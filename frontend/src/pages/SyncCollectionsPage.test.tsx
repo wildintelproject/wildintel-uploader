@@ -18,7 +18,7 @@ beforeEach(() => {
 describe('SyncCollectionsPage', () => {
   it('asks for the research project and the classification project, then syncs and says what was created', async () => {
     mockedApi.syncCollections.mockResolvedValue({
-      research_project_id: 'DONA', folder: '/c/DONA', collections: ['R0003'], unassigned: ['R0009-DONA_01'],
+      research_project_id: 'DONA', folder: '/c/DONA', collections: ['R0003'], unassigned: ['R0009-DONA_01'], failed: [{ deployment_id: 'R0003-DONA_04', error: 'start_date: Value error' }],
       created: { ...none, collections: ['R0003'], deployments: ['R0003-DONA_01'], images: ['R0003-DONA_01'] }, kept: { ...none, locations: ['DONA_01'] },
     })
     render(<SyncCollectionsPage />)
@@ -34,7 +34,8 @@ describe('SyncCollectionsPage', () => {
     expect(result).toHaveTextContent('Deployments: 1 created, 0 already there')
     expect(result).toHaveTextContent('Locations: 0 created, 1 already there')
     expect(result).toHaveTextContent('Images files (images.json): 1 created, 0 already there')
-    expect(result).toHaveTextContent('Not in any of its collections, so not created: R0009-DONA_01.')
+    expect(result).toHaveTextContent('R0003-DONA_04 — start_date: Value error')
+    expect(result).toHaveTextContent('1 deployment of the research project are not in the collections of this classification project, so they were not created (collections R0009).')
   })
 
   it('says why when Trapper cannot be read', async () => {

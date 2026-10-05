@@ -303,6 +303,7 @@ export interface SyncResult {
   created: Record<'research_project' | 'locations' | 'collections' | 'deployments' | 'timestamp_log' | 'images', string[]>
   kept: Record<'research_project' | 'locations' | 'collections' | 'deployments' | 'timestamp_log' | 'images', string[]>
   unassigned: string[]
+  failed: { deployment_id: string; error: string }[]
 }
 
 /** What the upload page starts from when it is reached from a finished import: the research project and collection just imported into. */

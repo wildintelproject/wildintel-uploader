@@ -11,8 +11,8 @@ from wildintel_uploader.core.services import local_folder_service, sync_service
 CREDS = ("https://trapper.example.org", "alice", "s3cret")
 PROJECT = {"pk": 2, "name": "Doñana", "acronym": "DONA"}
 LOCATIONS = [
-    {"pk": 5, "location_id": "DONA_01", "name": "Site 1", "timezone": "Europe/Madrid", "ignore_dst": True, "latitude": 37.0, "longitude": -6.5},
-    {"pk": 6, "location_id": "DONA_02", "name": "Site 2", "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.1, "longitude": -6.4},
+    {"pk": 5, "location_id": "dona_01", "name": "Site 1", "timezone": "Europe/Madrid", "ignore_dst": True, "latitude": 37.0, "longitude": -6.5},
+    {"pk": 6, "location_id": "dona_02", "name": "Site 2", "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.1, "longitude": -6.4},
 ]
 
 
@@ -24,9 +24,11 @@ def _deployment(deployment_id: str, location_id: str, start: str, end: str) -> d
 
 
 DEPLOYMENTS = [
-    _deployment("R0003-DONA_01", "DONA_01", "2024-07-01T08:00:00+00:00", "2024-07-31T10:00:00+00:00"),  # summer, ignoring DST: UTC+1
-    _deployment("R0003-DONA_02", "DONA_02", "2024-07-01T08:00:00+00:00", "2024-07-31T10:00:00+00:00"),  # summer, using DST: UTC+2
-    _deployment("R0009-DONA_01", "DONA_01", "2024-07-01T08:00:00+00:00", "2024-07-31T10:00:00+00:00"),  # no such collection in the project
+    _deployment("r0003-dona_01", "dona_01", "2024-07-01T08:00:00+00:00", "2024-07-31T10:00:00+00:00"),  # summer, ignoring DST: UTC+1
+    _deployment("r0003-dona_02", "dona_02", "2024-07-01T08:00:00+00:00", "2024-07-31T10:00:00+00:00"),  # summer, using DST: UTC+2
+    {**_deployment("r0003-dona_03", "dona_01", "2024-07-01T08:00:00+0000", "2024-07-31T10:00:00+0000"), "feature_type": ""},  # as Trapper gives it
+    _deployment("r0003-dona_04", "dona_01", "not a date", "2024-07-31T10:00:00+0000"),
+    _deployment("r0009-dona_01", "dona_01", "2024-07-01T08:00:00+00:00", "2024-07-31T10:00:00+00:00"),  # no such collection in the project
 ]
 
 
@@ -72,7 +74,11 @@ def test_creates_the_expected_structure(tmp_path: Path):
     assert first["name"] == "R0003-DONA_01__20240701_1.JPEG" and first["trapper_pk"] == 90 and first["timestamp"] == 1719820800.0 and first["tags"] == ["night"]
     assert info["images"][1]["species"] == ["Lynx pardinus"]
     assert result["unassigned"] == ["R0009-DONA_01"]
-    assert result["created"]["deployments"] == ["R0003-DONA_01", "R0003-DONA_02"]
+    assert result["created"]["deployments"] == ["R0003-DONA_01", "R0003-DONA_02", "R0003-DONA_03"]
+    saved = json.loads((folder / "R0003" / "R0003-DONA_03" / "deployment.json").read_text(encoding="utf-8"))
+    assert saved["start_date"] == "2024-07-01T08:00:00+00:00" and saved["feature_type"] is None  # the offset as ±hh:mm, the empty value left out
+    assert [f["deployment_id"] for f in result["failed"]] == ["R0003-DONA_04"] and "start_date" in result["failed"][0]["error"]
+    assert not (folder / "R0003" / "R0003-DONA_04").exists()
 
 
 def test_leaves_what_is_already_there_as_it_is(tmp_path: Path):
@@ -84,8 +90,8 @@ def test_leaves_what_is_already_there_as_it_is(tmp_path: Path):
 
     assert deployment.read_text(encoding="utf-8") == '{"edited": true}'
     assert again["created"] == {key: [] for key in again["created"]}
-    assert again["kept"]["images"] == ["R0003-DONA_01", "R0003-DONA_02"]
-    assert again["kept"]["deployments"] == ["R0003-DONA_01", "R0003-DONA_02"] and again["kept"]["locations"] == ["DONA_01", "DONA_02"]
+    assert again["kept"]["images"] == ["R0003-DONA_01", "R0003-DONA_02", "R0003-DONA_03"]
+    assert again["kept"]["deployments"] == ["R0003-DONA_01", "R0003-DONA_02", "R0003-DONA_03"] and again["kept"]["locations"] == ["DONA_01", "DONA_02"]
 
 
 def test_the_endpoint_syncs_the_collections_folder(tmp_path: Path):

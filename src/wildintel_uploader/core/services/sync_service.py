@@ -21,6 +21,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from pydantic import ValidationError
+
 from wildintel_uploader.core.schemas.requests import DeploymentFields, ResearchProjectRecord
 from wildintel_uploader.core.services import deployment_import_service, local_folder_service, trapper_service
 
@@ -46,6 +48,25 @@ def wall_clock(value: str, timezone_name: str | None, ignore_dst: bool) -> datet
         return moment.replace(tzinfo=None)
     local = moment.astimezone(zone)
     return local.replace(tzinfo=None) - (local.dst() or timedelta(0) if ignore_dst else timedelta(0))
+
+
+def deployment_fields(deployment: dict, deployment_id: str) -> DeploymentFields:
+    """A deployment as Trapper exports it, as DeploymentFields: the empty values are left out (Trapper gives "" for what
+    it doesn't have), the dates' offset is written ±hh:mm (it gives +0000) and the ids are in upper case.
+
+    Raises:
+        pydantic.ValidationError: what is left is not a valid deployment.
+    """
+    given = {k: v for k, v in deployment.items() if k != "pk" and v is not None and v != "" and v != []}
+    for key in ("start_date", "end_date"):
+        if isinstance(given.get(key), str):
+            try:
+                given[key] = datetime.fromisoformat(given[key].replace("Z", "+00:00")).isoformat()
+            except ValueError:
+                pass  # left as it is: the validation says what is wrong
+    if given.get("location_id"):
+        given["location_id"] = given["location_id"].upper()
+    return DeploymentFields.model_validate({**given, "deployment_id": deployment_id})
 
 
 def image_entries(resources: list[dict], timezone_name: str | None, ignore_dst: bool) -> list[dict]:
@@ -77,8 +98,10 @@ def sync(
     """Creates, under root, what Trapper has for the classification project and the folder lacks.
 
     research_project is {"pk", "name", "acronym"} — the one the classification project belongs to.
+    The deployments' and locations' ids, which Trapper keeps in lower case, are written in upper case.
     Returns the lists of what was "created" and what was already there ("kept") for each kind, and the
-    deployments no collection of the classification project claims ("unassigned").
+    deployments no collection of the classification project claims ("unassigned"), and those Trapper holds in a way
+    that is not a valid deployment ("failed": {"deployment_id", "error"}), which are left out.
 
     Raises:
         local_folder_service.LocalFolderError: the research project can't be a folder name.
@@ -101,15 +124,17 @@ def sync(
     for location in locations:
         by_id[location["location_id"].lower()] = location
         if location["location_id"].lower() in known:
-            kept["locations"].append(location["location_id"])
+            kept["locations"].append(location["location_id"].upper())
             continue
         record = {k: location.get(k) for k in ("location_id", "name", "timezone", "ignore_dst", "latitude", "longitude")}
-        local_folder_service.write_location(root, project_id, {**record, "coordinate_uncertainty": None, "trapper_pk": location["pk"]})
-        created["locations"].append(location["location_id"])
+        # Trapper keeps the ids in lower case; here they are written as the wizard does, in upper case.
+        local_folder_service.write_location(root, project_id, {**record, "location_id": location["location_id"].upper(), "coordinate_uncertainty": None, "trapper_pk": location["pk"]})
+        created["locations"].append(location["location_id"].upper())
 
     deployments = trapper_service.list_deployments(*credentials, research_project["pk"])
     names = collection_names(credentials, classification_project_pk)
     claimed: set[str] = set()
+    failed: list[dict] = []
     for name in names:
         collection_dir = folder / name
         if (collection_dir / local_folder_service.COLLECTION_METADATA_FILE).is_file():
@@ -119,7 +144,7 @@ def sync(
             created["collections"].append(name)
         log_rows = {row["Deployment"].upper() for row in local_folder_service.read_timestamp_log(local_folder_service.timestamp_log_path(collection_dir))}
         for deployment in deployments:
-            deployment_id = deployment["deployment_id"] or ""
+            deployment_id = (deployment["deployment_id"] or "").upper()  # Trapper has it in lower case
             try:
                 code = deployment_import_service.collection_code(deployment_id)
             except deployment_import_service.DeploymentImportError:
@@ -131,7 +156,12 @@ def sync(
             if (target / local_folder_service.DEPLOYMENT_METADATA_FILE).is_file():
                 kept["deployments"].append(deployment_id)
             else:
-                fields = DeploymentFields.model_validate({k: v for k, v in deployment.items() if k != "pk" and v is not None})
+                try:
+                    fields = deployment_fields(deployment, deployment_id)
+                except ValidationError as exc:  # one deployment Trapper holds badly doesn't stop the rest
+                    failed.append({"deployment_id": deployment_id, "error": "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())})
+                    claimed.add(deployment_id)
+                    continue
                 local_folder_service.write_deployment_metadata(target, fields.model_dump())
                 created["deployments"].append(deployment_id)
             if (target / local_folder_service.IMAGES_FILE).is_file():
@@ -154,5 +184,5 @@ def sync(
                 except local_folder_service.LocalFolderError as exc:
                     logger.warning("%s: no timestamp log row: %s", deployment_id, exc)
 
-    unassigned = sorted(d["deployment_id"] for d in deployments if d["deployment_id"] and d["deployment_id"] not in claimed)
-    return {"research_project_id": project_id, "folder": str(folder), "created": created, "kept": kept, "unassigned": unassigned, "collections": names}
+    unassigned = sorted(d["deployment_id"].upper() for d in deployments if d["deployment_id"] and d["deployment_id"].upper() not in claimed)
+    return {"research_project_id": project_id, "folder": str(folder), "created": created, "kept": kept, "unassigned": unassigned, "failed": failed, "collections": names}

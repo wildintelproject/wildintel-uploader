@@ -15,6 +15,11 @@ const KINDS: { key: keyof SyncResult['created']; label: string }[] = [
   { key: 'images', label: 'Images files (images.json)' },
 ]
 
+/** The collection prefixes (R0003…) of deployment ids, each once — what the ones not synced belong to. */
+function unassignedCollections(ids: string[]): string[] {
+  return [...new Set(ids.map((id) => id.match(/^R\d+/i)?.[0].toUpperCase() ?? id))].sort()
+}
+
 /** Checks the local collections folder against what Trapper has for a classification project, and creates what it lacks. */
 export default function SyncCollectionsPage() {
   const [projects, setProjects] = useState<ResearchProject[]>([])
@@ -98,9 +103,18 @@ export default function SyncCollectionsPage() {
           {result.collections.length === 0 && (
             <p className="text-sm text-amber-700 dark:text-amber-400 mt-3">The classification project has no collection starting with R.</p>
           )}
+          {result.failed.length > 0 && (
+            <div className="text-sm text-red-600 dark:text-red-400 mt-3">
+              <p>{result.failed.length} deployment{result.failed.length === 1 ? '' : 's'} could not be created, as Trapper holds {result.failed.length === 1 ? 'it' : 'them'} with invalid values:</p>
+              <ul className="list-disc ml-5">
+                {result.failed.map((f) => <li key={f.deployment_id}><span className="font-mono">{f.deployment_id}</span> — {f.error}</li>)}
+              </ul>
+            </div>
+          )}
           {result.unassigned.length > 0 && (
             <p className="text-sm text-amber-700 dark:text-amber-400 mt-3">
-              Not in any of its collections, so not created: {result.unassigned.join(', ')}.
+              {result.unassigned.length} deployment{result.unassigned.length === 1 ? '' : 's'} of the research project are not in the collections of this classification project, so they were not created
+              {' '}(collections {unassignedCollections(result.unassigned).join(', ')}).
             </p>
           )}
         </section>
