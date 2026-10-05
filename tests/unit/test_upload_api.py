@@ -68,9 +68,44 @@ def test_uploading_streams_the_steps_and_ends_with_done(tmp_path: Path, fake_upl
 
     assert response.status_code == 200
     events = _events(response)
-    assert [e["step"] for e in events if e["type"] == "step" and e["status"] == "done"] == ["connect", "location", "deployment", "package", "upload", "process", "wait"]
+    assert [e["step"] for e in events if e["type"] == "step" and e["status"] == "done"] == ["connect", "classification", "location", "deployment", "package", "upload", "process", "wait"]
     assert events[-1]["type"] == "done" and events[-1]["collection"] == "R0003" and events[-1]["deployment_id"] == DEPLOYMENT_ID
     assert len(fake.imported_locations) == 1 and len(fake.triggered) == 1
+
+
+def test_checking_the_access_gives_one_result_per_check_and_changes_nothing(tmp_path: Path):
+    _kept(tmp_path)
+    fake = FakeTrapper(locations=[])
+    payload = {k: v for k, v in PAYLOAD.items() if k != "deployment_id"} | {"deployment_ids": [DEPLOYMENT_ID]}
+
+    with _in(tmp_path / "collections"), patch.object(trapper_service, "_client", return_value=fake), \
+         patch.object(trapper_upload_service, "_uploader_login", return_value=None):
+        response = _client().post("/api/upload/check-access", json=payload)
+
+    assert response.status_code == 200
+    checks = response.json()["checks"]
+    assert [(c["check"], c["ok"]) for c in checks] == [("research_project", True), ("classification_project", True), ("location", True), ("uploader", True)]
+    assert "Would be created" in checks[2]["message"]
+    assert fake.imported_locations == [] and fake.imported_deployments == [] and fake.triggered == []
+
+
+def test_the_classification_projects_of_a_research_project_are_listed_from_trapper(tmp_path: Path):
+    _kept(tmp_path)
+    payload = {"url": PAYLOAD["url"], "username": PAYLOAD["username"], "password": PAYLOAD["password"], "research_project_id": "DONA"}
+
+    with _in(tmp_path / "collections"), patch.object(trapper_service, "_client", return_value=FakeTrapper()):
+        response = _client().post("/api/upload/classification-projects", json=payload)
+        unknown = _client().post("/api/upload/classification-projects", json={**payload, "research_project_id": "NOPE"})
+
+    assert response.status_code == 200 and response.json()["results"] == [{"pk": 7, "name": "Doñana classification", "is_active": True}]
+    assert unknown.status_code == 404
+
+
+def test_checking_the_access_of_an_unknown_research_project_is_a_404(tmp_path: Path):
+    _kept(tmp_path)
+    payload = {k: v for k, v in PAYLOAD.items() if k != "deployment_id"} | {"research_project_id": "NOPE"}
+    with _in(tmp_path / "collections"):
+        assert _client().post("/api/upload/check-access", json=payload).status_code == 404
 
 
 def test_a_failure_midway_is_an_error_line_not_a_crash(tmp_path: Path, fake_uploader):
@@ -188,7 +223,7 @@ def test_generating_the_files_needs_no_trapper_account(tmp_path: Path, fake_uplo
     _kept(tmp_path)
     no_account = config.Settings()  # no URL, user or password saved
 
-    response = _post(tmp_path, {"research_project_id": "DONA", "collection": "R0003", "deployment_id": DEPLOYMENT_ID, "mode": "generate"}, settings=no_account)
+    response = _post(tmp_path, {"research_project_id": "DONA", "collection": "R0003", "deployment_id": DEPLOYMENT_ID, "mode": "generate", "classification_project_pk": 7}, settings=no_account)
 
     assert response.status_code == 200
     events = _events(response)

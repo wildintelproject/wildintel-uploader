@@ -212,10 +212,11 @@ def test_import_deployment_streams_progress_then_registers(tmp_path: Path):
             "deployment_id": "R0001-DONA_01", "location_id": "DONA_01",
             "start_date": "2024-09-04T13:10:00+02:00", "end_date": "2024-11-04T14:28:00+02:00", "latitude": 37.0, "longitude": -6.5,
         },
-        "timezone": "Europe/Madrid",
     }
+    _keep_location(data_dir, timezone="Europe/Madrid")
 
     with patch("wildintel_uploader.core.services.trapper_service._client", return_value=fake_client), \
+         patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=data_dir), \
          patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/import", json=payload)
 
@@ -360,6 +361,41 @@ def test_a_research_project_starts_with_no_locations_and_gets_them_added(tmp_pat
     assert location["latitude"] is None and location["longitude"] is None  # not known yet
 
 
+def test_a_locations_timezone_and_summer_time_can_be_changed_and_belong_to_it(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "UTC"}})
+        only_dst = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "dona_01", "ignore_dst": False})
+        both = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "timezone": "Europe/Madrid", "ignore_dst": True})
+        listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
+
+    assert only_dst.status_code == 200 and (only_dst.json()["timezone"], only_dst.json()["ignore_dst"]) == ("UTC", False)  # the timezone was left alone
+    assert both.status_code == 200
+    [location] = listed
+    assert (location["name"], location["timezone"], location["ignore_dst"]) == ("Site", "Europe/Madrid", True)
+
+
+def test_updating_a_location_that_is_not_there_is_a_404_and_a_bad_timezone_a_422(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        missing = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "NOPE", "timezone": "UTC"})
+        bad = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "X", "timezone": "Mars/Olympus"})
+
+    assert missing.status_code == 404
+    assert bad.status_code == 422
+
+
+def test_the_next_revision_is_asked_by_research_project_and_location(tmp_path: Path):
+    deployment = tmp_path / "DONA" / "R0002" / "R0002-DONA_01"
+    deployment.mkdir(parents=True)
+
+    with _in(tmp_path):
+        known = _client().post("/api/deployment-import/next-revision", json={"research_project_id": "DONA", "location_id": "DONA_01"})
+        new = _client().post("/api/deployment-import/next-revision", json={"research_project_id": "DONA", "location_id": "DONA_09"})
+
+    assert known.json() == {"last": 2, "next": 3} and new.json() == {"last": None, "next": 1}
+
+
 def test_a_location_id_is_unique_within_its_research_project(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
@@ -471,7 +507,15 @@ def test_validate_deployment_refuses_a_negative_tolerance(tmp_path: Path):
 
 # ── preprocessing on import ─────────────────────────────────────────────────
 
-def _import_local_payload(tmp_path: Path, **preprocessing) -> dict:
+def _keep_location(root: Path, **fields) -> None:
+    project = root / "DONA"
+    project.mkdir(parents=True, exist_ok=True)
+    (project / "locations.json").write_text(json.dumps([{"location_id": "DONA_01", **fields}]), encoding="utf-8")
+
+
+def _import_local_payload(tmp_path: Path, location_time: dict | None = None, **preprocessing) -> dict:
+    """location_time is what the kept location DONA_01 holds — the images are read in its timezone, the request has none."""
+    _keep_location(tmp_path / "collections", **({"timezone": "Europe/Madrid"} if location_time is None else location_time))
     source = tmp_path / "source"
     source.mkdir()
     _make_jpeg(source / "IMG_0001.jpg", "2024:07:01 10:00:00")
@@ -481,7 +525,7 @@ def _import_local_payload(tmp_path: Path, **preprocessing) -> dict:
             "deployment_id": "R0003-DONA_01", "location_id": "DONA_01", "start_date": "2024-07-01T00:00:00+02:00",
             "end_date": "2024-07-31T00:00:00+02:00", "latitude": 37.0, "longitude": -6.5,
         },
-        "preprocessing": {"metadata": False, "timezone": "Europe/Madrid", **preprocessing},
+        "preprocessing": {"metadata": False, **preprocessing},
     }
 
 
@@ -509,12 +553,12 @@ def test_import_local_without_preprocessing_copies_as_before(tmp_path: Path):
     assert (tmp_path / "collections" / "DONA" / "R0003" / "R0003-DONA_01" / "IMG_0001.jpg").is_file()
 
 
-def test_import_local_reports_an_unknown_timezone_as_a_plain_400_before_touching_anything(tmp_path: Path):
-    response = _client().post("/api/deployment-import/import-local", json=_import_local_payload(tmp_path, timezone="Mars/Olympus"))
+def test_import_local_without_a_location_timezone_is_a_plain_400_before_touching_anything(tmp_path: Path):
+    response = _client().post("/api/deployment-import/import-local", json=_import_local_payload(tmp_path, location_time={}))
 
     assert response.status_code == 400
-    assert "Unknown timezone" in response.json()["detail"]
-    assert not (tmp_path / "collections").exists()
+    assert "has no timezone" in response.json()["detail"]
+    assert not (tmp_path / "collections" / "DONA" / "R0003").exists()
 
 
 def test_import_local_reports_metadata_without_exiftool_as_a_plain_400(tmp_path: Path):
@@ -525,7 +569,7 @@ def test_import_local_reports_metadata_without_exiftool_as_a_plain_400(tmp_path:
     assert "needs ExifTool" in response.json()["detail"]
 
 
-@pytest.mark.parametrize("bad", [{"resize_width": 50}, {"resize_width": 30000}, {"timezone": ""}])
+@pytest.mark.parametrize("bad", [{"resize_width": 50}, {"resize_width": 30000}])
 def test_import_local_refuses_preprocessing_values_out_of_range(tmp_path: Path, bad: dict):
     assert _client().post("/api/deployment-import/import-local", json=_import_local_payload(tmp_path, **bad)).status_code == 422
 
@@ -720,3 +764,71 @@ def test_existing_deployments_says_where_each_one_is_kept(tmp_path: Path):
 def test_existing_deployments_needs_some_ids():
     response = _client().post("/api/deployment-import/existing-deployments", json={"research_project_id": "DONA", "deployment_ids": []})
     assert response.status_code == 422
+
+
+# ── the timezone is the location's, and only there ─────────────────────────
+
+def test_import_local_reads_the_images_in_the_kept_locations_timezone(tmp_path: Path):
+    payload = _import_local_payload(tmp_path, location_time={"timezone": "Atlantic/Canary", "ignore_dst": False})
+
+    with patch("wildintel_uploader.web.api.routers.deployment_import.preprocessing_service.preprocess_stream", return_value=iter([])) as stream:
+        response = _client().post("/api/deployment-import/import-local", json=payload)
+
+    assert response.status_code == 200
+    options = stream.call_args.args[4]
+    assert (options.timezone, options.ignore_dst) == ("Atlantic/Canary", False)
+
+
+def test_a_request_cannot_carry_a_timezone_of_its_own_into_the_import(tmp_path: Path):
+    payload = _import_local_payload(tmp_path, location_time={"timezone": "Atlantic/Canary"}, timezone="Europe/Madrid", ignore_dst=False)
+
+    with patch("wildintel_uploader.web.api.routers.deployment_import.preprocessing_service.preprocess_stream", return_value=iter([])) as stream:
+        _client().post("/api/deployment-import/import-local", json=payload)
+
+    assert stream.call_args.args[4].timezone == "Atlantic/Canary"  # the extra fields are ignored
+
+
+def test_import_registers_the_deployment_in_the_kept_locations_timezone(tmp_path: Path):
+    root = tmp_path / "collections"
+    _keep_location(root, timezone="Atlantic/Canary", ignore_dst=True)
+    payload = {
+        "url": "https://trapper.example.org", "username": "alice", "password": "s3cret",
+        "research_project_pk": 2, "research_project_id": "DONA", "classification_project_pk": 10, "source_dir": str(tmp_path),
+        "deployment": {
+            "deployment_id": "R0001-DONA_01", "location_id": "dona_01",
+            "start_date": "2024-09-04T13:10:00+02:00", "end_date": "2024-11-04T14:28:00+02:00", "latitude": 37.0, "longitude": -6.5,
+        },
+    }
+
+    with patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=root), \
+         patch("wildintel_uploader.web.api.routers.deployment_import.deployment_import_service.import_stream", return_value=iter([])) as stream:
+        response = _client().post("/api/deployment-import/import", json=payload)
+
+    assert response.status_code == 200
+    assert stream.call_args.args[7] == "Atlantic/Canary"
+    assert stream.call_args.kwargs["ignore_dst"] is True
+
+
+# ── images.json ─────────────────────────────────────────────────────────────
+
+def test_import_local_without_preprocessing_writes_images_json(tmp_path: Path):
+    payload = _import_local_payload(tmp_path)
+    del payload["preprocessing"]
+
+    _client().post("/api/deployment-import/import-local", json=payload)
+
+    info = json.loads((tmp_path / "collections" / "DONA" / "R0003" / "R0003-DONA_01" / "images.json").read_text(encoding="utf-8"))
+    assert (info["deployment_id"], info["image_count"], info["first"], info["last"]) == ("R0003-DONA_01", 1, "2024-07-01T10:00:00", "2024-07-01T10:00:00")
+    assert info["images"][0]["name"] == "IMG_0001.jpg" and (info["images"][0]["width"], info["images"][0]["height"]) == (4, 4)
+
+
+def test_import_local_with_preprocessing_writes_images_json_with_the_dates_and_hashes(tmp_path: Path):
+    _client().post("/api/deployment-import/import-local", json=_import_local_payload(tmp_path))
+
+    folder = tmp_path / "collections" / "DONA" / "R0003" / "R0003-DONA_01"
+    info = json.loads((folder / "images.json").read_text(encoding="utf-8"))
+    image = info["images"][0]
+    assert image["name"] == "R0003-DONA_01__20240701_1.JPEG" and image["original"] == "IMG_0001.jpg"
+    assert image["local_time"] == "2024-07-01T10:00:00" and image["taken_at"].startswith("2024-07-01T09:00:00")  # Madrid, ignoring summer time (UTC+1) → UTC
+    assert image["timestamp"] == 1719824400.0
+    assert image["size_bytes"] == (folder / image["name"]).stat().st_size and len(image["sha1"]) == 40

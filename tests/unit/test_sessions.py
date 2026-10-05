@@ -98,12 +98,12 @@ def test_saving_the_details_moves_the_session_on_and_is_ready_to_import():
     saved = client.post("/api/sessions/scan", json={"source_dir": "/home/me/DONA_01", "scan": SCAN}).json()
     client.post("/api/sessions/selection", json={"task_id": saved["task_id"], "selection": SELECTION})
     ready = client.post("/api/sessions/details", json={
-        "task_id": saved["task_id"], "deployment": DEPLOYMENT, "timezone": "Europe/Madrid", "ignore_dst": False,
+        "task_id": saved["task_id"], "deployment": DEPLOYMENT,
     }).json()
 
     assert ready["phase"] == "ready"
     assert ready["deployment"]["deployment_id"] == "DONA-DONA_01"
-    assert ready["timezone"] == "Europe/Madrid"
+    assert "timezone" not in ready  # the location's, not the session's
     assert ready["selection"]["location"]["location_id"] == "DONA_01"
     assert "password" not in str(ready)
 
@@ -111,11 +111,11 @@ def test_saving_the_details_moves_the_session_on_and_is_ready_to_import():
 def test_details_need_an_existing_session_and_valid_values():
     client = _client()
     assert client.post("/api/sessions/details", json={
-        "task_id": "nope", "deployment": DEPLOYMENT, "timezone": "Europe/Madrid",
+        "task_id": "nope", "deployment": DEPLOYMENT,
     }).status_code == 404
     saved = client.post("/api/sessions/scan", json={"source_dir": "/home/me/DONA_01", "scan": SCAN}).json()
     bad = client.post("/api/sessions/details", json={
-        "task_id": saved["task_id"], "deployment": {**DEPLOYMENT, "deployment_id": ""}, "timezone": "Europe/Madrid",
+        "task_id": saved["task_id"], "deployment": {**DEPLOYMENT, "deployment_id": ""},
     })
     assert bad.status_code == 422
 

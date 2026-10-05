@@ -19,7 +19,7 @@ from wildintel_uploader.core.logging_setup import debugging
 from wildintel_uploader.core.schemas.requests import (
     BrowseFolderRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
     ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
-    ValidateDeploymentRequest, ValidateImagesRequest,
+    NextRevisionRequest, UpdateLocationRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
 from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, statistics_service
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
@@ -83,6 +83,17 @@ def save_location(req: SaveLocationRequest) -> dict:
         return local_folder_service.write_location(config.collections_dir(), req.research_project_id, req.location.model_dump())
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(409 if "already exists" in str(exc) else 400, str(exc)) from exc
+
+
+@router.post("/locations/update")
+def update_location(req: UpdateLocationRequest) -> dict:
+    """Changes the timezone and/or the summer-time setting of a kept location — they belong to the location, not to
+    a deployment. The fields left out stay as they are; 404 if the location isn't there."""
+    changes = req.model_dump(include={"timezone", "ignore_dst"}, exclude_unset=True)
+    try:
+        return local_folder_service.update_location(config.collections_dir(), req.research_project_id, req.location_id, changes)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(404 if "isn't in" in str(exc) else 400, str(exc)) from exc
 
 
 @router.get("/exiftool")
@@ -178,6 +189,13 @@ def previous_deployments(req: PreviousDeploymentsRequest) -> dict:
     }}
 
 
+@router.post("/next-revision")
+def next_revision(req: NextRevisionRequest) -> dict:
+    """The revision a new deployment at this location is expected to have — one after the highest kept for it in the
+    research project, or 1 — as {"last", "next"}."""
+    return statistics_service.next_revision(config.collections_dir(), req.research_project_id, req.location_id)
+
+
 @router.post("/validate-deployment")
 def validate_deployment(req: ValidateDeploymentRequest) -> dict:
     """Opt-in checks of the scanned images against the deployment's own
@@ -208,6 +226,16 @@ def validate_deployment(req: ValidateDeploymentRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
+def _location_time(research_project_id: str | None, location_id: str | None) -> dict:
+    """The kept location's timezone and summer-time setting — the only source of them, whatever the request carries."""
+    if not research_project_id:
+        return {}
+    try:
+        return local_folder_service.location_time(config.collections_dir(), research_project_id, location_id)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.post("/import")
 def import_deployment(req: ImportDeploymentRequest) -> StreamingResponse:
     """The import's events, as NDJSON:
@@ -220,11 +248,12 @@ def import_deployment(req: ImportDeploymentRequest) -> StreamingResponse:
     Bad source/destination paths are a plain 400, checked before any file
     is touched."""
     url, username, password = resolve(req)
+    time = _location_time(req.research_project_id, req.deployment.location_id)
     try:
         events = deployment_import_service.import_stream(
             url, username, password, req.research_project_pk, req.classification_project_pk,
-            req.source_dir, req.deployment, req.timezone,
-            research_project_id=req.research_project_id, ignore_dst=req.ignore_dst, register=req.register_deployment,
+            req.source_dir, req.deployment, time.get("timezone"),
+            research_project_id=req.research_project_id, ignore_dst=time.get("ignore_dst", False), register=req.register_deployment,
         )
     except deployment_import_service.DeploymentImportError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -247,9 +276,15 @@ def import_local(req: ImportLocalRequest) -> StreamingResponse:
     the "Local folder" destination never talks to Trapper."""
     try:
         if req.preprocessing is not None:
+            # The collection sits in its research project's folder, <research project>/<collection>: the images are read
+            # in the timezone of the location kept there beside it — the only place it is set.
+            time = local_folder_service.location_time_in(Path(req.collection_dir).expanduser().parent, req.deployment.location_id)
+            if not time.get("timezone"):
+                raise HTTPException(400, f"The location {req.deployment.location_id or '(none)'} has no timezone: set it in the location's time settings first.")
+            options = {**req.preprocessing.model_dump(), "timezone": time["timezone"], "ignore_dst": time.get("ignore_dst", True)}
             events = preprocessing_service.preprocess_stream(
                 req.source_dir, req.collection_dir, req.collection_name, req.deployment,
-                preprocessing_service.PreprocessOptions(**req.preprocessing.model_dump()),
+                preprocessing_service.PreprocessOptions(**options),
             )
         else:
             events = deployment_import_service.import_local_stream(

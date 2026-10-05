@@ -94,6 +94,88 @@ def test_scan_session_scans_each_subfolder_in_name_order(tmp_path: Path):
     assert result["loose_files"] == 1 and "1 loose file(s)" in result["warnings"][0]
 
 
+def _log(path: Path, *rows: str) -> None:
+    path.write_text("Deployment,StartDate,StartTime,EndDate,EndTime\n" + "".join(r + "\n" for r in rows), encoding="utf-8")
+
+
+def test_scan_session_takes_the_dates_from_the_timestamp_log(tmp_path: Path):
+    session = tmp_path / "R0033"
+    _make_jpeg(session / "DONA_01" / "a.jpg", taken="2024:09:04 13:10:00")
+    _make_jpeg(session / "DONA_02" / "a.jpg", taken="2024:09:05 09:00:00")
+    _make_jpeg(session / "DONA_03" / "a.jpg", taken="2024:09:06 09:00:00")
+    # one row by the full deployment id, one by the subfolder's name, one that matches nothing
+    _log(session / "R0033_FileTimestampLog.csv",
+         "R0033-DONA_01,2024:09:01,08:00:00,2024:11:01,09:30:00",
+         "dona_02,2024:09:02,10:00:00,2024:11:02,11:00:00",
+         "R0033-OTHER,2024:09:02,10:00:00,2024:11:02,11:00:00")
+
+    result = svc.scan_session(session)
+
+    first, second, third = result["deployments"]
+    assert (first["start_date"], first["end_date"], first["from_timestamp_log"]) == ("2024-09-01T08:00:00", "2024-11-01T09:30:00", True)
+    assert (second["start_date"], second["end_date"], second["from_timestamp_log"]) == ("2024-09-02T10:00:00", "2024-11-02T11:00:00", True)
+    assert (third["start_date"], third["from_timestamp_log"]) == ("2024-09-06T09:00:00", False)  # no row: the EXIF stays
+    assert result["timestamp_log"] == {"name": "R0033_FileTimestampLog.csv", "path": str(session / "R0033_FileTimestampLog.csv"), "rows": 3, "matched": 2, "revision": 33}
+    assert (first["log_deployment_id"], second["log_deployment_id"], third["log_deployment_id"]) == ("R0033-DONA_01", "dona_02", None)
+    assert any("1 row(s)" in w and "match no subfolder" in w for w in result["warnings"])
+    assert not any("loose" in w for w in result["warnings"])  # the log itself is not a stray file
+
+
+def test_scan_session_gives_no_revision_when_the_ids_disagree_or_have_none(tmp_path: Path):
+    _make_jpeg(tmp_path / "A" / "a.jpg", taken="2024:09:04 13:10:00")
+    _make_jpeg(tmp_path / "B" / "a.jpg", taken="2024:09:04 13:10:00")
+    row = ",2024:09:01,08:00:00,2024:11:01,09:30:00"
+    _log(tmp_path / "L_FileTimestampLog.csv", "R0001-A" + row, "R0002-B" + row)
+    assert svc.scan_session(tmp_path)["timestamp_log"]["revision"] is None
+    _log(tmp_path / "L_FileTimestampLog.csv", "A" + row, "B" + row)
+    assert svc.scan_session(tmp_path)["timestamp_log"]["revision"] is None
+
+
+def test_scan_session_without_a_timestamp_log_keeps_the_exif_dates(tmp_path: Path):
+    _make_jpeg(tmp_path / "SITE_01" / "a.jpg", taken="2024:09:04 13:10:00")
+
+    result = svc.scan_session(tmp_path)
+
+    assert result["timestamp_log"] is None
+    assert result["deployments"][0]["from_timestamp_log"] is False
+
+
+def test_scan_session_uses_the_only_timestamp_log_whatever_it_is_called(tmp_path: Path):
+    _make_jpeg(tmp_path / "SITE_01" / "a.jpg", taken="2024:09:04 13:10:00")
+    _log(tmp_path / "R0001_FileTimestampLog.csv", "SITE_01,2024:09:01,08:00:00,2024:11:01,09:30:00")
+
+    result = svc.scan_session(tmp_path)
+
+    assert result["deployments"][0]["start_date"] == "2024-09-01T08:00:00"
+
+
+def test_scan_session_ignores_ambiguous_or_unreadable_timestamp_logs(tmp_path: Path):
+    _make_jpeg(tmp_path / "SITE_01" / "a.jpg", taken="2024:09:04 13:10:00")
+    _log(tmp_path / "R0001_FileTimestampLog.csv", "SITE_01,2024:09:01,08:00:00,2024:11:01,09:30:00")
+    _log(tmp_path / "R0002_FileTimestampLog.csv", "SITE_01,2024:09:01,08:00:00,2024:11:01,09:30:00")
+    ambiguous = svc.scan_session(tmp_path)
+    assert ambiguous["timestamp_log"] is None and any("none is named after the folder" in w for w in ambiguous["warnings"])
+
+    (tmp_path / "R0002_FileTimestampLog.csv").unlink()
+    (tmp_path / "R0001_FileTimestampLog.csv").write_text("Deployment,StartDate\nSITE_01,2024:09:01\n", encoding="utf-8")
+    unreadable = svc.scan_session(tmp_path)
+    assert unreadable["deployments"][0]["from_timestamp_log"] is False
+    assert any("missing the columns" in w for w in unreadable["warnings"])
+
+
+def test_scan_session_skips_timestamp_log_rows_with_bad_dates(tmp_path: Path):
+    _make_jpeg(tmp_path / "SITE_01" / "a.jpg", taken="2024:09:04 13:10:00")
+    _make_jpeg(tmp_path / "SITE_02" / "a.jpg", taken="2024:09:04 13:10:00")
+    _log(tmp_path / "R0001_FileTimestampLog.csv",
+         "SITE_01,2024-09-01,08:00:00,2024:11:01,09:30:00",
+         "SITE_02,2024:11:01,09:30:00,2024:09:01,08:00:00")
+
+    result = svc.scan_session(tmp_path)
+
+    assert [d["from_timestamp_log"] for d in result["deployments"]] == [False, False]
+    assert len(result["warnings"]) >= 2
+
+
 def test_scan_session_needs_subfolders(tmp_path: Path):
     (tmp_path / "a.jpg").write_bytes(b"x")
     with pytest.raises(svc.DeploymentImportError, match="no subfolders"):

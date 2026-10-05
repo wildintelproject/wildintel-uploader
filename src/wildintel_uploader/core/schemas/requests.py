@@ -46,6 +46,24 @@ class UploadDeploymentRequest(TrapperCredentials):
     # "upload" sends it; "dry_run" says what that would do and changes nothing; "generate" only writes the
     # files (the zips, the yamls and the collection's deployments csv) and leaves them.
     mode: Literal["upload", "dry_run", "generate"] = "upload"
+    # The classification project the collection goes to — optional when the research project has only one.
+    classification_project_pk: Optional[int] = None
+
+
+class AccessCheckRequest(TrapperCredentials):
+    """Check the account can do what uploading a collection's deployments needs, changing nothing."""
+
+    research_project_id: str = Field(min_length=1)
+    collection: Optional[str] = Field(default=None, pattern=r"^R\d{4}(_.+)?$")
+    # The deployments whose locations are looked for in Trapper.
+    deployment_ids: list[str] = Field(default_factory=list)
+    classification_project_pk: Optional[int] = None
+
+
+class UploadClassificationProjectsRequest(TrapperCredentials):
+    """The classification projects of a research project kept locally, as Trapper has them."""
+
+    research_project_id: str = Field(min_length=1)
 
 
 class ScanFolderRequest(BaseModel):
@@ -159,6 +177,11 @@ class PreviousDeploymentsRequest(BaseModel):
     deployment_ids: list[str] = Field(min_length=1, max_length=1000)
 
 
+class NextRevisionRequest(BaseModel):
+    research_project_id: str = Field(min_length=1)
+    location_id: str = Field(min_length=1)
+
+
 class StatisticsParams(BaseModel):
     """What the statistical checks mean by a sequence and by similar (see services.statistics_service)."""
 
@@ -223,8 +246,10 @@ class LocationRecord(BaseModel):
 
     location_id: str = Field(min_length=1, max_length=100)
     name: Optional[str] = None
-    # IANA timezone, when known — the deployment's own is prefilled from it.
+    # IANA timezone, when known, and whether its cameras ignore summer time. Both belong to the location — never to a
+    # deployment: every deployment there uses them, and Trapper only accepts a package that declares the same.
     timezone: Optional[str] = None
+    ignore_dst: Optional[bool] = None
     # Where it is — WGS84 decimal degrees, as in Camtrap DP's deployments table.
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
@@ -249,6 +274,25 @@ class LocalLocationsRequest(BaseModel):
 
 class SaveLocationRequest(LocalLocationsRequest):
     location: LocationRecord
+
+
+class UpdateLocationRequest(LocalLocationsRequest):
+    """Change the timezone and/or summer-time setting of a location already kept — the fields left out stay as they are."""
+
+    location_id: str = Field(min_length=1)
+    timezone: Optional[str] = None
+    ignore_dst: Optional[bool] = None
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("is not a known IANA timezone") from exc
+        return value
 
 
 class TimestampLogRequest(BaseModel):
@@ -278,9 +322,7 @@ class PreprocessingRequest(BaseModel):
     license_url: str = "https://creativecommons.org/licenses/by-nc/4.0/"
     # The research project's name, for the creator metadata.
     research_project: str = ""
-    # The camera's timezone (IANA), to read the capture dates in.
-    timezone: str = Field(default="UTC", min_length=1)
-    ignore_dst: bool = True
+    # The timezone and summer-time setting the dates are read in are the location's, kept with it: not asked here.
     convert_to_utc: bool = True
 
 
@@ -308,10 +350,7 @@ class ImportDeploymentRequest(TrapperCredentials):
     # organized data directory before Trapper is told about the deployment.
     source_dir: str = Field(min_length=1)
     deployment: DeploymentFields
-    # None when the deployment already exists in Trapper — register_deployment
-    # is then false, and the folder is only organized locally, not registered.
-    timezone: Optional[str] = None
-    ignore_dst: bool = False
+    # The timezone and summer-time setting it is registered with are the location's, kept with it: not asked here.
     # "register" collides with abc.ABCMeta.register, which pydantic warns
     # about — hence the longer name.
     register_deployment: bool = True
@@ -390,7 +429,12 @@ class SaveScanRequest(BaseModel):
 class SaveDetailsRequest(BaseModel):
     task_id: str
     deployment: DeploymentFields
-    # None for an existing deployment — nothing is registered in Trapper,
-    # so no timezone conversion is needed.
-    timezone: Optional[str] = None
-    ignore_dst: bool = False
+
+
+class SyncCollectionsRequest(TrapperCredentials):
+    """Sync the collections folder with the classification project's collections, deployments and locations."""
+
+    research_project_pk: int
+    research_project_name: Optional[str] = None
+    research_project_acronym: Optional[str] = None
+    classification_project_pk: int

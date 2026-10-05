@@ -101,7 +101,7 @@ def write_selection_phase(task_id: str, *, selection: dict) -> dict[str, Any]:
     return manifest
 
 
-def write_details_phase(task_id: str, *, deployment: dict, timezone_name: str | None, ignore_dst: bool) -> dict[str, Any]:
+def write_details_phase(task_id: str, *, deployment: dict) -> dict[str, Any]:
     """Raises:
         LookupError: no session with that task_id.
     """
@@ -110,7 +110,7 @@ def write_details_phase(task_id: str, *, deployment: dict, timezone_name: str | 
         raise LookupError(f"Session {task_id} not found.")
     manifest = {
         **existing, "updated_at": now_iso(), "phase": "ready",
-        "deployment": deployment, "timezone": timezone_name, "ignore_dst": ignore_dst,
+        "deployment": deployment,
     }
     write_manifest(task_id, manifest)
     return manifest

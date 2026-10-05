@@ -18,6 +18,7 @@ from pathlib import Path
 
 COLLECTION_METADATA_FILE = "collection.json"
 DEPLOYMENT_METADATA_FILE = "deployment.json"
+IMAGES_FILE = "images.json"
 RESEARCH_PROJECT_METADATA_FILE = "research_project.json"
 LOCATIONS_FILE = "locations.json"
 
@@ -66,6 +67,16 @@ def write_deployment_metadata(path: Path, deployment: dict) -> None:
     (path / DEPLOYMENT_METADATA_FILE).write_text(
         json.dumps(deployment, indent=2, ensure_ascii=False), encoding="utf-8",
     )
+
+
+def write_images_file(deployment_dir: Path, deployment_id: str, images: list[dict], *, source: str = "local") -> None:
+    """images.json — what is known of each image of the deployment, for statistics and checks without opening the
+    images again: {"deployment_id", "source", "image_count", "first", "last", "images": [...]}. "source" says where it
+    comes from: "local" (the images were read here) or "trapper" (what Trapper holds for them). "first" and "last" are the
+    earliest and latest "local_time" of the images (the camera's wall clock) that have one."""
+    times = sorted(i["local_time"] for i in images if i.get("local_time"))
+    summary = {"deployment_id": deployment_id, "source": source, "image_count": len(images), "first": times[0] if times else None, "last": times[-1] if times else None}
+    (deployment_dir / IMAGES_FILE).write_text(json.dumps({**summary, "images": images}, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def list_deployments(collection_dir: Path) -> list[dict]:
@@ -173,6 +184,38 @@ def write_location(root: Path, research_project_id: str, location: dict) -> dict
     locations.append(location)
     (folder / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
     return location
+
+
+def update_location(root: Path, research_project_id: str, location_id: str, changes: dict) -> dict:
+    """Changes a kept location's fields (found ignoring case) — only the keys in changes, the rest stay.
+
+    Raises:
+        LocalFolderError: the research project or the location isn't there.
+    """
+    locations = list_locations(root, research_project_id)
+    index = next((i for i, l in enumerate(locations) if l.get("location_id", "").lower() == location_id.lower()), None)
+    if index is None:
+        raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
+    locations[index] = {**locations[index], **changes}
+    (project_dir(root, research_project_id) / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
+    return locations[index]
+
+
+def location_time(root: Path, research_project_id: str, location_id: str | None) -> dict:
+    """The timezone and summer-time setting kept for a location (found ignoring case) — only the ones it has. They belong
+    to the location, so they are what every deployment there is read in; empty when it isn't kept, or has neither.
+
+    Raises:
+        LocalFolderError: the research project id can't be a folder name.
+    """
+    return location_time_in(project_dir(root, research_project_id), location_id)
+
+
+def location_time_in(project_folder: Path, location_id: str | None) -> dict:
+    """location_time for a research project's folder, wherever it is — <folder>/locations.json."""
+    locations = _read_json(project_folder / LOCATIONS_FILE)
+    found = next((l for l in locations if isinstance(l, dict) and location_id and str(l.get("location_id", "")).lower() == location_id.lower()), None) if isinstance(locations, list) else None
+    return {k: found[k] for k in ("timezone", "ignore_dst") if found and found.get(k) is not None}
 
 
 # ── the collection's timestamp log ──────────────────────────────────────────

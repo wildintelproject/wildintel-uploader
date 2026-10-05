@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
 import Combobox from '../components/Combobox'
-import type { LocalResearchProject, UploadCollection, UploadDeploymentInfo, UploadEvent, UploadMode, UploadStep } from '../types'
+import type { AccessCheck, ClassificationProject, LocalResearchProject, UploadCollection, UploadTarget, UploadDeploymentInfo, UploadEvent, UploadMode, UploadStep } from '../types'
 
 const btnPrimary = 'px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
 const btnOutline = 'px-4 py-2 text-sm border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50'
@@ -11,6 +11,7 @@ const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark
 
 const STEPS: { step: UploadStep; label: string }[] = [
   { step: 'connect', label: 'Connect to Trapper' },
+  { step: 'classification', label: 'Classification project' },
   { step: 'location', label: 'Location' },
   { step: 'deployment', label: 'Deployment' },
   { step: 'package', label: 'Pack the images' },
@@ -26,6 +27,10 @@ interface Run {
   progress: { file: string; bytes: number; total: number } | null
   result: Extract<UploadEvent, { type: 'done' }> | null
   error: string | null
+}
+
+const ACCESS_LABELS: Record<AccessCheck['check'], string> = {
+  research_project: 'Research project', classification_project: 'Classification project', location: 'Locations', uploader: 'Uploader',
 }
 
 const EMPTY_RUN: Run = { steps: {}, progress: null, result: null, error: null }
@@ -66,7 +71,12 @@ const canUpload = (d: UploadDeploymentInfo) => d.preprocessed && d.images > 0
  * collection and the deployments in it; each goes through creating its location and the
  * deployment in Trapper if they're missing, packing its images into a zip and a yaml, and uploading
  * them for Trapper to process into a collection. */
-export default function UploadDeploymentPage() {
+interface Props {
+  /** Where to start from — the research project and collection a finished import went into. */
+  initial?: UploadTarget
+}
+
+export default function UploadDeploymentPage({ initial }: Props = {}) {
   const [projects, setProjects] = useState<LocalResearchProject[]>([])
   const [projectId, setProjectId] = useState('')
   const [collections, setCollections] = useState<UploadCollection[]>([])
@@ -80,33 +90,59 @@ export default function UploadDeploymentPage() {
   const [order, setOrder] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [finished, setFinished] = useState(false)
+  // The classification project the collection goes to: the ones Trapper has, and the chosen pk (a text, for when they can't be listed).
+  const [classifications, setClassifications] = useState<ClassificationProject[]>([])
+  const [classificationError, setClassificationError] = useState<string | null>(null)
+  const [classificationPk, setClassificationPk] = useState('')
+  const [access, setAccess] = useState<AccessCheck[] | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [accessError, setAccessError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (initial) chooseProject(initial.researchProjectId, initial.collection)
     api.listResearchProjects().then(({ results }) => setProjects(results)).catch((e) => setLoadError(e instanceof Error ? e.message : 'Could not read the collections folder.'))
     api.trapperGetConfig().then(setTrapper).catch(() => setTrapper(null))
   }, [])
 
-  async function loadCollections(id: string) {
+  async function loadCollections(id: string, pick?: string) {
     setCollections([]); setCollectionName(''); setSelected(new Set()); setLoadError(null)
     if (!id) return
     try {
       const { results } = await api.uploadCollections(id)
       setCollections(results)
+      if (pick) selectCollection(pick, results)
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Could not read the collections.')
     }
   }
 
-  function chooseProject(id: string) {
+  /** The classification projects Trapper has for the research project: with only one, it is the one chosen. */
+  async function loadClassifications(id: string) {
+    setClassifications([]); setClassificationPk(''); setClassificationError(null)
+    if (!id || !connected) return
+    try {
+      const { results } = await api.uploadClassificationProjects(id)
+      setClassifications(results)
+      if (results.length === 1) setClassificationPk(String(results[0].pk))
+    } catch (e) {
+      setClassificationError(e instanceof Error ? e.message : 'Could not read the classification projects.')
+    }
+  }
+
+  function chooseProject(id: string, pick?: string) {
     setProjectId(id)
-    setRuns({}); setOrder([]); setFinished(false)
-    void loadCollections(id)
+    setRuns({}); setOrder([]); setFinished(false); setAccess(null); setAccessError(null)
+    void loadCollections(id, pick)
   }
 
   function chooseCollection(name: string) {
+    setRuns({}); setOrder([]); setFinished(false); setAccess(null); setAccessError(null)
+    selectCollection(name, collections)
+  }
+
+  function selectCollection(name: string, from: UploadCollection[]) {
     setCollectionName(name)
-    setRuns({}); setOrder([]); setFinished(false)
-    const found = collections.find((c) => c.name === name)
+    const found = from.find((c) => c.name === name)
     // What is left to send: preprocessed, and not sent before.
     setSelected(new Set((found?.deployments ?? []).filter((d) => canUpload(d) && !d.uploaded_at).map((d) => d.deployment_id)))
   }
@@ -126,7 +162,30 @@ export default function UploadDeploymentPage() {
   // Generating the files needs no account — the others look at Trapper.
   const accountOk = mode === 'generate' || connected
   const modeInfo = MODES.find((m) => m.value === mode)!
+  // The classification projects are looked up once the research project and the account are both known.
+  useEffect(() => {
+    void loadClassifications(projectId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, connected])
+
+  const classificationValue = classificationPk.trim() === '' ? null : Number(classificationPk)
+  const classificationValid = classificationValue === null || (Number.isInteger(classificationValue) && classificationValue >= 1)
+  // The yaml needs one: with an account it is the one picked (or the only one); offline, the pk typed in.
+  const classificationReady = classificationValue !== null && classificationValid
   const toUpload = (collection?.deployments ?? []).filter((d) => selected.has(d.deployment_id) && canUpload(d))
+
+  /** Whether the account can reach the research project, its locations and the uploader — before sending anything. */
+  async function handleTestAccess() {
+    setTesting(true); setAccess(null); setAccessError(null)
+    try {
+      const { checks } = await api.checkUploadAccess(projectId, collection?.name ?? null, toUpload.map((d) => d.deployment_id), classificationValue)
+      setAccess(checks)
+    } catch (e) {
+      setAccessError(e instanceof Error ? e.message : 'Could not test the connection.')
+    } finally {
+      setTesting(false)
+    }
+  }
 
   async function handleUpload() {
     if (!collection) return
@@ -135,7 +194,7 @@ export default function UploadDeploymentPage() {
     setRuns(Object.fromEntries(ids.map((id) => [id, EMPTY_RUN])))
     for (const id of ids) {
       try {
-        await api.uploadDeployment(projectId, collection.name, id, zipMb, mode, (event) => setRuns((r) => ({ ...r, [id]: reduceRun(r[id] ?? EMPTY_RUN, event) })))
+        await api.uploadDeployment(projectId, collection.name, id, zipMb, mode, (event) => setRuns((r) => ({ ...r, [id]: reduceRun(r[id] ?? EMPTY_RUN, event) })), classificationValue)
       } catch (e) {
         setRuns((r) => ({ ...r, [id]: { ...(r[id] ?? EMPTY_RUN), progress: null, error: e instanceof Error ? e.message : 'The upload failed.' } }))
       }
@@ -167,6 +226,28 @@ export default function UploadDeploymentPage() {
             There is no Trapper account saved yet — set its URL, username and password in Settings › Trapper first
             {mode === 'generate' ? ' (to look up a research project that was not filled in from Trapper).' : '.'}
           </p>
+        )}
+        {connected && (
+          <div className="mt-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <button type="button" className={btnOutline} disabled={!projectId || testing || uploading} onClick={handleTestAccess}>
+                {testing ? 'Testing…' : 'Test connection'}
+              </button>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                {projectId ? 'Checks the research project, its locations and the uploader — nothing is created or sent.' : 'Pick a research project below to test the access to it.'}
+              </span>
+            </div>
+            {accessError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{accessError}</p>}
+            {access && (
+              <ul className="mt-2 space-y-1 text-sm" aria-label="Connection test">
+                {access.map((c) => (
+                  <li key={c.check} className={c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+                    {c.ok ? '✔' : '⚠'} <span className="font-medium">{ACCESS_LABELS[c.check]}</span> — {c.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </Card>
 
@@ -218,6 +299,30 @@ export default function UploadDeploymentPage() {
             </ul>
           </div>
         )}
+        {collection && (
+          <div className="mt-4">
+            <label className={labelClass} htmlFor="upload-classification">Classification project</label>
+            {classifications.length > 0 || connected ? (
+              <Combobox
+                id="upload-classification" options={classifications.map((c) => ({ value: String(c.pk), label: `${c.name} (#${c.pk})${c.is_active ? '' : ' — inactive'}` }))}
+                value={classificationPk} onChange={setClassificationPk} disabled={uploading}
+                placeholder={classifications.length === 0 ? 'No classification projects yet' : 'Select a classification project…'} clearLabel="Clear classification project"
+              />
+            ) : (
+              <input id="upload-classification" type="number" min={1} step={1} className={inputClass} value={classificationPk} disabled={uploading}
+                     placeholder="Its pk in Trapper" onChange={(e) => setClassificationPk(e.target.value)} aria-invalid={classificationValid ? undefined : true} />
+            )}
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">The collection is created in this classification project of Trapper.</p>
+            {classificationError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{classificationError}</p>}
+            {!classificationError && connected && classifications.length === 0 && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Trapper has none for this research project — create it there first.</p>
+            )}
+            {!connected && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Without a Trapper account they can’t be listed: type its pk.</p>}
+            {connected && classifications.length > 1 && !classificationReady && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">The research project has several: pick the one the collection goes to.</p>
+            )}
+          </div>
+        )}
         {loadError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{loadError}</p>}
       </Card>
 
@@ -250,7 +355,7 @@ export default function UploadDeploymentPage() {
 
       {collection && (
         <div className="flex justify-end mb-6">
-          <button type="button" className={btnPrimary} disabled={uploading || !accountOk || toUpload.length === 0 || !zipValid} onClick={handleUpload}>
+          <button type="button" className={btnPrimary} disabled={uploading || !accountOk || toUpload.length === 0 || !zipValid || !classificationReady} onClick={handleUpload}>
             {uploading ? modeInfo.busy : modeInfo.button(toUpload.length)}
           </button>
         </div>

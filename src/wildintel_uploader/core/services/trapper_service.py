@@ -123,21 +123,23 @@ def list_classification_projects(url: str, username: str, password: str, researc
 
 def list_locations(url: str, username: str, password: str, research_project_pk: int) -> list[dict]:
     """A research project's locations: pk, location_id, name, timezone and its
-    coordinates (latitude/longitude, WGS84) — those come from Trapper's export
-    endpoint, since the plain list only has them as a display string. None
-    when Trapper can't say."""
+    coordinates (latitude/longitude, WGS84) and whether it ignores summer time
+    ("ignore_dst") — those come from Trapper's export endpoint, since the plain
+    list only has the coordinates as a display string. None when Trapper can't say."""
     trapper = _client(url, username, password)
     locations = trapper.locations.where(research_project=research_project_pk, page_size=LIST_PAGE_SIZE)
     coordinates: dict[int, tuple[float | None, float | None]] = {}
+    ignore_dst: dict[int, bool | None] = {}
     try:
         for export in trapper.locations.export(query={"research_project": research_project_pk}):
             coordinates[export.pk] = (export.latitude, export.longitude)
+            ignore_dst[export.pk] = getattr(export, "ignore_dst", None)
     except Exception as exc:  # the locations are still usable, just without coordinates
         logger.warning("Could not read the locations' coordinates from Trapper: %s", exc)
     return sorted(
         (
             {
-                "pk": l.pk, "location_id": l.location_id or f"#{l.pk}", "name": l.name, "timezone": l.timezone,
+                "pk": l.pk, "location_id": l.location_id or f"#{l.pk}", "name": l.name, "timezone": l.timezone, "ignore_dst": ignore_dst.get(l.pk),
                 "latitude": coordinates.get(l.pk, (None, None))[0], "longitude": coordinates.get(l.pk, (None, None))[1],
             }
             for l in locations
@@ -164,6 +166,19 @@ def list_deployments(url: str, username: str, password: str, research_project_pk
         for export in exports
     ]
     return sorted(deployments, key=lambda d: (d["deployment_id"] or "").lower())
+
+
+def list_deployment_resources(url: str, username: str, password: str, deployment_pk: int) -> list[dict]:
+    """The resources (images) Trapper has for a deployment — its pk — as plain dicts: pk, name, date_recorded (as Trapper
+    gives it), mime, whether that date is right, and what is known of what they show (observation types, species, tags)."""
+    resources = _client(url, username, password).resources.where(deployments=deployment_pk, page_size=LIST_PAGE_SIZE)
+    return [
+        {
+            "pk": r.pk, "name": r.name, "date_recorded": r.date_recorded, "mime": r.mime, "date_recorded_correct": r.date_recorded_correct,
+            "observation_type": list(r.observation_type), "species": list(r.species), "tags": list(r.tags),
+        }
+        for r in resources
+    ]
 
 
 def _csv_value(value) -> str:

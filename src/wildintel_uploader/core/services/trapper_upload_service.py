@@ -20,6 +20,7 @@ the zip(s), the yaml(s) and the collection's <collection>_deployments.csv — an
 leaves them, for sending some other way."""
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import logging
@@ -33,6 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx
 from PIL import Image
 
 from wildintel_uploader.core.schemas.requests import DeploymentFields
@@ -195,15 +197,17 @@ def upsert_deployments_csv(path: Path, deployment: DeploymentFields, log: dict) 
 
 def build_packages(
     deployment_dir: Path, collection: str, deployment_id: str, log: dict, *, project_id: int, timezone_name: str, ignore_dst: bool,
-    output_dir: Path, max_zip_bytes: int | None = DEFAULT_MAX_ZIP_BYTES, stamp: str | None = None,
+    output_dir: Path, max_zip_bytes: int | None = DEFAULT_MAX_ZIP_BYTES, stamp: str | None = None, trapper_deployment_id: str | None = None,
 ) -> list[dict]:
     """Packs a deployment's images — as the preprocessing recorded them — into one or more
     zip + yaml pairs in output_dir. The yaml is what Trapper reads to build the collection:
 
-        collections: [{name, project_id, timezone, timezone_ignore_dst, resources_dir,
+        collections: [{name, project_id (the classification project's pk), timezone, timezone_ignore_dst, resources_dir,
                        deployments: [{deployment_id, resources: [{name, file, date_recorded, …}]}]}]
 
-    The zip holds <collection>/<deployment>/<file>. Returns [{"yaml", "zip", "files"}], one per part.
+    The zip holds <collection>/<deployment>/<file>. The yaml and the zip name the deployment as Trapper has it
+    (trapper_deployment_id, else the local id), in lower case — Trapper keeps its ids that way and looks them up as they are.
+    Returns [{"yaml", "zip", "files"}], one per part.
 
     Raises:
         TrapperUploadError: there are no images to pack, or one the log mentions is missing.
@@ -211,6 +215,7 @@ def build_packages(
     import yaml
 
     entries = check_images(deployment_dir, log)
+    named = (trapper_deployment_id or deployment_id).lower()  # Trapper keeps its ids in lower case and looks them up as they are
     stamp = stamp or datetime.now().strftime("%Y%m%d%H%M%S")
     output_dir.mkdir(parents=True, exist_ok=True)
     files = [(deployment_dir / e["name"], e) for e in entries]
@@ -220,13 +225,13 @@ def build_packages(
         definition = {"collections": [{
             "name": collection, "project_id": project_id, "timezone": timezone_name, "timezone_ignore_dst": ignore_dst,
             "resources_dir": collection,
-            "deployments": [{"deployment_id": deployment_id, "resources": [_resource(path, entry["name"], entry["date"]) for path, entry in part]}],
+            "deployments": [{"deployment_id": named, "resources": [_resource(path, entry["name"], entry["date"]) for path, entry in part]}],
         }]}
         yaml_path, zip_path = output_dir / f"{base}.yaml", output_dir / f"{base}.zip"
         yaml_path.write_text(yaml.dump(definition, sort_keys=False, allow_unicode=True), encoding="utf-8")
         with zipfile.ZipFile(zip_path, "w", allowZip64=True) as z:
             for path, _ in part:
-                z.write(path, f"{collection}/{deployment_id}/{path.name}")
+                z.write(path, f"{collection}/{named}/{path.name}")
         packages.append({"yaml": yaml_path, "zip": zip_path, "files": len(part)})
     return packages
 
@@ -252,6 +257,29 @@ def find_research_project(credentials: tuple[str, str, str], record: dict) -> in
     return match["pk"]
 
 
+def resolve_classification_project(credentials: tuple[str, str, str], research_project_pk: int, chosen: int | None = None) -> dict:
+    """The classification project the collection's yaml names (its "project_id" — not the research project's pk): the
+    one chosen, which must belong to the research project, or else the only one it has.
+
+    Raises:
+        TrapperUploadError: the chosen one isn't one of the research project's, or none was chosen and it has none or several.
+    """
+    projects = trapper_service.list_classification_projects(*credentials, research_project_pk)
+    if chosen is not None:
+        found = next((p for p in projects if p["pk"] == chosen), None)
+        if found is None:
+            raise TrapperUploadError(f"The classification project #{chosen} isn't one of the research project's in Trapper.")
+        return found
+    if not projects:
+        raise TrapperUploadError(
+            "The research project has no classification project in Trapper, and the collection needs one — create it there first."
+        )
+    if len(projects) > 1:
+        names = ", ".join(f"{p['name']} (#{p['pk']})" for p in projects)
+        raise TrapperUploadError(f"The research project has several classification projects — choose which one the collection goes to: {names}.")
+    return projects[0]
+
+
 def _write_locations_csv(path: Path, deployment: DeploymentFields) -> None:
     import csv
 
@@ -262,6 +290,32 @@ def _write_locations_csv(path: Path, deployment: DeploymentFields) -> None:
             deployment.location_id, deployment.location_name or "", deployment.longitude, deployment.latitude,
             deployment.coordinate_uncertainty if deployment.coordinate_uncertainty is not None else "",
         ])
+
+
+def find_location(credentials: tuple[str, str, str], research_project_pk: int, deployment: DeploymentFields) -> dict | None:
+    """The deployment's location as the research project has it in Trapper (found ignoring case) — with its "timezone"
+    and "ignore_dst" — or None if it isn't there. Trapper only accepts a package that declares the same timezone and
+    summer-time setting as the location the deployment is in.
+
+    Raises:
+        TrapperUploadError: the deployment has no location.
+    """
+    if not deployment.location_id:
+        raise TrapperUploadError("The deployment has no location id, so its location can't be looked for or created in Trapper.")
+    wanted = deployment.location_id.lower()
+    return next((l for l in trapper_service.list_locations(*credentials, research_project_pk) if l["location_id"].lower() == wanted), None)
+
+
+def _location_time_settings(location: dict | None, timezone_name: str, ignore_dst: bool) -> tuple[str, bool, str]:
+    """The timezone and summer-time setting the package declares — the location's own when it has them, else those given —
+    and a sentence saying so when they differ from the ones given ("" when they don't)."""
+    if location is None:
+        return timezone_name, ignore_dst, ""
+    zone = location.get("timezone") or timezone_name
+    ignores = ignore_dst if location.get("ignore_dst") is None else bool(location["ignore_dst"])
+    if (zone, ignores) == (timezone_name, ignore_dst):
+        return zone, ignores, ""
+    return zone, ignores, f" Its timezone is {zone} and it {'ignores' if ignores else 'does not ignore'} summer time — the package declares that, as Trapper requires."
 
 
 def location_exists(credentials: tuple[str, str, str], research_project_pk: int, deployment: DeploymentFields) -> bool:
@@ -276,10 +330,16 @@ def location_exists(credentials: tuple[str, str, str], research_project_pk: int,
     return any(l["location_id"].lower() == wanted for l in trapper_service.list_locations(*credentials, research_project_pk))
 
 
+def find_deployment(credentials: tuple[str, str, str], research_project_pk: int, deployment: DeploymentFields) -> str | None:
+    """The deployment's id as the research project has it in Trapper (found ignoring case), or None if it isn't there.
+    The collection's yaml has to name it exactly like that: Trapper looks the id up as it is."""
+    wanted = deployment.deployment_id.lower()
+    return next((d["deployment_id"] for d in trapper_service.list_deployments(*credentials, research_project_pk) if (d["deployment_id"] or "").lower() == wanted), None)
+
+
 def deployment_exists(credentials: tuple[str, str, str], research_project_pk: int, deployment: DeploymentFields) -> bool:
     """Whether the research project already has the deployment in Trapper (ignoring case)."""
-    wanted = deployment.deployment_id.lower()
-    return any((d["deployment_id"] or "").lower() == wanted for d in trapper_service.list_deployments(*credentials, research_project_pk))
+    return find_deployment(credentials, research_project_pk, deployment) is not None
 
 
 def ensure_location(credentials: tuple[str, str, str], research_project_pk: int, deployment: DeploymentFields, *, timezone_name: str, ignore_dst: bool, work_dir: Path) -> bool:
@@ -339,6 +399,33 @@ def _with_progress(work: Callable[[Callable[[dict], None]], None]) -> Iterator[d
         raise failure[0]
 
 
+def _refused(exc: httpx.HTTPStatusError) -> str:
+    """What Trapper's uploader answered — its URL, status and the start of the body — since "Client error '403 Forbidden'"
+    alone doesn't say whether the login was refused by the uploader itself or by something in front of it."""
+    response = exc.response
+    body = " ".join(response.text.split())[:300]
+    server = response.headers.get("server")
+    hint = ""
+    if response.status_code in (401, 403) and response.url.path.endswith("/auth/login"):
+        hint = " The login was refused: check the account's permissions on the uploader, or whether a proxy/firewall in front of Trapper blocks this address."
+    return (f"Trapper's uploader refused {response.request.method} {response.url}: {response.status_code} {response.reason_phrase}"
+            f"{f' (server: {server})' if server else ''}{f' — {body}' if body else ''}.{hint}")
+
+
+def _trapper_message(exc: Exception) -> str:
+    """Trapper answers a refused task with a dict — {'data': {'message': …, 'errors': …}} — that an exception
+    shows as its repr; this is what it says, in words. Anything else is its own text."""
+    text = str(exc)
+    try:
+        parsed = ast.literal_eval(text) if text.lstrip().startswith("{") else None
+    except (ValueError, SyntaxError):
+        parsed = None
+    data = parsed.get("data", parsed) if isinstance(parsed, dict) else None
+    if isinstance(data, dict) and (data.get("message") or data.get("errors")):
+        return " ".join(str(part).rstrip(".") + "." for part in (data.get("message"), data.get("errors")) if part)
+    return text
+
+
 def _upload_files(client, files: list[Path], report: Callable[[dict], None]) -> None:
     from trapper_client.components.http_uploader import HTTPUploader  # needs the SDK's "upload" extra
 
@@ -351,8 +438,86 @@ def _upload_files(client, files: list[Path], report: Callable[[dict], None]) -> 
                 report({"type": "upload_progress", "file": _name, "bytes": sent["bytes"], "total": _total})
 
         uploader = HTTPUploader(client=client, progress_callback=on_progress)
-        asyncio.run(uploader.upload_file(path, f"/collections/{path.name}"))
+        try:
+            asyncio.run(uploader.upload_file(path, f"/collections/{path.name}"))
+        except httpx.HTTPStatusError as exc:
+            raise TrapperUploadError(_refused(exc)) from exc
         Path(str(path) + ".uploadmeta.json").unlink(missing_ok=True)
+
+
+def _uploader_login(credentials: tuple[str, str, str]) -> None:
+    """Logs in to Trapper's uploader the way an upload does — and does nothing else.
+
+    Raises:
+        httpx.HTTPStatusError: the uploader refused the login.
+    """
+    from trapper_client.components.http_uploader import HTTPUploader  # needs the SDK's "upload" extra
+
+    client = trapper_service.client(*credentials)
+
+    async def login() -> None:
+        async with httpx.AsyncClient(base_url=client.base_url.rstrip("/") + "/", verify=client.verify_ssl) as http:
+            await HTTPUploader(client=client)._login(http)
+
+    asyncio.run(login())
+
+
+def check_access(
+    credentials: tuple[str, str, str], research_project: dict, location_ids: list[str] | None = None, *,
+    classification_project_pk: int | None = None, describe: Callable[[Exception], str] = str,
+) -> list[dict]:
+    """Whether this account can do what an upload needs, changing nothing in Trapper — [{"check", "ok", "message"}]:
+      - "research_project": the research project is there and can be read;
+      - "classification_project": the one the collection will go to — the one chosen, or the only one there is;
+      - "location": the research project's locations can be read, and whether each of location_ids (the ones the
+        deployments to upload have) is already there or would be created. Skipped if the project couldn't be found;
+      - "uploader": the login of the uploader, the endpoint the packages go up through — a different door from the
+        rest of Trapper's API, so it can refuse an account the API accepts.
+    Each check is independent: one failing doesn't stop the others. describe turns an exception into the message.
+    """
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, message: str) -> None:
+        checks.append({"check": name, "ok": ok, "message": message})
+
+    project_pk: int | None = None
+    try:
+        project_pk = find_research_project(credentials, research_project)
+        check("research_project", True, f"Research project {research_project.get('acronym')} is #{project_pk} in Trapper.")
+    except Exception as exc:
+        check("research_project", False, describe(exc))
+
+    if project_pk is None:
+        check("classification_project", False, "Not checked: the research project couldn't be found.")
+        check("location", False, "Not checked: the research project couldn't be found.")
+    else:
+        try:
+            chosen = resolve_classification_project(credentials, project_pk, classification_project_pk)
+            check("classification_project", True, f"The collection will go to the classification project {chosen['name']} (#{chosen['pk']}).")
+        except Exception as exc:
+            check("classification_project", False, describe(exc))
+        try:
+            known = {l["location_id"].lower() for l in trapper_service.list_locations(*credentials, project_pk)}
+            wanted = sorted({i for i in (location_ids or []) if i}, key=str.lower)
+            present = [i for i in wanted if i.lower() in known]
+            missing = [i for i in wanted if i.lower() not in known]
+            message = f"The {len(known)} location(s) of the research project can be read."
+            if present:
+                message += f" Already in Trapper: {', '.join(present)}."
+            if missing:
+                message += f" Would be created: {', '.join(missing)}."
+            check("location", True, message)
+        except Exception as exc:
+            check("location", False, describe(exc))
+
+    try:
+        _uploader_login(credentials)
+        check("uploader", True, f"Logged in to the uploader at {credentials[0].rstrip('/')}/uploader.")
+    except httpx.HTTPStatusError as exc:
+        check("uploader", False, _refused(exc))
+    except Exception as exc:
+        check("uploader", False, describe(exc))
+    return checks
 
 
 def _wait_for_collection(client, research_project_pk: int, name: str, *, timeout: float, poll: float) -> bool:
@@ -372,12 +537,12 @@ def _megabytes(size: float) -> str:
 def upload_stream(
     credentials: tuple[str, str, str] | None, research_project: dict, collection_dir: Path, deployment_id: str, packages_dir: Path, *,
     mode: Mode = "upload", max_zip_bytes: int | None = DEFAULT_MAX_ZIP_BYTES, remove_zip: bool = True,
-    wait_seconds: float | None = None, poll_seconds: float | None = None,
+    wait_seconds: float | None = None, poll_seconds: float | None = None, classification_project_pk: int | None = None,
 ) -> Iterator[dict]:
     """Uploads one deployment of a collection to Trapper — or, as `mode` says, only shows what that
     would do ("dry_run"), or only writes the files ("generate"). Events:
       - {"type": "step", "step", "status": "running" | "done" | "skipped", "message"}, for the steps
-        "connect", "location", "deployment", "package", "csv", "upload", "process" and "wait";
+        "connect", "classification", "location", "deployment", "package", "csv", "upload", "process" and "wait";
       - {"type": "upload_progress", "file", "bytes", "total"} while a file goes up;
       - {"type": "done", "mode", "collection", "deployment_id", …}: for "upload", "location_created",
         "deployment_created" and "parts"; for "dry_run", "would_create_location",
@@ -431,19 +596,36 @@ def upload_stream(
         project_pk = find_research_project(credentials, research_project)  # type: ignore[arg-type]
         yield step("connect", "done", f"Connected — research project {research_project.get('acronym')} is #{project_pk} in Trapper.")
 
+    # ── the classification project the collection goes to: the yaml's project_id ──
+    classification_pk: int | None = classification_project_pk
+    if credentials is not None:
+        yield step("classification", "running", "Looking for the classification project…")
+        chosen = resolve_classification_project(credentials, project_pk, classification_project_pk)
+        classification_pk = chosen["pk"]
+        yield step("classification", "done", f"The collection goes to the classification project {chosen['name']} (#{classification_pk}).")
+    elif classification_pk is None:
+        raise TrapperUploadError("The yaml needs the classification project's pk in Trapper — choose one, which needs the Trapper account saved in the settings.")
+    else:
+        yield step("classification", "done", f"The collection goes to the classification project #{classification_pk}.")
+
     work_dir = packages_dir
     location_created = deployment_created = False
+    trapper_deployment_id: str | None = None  # the deployment's id as Trapper has it, once known
 
     # ── what has to exist in Trapper ──
     if mode != "generate":
         yield step("location", "running", f"Looking for the location {deployment.location_id} in Trapper…")
         if dry:
-            location_created = not location_exists(credentials, project_pk, deployment)  # type: ignore[arg-type]
-            yield step("location", "done", f"Location {deployment.location_id} would be created." if location_created else f"Location {deployment.location_id} is already in Trapper.")
+            found = find_location(credentials, project_pk, deployment)  # type: ignore[arg-type]
+            location_created = found is None
+            note = _location_time_settings(found, timezone_name, ignore_dst)[2]
+            yield step("location", "done", f"Location {deployment.location_id} would be created." if location_created else f"Location {deployment.location_id} is already in Trapper.{note}")
         else:
             work_dir.mkdir(parents=True, exist_ok=True)
             location_created = ensure_location(credentials, project_pk, deployment, timezone_name=timezone_name, ignore_dst=ignore_dst, work_dir=work_dir)  # type: ignore[arg-type]
-            yield step("location", "done", f"Location {deployment.location_id} {'created' if location_created else 'was already in Trapper'}.")
+            # The package has to declare the timezone and summer-time setting of the location it goes to.
+            timezone_name, ignore_dst, note = _location_time_settings(find_location(credentials, project_pk, deployment), timezone_name, ignore_dst)  # type: ignore[arg-type]
+            yield step("location", "done", f"Location {deployment.location_id} {'created' if location_created else 'was already in Trapper'}.{note}")
 
         yield step("deployment", "running", f"Looking for the deployment {deployment_id} in Trapper…")
         if dry:
@@ -451,7 +633,16 @@ def upload_stream(
             yield step("deployment", "done", f"Deployment {deployment_id} would be created." if deployment_created else f"Deployment {deployment_id} is already in Trapper.")
         else:
             deployment_created = ensure_deployment(credentials, project_pk, deployment, timezone_name=timezone_name, ignore_dst=ignore_dst, work_dir=work_dir)  # type: ignore[arg-type]
-            yield step("deployment", "done", f"Deployment {deployment_id} {'created' if deployment_created else 'was already in Trapper'}.")
+            trapper_deployment_id = find_deployment(credentials, project_pk, deployment)  # type: ignore[arg-type]
+            message = f"Deployment {deployment_id} {'created' if deployment_created else 'was already in Trapper'}"
+            if trapper_deployment_id and trapper_deployment_id != deployment_id:
+                message += f", as {trapper_deployment_id} — the package uses that id"
+            yield step("deployment", "done", message + ".")
+
+    elif credentials is not None:  # only generating: what the location says is read — nothing is created
+        timezone_name, ignore_dst, note = _location_time_settings(find_location(credentials, project_pk, deployment), timezone_name, ignore_dst)  # type: ignore[arg-type]
+        if note:
+            yield step("location", "done", f"Location {deployment.location_id} is in Trapper.{note}")
 
     # ── the package ──
     if dry:
@@ -468,7 +659,7 @@ def upload_stream(
     yield step("package", "running", f"Packing {len(log['images'])} image(s)…")
     output_dir = work_dir / collection
     packages = build_packages(
-        deployment_dir, collection, deployment_id, log, project_id=project_pk, timezone_name=timezone_name, ignore_dst=ignore_dst,
+        deployment_dir, collection, deployment_id, log, project_id=classification_pk, timezone_name=timezone_name, ignore_dst=ignore_dst, trapper_deployment_id=trapper_deployment_id,
         output_dir=output_dir, max_zip_bytes=max_zip_bytes,
     )
     yield step("package", "done", f"{len(packages)} package(s) of {sum(p['files'] for p in packages)} image(s).")
@@ -490,9 +681,12 @@ def upload_stream(
         yield from _with_progress(lambda report, p=package: _upload_files(client, [p["zip"], p["yaml"]], report))
         yield step("upload", "done", f"Package {number} of {len(packages)} uploaded.")
         yield step("process", "running", "Asking Trapper to process the package…")
-        client.collections.trigger_collection(
-            payload={"yaml_file": package["yaml"].name, "zip_file": package["zip"].name, "remove_zip": remove_zip}, raise_on_error=True,
-        )
+        try:
+            client.collections.trigger_collection(
+                payload={"yaml_file": package["yaml"].name, "zip_file": package["zip"].name, "remove_zip": remove_zip}, raise_on_error=True,
+            )
+        except Exception as exc:
+            raise TrapperUploadError(f"Trapper refused to process the package: {_trapper_message(exc)}") from exc
         yield step("process", "done", "Trapper is processing the package.")
 
     yield step("wait", "running", f"Waiting for the collection {collection} to appear in Trapper…")
@@ -504,7 +698,7 @@ def upload_stream(
         package["zip"].unlink(missing_ok=True)
         package["yaml"].unlink(missing_ok=True)
     (deployment_dir / UPLOAD_LOG_FILE).write_text(json.dumps({
-        "uploaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "research_project_pk": project_pk, "collection": collection,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "research_project_pk": project_pk, "classification_project_pk": classification_pk, "collection": collection,
         "parts": len(packages), "location_created": location_created, "deployment_created": deployment_created,
     }, indent=2), encoding="utf-8")
     yield {

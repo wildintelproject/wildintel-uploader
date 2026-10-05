@@ -127,6 +127,23 @@ def previous_revisions(collections_dir: Path, research_project_id: str, deployme
     return sorted(found, key=lambda r: (r.revision, r.deployment_id))
 
 
+def next_revision(collections_dir: Path, research_project_id: str, location_id: str) -> dict:
+    """The revision a new deployment at this location is expected to be: one after the highest kept in the research
+    project for it (any collection, a location's _suffix not counting), or 1 if there is none. {"last", "next"}."""
+    project = collections_dir / research_project_id
+    wanted = location_id.strip().lower()
+    last: int | None = None
+    if wanted and project.is_dir():
+        for collection in project.iterdir():
+            if not (collection.is_dir() and _COLLECTION_RE.match(collection.name)):
+                continue
+            for deployment in collection.iterdir():
+                match = _DEPLOYMENT_RE.match(deployment.name)
+                if deployment.is_dir() and match and match.group(2).lower() == wanted:
+                    last = max(last or 0, int(match.group(1)))
+    return {"last": last, "next": (last or 0) + 1}
+
+
 def previous_deployment(collections_dir: Path, research_project_id: str, deployment_id: str) -> dict | None:
     """The details kept for the closest earlier revision of this deployment's location — the
     deployment.json an import leaves — as {"revision", "deployment_id", "deployment"}, or None

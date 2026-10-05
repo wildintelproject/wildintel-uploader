@@ -1,14 +1,17 @@
+import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
 import ImportDeploymentPage from './ImportDeploymentPage'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { DeploymentCheckResult, LocalLocation, LocalResearchProject } from '../types'
 import { APP_SETTINGS, DETAILED_SESSION, SESSION } from '../test/fixtures'
+import { isValidTimezone as isValid } from '../deploymentValidation'
 
 vi.mock('../api', () => ({
   api: {
+    nextRevision: vi.fn(),
     trapperGetConfig: vi.fn(),
     getSettings: vi.fn(),
     exiftoolStatus: vi.fn(),
@@ -74,12 +77,14 @@ beforeEach(() => {
   vi.clearAllMocks()
   storedProjects = []
   storedLocations = {}
+  pageProps = {}
   mockedApi.listResearchProjects.mockImplementation(async () => ({ results: [...storedProjects] }))
   mockedApi.saveResearchProject.mockImplementation(async (project) => { storedProjects.push(project); return project })
   mockedApi.listLocalLocations.mockImplementation(async (id) => ({ results: [...(storedLocations[id] ?? [])] }))
   mockedApi.saveLocalLocation.mockImplementation(async (id, location) => { (storedLocations[id] ??= []).push(location); return location })
   mockedApi.getSettings.mockResolvedValue(APP_SETTINGS)
   mockedApi.existingDeployments.mockResolvedValue({ results: {} })
+  mockedApi.nextRevision.mockRejectedValue(new Error('no suggestion'))  // the revision stays to be typed, unless a test says otherwise
   mockedApi.previousDeployments.mockResolvedValue({ results: {} })
   mockedApi.exiftoolStatus.mockResolvedValue({ available: true, path: '/usr/bin/exiftool' })
   mockedApi.writeTimestampLog.mockResolvedValue({ path: `${COLLECTIONS_DIR}/R0001_FileTimestampLog.csv`, action: 'added', rows: 1, collection: 'R0001' })
@@ -101,8 +106,11 @@ beforeEach(() => {
 
 // ── Step-by-step helpers ─────────────────────────────────────────────────────
 
+// Props the page is rendered with — reset for every test.
+let pageProps: ComponentProps<typeof ImportDeploymentPage> = {}
+
 async function scanTheFolder() {
-  render(<ImportDeploymentPage />)
+  render(<ImportDeploymentPage {...pageProps} />)
   await userEvent.type(screen.getByLabelText('Folder path'), '/home/me/deployments/DONA_01')
   await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
   await screen.findByText(/12 file\(s\), 12 image\(s\)/)
@@ -141,24 +149,23 @@ async function addProjectByHand(name = 'Doñana', acronym = 'DONA') {
   await screen.findByRole('button', { name: /add a new location/i })
 }
 
-async function addLocationByHand(locationId = 'DONA_01', name = 'Doñana site 1') {
+async function addLocationByHand(locationId = 'DONA_01', name = 'Doñana site 1', timezone = 'Europe/Madrid') {
   await userEvent.click(await screen.findByRole('button', { name: /add a new location/i }))
   await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
   await userEvent.type(screen.getByLabelText('Location id'), locationId)
   await userEvent.type(screen.getByLabelText('Location name (optional)'), name)
   await userEvent.type(screen.getByLabelText('Latitude'), '37.0')
   await userEvent.type(screen.getByLabelText('Longitude'), '-6.5')
+  if (timezone) await userEvent.type(screen.getByLabelText('Timezone (IANA)'), timezone)
   await userEvent.click(screen.getByRole('button', { name: 'Save location' }))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled())
 }
 
 /** What the details step requires: the revision (which gives the deployment
- * id "R000<revision>-DONA_01") and the timezone. The location — coordinates
- * and all — was already added in the origin step. */
+ * id "R000<revision>-DONA_01"). The location — coordinates, timezone and
+ * all — was already added in the origin step. */
 async function fillRequiredDetails(revision = '1') {
   await userEvent.type(screen.getByLabelText('Revision'), revision)
-  await userEvent.clear(screen.getByLabelText('Timezone (IANA)'))
-  await userEvent.type(screen.getByLabelText('Timezone (IANA)'), 'Europe/Madrid')
 }
 
 /** Origin and details filled in, then Next (→ step "postvalidation"). `fillDetails` can fill in more first. */
@@ -265,7 +272,8 @@ describe('ImportDeploymentPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Next' }))
       await screen.findByText('Deployment details')
-      expect(screen.getByLabelText('Timezone (IANA)')).toHaveValue('Europe/Madrid') // from the location
+      expect(screen.getByText('Europe/Madrid')).toBeInTheDocument() // from the location, in the sentence about it
+      expect(screen.queryByLabelText('Timezone (IANA)')).not.toBeInTheDocument() // not asked for the deployment
       await userEvent.type(screen.getByLabelText('Revision'), '3')
       expect(screen.getByLabelText('Deployment id')).toHaveValue('R0003-DONA_01') // built from its location id
     })
@@ -506,7 +514,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Save location' }))
 
         expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
-          location_id: 'DONA_02', name: null, timezone: null, latitude: 37.1, longitude: -6.4, coordinate_uncertainty: 100, trapper_pk: null,
+          location_id: 'DONA_02', name: null, timezone: null, ignore_dst: true, latitude: 37.1, longitude: -6.4, coordinate_uncertainty: 100, trapper_pk: null,
         })
         await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()) // picked
         expect(screen.getByLabelText('Location')).toHaveValue('DONA_02')
@@ -550,7 +558,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(screen.getByRole('button', { name: /add 1 location$/i }))
 
         await waitFor(() => expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
-          location_id: 'DONA_01', name: 'Doñana site 1', timezone: 'Europe/Madrid', trapper_pk: 5,
+          location_id: 'DONA_01', name: 'Doñana site 1', timezone: 'Europe/Madrid', ignore_dst: null, trapper_pk: 5,
           latitude: 37, longitude: -6.5, coordinate_uncertainty: null, // its coordinates come from Trapper
         }))
         expect(screen.queryByRole('button', { name: 'Save location' })).not.toBeInTheDocument() // no form
@@ -716,7 +724,6 @@ describe('ImportDeploymentPage', () => {
 
     it('needs a whole revision number from 1 to 9999', async () => {
       await goToNewDetailsStep()
-      await userEvent.type(screen.getByLabelText('Timezone (IANA)'), 'Europe/Madrid')
       expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled() // no revision yet
 
       for (const bad of ['0', '-2', '1.5', '10000']) {
@@ -754,14 +761,11 @@ describe('ImportDeploymentPage', () => {
     })
   })
 
-  it('needs the revision and the timezone before leaving the details', async () => {
+  it('needs the revision before leaving the details', async () => {
     await goToNewDetailsStep()
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
 
     await userEvent.type(screen.getByLabelText('Revision'), '1')
-    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled() // still no timezone
-
-    await userEvent.type(screen.getByLabelText('Timezone (IANA)'), 'Europe/Madrid')
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
   })
 
@@ -791,19 +795,12 @@ describe('ImportDeploymentPage', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
   })
 
-  it('gives both dates their timezone designator, following the timezone chosen', async () => {
+  it('gives both dates the timezone designator of the location', async () => {
     await goToNewDetailsStep()
-    expect(screen.queryByText(/Saved as/)).not.toBeInTheDocument() // no timezone yet, so no designator
-
-    await userEvent.type(screen.getByLabelText('Timezone (IANA)'), 'Europe/Madrid')
     expect(screen.getAllByText(/Saved as 2024-(09-04T13:10:00\+02:00|11-04T14:28:00\+01:00)/)).toHaveLength(2)
 
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2024-12-01T08:00' } })
     expect(screen.getByText('Saved as 2024-12-01T08:00:00+01:00')).toBeInTheDocument() // winter offset
-
-    await userEvent.clear(screen.getByLabelText('Timezone (IANA)'))
-    await userEvent.type(screen.getByLabelText('Timezone (IANA)'), 'Atlantic/Canary')
-    expect(screen.getByText('Saved as 2024-12-01T08:00:00Z')).toBeInTheDocument()
   })
 
   it('shows the standard\'s description under each field', async () => {
@@ -811,7 +808,7 @@ describe('ImportDeploymentPage', () => {
 
     expect(screen.getByText(/Unique identifier of the deployment\./)).toBeInTheDocument()
     expect(screen.getAllByText(/Formatted as an ISO 8601 string with timezone designator/)).toHaveLength(2)
-    expect(screen.getAllByText('Required').length).toBeGreaterThanOrEqual(4) // revision, timezone, start, end (the location came with its coordinates)
+    expect(screen.getAllByText('Required').length).toBeGreaterThanOrEqual(3) // revision, start, end (the location came with its coordinates)
   })
 
   it('flags camera height and depth given together', async () => {
@@ -830,14 +827,13 @@ describe('ImportDeploymentPage', () => {
 
     expect(await screen.findByLabelText('Deployment id')).toHaveValue('R0001-DONA_01')
     expect(screen.getByLabelText('Revision')).toHaveValue(1)
-    expect(screen.getByLabelText('Timezone (IANA)')).toHaveValue('Europe/Madrid')
   })
 
   it('saves the deployment\'s details into the session when leaving them, and nothing about a mode or a destination', async () => {
     await goToPostvalidation('3')
 
     expect(mockedApi.saveDetails).toHaveBeenCalledWith(
-      'task-1', expect.objectContaining({ deployment_id: 'R0003-DONA_01', location_id: 'DONA_01', latitude: 37, longitude: -6.5 }), 'Europe/Madrid', false,
+      'task-1', expect.objectContaining({ deployment_id: 'R0003-DONA_01', location_id: 'DONA_01', latitude: 37, longitude: -6.5 }),
     )
     expect(mockedApi.saveSelection).not.toHaveBeenCalled()
   })
@@ -1586,13 +1582,35 @@ describe('ImportDeploymentPage', () => {
 
     })
 
-    it('follows the settings for the dates: not ignoring summer time, not converting to UTC', async () => {
+
+    /** Locations kept before the summer-time setting was asked: they do not say it, so the setting's default stands. */
+    const locationsWithoutSummerTime = () => mockedApi.saveLocalLocation.mockImplementation(async (id, location) => {
+      const kept = { ...location, ignore_dst: null }
+      ;(storedLocations[id] ??= []).push(kept)
+      return kept
+    })
+
+    it('follows the settings for the dates when the location does not say: not ignoring summer time, not converting to UTC', async () => {
+      locationsWithoutSummerTime()
       mockedApi.getSettings.mockResolvedValue(preSettings({ ignore_dst: false, convert_to_utc: false }))
       await goToPostvalidation()
       await advanceToPreprocessing()
 
       await waitFor(() => expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('ignoring summer time'))
       expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('converted to UTC')
+    })
+
+    it('reads the summer-time setting from the location rather than from the settings', async () => {
+      mockedApi.saveLocalLocation.mockImplementation(async (id, location) => {
+        const kept = { ...location, ignore_dst: false }  // the location says its cameras do not ignore summer time
+        ;(storedLocations[id] ??= []).push(kept)
+        return kept
+      })
+      mockedApi.getSettings.mockResolvedValue(preSettings({ ignore_dst: true }))  // the default says they do
+      await goToPostvalidation()
+      await advanceToPreprocessing()
+
+      await waitFor(() => expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('ignoring summer time'))
     })
 
     it('shows the name an image will get, built from the deployment id and the first date', async () => {
@@ -1660,7 +1678,39 @@ describe('ImportDeploymentPage', () => {
       expect(mockedApi.openFolder).toHaveBeenCalledWith(`${COLLECTIONS_DIR}/R0001-DONA_01`)
     })
 
+    it('offers to go on to the upload of the collection it was imported into, once imported', async () => {
+      const onUpload = vi.fn()
+      pageProps = { onUpload }
+      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+        onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0 })
+      })
+      await goToPostvalidation()
+      await advanceToPreprocessing()
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await screen.findByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
+      expect(screen.queryByRole('button', { name: 'Upload to Trapper' })).not.toBeInTheDocument() // not before it is imported
+      await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
+
+      await screen.findByText(/Deployment imported/)
+      await userEvent.click(screen.getByRole('button', { name: 'Upload to Trapper' }))
+      expect(onUpload).toHaveBeenCalledWith({ researchProjectId: 'DONA', collection: 'R0001' })
+    })
+
+    it('has no upload button when the page cannot go anywhere', async () => {
+      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+        onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0 })
+      })
+      await goToPostvalidation()
+      await advanceToPreprocessing()
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'Import deployment' }))
+
+      await screen.findByText(/Deployment imported/)
+      expect(screen.queryByRole('button', { name: 'Upload to Trapper' })).not.toBeInTheDocument()
+    })
+
     it('imports with the steps left ticked, and the values of the settings', async () => {
+      locationsWithoutSummerTime()
       mockedApi.getSettings.mockResolvedValue(preSettings({ resize_width: 1600, owner: 'Universidad de Huelva', ignore_dst: false }))
       mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0 })
@@ -1678,8 +1728,7 @@ describe('ImportDeploymentPage', () => {
         '/home/me/deployments/DONA_01', COLLECTIONS_DIR, 'R0001', expect.anything(),
         {
           rename: true, resize: false, resize_width: 1600, metadata: true, owner: 'Universidad de Huelva', publisher: '', coverage: '',
-          license_url: 'https://creativecommons.org/licenses/by-nc/4.0/', research_project: 'Doñana', timezone: 'Europe/Madrid',
-          ignore_dst: false, convert_to_utc: true,
+          license_url: 'https://creativecommons.org/licenses/by-nc/4.0/', research_project: 'Doñana', convert_to_utc: true,
         },
         expect.any(Function),
       )
@@ -1881,7 +1930,6 @@ describe('ImportDeploymentPage', () => {
     await screen.findByText('Deployment details')
     expect(screen.getByLabelText('Revision')).toHaveValue(1)
     expect(screen.getByLabelText('Deployment id')).toHaveValue('R0001-DONA_01')
-    expect(screen.getByLabelText('Timezone (IANA)')).toHaveValue('Europe/Madrid')
     expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-04T13:10')
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
     expect(mockedApi.saveScan).not.toHaveBeenCalled()
@@ -1971,6 +2019,54 @@ describe('ImportDeploymentPage', () => {
       await waitFor(() => expect(mockedApi.previousDeployments).toHaveBeenCalled())
 
       expect(screen.queryByText(/There is an earlier revision/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('the revision and the location’s time settings', () => {
+    it('starts the revision as the next one expected for the location, says so, and keeps what is typed', async () => {
+      mockedApi.nextRevision.mockResolvedValue({ last: 2, next: 3 })
+      await goToNewDetailsStep()
+
+      await waitFor(() => expect(screen.getByLabelText('Revision')).toHaveValue(3))
+      expect(mockedApi.nextRevision).toHaveBeenCalledWith('DONA', 'DONA_01')
+      expect(screen.getByText(/the next after R0002, the latest kept for this location/)).toBeInTheDocument()
+      expect(screen.getByLabelText('Deployment id')).toHaveValue('R0003-DONA_01')
+
+      fireEvent.change(screen.getByLabelText('Revision'), { target: { value: '5' } })
+      expect(screen.getByLabelText('Deployment id')).toHaveValue('R0005-DONA_01')
+      expect(screen.queryByText(/the latest kept for this location/)).not.toBeInTheDocument()
+    })
+
+    it('starts at 1 when the location has no revision kept', async () => {
+      mockedApi.nextRevision.mockResolvedValue({ last: null, next: 1 })
+      await goToNewDetailsStep()
+
+      await waitFor(() => expect(screen.getByLabelText('Revision')).toHaveValue(1))
+      expect(screen.getByText(/the first revision of this location/)).toBeInTheDocument()
+    })
+
+    it('leaves the revision to be typed when none can be suggested', async () => {
+      await goToNewDetailsStep() // nextRevision rejects
+      expect(screen.getByLabelText('Revision')).toHaveValue(null)
+    })
+
+    it('does not ask the timezone nor summer time: it says them, as the location’s, before asking for the details', async () => {
+      await goToNewDetailsStep()
+
+      expect(screen.queryByLabelText('Timezone (IANA)')).not.toBeInTheDocument()
+      expect(screen.queryByRole('checkbox', { name: /ignore summer time/ })).not.toBeInTheDocument()
+      expect(screen.getByText(/You are entering the details of a deployment taken at location/)).toBeInTheDocument()
+      for (const bold of ['DONA_01', '37, -6.5', 'Europe/Madrid', 'ignores']) expect(screen.getByText(bold).tagName).toBe('STRONG')
+    })
+
+    it('says when the location has no timezone', async () => {
+      await goToOriginStep()
+      await addProjectByHand()
+      await addLocationByHand('DONA_01', 'Doñana site 1', '')
+      await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+      await screen.findByText('Deployment details')
+
+      expect(screen.getByText(/has no timezone, and a deployment needs it/)).toBeInTheDocument()
     })
   })
 })

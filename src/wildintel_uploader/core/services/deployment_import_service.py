@@ -203,9 +203,55 @@ def scan_folder(source_dir: Path) -> dict:
     }
 
 
+def _find_timestamp_log(session_dir: Path) -> tuple[Path | None, list[str]]:
+    """The <collection>_FileTimestampLog.csv wildintel-tools expects beside a collection's deployments: the one
+    named after the folder, else the only one there. None (and a warning when it is ambiguous) otherwise."""
+    suffix = local_folder_service.TIMESTAMP_LOG_SUFFIX
+    named = session_dir / f"{session_dir.name}{suffix}"
+    if named.is_file():
+        return named, []
+    found = sorted(p for p in session_dir.iterdir() if p.is_file() and p.name.lower().endswith(suffix.lower()))
+    if len(found) == 1:
+        return found[0], []
+    if found:
+        return None, [f"There are {len(found)} FileTimestampLog files ({', '.join(p.name for p in found)}) and none is named after the folder — none was used."]
+    return None, []
+
+
+def _timestamp_log_periods(path: Path) -> tuple[dict[str, tuple[str, datetime, datetime]], list[str]]:
+    """The log's rows as {lower-cased deployment id: (deployment id as written, start, end)}, plus a warning for
+    each row that can't be used (a date that isn't %Y:%m:%d %H:%M:%S, or one that ends before it starts)."""
+    warnings: list[str] = []
+    try:
+        rows = local_folder_service.read_timestamp_log(path)
+    except local_folder_service.LocalFolderError as exc:
+        return {}, [f"{exc} — its dates were not used."]
+    periods: dict[str, tuple[str, datetime, datetime]] = {}
+    for row in rows:
+        try:
+            start = datetime.strptime(f"{row['StartDate']} {row['StartTime']}", "%Y:%m:%d %H:%M:%S")
+            end = datetime.strptime(f"{row['EndDate']} {row['EndTime']}", "%Y:%m:%d %H:%M:%S")
+        except ValueError:
+            warnings.append(f"{path.name}: the dates of {row['Deployment']} are not like 2024:09:04 13:10:00 — that row was ignored.")
+            continue
+        if end <= start:
+            warnings.append(f"{path.name}: {row['Deployment']} ends before it starts — that row was ignored.")
+            continue
+        periods[row["Deployment"].lower()] = (row["Deployment"], start, end)
+    return periods, warnings
+
+
 def scan_session(session_dir: Path) -> dict:
     """A session folder — one subfolder per deployment — scanned: each subfolder's own scan_folder result,
     named after it (hidden ones are left out), and how many loose files sit beside them.
+
+    If the folder holds a <collection>_FileTimestampLog.csv (the file wildintel-tools asks for beside a
+    collection's deployments), the start and end of each subfolder it has a row for — by the subfolder's
+    name, or by a deployment id like R0033-<name> — are taken from it instead of from the images' EXIF, and
+    that deployment says so in "from_timestamp_log" and gives the id the row names it by in
+    "log_deployment_id" (None otherwise). "timestamp_log" is then {"name", "path", "rows", "matched",
+    "revision"} — the revision number every matched id starts with (R0033-… → 33), None if they
+    disagree or have none — or None when there is no usable log.
 
     Raises:
         DeploymentImportError: session_dir doesn't exist, isn't a folder, or has no subfolders.
@@ -215,13 +261,33 @@ def scan_session(session_dir: Path) -> dict:
     subfolders = sorted((p for p in session_dir.iterdir() if p.is_dir() and not p.name.startswith(".")), key=lambda p: p.name.lower())
     if not subfolders:
         raise DeploymentImportError("This folder has no subfolders — a session has one subfolder per deployment.")
-    loose = sum(1 for p in session_dir.iterdir() if p.is_file() and not p.name.startswith("."))
+    suffix = local_folder_service.TIMESTAMP_LOG_SUFFIX.lower()  # a timestamp log is not a stray file
+    loose = sum(1 for p in session_dir.iterdir() if p.is_file() and not p.name.startswith(".") and not p.name.lower().endswith(suffix))
     warnings = [f"{loose} loose file(s) beside the subfolders will be ignored."] if loose else []
-    return {
-        "deployments": [{"name": p.name, "path": str(p), **scan_folder(p)} for p in subfolders],
-        "loose_files": loose,
-        "warnings": warnings,
-    }
+    deployments = [{"name": p.name, "path": str(p), **scan_folder(p), "from_timestamp_log": False, "log_deployment_id": None} for p in subfolders]
+
+    timestamp_log = None
+    log_path, log_warnings = _find_timestamp_log(session_dir)
+    warnings += log_warnings
+    if log_path is not None:
+        periods, log_warnings = _timestamp_log_periods(log_path)
+        warnings += log_warnings
+        matched = 0
+        for deployment in deployments:
+            name = deployment["name"].lower()
+            # A log written by wildintel-tools names the full deployment id, R0033-DONA_01, for a subfolder DONA_01.
+            period = periods.get(name) or next((p for key, p in periods.items() if re.sub(r"^r\d{4}-", "", key) == name), None)
+            if period:
+                deployment["log_deployment_id"] = period[0]
+                deployment["start_date"], deployment["end_date"] = period[1].isoformat(), period[2].isoformat()
+                deployment["from_timestamp_log"] = True
+                matched += 1
+        revisions = {int(m.group(1)) for d in deployments if d["log_deployment_id"] and (m := re.match(r"^R(\d{4})-", d["log_deployment_id"], re.IGNORECASE))}
+        revision = next(iter(revisions)) if len(revisions) == 1 and 0 not in revisions else None  # R0000 is not a revision
+        timestamp_log = {"name": log_path.name, "path": str(log_path), "rows": len(periods), "matched": matched, "revision": revision}
+        if len(periods) > matched:
+            warnings.append(f"{len(periods) - matched} row(s) of {log_path.name} match no subfolder.")
+    return {"deployments": deployments, "loose_files": loose, "warnings": warnings, "timestamp_log": timestamp_log}
 
 
 _TRAILING_DIGITS_RE = re.compile(r"(\d+)(?!.*\d)")  # a filename's last run of digits — how camera traps number shots
@@ -651,6 +717,24 @@ def import_stream(
     return events()
 
 
+def copied_images_info(dest: Path) -> list[dict]:
+    """The images of a copied deployment folder, in natural order, as images.json keeps them: the name, the camera's
+    wall-clock time from the EXIF (None when it has none), the file's size and its pixels."""
+    entries = []
+    for path in sorted((p for p in dest.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: _natural_key(p.relative_to(dest))):
+        taken = _image_datetime(path)
+        try:
+            with Image.open(path) as img:
+                width, height = img.width, img.height
+        except Exception:
+            width = height = None
+        entries.append({
+            "name": str(path.relative_to(dest)), "local_time": taken.isoformat() if taken else None,
+            "width": width, "height": height, "size_bytes": path.stat().st_size,
+        })
+    return entries
+
+
 def import_local_stream(source_dir: str, collection_dir: str, collection_name: str | None, deployment: DeploymentFields) -> Iterator[dict]:
     """Organizes source_dir's images under collection_dir/<deployment_id>,
     and records the collection's and deployment's own metadata as JSON —
@@ -670,6 +754,7 @@ def import_local_stream(source_dir: str, collection_dir: str, collection_name: s
         local_folder_service.write_collection_metadata(collection, collection_name)
         yield from copy_folder(source, dest)
         local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
+        local_folder_service.write_images_file(dest, deployment.deployment_id, copied_images_info(dest))
         logger.info("Deployment %s organized locally in %s", deployment.deployment_id, dest)
         yield {"type": "done", "dest_dir": str(dest)}
 

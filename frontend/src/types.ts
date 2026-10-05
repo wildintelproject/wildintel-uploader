@@ -15,6 +15,8 @@ export interface Location {
   location_id: string
   name: string | null
   timezone: string | null
+  /** Whether the location ignores summer time, as Trapper has it. */
+  ignore_dst?: boolean | null
   /** WGS84 decimal degrees, from Trapper — null when it can't say. */
   latitude?: number | null
   longitude?: number | null
@@ -35,12 +37,27 @@ export interface ScanResult {
 export interface SessionScanDeployment extends ScanResult {
   name: string
   path: string
+  /** Its start and end come from the collection's FileTimestampLog, not from the images' EXIF. */
+  from_timestamp_log: boolean
+  /** The id its row in the log names it by (R0033-DONA_01), when it has one. */
+  log_deployment_id: string | null
+}
+
+/** The <collection>_FileTimestampLog.csv found beside a session's subfolders. */
+export interface SessionTimestampLog {
+  name: string
+  path: string
+  rows: number
+  matched: number
+  /** The revision number the matched ids start with (R0033-… → 33), when they all agree. */
+  revision: number | null
 }
 
 export interface SessionScan {
   deployments: SessionScanDeployment[]
   loose_files: number
   warnings: string[]
+  timestamp_log: SessionTimestampLog | null
 }
 
 export interface CorruptedImage {
@@ -272,13 +289,27 @@ export interface PreprocessingOptions {
   coverage: string
   license_url: string
   research_project: string
-  timezone: string
-  ignore_dst: boolean
   convert_to_utc: boolean
 }
 
 /** What the app's menu offers — import a deployment, import a whole session of them, or upload one to Trapper. */
-export type Task = 'deployment' | 'upload' | 'session'
+export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'sync'
+
+/** What syncing the local collections folder with Trapper did: for each kind of thing, what it created and what was already there. */
+export interface SyncResult {
+  research_project_id: string
+  folder: string
+  collections: string[]
+  created: Record<'research_project' | 'locations' | 'collections' | 'deployments' | 'timestamp_log' | 'images', string[]>
+  kept: Record<'research_project' | 'locations' | 'collections' | 'deployments' | 'timestamp_log' | 'images', string[]>
+  unassigned: string[]
+}
+
+/** What the upload page starts from when it is reached from a finished import: the research project and collection just imported into. */
+export interface UploadTarget {
+  researchProjectId: string
+  collection: string
+}
 
 export interface SelectedResearchProject {
   pk: number
@@ -369,8 +400,6 @@ export interface SessionSummary {
   selection?: DeploymentSelection
   /** Set once the deployment's own fields are filled in — ready to import. */
   deployment?: DeploymentFields
-  timezone?: string
-  ignore_dst?: boolean
 }
 
 export type LogLevel = 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG'
@@ -482,8 +511,10 @@ export interface LocalResearchProject extends ResearchProjectDraft {
 export interface LocalLocation {
   location_id: string
   name: string | null
-  /** IANA timezone, when known. */
+  /** IANA timezone, when known. It belongs to the location, never to a deployment. */
   timezone: string | null
+  /** Whether its cameras ignore summer time — also the location's. Unknown for one kept before it was asked. */
+  ignore_dst?: boolean | null
   /** Where it is — WGS84 decimal degrees; unknown for one added from Trapper. */
   latitude: number | null
   longitude: number | null
@@ -514,7 +545,14 @@ export interface UploadCollection {
 }
 
 /** What an upload goes through, in order. */
-export type UploadStep = 'connect' | 'location' | 'deployment' | 'package' | 'csv' | 'upload' | 'process' | 'wait'
+/** One thing an upload needs, checked without changing anything in Trapper. */
+export interface AccessCheck {
+  check: 'research_project' | 'classification_project' | 'location' | 'uploader'
+  ok: boolean
+  message: string
+}
+
+export type UploadStep = 'connect' | 'classification' | 'location' | 'deployment' | 'package' | 'csv' | 'upload' | 'process' | 'wait'
 
 /** What an upload run does: send the deployment to Trapper; say what that would do, changing nothing
  * (a dry run); or only write the files (the zips, the yamls and the collection's deployments csv). */

@@ -12,7 +12,7 @@ import { isValidTimezone, knownTimezones, shownErrors, stampTimezone, validateDe
 import type {
   AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, SimilarityMethod, StatisticCheck, StatisticsParams, TimestampLogResult, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   FeatureType, ImageCheck, ImportEvent, Location, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
-  SessionSummary, ValidationResult,
+  SessionSummary, UploadTarget, ValidationResult,
 } from '../types'
 
 export const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
@@ -280,7 +280,7 @@ function rangeError(text: string, min: number, max: number, required: boolean): 
 export type OriginSource = 'trapper' | 'manual'
 
 // A new location's form, its numbers as typed.
-const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', latitude: '', longitude: '', coordinate_uncertainty: '' }
+const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', ignore_dst: true, latitude: '', longitude: '', coordinate_uncertainty: '' }
 
 export const ORIGIN_SOURCE_OPTIONS: Option<OriginSource>[] = [
   { value: 'trapper', emoji: '🪤', title: 'From Trapper', description: 'Connect to Trapper and pick one — its fields fill in the form.', available: true },
@@ -443,29 +443,44 @@ export function deploymentCheckPassed(check: DeploymentCheck, result: Deployment
   return result.camera_mismatches.length === 0 && (result.camera_models_found?.length ?? 0) <= 1
 }
 
+/** Where the deployment was taken, and the timezone and summer-time setting it is read in. They are the location's — kept with it,
+ * never asked for a deployment: every deployment there is read in them, and Trapper only accepts a package that declares the same ones. */
+export function LocationTimeNote({ locationId, latitude, longitude, timezone, ignoreDst }: {
+  locationId: string | null | undefined; latitude?: number | null; longitude?: number | null; timezone: string; ignoreDst: boolean
+}) {
+  if (!locationId) return null
+  if (!timezone) {
+    return <span className="block text-red-600 dark:text-red-400">The location <strong>{locationId}</strong> has no timezone, and a deployment needs it: add it to the location.</span>
+  }
+  return (
+    <>
+      You are entering the details of a deployment taken at location <strong>{locationId}</strong>
+      {latitude != null && longitude != null && <> (GPS <strong>{latitude}, {longitude}</strong>)</>}
+      , in the timezone <strong>{timezone}</strong>, which <strong>{ignoreDst ? 'ignores' : 'does not ignore'}</strong> summer time.{' '}
+    </>
+  )
+}
+
 /** The deployment's period, and — behind a tick — its camera, site and notes: Camtrap DP's own fields. */
-export function DeploymentFormBody({ deployment, timezone, errors, showAll, onShowAllChange, onField, onTimezoneChange, datesGuessed }: {
+export function DeploymentFormBody({ deployment, timezone, errors, showAll, onShowAllChange, onField, datesGuessed, datesFromLog }: {
   deployment: DeploymentFields; timezone: string; errors: ReturnType<typeof shownErrors>
   showAll: boolean; onShowAllChange: (v: boolean) => void
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
-  onTimezoneChange: (tz: string) => void; datesGuessed: boolean
+  datesGuessed: boolean
+  /** The FileTimestampLog the dates were read from, if they were. */
+  datesFromLog?: string
 }) {
   return (
     <>
     <FormCard title="Period" description="When the camera was recording. Pick a date from the calendar or type it.">
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Timezone (IANA)" required placeholder="e.g. Europe/Madrid" list="timezone-options"
-               hint={DESCRIPTIONS.timezone} error={errors.timezone} value={timezone} onChange={onTimezoneChange} />
-        <div />
         <DateTimeField label="Start date" required hint={DESCRIPTIONS.deploymentStart} error={errors.start_date}
                        value={deployment.start_date} onChange={(v) => onField('start_date', stampTimezone(v, timezone))} />
         <DateTimeField label="End date" required hint={DESCRIPTIONS.deploymentEnd} error={errors.end_date}
                        value={deployment.end_date ?? ''} onChange={(v) => onField('end_date', v ? stampTimezone(v, timezone) : null)} />
       </div>
-      <datalist id="timezone-options">
-        {knownTimezones().map((tz) => <option key={tz} value={tz} />)}
-      </datalist>
       {datesGuessed && <p className={hintClass}>The dates were guessed from the images' EXIF data.</p>}
+      {datesFromLog && <p className={hintClass}>The dates were taken from {datesFromLog}, not from the images' EXIF data.</p>}
     </FormCard>
 
     <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-4 cursor-pointer">
@@ -696,9 +711,11 @@ interface Props {
    * the deployment's details, those too. Where the images were taken isn't
    * kept in a session, so the wizard picks up at that step. */
   resumeSession?: SessionSummary
+  /** Offered once a deployment is imported: goes to the upload page, on the collection it went into. */
+  onUpload?: (target: UploadTarget) => void
 }
 
-export default function ImportDeploymentPage({ resumeSession }: Props) {
+export default function ImportDeploymentPage({ resumeSession, onUpload }: Props) {
   const [step, setStep] = useState(resumeSession ? STEPS.findIndex((s) => s.key === 'origin') : 0)
 
   const [form, setForm] = useState<TrapperCredentials>({ url: '', username: '', password: '' })
@@ -762,6 +779,12 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
   const [deployment, setDeployment] = useState<DeploymentFields>(EMPTY_DEPLOYMENT_FIELDS)
   const [revision, setRevision] = useState('')
   const [timezone, setTimezone] = useState('')
+  // Both belong to the location (see LocationTimeSettings): the deployment only reads them from it.
+  // null: the location doesn't say (it was kept before this was asked), so the setting's default stands.
+  const [ignoreDstChoice, setIgnoreDst] = useState<boolean | null>(null)
+  // The revision starts as the next one expected for the location, until it is typed.
+  const revisionTouched = useRef(false)
+  const [revisionHint, setRevisionHint] = useState<string | null>(null)
   const [showAllFields, setShowAllFields] = useState(false)
   const [savingDetails, setSavingDetails] = useState(false)
 
@@ -822,6 +845,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
 
   // What is done to the images: the steps chosen, less the metadata if ExifTool isn't there to write it.
   const preSettings = checkSettings.PREPROCESSING
+  const ignoreDst = ignoreDstChoice ?? preSettings.ignore_dst
   const effectivePreprocessSteps = new Set([...preprocessSteps].filter((step) => step !== 'metadata' || exiftool !== false))
   const startDay = (scan?.start_date ?? '').slice(0, 10).replace(/-/g, '')
   const exampleImageName = `${deployment.deployment_id || 'R0003-DONA_01'}__${startDay || 'YYYYMMDD'}_1.JPEG`.toUpperCase()
@@ -848,8 +872,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
     setScan(resumeSession.scan)
     if (resumeSession.deployment) {
       setDeployment(resumeSession.deployment)
-      setRevision(revisionOf(resumeSession.deployment.deployment_id))
-      if (resumeSession.timezone) setTimezone(resumeSession.timezone)
+      setRevision(revisionOf(resumeSession.deployment.deployment_id)); revisionTouched.current = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeSession])
@@ -980,9 +1003,14 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
   }
 
   /** The revision number, and with it the deployment id. */
-  function handleRevisionChange(value: string) {
+  function applyRevision(value: string) {
     setRevision(value)
     setDeployment((d) => ({ ...d, deployment_id: buildDeploymentId(value, d.location_id) }))
+  }
+
+  function handleRevisionChange(value: string) {
+    revisionTouched.current = true; setRevisionHint(null)
+    applyRevision(value)
   }
 
   // ── Research project ──
@@ -1062,7 +1090,8 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
     setSelectedLocationId(location?.location_id ?? '')
     setOrigin((o) => ({ ...o, locationId: location?.location_id ?? '', locationName: location?.name ?? '', timezone: location?.timezone ?? '' }))
     applyOriginLocation(location)
-    if (location?.timezone && !timezone) handleTimezoneChange(location.timezone)
+    applyTimezone(location?.timezone ?? '')
+    setIgnoreDst(location?.ignore_dst ?? null)
   }
 
   function startAddingLocation() {
@@ -1109,7 +1138,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
   function handleSaveLocation() {
     return addLocation({
       location_id: locationDraft.location_id.trim(), name: locationDraft.name.trim() || null,
-      timezone: locationDraft.timezone.trim() || null, trapper_pk: null,
+      timezone: locationDraft.timezone.trim() || null, ignore_dst: locationDraft.ignore_dst, trapper_pk: null,
       latitude: Number(locationDraft.latitude), longitude: Number(locationDraft.longitude),
       coordinate_uncertainty: locationDraft.coordinate_uncertainty.trim() ? Number(locationDraft.coordinate_uncertainty) : null,
     })
@@ -1134,7 +1163,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
       try {
         const saved = await api.saveLocalLocation(selectedProjectId, {
           location_id: loc.location_id, name: loc.name || null,
-          timezone: loc.timezone && isValidTimezone(loc.timezone) ? loc.timezone : null, trapper_pk: loc.pk,
+          timezone: loc.timezone && isValidTimezone(loc.timezone) ? loc.timezone : null, ignore_dst: loc.ignore_dst ?? null, trapper_pk: loc.pk,
           latitude: loc.latitude, longitude: loc.longitude, coordinate_uncertainty: null,
         })
         added.push(saved); chosen.push(saved)
@@ -1150,7 +1179,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
 
   /** Sets the timezone and re-stamps both dates with the designator it
    * gives them — the wall-clock time stays, its offset follows. */
-  function handleTimezoneChange(tz: string) {
+  function applyTimezone(tz: string) {
     setTimezone(tz)
     setDeployment((d) => ({
       ...d, start_date: stampTimezone(d.start_date, tz), end_date: d.end_date ? stampTimezone(d.end_date, tz) : d.end_date,
@@ -1230,6 +1259,23 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
     return () => { cancelled = true }
   }, [stepKey, researchProjectId, deployment.deployment_id])
 
+  // The revision starts as the next one expected for the location — one after the highest kept — until it is typed.
+  useEffect(() => {
+    if (stepKey !== 'deployment' || !selectedProjectId || !deployment.location_id || revisionTouched.current) return
+    let cancelled = false
+    api.nextRevision(selectedProjectId, deployment.location_id)
+      .then(({ last, next }) => {
+        if (cancelled || revisionTouched.current) return
+        applyRevision(String(next))
+        setRevisionHint(last
+          ? `Filled in as the next after R${String(last).padStart(4, '0')}, the latest kept for this location — change it if it is not right.`
+          : 'Filled in as the first revision of this location — change it if it is not right.')
+      })
+      .catch(() => { /* no suggestion: it is typed */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey, selectedProjectId, deployment.location_id])
+
   // ...and whether an earlier revision of it was kept, to offer its details.
   useEffect(() => {
     const id = deployment.deployment_id
@@ -1287,7 +1333,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
   async function handleContinueFromDeployment() {
     setSavingDetails(true); setTimestampLogError(null)
     if (taskId) {
-      try { await api.saveDetails(taskId, deployment, timezone, false) } catch { /* best-effort */ }
+      try { await api.saveDetails(taskId, deployment) } catch { /* best-effort */ }
     }
     try {
       // The collection's FileTimestampLog — wildintel-tools' file, one row per deployment — before the postvalidation.
@@ -1317,7 +1363,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
         rename: effectivePreprocessSteps.has('rename'), resize: effectivePreprocessSteps.has('resize'), resize_width: preSettings.resize_width,
         metadata: effectivePreprocessSteps.has('metadata'), owner: preSettings.owner, publisher: preSettings.publisher,
         coverage: preSettings.coverage, license_url: preSettings.license_url, research_project: selectedProject?.name ?? '',
-        timezone, ignore_dst: preSettings.ignore_dst, convert_to_utc: preSettings.convert_to_utc,
+        convert_to_utc: preSettings.convert_to_utc,
       }
       await api.importLocal(
         sourceDir, plannedCollection!.path, plannedCollection!.exists ? null : plannedCollection!.collection, deployment, options, onEvent,
@@ -1346,7 +1392,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
     setPlannedCollection(null); setPlannedCollectionError(null)
     setDeploymentCheck(null); setDeploymentCheckError(null)
     preprocessTouched.current = false
-    setShowAllFields(false); setRevision('')
+    setShowAllFields(false); setRevision(''); revisionTouched.current = false; setRevisionHint(null)
     setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set())
     setTimestampLog(null); setTimestampLogError(null)
     setEvents([]); setImportError(null); setDestDir(null)
@@ -1654,8 +1700,12 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
                              hint={DESCRIPTIONS.coordinateUncertainty} error={locationErrors.coordinate_uncertainty} value={locationDraft.coordinate_uncertainty}
                              onChange={(v) => setLocationDraft((d) => ({ ...d, coordinate_uncertainty: v }))} />
                       <Field label="Timezone (IANA)" placeholder="e.g. Europe/Madrid" list="timezone-options" error={locationErrors.timezone}
-                             hint="Optional — the deployment's timezone starts from it." value={locationDraft.timezone}
+                             hint="The location's own — every deployment there is read in it." value={locationDraft.timezone}
                              onChange={(v) => setLocationDraft((d) => ({ ...d, timezone: v }))} />
+                      <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer mt-7">
+                        <input type="checkbox" className="mt-1" checked={locationDraft.ignore_dst} onChange={(e) => setLocationDraft((d) => ({ ...d, ignore_dst: e.target.checked }))} />
+                        The location’s cameras ignore summer time (DST)
+                      </label>
                       <datalist id="timezone-options">
                         {knownTimezones().map((tz) => <option key={tz} value={tz} />)}
                       </datalist>
@@ -1694,13 +1744,14 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
           {(
             <>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 mb-5">
+                <LocationTimeNote locationId={deployment.location_id} latitude={deployment.latitude} longitude={deployment.longitude} timezone={timezone} ignoreDst={ignoreDst} />
                 Tell us about the deployment. Its names and dates are checked next.
               </p>
 
               <FormCard title="Identification" description="The revision number and the location give the deployment its id.">
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Revision" type="number" required min={1} max={9999} step={1} placeholder="e.g. 3"
-                         hint="The revision the images belong to: 1, 2, 3…"
+                         hint={revisionHint ?? 'The revision the images belong to: 1, 2, 3…'}
                          error={revision.trim() !== '' && !revisionValid ? 'Must be a whole number between 1 and 9999.' : undefined}
                          value={revision} onChange={handleRevisionChange} />
                   <Field label="Deployment id" readOnly placeholder="Filled in from the revision and the location"
@@ -1728,7 +1779,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
               </FormCard>
 
               <DeploymentFormBody deployment={deployment} timezone={timezone} errors={fieldErrors} showAll={showAllFields}
-                                  onShowAllChange={setShowAllFields} onField={updateField} onTimezoneChange={handleTimezoneChange}
+                                  onShowAllChange={setShowAllFields} onField={updateField}
                                   datesGuessed={Boolean(scan?.start_date)} />
             </>
           )}
@@ -1789,7 +1840,7 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
             </PreprocessItem>
             <PreprocessItem title="Read the capture dates" always>
               From each image&rsquo;s EXIF, as the camera&rsquo;s local time in <span className="font-mono">{timezone || 'the timezone of the details'}</span>
-              {preSettings.ignore_dst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}.
+              {ignoreDst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}.
               They go into the names and the metadata. An image with no EXIF date uses its file&rsquo;s date.
             </PreprocessItem>
             <PreprocessItem title="Rename the images" checked={effectivePreprocessSteps.has('rename')} onToggle={() => togglePreprocessStep('rename')}>
@@ -1867,6 +1918,11 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
             <div className="flex items-center gap-3 flex-wrap">
               <p className="text-sm text-emerald-600 dark:text-emerald-400">✔ Deployment imported.</p>
               <button type="button" className={btnOutline} onClick={handleOpenFolder}>Open folder in file explorer</button>
+              {onUpload && selectedProjectId && plannedCollection && (
+                <button type="button" className={btnPrimary} onClick={() => onUpload({ researchProjectId: selectedProjectId, collection: plannedCollection.collection })}>
+                  Upload to Trapper
+                </button>
+              )}
               {openFolderError && <p className="text-sm text-red-600 dark:text-red-400">{openFolderError}</p>}
             </div>
           )}

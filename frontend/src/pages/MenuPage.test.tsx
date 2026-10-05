@@ -13,7 +13,6 @@ describe('MenuPage', () => {
 
     expect(deploymentButton).toBeEnabled()
     expect(sessionButton).toBeEnabled()
-    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument()
 
     await userEvent.click(deploymentButton)
     expect(onChoose).toHaveBeenCalledWith('deployment')
@@ -31,5 +30,19 @@ describe('MenuPage', () => {
 
     await userEvent.click(uploadButton)
     expect(onChoose).toHaveBeenCalledWith('upload')
+  })
+
+  it('offers to sync the local collections with Trapper, and says the session upload is coming soon', async () => {
+    const onChoose = vi.fn()
+    render(<MenuPage onChoose={onChoose} />)
+
+    const syncButton = screen.getByRole('button', { name: /sync local collections/i })
+    expect(syncButton).toBeEnabled()
+    await userEvent.click(syncButton)
+    expect(onChoose).toHaveBeenCalledWith('sync')
+
+    const sessionUpload = screen.getByRole('button', { name: /upload session to trapper/i })
+    expect(sessionUpload).toBeDisabled()
+    expect(sessionUpload).toHaveTextContent(/coming soon/i)
   })
 })

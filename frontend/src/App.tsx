@@ -6,10 +6,11 @@ import ImportSessionPage from './pages/ImportSessionPage'
 import MenuPage from './pages/MenuPage'
 import ResumeSessionsPage from './pages/ResumeSessionsPage'
 import SettingsPage from './pages/SettingsPage'
+import SyncCollectionsPage from './pages/SyncCollectionsPage'
 import UploadDeploymentPage from './pages/UploadDeploymentPage'
 import WelcomePage from './pages/WelcomePage'
 import { api } from './api'
-import type { SessionSummary, Task } from './types'
+import type { SessionSummary, Task, UploadTarget } from './types'
 
 export default function App() {
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
@@ -26,6 +27,10 @@ export default function App() {
   // The settings page is shown over the rest, which stays mounted (just
   // hidden) — so a run in progress isn't lost.
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Back on the welcome screen by the title: it is shown ahead of anything else until "Get Started" is pressed again.
+  const [home, setHome] = useState(false)
+  // Where the upload page starts from, when it is reached from a finished import.
+  const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -50,11 +55,19 @@ export default function App() {
       .catch(() => setUnfinishedSessions([]))
   }, [])
 
-  const showResumeScreen = !task && !menuShown && unfinishedSessions !== null && unfinishedSessions.length > 0
+  function goHome() {
+    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setMenuShown(false); setHome(true)
+  }
+
+  function goToUpload(target: UploadTarget) {
+    setUploadTarget(target); setTask('upload')
+  }
+
+  const showResumeScreen = !task && !menuShown && !home && unfinishedSessions !== null && unfinishedSessions.length > 0
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
-      <Navbar version={currentVersion} settingsOpen={settingsOpen} onOpenSettings={() => setSettingsOpen(true)} />
+      <Navbar version={currentVersion} onHome={goHome} settingsOpen={settingsOpen} onOpenSettings={() => setSettingsOpen(true)} />
       {backendDown && (
         <div className="bg-red-50 dark:bg-red-950 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm text-center py-2">
           Backend not reachable — is the server running?
@@ -64,11 +77,13 @@ export default function App() {
         {settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} />}
         <div className={settingsOpen ? 'hidden' : ''}>
           {task === 'deployment'
-            ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} />
+            ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} onUpload={goToUpload} />
             : task === 'session'
-              ? <ImportSessionPage />
+              ? <ImportSessionPage onUpload={goToUpload} />
               : task === 'upload'
-              ? <UploadDeploymentPage />
+              ? <UploadDeploymentPage initial={uploadTarget ?? undefined} />
+              : task === 'sync'
+              ? <SyncCollectionsPage />
               : showResumeScreen
                 ? (
                   <ResumeSessionsPage
@@ -80,7 +95,7 @@ export default function App() {
                 )
                 : menuShown
                   ? <MenuPage onChoose={setTask} />
-                  : <WelcomePage onStart={() => setMenuShown(true)} />}
+                  : <WelcomePage onStart={() => { setHome(false); if (!unfinishedSessions?.length) setMenuShown(true) }} />}
         </div>
       </main>
       <Footer />

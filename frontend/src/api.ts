@@ -1,7 +1,7 @@
 import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
-  ScanResult, SessionSummary, StatisticsParams, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
+  AccessCheck, ScanResult, SessionSummary, StatisticsParams, SyncResult, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
 } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
@@ -137,6 +137,17 @@ export const api = {
   listLocalLocations: (researchProjectId: string) =>
     post<{ results: LocalLocation[] }>('/api/deployment-import/locations/list', { research_project_id: researchProjectId }),
 
+  // The revision a new deployment at this location is expected to have: one after the highest kept for it, or 1.
+  nextRevision: (researchProjectId: string, locationId: string) =>
+    post<{ last: number | null; next: number }>('/api/deployment-import/next-revision', { research_project_id: researchProjectId, location_id: locationId }),
+
+  // Creates in the collections folder what Trapper has for the classification project and it lacks.
+  syncCollections: (creds: TrapperCredentials, researchProject: ResearchProject, classificationProjectPk: number) =>
+    post<SyncResult>('/api/sync/collections', {
+      ...creds, research_project_pk: researchProject.pk, research_project_name: researchProject.name,
+      research_project_acronym: researchProject.acronym ?? null, classification_project_pk: classificationProjectPk,
+    }),
+
   saveLocalLocation: (researchProjectId: string, location: LocalLocation) =>
     post<LocalLocation>('/api/deployment-import/locations/save', { research_project_id: researchProjectId, location }),
 
@@ -171,12 +182,12 @@ export const api = {
 
   importDeployment: (
     creds: TrapperCredentials, researchProjectPk: number, classificationProjectPk: number | null,
-    sourceDir: string, deployment: DeploymentFields, timezone: string | null, registerDeployment: boolean,
+    sourceDir: string, deployment: DeploymentFields, registerDeployment: boolean,
     researchProjectId: string, onEvent: (event: ImportEvent) => void,
   ) =>
     streamNdjson<ImportEvent>('/api/deployment-import/import', {
       ...creds, research_project_pk: researchProjectPk, research_project_id: researchProjectId, classification_project_pk: classificationProjectPk,
-      source_dir: sourceDir, deployment, timezone, register_deployment: registerDeployment,
+      source_dir: sourceDir, deployment, register_deployment: registerDeployment,
     }, onEvent, 'The import ended unexpectedly.'),
 
   // preprocessing null copies the images as they are.
@@ -192,14 +203,25 @@ export const api = {
   uploadCollections: (researchProjectId: string) =>
     post<{ results: UploadCollection[] }>('/api/upload/collections', { research_project_id: researchProjectId }),
 
+  // Whether the saved account can reach the research project, its locations and the uploader — changing nothing.
+  checkUploadAccess: (researchProjectId: string, collection: string | null, deploymentIds: string[], classificationProjectPk: number | null) =>
+    post<{ checks: AccessCheck[] }>('/api/upload/check-access', {
+      research_project_id: researchProjectId, collection, deployment_ids: deploymentIds, classification_project_pk: classificationProjectPk,
+    }),
+
+  // The classification projects Trapper has for a research project kept locally — the collection goes to one of them.
+  uploadClassificationProjects: (researchProjectId: string) =>
+    post<{ results: ClassificationProject[] }>('/api/upload/classification-projects', { research_project_id: researchProjectId }),
+
   // Uploads one deployment: creates its location and the deployment in Trapper if need be, packs it and sends it — or,
   // as `mode` says, only shows what that would do, or only writes the files. The Trapper credentials are the saved ones.
   uploadDeployment: (
     researchProjectId: string, collection: string, deploymentId: string, maxZipMb: number, mode: UploadMode,
-    onEvent: (event: UploadEvent) => void,
+    onEvent: (event: UploadEvent) => void, classificationProjectPk: number | null = null,
   ) =>
     streamNdjson<UploadEvent>('/api/upload/deployment', {
       research_project_id: researchProjectId, collection, deployment_id: deploymentId, max_zip_mb: maxZipMb, mode,
+      classification_project_pk: classificationProjectPk,
     }, onEvent, 'The upload ended unexpectedly.'),
 
   // Whether ExifTool is installed — adding metadata needs it.
@@ -217,8 +239,8 @@ export const api = {
   saveSelection: (taskId: string, selection: DeploymentSelection) =>
     post<SessionSummary>('/api/sessions/selection', { task_id: taskId, selection }),
 
-  saveDetails: (taskId: string, deployment: DeploymentFields, timezone: string | null, ignoreDst: boolean) =>
-    post<SessionSummary>('/api/sessions/details', { task_id: taskId, deployment, timezone, ignore_dst: ignoreDst }),
+  saveDetails: (taskId: string, deployment: DeploymentFields) =>
+    post<SessionSummary>('/api/sessions/details', { task_id: taskId, deployment }),
 
   discardSession: (taskId: string) =>
     req<{ status: string }>(`/api/sessions/${taskId}`, { method: 'DELETE' }),

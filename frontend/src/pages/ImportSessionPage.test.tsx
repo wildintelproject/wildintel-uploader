@@ -1,5 +1,6 @@
+import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
 import ImportSessionPage, { matchLocation } from './ImportSessionPage'
@@ -12,7 +13,7 @@ vi.mock('../api', () => ({
     getSettings: vi.fn(), exiftoolStatus: vi.fn(), browseFolder: vi.fn(), scanSession: vi.fn(), validateImages: vi.fn(),
     listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(),
     writeTimestampLog: vi.fn(), validateDeployment: vi.fn(), previousDeployments: vi.fn(), existingDeployments: vi.fn(), collectionPath: vi.fn(), importLocal: vi.fn(), openFolder: vi.fn(),
-    trapperGetConfig: vi.fn(), trapperTestConnection: vi.fn(), trapperResearchProjects: vi.fn(),
+    trapperGetConfig: vi.fn(), trapperTestConnection: vi.fn(), trapperResearchProjects: vi.fn(), nextRevision: vi.fn(),
   },
 }))
 
@@ -26,7 +27,7 @@ const loc = (id: string, over: Partial<LocalLocation> = {}): LocalLocation => ({
 
 const scanned = (name: string, images: number, start: string | null, end: string | null) => ({
   name, path: `/s/${name}`, file_count: images, image_count: images, start_date: start, end_date: end,
-  camera_model: images ? 'Reconyx HC600' : null, camera_id: null as string | null, warnings: [] as string[],
+  camera_model: images ? 'Reconyx HC600' : null, camera_id: null as string | null, warnings: [] as string[], from_timestamp_log: false, log_deployment_id: null as string | null,
 })
 
 const SCAN: SessionScan = {
@@ -35,11 +36,12 @@ const SCAN: SessionScan = {
     scanned('DONA_02', 5, '2024-09-05T09:00:00', '2024-11-05T10:00:00'),
     scanned('EMPTY', 0, null, null),
   ],
-  loose_files: 0, warnings: [],
+  loose_files: 0, warnings: [], timestamp_log: null,
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  pageProps = {}
   mockedApi.getSettings.mockResolvedValue(APP_SETTINGS)
   mockedApi.exiftoolStatus.mockResolvedValue({ available: true, path: '/usr/bin/exiftool' })
   mockedApi.browseFolder.mockResolvedValue({ path: '/s' })
@@ -56,11 +58,15 @@ beforeEach(() => {
   mockedApi.openFolder.mockResolvedValue({ opened: COLLECTION })
   mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice@example.org', has_password: true })
   mockedApi.existingDeployments.mockResolvedValue({ results: {} })
+  mockedApi.nextRevision.mockRejectedValue(new Error('no suggestion'))  // the revision stays to be typed, unless a test says otherwise
   mockedApi.previousDeployments.mockResolvedValue({ results: {} })
 })
 
+// Props the page is rendered with — reset for every test.
+let pageProps: ComponentProps<typeof ImportSessionPage> = {}
+
 async function scanSession() {
-  render(<ImportSessionPage />)
+  render(<ImportSessionPage {...pageProps} />)
   await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
   await screen.findByDisplayValue('/s')
   await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
@@ -236,6 +242,100 @@ describe('ImportSessionPage', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
 
+  it('says in the details when the dates come from the collection’s FileTimestampLog', async () => {
+    mockedApi.scanSession.mockResolvedValue({
+      ...SCAN,
+      deployments: [{ ...SCAN.deployments[0], start_date: '2024-09-01T08:00:00', end_date: '2024-11-01T09:00:00', from_timestamp_log: true }, SCAN.deployments[1], SCAN.deployments[2]],
+      timestamp_log: { name: 'S_FileTimestampLog.csv', path: '/s/S_FileTimestampLog.csv', rows: 1, matched: 1, revision: null },
+    })
+    await toDetails()
+    expect(await screen.findByText(/deployment\(s\) were taken from/)).toHaveTextContent('1 of these 2 deployment(s) were taken from S_FileTimestampLog.csv')
+    expect(screen.getByText(/^The dates were taken from/)).toBeInTheDocument()
+    expect(screen.queryByText(/guessed from the images/)).not.toBeInTheDocument()
+  })
+
+  describe('the next revision', () => {
+    const toSuggested = async () => { await toOrigin(); await next() }
+
+    it('suggests the highest next revision of the deployments’ locations, says so, and keeps what is typed', async () => {
+      mockedApi.nextRevision.mockImplementation(async (_project, location) => (location === 'DONA_01' ? { last: 2, next: 3 } : { last: 4, next: 5 }))
+      await toSuggested()
+
+      await waitFor(() => expect(screen.getByLabelText('What revision number are you importing?')).toHaveValue(5))
+      expect(screen.getByText(/Filled in as the next one expected for these locations/)).toBeInTheDocument()
+      expect(screen.getByLabelText('Deployment id')).toHaveValue('R0005-DONA_01')
+
+      fireEvent.change(screen.getByLabelText('What revision number are you importing?'), { target: { value: '7' } })
+      expect(screen.queryByText(/Filled in as the next one expected/)).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Deployment id')).toHaveValue('R0007-DONA_01')
+    })
+
+    it('does not ask the timezone nor summer time: it says the location’s', async () => {
+      await toSuggested()
+
+      expect(screen.queryByLabelText('Timezone (IANA)')).not.toBeInTheDocument()
+      expect(screen.queryByRole('checkbox', { name: /ignore summer time/ })).not.toBeInTheDocument()
+      await screen.findByText(/You are entering the details of a deployment taken at location/)
+      for (const bold of ['Europe/Madrid', 'ignores']) expect(screen.getAllByText(bold)[0].tagName).toBe('STRONG')
+    })
+  })
+
+  describe('deducing the revision and the locations', () => {
+    // The folders are named nothing like a location: only the log's ids say which one each is.
+    const logged = (name: string, id: string) => ({ ...scanned(name, 5, '2024-09-01T08:00:00', '2024-11-01T09:00:00'), from_timestamp_log: true, log_deployment_id: id })
+    beforeEach(() => {
+      mockedApi.scanSession.mockResolvedValue({
+        deployments: [logged('SITE_A', 'R0033-DONA_01'), logged('SITE_B', 'R0033-DONA_02')], loose_files: 0, warnings: [],
+        timestamp_log: { name: 'R0033_FileTimestampLog.csv', path: '/s/R0033_FileTimestampLog.csv', rows: 2, matched: 2, revision: 33 },
+      })
+    })
+    const toDeducedDetails = async () => {
+      render(<ImportSessionPage {...pageProps} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
+      await screen.findByDisplayValue('/s')
+      await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
+      await screen.findByRole('checkbox', { name: 'SITE_A' })
+      await next() // validate
+      await next() // origin
+      await pickProject()
+      await next()
+    }
+
+    it('fills in the revision from the ids in the log, says so, and lets it be changed', async () => {
+      await toDeducedDetails()
+      const field = await screen.findByLabelText('What revision number are you importing?')
+      expect(field).toHaveValue(33)
+      expect(screen.getByText(/Taken from the deployment ids in R0033_FileTimestampLog.csv/)).toBeInTheDocument()
+      expect(screen.getByLabelText('Deployment id')).toHaveValue('R0033-DONA_01')
+
+      fireEvent.change(field, { target: { value: '34' } })
+      expect(screen.queryByText(/Taken from the deployment ids/)).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Deployment id')).toHaveValue('R0034-DONA_01')
+    })
+
+    it('deduces the location from the log’s id when the folder’s name is no help, says so, and lets it be changed', async () => {
+      await toDeducedDetails()
+      expect(await screen.findByLabelText('Location')).toHaveValue('DONA_01')
+      expect(screen.getByText(/of these 2 deployment\(s\) was deduced from the name of their folder or the deployment id in the timestamp log/)).toBeInTheDocument()
+      expect(screen.getByText(/Deduced from the deployment id in the timestamp log, R0033-DONA_01/)).toBeInTheDocument()
+
+      await userEvent.selectOptions(screen.getByLabelText('Location'), 'DONA_02')
+      expect(screen.queryByText(/Deduced from the deployment id/)).not.toBeInTheDocument()
+    })
+  })
+
+  it('says a location was deduced from the folder’s name, with no log involved', async () => {
+    await toDetails()
+    expect(await screen.findByText(/Deduced from the folder's name, DONA_01/)).toBeInTheDocument()
+    expect(screen.getByText(/of these 2 deployment\(s\) was deduced from the name of their folder, as it is already registered/)).toBeInTheDocument()
+  })
+
+  it('says nothing about a log when the session has none', async () => {
+    await toDetails()
+    await screen.findByText(/deployment\(s\) complete/)
+    expect(screen.queryByText(/FileTimestampLog/)).not.toBeInTheDocument()
+  })
+
   it('does not accept two deployments with the same location', async () => {
     await toDetails()
     await userEvent.click(await screen.findByRole('button', { name: 'DONA_02' }))
@@ -354,9 +454,24 @@ describe('ImportSessionPage', () => {
       ['/s/DONA_01', COLLECTION, 'R0003-DONA_01'], ['/s/DONA_02', COLLECTION, 'R0003-DONA_02'],
     ])
     expect(mockedApi.importLocal.mock.calls[0][2]).toBe('R0003')
-    expect(mockedApi.importLocal.mock.calls[0][4]).toEqual(expect.objectContaining({ rename: true, timezone: 'Europe/Madrid', research_project: 'Doñana' }))
+    expect(mockedApi.importLocal.mock.calls[0][4]).toEqual(expect.objectContaining({ rename: true, research_project: 'Doñana' }))
     await userEvent.click(screen.getByRole('button', { name: 'Open folder in file explorer' }))
     expect(mockedApi.openFolder).toHaveBeenCalledWith(COLLECTION)
+  })
+
+  it('offers to go on to the upload of the revision’s collection once the session is imported', async () => {
+    const onUpload = vi.fn()
+    pageProps = { onUpload }
+    await toDetails()
+    await next() // checks
+    await next() // preprocessing
+    await next() // import
+    expect(screen.queryByRole('button', { name: 'Upload to Trapper' })).not.toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: 'Import 2 deployments' }))
+
+    await screen.findByText(/Session imported — 2 deployment/)
+    await userEvent.click(screen.getByRole('button', { name: 'Upload to Trapper' }))
+    expect(onUpload).toHaveBeenCalledWith({ researchProjectId: 'DONA', collection: 'R0003' })
   })
 
   it('goes on past a failed deployment and retries only what is left', async () => {
@@ -465,7 +580,7 @@ describe('ImportSessionPage', () => {
     const names = Array.from({ length: 66 }, (_, i) => `DONA_${String(i + 1).padStart(2, '0')}`)
     beforeEach(() => {
       mockedApi.scanSession.mockResolvedValue({
-        deployments: names.map((n) => scanned(n, 3, '2024-09-04T13:10:00', '2024-11-04T14:28:00')), loose_files: 0, warnings: [],
+        deployments: names.map((n) => scanned(n, 3, '2024-09-04T13:10:00', '2024-11-04T14:28:00')), loose_files: 0, warnings: [], timestamp_log: null,
       })
       // Only 60 of the 66 folders are named after a location of the project.
       mockedApi.listLocalLocations.mockResolvedValue({ results: names.slice(0, 60).map((n) => loc(n)) })

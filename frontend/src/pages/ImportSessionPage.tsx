@@ -5,12 +5,12 @@ import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type {
   DeploymentCheck, DeploymentCheckResult, DeploymentFields, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject,
-  PreprocessingOptions, SessionScan, StatisticsParams, ValidationResult,
+  PreprocessingOptions, SessionScan, StatisticsParams, UploadTarget, ValidationResult,
 } from '../types'
 import {
   ALL_DEPLOYMENT_CHECKS, CheckTable, DEFAULT_CHECK_SETTINGS, DEPLOYMENT_CHECK_OPTIONS, DeploymentCheckReport, Field,
   FormCard, IMAGE_CHECK_OPTIONS, PreprocessItem, SelectField, SmallSpinner, StepHeading,
-  DeploymentFormBody, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
+  DeploymentFormBody, LocationTimeNote, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, statParamsOf, statParamsValid, toggled,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, WizardSettings } from './ImportDeploymentPage'
@@ -32,15 +32,19 @@ const STEPS: { key: StepKey; label: string }[] = [
 interface Entry {
   fields: DeploymentFields
   timezone: string
+  /** The location's summer-time setting, as its timezone is: read from it, kept in it. */
+  ignoreDst: boolean | null
   /** Whether the camera, site and notes are open in the form. */
   showAll: boolean
+  /** Where the location was deduced from, until it is picked by hand. */
+  locationFrom?: 'folder' | 'log'
 }
 
 interface Outcome<T> { result?: T; error?: string }
 
 interface ImportRun { events: ImportEvent[]; done: boolean; error?: string; destDir?: string }
 
-const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', latitude: '', longitude: '' }
+const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', ignore_dst: true, latitude: '', longitude: '' }
 
 /** The location a subfolder is named after — "DONA_01" for the folder "DONA_01", "R0003-DONA_01" or "dona_01 (2)" —
  * when there is exactly one such. */
@@ -60,7 +64,12 @@ function locationFields(location?: LocalLocation): Partial<DeploymentFields> {
   }
 }
 
-export default function ImportSessionPage() {
+interface Props {
+  /** Offered once the session is imported: goes to the upload page, on the revision's collection. */
+  onUpload?: (target: UploadTarget) => void
+}
+
+export default function ImportSessionPage({ onUpload }: Props = {}) {
   const [step, setStep] = useState(0)
   const stepKey = STEPS[step].key
 
@@ -81,6 +90,11 @@ export default function ImportSessionPage() {
   const [preprocessSteps, setPreprocessSteps] = useState<Set<PreprocessStep>>(new Set(['rename', 'resize', 'metadata']))
   const [exiftool, setExiftool] = useState<boolean | null>(null)
   const [revision, setRevision] = useState('')
+  // The log the revision was deduced from, until it is edited.
+  const [revisionFromLog, setRevisionFromLog] = useState<string | null>(null)
+  // The revision starts as the next one expected for the deployments' locations, until it is typed.
+  const revisionTouched = useRef(false)
+  const [revisionSuggested, setRevisionSuggested] = useState(false)
   // Set the moment a value is edited (refs, so a settings response arriving meanwhile never puts it back).
   const preprocessTouched = useRef(false)
 
@@ -155,10 +169,13 @@ export default function ImportSessionPage() {
       const next = { ...current }
       for (const d of scan.deployments.filter((x) => included.has(x.name))) {
         if (next[d.name]) continue
-        const location = matchLocation(d.name, localLocations)
+        // The folder's name first; failing that, the id its row in the timestamp log gives it.
+        const byFolder = matchLocation(d.name, localLocations)
+        const byLog = byFolder || !d.log_deployment_id ? undefined : matchLocation(d.log_deployment_id, localLocations)
+        const location = byFolder ?? byLog
         const timezone = location?.timezone ?? ''
         next[d.name] = {
-          timezone, showAll: false,
+          timezone, ignoreDst: location?.ignore_dst ?? null, showAll: false, locationFrom: byFolder ? 'folder' : byLog ? 'log' : undefined,
           fields: {
             ...EMPTY_DEPLOYMENT_FIELDS, ...locationFields(location),
             start_date: stampTimezone(d.start_date ?? '', timezone), end_date: d.end_date ? stampTimezone(d.end_date, timezone) : null,
@@ -183,6 +200,20 @@ export default function ImportSessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepKey, projectId, knownIds])
 
+  // The revision starts as the next one expected for the deployments' locations — the highest of them — until it is typed.
+  const locationIds = [...new Set(chosen.map((d) => fieldsOf(d.name).location_id).filter((id): id is string => Boolean(id)))].sort().join('\n')
+  useEffect(() => {
+    if (stepKey !== 'details' || !projectId || !locationIds || revisionTouched.current || revisionFromLog) return
+    let cancelled = false
+    Promise.all(locationIds.split('\n').map((id) => api.nextRevision(projectId, id)))
+      .then((answers) => {
+        if (cancelled || revisionTouched.current) return
+        setRevision(String(Math.max(...answers.map((a) => a.next)))); setRevisionSuggested(true)
+      })
+      .catch(() => { /* no suggestion: it is typed */ })
+    return () => { cancelled = true }
+  }, [stepKey, projectId, locationIds, revisionFromLog])
+
   // ── The session folder ──
 
   async function handleBrowse() {
@@ -202,6 +233,9 @@ export default function ImportSessionPage() {
     try {
       const result = await api.scanSession(sessionDir)
       setScan(result)
+      const logged = result.timestamp_log?.revision
+      if (logged) { setRevision(String(logged)); setRevisionFromLog(result.timestamp_log!.name) }
+      else if (revisionFromLog) { setRevision(''); setRevisionFromLog(null) }
       setIncluded(new Set(result.deployments.filter((d) => d.image_count > 0).map((d) => d.name)))
       autoFilled.current.clear(); setPreviousKnown({}); setDrafts({}); setValidations({}); setChecks({}); setRuns({})
     } catch (e) {
@@ -266,6 +300,7 @@ export default function ImportSessionPage() {
     return revisionValid && revisionNumber > 1 && Boolean(id) && previousKnown[`${projectId}|${id}`] !== false
   }
   const canFillFromPrevious = chosen.some((d) => hasEarlierRevision(d.name))
+  const deduced = chosen.filter((d) => drafts[d.name]?.locationFrom)
   const detailsReady = revisionValid && chosen.length > 0 && completed === chosen.length
 
   function updateEntry(name: string, change: (entry: Entry) => Entry) {
@@ -286,7 +321,7 @@ export default function ImportSessionPage() {
 
   function pickLocation(name: string, locationId: string, known?: LocalLocation) {
     const location = known ?? localLocations.find((l) => l.location_id === locationId)
-    updateEntry(name, (e) => ({ ...e, fields: { ...e.fields, ...locationFields(location) } }))
+    updateEntry(name, (e) => ({ ...e, locationFrom: undefined, ignoreDst: location?.ignore_dst ?? null, fields: { ...e.fields, ...locationFields(location) } }))
     if (location?.timezone) setTimezone(name, location.timezone)
   }
 
@@ -349,7 +384,7 @@ export default function ImportSessionPage() {
     setLocationError(null)
     try {
       const saved = await api.saveLocalLocation(projectId, {
-        location_id: locationDraft.location_id.trim(), name: locationDraft.name.trim() || null, timezone: locationDraft.timezone.trim() || null,
+        location_id: locationDraft.location_id.trim(), name: locationDraft.name.trim() || null, timezone: locationDraft.timezone.trim() || null, ignore_dst: locationDraft.ignore_dst,
         trapper_pk: null, latitude: Number(locationDraft.latitude), longitude: Number(locationDraft.longitude), coordinate_uncertainty: null,
       })
       setLocalLocations((list) => [...list, saved])
@@ -426,7 +461,7 @@ export default function ImportSessionPage() {
           rename: effectiveSteps.has('rename'), resize: effectiveSteps.has('resize'), resize_width: preSettings.resize_width,
           metadata: effectiveSteps.has('metadata'), owner: preSettings.owner, publisher: preSettings.publisher,
           coverage: preSettings.coverage, license_url: preSettings.license_url, research_project: project?.name ?? '',
-          timezone: drafts[name].timezone, ignore_dst: preSettings.ignore_dst, convert_to_utc: preSettings.convert_to_utc,
+          convert_to_utc: preSettings.convert_to_utc,
         }
         await api.importLocal(d.path, planned.path, planned.exists ? null : planned.collection, deployment, options, onEvent)
       } catch (e) {
@@ -602,8 +637,8 @@ export default function ImportSessionPage() {
           <StepHeading>Deployment details</StepHeading>
           <FormCard title="Which revision is this?" description="The same revision number names all the deployments of the session — R0003-DONA_01, R0003-DONA_02…">
             <div className="max-w-sm">
-              <Field label="What revision number are you importing?" required type="number" min={1} max={9999} step={1} placeholder="e.g. 3" value={revision} onChange={setRevision}
-                     hint="1 for the first visit to these locations, 2 for the second, and so on."
+              <Field label="What revision number are you importing?" required type="number" min={1} max={9999} step={1} placeholder="e.g. 3" value={revision} onChange={(v) => { revisionTouched.current = true; setRevision(v); setRevisionFromLog(null); setRevisionSuggested(false) }}
+                     hint={revisionFromLog && revisionValid ? `Taken from the deployment ids in ${revisionFromLog} — change it if it is not right.` : revisionSuggested && revisionValid ? 'Filled in as the next one expected for these locations — change it if it is not right.' : '1 for the first visit to these locations, 2 for the second, and so on.'}
                      error={revision.trim() !== '' && !revisionValid ? 'A whole number from 1 to 9999.' : undefined} />
             </div>
             {revisionValid && existingNames.length > 0 && (
@@ -627,6 +662,19 @@ export default function ImportSessionPage() {
             {fillMessage?.scope === 'all' && <p aria-live="polite" className="text-sm text-zinc-600 dark:text-zinc-400 mt-2">{fillMessage.text}</p>}
           </FormCard>
 
+          {scan?.timestamp_log && (
+            <p aria-live="polite" className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
+              The start and end dates of {scan.timestamp_log.matched} of these {chosen.length} deployment(s) were taken from{' '}
+              <span className="font-mono">{scan.timestamp_log.name}</span>, found in the session folder, not from the images' EXIF data.
+            </p>
+          )}
+          {deduced.length > 0 && (
+            <p aria-live="polite" className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
+              The location of {deduced.length} of these {chosen.length} deployment(s) was deduced from the name of their folder
+              {deduced.some((d) => drafts[d.name]?.locationFrom === 'log') ? ' or the deployment id in the timestamp log' : ''}, as it is already registered
+              in this research project. Check them, and pick another where it is not right.
+            </p>
+          )}
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <p className="text-sm text-zinc-600 dark:text-zinc-400" role="status">{completed} of {chosen.length} deployment(s) complete.</p>
             <input aria-label="Filter deployments" className={`${inputClass} max-w-[14rem]`} placeholder="Filter by name…" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -692,9 +740,18 @@ export default function ImportSessionPage() {
                                options={localLocations.map((l) => ({ value: l.location_id, label: l.name ? `${l.location_id} — ${l.name}` : l.location_id }))} />
                   <Field label="Deployment id" readOnly placeholder="Filled in from the revision and the location" value={activeFields.deployment_id} onChange={() => {}} />
                 </div>
+                {activeEntry.locationFrom && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+                    Deduced from {activeEntry.locationFrom === 'folder' ? `the folder's name, ${active.name}` : `the deployment id in the timestamp log, ${active.log_deployment_id}`} — pick another if it is not the right one.
+                  </p>
+                )}
                 {activeFields.location_id && (activeFields.latitude == null || activeFields.longitude == null) && (
                   <p className="text-sm text-red-600 dark:text-red-400 mt-2">This location has no coordinates, and a deployment needs them.</p>
                 )}
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-3">
+                  <LocationTimeNote locationId={activeFields.location_id} latitude={activeFields.latitude} longitude={activeFields.longitude}
+                                    timezone={activeEntry.timezone} ignoreDst={activeEntry.ignoreDst ?? preSettings.ignore_dst} />
+                </p>
                 {!addingLocation && (
                   <button type="button" className={`${btnOutline} mt-3`} onClick={() => { setAddingLocation(true); setLocationDraft({ ...EMPTY_LOCATION_DRAFT, location_id: matchLocation(active.name, localLocations) ? '' : active.name }); setLocationError(null) }}>
                     Add a location
@@ -707,7 +764,10 @@ export default function ImportSessionPage() {
                       <Field label="Location id" required value={locationDraft.location_id} onChange={(v) => setLocationDraft((l) => ({ ...l, location_id: v }))} />
                       <Field label="Location name" value={locationDraft.name} onChange={(v) => setLocationDraft((l) => ({ ...l, name: v }))} />
                       <Field label="Location timezone" value={locationDraft.timezone} error={locationErrors.timezone} placeholder="Europe/Madrid" onChange={(v) => setLocationDraft((l) => ({ ...l, timezone: v }))} />
-                      <div />
+                      <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer mt-7">
+                        <input type="checkbox" className="mt-1" checked={locationDraft.ignore_dst} onChange={(e) => setLocationDraft((l) => ({ ...l, ignore_dst: e.target.checked }))} />
+                        The location’s cameras ignore summer time (DST)
+                      </label>
                       <Field label="Location latitude" required type="number" step="any" value={locationDraft.latitude} error={shown(locationErrors.latitude)} onChange={(v) => setLocationDraft((l) => ({ ...l, latitude: v }))} />
                       <Field label="Location longitude" required type="number" step="any" value={locationDraft.longitude} error={shown(locationErrors.longitude)} onChange={(v) => setLocationDraft((l) => ({ ...l, longitude: v }))} />
                     </div>
@@ -733,8 +793,9 @@ export default function ImportSessionPage() {
 
               <DeploymentFormBody deployment={activeFields} timezone={activeEntry.timezone} errors={activeErrors} showAll={activeEntry.showAll}
                                   onShowAllChange={(v) => updateEntry(active.name, (e) => ({ ...e, showAll: v }))}
-                                  onField={(key, value) => updateField(active.name, key, value)} onTimezoneChange={(tz) => setTimezone(active.name, tz)}
-                                  datesGuessed={Boolean(active.start_date)} />
+                                  onField={(key, value) => updateField(active.name, key, value)}
+                                  datesGuessed={Boolean(active.start_date) && !active.from_timestamp_log}
+                                  datesFromLog={active.from_timestamp_log ? scan?.timestamp_log?.name : undefined} />
 
             </div>
           )}
@@ -801,8 +862,8 @@ export default function ImportSessionPage() {
               Each deployment&rsquo;s images are copied into its own folder in the revision&rsquo;s collection. Anything that isn&rsquo;t an image is copied as it is.
             </PreprocessItem>
             <PreprocessItem title="Read the capture dates" always>
-              From each image&rsquo;s EXIF, as the camera&rsquo;s local time in the deployment&rsquo;s timezone
-              {preSettings.ignore_dst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}.
+              From each image&rsquo;s EXIF, as the camera&rsquo;s local time in its location&rsquo;s timezone, ignoring summer time where the location says so
+              {preSettings.convert_to_utc ? ', converted to UTC' : ''}.
             </PreprocessItem>
             <PreprocessItem title="Rename the images" checked={effectiveSteps.has('rename')} onToggle={() => { preprocessTouched.current = true; setPreprocessSteps((s) => toggled(s, 'rename')) }}>
               <span className="font-mono">{'<deployment>__<YYYYMMDD>_<n>.<EXT>'}</span> in upper case.
@@ -856,6 +917,11 @@ export default function ImportSessionPage() {
             <div className="flex items-center gap-3 flex-wrap">
               <p className="text-sm text-emerald-600 dark:text-emerald-400">✔ Session imported — {chosen.length} deployment(s).</p>
               {collectionPath && <button type="button" className={btnOutline} onClick={handleOpenFolder}>Open folder in file explorer</button>}
+              {onUpload && projectId && revisionValid && (
+                <button type="button" className={btnPrimary} onClick={() => onUpload({ researchProjectId: projectId, collection: `R${String(revisionNumber).padStart(4, '0')}` })}>
+                  Upload to Trapper
+                </button>
+              )}
               {openFolderError && <p className="text-sm text-red-600 dark:text-red-400">{openFolderError}</p>}
             </div>
           )}

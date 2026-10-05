@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
-from wildintel_uploader.core.schemas.requests import UploadCollectionsRequest, UploadDeploymentRequest
+from wildintel_uploader.core.schemas.requests import AccessCheckRequest, UploadClassificationProjectsRequest, UploadCollectionsRequest, UploadDeploymentRequest
 from wildintel_uploader.core.services import local_folder_service, trapper_service, trapper_upload_service
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
 
@@ -26,6 +26,56 @@ def collections(req: UploadCollectionsRequest) -> dict:
         return {"results": trapper_upload_service.list_collections(config.collections_dir(), req.research_project_id)}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/classification-projects")
+def classification_projects(req: UploadClassificationProjectsRequest) -> dict:
+    """The classification projects Trapper has for a research project kept locally — the collection goes to one of them."""
+    credentials = resolve(req)
+    records = {p["acronym"]: p for p in local_folder_service.list_research_projects(config.collections_dir())}
+    record = records.get(req.research_project_id)
+    if record is None:
+        raise HTTPException(404, f"The research project '{req.research_project_id}' isn't in the collections folder.")
+
+    def lookup() -> list[dict]:
+        pk = trapper_upload_service.find_research_project(credentials, record)
+        return trapper_service.list_classification_projects(*credentials, pk)
+
+    try:
+        return {"results": lookup()}
+    except trapper_upload_service.TrapperUploadError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        logger.warning("Reading the classification projects failed: %s", exc, exc_info=debugging())
+        raise http_exc(exc) from exc
+
+
+@router.post("/check-access")
+def check_access(req: AccessCheckRequest) -> dict:
+    """Whether the account can reach what an upload needs — the research project, its locations (and which of the
+    deployments' own are already there) and the uploader's login — changing nothing. Always a 200 with one
+    {"check", "ok", "message"} per check, so a failing one says why instead of being a bare error."""
+    credentials = resolve(req)
+    try:
+        records = {p["acronym"]: p for p in local_folder_service.list_research_projects(config.collections_dir())}
+        record = records.get(req.research_project_id)
+        if record is None:
+            raise HTTPException(404, f"The research project '{req.research_project_id}' isn't in the collections folder.")
+        location_ids: list[str] = []
+        if req.collection:
+            collection_dir = local_folder_service.project_dir(config.collections_dir(), req.research_project_id) / req.collection
+            for deployment_id in req.deployment_ids:
+                metadata = trapper_upload_service._read_json(collection_dir / deployment_id / local_folder_service.DEPLOYMENT_METADATA_FILE)
+                if isinstance(metadata, dict) and metadata.get("location_id"):
+                    location_ids.append(metadata["location_id"])
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    def describe(exc: Exception) -> str:
+        logger.warning("Checking the access to Trapper failed: %s", exc, exc_info=debugging())
+        return str(exc) if isinstance(exc, trapper_upload_service.TrapperUploadError) else http_exc(exc).detail
+
+    return {"checks": trapper_upload_service.check_access(credentials, record, location_ids, classification_project_pk=req.classification_project_pk, describe=describe)}
 
 
 @router.post("/deployment")
@@ -58,7 +108,7 @@ def upload_deployment(req: UploadDeploymentRequest) -> StreamingResponse:
 
     events = trapper_upload_service.upload_stream(
         credentials, record, collection_dir, req.deployment_id, config.data_dir() / "packages" / req.research_project_id,
-        mode=req.mode, max_zip_bytes=req.max_zip_mb * 1024 * 1024,
+        mode=req.mode, max_zip_bytes=req.max_zip_mb * 1024 * 1024, classification_project_pk=req.classification_project_pk,
     )
 
     def lines() -> Iterator[str]:

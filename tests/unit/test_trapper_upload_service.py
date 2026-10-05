@@ -107,12 +107,12 @@ def test_the_package_is_a_zip_of_the_images_and_a_yaml_describing_them_as_in_wil
     assert package["files"] == 3
     names = sorted(f.name for f in (collection / DEPLOYMENT_ID).glob("*.JPEG"))
     with zipfile.ZipFile(package["zip"]) as z:
-        assert sorted(z.namelist()) == [f"R0003/{DEPLOYMENT_ID}/{n}" for n in names]
+        assert sorted(z.namelist()) == [f"R0003/{DEPLOYMENT_ID.lower()}/{n}" for n in names]  # Trapper keeps its deployment ids in lower case
     definition = yaml.safe_load(package["yaml"].read_text(encoding="utf-8"))
     [col] = definition["collections"]
     assert (col["name"], col["project_id"], col["timezone"], col["timezone_ignore_dst"], col["resources_dir"]) == ("R0003", 2, "Europe/Madrid", True, "R0003")
     [dep] = col["deployments"]
-    assert dep["deployment_id"] == DEPLOYMENT_ID and [r["file"] for r in dep["resources"]] == names
+    assert dep["deployment_id"] == DEPLOYMENT_ID.lower() and [r["file"] for r in dep["resources"]] == names
 
 
 def test_each_resource_says_when_it_was_recorded_in_utc_and_what_it_is(tmp_path: Path):
@@ -175,7 +175,7 @@ def test_a_deployment_with_no_images_has_nothing_to_pack(tmp_path: Path):
 class FakeTrapper:
     """Just enough of the SDK's client: what a research project has, and what gets created and uploaded."""
 
-    def __init__(self, *, projects=None, locations=(), deployments=(), collections_appear=True):
+    def __init__(self, *, projects=None, locations=(), deployments=(), collections_appear=True, classification_projects=None):
         self.projects = projects if projects is not None else [SimpleNamespace(pk=2, name="Doñana", acronym="DONA")]
         self.location_rows = list(locations)
         self.deployment_rows = list(deployments)
@@ -184,8 +184,12 @@ class FakeTrapper:
         self.imported_deployments: list[dict] = []
         self.triggered: list[dict] = []
         self.research_projects = SimpleNamespace(where=lambda **kw: list(self.projects))
-        self.locations = SimpleNamespace(where=lambda **kw: [SimpleNamespace(pk=i, location_id=l, name=None, timezone="UTC") for i, l in enumerate(self.location_rows, 1)],
-                                         export=lambda query=None: [], import_locations=self._import_locations)
+        self.classification_rows = classification_projects if classification_projects is not None else [SimpleNamespace(pk=7, name="Doñana classification", is_active=True)]
+        self.classification_projects = SimpleNamespace(where=lambda **kw: list(self.classification_rows))
+        self.location_settings: dict[str, tuple[str, bool]] = {}  # a location's (timezone, ignore_dst) in Trapper — the import options' own (Europe/Madrid, ignoring summer time) by default
+        self.locations = SimpleNamespace(where=lambda **kw: [SimpleNamespace(pk=i, location_id=l, name=None, timezone=self.location_settings.get(l, ("Europe/Madrid", True))[0]) for i, l in enumerate(self.location_rows, 1)],
+                                         export=lambda query=None: [SimpleNamespace(pk=i, latitude=None, longitude=None, ignore_dst=self.location_settings.get(l, ("Europe/Madrid", True))[1]) for i, l in enumerate(self.location_rows, 1)],
+                                         import_locations=self._import_locations)
         self.deployments = SimpleNamespace(export=lambda query=None: [self._export(d) for d in self.deployment_rows], import_deployments=self._import_deployments)
         self.collections = SimpleNamespace(where=lambda **kw: [SimpleNamespace(name=kw["search"])] if self.collections_appear else [], trigger_collection=self._trigger)
 
@@ -217,13 +221,14 @@ def fake_uploader(monkeypatch: pytest.MonkeyPatch):
 
     class FakeUploader:
         fail_on: str | None = None
+        error: Exception | None = None
 
         def __init__(self, client, progress_callback=None):
             self.progress_callback = progress_callback
 
         async def upload_file(self, file_path: Path, remote_path: str) -> None:
             if FakeUploader.fail_on and FakeUploader.fail_on in file_path.name:
-                raise RuntimeError("connection reset by peer")
+                raise FakeUploader.error or RuntimeError("connection reset by peer")
             uploads.append((file_path.name, remote_path))
             size = file_path.stat().st_size
             if self.progress_callback:
@@ -326,7 +331,7 @@ def test_the_upload_creates_the_location_and_the_deployment_then_packs_uploads_a
 
     steps = [(e["step"], e["status"]) for e in events if e["type"] == "step"]
     assert steps == [
-        ("connect", "running"), ("connect", "done"), ("location", "running"), ("location", "done"), ("deployment", "running"), ("deployment", "done"),
+        ("connect", "running"), ("connect", "done"), ("classification", "running"), ("classification", "done"), ("location", "running"), ("location", "done"), ("deployment", "running"), ("deployment", "done"),
         ("package", "running"), ("package", "done"), ("upload", "running"), ("upload", "done"), ("process", "running"), ("process", "done"),
         ("wait", "running"), ("wait", "done"),
     ]
@@ -334,6 +339,118 @@ def test_the_upload_creates_the_location_and_the_deployment_then_packs_uploads_a
         "type": "done", "mode": "upload", "collection": "R0003", "deployment_id": DEPLOYMENT_ID, "location_created": True, "deployment_created": True, "parts": 1,
     }
     assert len(fake.imported_locations) == 1 and len(fake.imported_deployments) == 1  # both created, the location first (it has to exist)
+
+
+def test_the_yaml_names_the_classification_project_and_not_the_research_project(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 2)
+    fake = FakeTrapper(classification_projects=[SimpleNamespace(pk=7, name="A", is_active=True), SimpleNamespace(pk=8, name="B", is_active=True)])
+
+    events = _upload(tmp_path, collection, fake, classification_project_pk=8)
+
+    assert next(e for e in events if e.get("step") == "classification" and e["status"] == "done")["message"] == "The collection goes to the classification project B (#8)."
+    assert json.loads((collection / DEPLOYMENT_ID / "upload.json").read_text())["classification_project_pk"] == 8
+    # what went up is deleted afterwards, so the yaml itself is looked at when only generating
+    _upload(tmp_path / "again", _imported(tmp_path / "again", 2), fake, mode="generate", classification_project_pk=8)
+    yaml_file = next((tmp_path / "again" / "packages" / "DONA" / "R0003").glob("*.yaml"))
+    assert yaml.safe_load(yaml_file.read_text(encoding="utf-8"))["collections"][0]["project_id"] == 8  # the research project is #2
+
+
+def test_the_classification_project_has_to_be_chosen_when_there_are_several_and_must_exist():
+    several = FakeTrapper(classification_projects=[SimpleNamespace(pk=7, name="A", is_active=True), SimpleNamespace(pk=8, name="B", is_active=True)])
+    with _with(several):
+        with pytest.raises(up.TrapperUploadError, match=r"several classification projects.*A \(#7\), B \(#8\)"):
+            up.resolve_classification_project(CREDENTIALS, 2)
+        assert up.resolve_classification_project(CREDENTIALS, 2, 7)["name"] == "A"
+        with pytest.raises(up.TrapperUploadError, match="isn't one of the research project's"):
+            up.resolve_classification_project(CREDENTIALS, 2, 99)
+    with _with(FakeTrapper()):
+        assert up.resolve_classification_project(CREDENTIALS, 2)["pk"] == 7  # the only one
+    with _with(FakeTrapper(classification_projects=[])), pytest.raises(up.TrapperUploadError, match="has no classification project"):
+        up.resolve_classification_project(CREDENTIALS, 2)
+
+
+def test_the_package_declares_the_timezone_and_summer_time_of_the_location_it_goes_to(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 2)
+    fake = FakeTrapper(locations=["DONA_0006_B"], deployments=[DEPLOYMENT_ID.lower()])
+    fake.location_settings["DONA_0006_B"] = ("Europe/Madrid", False)  # the import's options say Europe/Madrid, ignoring summer time
+    seen = []
+    real = up.build_packages
+    with patch.object(up, "build_packages", side_effect=lambda *a, **kw: seen.append((kw["timezone_name"], kw["ignore_dst"])) or real(*a, **kw)):
+        events = _upload(tmp_path, collection, fake)
+
+    assert seen == [("Europe/Madrid", False)]
+    message = next(e for e in events if e.get("step") == "location" and e["status"] == "done")["message"]
+    assert "Its timezone is Europe/Madrid and it does not ignore summer time — the package declares that" in message
+
+
+def test_a_location_with_the_same_settings_says_nothing_about_them(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 2)
+    fake = FakeTrapper(locations=["DONA_0006_B"])  # Europe/Madrid, ignoring summer time — what the import's options say too
+
+    events = _upload(tmp_path, collection, fake)
+
+    assert next(e for e in events if e.get("step") == "location" and e["status"] == "done")["message"] == "Location DONA_0006_B was already in Trapper."
+
+
+def test_generating_with_an_account_also_uses_the_locations_settings(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 2)
+    fake = FakeTrapper(locations=["DONA_0006_B"])
+    fake.location_settings["DONA_0006_B"] = ("Europe/Madrid", False)
+
+    events = _run(tmp_path, collection, fake, "generate")
+
+    assert any("Its timezone is Europe/Madrid" in e.get("message", "") for e in events)
+    assert fake.imported_locations == [] and fake.triggered == []  # read, not created
+
+
+def test_the_package_names_the_deployment_as_trapper_has_it_not_as_it_is_kept_here(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 2)
+    stored = DEPLOYMENT_ID.lower()  # Trapper matches ignoring case, but its yaml lookup does not
+    assert stored != DEPLOYMENT_ID
+    fake = FakeTrapper(locations=["DONA_0006_B"], deployments=[stored])
+    seen = []
+    real = up.build_packages
+    with patch.object(up, "build_packages", side_effect=lambda *a, **kw: seen.append(kw["trapper_deployment_id"]) or real(*a, **kw)):
+        events = _upload(tmp_path, collection, fake)
+
+    assert seen == [stored]
+    assert f"was already in Trapper, as {stored} — the package uses that id" in next(e for e in events if e.get("step") == "deployment" and e["status"] == "done")["message"]
+
+
+def test_a_package_names_the_deployment_it_was_given_and_puts_its_files_in_that_folder(tmp_path: Path):
+    collection = _imported(tmp_path, 2)
+    log = json.loads((collection / DEPLOYMENT_ID / "preprocessing.json").read_text(encoding="utf-8"))
+
+    [package] = up.build_packages(collection / DEPLOYMENT_ID, "R0003", DEPLOYMENT_ID, log, project_id=7, timezone_name="UTC", ignore_dst=True,
+                                  output_dir=tmp_path / "out", trapper_deployment_id="r0003-dona_0006_b")
+
+    assert yaml.safe_load(package["yaml"].read_text(encoding="utf-8"))["collections"][0]["deployments"][0]["deployment_id"] == "r0003-dona_0006_b"
+    with zipfile.ZipFile(package["zip"]) as z:
+        assert all(name.startswith("R0003/r0003-dona_0006_b/") for name in z.namelist())
+
+
+def test_a_package_names_the_deployment_in_lower_case_even_when_trapper_was_not_asked(tmp_path: Path):
+    collection = _imported(tmp_path, 2)
+    log = json.loads((collection / DEPLOYMENT_ID / "preprocessing.json").read_text(encoding="utf-8"))
+
+    [package] = up.build_packages(collection / DEPLOYMENT_ID, "R0003", DEPLOYMENT_ID, log, project_id=7, timezone_name="UTC", ignore_dst=True, output_dir=tmp_path / "out")
+
+    assert DEPLOYMENT_ID != DEPLOYMENT_ID.lower()
+    assert yaml.safe_load(package["yaml"].read_text(encoding="utf-8"))["collections"][0]["deployments"][0]["deployment_id"] == DEPLOYMENT_ID.lower()
+    with zipfile.ZipFile(package["zip"]) as z:
+        assert all(name.startswith(f"R0003/{DEPLOYMENT_ID.lower()}/") for name in z.namelist())
+
+
+def test_trappers_refusal_to_process_the_package_is_said_in_words_not_as_a_dict(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 2)
+    fake = FakeTrapper()
+
+    def refuse(payload, raise_on_error=True):
+        raise RuntimeError("{'data': {'message': 'The YAML collection definition file is invalid.', 'errors': 'Deployment X does not exist.', 'task_id': None}}")
+
+    fake.collections.trigger_collection = refuse
+    with pytest.raises(up.TrapperUploadError, match=r"refused to process the package: The YAML collection definition file is invalid\. Deployment X does not exist\.$"):
+        _upload(tmp_path, collection, fake)
 
 
 def test_the_zip_goes_up_first_then_its_yaml_and_trapper_is_told_to_process_them(tmp_path: Path, fake_uploader):
@@ -366,7 +483,7 @@ def test_what_is_already_in_trapper_is_not_created_again(tmp_path: Path, fake_up
     events = _upload(tmp_path, collection, fake)
 
     assert fake.imported_locations == [] and fake.imported_deployments == []
-    assert [e["message"] for e in events if e["type"] == "step" and e["status"] == "done"][1:3] == [
+    assert [e["message"] for e in events if e["type"] == "step" and e["status"] == "done"][2:4] == [
         "Location DONA_0006_B was already in Trapper.", f"Deployment {DEPLOYMENT_ID} was already in Trapper.",
     ]
     assert events[-1]["location_created"] is False and events[-1]["deployment_created"] is False
@@ -415,6 +532,25 @@ def test_a_failure_while_uploading_keeps_the_packages_for_another_try_and_does_n
     assert list((tmp_path / "packages").rglob("*.zip"))
     assert not (collection / DEPLOYMENT_ID / "upload.json").exists()
     fake_uploader.fail_on = None
+
+
+def test_a_refused_login_says_who_refused_it_and_what_it_answered(tmp_path: Path, fake_uploader):
+    import httpx
+
+    collection = _imported(tmp_path, 2)
+    request = httpx.Request("POST", "https://trapper.example.org/uploader/auth/login")
+    response = httpx.Response(403, request=request, headers={"server": "Coraza"}, text="Forbidden by\nthe WAF")
+    fake_uploader.fail_on, fake_uploader.error = ".zip", httpx.HTTPStatusError("403", request=request, response=response)
+
+    try:
+        with pytest.raises(up.TrapperUploadError) as caught:
+            _upload(tmp_path, collection, FakeTrapper())
+    finally:
+        fake_uploader.fail_on = fake_uploader.error = None
+
+    message = str(caught.value)
+    assert "POST https://trapper.example.org/uploader/auth/login: 403 Forbidden (server: Coraza) — Forbidden by the WAF." in message
+    assert "The login was refused" in message
 
 
 def test_when_the_collection_never_appears_in_trapper_it_says_so(tmp_path: Path, fake_uploader):
@@ -569,12 +705,12 @@ def test_generating_writes_the_zip_the_yaml_and_the_deployments_csv_and_leaves_t
 def test_generating_does_not_touch_trapper_when_the_research_project_pk_is_known(tmp_path: Path, fake_uploader):
     collection = _imported(tmp_path, 2)
 
-    events = _run(tmp_path, collection, FakeTrapper(projects=[]), "generate", credentials=None)  # no account, and Trapper has no projects either
+    events = _run(tmp_path, collection, FakeTrapper(projects=[]), "generate", credentials=None, classification_project_pk=9)  # no account, and Trapper has no projects either
 
     assert events[-1]["type"] == "done"
-    assert [e["step"] for e in events if e["type"] == "step"] == ["package", "package", "csv", "csv"]  # no connect, location or deployment
+    assert [e["step"] for e in events if e["type"] == "step"] == ["classification", "package", "package", "csv", "csv"]  # no connect, location or deployment
     yaml_file = next((tmp_path / "packages" / "DONA" / "R0003").glob("*.yaml"))
-    assert yaml.safe_load(yaml_file.read_text(encoding="utf-8"))["collections"][0]["project_id"] == 2  # the pk the research project was filled in with
+    assert yaml.safe_load(yaml_file.read_text(encoding="utf-8"))["collections"][0]["project_id"] == 9  # the classification project's pk, not the research project's
 
 
 def test_generating_looks_the_pk_up_in_trapper_when_it_is_not_known_and_there_is_an_account(tmp_path: Path, fake_uploader):
@@ -586,7 +722,14 @@ def test_generating_looks_the_pk_up_in_trapper_when_it_is_not_known_and_there_is
 
     assert [e["step"] for e in events if e["type"] == "step"][:2] == ["connect", "connect"]
     yaml_file = next((tmp_path / "packages" / "DONA" / "R0003").glob("*.yaml"))
-    assert yaml.safe_load(yaml_file.read_text(encoding="utf-8"))["collections"][0]["project_id"] == 77
+    assert yaml.safe_load(yaml_file.read_text(encoding="utf-8"))["collections"][0]["project_id"] == 7  # the classification project of research project #77, not #77 itself
+
+
+def test_generating_without_an_account_needs_the_classification_project_chosen(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 2)
+
+    with pytest.raises(up.TrapperUploadError, match="classification project's pk"):
+        _run(tmp_path, collection, FakeTrapper(), "generate", credentials=None)
 
 
 def test_generating_without_a_known_pk_nor_an_account_says_what_to_do(tmp_path: Path, fake_uploader):
@@ -671,3 +814,49 @@ def test_a_csv_wildintel_tools_wrote_is_kept_and_extended(tmp_path: Path):
     rows = _csv_rows(path)
     assert [r["deploymentID"] for r in rows] == ["R0003-DONA_0001", DEPLOYMENT_ID]
     assert rows[0]["cameraModel"] == "Reconyx" and rows[0]["longitude"] == ""  # theirs, as it was
+
+
+# ── checking the access ──────────────────────────────────────────────────────
+
+def _refusing_login(monkeypatch: pytest.MonkeyPatch, status: int | None) -> None:
+    import httpx
+
+    def login(credentials):
+        if status is not None:
+            request = httpx.Request("POST", "https://trapper.example.org/uploader/auth/login")
+            raise httpx.HTTPStatusError(str(status), request=request, response=httpx.Response(status, request=request, text="nope"))
+
+    monkeypatch.setattr(up, "_uploader_login", login)
+
+
+def test_checking_the_access_reports_the_project_the_locations_and_the_uploader(monkeypatch: pytest.MonkeyPatch):
+    _refusing_login(monkeypatch, None)
+    fake = FakeTrapper(locations=["DONA_0001"])
+
+    with _with(fake):
+        checks = up.check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, ["DONA_0001", "dona_0002", ""])
+
+    assert [c["check"] for c in checks] == ["research_project", "classification_project", "location", "uploader"]
+    assert all(c["ok"] for c in checks)
+    assert "Doñana classification (#7)" in checks[1]["message"]
+    assert "Already in Trapper: DONA_0001" in checks[2]["message"] and "Would be created: dona_0002" in checks[2]["message"]
+    assert fake.imported_locations == [] and fake.imported_deployments == []  # nothing was created
+
+
+def test_each_access_check_fails_on_its_own(monkeypatch: pytest.MonkeyPatch):
+    _refusing_login(monkeypatch, 403)
+
+    with _with(FakeTrapper(locations=["DONA_0001"])):
+        checks = up.check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2})
+    assert [c["ok"] for c in checks] == [True, True, True, False]
+    assert "403 Forbidden" in checks[3]["message"] and "The login was refused" in checks[3]["message"]
+
+    with _with(FakeTrapper(projects=[])):
+        checks = up.check_access(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None})
+    assert [c["ok"] for c in checks] == [False, False, False, False]
+    assert "create it there first" in checks[0]["message"] and "Not checked" in checks[1]["message"]
+
+    with _with(FakeTrapper(classification_projects=[])):
+        checks = up.check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2})
+    assert [c["ok"] for c in checks] == [True, False, True, False]
+    assert "has no classification project" in checks[1]["message"]

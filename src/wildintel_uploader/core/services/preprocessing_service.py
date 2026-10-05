@@ -97,13 +97,19 @@ def _exif_date(path: Path) -> datetime | None:
     return None
 
 
-def capture_datetime(path: Path, options: PreprocessOptions) -> tuple[datetime, str]:
-    """The image's capture date — in UTC if asked — and where it came from:
+def _camera_time(path: Path, options: PreprocessOptions) -> tuple[datetime, datetime, str]:
+    """The image's capture time as the camera's wall clock, the same in its timezone, and where it came from:
     "exif", or "file" when the image has no date and its modification time stands in."""
     naive, source = _exif_date(path), "exif"
     if naive is None:
         naive, source = datetime.fromtimestamp(path.stat().st_mtime).replace(microsecond=0), "file"
-    aware = localize(naive, zone_of(options.timezone), ignore_dst=options.ignore_dst)
+    return naive, localize(naive, zone_of(options.timezone), ignore_dst=options.ignore_dst), source
+
+
+def capture_datetime(path: Path, options: PreprocessOptions) -> tuple[datetime, str]:
+    """The image's capture date — in UTC if asked — and where it came from:
+    "exif", or "file" when the image has no date and its modification time stands in."""
+    _, aware, source = _camera_time(path, options)
     return (aware.astimezone(datetime_timezone.utc) if options.convert_to_utc else aware), source
 
 
@@ -190,10 +196,32 @@ def write_xmp(exiftool: str, items: list[tuple[Path, dict[str, str]]]) -> None:
             raise DeploymentImportError(f"ExifTool could not write the metadata: {(completed.stderr or completed.stdout).strip()[:300]}")
 
 
+def _image_entry(record: dict) -> dict:
+    """What images.json keeps of a preprocessed image: its names, when it was taken (the camera's wall clock, the
+    instant and its epoch seconds), the camera, the file's size and pixels and its hashes."""
+    target: Path = record["_target"]
+    width, height = _dimensions(target)
+    return {
+        "name": record["name"], "original": record["original"], "local_time": record["_local"].isoformat(),
+        "taken_at": record["date"], "timestamp": record["_date"].timestamp(), "date_source": record["date_source"],
+        "camera": record["camera"], "width": width, "height": height, "size_bytes": target.stat().st_size,
+        "resized": record["resized"], "sha1": record["final_hash"], "source_sha1": record["source_hash"],
+    }
+
+
+def _dimensions(path: Path) -> tuple[int | None, int | None]:
+    try:
+        with Image.open(path) as img:
+            return img.width, img.height
+    except Exception:
+        return None, None
+
+
 def _process(index: int, path: Path, source_dir: Path, dest: Path, deployment: DeploymentFields, options: PreprocessOptions,
              cameras: dict[Path, camera_info.CameraInfo]) -> dict:
     """One image: date, name, resize (or copy) and hashes."""
-    date, date_source = capture_datetime(path, options)
+    naive, aware, date_source = _camera_time(path, options)
+    date = aware.astimezone(datetime_timezone.utc) if options.convert_to_utc else aware
     relative = path.relative_to(source_dir)
     name = new_name(deployment.deployment_id, date, index, path.suffix) if options.rename else str(relative)
     target = dest / name
@@ -206,7 +234,7 @@ def _process(index: int, path: Path, source_dir: Path, dest: Path, deployment: D
         resized = False
     return {
         "original": str(relative), "name": name, "date": date.isoformat(), "date_source": date_source, "resized": resized,
-        "source_hash": source_hash, "hash": _sha1(target), "camera": cameras[path].model, "_target": target, "_date": date,
+        "source_hash": source_hash, "hash": _sha1(target), "camera": cameras[path].model, "_target": target, "_date": date, "_local": naive,
     }
 
 
@@ -282,6 +310,7 @@ def preprocess_stream(
             r["final_hash"] = _sha1(r["_target"])
 
         local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
+        local_folder_service.write_images_file(dest, deployment.deployment_id, [_image_entry(r) for r in records])
         public = [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
         (dest / PREPROCESSING_LOG_FILE).write_text(
             json.dumps({"options": asdict(options), "processed": len(records), "skipped": skipped, "images": public}, indent=2, ensure_ascii=False),

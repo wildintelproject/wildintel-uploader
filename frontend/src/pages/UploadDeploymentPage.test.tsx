@@ -7,7 +7,7 @@ import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { LocalResearchProject, UploadCollection, UploadDeploymentInfo, UploadEvent } from '../types'
 
 vi.mock('../api', () => ({
-  api: { listResearchProjects: vi.fn(), uploadCollections: vi.fn(), uploadDeployment: vi.fn(), openFolder: vi.fn(), trapperGetConfig: vi.fn() },
+  api: { listResearchProjects: vi.fn(), uploadCollections: vi.fn(), uploadDeployment: vi.fn(), openFolder: vi.fn(), trapperGetConfig: vi.fn(), checkUploadAccess: vi.fn(), uploadClassificationProjects: vi.fn() },
 }))
 
 const mockedApi = vi.mocked(api)
@@ -49,6 +49,7 @@ beforeEach(() => {
   mockedApi.listResearchProjects.mockResolvedValue({ results: [PROJECT] })
   mockedApi.uploadCollections.mockResolvedValue({ results: COLLECTIONS })
   mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice@example.org', has_password: true })
+  mockedApi.uploadClassificationProjects.mockResolvedValue({ results: [{ pk: 7, name: 'Doñana classification', is_active: true }] })
   mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mb, _mode, onEvent) => { STEP_EVENTS(id).forEach(onEvent) })
 })
 
@@ -288,13 +289,99 @@ describe('UploadDeploymentPage', () => {
     await pickCollection()
     await userEvent.click(await screen.findByRole('radio', { name: 'Only generate the files' }))
     const button = await screen.findByRole('button', { name: 'Generate the files of 2 deployments' })
+    expect(button).toBeDisabled() // the yaml needs the classification project, which can't be listed with no account
+    expect(mockedApi.uploadClassificationProjects).not.toHaveBeenCalled()
+    await userEvent.type(screen.getByLabelText('Classification project'), '7')
     expect(button).toBeEnabled()
     await userEvent.click(button)
 
     await screen.findByText(/2 deployment\(s\) generated\./)
     expect(mockedApi.uploadDeployment.mock.calls[0][4]).toBe('generate')
+    expect(mockedApi.uploadDeployment.mock.calls[0][6]).toBe(7)
     expect(screen.getAllByText('R0003_deployments.csv').length).toBeGreaterThan(0)
     await userEvent.click(screen.getAllByRole('button', { name: 'Open folder in file explorer' })[0])
     expect(mockedApi.openFolder).toHaveBeenCalledWith('/out/R0003')
+  })
+
+  it('starts from the research project and collection a finished import went into', async () => {
+    render(<UploadDeploymentPage initial={{ researchProjectId: 'DONA', collection: 'R0003' }} />)
+
+    expect(await screen.findByLabelText('Collection')).toHaveValue('R0003 — 4 deployment(s)')
+    expect(mockedApi.uploadCollections).toHaveBeenCalledWith('DONA')
+    expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
+    // what is left to send is ticked, as when the collection is picked by hand
+    expect(await screen.findByRole('checkbox', { name: 'R0003-DONA_01' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'R0003-DONA_04' })).not.toBeChecked() // uploaded before
+    expect(await screen.findByLabelText('Classification project')).toHaveValue('Doñana classification (#7)')
+    expect(screen.getByRole('button', { name: 'Upload 2 deployments' })).toBeEnabled()
+  })
+
+  it('starts empty when it is not reached from an import', async () => {
+    render(<UploadDeploymentPage />)
+    expect(await screen.findByLabelText('Research project')).toHaveValue('')
+    expect(mockedApi.uploadCollections).not.toHaveBeenCalled()
+  })
+
+  describe('the classification project', () => {
+    it('is the only one the research project has, picked by itself and sent with the upload', async () => {
+      await pickCollection()
+      expect(await screen.findByLabelText('Classification project')).toHaveValue('Doñana classification (#7)')
+      await userEvent.click(await screen.findByRole('button', { name: 'Upload 2 deployments' }))
+      await screen.findByText(/2 deployment\(s\) uploaded\./)
+      expect(mockedApi.uploadClassificationProjects).toHaveBeenCalledWith('DONA')
+      expect(mockedApi.uploadDeployment.mock.calls.map((c) => c[6])).toEqual([7, 7])
+    })
+
+    it('has to be picked when there are several, and holds the upload back until it is', async () => {
+      mockedApi.uploadClassificationProjects.mockResolvedValue({ results: [
+        { pk: 7, name: 'A', is_active: true }, { pk: 8, name: 'B', is_active: true },
+      ] })
+      await pickCollection()
+      const field = await screen.findByLabelText('Classification project')
+      expect(field).toHaveValue('')
+      expect(screen.getByRole('button', { name: 'Upload 2 deployments' })).toBeDisabled()
+      expect(screen.getByText(/has several: pick the one/)).toBeInTheDocument()
+
+      await userEvent.click(field)
+      await userEvent.click(await screen.findByRole('option', { name: 'B (#8)' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Upload 2 deployments' }))
+      await screen.findByText(/2 deployment\(s\) uploaded\./)
+      expect(mockedApi.uploadDeployment.mock.calls[0][6]).toBe(8)
+    })
+  })
+
+  describe('testing the connection', () => {
+    it('needs a research project, then checks the project, its locations and the uploader without uploading anything', async () => {
+      mockedApi.checkUploadAccess.mockResolvedValue({ checks: [
+        { check: 'research_project', ok: true, message: 'Research project DONA is #2 in Trapper.' },
+        { check: 'location', ok: true, message: 'The 5 location(s) of the research project can be read. Would be created: DONA_02.' },
+        { check: 'uploader', ok: false, message: "Trapper's uploader refused POST https://trapper.example.org/uploader/auth/login: 403 Forbidden." },
+      ] })
+      render(<UploadDeploymentPage />)
+      const button = await screen.findByRole('button', { name: 'Test connection' })
+      expect(button).toBeDisabled()
+
+      await userEvent.click(await screen.findByLabelText('Research project'))
+      await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+      await userEvent.click(await screen.findByLabelText('Collection'))
+      await userEvent.click(await screen.findByRole('option', { name: /^R0003/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
+
+      const list = await screen.findByRole('list', { name: 'Connection test' })
+      expect(mockedApi.checkUploadAccess).toHaveBeenCalledWith('DONA', 'R0003', ['R0003-DONA_01', 'R0003-DONA_02'], 7)
+      expect(within(list).getByText(/Research project DONA is #2/)).toBeInTheDocument()
+      expect(within(list).getByText(/Would be created: DONA_02/)).toBeInTheDocument()
+      expect(within(list).getByText(/uploader refused POST .*403 Forbidden/)).toBeInTheDocument()
+      expect(mockedApi.uploadDeployment).not.toHaveBeenCalled()
+    })
+
+    it('says why the test could not be run', async () => {
+      mockedApi.checkUploadAccess.mockRejectedValue(new Error('The Trapper account isn\u2019t set up'))
+      render(<UploadDeploymentPage />)
+      await userEvent.click(await screen.findByLabelText('Research project'))
+      await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
+      expect(await screen.findByText(/account isn.t set up/)).toBeInTheDocument()
+    })
   })
 })

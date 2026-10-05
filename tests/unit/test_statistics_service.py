@@ -286,6 +286,17 @@ def test_without_a_research_project_there_is_no_history(tmp_path: Path):
     assert all(c["skipped"] for c in result.values())
 
 
+def test_the_next_revision_is_one_after_the_highest_kept_for_that_location(tmp_path: Path):
+    _revision(tmp_path, "DONA", "R0001-DONA_01", _stamps(3, 3))
+    _revision(tmp_path, "DONA", "R0003-DONA_01", _stamps(3, 3), collection="R0003_winter")
+    _revision(tmp_path, "DONA", "R0007-DONA_02", _stamps(3, 3))  # another location
+
+    assert st.next_revision(tmp_path, "DONA", "dona_01") == {"last": 3, "next": 4}
+    assert st.next_revision(tmp_path, "DONA", "DONA_02") == {"last": 7, "next": 8}
+    assert st.next_revision(tmp_path, "DONA", "DONA_03") == {"last": None, "next": 1}
+    assert st.next_revision(tmp_path, "NOPE", "DONA_01") == {"last": None, "next": 1}
+
+
 def test_a_previous_revision_with_no_images_is_not_history(tmp_path: Path):
     _history(tmp_path, _stamps(300, 3), [], _stamps(300, 3))
 

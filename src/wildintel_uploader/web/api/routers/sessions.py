@@ -38,9 +38,7 @@ def save_details(req: SaveDetailsRequest) -> dict:
     """Saves the deployment's own fields into an existing session — the run
     is then ready to import."""
     try:
-        return session_store.write_details_phase(
-            req.task_id, deployment=req.deployment.model_dump(), timezone_name=req.timezone, ignore_dst=req.ignore_dst,
-        )
+        return session_store.write_details_phase(req.task_id, deployment=req.deployment.model_dump())
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
 
