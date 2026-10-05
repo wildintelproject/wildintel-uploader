@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from PIL import Image, ImageOps
 
+from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import DeploymentFields
 from wildintel_uploader.core.services import camera_info, deployment_import_service, local_folder_service
 from wildintel_uploader.core.services.deployment_import_service import DeploymentImportError
@@ -43,7 +44,6 @@ _DATE_TAGS = (("exif", 36867), ("exif", 36868), ("main", 306))  # DateTimeOrigin
 _NO_DATA = {"0000:00:00 00:00:00"}
 _XMP_BATCH = 200  # files per ExifTool run
 _JPEG_QUALITY = 90
-_WORKERS = 4
 
 
 @dataclass(frozen=True)
@@ -249,7 +249,7 @@ def preprocess_stream(
         skipped = 0
         done = 0
         dest.mkdir(parents=True, exist_ok=True)
-        with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+        with ThreadPoolExecutor(max_workers=config.workers()) as pool:
             futures = [(path, pool.submit(_process, index_of[path], path, source, dest, deployment, options, cameras)) for path in images]
             for path, future in futures:  # in order, so the events are too
                 done += 1

@@ -17,6 +17,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     taken from Trapper.
   - *Details*: the deployment's id from its revision (`R0003-DONA_01`), the period with its timezone and
     Camtrap DP's own fields, validated in the browser and in the backend.
+    It says when that deployment already exists in the collections folder, and, when an earlier revision of it
+    was kept, offers to fill the form in from it (everything but the start and end dates).
   - *Postvalidation*: the naming and the dates against wildintel-tools' rules, and statistical checks
     (number of images, of sequences and their length) against the previous revisions of the location.
   - *Preprocessing*: renaming, resizing to a width and XMP metadata (as wildintel-tools did), listed before
@@ -33,6 +35,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   location and the deployment in Trapper if they are missing, packing the images in zip + yaml parts and
   sending them. A *dry run* says what would be done changing nothing, and *only generate the files* writes the
   zips, the yamls and the collection's deployments csv to leave them for later.
+- Validating and preprocessing the images use several CPUs at once (Settings › General › Workers; by default the
+  CPUs the machine has, up to 4).
 - **Settings**: General (images folder, log, update check), Trapper (account and test), Validation and
   Postvalidation (each check an entry with a quick switch, and a gear only where it has settings),
   Preprocessing (steps, width, authorship, license, dates) and Config — several settings files to switch

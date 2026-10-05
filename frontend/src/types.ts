@@ -430,7 +430,8 @@ export interface ConfigInfo {
 }
 
 export interface AppSettings {
-  GENERAL: { log_level: LogLevel; log_file: string; log_level_override: string | null }
+  /** workers: how many images are validated or preprocessed at once; cpu_count: the CPUs this machine has (read-only). */
+  GENERAL: { log_level: LogLevel; workers: number; cpu_count: number; log_file: string; log_level_override: string | null }
   TRAPPER: { base_url: string | null; user_name: string | null; has_password: boolean }
   /** The folder where the app keeps the images — its collections go in a "collections" folder inside. */
   DATA: { dir: string }
@@ -441,7 +442,7 @@ export interface AppSettings {
 
 /** What the settings page saves. A blank password keeps the saved one. */
 export interface AppSettingsUpdate {
-  GENERAL: { log_level: LogLevel }
+  GENERAL: { log_level: LogLevel; workers: number }
   TRAPPER: { base_url: string | null; user_name: string | null; user_password: string }
   DATA: { dir: string | null }
   VALIDATION: ValidationSettings

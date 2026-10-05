@@ -121,7 +121,7 @@ describe('SettingsPage', () => {
       expect(screen.getByText(/each image scanned and copied/i)).toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL).toEqual({ log_level: 'DEBUG' })
+      expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL).toEqual({ log_level: 'DEBUG', workers: 4 })
     })
 
     it('says when the environment overrides the log level', async () => {
@@ -205,6 +205,33 @@ describe('SettingsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
       expect(await screen.findByText('Invalid credentials')).toBeInTheDocument()
+    })
+  })
+
+  describe('Parallel work', () => {
+    it('shows how many images are worked on at once, and the CPUs of the machine', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+
+      expect(await screen.findByLabelText('Workers')).toHaveValue('4')
+      expect(screen.getByText(/This machine has 8 CPUs/)).toBeInTheDocument()
+    })
+
+    it('saves the number of workers', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await userEvent.clear(await screen.findByLabelText('Workers'))
+      await userEvent.type(screen.getByLabelText('Workers'), '6')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL.workers).toBe(6)
+    })
+
+    it.each(['0', '65', '2.5', 'abc', ''])('marks %j workers as invalid, and cannot save', async (bad) => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await userEvent.clear(await screen.findByLabelText('Workers'))
+      if (bad) await userEvent.type(screen.getByLabelText('Workers'), bad)
+
+      expect(screen.getByText('A whole number from 1 to 64.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
     })
   })
 
@@ -579,7 +606,7 @@ describe('SettingsPage', () => {
 
     expect(mockedApi.saveSettings).toHaveBeenCalledTimes(1)
     const update = mockedApi.saveSettings.mock.calls[0][0]
-    expect(update.GENERAL).toEqual({ log_level: 'WARNING' })
+    expect(update.GENERAL).toEqual({ log_level: 'WARNING', workers: 4 })
     expect(update.TRAPPER.base_url).toBe('https://other.example.org')
     expect(update.VALIDATION.duplicates).toBe(false)
     expect(update.POSTVALIDATION.camera).toBe(false)

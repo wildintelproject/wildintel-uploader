@@ -829,3 +829,46 @@ def test_the_default_run_includes_every_postvalidation_check(tmp_path: Path):
     result = svc.validate_deployment_consistency(tmp_path, _deployment())
 
     assert {"deployment_id", "collection_name", "collection_prefix", "location", "out_of_range", "tolerance_hours", "camera_mismatches"} <= set(result)
+
+
+# ── validating several images at once ────────────────────────────────────────
+
+def test_the_image_checks_find_the_same_whatever_the_workers(tmp_path: Path, monkeypatch):
+    for i in range(1, 9):
+        _make_jpeg(tmp_path / f"IMG_{i:04d}.jpg", taken=f"2024:09:0{i}  10:00:00".replace("  ", " "), make="Reconyx", model="HC600")
+    _make_jpeg(tmp_path / "IMG_0003.jpg", taken="2024:08:20 10:00:00", make="Reconyx", model="HC600")  # out of order
+    (tmp_path / "IMG_0099.jpg").write_bytes(b"not an image")  # corrupted
+    (tmp_path / "IMG_0010.jpg").write_bytes((tmp_path / "IMG_0001.jpg").read_bytes())  # a duplicate
+    checks = frozenset({"corrupted", "sequence", "exif", "duplicates", "camera"})
+
+    outcomes = []
+    for workers in (1, 4):
+        monkeypatch.setattr(svc.config, "workers", lambda settings=None, w=workers: w)
+        outcomes.append(svc.validate_images(tmp_path, checks))
+
+    assert outcomes[0] == outcomes[1]
+    assert [c["path"] for c in outcomes[0]["corrupted"]] == ["IMG_0099.jpg"]
+    assert outcomes[0]["sequence_issues"] and outcomes[0]["duplicates"]
+
+
+# ── a deployment that is already kept ────────────────────────────────────────
+
+def test_a_deployment_with_images_in_its_folder_already_exists(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(svc.config, "collections_dir", lambda settings=None: tmp_path)
+    kept = tmp_path / "DONA" / "R0003" / "R0003-DONA_01"
+    kept.mkdir(parents=True)
+    (kept / "IMG.JPEG").write_bytes(b"x")
+
+    assert svc.existing_deployment_dir("DONA", "R0003-DONA_01") == kept
+    assert svc.existing_deployment_dir("DONA", "R0003-DONA_02") is None  # another location
+    assert svc.existing_deployment_dir("DONA", "R0004-DONA_01") is None  # another revision
+    assert svc.existing_deployment_dir("OTHER", "R0003-DONA_01") is None  # another research project
+
+
+def test_an_empty_folder_is_not_an_existing_deployment_and_nor_are_bad_ids(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(svc.config, "collections_dir", lambda settings=None: tmp_path)
+    (tmp_path / "DONA" / "R0003" / "R0003-DONA_01").mkdir(parents=True)  # nothing in it: importing is not refused
+
+    assert svc.existing_deployment_dir("DONA", "R0003-DONA_01") is None
+    assert svc.existing_deployment_dir("DONA", "no-collection-prefix") is None
+    assert svc.existing_deployment_dir("../x", "R0003-DONA_01") is None

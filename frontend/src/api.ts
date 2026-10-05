@@ -112,6 +112,10 @@ export const api = {
   scanFolder: (path: string) =>
     post<ScanResult>('/api/deployment-import/scan-folder', { path }),
 
+  // For each deployment id, the folder where it is already kept in the collections folder (null if it is not there yet).
+  existingDeployments: (researchProjectId: string, deploymentIds: string[]) =>
+    post<{ results: Record<string, string | null> }>('/api/deployment-import/existing-deployments', { research_project_id: researchProjectId, deployment_ids: deploymentIds }),
+
   // For each deployment id, the details of the closest earlier revision of its location (null if there is none).
   previousDeployments: (researchProjectId: string, deploymentIds: string[]) =>
     post<{ results: Record<string, PreviousDeployment | null> }>('/api/deployment-import/previous-deployments', { research_project_id: researchProjectId, deployment_ids: deploymentIds }),

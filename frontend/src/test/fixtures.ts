@@ -82,7 +82,7 @@ export const DETAILED_SESSION: SessionSummary = {
 
 /** The settings a fresh install has — every check shown — with a Trapper account saved. */
 export const APP_SETTINGS: AppSettings = {
-  GENERAL: { log_level: 'INFO', log_file: '/home/me/.config/wildintel-uploader/logs/wildintel-uploader.log', log_level_override: null },
+  GENERAL: { log_level: 'INFO', workers: 4, cpu_count: 8, log_file: '/home/me/.config/wildintel-uploader/logs/wildintel-uploader.log', log_level_override: null },
   TRAPPER: { base_url: 'https://trapper.example.org', user_name: 'alice', has_password: true },
   DATA: { dir: '/home/me/Documents/wildintel-uploader' },
   VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },

@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { isValidTimezone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
-import { shownProjectErrors, validateResearchProject } from '../researchProjectValidation'
-import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
+import ResearchProjectPicker from '../components/ResearchProjectPicker'
+import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type {
   DeploymentCheck, DeploymentCheckResult, DeploymentFields, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject,
-  PreprocessingOptions, SessionScan, SimilarityMethod, StatisticsParams, ValidationResult,
+  PreprocessingOptions, SessionScan, StatisticsParams, ValidationResult,
 } from '../types'
 import {
   ALL_DEPLOYMENT_CHECKS, CheckTable, DEFAULT_CHECK_SETTINGS, DEPLOYMENT_CHECK_OPTIONS, DeploymentCheckReport, Field,
-  FormCard, IMAGE_CHECK_OPTIONS, PreprocessItem, SIMILARITY_METHODS, STATISTIC_CHECKS, SelectField, SmallSpinner, StepHeading,
-  DeploymentFormBody, ValidationReport, buildDeploymentId, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
+  FormCard, IMAGE_CHECK_OPTIONS, PreprocessItem, SelectField, SmallSpinner, StepHeading,
+  DeploymentFormBody, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, statParamsOf, statParamsValid, toggled,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, WizardSettings } from './ImportDeploymentPage'
@@ -35,13 +35,6 @@ interface Entry {
   /** Whether the camera, site and notes are open in the form. */
   showAll: boolean
 }
-
-/** What is filled in from the previous revision of the same deployment: its camera setup, site and notes — not what is
- * each revision's own (the id, the dates, whether its timestamps had issues) nor the location's (its coordinates). */
-const FILLED_FIELDS = [
-  'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading',
-  'feature_type', 'habitat', 'setup_by', 'bait_use', 'deployment_groups', 'tags', 'comments',
-] as const satisfies readonly (keyof DeploymentFields)[]
 
 interface Outcome<T> { result?: T; error?: string }
 
@@ -85,21 +78,16 @@ export default function ImportSessionPage() {
   const [requiredImageChecks, setRequiredImageChecks] = useState<Set<ImageCheck>>(new Set())
   const [deploymentChecks, setDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set(ALL_DEPLOYMENT_CHECKS))
   const [requiredDeploymentChecks, setRequiredDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set())
-  const [toleranceHours, setToleranceHours] = useState('1')
-  const [statParams, setStatParams] = useState(statParamsOf(DEFAULT_CHECK_SETTINGS.POSTVALIDATION))
   const [preprocessSteps, setPreprocessSteps] = useState<Set<PreprocessStep>>(new Set(['rename', 'resize', 'metadata']))
   const [exiftool, setExiftool] = useState<boolean | null>(null)
   const [revision, setRevision] = useState('')
   // Set the moment a value is edited (refs, so a settings response arriving meanwhile never puts it back).
-  const toleranceTouched = useRef(false)
-  const statTouched = useRef(false)
   const preprocessTouched = useRef(false)
 
   // ── Origin ──
-  const [localProjects, setLocalProjects] = useState<LocalResearchProject[]>([])
-  const [projectId, setProjectId] = useState('')
-  const [addingProject, setAddingProject] = useState(false)
-  const [projectDraft, setProjectDraft] = useState(EMPTY_RESEARCH_PROJECT)
+  // The research project picked, as in the Origin step of Import deployment (see ResearchProjectPicker).
+  const [project, setProject] = useState<LocalResearchProject | undefined>(undefined)
+  const projectId = project?.acronym ?? ''
   const [localLocations, setLocalLocations] = useState<LocalLocation[]>([])
   const [originError, setOriginError] = useState<string | null>(null)
 
@@ -108,6 +96,10 @@ export default function ImportSessionPage() {
   const [activeName, setActiveName] = useState('')
   const [filter, setFilter] = useState('')
   const [onlyIncomplete, setOnlyIncomplete] = useState(false)
+  // Where each deployment is already kept, by its id — importing it again would be refused.
+  const [existing, setExisting] = useState<Record<string, string | null>>({})
+  // Whether each deployment is known to have an earlier revision (true) or not (false), by research project and id — until it is looked up, unknown.
+  const [previousKnown, setPreviousKnown] = useState<Record<string, boolean>>({})
   const [filling, setFilling] = useState(false)
   // What the last fill said, and whether it was for one deployment or for all of them.
   const [fillMessage, setFillMessage] = useState<{ scope: 'one' | 'all'; text: string } | null>(null)
@@ -126,7 +118,6 @@ export default function ImportSessionPage() {
   const [openFolderError, setOpenFolderError] = useState<string | null>(null)
 
   const chosen = (scan?.deployments ?? []).filter((d) => included.has(d.name))
-  const project = localProjects.find((p) => p.acronym === projectId)
 
   useEffect(() => {
     if (stepKey !== 'validate' && stepKey !== 'checks' && stepKey !== 'preprocessing') return
@@ -136,8 +127,6 @@ export default function ImportSessionPage() {
         if (cancelled) return
         setCheckSettings({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
         if (!preprocessTouched.current) setPreprocessSteps(new Set((['rename', 'resize', 'metadata'] as const).filter((k) => s.PREPROCESSING[k])))
-        if (!toleranceTouched.current) setToleranceHours(String(s.POSTVALIDATION.tolerance_hours))
-        if (!statTouched.current) setStatParams(statParamsOf(s.POSTVALIDATION))
       })
       .catch(() => { /* the settings can't be read: every check stays shown */ })
     return () => { cancelled = true }
@@ -147,15 +136,6 @@ export default function ImportSessionPage() {
     if (stepKey !== 'preprocessing') return
     let cancelled = false
     api.exiftoolStatus().then((s) => { if (!cancelled) setExiftool(s.available) }).catch(() => { if (!cancelled) setExiftool(null) })
-    return () => { cancelled = true }
-  }, [stepKey])
-
-  useEffect(() => {
-    if (stepKey !== 'origin') return
-    let cancelled = false
-    api.listResearchProjects()
-      .then(({ results }) => { if (!cancelled) setLocalProjects(results) })
-      .catch((e) => { if (!cancelled) setOriginError(e instanceof Error ? e.message : 'Could not read the collections folder.') })
     return () => { cancelled = true }
   }, [stepKey])
 
@@ -191,6 +171,18 @@ export default function ImportSessionPage() {
     setActiveName((name) => (name && included.has(name) ? name : [...included][0] ?? ''))
   }, [stepKey, scan, included, localLocations])
 
+  // Which of the deployments the revision and the locations name are already kept — said as soon as it can be known.
+  const knownIds = chosen.map((d) => fieldsOf(d.name).deployment_id).filter(Boolean).sort().join('\n')
+  useEffect(() => {
+    if (stepKey !== 'details' || !projectId || !knownIds) { setExisting({}); return }
+    let cancelled = false
+    api.existingDeployments(projectId, knownIds.split('\n'))
+      .then(({ results }) => { if (!cancelled) setExisting(results) })
+      .catch(() => { if (!cancelled) setExisting({}) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey, projectId, knownIds])
+
   // ── The session folder ──
 
   async function handleBrowse() {
@@ -211,7 +203,7 @@ export default function ImportSessionPage() {
       const result = await api.scanSession(sessionDir)
       setScan(result)
       setIncluded(new Set(result.deployments.filter((d) => d.image_count > 0).map((d) => d.name)))
-      setDrafts({}); setValidations({}); setChecks({}); setRuns({})
+      autoFilled.current.clear(); setPreviousKnown({}); setDrafts({}); setValidations({}); setChecks({}); setRuns({})
     } catch (e) {
       setScanError(e instanceof Error ? e.message : 'Could not scan the folder.')
     } finally {
@@ -243,22 +235,6 @@ export default function ImportSessionPage() {
 
   // ── Origin ──
 
-  const projectErrors = validateResearchProject(projectDraft)
-  const shownProject = shownProjectErrors(projectErrors)
-
-  async function handleSaveProject() {
-    setOriginError(null)
-    try {
-      const saved = await api.saveResearchProject({
-        ...projectDraft, name: projectDraft.name.trim(), acronym: projectDraft.acronym.trim(), event_interval: projectDraft.event_interval ?? 0, trapper_pk: null,
-      })
-      setLocalProjects((list) => [...list, saved].sort((a, b) => a.acronym.toLowerCase().localeCompare(b.acronym.toLowerCase())))
-      setProjectId(saved.acronym); setAddingProject(false); setProjectDraft(EMPTY_RESEARCH_PROJECT); setDrafts({})
-    } catch (e) {
-      setOriginError(e instanceof Error ? e.message : 'Could not save the research project.')
-    }
-  }
-
   // ── Details ──
 
   const revisionNumber = Number(revision)
@@ -282,6 +258,14 @@ export default function ImportSessionPage() {
   const completed = chosen.filter((d) => problemsOf(d.name) === 0).length
   // The deployments whose id is known — the ones a previous revision can be looked up for.
   const fillable = chosen.filter((d) => fieldsOf(d.name).deployment_id).map((d) => d.name)
+  const existingFolder = (name: string) => existing[fieldsOf(name).deployment_id] ?? null
+  const existingNames = chosen.filter((d) => existingFolder(d.name))
+  // There can only be an earlier revision after the first, and once it is known that a deployment has none, it is not offered.
+  const hasEarlierRevision = (name: string) => {
+    const id = fieldsOf(name).deployment_id
+    return revisionValid && revisionNumber > 1 && Boolean(id) && previousKnown[`${projectId}|${id}`] !== false
+  }
+  const canFillFromPrevious = chosen.some((d) => hasEarlierRevision(d.name))
   const detailsReady = revisionValid && chosen.length > 0 && completed === chosen.length
 
   function updateEntry(name: string, change: (entry: Entry) => Entry) {
@@ -308,29 +292,24 @@ export default function ImportSessionPage() {
 
   /** Fills these deployments in from the previous revision of the same one — R0002-DONA_01 from R0001-DONA_01 —
    * keeping their own location, dates and id. The camera model and id are only filled in when the images gave none. */
-  async function fillFromPrevious(names: string[], scope: 'one' | 'all') {
+  async function fillFromPrevious(names: string[], scope: 'one' | 'all', automatic = false) {
     const ids = names.map((n) => fieldsOf(n).deployment_id)
     setFilling(true); setFillMessage(null)
     try {
       const { results } = await api.previousDeployments(projectId, ids)
+      setPreviousKnown((known) => ({ ...known, ...Object.fromEntries(ids.map((id) => [`${projectId}|${id}`, Boolean(results[id])])) }))
       setDrafts((all) => {
         const next = { ...all }
         names.forEach((name, i) => {
           const previous = results[ids[i]]?.deployment
           if (!previous || !next[name]) return
-          const { fields } = next[name]
-          next[name] = {
-            ...next[name], showAll: true,
-            fields: {
-              ...fields, ...Object.fromEntries(FILLED_FIELDS.map((k) => [k, previous[k]])),
-              camera_model: fields.camera_model || previous.camera_model, camera_id: fields.camera_id || previous.camera_id,
-            },
-          }
+          next[name] = { ...next[name], showAll: true, fields: fillFromPreviousRevision(next[name].fields, previous) }
         })
         return next
       })
       const found = names.filter((_, i) => results[ids[i]]).length
       const say = (text: string) => setFillMessage({ scope, text })
+      if (automatic && found === 0) return // nothing to say when there simply is no earlier revision
       say(names.length === 1
         ? (found ? `Filled in from ${results[ids[0]]!.deployment_id}.` : 'There is no previous revision of this deployment to fill it in from.')
         : `Filled in ${found} of ${names.length} from their previous revision${found < names.length ? ` — the other ${names.length - found} have none` : ''}.`)
@@ -340,6 +319,23 @@ export default function ImportSessionPage() {
       setFilling(false)
     }
   }
+
+  // As soon as the revision gives a deployment its id, it is filled in from its previous revision — once, so what is typed after is kept.
+  const autoFilled = useRef(new Set<string>())
+  useEffect(() => {
+    if (stepKey !== 'details' || !projectId || !revisionValid || revisionNumber <= 1 || !knownIds) return // revision 1 has no earlier one
+    const timer = setTimeout(() => {
+      const todo = chosen.filter((d) => {
+        const id = fieldsOf(d.name).deployment_id
+        return id && drafts[d.name] && !autoFilled.current.has(`${projectId}|${id}`)
+      })
+      if (todo.length === 0) return
+      todo.forEach((d) => autoFilled.current.add(`${projectId}|${fieldsOf(d.name).deployment_id}`))
+      void fillFromPrevious(todo.map((d) => d.name), 'all', true)
+    }, 400) // the revision may still be being typed
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey, projectId, revisionValid, knownIds, Object.keys(drafts).length])
 
   const locationErrors = {
     location_id: locationDraft.location_id.trim() ? undefined : 'Required',
@@ -383,9 +379,9 @@ export default function ImportSessionPage() {
 
   const shownDeploymentChecks = DEPLOYMENT_CHECK_OPTIONS.filter((o) => checkSettings.POSTVALIDATION[o.value])
   const runnableDeploymentChecks = shownDeploymentChecks.map((o) => o.value).filter((c) => deploymentChecks.has(c))
-  const statistics: StatisticsParams | null = statParamsValid(statParams)
-  const statShown = shownDeploymentChecks.some((o) => (STATISTIC_CHECKS as string[]).includes(o.value))
-  const toleranceValid = toleranceHours.trim() !== '' && Number.isFinite(Number(toleranceHours)) && Number(toleranceHours) >= 0
+  // The tolerance and what the statistical checks mean by a sequence and by similar come from the settings.
+  const toleranceHours = String(checkSettings.POSTVALIDATION.tolerance_hours)
+  const statistics: StatisticsParams | null = statParamsValid(statParamsOf(checkSettings.POSTVALIDATION))
 
   async function handleCheck() {
     setChecking(true); setChecks({})
@@ -461,7 +457,7 @@ export default function ImportSessionPage() {
   const canContinue: Record<StepKey, boolean> = {
     folder: Boolean(scan) && chosen.length > 0,
     validate: requiredImageChecksOk && !validating,
-    origin: Boolean(projectId) && !addingProject,
+    origin: Boolean(projectId),
     details: detailsReady && !savingDetails,
     checks: requiredDeploymentChecksOk && !checking,
     preprocessing: true,
@@ -595,26 +591,7 @@ export default function ImportSessionPage() {
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
             The research project is the same for the whole session. Each deployment&rsquo;s location is picked in the next step, from the project&rsquo;s locations.
           </p>
-          <SelectField label="Research project" value={projectId} allowEmpty
-                       options={localProjects.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))}
-                       onChange={(v) => { setProjectId(v); setDrafts({}); setAddingProject(false) }} />
-          {!addingProject && (
-            <button type="button" className={`${btnOutline} mt-3`} onClick={() => { setAddingProject(true); setProjectDraft(EMPTY_RESEARCH_PROJECT) }}>
-              Add a research project
-            </button>
-          )}
-          {addingProject && (
-            <FormCard title="New research project" description="Trapper's own fields — the rest can be filled in later.">
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Name" required value={projectDraft.name} error={shownProject.name} onChange={(v) => setProjectDraft((p) => ({ ...p, name: v }))} />
-                <Field label="Acronym" required value={projectDraft.acronym} error={shownProject.acronym} onChange={(v) => setProjectDraft((p) => ({ ...p, acronym: v }))} />
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button type="button" className={btnPrimary} disabled={Boolean(projectErrors.name || projectErrors.acronym)} onClick={handleSaveProject}>Save research project</button>
-                <button type="button" className={btnOutline} onClick={() => setAddingProject(false)}>Cancel</button>
-              </div>
-            </FormCard>
-          )}
+          <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />
           {originError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{originError}</p>}
         </div>
       )}
@@ -623,20 +600,30 @@ export default function ImportSessionPage() {
       {stepKey === 'details' && (
         <div>
           <StepHeading>Deployment details</StepHeading>
-          <FormCard title="Common to the session" description="The revision numbers every deployment: R0003-DONA_01, R0003-DONA_02…">
-            <div className="max-w-xs">
-              <Field label="Revision number" required type="number" min={1} max={9999} step={1} value={revision} onChange={setRevision}
+          <FormCard title="Which revision is this?" description="The same revision number names all the deployments of the session — R0003-DONA_01, R0003-DONA_02…">
+            <div className="max-w-sm">
+              <Field label="What revision number are you importing?" required type="number" min={1} max={9999} step={1} placeholder="e.g. 3" value={revision} onChange={setRevision}
+                     hint="1 for the first visit to these locations, 2 for the second, and so on."
                      error={revision.trim() !== '' && !revisionValid ? 'A whole number from 1 to 9999.' : undefined} />
             </div>
-            <div className="mt-4 flex items-center gap-3 flex-wrap">
-              <button type="button" className={btnOutline} disabled={filling || !revisionValid || chosen.length === 0} onClick={() => fillFromPrevious(fillable, 'all')}>
-                {filling ? 'Reading…' : 'Fill all from the previous revision'}
-              </button>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                Each deployment takes the camera setup, site and notes of the same one in the closest earlier revision — revision 2 from revision 1.
-                What you have typed in those fields is replaced.
-              </span>
-            </div>
+            {revisionValid && existingNames.length > 0 && (
+              <p aria-live="polite" className="mt-3 text-sm text-amber-700 dark:text-amber-400">
+                ⚠ Revision {revisionNumber} already has {existingNames.length} of these {chosen.length} deployment(s) in the collections folder:{' '}
+                <span className="font-mono">{existingNames.slice(0, 5).map((d) => fieldsOf(d.name).deployment_id).join(', ')}{existingNames.length > 5 ? ', …' : ''}</span>.
+                Importing them again would be refused — pick another revision, or leave them out.
+              </p>
+            )}
+            {canFillFromPrevious && (
+              <div className="mt-4 flex items-center gap-3 flex-wrap">
+                <button type="button" className={btnOutline} disabled={filling} onClick={() => fillFromPrevious(fillable, 'all')}>
+                  {filling ? 'Reading…' : 'Fill all from the previous revision'}
+                </button>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  As soon as the revision is known, each deployment is filled in with everything possible from the same one in the closest earlier
+                  revision — revision 2 from revision 1 — except the dates. This does it again, replacing what you have typed in those fields.
+                </span>
+              </div>
+            )}
             {fillMessage?.scope === 'all' && <p aria-live="polite" className="text-sm text-zinc-600 dark:text-zinc-400 mt-2">{fillMessage.text}</p>}
           </FormCard>
 
@@ -671,7 +658,8 @@ export default function ImportSessionPage() {
                       <td className="px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{fields?.start_date.slice(0, 10) || '?'} → {fields?.end_date?.slice(0, 10) ?? '?'}</td>
                       <td className="px-3 py-1.5">{problems === 0
                         ? <span className="text-emerald-600 dark:text-emerald-400">✔ Complete</span>
-                        : <span className="text-amber-600 dark:text-amber-400">⚠ {problems} to fix</span>}</td>
+                        : <span className="text-amber-600 dark:text-amber-400">⚠ {problems} to fix</span>}
+                        {existingFolder(d.name) && <span className="ml-2 text-amber-600 dark:text-amber-400">⚠ Already exists</span>}</td>
                     </tr>
                   )
                 })}
@@ -693,6 +681,12 @@ export default function ImportSessionPage() {
 
               <FormCard title="Identification" description="The revision and the deployment's own location give its id.">
                 {duplicated(active.name) && <p className="text-sm text-red-600 dark:text-red-400 mb-3">Another deployment of the session has this id — each needs its own location.</p>}
+                {existingFolder(active.name) && (
+                  <p role="alert" className="text-sm text-amber-700 dark:text-amber-400 mb-3">
+                    ⚠ This deployment already exists: <span className="font-mono break-all">{existingFolder(active.name)}</span> has images in it, and
+                    importing it again would be refused as it would mix them. Choose another location, or move that folder away.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <SelectField label="Location" value={activeFields.location_id ?? ''} onChange={(v) => pickLocation(active.name, v)}
                                options={localLocations.map((l) => ({ value: l.location_id, label: l.name ? `${l.location_id} — ${l.name}` : l.location_id }))} />
@@ -726,13 +720,16 @@ export default function ImportSessionPage() {
                 )}
               </FormCard>
 
-              <div className="mb-4 flex items-center gap-3 flex-wrap">
-                <button type="button" className={btnOutline} disabled={filling || !activeFields.deployment_id} onClick={() => fillFromPrevious([active.name], 'one')}>
-                  Fill from the previous revision
-                </button>
-                {fillMessage?.scope === 'one' && <span aria-live="polite" className="text-xs text-zinc-500 dark:text-zinc-400">{fillMessage.text}</span>}
-                {!activeFields.deployment_id && <span className="text-xs text-zinc-500 dark:text-zinc-400">Needs the revision and a location.</span>}
-              </div>
+              {(hasEarlierRevision(active.name) || fillMessage?.scope === 'one') && (
+                <div className="mb-4 flex items-center gap-3 flex-wrap">
+                  {hasEarlierRevision(active.name) && (
+                    <button type="button" className={btnOutline} disabled={filling} onClick={() => fillFromPrevious([active.name], 'one')}>
+                      Fill from the previous revision
+                    </button>
+                  )}
+                  {fillMessage?.scope === 'one' && <span aria-live="polite" className="text-xs text-zinc-500 dark:text-zinc-400">{fillMessage.text}</span>}
+                </div>
+              )}
 
               <DeploymentFormBody deployment={activeFields} timezone={activeEntry.timezone} errors={activeErrors} showAll={activeEntry.showAll}
                                   onShowAllChange={(v) => updateEntry(active.name, (e) => ({ ...e, showAll: v }))}
@@ -753,6 +750,10 @@ export default function ImportSessionPage() {
             Now that each deployment is known, the same checks of its names, dates and statistics over all {chosen.length} of them — pick which to run,
             and which must pass in all of them before moving on.
           </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+            Some of these checks can be customized in the settings (Settings › Postvalidation): the tolerance of the image dates, and what the
+            comparison with the previous revisions means — the length of a sequence, the way of comparing and how much counts as similar.
+          </p>
           {shownDeploymentChecks.length === 0 ? (
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">Every postvalidation check is turned off in the settings, so there is nothing to run here — go on.</p>
           ) : (
@@ -765,39 +766,9 @@ export default function ImportSessionPage() {
                         onToggleRequired={(c) => setRequiredDeploymentChecks((s) => toggled(s, c))}
                         onSetEnabled={setDeploymentChecks} onSetRequired={setRequiredDeploymentChecks} />
           )}
-          {checkSettings.POSTVALIDATION.time_range && (
-            <div className="max-w-xs mb-4">
-              <Field label="Tolerance (hours)" type="number" min={0} step="any" value={toleranceHours} error={toleranceValid ? undefined : 'Must be 0 or more.'}
-                     hint="Leeway around the start and end when checking the image dates."
-                     onChange={(v) => { toleranceTouched.current = true; setToleranceHours(v) }} />
-            </div>
-          )}
-          {statShown && (
-            <div className="mb-4 p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Previous revisions</h5>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
-                What a sequence is and what counts as similar, for the statistical checks — the settings say where these start from.
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Sequence gap (seconds)" type="number" min={1} step="any" value={statParams.gap}
-                       onChange={(v) => { statTouched.current = true; setStatParams((p) => ({ ...p, gap: v })) }} />
-                <Field label="Previous revisions needed" type="number" min={1} step={1} value={statParams.minRevisions}
-                       onChange={(v) => { statTouched.current = true; setStatParams((p) => ({ ...p, minRevisions: v })) }} />
-                <div className="col-span-2">
-                  <SelectField label="Compared with" allowEmpty={false} options={SIMILARITY_METHODS} value={statParams.method}
-                               onChange={(v) => { statTouched.current = true; setStatParams((p) => ({ ...p, method: v as SimilarityMethod })) }} />
-                </div>
-                {([['imageTol', 'Images — similar within (%)'], ['seqCountTol', 'Sequences — similar within (%)'], ['seqLenTol', 'Sequence length — similar within (%)']] as const).map(([key, label]) => (
-                  <Field key={key} label={label} type="number" min={0} step="any" value={statParams[key]}
-                         onChange={(v) => { statTouched.current = true; setStatParams((p) => ({ ...p, [key]: v })) }} />
-                ))}
-              </div>
-              {statistics === null && <p className="text-xs text-red-600 dark:text-red-400 mt-2">One of these isn&rsquo;t valid.</p>}
-            </div>
-          )}
           {shownDeploymentChecks.length > 0 && (
             <button type="button" className={`${btnOutline} flex items-center gap-2`}
-                    disabled={checking || runnableDeploymentChecks.length === 0 || !toleranceValid || (statShown && statistics === null)} onClick={handleCheck}>
+                    disabled={checking || runnableDeploymentChecks.length === 0} onClick={handleCheck}>
               {checking && <SmallSpinner />}{checking ? 'Checking…' : 'Run checks'}
             </button>
           )}

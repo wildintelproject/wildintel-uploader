@@ -22,7 +22,7 @@ from pathlib import Path
 
 from PIL import ExifTags, Image
 
-from wildintel_uploader.core import config
+from wildintel_uploader.core import config, parallel
 from wildintel_uploader.core.schemas.requests import DeploymentFields
 from wildintel_uploader.core.services import camera_info, local_folder_service, trapper_service
 
@@ -82,6 +82,20 @@ def default_collection_dir(research_project_id: str, deployment_id: str) -> Path
             f"The research project id '{research_project_id}' can only have letters, digits, '_', '-' and '.' to be a folder name."
         )
     return config.collections_dir() / research_project_id / collection_code(deployment_id)
+
+
+def existing_deployment_dir(research_project_id: str, deployment_id: str) -> Path | None:
+    """The folder where this deployment is already kept — <collections folder>/<research project>/<R0003>/<deployment id>
+    — if it is there with something in it, which is when importing it again would be refused. None otherwise,
+    or if the ids can't name a folder."""
+    try:
+        dest = default_collection_dir(research_project_id, deployment_id) / deployment_id
+    except DeploymentImportError:
+        return None
+    try:
+        return dest if dest.is_dir() and any(dest.iterdir()) else None
+    except OSError:
+        return None
 
 
 def check_paths(source_dir: Path, dest_dir: Path) -> None:
@@ -150,8 +164,7 @@ def scan_folder(source_dir: Path) -> dict:
 
     dates: list[datetime] = []
     dated_images = 0
-    for path in images:
-        dt = _image_datetime(path)
+    for dt in parallel.pmap(_image_datetime, images):
         if dt is not None:
             dates.append(dt)
             dated_images += 1
@@ -256,12 +269,12 @@ def _duplicate_groups(images: list[Path], source_dir: Path) -> list[dict]:
         except OSError:
             continue
     groups: list[dict] = []
-    for size, paths in by_size.items():
-        if len(paths) < 2:
-            continue
+    candidates = {size: paths for size, paths in by_size.items() if len(paths) > 1}
+    hashes = dict(zip((p for paths in candidates.values() for p in paths), parallel.pmap(_content_hash, [p for paths in candidates.values() for p in paths])))
+    for size, paths in candidates.items():
         by_hash: dict[str, list[Path]] = defaultdict(list)
         for path in paths:
-            digest = _content_hash(path)
+            digest = hashes[path]
             if digest is not None:
                 by_hash[digest].append(path)
         groups += [{"size": size, "files": [str(p.relative_to(source_dir)) for p in same]} for same in by_hash.values() if len(same) > 1]
@@ -317,10 +330,15 @@ def validate_images(source_dir: Path, checks: frozenset[str] | None = None) -> d
         cameras, reader = camera_info.read_cameras(images)
         result["exiftool"] = reader == "exiftool"
 
+    # Reading each image is what takes the time, so it is done for several at once (GENERAL.workers).
+    taken: dict[Path, datetime | None] = {}
+    if "exif" in checks or "sequence" in checks:
+        taken = dict(zip(images, parallel.pmap(_image_datetime, images)))
+
     if "exif" in checks:
         missing: dict[str, list[Path]] = {"date": [], "camera_model": [], "camera_id": []}
         for path in sorted(images):
-            if _image_datetime(path) is None:
+            if taken[path] is None:
                 missing["date"].append(path)
             if cameras[path].model is None:
                 missing["camera_model"].append(path)
@@ -356,16 +374,15 @@ def validate_images(source_dir: Path, checks: frozenset[str] | None = None) -> d
         corrupted: list[dict] = []
         dated: dict[Path, datetime] = {}
         by_dir: dict[Path, list[Path]] = defaultdict(list)
-        for path in images:
-            error = _corruption_error(path) if "corrupted" in checks else None
+        errors = parallel.pmap(_corruption_error, images) if "corrupted" in checks else [None] * len(images)
+        for path, error in zip(images, errors):
             if error is not None:
                 corrupted.append({"path": str(path.relative_to(source_dir)), "error": error})
                 continue
             if need_dates:
                 by_dir[path.parent].append(path)
-                dt = _image_datetime(path)
-                if dt is not None:
-                    dated[path] = dt
+                if taken[path] is not None:
+                    dated[path] = taken[path]  # type: ignore[assignment]
         if "corrupted" in checks:
             result["corrupted"] = corrupted
 

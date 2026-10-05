@@ -3,6 +3,7 @@ the settings page. The password never goes back to the frontend: TRAPPER
 says whether one is saved instead, and saving a blank one keeps it."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -24,6 +25,7 @@ def _public(settings: config.Settings) -> dict:
     # the level set here.
     data["GENERAL"]["log_file"] = str(logging_setup.log_file())
     data["GENERAL"]["log_level_override"] = logging_setup.env_override()
+    data["GENERAL"]["cpu_count"] = os.cpu_count() or 1
     return data
 
 

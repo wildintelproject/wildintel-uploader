@@ -7,6 +7,7 @@ validated from what Dynaconf reads, written back with Dynaconf's TOML
 loader. Created with defaults the first time it's read."""
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Literal, Optional
@@ -49,11 +50,22 @@ def default_data_dir() -> Path:
 
 LogLevel = Literal["ERROR", "WARNING", "INFO", "DEBUG"]
 
+MAX_WORKERS = 64
+
+
+def default_workers() -> int:
+    """How many images are worked on at once unless the settings say otherwise: the CPUs there are, up to 4."""
+    return max(1, min(4, os.cpu_count() or 1))
+
 
 class GeneralSettings(BaseModel):
     log_level: LogLevel = Field(
         default="INFO",
         description="How much the app logs, to the console and its log file. (GENERAL.log_level)",
+    )
+    workers: int = Field(
+        default_factory=default_workers, ge=1, le=MAX_WORKERS,
+        description="How many images are validated or preprocessed at once — up to the CPUs of the machine pays off. (GENERAL.workers)",
     )
 
 
@@ -274,6 +286,11 @@ def save_settings(settings: Settings, config_file: Optional[Path] = None) -> Non
     config_file = config_file or active_config_file()
     config_file.parent.mkdir(parents=True, exist_ok=True)
     loaders.toml_loader.write(str(config_file), settings.model_dump(mode="json", exclude_none=True), merge=False)
+
+
+def workers(settings: Settings | None = None) -> int:
+    """How many images are validated or preprocessed at once — GENERAL.workers."""
+    return (settings or load_settings()).GENERAL.workers
 
 
 def data_dir(settings: Settings | None = None) -> Path:

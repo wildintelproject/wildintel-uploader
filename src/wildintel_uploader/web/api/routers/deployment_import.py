@@ -18,7 +18,7 @@ from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
 from wildintel_uploader.core.schemas.requests import (
     BrowseFolderRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
-    LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
+    ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
     ValidateDeploymentRequest, ValidateImagesRequest,
 )
 from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, statistics_service
@@ -118,6 +118,17 @@ def collection_path(req: CollectionPathRequest) -> dict:
     except deployment_import_service.DeploymentImportError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"path": str(path), "collection": path.name, **local_folder_service.check_collection(path)}
+
+
+@router.post("/existing-deployments")
+def existing_deployments(req: ExistingDeploymentsRequest) -> dict:
+    """For each deployment id, the folder where it is already kept in the collections folder — or null when it is not there
+    yet — so the details can say that a deployment already exists before it is imported again."""
+    results = {}
+    for deployment_id in req.deployment_ids:
+        found = deployment_import_service.existing_deployment_dir(req.research_project_id, deployment_id)
+        results[deployment_id] = str(found) if found else None
+    return {"results": results}
 
 
 @router.post("/list-local-deployments")

@@ -155,3 +155,30 @@ def test_the_resize_width_has_limits(bad):
 
     with pytest.raises(ValidationError):
         config.PreprocessingSettings(**bad)
+
+
+# ── how many images are worked on at once ────────────────────────────────────
+
+def test_the_workers_default_to_the_cpus_up_to_four(monkeypatch):
+    monkeypatch.setattr(config.os, "cpu_count", lambda: 22)
+    assert config.default_workers() == 4
+    monkeypatch.setattr(config.os, "cpu_count", lambda: 2)
+    assert config.default_workers() == 2
+    monkeypatch.setattr(config.os, "cpu_count", lambda: None)
+    assert config.default_workers() == 1
+
+
+@pytest.mark.parametrize("bad", [0, -1, 65])
+def test_the_workers_must_be_between_one_and_sixty_four(bad):
+    with pytest.raises(ValueError):
+        config.GeneralSettings(workers=bad)
+
+
+def test_the_workers_are_saved_with_the_settings(tmp_path: Path):
+    config_file = tmp_path / "settings.toml"
+    settings = config.load_settings(config_file)
+    settings.GENERAL.workers = 6
+    config.save_settings(settings, config_file)
+
+    assert config.load_settings(config_file).GENERAL.workers == 6
+    assert config.workers(config.load_settings(config_file)) == 6

@@ -11,7 +11,8 @@ vi.mock('../api', () => ({
   api: {
     getSettings: vi.fn(), exiftoolStatus: vi.fn(), browseFolder: vi.fn(), scanSession: vi.fn(), validateImages: vi.fn(),
     listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(),
-    writeTimestampLog: vi.fn(), validateDeployment: vi.fn(), previousDeployments: vi.fn(), collectionPath: vi.fn(), importLocal: vi.fn(), openFolder: vi.fn(),
+    writeTimestampLog: vi.fn(), validateDeployment: vi.fn(), previousDeployments: vi.fn(), existingDeployments: vi.fn(), collectionPath: vi.fn(), importLocal: vi.fn(), openFolder: vi.fn(),
+    trapperGetConfig: vi.fn(), trapperTestConnection: vi.fn(), trapperResearchProjects: vi.fn(),
   },
 }))
 
@@ -53,6 +54,9 @@ beforeEach(() => {
     onEvent({ type: 'done', dest_dir: `${COLLECTION}/${deployment.deployment_id}`, processed: 1, skipped: 0 })
   })
   mockedApi.openFolder.mockResolvedValue({ opened: COLLECTION })
+  mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice@example.org', has_password: true })
+  mockedApi.existingDeployments.mockResolvedValue({ results: {} })
+  mockedApi.previousDeployments.mockResolvedValue({ results: {} })
 })
 
 async function scanSession() {
@@ -65,17 +69,22 @@ async function scanSession() {
 
 const next = () => userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
+async function pickProject() {
+  await userEvent.click(await screen.findByLabelText('Research project'))
+  await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+}
+
 async function toOrigin() {
   await scanSession()
   await next() // validate
   await next() // origin
-  await userEvent.selectOptions(await screen.findByLabelText('Research project'), 'DONA')
+  await pickProject()
 }
 
 async function toDetails() {
   await toOrigin()
   await next()
-  fireEvent.change(await screen.findByLabelText('Revision number'), { target: { value: '3' } })
+  fireEvent.change(await screen.findByLabelText('What revision number are you importing?'), { target: { value: '3' } })
 }
 
 describe('matchLocation', () => {
@@ -141,6 +150,70 @@ describe('ImportSessionPage', () => {
     expect(screen.getByLabelText('Require all checks')).not.toBeChecked()
   })
 
+  describe('the research project', () => {
+    async function openOrigin() {
+      await scanSession()
+      await next()
+      await next()
+      await screen.findByLabelText('Research project')
+    }
+
+    it('is picked from a list that filters as you type, like in Import deployment, and can be cleared', async () => {
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [DONA, { ...DONA, name: 'Tatra', acronym: 'TATR' }] })
+      await openOrigin()
+      await userEvent.type(screen.getByLabelText('Research project'), 'tat')
+
+      expect(screen.queryByRole('option', { name: 'DONA — Doñana' })).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('option', { name: 'TATR — Tatra' }))
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
+      await userEvent.click(screen.getByRole('button', { name: 'Clear research project' }))
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+    })
+
+    it('says there is none yet, and offers to add the first one', async () => {
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [] })
+      await openOrigin()
+
+      expect(screen.getByText(/has no research projects yet — add the first one/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Add a new research project/ })).toBeInTheDocument()
+    })
+
+    it('adds one by hand with Trapper’s own fields, and picks it', async () => {
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [] })
+      mockedApi.saveResearchProject.mockImplementation(async (p) => p)
+      await openOrigin()
+      await userEvent.click(screen.getByRole('button', { name: /Add a new research project/ }))
+      await userEvent.click(screen.getByRole('button', { name: /By hand/ }))
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Doñana' } })
+      fireEvent.change(screen.getByLabelText('Acronym'), { target: { value: 'DONA' } })
+      fireEvent.change(screen.getByLabelText('Event interval'), { target: { value: '120' } })
+      expect(screen.getByLabelText('Sampling design')).toBeInTheDocument()
+      expect(screen.getByLabelText('Keywords')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Save research project' }))
+
+      await waitFor(() => expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ name: 'Doñana', acronym: 'DONA', event_interval: 120, trapper_pk: null })))
+      expect(await screen.findByLabelText('Research project')).toHaveValue('DONA — Doñana')
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
+    })
+
+    it('adds the ones ticked in Trapper, and picks the first', async () => {
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [] })
+      mockedApi.trapperTestConnection.mockResolvedValue({ ok: true, research_projects_count: 2 })
+      mockedApi.trapperResearchProjects.mockResolvedValue({ results: [{ pk: 2, name: 'Doñana', acronym: 'DONA' }, { pk: 3, name: 'Tatra', acronym: 'TATR' }] })
+      mockedApi.saveResearchProject.mockImplementation(async (p) => p)
+      await openOrigin()
+      await userEvent.click(screen.getByRole('button', { name: /Add a new research project/ }))
+      await userEvent.click(screen.getByRole('button', { name: /From Trapper/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Test Connection' }))
+      await userEvent.click(await screen.findByRole('checkbox', { name: 'DONA — Doñana' }))
+      await userEvent.click(screen.getByRole('checkbox', { name: 'TATR — Tatra' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Add 2 research projects' }))
+
+      await waitFor(() => expect(mockedApi.saveResearchProject).toHaveBeenCalledTimes(2))
+      expect(await screen.findByLabelText('Research project')).toHaveValue('DONA — Doñana')
+    })
+  })
+
   it('needs a research project before the details', async () => {
     await scanSession()
     await next()
@@ -172,9 +245,63 @@ describe('ImportSessionPage', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
   })
 
+  it('asks the revision as a question, and explains what it names', async () => {
+    await toDetails()
+
+    expect(screen.getByText('Which revision is this?')).toBeInTheDocument()
+    expect(screen.getByLabelText('What revision number are you importing?')).toHaveValue(3)
+    expect(screen.getByText(/1 for the first visit to these locations/)).toBeInTheDocument()
+  })
+
+  it('warns at the revision itself of how many of the deployments already exist', async () => {
+    mockedApi.existingDeployments.mockResolvedValue({ results: { 'R0003-DONA_01': `${COLLECTION}/R0003-DONA_01`, 'R0003-DONA_02': `${COLLECTION}/R0003-DONA_02` } })
+    await toDetails()
+
+    expect(await screen.findByText(/Revision 3 already has 2 of these 2 deployment\(s\) in the collections folder/)).toBeInTheDocument()
+    expect(screen.getByText('R0003-DONA_01, R0003-DONA_02', { selector: 'span' })).toBeInTheDocument()
+  })
+
+  it('fills every deployment in from its previous revision as soon as the revision is known, without being asked', async () => {
+    mockedApi.previousDeployments.mockResolvedValue({ results: {
+      'R0003-DONA_01': previous('R0002-DONA_01', { habitat: 'Pine forest' }), 'R0003-DONA_02': previous('R0002-DONA_02', { habitat: 'Oak forest' }),
+    } })
+    await toDetails()
+
+    expect(await screen.findByText(/Filled in 2 of 2 from their previous revision/)).toBeInTheDocument()
+    expect(mockedApi.previousDeployments).toHaveBeenCalledWith('DONA', ['R0003-DONA_01', 'R0003-DONA_02'])
+    expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
+    await userEvent.click(screen.getByRole('button', { name: 'DONA_02' }))
+    expect(screen.getByLabelText('Habitat')).toHaveValue('Oak forest')
+    expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-05T09:00') // the dates are this revision's own
+  })
+
+  it('fills in once: what is typed afterwards is kept, and it says nothing when there is no earlier revision', async () => {
+    mockedApi.previousDeployments.mockResolvedValue({ results: { 'R0003-DONA_01': previous('R0002-DONA_01', { habitat: 'Pine forest' }), 'R0003-DONA_02': null } })
+    await toDetails()
+    await screen.findByText(/Filled in 1 of 2/)
+    fireEvent.change(screen.getByLabelText('Habitat'), { target: { value: 'My own habitat' } })
+    await userEvent.click(screen.getByRole('button', { name: 'DONA_02' }))
+    await userEvent.click(screen.getByRole('button', { name: 'DONA_01' }))
+
+    await waitFor(() => expect(mockedApi.previousDeployments).toHaveBeenCalledTimes(1))
+    expect(screen.getByLabelText('Habitat')).toHaveValue('My own habitat')
+  })
+
+  it('says which deployments already exist, in the list and in the one being edited', async () => {
+    mockedApi.existingDeployments.mockResolvedValue({ results: { 'R0003-DONA_01': `${COLLECTION}/R0003-DONA_01`, 'R0003-DONA_02': null } })
+    await toDetails()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(`${COLLECTION}/R0003-DONA_01`)
+    expect(screen.getByRole('alert')).toHaveTextContent('This deployment already exists')
+    expect(screen.getAllByText('⚠ Already exists')).toHaveLength(1)
+    expect(mockedApi.existingDeployments).toHaveBeenCalledWith('DONA', ['R0003-DONA_01', 'R0003-DONA_02'])
+    await userEvent.click(screen.getByRole('button', { name: 'DONA_02' }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('needs the revision', async () => {
     await toDetails()
-    fireEvent.change(screen.getByLabelText('Revision number'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('What revision number are you importing?'), { target: { value: '' } })
 
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
   })
@@ -193,6 +320,15 @@ describe('ImportSessionPage', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Location')).toHaveValue('DONA_02'))
     expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', expect.objectContaining({ location_id: 'DONA_02', latitude: 37.1, longitude: -6.4 }))
+  })
+
+  it('says in the postvalidation that some checks are customized in the settings, and has no fields for them', async () => {
+    await toDetails()
+    await next()
+
+    expect(await screen.findByText(/Some of these checks can be customized in the settings \(Settings › Postvalidation\)/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Tolerance (hours)')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Sequence gap (seconds)')).not.toBeInTheDocument()
   })
 
   it('writes each deployment’s timestamp log and checks each one after the details', async () => {
@@ -283,12 +419,23 @@ describe('ImportSessionPage', () => {
     expect(screen.getByLabelText('Timestamps have issues')).not.toBeChecked() // not carried over
   })
 
-  it('says when there is no previous revision to fill in from', async () => {
-    mockedApi.previousDeployments.mockResolvedValue({ results: { 'R0003-DONA_01': null } })
+  it('does not offer to fill in from a previous revision once it is known there is none', async () => {
+    mockedApi.previousDeployments.mockResolvedValue({ results: { 'R0003-DONA_01': null, 'R0003-DONA_02': null } })
     await toDetails()
-    await userEvent.click(await screen.findByRole('button', { name: 'Fill from the previous revision' }))
+    await waitFor(() => expect(mockedApi.previousDeployments).toHaveBeenCalled())
 
-    expect(await screen.findByText(/no previous revision of this deployment/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Fill all from the previous revision' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Fill from the previous revision' })).not.toBeInTheDocument()
+  })
+
+  it('does not look for an earlier revision in the first one, which has none', async () => {
+    await toDetails()
+    fireEvent.change(screen.getByLabelText('What revision number are you importing?'), { target: { value: '1' } })
+    await new Promise((resolve) => setTimeout(resolve, 600)) // longer than the wait before looking
+
+    expect(mockedApi.previousDeployments).not.toHaveBeenCalledWith('DONA', expect.arrayContaining(['R0001-DONA_01']))
+    expect(screen.queryByRole('button', { name: 'Fill all from the previous revision' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Fill from the previous revision' })).not.toBeInTheDocument()
   })
 
   it('fills all the deployments at once, each from its own previous revision', async () => {
@@ -306,12 +453,12 @@ describe('ImportSessionPage', () => {
     expect(screen.queryByLabelText('Habitat')).not.toBeInTheDocument() // nothing filled in, so the form stays closed
   })
 
-  it('does not fill from a previous revision without a revision', async () => {
+  it('does not offer to fill in from a previous revision without a revision', async () => {
     await toDetails()
-    fireEvent.change(screen.getByLabelText('Revision number'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('What revision number are you importing?'), { target: { value: '' } })
 
-    expect(screen.getByRole('button', { name: 'Fill all from the previous revision' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Fill from the previous revision' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Fill all from the previous revision' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Fill from the previous revision' })).not.toBeInTheDocument()
   })
 
   describe('with a big session', () => {

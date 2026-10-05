@@ -149,6 +149,11 @@ class DeploymentFields(BaseModel):
 _ISO_8601 = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})")
 
 
+class ExistingDeploymentsRequest(BaseModel):
+    research_project_id: str = Field(min_length=1)
+    deployment_ids: list[str] = Field(min_length=1, max_length=1000)
+
+
 class PreviousDeploymentsRequest(BaseModel):
     research_project_id: str = Field(min_length=1)
     deployment_ids: list[str] = Field(min_length=1, max_length=1000)

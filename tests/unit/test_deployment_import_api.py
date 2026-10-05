@@ -701,3 +701,22 @@ def test_previous_deployments_gives_each_ones_earlier_revision(tmp_path: Path):
 def test_previous_deployments_needs_some_ids():
     response = _client().post("/api/deployment-import/previous-deployments", json={"research_project_id": "DONA", "deployment_ids": []})
     assert response.status_code == 422
+
+
+def test_existing_deployments_says_where_each_one_is_kept(tmp_path: Path):
+    kept = tmp_path / "DONA" / "R0003" / "R0003-DONA_01"
+    kept.mkdir(parents=True)
+    (kept / "IMG.JPEG").write_bytes(b"x")
+
+    with patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=tmp_path):
+        response = _client().post("/api/deployment-import/existing-deployments", json={
+            "research_project_id": "DONA", "deployment_ids": ["R0003-DONA_01", "R0003-DONA_02"],
+        })
+
+    assert response.status_code == 200
+    assert response.json()["results"] == {"R0003-DONA_01": str(kept), "R0003-DONA_02": None}
+
+
+def test_existing_deployments_needs_some_ids():
+    response = _client().post("/api/deployment-import/existing-deployments", json={"research_project_id": "DONA", "deployment_ids": []})
+    assert response.status_code == 422

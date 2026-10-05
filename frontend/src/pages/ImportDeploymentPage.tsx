@@ -11,7 +11,7 @@ import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } 
 import { isValidTimezone, knownTimezones, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import type {
   AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, SimilarityMethod, StatisticCheck, StatisticsParams, TimestampLogResult, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
-  FeatureType, ImageCheck, ImportEvent, Location, LocalLocation, LocalResearchProject, ResearchProject, ScanResult,
+  FeatureType, ImageCheck, ImportEvent, Location, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
   SessionSummary, ValidationResult,
 } from '../types'
 
@@ -155,7 +155,7 @@ const DESCRIPTIONS = {
 } as const
 
 /** A multi-line field. */
-function TextAreaField({ label, value, onChange, maxLength, error, hint }: {
+export function TextAreaField({ label, value, onChange, maxLength, error, hint }: {
   label: string; value: string; onChange: (v: string) => void; maxLength?: number; error?: string; hint?: string
 }) {
   const id = fieldId(label)
@@ -171,11 +171,11 @@ function TextAreaField({ label, value, onChange, maxLength, error, hint }: {
 }
 
 // The choices of Trapper's own "Add research project" form, keyed by its option numbers.
-const SAMPLING_DESIGN_OPTIONS = ['simpleRandom', 'systematicRandom', 'clusteredRandom', 'experimental', 'targeted', 'opportunistic']
+export const SAMPLING_DESIGN_OPTIONS = ['simpleRandom', 'systematicRandom', 'clusteredRandom', 'experimental', 'targeted', 'opportunistic']
   .map((label, i) => ({ value: String(i + 1), label }))
-const SENSOR_METHOD_OPTIONS = ['activityDetection', 'timeLapse', 'both'].map((label, i) => ({ value: String(i + 1), label }))
-const ANIMAL_TYPES_OPTIONS = ['unmarked', 'marked', 'both'].map((label, i) => ({ value: String(i + 1), label }))
-const BAIT_USE_OPTIONS = ['none', 'scent', 'food', 'visual', 'acoustic', 'other'].map((label, i) => ({ value: String(i + 1), label }))
+export const SENSOR_METHOD_OPTIONS = ['activityDetection', 'timeLapse', 'both'].map((label, i) => ({ value: String(i + 1), label }))
+export const ANIMAL_TYPES_OPTIONS = ['unmarked', 'marked', 'both'].map((label, i) => ({ value: String(i + 1), label }))
+export const BAIT_USE_OPTIONS = ['none', 'scent', 'food', 'visual', 'acoustic', 'other'].map((label, i) => ({ value: String(i + 1), label }))
 
 /** One thing the preprocessing does — optional (a box to tick) or always done. */
 export function PreprocessItem({ title, always, checked, onToggle, disabledReason, children }: {
@@ -277,12 +277,12 @@ function rangeError(text: string, min: number, max: number, required: boolean): 
   return Number.isFinite(n) && n >= min && n <= max ? undefined : `Must be between ${min} and ${max}.`
 }
 
-type OriginSource = 'trapper' | 'manual'
+export type OriginSource = 'trapper' | 'manual'
 
 // A new location's form, its numbers as typed.
 const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', latitude: '', longitude: '', coordinate_uncertainty: '' }
 
-const ORIGIN_SOURCE_OPTIONS: Option<OriginSource>[] = [
+export const ORIGIN_SOURCE_OPTIONS: Option<OriginSource>[] = [
   { value: 'trapper', emoji: '🪤', title: 'From Trapper', description: 'Connect to Trapper and pick one — its fields fill in the form.', available: true },
   { value: 'manual', emoji: '✍️', title: 'By hand', description: 'Fill in the form yourself.', available: true },
 ]
@@ -674,6 +674,22 @@ export function DeploymentCheckReport({ result, toleranceHours }: { result: Depl
   )
 }
 
+/** What is filled in from the previous revision of the same deployment: its camera setup, site and notes — everything but what
+ * is each revision's own (the id, the start and end dates, whether its timestamps had issues) and the location's (its coordinates). */
+export const FILLED_FROM_PREVIOUS = [
+  'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading',
+  'feature_type', 'habitat', 'setup_by', 'bait_use', 'deployment_groups', 'tags', 'comments',
+] as const satisfies readonly (keyof DeploymentFields)[]
+
+/** `current` filled in from the same deployment's previous revision, keeping its own id, location and dates. The camera model and id
+ * only fill in what the images did not give, as what they say is more reliable than what was written down before. */
+export function fillFromPreviousRevision(current: DeploymentFields, previous: DeploymentFields): DeploymentFields {
+  return {
+    ...current, ...Object.fromEntries(FILLED_FROM_PREVIOUS.map((k) => [k, previous[k]])), tags: previous.tags ?? [],
+    camera_model: current.camera_model || previous.camera_model, camera_id: current.camera_id || previous.camera_id,
+  }
+}
+
 interface Props {
   /** A run left unfinished by an earlier visit (see ResumeSessionsPage) —
    * its source folder and scan are restored, and, if it had got as far as
@@ -735,6 +751,11 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
 
   // Step "checks"/"import": where the deployment's collection is kept locally by
   // default — <collections folder>/<research project id>/<R0003> — and whether it's there.
+  // The folder where this deployment is already kept, if it is — importing it again would be refused.
+  const [existingFolder, setExistingFolder] = useState<string | null>(null)
+  // The closest earlier revision of this deployment, if one was kept — to offer filling the form in from it.
+  const [previousRevision, setPreviousRevision] = useState<PreviousDeployment | null>(null)
+  const [filledFrom, setFilledFrom] = useState<string | null>(null)
   const [plannedCollection, setPlannedCollection] = useState<CollectionPath | null>(null)
   const [plannedCollectionError, setPlannedCollectionError] = useState<string | null>(null)
 
@@ -747,18 +768,13 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
   // Step "checks": opt-in checks of the images against the deployment's own
   // fields, once it's known.
   const [deploymentChecks, setDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set(ALL_DEPLOYMENT_CHECKS))
-  const [toleranceHours, setToleranceHours] = useState(String(DEFAULT_TOLERANCE_HOURS))
-  // Which checks the settings page turns on, and the tolerance it starts from — read again when the
-  // validate and postvalidation steps are shown, since the settings can change meanwhile.
+  // Which checks the settings page turns on, and the tolerance and the statistical parameters the postvalidation uses — read again
+  // when the validate and postvalidation steps are shown, since the settings can change meanwhile.
   const [checkSettings, setCheckSettings] = useState<WizardSettings>(DEFAULT_CHECK_SETTINGS)
   const [preprocessSteps, setPreprocessSteps] = useState<Set<PreprocessStep>>(new Set(['rename', 'resize', 'metadata']))
   // Set the moment a value is edited here (a ref, so a settings response arriving meanwhile never puts it back).
   const preprocessTouched = useRef(false)
   const [exiftool, setExiftool] = useState<boolean | null>(null) // whether ExifTool is installed; null until known
-  const toleranceTouched = useRef(false)
-  // What the statistical checks mean by a sequence and by similar, as typed — they start from the settings too.
-  const [statParams, setStatParams] = useState(statParamsOf(DEFAULT_CHECK_SETTINGS.POSTVALIDATION))
-  const statTouched = useRef(false)
   // The deployment's row in its collection's FileTimestampLog, written on leaving the details.
   const [timestampLog, setTimestampLog] = useState<TimestampLogResult | null>(null)
   const [timestampLogError, setTimestampLogError] = useState<string | null>(null)
@@ -783,8 +799,6 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
         setCheckSettings({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
         // What can be edited in the wizard starts from the settings, until it has been.
         if (!preprocessTouched.current) setPreprocessSteps(new Set((['rename', 'resize', 'metadata'] as const).filter((step) => s.PREPROCESSING[step])))
-        if (!toleranceTouched.current) setToleranceHours(String(s.POSTVALIDATION.tolerance_hours))
-        if (!statTouched.current) setStatParams(statParamsOf(s.POSTVALIDATION))
       })
       .catch(() => { /* the settings can't be read: every check stays shown */ })
     return () => { cancelled = true }
@@ -1169,9 +1183,9 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
     }
   }
 
-  const statistics = statParamsValid(statParams)
-  const statShown = shownDeploymentChecks.some((o) => STATISTIC_CHECKS.includes(o.value as StatisticCheck))
-  const toleranceValid = toleranceHours.trim() !== '' && Number.isFinite(Number(toleranceHours)) && Number(toleranceHours) >= 0
+  // The tolerance and what the statistical checks mean by a sequence and by similar come from the settings.
+  const toleranceHours = String(checkSettings.POSTVALIDATION.tolerance_hours)
+  const statistics = statParamsValid(statParamsOf(checkSettings.POSTVALIDATION))
   const requiredDeploymentChecksOk = [...requiredDeploymentChecks]
     .filter((c) => checkSettings.POSTVALIDATION[c])
     .every((c) => deploymentCheckPassed(c, deploymentCheck) === true)
@@ -1204,6 +1218,36 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
       })
     return () => { cancelled = true }
   }, [stepKey, researchProjectId, deployment.deployment_id])
+
+  // Whether the deployment the revision and the location name is already kept — said as soon as it can be known.
+  useEffect(() => {
+    const id = deployment.deployment_id
+    if (stepKey !== 'deployment' || !researchProjectId || !id) { setExistingFolder(null); return }
+    let cancelled = false
+    api.existingDeployments(researchProjectId, [id])
+      .then(({ results }) => { if (!cancelled) setExistingFolder(results[id] ?? null) })
+      .catch(() => { if (!cancelled) setExistingFolder(null) })
+    return () => { cancelled = true }
+  }, [stepKey, researchProjectId, deployment.deployment_id])
+
+  // ...and whether an earlier revision of it was kept, to offer its details.
+  useEffect(() => {
+    const id = deployment.deployment_id
+    setFilledFrom(null)
+    if (stepKey !== 'deployment' || !researchProjectId || !id) { setPreviousRevision(null); return }
+    let cancelled = false
+    api.previousDeployments(researchProjectId, [id])
+      .then(({ results }) => { if (!cancelled) setPreviousRevision(results[id] ?? null) })
+      .catch(() => { if (!cancelled) setPreviousRevision(null) })
+    return () => { cancelled = true }
+  }, [stepKey, researchProjectId, deployment.deployment_id])
+
+  function handleFillFromPrevious() {
+    if (!previousRevision) return
+    setDeployment((d) => fillFromPreviousRevision(d, previousRevision.deployment))
+    setShowAllFields(true) // so what was filled in is there to see
+    setFilledFrom(previousRevision.deployment_id)
+  }
 
   // The research projects kept in the collections folder — read each time the origin step is shown.
   useEffect(() => {
@@ -1303,8 +1347,8 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
     setDeploymentCheck(null); setDeploymentCheckError(null)
     preprocessTouched.current = false
     setShowAllFields(false); setRevision('')
-    setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set()); setToleranceHours(String(checkSettings.POSTVALIDATION.tolerance_hours)); toleranceTouched.current = false
-    statTouched.current = false; setStatParams(statParamsOf(checkSettings.POSTVALIDATION)); setTimestampLog(null); setTimestampLogError(null)
+    setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set())
+    setTimestampLog(null); setTimestampLogError(null)
     setEvents([]); setImportError(null); setDestDir(null)
     setTaskId(null)
   }
@@ -1663,6 +1707,24 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
                          hint={`R + the revision as four digits + “-” + the location id, e.g. R0003-DONA_01. ${DESCRIPTIONS.deploymentID}`}
                          error={fieldErrors.deployment_id} value={deployment.deployment_id} onChange={() => {}} />
                 </div>
+                {previousRevision && (
+                  <div className="mt-3 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
+                    <p>
+                      There is an earlier revision of this deployment, <span className="font-mono">{previousRevision.deployment_id}</span>.
+                      Do you want to fill this form in from it? Everything is copied except the start and end dates.
+                    </p>
+                    <div className="mt-2 flex items-center gap-3 flex-wrap">
+                      <button type="button" className={btnOutline} onClick={handleFillFromPrevious}>Fill in from {previousRevision.deployment_id}</button>
+                      {filledFrom && <span role="status" className="text-xs text-blue-800 dark:text-blue-300">Filled in from {filledFrom} — check the camera, site and notes below.</span>}
+                    </div>
+                  </div>
+                )}
+                {existingFolder && (
+                  <p role="alert" className="mt-3 text-sm text-amber-700 dark:text-amber-400">
+                    ⚠ This deployment already exists: <span className="font-mono break-all">{existingFolder}</span> has images in it, and importing again
+                    would be refused as it would mix them. Choose another revision or location, or move that folder away.
+                  </p>
+                )}
               </FormCard>
 
               <DeploymentFormBody deployment={deployment} timezone={timezone} errors={fieldErrors} showAll={showAllFields}
@@ -1681,6 +1743,10 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
             Now that the deployment is known, checks its names and dates against wildintel-tools' own rules, and the scanned
             images against the deployment — pick which to run, and which must pass before moving on.
           </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+            Some of these checks can be customized in the settings (Settings › Postvalidation): the tolerance of the image dates, and what the
+            comparison with the previous revisions means — the length of a sequence, the way of comparing and how much counts as similar.
+          </p>
           {timestampLog && (
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
               {timestampLog.action === 'added' ? 'Added' : timestampLog.action === 'updated' ? 'Updated' : 'Already in'} the deployment in{' '}
@@ -1696,43 +1762,8 @@ export default function ImportDeploymentPage({ resumeSession }: Props) {
                         onToggleEnabled={toggleDeploymentCheck} onToggleRequired={(v) => setRequiredDeploymentChecks((s) => toggled(s, v))}
                         onSetEnabled={setDeploymentChecks} onSetRequired={setRequiredDeploymentChecks} />
           )}
-          {checkSettings.POSTVALIDATION.time_range && (
-            <div className="max-w-xs mb-4">
-              <Field label="Tolerance (hours)" type="number" min={0} step="any" value={toleranceHours} error={toleranceValid ? undefined : 'Must be 0 or more.'}
-                     hint="Leeway around the start and end when checking the image dates. The settings say where it starts from; wildintel-tools uses 1 hour."
-                     onChange={(v) => { toleranceTouched.current = true; setToleranceHours(v) }} />
-            </div>
-          )}
-          {statShown && (
-            <div className="mb-4 p-4 rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Previous revisions</h5>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
-                The statistical checks compare this revision with the earlier revisions of the same location kept in the collections folder.
-                Say what a sequence is and what counts as similar; the settings say where these start from.
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Sequence gap (seconds)" type="number" min={1} step="any" value={statParams.gap}
-                       error={statParamsValid({ ...statParams, minRevisions: '1', imageTol: '0', seqCountTol: '0', seqLenTol: '0' }) ? undefined : 'Must be more than 0.'}
-                       hint="A new sequence starts when the gap to the previous image is at least this long."
-                       onChange={(v) => { statTouched.current = true; setStatParams((p) => ({ ...p, gap: v })) }} />
-                <Field label="Previous revisions needed" type="number" min={1} step={1} value={statParams.minRevisions}
-                       error={statParamsValid({ ...statParams, gap: '1', imageTol: '0', seqCountTol: '0', seqLenTol: '0' }) ? undefined : 'A whole number from 1 to 50.'}
-                       hint="With fewer than this many, the checks are skipped."
-                       onChange={(v) => { statTouched.current = true; setStatParams((p) => ({ ...p, minRevisions: v })) }} />
-                <div className="col-span-2">
-                  <SelectField label="Compared with" allowEmpty={false} options={SIMILARITY_METHODS} value={statParams.method}
-                               onChange={(v) => { statTouched.current = true; setStatParams((p) => ({ ...p, method: v as SimilarityMethod })) }} />
-                </div>
-                {([['imageTol', 'Images — similar within (%)'], ['seqCountTol', 'Sequences — similar within (%)'], ['seqLenTol', 'Sequence length — similar within (%)']] as const).map(([key, label]) => (
-                  <Field key={key} label={label} type="number" min={0} step="any" value={statParams[key]}
-                         error={statParamsValid({ ...statParams, gap: '1', minRevisions: '1', imageTol: '0', seqCountTol: '0', seqLenTol: '0', [key]: statParams[key] }) ? undefined : 'From 0 to 1000.'}
-                         onChange={(v) => { statTouched.current = true; setStatParams((p) => ({ ...p, [key]: v })) }} />
-                ))}
-              </div>
-            </div>
-          )}
           {shownDeploymentChecks.length > 0 && (
-            <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={checkingDeployment || runnableDeploymentChecks.length === 0 || !toleranceValid || (statShown && statistics === null)} onClick={handleCheckDeployment}>
+            <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={checkingDeployment || runnableDeploymentChecks.length === 0} onClick={handleCheckDeployment}>
               {checkingDeployment && <SmallSpinner />}
               {checkingDeployment ? 'Checking…' : 'Run checks'}
             </button>

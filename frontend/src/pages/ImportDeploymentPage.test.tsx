@@ -23,6 +23,8 @@ vi.mock('../api', () => ({
     importDeployment: vi.fn(),
     importLocal: vi.fn(),
     openFolder: vi.fn(),
+    existingDeployments: vi.fn(),
+    previousDeployments: vi.fn(),
     checkCollection: vi.fn(),
     collectionPath: vi.fn(),
     listResearchProjects: vi.fn(),
@@ -77,6 +79,8 @@ beforeEach(() => {
   mockedApi.listLocalLocations.mockImplementation(async (id) => ({ results: [...(storedLocations[id] ?? [])] }))
   mockedApi.saveLocalLocation.mockImplementation(async (id, location) => { (storedLocations[id] ??= []).push(location); return location })
   mockedApi.getSettings.mockResolvedValue(APP_SETTINGS)
+  mockedApi.existingDeployments.mockResolvedValue({ results: {} })
+  mockedApi.previousDeployments.mockResolvedValue({ results: {} })
   mockedApi.exiftoolStatus.mockResolvedValue({ available: true, path: '/usr/bin/exiftool' })
   mockedApi.writeTimestampLog.mockResolvedValue({ path: `${COLLECTIONS_DIR}/R0001_FileTimestampLog.csv`, action: 'added', rows: 1, collection: 'R0001' })
   mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice', has_password: true })
@@ -1232,31 +1236,17 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getByText("⚠ The deployment id's location is 'DONA_02', but the location chosen is DONA_01.")).toBeInTheDocument()
     })
 
-    it('the tolerance is one hour, like wildintel-tools, and can be changed', async () => {
+    it('is customized in the settings: the wizard has no tolerance field and runs with the one of the settings, one hour by default', async () => {
       mockedApi.validateDeployment.mockResolvedValue({ checked_count: 2 })
       await goToPostvalidation()
-      expect(screen.getByLabelText('Tolerance (hours)')).toHaveValue(1)
+      expect(screen.queryByLabelText('Tolerance (hours)')).not.toBeInTheDocument()
+      expect(screen.getByText(/Some of these checks can be customized in the settings \(Settings › Postvalidation\)/)).toBeInTheDocument()
 
-      await userEvent.clear(screen.getByLabelText('Tolerance (hours)'))
-      await userEvent.type(screen.getByLabelText('Tolerance (hours)'), '2.5')
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
       await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.objectContaining({ toleranceHours: 2.5 }),
+        expect.anything(), expect.anything(), expect.anything(), expect.objectContaining({ toleranceHours: 1 }),
       ))
-    })
-
-    it('does not run with a negative or empty tolerance', async () => {
-      await goToPostvalidation()
-
-      await userEvent.clear(screen.getByLabelText('Tolerance (hours)'))
-      expect(screen.getByRole('button', { name: 'Run checks' })).toBeDisabled()
-      await userEvent.type(screen.getByLabelText('Tolerance (hours)'), '-1')
-      expect(screen.getByText('Must be 0 or more.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Run checks' })).toBeDisabled()
-      await userEvent.clear(screen.getByLabelText('Tolerance (hours)'))
-      await userEvent.type(screen.getByLabelText('Tolerance (hours)'), '0')
-      expect(screen.getByRole('button', { name: 'Run checks' })).toBeEnabled()
     })
 
     it('says which images fell outside the dates, by which rule, and what was expected', async () => {
@@ -1338,74 +1328,31 @@ describe('ImportDeploymentPage', () => {
       ...over,
     })
 
-    it('says what a sequence is and what is similar, starting from the settings', async () => {
+    it('has no fields for the parameters — they are customized in the settings', async () => {
       await goToPostvalidation()
 
-      expect(screen.getByText('Previous revisions', { selector: 'h5' })).toBeInTheDocument()
-      expect(screen.getByLabelText('Sequence gap (seconds)')).toHaveValue(60)
-      expect(screen.getByLabelText('Previous revisions needed')).toHaveValue(2)
-      expect(screen.getByLabelText('Compared with')).toHaveValue('median')
-      expect(screen.getByLabelText('Images — similar within (%)')).toHaveValue(50)
-      expect(screen.getByLabelText('Sequences — similar within (%)')).toHaveValue(50)
-      expect(screen.getByLabelText('Sequence length — similar within (%)')).toHaveValue(50)
-      expect(screen.getByText(/A new sequence starts when the gap to the previous image is at least this long/)).toBeInTheDocument()
+      expect(screen.queryByText('Previous revisions', { selector: 'h5' })).not.toBeInTheDocument()
+      for (const label of ['Sequence gap (seconds)', 'Previous revisions needed', 'Compared with', 'Images — similar within (%)', 'Sequences — similar within (%)', 'Sequence length — similar within (%)']) {
+        expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+      }
     })
 
-    it('starts from the values in the settings', async () => {
+    it('runs with the parameters of the settings', async () => {
       mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, POSTVALIDATION: {
         ...APP_SETTINGS.POSTVALIDATION, sequence_gap_seconds: 90, min_revisions: 3, similarity_method: 'range', image_count_tolerance: 20, sequence_count_tolerance: 30, sequence_length_tolerance: 40,
       } })
-      await goToPostvalidation()
-
-      await waitFor(() => expect(screen.getByLabelText('Sequence gap (seconds)')).toHaveValue(90))
-      expect(screen.getByLabelText('Previous revisions needed')).toHaveValue(3)
-      expect(screen.getByLabelText('Compared with')).toHaveValue('range')
-      expect(screen.getByLabelText('Images — similar within (%)')).toHaveValue(20)
-      expect(screen.getByLabelText('Sequences — similar within (%)')).toHaveValue(30)
-      expect(screen.getByLabelText('Sequence length — similar within (%)')).toHaveValue(40)
-    })
-
-    it('runs with the parameters typed here', async () => {
       mockedApi.validateDeployment.mockResolvedValue({ checked_count: 2 })
       await goToPostvalidation()
-      const type = async (label: string, value: string) => {
-        await userEvent.clear(screen.getByLabelText(label))
-        await userEvent.type(screen.getByLabelText(label), value)
-      }
-      await type('Sequence gap (seconds)', '120')
-      await type('Previous revisions needed', '3')
-      await userEvent.selectOptions(screen.getByLabelText('Compared with'), 'last')
-      await type('Images — similar within (%)', '25')
-      await type('Sequences — similar within (%)', '35')
-      await type('Sequence length — similar within (%)', '45')
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
       await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
         expect.anything(), expect.anything(), expect.anything(), expect.objectContaining({
           statistics: {
-            sequence_gap_seconds: 120, min_revisions: 3, method: 'last',
-            image_count_tolerance: 25, sequence_count_tolerance: 35, sequence_length_tolerance: 45,
+            sequence_gap_seconds: 90, min_revisions: 3, method: 'range',
+            image_count_tolerance: 20, sequence_count_tolerance: 30, sequence_length_tolerance: 40,
           },
         }),
       ))
-    })
-
-    it.each([
-      ['Sequence gap (seconds)', ['0', '-5', '']],
-      ['Previous revisions needed', ['0', '51', '2.5', '']],
-      ['Images — similar within (%)', ['-1', '1001', '']],
-      ['Sequences — similar within (%)', ['-1', '']],
-      ['Sequence length — similar within (%)', ['1001', '']],
-    ])('does not run with an invalid %s', async (label, bads) => {
-      await goToPostvalidation()
-      for (const bad of bads) {
-        await userEvent.clear(screen.getByLabelText(label))
-        if (bad) await userEvent.type(screen.getByLabelText(label), bad)
-        expect(screen.getByRole('button', { name: 'Run checks' }), `"${bad}"`).toBeDisabled()
-      }
-      await userEvent.clear(screen.getByLabelText(label))
-      await userEvent.type(screen.getByLabelText(label), '5')
-      expect(screen.getByRole('button', { name: 'Run checks' })).toBeEnabled()
     })
 
     it('shows what each check found, with the value of each previous revision', async () => {
@@ -1597,38 +1544,15 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
     })
 
-    it('starts the tolerance from the setting', async () => {
+    it('runs with the tolerance of the setting', async () => {
       mockedApi.getSettings.mockResolvedValue(settings({}, { tolerance_hours: 2.5 }))
       mockedApi.validateDeployment.mockResolvedValue({ checked_count: 2 })
       await goToPostvalidation()
 
-      await waitFor(() => expect(screen.getByLabelText('Tolerance (hours)')).toHaveValue(2.5))
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
       await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
         expect.anything(), expect.anything(), expect.anything(), expect.objectContaining({ toleranceHours: 2.5 }),
       ))
-    })
-
-    it('a tolerance edited in the wizard is kept, not put back to the setting', async () => {
-      mockedApi.getSettings.mockResolvedValue(settings({}, { tolerance_hours: 2 }))
-      await goToPostvalidation()
-      await waitFor(() => expect(screen.getByLabelText('Tolerance (hours)')).toHaveValue(2))
-
-      await userEvent.clear(screen.getByLabelText('Tolerance (hours)'))
-      await userEvent.type(screen.getByLabelText('Tolerance (hours)'), '4')
-      await userEvent.click(screen.getByRole('button', { name: 'Back' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Next' }))
-      await screen.findByText('Postvalidation', { selector: 'h4' })
-
-      expect(screen.getByLabelText('Tolerance (hours)')).toHaveValue(4)
-    })
-
-    it('hides the tolerance when the dates check is turned off', async () => {
-      mockedApi.getSettings.mockResolvedValue(settings({}, { time_range: false }))
-      await goToPostvalidation()
-
-      await waitFor(() => expect(screen.queryByLabelText('Tolerance (hours)')).not.toBeInTheDocument())
-      expect(screen.getByLabelText('Camera consistency')).toBeInTheDocument()
     })
   })
 
@@ -1970,5 +1894,83 @@ describe('ImportDeploymentPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Back' }))
     await userEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(await screen.findByLabelText('Folder path')).toHaveValue('/home/me/DONA_01')
+  })
+
+  describe('a deployment that already exists', () => {
+    it('says so as soon as the revision gives an id that is already kept, and where it is', async () => {
+      mockedApi.existingDeployments.mockImplementation(async (_rp, ids) => ({
+        results: Object.fromEntries(ids.map((id) => [id, `${COLLECTIONS_DIR}/${id}`])),
+      }))
+      await goToNewDetailsStep()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument() // no revision yet, so no id to look for
+      await userEvent.type(screen.getByLabelText('Revision'), '1')
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent('This deployment already exists')
+      expect(alert).toHaveTextContent(`${COLLECTIONS_DIR}/R0001-DONA_01`)
+      expect(mockedApi.existingDeployments).toHaveBeenCalledWith('DONA', ['R0001-DONA_01'])
+    })
+
+    it('says nothing when it is a new deployment, and again as the revision changes', async () => {
+      mockedApi.existingDeployments.mockImplementation(async (_rp, ids) => ({
+        results: Object.fromEntries(ids.map((id) => [id, id === 'R0001-DONA_01' ? `${COLLECTIONS_DIR}/${id}` : null])),
+      }))
+      await goToNewDetailsStep()
+      await userEvent.type(screen.getByLabelText('Revision'), '1')
+      await screen.findByRole('alert')
+
+      await userEvent.clear(screen.getByLabelText('Revision'))
+      await userEvent.type(screen.getByLabelText('Revision'), '2')
+      await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    })
+  })
+
+  describe('an earlier revision of the deployment', () => {
+    const PREVIOUS = {
+      revision: 1, deployment_id: 'R0001-DONA_01',
+      deployment: {
+        deployment_id: 'R0001-DONA_01', location_id: 'DONA_01', location_name: 'Doñana site 1', latitude: 1, longitude: 2, coordinate_uncertainty: null,
+        start_date: '2023-01-01T00:00:00+01:00', end_date: '2023-02-01T00:00:00+01:00', setup_by: 'Ana', camera_id: 'OLD-ID', camera_model: 'Old model',
+        camera_interval: null, camera_height: 1.2, camera_depth: null, camera_tilt: null, camera_heading: null, detection_distance: null,
+        timestamp_issues: true, bait_use: null, feature_type: null, habitat: 'Pine forest', deployment_groups: null, comments: 'Near the pond', tags: ['forest'],
+      },
+    }
+
+    it('offers to fill the form in from it, once the revision gives a deployment that has one', async () => {
+      mockedApi.previousDeployments.mockResolvedValue({ results: { 'R0002-DONA_01': PREVIOUS } })
+      await goToNewDetailsStep()
+      expect(screen.queryByRole('button', { name: /Fill in from/ })).not.toBeInTheDocument()
+      await userEvent.type(screen.getByLabelText('Revision'), '2')
+
+      expect(await screen.findByText(/There is an earlier revision of this deployment/)).toBeInTheDocument()
+      expect(mockedApi.previousDeployments).toHaveBeenCalledWith('DONA', ['R0002-DONA_01'])
+      expect(screen.getByRole('button', { name: 'Fill in from R0001-DONA_01' })).toBeInTheDocument()
+    })
+
+    it('fills in everything but the start and end dates, the id and the location', async () => {
+      mockedApi.previousDeployments.mockResolvedValue({ results: { 'R0002-DONA_01': PREVIOUS } })
+      await goToNewDetailsStep()
+      await userEvent.type(screen.getByLabelText('Revision'), '2')
+      fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2024-09-04T13:10:00' } })
+      await userEvent.click(await screen.findByRole('button', { name: 'Fill in from R0001-DONA_01' }))
+
+      expect(await screen.findByRole('status')).toHaveTextContent('Filled in from R0001-DONA_01')
+      expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
+      expect(screen.getByLabelText('Set up by')).toHaveValue('Ana')
+      expect(screen.getByLabelText('Comments')).toHaveValue('Near the pond')
+      expect(screen.getByLabelText('Camera height (m)')).toHaveValue(1.2)
+      expect(screen.getByLabelText('Tags (comma-separated)')).toHaveValue('forest')
+      expect(screen.getByLabelText('Deployment id')).toHaveValue('R0002-DONA_01')
+      expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-04T13:10') // the new revision's own
+      expect(screen.getByLabelText('Timestamps have issues')).not.toBeChecked() // belongs to that revision
+    })
+
+    it('does not offer it when there is no earlier revision', async () => {
+      await goToNewDetailsStep()
+      await userEvent.type(screen.getByLabelText('Revision'), '2')
+      await waitFor(() => expect(mockedApi.previousDeployments).toHaveBeenCalled())
+
+      expect(screen.queryByText(/There is an earlier revision/)).not.toBeInTheDocument()
+    })
   })
 })

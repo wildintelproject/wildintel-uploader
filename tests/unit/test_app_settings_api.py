@@ -40,6 +40,16 @@ def test_the_defaults_have_every_section_and_every_check_shown():
     assert body["POSTVALIDATION"]["tolerance_hours"] == 1.0
     assert body["GENERAL"]["log_level"] == "INFO"
     assert body["GENERAL"]["log_file"].endswith("wildintel-uploader.log")
+    assert 1 <= body["GENERAL"]["workers"] <= 4 and body["GENERAL"]["cpu_count"] >= 1
+
+
+def test_the_workers_are_saved_and_must_be_between_one_and_sixty_four():
+    assert _put(GENERAL={"workers": 6})["GENERAL"]["workers"] == 6
+    assert _client().get("/api/settings").json()["GENERAL"]["workers"] == 6
+    body = config.Settings().model_dump(mode="json")
+    for bad in (0, 65):
+        body["GENERAL"]["workers"] = bad
+        assert _client().put("/api/settings", json=body).status_code == 422
 
 
 def test_the_data_folder_shown_by_default_is_a_folder_named_like_the_app_in_the_documents_folder():

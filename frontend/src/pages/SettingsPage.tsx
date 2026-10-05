@@ -14,6 +14,7 @@ const RESIZE_WIDTH = { min: 100, max: 20000 }
 const SEQUENCE_GAP = { min: 0.001, max: 86400, decimal: true }
 const MIN_REVISIONS = { min: 1, max: 50 }
 const SIMILARITY_TOLERANCE = { min: 0, max: 1000, decimal: true }
+const WORKERS = { min: 1, max: 64 }
 
 type Limits = { min: number; max: number; decimal?: boolean }
 
@@ -94,6 +95,7 @@ const BackIcon = () => (
 /** Every field as typed — the tolerance can be briefly empty or invalid. */
 interface Draft {
   logLevel: LogLevel
+  workers: string
   dataDir: string
   trapperUrl: string
   trapperUser: string
@@ -128,6 +130,7 @@ function toDraft(s: AppSettings): Draft {
   }
   return {
     logLevel: s.GENERAL.log_level,
+    workers: String(s.GENERAL.workers),
     dataDir: s.DATA.dir,
     trapperUrl: s.TRAPPER.base_url ?? '',
     trapperUser: s.TRAPPER.user_name ?? '',
@@ -165,7 +168,7 @@ function isAbsolutePath(path: string): boolean {
 }
 
 function sectionValid(d: Draft, id: SectionId): boolean {
-  if (id === 'general') return d.dataDir.trim() === '' || isAbsolutePath(d.dataDir)
+  if (id === 'general') return (d.dataDir.trim() === '' || isAbsolutePath(d.dataDir)) && numberIn(d.workers, WORKERS) !== null
   if (id === 'postvalidation') {
     return numberIn(d.toleranceHours, TOLERANCE) !== null && numberIn(d.sequenceGap, SEQUENCE_GAP) !== null
       && numberIn(d.minRevisions, MIN_REVISIONS) !== null
@@ -178,7 +181,7 @@ function sectionValid(d: Draft, id: SectionId): boolean {
 function toUpdate(d: Draft): AppSettingsUpdate | null {
   if (!SECTIONS.every((s) => sectionValid(d, s.id))) return null
   return {
-    GENERAL: { log_level: d.logLevel },
+    GENERAL: { log_level: d.logLevel, workers: Number(d.workers) },
     TRAPPER: { base_url: d.trapperUrl.trim() || null, user_name: d.trapperUser.trim() || null, user_password: d.trapperPassword },
     DATA: { dir: d.dataDir.trim() || null },
     VALIDATION: d.validation,
@@ -701,6 +704,16 @@ export default function SettingsPage({ onClose }: Props) {
               </p>
             </Row>
             <Row
+              label="Parallel work"
+              description="How many images are validated or preprocessed at once. More workers use more CPUs and finish sooner, up to what the machine has."
+            >
+              <NumberBox label="Workers" value={draft.workers} limits={WORKERS} onChange={(v) => set('workers', v)} unit="images at once" />
+              <p className={`${hintClass} px-1`}>
+                This machine has {saved.GENERAL.cpu_count} CPU{saved.GENERAL.cpu_count === 1 ? '' : 's'}. The default is the CPUs it has, up to 4;
+                with a hard disk or a network drive, more workers may not help, as the files are read slower than they are worked on.
+              </p>
+            </Row>
+            <Row
               label="Log level"
               description="How much the app writes to its log — raise it to Debug to track a problem down, then lower it again. Applied as soon as it's saved."
             >
@@ -792,7 +805,7 @@ export default function SettingsPage({ onClose }: Props) {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <p className={`${hintClass} leading-relaxed max-w-prose`}>
                 Once the deployment&rsquo;s details are known: its names and dates, and the images against them. One that is turned off is
-                neither shown nor run. The gear opens the settings of the checks that have any; each run can still change them.
+                neither shown nor run. The gear opens the settings of the checks that have any — the wizard uses them as they are here.
               </p>
               <AllChecksButtons onAll={(on) => set('postvalidation', Object.fromEntries(DEPLOYMENT_CHECKS.map((c) => [c.key, on])) as typeof draft.postvalidation)} />
             </div>
