@@ -1,0 +1,241 @@
+# Run by hand: GitHub → Actions → Release → Run workflow (choose the branch).
+name: Release
+
+# A tag vX.Y.Z builds the packages — Linux AppImage, Windows portable .exe,
+# macOS .dmg — and publishes the X.Y.Z release, its notes taken from
+# CHANGELOG.md. Running it by hand (Actions → Release → Run workflow) refreshes
+# the rolling "dev" pre-release instead — never on a push to a branch.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.1.0) — blank: 0.0.0-dev+<commit>'
+        required: false
+        default: ''
+
+env:
+  TRAPPER_SDK_REF: ${{ vars.TRAPPER_SDK_REF || 'development' }}
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-dev+${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/trapper-sdk
+        with:
+          ref: ${{ env.TRAPPER_SDK_REF }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - run: uv run pytest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm ci && npm test
+
+  build:
+    name: ${{ matrix.name }}
+    needs: [version, test]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04: an older glibc, so the AppImage runs on more distributions.
+          - name: Linux (.AppImage)
+            os: ubuntu-22.04
+          - name: Windows (portable .exe)
+            os: windows-latest
+          - name: macOS (.dmg)
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/trapper-sdk
+        with:
+          ref: ${{ env.TRAPPER_SDK_REF }}
+
+      # ── Frontend ────────────────────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npm run build
+
+      # ── Backend (PyInstaller) ───────────────────────────────────────────────
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - name: Write version file
+        run: echo "__version__ = \"$VERSION\"" > src/wildintel_uploader/_version.py
+      # Defender's real-time scan of PyInstaller's many loose DLL/pyd files can
+      # turn a two-minute build into a multi-hour hang on Windows runners (seen
+      # on wildintel-zooniverse's own release workflow — a path exclusion alone
+      # wasn't enough), so turn real-time monitoring off outright for this job.
+      - name: Disable Windows Defender real-time protection
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Build executable
+        # A folder for the AppImage; a single file elsewhere — into build/dist.
+        # DEBUG on Windows: if it hangs, the log shows what it was doing.
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then export WU_ONEDIR=1; fi
+          LOG_LEVEL=INFO
+          if [ "$RUNNER_OS" = "Windows" ]; then LOG_LEVEL=DEBUG; fi
+          uv run pyinstaller wildintel-uploader.spec --noconfirm --log-level "$LOG_LEVEL" --distpath build/dist --workpath build/work
+
+      # ── Linux: AppImage ─────────────────────────────────────────────────────
+      - name: Build AppImage
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y libfuse2
+          wget -q -O appimagetool \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+
+          mkdir -p dist AppDir
+          cp -r build/dist/wildintel-uploader/. AppDir/wildintel-uploader/
+          printf '#!/bin/sh\nexec "$(dirname "$0")/wildintel-uploader/wildintel-uploader" "$@"\n' > AppDir/AppRun
+          chmod +x AppDir/AppRun
+          printf '[Desktop Entry]\nType=Application\nName=WildINTEL Uploader\nExec=wildintel-uploader\nIcon=wildintel-uploader\nTerminal=true\nCategories=Science;\n' \
+            > AppDir/wildintel-uploader.desktop
+          cp docs/img/WildINTEL_onlyCircle_25.png AppDir/wildintel-uploader.png
+
+          ARCH=x86_64 ./appimagetool AppDir/ "dist/wildintel-uploader-${VERSION}-linux-x86_64.AppImage"
+
+      # ── Windows: portable exe ───────────────────────────────────────────────
+      - name: Stage portable exe
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p dist
+          cp build/dist/wildintel-uploader.exe "dist/wildintel-uploader-${VERSION}-windows-x64.exe"
+
+      # ── macOS: DMG ──────────────────────────────────────────────────────────
+      - name: Build DMG
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist dmg_staging
+          cp build/dist/wildintel-uploader dmg_staging/wildintel-uploader
+          hdiutil create \
+            -volname "WildINTEL Uploader ${VERSION}" \
+            -srcfolder dmg_staging \
+            -ov -format UDZO \
+            "dist/wildintel-uploader-${VERSION}-macos-arm64.dmg"
+
+      - run: ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ runner.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.exe
+            dist/*.dmg
+
+  release:
+    name: Publish release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      # ── Stable release (tag vX.Y.Z) ─────────────────────────────────────────
+      - name: Release notes from CHANGELOG
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          awk "/^### \[${VERSION//./\\.}\]/{found=1; next} found && /^### \[/{exit} found{print}" \
+            CHANGELOG.md > release_notes.txt
+          if [ ! -s release_notes.txt ]; then
+            echo "::error::CHANGELOG.md has no '### [${VERSION}]' section."
+            exit 1
+          fi
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WildINTEL Uploader ${{ env.VERSION }}
+          files: release-assets/*
+          body_path: release_notes.txt
+
+      # ── Dev pre-release (run by hand) ──────────────────────────────────────
+      - name: Move the dev tag
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        run: |
+          git tag -f dev
+          git push origin dev --force
+
+      - name: Dev release notes
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        run: |
+          {
+            echo "Development build — not for production use."
+            echo "Built from commit \`${{ github.sha }}\` on branch \`${{ github.ref_name }}\`."
+            echo ""
+            echo "---"
+            echo ""
+            awk '/^## Upcoming release/{found=1; next} found && /^## /{exit} found{print}' CHANGELOG.md
+          } > dev_release_notes.txt
+
+      - name: Remove the previous dev assets
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for asset in $(gh release view dev --json assets --jq '.assets[].name' 2>/dev/null); do
+            gh release delete-asset dev "$asset" --yes
+          done
+
+      - name: Create dev pre-release
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev
+          name: Dev build (${{ env.VERSION }})
+          prerelease: true
+          make_latest: false
+          files: release-assets/*
+          body_path: dev_release_notes.txt
