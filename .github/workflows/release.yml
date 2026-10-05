@@ -239,3 +239,5 @@ jobs:
           make_latest: false
           files: release-assets/*
           body_path: dev_release_notes.txt
+
+# Actions enabled for this repository.

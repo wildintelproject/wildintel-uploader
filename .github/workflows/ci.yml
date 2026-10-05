@@ -75,3 +75,5 @@ jobs:
 
       - name: Build (fails on broken links)
         run: uv run mkdocs build --strict
+
+# Actions enabled for this repository.

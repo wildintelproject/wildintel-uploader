@@ -88,3 +88,5 @@ jobs:
               break
             fi
           done
+
+# Actions enabled for this repository.
