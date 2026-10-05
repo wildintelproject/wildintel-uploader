@@ -24,7 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - *Preprocessing*: renaming, resizing to a width and XMP metadata (as wildintel-tools did), listed before
     the import; `preprocessing.json` records what was done to each image, with its hashes (`source_hash`
     of the original, `hash` of the image kept, `final_hash` of the file with its metadata).
-  - The camera model and id are read with ExifTool (Pillow without it); the collection's
+  - The camera model and id are read with ExifTool (Pillow without it) — the executables ship with their
+    own copy; the collection's
     `<COLLECTION>_FileTimestampLog.csv` is kept up to date.
   - After a good import, a button opens the folder in the file explorer.
 - **Import session**: a folder with one subfolder per deployment. The revision, the checks and the

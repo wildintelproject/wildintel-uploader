@@ -5,7 +5,9 @@
 #   uv run pyinstaller wildintel-uploader.spec              # one file (.exe, .dmg)
 #   WU_ONEDIR=1 uv run pyinstaller wildintel-uploader.spec  # a folder (AppImage)
 #
-# The frontend is bundled as "static" (see main._static_dir).
+# The frontend is bundled as "static" (see main._static_dir). ExifTool, when a
+# copy was unpacked in build/exiftool (the release workflow does it), goes in as
+# "exiftool" (see camera_info._bundled_exiftool).
 import os
 from pathlib import Path
 
@@ -33,6 +35,9 @@ hiddenimports = [
 ]
 
 datas = [(str(FRONTEND_DIST), "static")]
+EXIFTOOL_DIR = Path(SPECPATH) / "build" / "exiftool"
+if EXIFTOOL_DIR.is_dir():
+    datas.append((str(EXIFTOOL_DIR), "exiftool"))
 for package in ("wildintel-uploader", "wildintel-trapper-sdk"):
     try:
         datas += copy_metadata(package)

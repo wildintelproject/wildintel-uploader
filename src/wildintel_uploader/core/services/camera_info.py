@@ -1,7 +1,7 @@
 """Which camera took an image — its model and its id (serial number), read
 from the image's metadata.
 
-ExifTool is used when it's installed, because the serial number of a camera
+ExifTool is used when it's available (bundled with the executables, or installed), because the serial number of a camera
 trap usually lives in the manufacturer's own MakerNotes, which only ExifTool
 decodes across brands. Without it, Pillow still gives the make and model from
 the standard EXIF tags (and the serial, when the camera wrote the standard
@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,9 +39,26 @@ class CameraInfo:
         return self.model is not None or self.camera_id is not None
 
 
+def _bundled_exiftool() -> str | None:
+    """The ExifTool shipped inside the packaged executable (see the PyInstaller
+    spec), or None when running from source or when none was bundled."""
+    if not getattr(sys, "frozen", False):
+        return None
+    candidate = Path(sys._MEIPASS) / "exiftool" / ("exiftool.exe" if os.name == "nt" else "exiftool")  # type: ignore[attr-defined]
+    if not candidate.is_file():
+        return None
+    if os.name != "nt" and not os.access(candidate, os.X_OK):
+        try:
+            candidate.chmod(candidate.stat().st_mode | 0o755)
+        except OSError:
+            return None
+    return str(candidate)
+
+
 def exiftool_path() -> str | None:
-    """Where ExifTool is on this machine, or None if it isn't installed."""
-    return shutil.which("exiftool")
+    """Where ExifTool is: the bundled one first, then the one on the PATH; None
+    if neither exists."""
+    return _bundled_exiftool() or shutil.which("exiftool")
 
 
 def _model(make: object, model: object) -> str | None:

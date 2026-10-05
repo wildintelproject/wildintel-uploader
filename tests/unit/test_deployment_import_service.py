@@ -3,6 +3,7 @@ model), path validation, and organizing a copy."""
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -872,3 +873,24 @@ def test_an_empty_folder_is_not_an_existing_deployment_and_nor_are_bad_ids(tmp_p
     assert svc.existing_deployment_dir("DONA", "R0003-DONA_01") is None
     assert svc.existing_deployment_dir("DONA", "no-collection-prefix") is None
     assert svc.existing_deployment_dir("../x", "R0003-DONA_01") is None
+
+
+# ── bundled ExifTool ─────────────────────────────────────────────────────────
+
+def test_exiftool_path_prefers_the_bundled_copy(tmp_path: Path, monkeypatch):
+    name = "exiftool.exe" if sys.platform == "win32" else "exiftool"
+    (tmp_path / "exiftool").mkdir()
+    bundled = tmp_path / "exiftool" / name
+    bundled.write_text("#!/usr/bin/perl\n")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+
+    assert camera_info.exiftool_path() == str(bundled)
+
+
+def test_exiftool_path_falls_back_to_the_path_when_nothing_is_bundled(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    monkeypatch.setattr(camera_info.shutil, "which", lambda _name: "/usr/bin/exiftool")
+
+    assert camera_info.exiftool_path() == "/usr/bin/exiftool"

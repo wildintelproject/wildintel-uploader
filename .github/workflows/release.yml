@@ -111,6 +111,27 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: Set-MpPreference -DisableRealtimeMonitoring $true
+      # ExifTool goes inside the executable (wildintel-uploader.spec bundles
+      # build/exiftool), so it works without installing anything. Windows gets
+      # the standalone exiftool.exe; Linux and macOS the Perl distribution (Perl
+      # comes with macOS and almost every Linux).
+      - name: Fetch ExifTool
+        run: |
+          EXIFTOOL_VERSION="$(curl -fsSL https://exiftool.org/ver.txt | tr -d '[:space:]')"
+          echo "ExifTool ${EXIFTOOL_VERSION}"
+          mkdir -p build/exiftool
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            curl -fsSL -o exiftool.zip "https://sourceforge.net/projects/exiftool/files/exiftool-${EXIFTOOL_VERSION}_64.zip/download"
+            unzip -q exiftool.zip -d exiftool_unpacked
+            cp -r exiftool_unpacked/*/exiftool_files build/exiftool/exiftool_files
+            cp "exiftool_unpacked/"*/"exiftool(-k).exe" build/exiftool/exiftool.exe
+          else
+            curl -fsSL -o exiftool.tar.gz "https://sourceforge.net/projects/exiftool/files/Image-ExifTool-${EXIFTOOL_VERSION}.tar.gz/download"
+            tar -xzf exiftool.tar.gz
+            cp -r "Image-ExifTool-${EXIFTOOL_VERSION}/exiftool" "Image-ExifTool-${EXIFTOOL_VERSION}/lib" build/exiftool/
+            chmod +x build/exiftool/exiftool
+          fi
+          ls -R build/exiftool | head -20
       - name: Build executable
         # A folder for the AppImage; a single file elsewhere — into build/dist.
         # DEBUG on Windows: if it hangs, the log shows what it was doing.
