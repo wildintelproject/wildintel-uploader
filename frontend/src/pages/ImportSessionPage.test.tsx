@@ -210,7 +210,6 @@ describe('ImportSessionPage', () => {
       await openOrigin()
       await userEvent.click(screen.getByRole('button', { name: /Add a new research project/ }))
       await userEvent.click(screen.getByRole('button', { name: /From Trapper/ }))
-      await userEvent.click(screen.getByRole('button', { name: 'Test Connection' }))
       await userEvent.click(await screen.findByRole('checkbox', { name: 'DONA — Doñana' }))
       await userEvent.click(screen.getByRole('checkbox', { name: 'TATR — Tatra' }))
       await userEvent.click(screen.getByRole('button', { name: 'Add 2 research projects' }))

@@ -403,8 +403,6 @@ describe('ImportDeploymentPage', () => {
         await goToOriginStep()
         await userEvent.click(await screen.findByRole('button', { name: /add a new research project/i }))
         await userEvent.click(screen.getByRole('button', { name: /from trapper/i }))
-        await waitFor(() => expect(screen.getByLabelText('Trapper URL')).toHaveValue('https://trapper.example.org'))
-        await userEvent.click(screen.getByRole('button', { name: /test connection/i }))
       }
 
       const MORE_PROJECTS = [
@@ -426,6 +424,23 @@ describe('ImportDeploymentPage', () => {
           sampling_design: 1, event_interval: 0, // Trapper's own defaults for what the list doesn't carry
         }))
         expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
+      })
+
+      it('connects by itself with the account of the settings — it asks for no credentials', async () => {
+        await openTrapperAndConnect()
+        expect(screen.queryByLabelText('Trapper URL')).not.toBeInTheDocument()
+        expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
+        await screen.findByRole('checkbox', { name: 'DONA — Doñana' })
+        // Blank credentials: the backend fills them in from settings.toml.
+        expect(mockedApi.trapperTestConnection).toHaveBeenCalledWith({})
+        expect(mockedApi.trapperResearchProjects).toHaveBeenCalledWith({})
+      })
+
+      it('says so, instead of asking, when the settings have no Trapper account', async () => {
+        mockedApi.trapperGetConfig.mockResolvedValue({ base_url: null, user_name: null, has_password: false })
+        await openTrapperAndConnect()
+        expect(await screen.findByRole('alert')).toHaveTextContent(/save its URL, username and password in the settings/)
+        expect(mockedApi.trapperTestConnection).not.toHaveBeenCalled()
       })
 
       it('more than one can be ticked: all are added, and the first is the one picked', async () => {
@@ -549,8 +564,6 @@ describe('ImportDeploymentPage', () => {
         await withDonaPicked()
         await userEvent.click(screen.getByRole('button', { name: /add a new location/i }))
         await userEvent.click(screen.getByRole('button', { name: /from trapper/i }))
-        await waitFor(() => expect(screen.getByLabelText('Trapper URL')).toHaveValue('https://trapper.example.org'))
-        await userEvent.click(screen.getByRole('button', { name: /test connection/i }))
 
         await waitFor(() => expect(mockedApi.trapperLocations).toHaveBeenCalledWith(expect.anything(), 2)) // DONA's Trapper pk
         await userEvent.click(await screen.findByRole('checkbox', { name: 'DONA_01 — Doñana site 1' }))
@@ -570,8 +583,6 @@ describe('ImportDeploymentPage', () => {
         await withDonaPickedWithLocations()
         await userEvent.click(screen.getByRole('button', { name: /add a new location/i }))
         await userEvent.click(screen.getByRole('button', { name: /from trapper/i }))
-        await waitFor(() => expect(screen.getByLabelText('Trapper URL')).toHaveValue('https://trapper.example.org'))
-        await userEvent.click(screen.getByRole('button', { name: /test connection/i }))
         await userEvent.click(await screen.findByRole('checkbox', { name: 'DONA_01 — Doñana site 1' }))
         await userEvent.click(screen.getByRole('button', { name: /add 1 location$/i }))
 
@@ -597,8 +608,6 @@ describe('ImportDeploymentPage', () => {
         await withDonaPicked()
         await userEvent.click(screen.getByRole('button', { name: /add a new location/i }))
         await userEvent.click(screen.getByRole('button', { name: /from trapper/i }))
-        await waitFor(() => expect(screen.getByLabelText('Trapper URL')).toHaveValue('https://trapper.example.org'))
-        await userEvent.click(screen.getByRole('button', { name: /test connection/i }))
         await userEvent.click(await screen.findByRole('checkbox', { name: 'DONA_08 — No point' }))
         await userEvent.click(screen.getByRole('button', { name: /add 1 location$/i }))
 
@@ -615,8 +624,6 @@ describe('ImportDeploymentPage', () => {
         await withDonaPicked()
         await userEvent.click(screen.getByRole('button', { name: /add a new location/i }))
         await userEvent.click(screen.getByRole('button', { name: /from trapper/i }))
-        await waitFor(() => expect(screen.getByLabelText('Trapper URL')).toHaveValue('https://trapper.example.org'))
-        await userEvent.click(screen.getByRole('button', { name: /test connection/i }))
 
         await userEvent.click(await screen.findByRole('checkbox', { name: 'DONA_02 — Doñana site 2' }))
         await userEvent.click(screen.getByRole('checkbox', { name: 'DONA_01 — Doñana site 1' }))

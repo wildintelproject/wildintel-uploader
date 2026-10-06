@@ -1,3 +1,5 @@
+import TrapperAccountNotice, { trapperAccountReady } from '../components/TrapperAccountNotice'
+import type { TrapperAccount } from '../components/TrapperAccountNotice'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
@@ -715,11 +717,15 @@ interface Props {
   onUpload?: (target: UploadTarget) => void
 }
 
+// Blank credentials: the backend uses the ones saved in the settings.
+const NO_CREDENTIALS: TrapperCredentials = {}
+
 export default function ImportDeploymentPage({ resumeSession, onUpload }: Props) {
   const [step, setStep] = useState(resumeSession ? STEPS.findIndex((s) => s.key === 'origin') : 0)
 
-  const [form, setForm] = useState<TrapperCredentials>({ url: '', username: '', password: '' })
-  const [hasSavedPassword, setHasSavedPassword] = useState(false)
+  // The Trapper account is the one saved in the settings: nothing is asked for here, and the backend
+  // fills in the blank credentials from it.
+  const [account, setAccount] = useState<TrapperAccount | null>(null)
   const [conn, setConn] = useState<{ status: ConnStatus; message: string }>({ status: 'idle', message: '' })
 
   const [researchProjects, setResearchProjects] = useState<ResearchProject[]>([])
@@ -856,11 +862,8 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
 
   useEffect(() => {
     api.trapperGetConfig()
-      .then((config) => {
-        setForm((f) => ({ ...f, url: config.base_url ?? f.url, username: config.user_name ?? f.username }))
-        setHasSavedPassword(config.has_password)
-      })
-      .catch(() => {})
+      .then(setAccount)
+      .catch(() => setAccount(null))
   }, [])
 
   // The resumed session's source folder and scan are restored straight away. Where
@@ -939,13 +942,6 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     .filter((c) => checkSettings.VALIDATION[c])
     .every((c) => imageCheckPassed(c, validation) === true)
 
-  function setField(key: keyof TrapperCredentials, value: string) {
-    setForm((f) => ({ ...f, [key]: value }))
-    setConn({ status: 'idle', message: '' })
-    setResearchProjects([])
-    setTrapperProjectPks([]); setTrapperLocationProjectPk(''); setTrapperLocations([]); setTrapperLocationPks([])
-  }
-
   const projectErrors = validateResearchProject(projectDraft)
   const shownProjectFieldErrors = shownProjectErrors(projectErrors)
   const selectedProject = localProjects.find((p) => p.acronym === selectedProjectId)
@@ -964,20 +960,26 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
   }
   const canSaveProject = projectSource !== null && Object.keys(projectErrors).length === 0 && !savingProject
   const canSaveLocation = locationSource === 'manual' && Object.values(locationErrors).every((e) => !e) && !savingLocation
-  const canTest = form.url !== '' && form.username !== '' && (form.password !== '' || hasSavedPassword)
+  const accountReady = trapperAccountReady(account)
 
   async function handleTestConnection() {
     setConn({ status: 'testing', message: '' })
     try {
-      const result = await api.trapperTestConnection(form)
-      const { results } = await api.trapperResearchProjects(form)
+      const result = await api.trapperTestConnection(NO_CREDENTIALS)
+      const { results } = await api.trapperResearchProjects(NO_CREDENTIALS)
       setResearchProjects(results)
-      setHasSavedPassword(true)
       setConn({ status: 'ok', message: `Connected — ${result.research_projects_count} research project(s) available.` })
     } catch (e) {
       setConn({ status: 'error', message: e instanceof Error ? e.message : 'Could not connect to Trapper.' })
     }
   }
+
+  // Adding a research project or a location from Trapper connects, with the account of the settings, as soon as it is asked for.
+  const wantsTrapper = (addingProject && projectSource === 'trapper') || (addingLocation && locationSource === 'trapper')
+  useEffect(() => {
+    if (wantsTrapper && accountReady && conn.status === 'idle') void handleTestConnection()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsTrapper, accountReady, conn.status])
 
   function resetOriginChoice() {
     setOrigin({ researchProject: '', locationId: '', locationName: '', timezone: '' })
@@ -1111,7 +1113,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     if (!pk) return
     setLoadingTrapperLocations(true)
     try {
-      const { results } = await api.trapperLocations(form, Number(pk))
+      const { results } = await api.trapperLocations(NO_CREDENTIALS, Number(pk))
       setTrapperLocations(results)
     } catch (e) {
       setOriginError(e instanceof Error ? e.message : "Could not load the research project's locations.")
@@ -1403,41 +1405,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     setDeployment((d) => ({ ...d, [key]: value }))
   }
 
-  const connectionForm = (
-    <>
-          <div className="mb-4">
-            <label className={labelClass} htmlFor="trapper-url">Trapper URL</label>
-            <input id="trapper-url" className={inputClass} placeholder="https://trapper.example.com"
-                   value={form.url} onChange={(e) => setField('url', e.target.value)} autoComplete="url" />
-          </div>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className={labelClass} htmlFor="trapper-username">Username</label>
-              <input id="trapper-username" className={inputClass}
-                     value={form.username} onChange={(e) => setField('username', e.target.value)} autoComplete="username" />
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="trapper-password">Password</label>
-              <input id="trapper-password" type="password" className={inputClass} placeholder="••••••••"
-                     value={form.password} onChange={(e) => setField('password', e.target.value)} autoComplete="current-password" />
-              {hasSavedPassword && form.password === '' && <p className={hintClass}>Already saved — leave blank to reuse it.</p>}
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <div>
-              <div className="flex justify-end">
-                <button type="button" disabled={!canTest || conn.status === 'testing'} onClick={handleTestConnection}
-                        className={`${btnOutline} flex items-center gap-2`}>
-                  {conn.status === 'testing' && <SmallSpinner />}
-                  {conn.status === 'testing' ? 'Testing…' : 'Test Connection'}
-                </button>
-              </div>
-              {conn.status === 'ok' && <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400 text-right">{conn.message}</p>}
-              {conn.status === 'error' && <p className="mt-2 text-sm text-red-600 dark:text-red-400 text-right">{conn.message}</p>}
-            </div>
-          </div>
-    </>
-  )
+  const connectionForm = <TrapperAccountNotice account={account} conn={conn} onRetry={handleTestConnection} />
 
   return (
     <div className="max-w-screen-md mx-auto px-4 py-8">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { TrapperCredentials } from '../api'
+import TrapperAccountNotice, { trapperAccountReady } from './TrapperAccountNotice'
+import type { TrapperAccount, TrapperConnection } from './TrapperAccountNotice'
 import CheckboxList from './CheckboxList'
 import Combobox from './Combobox'
 import OptionCards from './OptionCards'
@@ -9,7 +10,7 @@ import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { LocalResearchProject, ResearchProject } from '../types'
 import {
   ANIMAL_TYPES_OPTIONS, BAIT_USE_OPTIONS, Field, FormCard, ORIGIN_SOURCE_OPTIONS, SAMPLING_DESIGN_OPTIONS, SENSOR_METHOD_OPTIONS,
-  SelectField, SmallSpinner, TextAreaField, btnOutline, btnPrimary, hintClass, inputClass, labelClass,
+  SelectField, SmallSpinner, TextAreaField, btnOutline, btnPrimary, hintClass, labelClass,
 } from '../pages/ImportDeploymentPage'
 import type { OriginSource } from '../pages/ImportDeploymentPage'
 
@@ -35,10 +36,9 @@ export default function ResearchProjectPicker({ value, onSelect, onError }: Prop
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // The Trapper account — the saved one, until something else is typed.
-  const [form, setForm] = useState<TrapperCredentials>({ url: '', username: '', password: '' })
-  const [hasSavedPassword, setHasSavedPassword] = useState(false)
-  const [conn, setConn] = useState<{ status: 'idle' | 'testing' | 'ok' | 'error'; message: string }>({ status: 'idle', message: '' })
+  // The Trapper account is the one saved in the settings: nothing is asked for here.
+  const [account, setAccount] = useState<TrapperAccount | null>(null)
+  const [conn, setConn] = useState<TrapperConnection>({ status: 'idle', message: '' })
   const [trapperProjects, setTrapperProjects] = useState<ResearchProject[]>([])
 
   useEffect(() => {
@@ -52,11 +52,8 @@ export default function ResearchProjectPicker({ value, onSelect, onError }: Prop
 
   useEffect(() => {
     api.trapperGetConfig()
-      .then((config) => {
-        setForm((f) => ({ ...f, url: config.base_url ?? f.url, username: config.user_name ?? f.username }))
-        setHasSavedPassword(config.has_password)
-      })
-      .catch(() => {})
+      .then(setAccount)
+      .catch(() => setAccount(null))
   }, [])
 
   function setErrorMessage(message: string | null) {
@@ -67,13 +64,6 @@ export default function ResearchProjectPicker({ value, onSelect, onError }: Prop
   const errors = validateResearchProject(draft)
   const shownErrors = shownProjectErrors(errors)
   const canSave = source !== null && Object.keys(errors).length === 0 && !saving
-  const canTest = form.url !== '' && form.username !== '' && (form.password !== '' || hasSavedPassword)
-
-  function setField(key: keyof TrapperCredentials, valueOfField: string) {
-    setForm((f) => ({ ...f, [key]: valueOfField }))
-    setConn({ status: 'idle', message: '' })
-    setTrapperProjects([]); setTrapperPks([])
-  }
 
   function update<K extends keyof typeof EMPTY_RESEARCH_PROJECT>(key: K, valueOfField: (typeof EMPTY_RESEARCH_PROJECT)[K]) {
     setDraft((p) => ({ ...p, [key]: valueOfField }))
@@ -90,15 +80,21 @@ export default function ResearchProjectPicker({ value, onSelect, onError }: Prop
   async function handleTestConnection() {
     setConn({ status: 'testing', message: '' })
     try {
-      const result = await api.trapperTestConnection(form)
-      const { results } = await api.trapperResearchProjects(form)
+      const result = await api.trapperTestConnection({})
+      const { results } = await api.trapperResearchProjects({})
       setTrapperProjects(results)
-      setHasSavedPassword(true)
       setConn({ status: 'ok', message: `Connected — ${result.research_projects_count} research project(s) available.` })
     } catch (e) {
       setConn({ status: 'error', message: e instanceof Error ? e.message : 'Could not connect to Trapper.' })
     }
   }
+
+  // Adding from Trapper connects, with the account of the settings, as soon as it is asked for.
+  const wantsTrapper = adding && source === 'trapper'
+  useEffect(() => {
+    if (wantsTrapper && trapperAccountReady(account) && conn.status === 'idle') void handleTestConnection()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsTrapper, account, conn.status])
 
   /** Keeps a research project in the collections folder and picks it. */
   async function add(project: LocalResearchProject) {
@@ -150,40 +146,7 @@ export default function ResearchProjectPicker({ value, onSelect, onError }: Prop
     if (problems.length) setErrorMessage(problems.join(' '))
   }
 
-  const connectionForm = (
-    <>
-      <div className="mb-4">
-        <label className={labelClass} htmlFor="trapper-url">Trapper URL</label>
-        <input id="trapper-url" className={inputClass} placeholder="https://trapper.example.com"
-               value={form.url} onChange={(e) => setField('url', e.target.value)} autoComplete="url" />
-      </div>
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <label className={labelClass} htmlFor="trapper-username">Username</label>
-          <input id="trapper-username" className={inputClass}
-                 value={form.username} onChange={(e) => setField('username', e.target.value)} autoComplete="username" />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="trapper-password">Password</label>
-          <input id="trapper-password" type="password" className={inputClass} placeholder="••••••••"
-                 value={form.password} onChange={(e) => setField('password', e.target.value)} autoComplete="current-password" />
-          {hasSavedPassword && form.password === '' && <p className={hintClass}>Already saved — leave blank to reuse it.</p>}
-        </div>
-      </div>
-      <div className="flex justify-end">
-        <div>
-          <div className="flex justify-end">
-            <button type="button" disabled={!canTest || conn.status === 'testing'} onClick={handleTestConnection} className={`${btnOutline} flex items-center gap-2`}>
-              {conn.status === 'testing' && <SmallSpinner />}
-              {conn.status === 'testing' ? 'Testing…' : 'Test Connection'}
-            </button>
-          </div>
-          {conn.status === 'ok' && <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400 text-right">{conn.message}</p>}
-          {conn.status === 'error' && <p className="mt-2 text-sm text-red-600 dark:text-red-400 text-right">{conn.message}</p>}
-        </div>
-      </div>
-    </>
-  )
+  const connectionForm = <TrapperAccountNotice account={account} conn={conn} onRetry={handleTestConnection} />
 
   return (
     <FormCard title="Research project" description="Those found in the collections folder.">
