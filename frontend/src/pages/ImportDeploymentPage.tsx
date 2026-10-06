@@ -1862,8 +1862,9 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
         <div>
           <StepHeading>Postvalidation</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Now that the deployment is known, checks its names and dates against wildintel-tools' own rules, and the scanned
-            images against the deployment — pick which to run, and which must pass before moving on.
+            Now that you know when, how and where the images were taken, new validation tests are run: the deployment's names and
+            dates against wildintel-tools' own rules, and the images against the deployment. Pick which to run, and which must pass
+            before moving on.
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
             Some of these checks can be customized in the settings (Settings › Postvalidation): the tolerance of the image dates, and what the

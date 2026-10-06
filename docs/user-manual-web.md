@@ -329,7 +329,7 @@ When you press **Next**, the deployment is added to the collection's timestamp l
 
 ![Step 5 — Postvalidation](img/screenshots/step-checks.png)
 
-Now that the deployment is known, its names and dates are checked, and the images against it:
+Now that you know when, how and where the images were taken, new validation tests are run: the deployment's names and dates, and the images against it:
 
 | Check | Looks for |
 |---|---|
