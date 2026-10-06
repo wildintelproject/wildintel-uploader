@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://wildintelproject.github.io/wildintel-uploader/dev/changelog/">
+        <link rel="canonical" href="https://wildintelproject.github.io/wildintel-uploader/dev/features/">
       
       
-        <link rel="prev" href="../features/">
+        <link rel="prev" href="../developer-manual/">
       
       
-        <link rel="next" href="../about/">
+        <link rel="next" href="../changelog/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Changelog - WildINTEL Uploader — Documentation</title>
+        <title>Features - WildINTEL Uploader — Documentation</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#changelog" class="md-skip">
+        <a href="#features" class="md-skip">
           Skip to content
         </a>
       
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Changelog
+              Features
             
           </span>
         </div>
@@ -286,9 +286,11 @@
   
   
   
+    
   
-    <li class="md-tabs__item">
-      <a href="../features/" class="md-tabs__link">
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
         
   
   
@@ -305,11 +307,9 @@
   
   
   
-    
   
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="./" class="md-tabs__link">
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
         
   
   
@@ -558,33 +558,6 @@
       
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../features/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Features
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
     
   
   
@@ -604,7 +577,7 @@
   <span class="md-ellipsis">
     
   
-    Changelog
+    Features
   
 
     
@@ -622,7 +595,7 @@
   <span class="md-ellipsis">
     
   
-    Changelog
+    Features
   
 
     
@@ -650,22 +623,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#upcoming-release" class="md-nav__link">
+  <a href="#importing-a-deployment" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Upcoming release
+        Importing a deployment
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Upcoming release">
+    <nav class="md-nav" aria-label="Importing a deployment">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#added" class="md-nav__link">
+  <a href="#local-first" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Added
+        Local first
       
     </span>
   </a>
@@ -673,10 +646,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed" class="md-nav__link">
+  <a href="#checks-before-anything-is-copied" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Changed
+        Checks before anything is copied
       
     </span>
   </a>
@@ -684,10 +657,76 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#fixed" class="md-nav__link">
+  <a href="#the-location-owns-the-timezone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Fixed
+        The location owns the timezone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deployment-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preprocessing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-seal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The seal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sessions-of-deployments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions of deployments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resumable-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resumable runs
       
     </span>
   </a>
@@ -699,10 +738,92 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#uploading-to-trapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Uploading to Trapper
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#differences-from-wildintel-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differences from wildintel-tools
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -763,22 +884,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#upcoming-release" class="md-nav__link">
+  <a href="#importing-a-deployment" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Upcoming release
+        Importing a deployment
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Upcoming release">
+    <nav class="md-nav" aria-label="Importing a deployment">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#added" class="md-nav__link">
+  <a href="#local-first" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Added
+        Local first
       
     </span>
   </a>
@@ -786,10 +907,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed" class="md-nav__link">
+  <a href="#checks-before-anything-is-copied" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Changed
+        Checks before anything is copied
       
     </span>
   </a>
@@ -797,10 +918,76 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#fixed" class="md-nav__link">
+  <a href="#the-location-owns-the-timezone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Fixed
+        The location owns the timezone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deployment-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preprocessing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-seal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The seal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sessions-of-deployments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions of deployments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resumable-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resumable runs
       
     </span>
   </a>
@@ -809,6 +996,61 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#uploading-to-trapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Uploading to Trapper
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#differences-from-wildintel-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differences from wildintel-tools
+      
+    </span>
+  </a>
   
 </li>
       
@@ -832,111 +1074,122 @@
   
 
 
-<h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
-<p>All notable changes to this project are documented in this file.</p>
-<p>The format is based on <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a>, and this project
-adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
-<h2 id="upcoming-release">Upcoming release<a class="headerlink" href="#upcoming-release" title="Permanent link">&para;</a></h2>
-<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
+<h2 id="importing-a-deployment">Importing a deployment<a class="headerlink" href="#importing-a-deployment" title="Permanent link">&para;</a></h2>
+<h3 id="local-first">Local first<a class="headerlink" href="#local-first" title="Permanent link">&para;</a></h3>
+<p>An import never touches Trapper: it organizes the images in a <strong>collections folder</strong> on your
+computer — <code>collections/&lt;research project&gt;/&lt;R0003&gt;/&lt;deployment id&gt;</code> — and sends them later, from
+the upload page. The source folder is only read; the copy is what is renamed, resized and tagged.
+Nothing is lost if the memory card — or the app — goes away half-way.</p>
+<h3 id="checks-before-anything-is-copied">Checks before anything is copied<a class="headerlink" href="#checks-before-anything-is-copied" title="Permanent link">&para;</a></h3>
+<p><strong>Validation</strong>, over the images alone: corrupted images, shooting order against file-name order,
+folder structure, one camera for all, required EXIF fields, and duplicates (same content). Each
+check can be run or not, and <strong>required</strong> — a required check that doesn't pass stops you.</p>
+<p><strong>Postvalidation</strong>, once the deployment is known: the id's format, its collection and location,
+the camera, and the images' dates against the deployment's start and end (with a tolerance) — wildintel-tools'
+own rules — and three <strong>statistical</strong> checks against the <strong>earlier revisions of the same
+location</strong>: the number of images, the number of sequences and how long they are. A camera that
+fired non-stop or died early shows up before it is uploaded. What a sequence is, what counts as
+similar, and whether to compare with the median, the mean, the last revision or the range they
+span, are settings. Revisions that were <em>synced</em> from Trapper count too.</p>
+<h3 id="the-location-owns-the-timezone">The location owns the timezone<a class="headerlink" href="#the-location-owns-the-timezone" title="Permanent link">&para;</a></h3>
+<p>A camera's clock has no timezone, so the <strong>timezone</strong> — and whether the cameras ignore summer
+time — is a property of the <strong>location</strong>, set once and used by every deployment there. It is
+never asked for again, and a location without one is reported rather than guessed.</p>
+<h3 id="deployment-details">Deployment details<a class="headerlink" href="#deployment-details" title="Permanent link">&para;</a></h3>
+<p>The same fields as Trapper's own deployment form, following
+<a href="https://camtrap-dp.tdwg.org">Camtrap DP</a>'s deployments table and its constraints; only the dates
+are required, and the camera model and id and the dates are guessed from the images. The
+revision starts as the next one expected for the location, and an earlier revision can <strong>fill the
+form in</strong> — everything but the dates. A deployment that already exists is refused, not mixed.</p>
+<p>When the collection has a <code>_FileTimestampLog.csv</code> — the file wildintel-tools asks for — the
+dates come from it, and the app keeps that file up to date.</p>
+<h3 id="preprocessing">Preprocessing<a class="headerlink" href="#preprocessing" title="Permanent link">&para;</a></h3>
+<p>What wildintel-tools did to a collection before uploading it, and a bit more:</p>
 <ul>
-<li><strong>Import deployment</strong>: organize a folder of camera-trap images into the local collections folder
-  (<code>&lt;Documents&gt;/wildintel-uploader/collections/&lt;research project&gt;/&lt;R000N&gt;/&lt;deployment id&gt;</code>), in a wizard:
-  folder → validate → origin → details → postvalidation → preprocessing → import.</li>
-<li><em>Validate</em>: corrupted images, shooting order vs. filename sequence, folder structure, same camera,
-    required EXIF fields and duplicate images — each one optional, and each one can be required to continue.</li>
-<li><em>Origin</em>: the research project and location, picked from the collections folder, added by hand or
-    taken from Trapper.</li>
-<li><em>Details</em>: the deployment's id from its revision (<code>R0003-DONA_01</code>), the period with its timezone and
-    Camtrap DP's own fields, validated in the browser and in the backend.
-    It says when that deployment already exists in the collections folder, and, when an earlier revision of it
-    was kept, offers to fill the form in from it (everything but the start and end dates).</li>
-<li><em>Postvalidation</em>: the naming and the dates against wildintel-tools' rules, and statistical checks
-    (number of images, of sequences and their length) against the previous revisions of the location.</li>
-<li><em>Preprocessing</em>: renaming, resizing to a width and XMP metadata (as wildintel-tools did), listed before
-    the import; <code>preprocessing.json</code> records what was done to each image, with its hashes (<code>source_hash</code>
-    of the original, <code>hash</code> of the image kept, <code>final_hash</code> of the file with its metadata).</li>
-<li>The camera model and id are read with ExifTool (Pillow without it) — the executables ship with their
-    own copy; the collection's
-    <code>&lt;COLLECTION&gt;_FileTimestampLog.csv</code> is kept up to date.</li>
-<li>After a good import, a button opens the folder in the file explorer.</li>
-<li><strong>Import session</strong>: a folder with one subfolder per deployment. The revision, the checks and the
-  preprocessing are common; the location, the dates and the rest of the details are asked for each
-  deployment, with a filterable list for big sessions, "next incomplete", and filling the details from the
-  previous revision of the same deployment (one or all).</li>
-<li>If the session folder has a <code>&lt;COLLECTION&gt;_FileTimestampLog.csv</code> (the file wildintel-tools asks for beside
-    a collection's deployments), the start and end of each deployment it has a row for are taken from it
-    instead of from the images' EXIF, and the <em>Details</em> step says so. See <code>examples/session_example_timestamp_log</code>.</li>
-<li>The timezone and the summer-time ("ignore DST") setting belong to the <strong>location</strong>, never to a deployment: the details
-  no longer ask for them, nor does any request carry them. They are said, in bold, in a sentence before the details
-  (the location, its GPS coordinates, its timezone and whether it ignores summer time), and the images are read and
-  the deployment registered in the ones the location has kept. New locations ask for both; a location without a
-  timezone is reported instead of guessing one (<code>/api/deployment-import/locations/update</code> still changes them).</li>
-<li>The <em>revision</em> of a deployment (and of a session) starts as the next one expected — one after the highest kept for the
-  location (<code>/api/deployment-import/next-revision</code>) — and says so; it can be changed.</li>
-<li>Once a deployment or a session is imported, an <strong>Upload to Trapper</strong> button goes to the upload page with the research
-  project and the collection already chosen. Pressing the title in the navbar goes back to the welcome screen.</li>
-<li><strong>Upload deployment to Trapper</strong>: pick a collection kept locally and upload its deployments — creating the
-  location and the deployment in Trapper if they are missing, packing the images in zip + yaml parts and
-  sending them. A <em>dry run</em> says what would be done changing nothing, and <em>only generate the files</em> writes the
-  zips, the yamls and the collection's deployments csv to leave them for later.
-  A <em>Test connection</em> button checks, changing nothing, that the account reaches the research project, its locations
-  (and which of the deployments' own would be created) and the uploader's login, each one reported on its own.
-  The collection's yaml names the research project's <em>classification project</em> (picked under the deployments, or the only
-  one it has; typed by pk when generating without an account) — not the research project's own pk.
-  The package names the deployment in lower case, as Trapper keeps it, and declares the timezone and summer-time
-  setting of the location it goes to (Trapper refuses a package that disagrees with it).</li>
-<li><strong>Sync local collections</strong>: pick a research project and one of its classification projects in Trapper, and the collections
-  folder gets what it lacks — the research project (<code>research_project.json</code>) and its <code>locations.json</code>, the collections
-  starting with R (each with its <code>collection.json</code> and <code>&lt;collection&gt;_FileTimestampLog.csv</code>) and each deployment's
-  <code>deployment.json</code>, a deployment going to the collection its id starts with. What is already there is kept as it is, nothing is
-  changed in Trapper and no image is downloaded, so no <code>preprocessing.json</code> is made. Each deployment also gets an <code>images.json</code> made
-  from what Trapper holds for its images (names, Trapper's pk, when they were taken, observation types, species and tags — not the
-  size, the pixels nor the hashes), marked <code>"source": "trapper"</code>. <strong>Upload session to Trapper</strong> is listed as
-  coming soon.</li>
-<li>Every deployment kept locally gets an <strong><code>images.json</code></strong> beside its <code>deployment.json</code>: the number of images, the first and the
-  last, and for each one its name (and the original, when renamed), when it was taken — the camera's wall clock, the instant
-  and its epoch seconds — the camera, the size and the pixels, and the hashes, for statistics without opening the images again.
-  A deployment copied without preprocessing has the names, the EXIF wall-clock time, the size and the pixels.</li>
-<li>Validating and preprocessing the images use several CPUs at once (Settings › General › Workers; by default the
-  CPUs the machine has, up to 4).</li>
-<li><strong>Settings</strong>: General (images folder, log, update check), Trapper (account and test), Validation and
-  Postvalidation (each check an entry with a quick switch, and a gear only where it has settings),
-  Preprocessing (steps, width, authorship, license, dates) and Config — several settings files to switch
-  between.</li>
-<li>Tables of checks have "all" boxes to run, or require, every check at once.</li>
-<li>A command line (<code>wildintel-uploader</code>) sharing the settings with the web app.</li>
-<li><strong>Documentation</strong>: a web and a command-line user manual, a developer manual, features and about pages, with screenshots
-  generated by <code>uv run wucli docs screenshots</code> (Playwright over the built frontend and a fake backend).</li>
-<li>
-<p><code>tools/make_example_deployment.py</code> makes a deployment of any number of sample images (3000 by default), each with the
-  camera's make, model and serial number and its capture date in the EXIF.</p>
-</li>
-<li>
-<p><strong>Reports</strong>: every validation, postvalidation and preprocessing writes a report of what was checked and done, image by image
-  (<code>&lt;images folder&gt;/reports/*.json</code>). Each step shows it — the checks with how many images passed and failed, and the images that
-  failed with the check and why — and it downloads as a CSV (a row per image and check) or a JSON. A <strong>Reports</strong> task lists the
-  reports to look at again or delete.</p>
-</li>
+<li><strong>dates</strong> read from the EXIF as the camera's local time — optionally ignoring summer time —
+  and converted to UTC;</li>
+<li><strong>rename</strong> to <code>&lt;DEPLOYMENT&gt;__&lt;YYYYMMDD&gt;_&lt;n&gt;.&lt;EXT&gt;</code>;</li>
+<li><strong>resize</strong> to a width (2400 px) — and unlike wildintel-tools, the resized image is the one that
+  is kept;</li>
+<li><strong>XMP metadata</strong> with ExifTool: creator, owner, publisher, rights, license, coverage, and the
+  hash of the original and of the image kept.</li>
 </ul>
-<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<p>Each step can be switched off per run, and <code>preprocessing.json</code> records what happened to every
+image.</p>
+<h3 id="reports">Reports<a class="headerlink" href="#reports" title="Permanent link">&para;</a></h3>
+<p>Every validation, postvalidation and preprocessing writes a <strong>report</strong>: what was checked and done, image by image — the
+ones that failed, which check and why, and the ones that passed too. The step shows it as it is kept, and it can be
+downloaded as a <strong>CSV</strong> (a row per image and check, for a spreadsheet) or as a <strong>JSON</strong> with everything. They are kept in
+the <code>reports</code> folder, and a page of the menu lists them to look at again or delete — what wildintel-tools' <code>reports</code> command
+did with its YAML files, from the interface.</p>
+<h3 id="the-seal">The seal<a class="headerlink" href="#the-seal" title="Permanent link">&para;</a></h3>
+<p>Every import writes <code>seal.json</code>: which checks each image and the deployment passed, tied by hash
+to their content. If something is edited by mistake afterwards, the seal says so. It is not a
+signature, and doesn't pretend to be.</p>
+<h3 id="sessions-of-deployments">Sessions of deployments<a class="headerlink" href="#sessions-of-deployments" title="Permanent link">&para;</a></h3>
+<p>A folder with one subfolder per deployment, imported in one go: the revision, the checks and the
+preprocessing are common, while location, dates and camera are asked for each deployment — with a
+filterable list, <em>next incomplete</em>, and filling in from the previous revision (one deployment
+or all).</p>
+<h3 id="resumable-runs">Resumable runs<a class="headerlink" href="#resumable-runs" title="Permanent link">&para;</a></h3>
+<p>The wizard saves its progress. A run left unfinished is offered back when the app starts, to
+resume or discard. Passwords are never saved with it.</p>
+<h2 id="uploading-to-trapper">Uploading to Trapper<a class="headerlink" href="#uploading-to-trapper" title="Permanent link">&para;</a></h2>
+<p>wildintel-tools' three commands, in one:</p>
 <ul>
-<li>Settings › Preprocessing › License is a list — CC0, CC BY and CC BY-NC — and shows the URL that is written into each image.
-  A license set by hand in <code>settings.toml</code> is kept and shown as <em>Other</em>.</li>
+<li>the <strong>location</strong> and the <strong>deployment</strong> are created in Trapper if the research project doesn't
+  have them — from the deployment's own coordinates and details;</li>
+<li>the images are <strong>packed</strong> in zips, split at a size, with the yaml that describes them;</li>
+<li>each part is <strong>uploaded</strong>, and Trapper is told to process them into the collection.</li>
 </ul>
-<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
-<ul>
-<li>A location with the timezone <code>UTC</code> (or any other) is accepted on Windows: the app ships the <code>tzdata</code> timezone database, which Windows lacks for
-  Python's <code>zoneinfo</code>, and the executables bundle it.</li>
-<li>Creating a deployment in Trapper no longer fails with <em>Type error in the cell … deploymentStart</em>: the CSV's dates are the wall clock of
-  the location's timezone, with no <code>Z</code> or offset, as Trapper's import form reads them.</li>
-<li>Adding a research project or a location <em>from Trapper</em> no longer asks for the credentials: it connects by itself with the
-  account saved in the settings, and says so when there isn't one.</li>
-<li>The <code>*_exiftool_tmp</code> files ExifTool leaves when it is interrupted writing the metadata are removed.</li>
-<li>The upload's login to Trapper copes with an answer without <code>results</code> (the session at the top, or as a cookie) and, when there is
-  no session at all, says what Trapper answered instead of failing with a bare <code>'results'</code>.</li>
-<li>The frontend type-checks again (<code>npm run build</code>): the resume screen knows every task, the Trapper credentials may be left
-  blank, and the tests' fixtures follow <code>SessionSummary</code>.</li>
-</ul>
+<p>A <strong>dry run</strong> reads Trapper only and says what would be created and how the images would be
+packed. <strong>Only generate the files</strong> writes the zips, yamls and <code>_deployments.csv</code> to leave them
+for another route — with no Trapper account if the project is known. A <strong>Test connection</strong> checks
+the account can do what an upload needs, step by step, before sending anything.</p>
+<p>Progress is shown per deployment, step by step, with a bar while a file goes up; if one
+deployment fails the others go on. Ids are matched ignoring case, as Trapper keeps them in lower
+case.</p>
+<h2 id="sync">Sync<a class="headerlink" href="#sync" title="Permanent link">&para;</a></h2>
+<p>For deployments Trapper holds that this computer doesn't know: a classification project's
+collections (those starting with <code>R</code>), its research project, locations and chosen deployments are
+created in the collections folder — nothing is changed in Trapper, nothing already there is
+overwritten, and no image is downloaded. Their <code>images.json</code>, marked <code>"source": "trapper"</code>, is
+built from what Trapper lists for each image, so they feed the statistical checks of later
+revisions. Deployments Trapper holds in an invalid way are reported, not fatal.</p>
+<h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
+<p>Trapper account, images folder, how many images are worked on at once, which checks are shown
+and what they mean, the preprocessing — all in <code>settings.toml</code>, edited from the ⚙️ page. You can keep
+<strong>several configs</strong> (a test server and the real one) and switch between them. The log is
+downloadable from there.</p>
+<h2 id="command-line">Command line<a class="headerlink" href="#command-line" title="Permanent link">&para;</a></h2>
+<p><code>wildintel-uploader</code> shares the settings and log with the web app: test the connection, edit the
+settings, look up Trapper's ids, and an interactive import that copies a deployment into the
+collections folder and registers it in Trapper. The checks, the preprocessing, sessions, upload
+and sync are the web app's. See the <a href="../user-manual-cli/">command-line manual</a>.</p>
+<h2 id="differences-from-wildintel-tools">Differences from wildintel-tools<a class="headerlink" href="#differences-from-wildintel-tools" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>wildintel-tools</th>
+<th>WildINTEL Uploader</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The resized image only fed the identifier's hash; the original was what got copied.</td>
+<td>The resized image is the one that is kept.</td>
+</tr>
+<tr>
+<td>Three commands to prepare, generate and upload a collection.</td>
+<td>One upload — with a dry run, or just the files.</td>
+</tr>
+<tr>
+<td>—</td>
+<td>Statistical checks against the location's earlier revisions, and <code>images.json</code>, <code>preprocessing.json</code> and a seal for what was done.</td>
+</tr>
+</tbody>
+</table>
 
 
 

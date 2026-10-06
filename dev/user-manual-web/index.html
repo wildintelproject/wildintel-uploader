@@ -1,0 +1,2349 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="User and developer documentation for WildINTEL Uploader">
+      
+      
+      
+        <link rel="canonical" href="https://wildintelproject.github.io/wildintel-uploader/dev/user-manual-web/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../user-manual-cli/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../img/wildIntel_logo.webp">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Web app - WildINTEL Uploader — Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extras.css">
+    
+      <link rel="stylesheet" href="../stylesheets/termynal.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#wildintel-uploader-user-manual-web" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="WildINTEL Uploader — Documentation" class="md-header__button md-logo" aria-label="WildINTEL Uploader — Documentation" data-md-component="logo">
+      
+  <img src="../img/wildIntel_logo.webp" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            WildINTEL Uploader — Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Web app
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/wildintelproject/wildintel-uploader" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    wildintelproject/wildintel-uploader
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  User Manual
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../developer-manual/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Developer Manual
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../about/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  About
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="WildINTEL Uploader — Documentation" class="md-nav__button md-logo" aria-label="WildINTEL Uploader — Documentation" data-md-component="logo">
+      
+  <img src="../img/wildIntel_logo.webp" alt="logo">
+
+    </a>
+    WildINTEL Uploader — Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/wildintelproject/wildintel-uploader" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    wildintelproject/wildintel-uploader
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Manual
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Manual
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web app
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web app
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+  
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Getting started
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-how-the-app-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. How the app works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. How the app works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#deployments-revisions-and-collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployments, revisions and collections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-collections-folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The collections folder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-location-owns-the-timezone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The location owns the timezone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unfinished-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unfinished runs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Settings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#general" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trapper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postvalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Postvalidation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preprocessing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-import-a-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Import a deployment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Import a deployment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Folder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Validate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-origin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — Origin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 — Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-postvalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5 — Postvalidation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6 — Preprocessing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-7-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 7 — Import
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 7 — Import">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-gets-written-next-to-the-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What gets written next to the images
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-import-a-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Import a session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-upload-a-deployment-to-trapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Upload a deployment to Trapper
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Upload a deployment to Trapper">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trapper_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trapper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-to-upload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to upload
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-to-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to do
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-sync-local-collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Sync local collections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-reports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Reports
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-where-the-app-keeps-its-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Where the app keeps its files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-manual-cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer-manual/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Manual
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../about/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+  
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Getting started
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-how-the-app-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. How the app works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. How the app works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#deployments-revisions-and-collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployments, revisions and collections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-collections-folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The collections folder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-location-owns-the-timezone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The location owns the timezone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unfinished-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unfinished runs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Settings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#general" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trapper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postvalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Postvalidation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preprocessing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-import-a-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Import a deployment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Import a deployment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Folder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Validate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-origin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — Origin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 — Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-postvalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5 — Postvalidation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6 — Preprocessing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-7-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 7 — Import
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 7 — Import">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-gets-written-next-to-the-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What gets written next to the images
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-import-a-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Import a session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-upload-a-deployment-to-trapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Upload a deployment to Trapper
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Upload a deployment to Trapper">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trapper_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trapper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-to-upload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to upload
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-to-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to do
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-sync-local-collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Sync local collections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-reports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Reports
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-where-the-app-keeps-its-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Where the app keeps its files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="wildintel-uploader-user-manual-web">WildINTEL Uploader — User Manual (web)<a class="headerlink" href="#wildintel-uploader-user-manual-web" title="Permanent link">&para;</a></h1>
+<p><strong>WildINTEL Uploader</strong> is a desktop web application: it runs on your own computer and opens in your
+browser. It takes the images of a camera-trap deployment — copied off the camera's memory card —
+checks them, organizes them in a local <strong>collections folder</strong>, and sends them to
+<a href="https://gitlab.com/trapper-project/trapper">Trapper</a>.</p>
+<p>This manual covers the web interface. Part of it can also be done from a terminal: see the
+<a href="../user-manual-cli/">command-line manual</a>.</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#1-installation">Installation</a></li>
+<li><a href="#2-getting-started">Getting started</a></li>
+<li><a href="#3-how-the-app-works">How the app works</a></li>
+<li><a href="#4-settings">Settings</a></li>
+<li><a href="#5-import-a-deployment">Import a deployment</a></li>
+<li><a href="#6-import-a-session">Import a session</a></li>
+<li><a href="#7-upload-a-deployment-to-trapper">Upload a deployment to Trapper</a></li>
+<li><a href="#8-sync-local-collections">Sync local collections</a></li>
+<li><a href="#9-reports">Reports</a></li>
+<li><a href="#10-where-the-app-keeps-its-files">Where the app keeps its files</a></li>
+<li><a href="#11-troubleshooting">Troubleshooting</a></li>
+</ol>
+<hr />
+<h2 id="1-installation">1. Installation<a class="headerlink" href="#1-installation" title="Permanent link">&para;</a></h2>
+<p>Download the file for your system from the
+<a href="https://github.com/wildintelproject/wildintel-uploader/releases">releases page</a>. Nothing else has
+to be installed — Python, the interface and <a href="https://exiftool.org/">ExifTool</a> (which reads the
+cameras' metadata) are all inside.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">Windows</label><label for="__tabbed_1_3">macOS</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Download <code>wildintel-uploader-X.Y.Z-linux-x86_64.AppImage</code>, make it executable and run it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>chmod<span class="w"> </span>+x<span class="w"> </span>wildintel-uploader-X.Y.Z-linux-x86_64.AppImage
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>./wildintel-uploader-X.Y.Z-linux-x86_64.AppImage
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<p>Download <code>wildintel-uploader-X.Y.Z-windows-x64.exe</code> and double-click it. If Windows SmartScreen
+warns that the publisher is unknown, choose <strong>More info → Run anyway</strong>.</p>
+</div>
+<div class="tabbed-block">
+<p>Download <code>wildintel-uploader-X.Y.Z-macos-arm64.dmg</code> (Apple Silicon), open it and drag the app
+to <em>Applications</em>. The first time, open it with a right click → <strong>Open</strong>, as it isn't signed.</p>
+</div>
+</div>
+</div>
+<p>Running it starts a small server on your computer and opens the app in your default browser
+(<a href="http://127.0.0.1:8769">http://127.0.0.1:8769</a>, or the next free port). <strong>Keep the window it opened until you finish</strong> —
+closing it stops the app. Everything stays on your machine: the only thing the app talks to is the
+Trapper server you configure.</p>
+<div class="admonition tip">
+<p class="admonition-title">Running it from the source code</p>
+<p>To run the app from its source code — or to change it — see the
+<a href="../developer-manual/#2-development-setup">developer manual</a>.</p>
+</div>
+<h2 id="2-getting-started">2. Getting started<a class="headerlink" href="#2-getting-started" title="Permanent link">&para;</a></h2>
+<p><img alt="Welcome" src="../img/screenshots/welcome.png" /></p>
+<ol>
+<li>Open the app. The welcome screen says what it does; press <strong>Get Started</strong>.</li>
+<li>Press <strong>⚙️ Settings</strong> (top right) and fill in the <strong>Trapper</strong> server, username and password —
+   see <a href="#4-settings">Settings</a>. You can test them right there. Also fill in who owns the images
+   (Preprocessing › Authorship) if you are going to import some.</li>
+<li>Back on the menu, choose what you want to do:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>What it's for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>📷 <strong>Import deployment</strong></td>
+<td>Check one folder of images and organize it in the collections folder.</td>
+</tr>
+<tr>
+<td>🗂️ <strong>Import session</strong></td>
+<td>The same for a folder holding several deployments, one subfolder each.</td>
+</tr>
+<tr>
+<td>☁️ <strong>Upload deployment to Trapper</strong></td>
+<td>Send deployments already kept locally to Trapper.</td>
+</tr>
+<tr>
+<td>🔄 <strong>Sync local collections</strong></td>
+<td>Bring the collections folder up to date with what Trapper already has.</td>
+</tr>
+<tr>
+<td>📑 <strong>Reports</strong></td>
+<td>The reports that the checks and the import leave — <a href="#9-reports">look at them again, download them</a>.</td>
+</tr>
+<tr>
+<td>📦 <em>Upload session to Trapper</em></td>
+<td>Coming soon.</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="The task menu" src="../img/screenshots/menu.png" /></p>
+<p>The usual order is <strong>Import</strong> (or <strong>Import session</strong>) first, then <strong>Upload</strong>. <em>Sync</em> is for when
+Trapper already holds deployments that this computer's collections folder doesn't know about.</p>
+<p>The title in the top bar takes you back to the welcome screen at any time; <strong>? Help</strong> opens this
+documentation, and the sun/moon button switches between dark and light.</p>
+<p>If the app was closed in the middle of an import, the first thing you see is the list of
+<strong>unfinished runs</strong> — see <a href="#unfinished-runs">Unfinished runs</a>.</p>
+<h2 id="3-how-the-app-works">3. How the app works<a class="headerlink" href="#3-how-the-app-works" title="Permanent link">&para;</a></h2>
+<h3 id="deployments-revisions-and-collections">Deployments, revisions and collections<a class="headerlink" href="#deployments-revisions-and-collections" title="Permanent link">&para;</a></h3>
+<p>A <strong>deployment</strong> is one camera at one <strong>location</strong>, between the day it was set up and the day it
+was collected. A location is visited again and again, so each visit is a <strong>revision</strong> — the 1st,
+the 2nd, the 3rd one. The app names everything after that:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Example</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Revision</td>
+<td><code>3</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Location id</td>
+<td><code>DONA_01</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Deployment id</strong></td>
+<td><code>R0003-DONA_01</code></td>
+<td><code>R</code> + the revision as four digits + <code>-</code> + the location id</td>
+</tr>
+<tr>
+<td><strong>Collection</strong></td>
+<td><code>R0003</code></td>
+<td>all the deployments of one revision</td>
+</tr>
+<tr>
+<td>Research project</td>
+<td><code>DONA</code></td>
+<td>the project they all belong to, by its acronym</td>
+</tr>
+</tbody>
+</table>
+<p>The deployment id is never typed: you give the revision and the location, and the app builds it.</p>
+<h3 id="the-collections-folder">The collections folder<a class="headerlink" href="#the-collections-folder" title="Permanent link">&para;</a></h3>
+<p>Imported deployments are kept in your <strong>collections folder</strong> until they are uploaded — by default
+<code>Documents/wildintel-uploader/collections</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>collections/
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>└── DONA/                                   ← research project
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    ├── research_project.json
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    ├── locations.json                      ← its locations, with timezone and coordinates
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    └── R0003/                              ← collection (one revision)
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        ├── collection.json
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        ├── R0003_FileTimestampLog.csv      ← the start and end of each deployment
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        └── R0003-DONA_01/                  ← deployment
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>            ├── R0003-DONA_01__20240904_1.JPEG …    the images
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>            ├── deployment.json             ← its details
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>            ├── images.json                 ← what is known of each image
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>            ├── preprocessing.json          ← what was done to each image
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>            ├── seal.json                   ← what was checked, tied to the content
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>            └── upload.json                 ← written once it has been uploaded
+</code></pre></div>
+<p>Your <strong>source folder is never touched</strong>: the images are copied, and the copy is what gets renamed,
+resized and tagged.</p>
+<div class="admonition warning">
+<p class="admonition-title">Copy the images off the camera's memory card first</p>
+<p>Point the app at a folder on your computer, not at the memory card. The app only <em>reads</em> the
+source folder, but working from the card is slow and risks losing files if it is removed
+half-way.</p>
+</div>
+<h3 id="the-location-owns-the-timezone">The location owns the timezone<a class="headerlink" href="#the-location-owns-the-timezone" title="Permanent link">&para;</a></h3>
+<p>A camera's clock has no timezone of its own: its images say "13:10", and the same camera,
+elsewhere, would say it too. So the <strong>timezone</strong> (and whether the cameras there <strong>ignore summer
+time</strong>) belongs to the <strong>location</strong>, never to a deployment. They are asked for when a location is
+added, and every deployment there is read in them. The details step says it, in bold, before you
+fill anything in. A location without a timezone is reported — the app doesn't guess one.</p>
+<h3 id="unfinished-runs">Unfinished runs<a class="headerlink" href="#unfinished-runs" title="Permanent link">&para;</a></h3>
+<p>An import saves its progress as you go. If you close the app, or it fails, the next time you start
+it the first screen lists the <strong>unfinished runs</strong> — the folder, the research project and when it
+was started — each with <strong>Resume</strong> and <strong>Discard</strong>. Resuming takes you back to the step after the
+folder was chosen. Passwords are never saved with a run.</p>
+<p><img alt="Unfinished runs" src="../img/screenshots/unfinished-runs.png" /></p>
+<h2 id="4-settings">4. Settings<a class="headerlink" href="#4-settings" title="Permanent link">&para;</a></h2>
+<p>Press <strong>⚙️ Settings</strong>. It has its own sections on the left; one <strong>Save</strong> saves them all, and a red
+dot marks a section with an invalid value.</p>
+<p><img alt="Settings — Preprocessing" src="../img/screenshots/settings.png" /></p>
+<h3 id="general">General<a class="headerlink" href="#general" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Images folder</strong> — where the collections folder lives. Blank uses
+  <code>Documents/wildintel-uploader</code>; a path must be absolute (or start with <code>~</code>).</li>
+<li><strong>Workers</strong> — how many images are validated and preprocessed at once. Up to the number of
+  processors of your machine pays off; the default is that number, up to 4.</li>
+<li><strong>Log level</strong> — how much the app logs (<code>ERROR</code>, <code>WARNING</code>, <code>INFO</code>, <code>DEBUG</code>). At <code>DEBUG</code> it logs
+  every step.</li>
+<li><strong>Log file</strong> — download it, or delete it. It rotates at 5 MB keeping the last 5. Attach it to any
+  bug report.</li>
+<li><strong>Update</strong> — looks for a newer version.</li>
+</ul>
+<h3 id="trapper">Trapper<a class="headerlink" href="#trapper" title="Permanent link">&para;</a></h3>
+<p>The server's <strong>URL</strong>, and the <strong>username</strong> (its email — Trapper's import form only accepts
+that) and <strong>password</strong> of your account. <strong>Test connection</strong> reports the research projects it can
+see. The password is saved in <code>settings.toml</code> but never sent back to your browser.</p>
+<h3 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h3>
+<p>Which of the <a href="#step-2-validate">folder checks</a> the wizard shows. Each is an entry with a switch;
+turn off the ones you never want to see. They are all on by default.</p>
+<h3 id="postvalidation">Postvalidation<a class="headerlink" href="#postvalidation" title="Permanent link">&para;</a></h3>
+<p>Which of the <a href="#step-5-postvalidation">postvalidation checks</a> the wizard shows, and what the ones
+that take a value mean:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tolerance</td>
+<td>1 hour</td>
+<td>Leeway around a deployment's start and end for the image dates.</td>
+</tr>
+<tr>
+<td>Sequence gap</td>
+<td>60 s</td>
+<td>What a <em>sequence</em> is: a new one starts when the gap to the previous image is at least this.</td>
+</tr>
+<tr>
+<td>Compared with</td>
+<td>median</td>
+<td>What this revision is compared to: the <strong>median</strong> or <strong>mean</strong> of the earlier ones, the <strong>last</strong> one, or the <strong>range</strong> they span.</td>
+</tr>
+<tr>
+<td>Previous revisions needed</td>
+<td>2</td>
+<td>With fewer, the statistical checks are skipped.</td>
+</tr>
+<tr>
+<td>Number of images / sequences / length of sequences</td>
+<td>50 % each</td>
+<td>How different a value can be and still count as similar.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="preprocessing">Preprocessing<a class="headerlink" href="#preprocessing" title="Permanent link">&para;</a></h3>
+<p>What a new import does to the images — the wizard lists it before importing, and a run can still
+switch each step off.</p>
+<ul>
+<li><strong>Steps</strong> — rename, resize, add metadata.</li>
+<li><strong>Resize width</strong> — 2400 px by default; wider images are shrunk to it, narrower ones left alone.</li>
+<li><strong>Authorship</strong> — <strong>Owner</strong>, <strong>Publisher</strong> and <strong>Coverage</strong> (where the images were taken; blank
+  uses the deployment's location), written into each image. A blank owner or publisher is written
+  as "Unknown".</li>
+<li><strong>License</strong> — picked from a list: <strong>CC0</strong> (any use, no requirements), <strong>CC BY</strong> (any use with
+  attribution) or <strong>CC BY-NC</strong> (with attribution, not for commercial purposes), the default. What is
+  written into each image is the license's URL, shown beside each name.</li>
+<li><strong>Dates</strong> — <strong>Ignore summer time</strong>, and <strong>Convert the dates to UTC</strong>.</li>
+</ul>
+<h3 id="config">Config<a class="headerlink" href="#config" title="Permanent link">&para;</a></h3>
+<p>The settings are saved in a file, <code>settings.toml</code>. Here you can keep <strong>several</strong>: <strong>+</strong> adds one
+with the default values, and choosing one makes it the active one — handy to switch between two
+Trapper servers (a test one and the real one) or two sets of authorship. Each can be downloaded,
+and its folder opened.</p>
+<h2 id="5-import-a-deployment">5. Import a deployment<a class="headerlink" href="#5-import-a-deployment" title="Permanent link">&para;</a></h2>
+<p>Press <strong>📷 Import deployment</strong>. A wizard of seven steps — the bar at the top shows where you are;
+<strong>Back</strong> and <strong>Next</strong> move between them.</p>
+<h3 id="step-1-folder">Step 1 — Folder<a class="headerlink" href="#step-1-folder" title="Permanent link">&para;</a></h3>
+<p><img alt="Step 1 — Folder" src="../img/screenshots/step-folder.png" /></p>
+<p>Press <strong>Browse…</strong> and choose the folder with the deployment's images (or type its path), then
+<strong>Scan</strong>. The app reads the images and tells you how many files and images it found and the date
+range — <code>2024-09-04 → 2024-10-12</code> — and warns about anything odd. The camera model and the dates
+are guessed from here and offered again later, editable.</p>
+<h3 id="step-2-validate">Step 2 — Validate<a class="headerlink" href="#step-2-validate" title="Permanent link">&para;</a></h3>
+<p><img alt="Step 2 — Validate" src="../img/screenshots/step-validate.png" /></p>
+<p>Checks over the images alone, before anything is known about the deployment:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Looks for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Corrupted images</td>
+<td>Files that aren't readable images.</td>
+</tr>
+<tr>
+<td>Shooting order vs. filename sequence</td>
+<td>Images whose order by name differs from their order by time.</td>
+</tr>
+<tr>
+<td>Folder structure</td>
+<td>Subfolders inside the deployment's folder.</td>
+</tr>
+<tr>
+<td>Same camera</td>
+<td>More than one camera model or id among the images.</td>
+</tr>
+<tr>
+<td>Required EXIF fields</td>
+<td>Images missing the capture date, camera model or id.</td>
+</tr>
+<tr>
+<td>Duplicate images</td>
+<td>Files with the same content.</td>
+</tr>
+</tbody>
+</table>
+<p>For each check you choose whether to <strong>run</strong> it, and whether it is <strong>required</strong>: a required check
+that doesn't pass stops you from going on. The <em>all</em> boxes at the top of each column do it for the
+whole table. Press <strong>Run validation</strong>; the results are listed per check, and below them is the <a href="#9-reports">report</a> — which images failed which check, and why — with its downloads.</p>
+<p>Reading the camera's model and id uses ExifTool, because the serial number of a camera trap lives
+in the manufacturer's own metadata. Without it the app falls back to the standard EXIF tags,
+which are less complete — it says which it used.</p>
+<h3 id="step-3-origin">Step 3 — Origin<a class="headerlink" href="#step-3-origin" title="Permanent link">&para;</a></h3>
+<p><img alt="Step 3 — Origin" src="../img/screenshots/step-origin.png" /></p>
+<p><em>Where was it taken?</em> The <strong>research project</strong> and the <strong>location</strong> the images come from. They are
+kept in the collections folder; pick one already there, or add a new one:</p>
+<ul>
+<li><strong>By hand</strong> — the project's name and acronym (which names its folder); a location's id, name,
+  latitude, longitude, coordinate uncertainty, <strong>timezone</strong> and whether its cameras ignore summer
+  time.</li>
+<li><strong>From Trapper</strong> — pick the project, or its locations, from your Trapper account and they are
+  copied here, with their coordinates and timezone. The app connects by itself with the account
+  saved in the settings — it never asks for the credentials again; if there isn't one, it says so.</li>
+</ul>
+<h3 id="step-4-details">Step 4 — Details<a class="headerlink" href="#step-4-details" title="Permanent link">&para;</a></h3>
+<p><img alt="Step 4 — Details" src="../img/screenshots/step-details.png" /></p>
+<p>The deployment's own data. <strong>Revision</strong> starts as the next one expected for that location — one
+more than the highest kept — and says so; change it if needed, and the <strong>Deployment id</strong> is built.</p>
+<p>If an earlier revision of this deployment is kept, the app offers to <strong>fill in the form from it</strong>:
+everything is copied except the start and end dates. If the deployment <strong>already exists</strong> in the
+collections folder you are told, and the import would be refused as it would mix two sets of
+images: choose another revision or location, or move that folder away.</p>
+<p>The rest of the form follows <a href="https://camtrap-dp.tdwg.org">Camtrap DP</a>'s deployment table — the
+same fields as Trapper's own deployment form. Only the <strong>start and end dates</strong> are required (and
+come from the images' EXIF, guessed); everything else is optional, and can be completed later in
+Trapper. <em>Show all fields</em> reveals the whole list.</p>
+<table>
+<thead>
+<tr>
+<th>Card</th>
+<th>Fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Period</strong></td>
+<td>Start and end, as the camera's local time.</td>
+</tr>
+<tr>
+<td><strong>Camera</strong></td>
+<td>Camera id and model, delay between triggers, height <em>or</em> depth (not both), tilt, heading, detection distance, timestamp issues.</td>
+</tr>
+<tr>
+<td><strong>Site</strong></td>
+<td>Set up by, feature type (road, trail, burrow, water source…), habitat, bait used.</td>
+</tr>
+<tr>
+<td><strong>Grouping and notes</strong></td>
+<td>Deployment groups, tags, comments.</td>
+</tr>
+</tbody>
+</table>
+<p>The form is validated as you type, in the browser and again in the server: dates in order,
+latitude and longitude in range, tilt between −90 and 90, heading between 0 and 360.</p>
+<div class="admonition info">
+<p class="admonition-title">A timestamp log can set the dates</p>
+<p>If the collection has a <code>&lt;COLLECTION&gt;_FileTimestampLog.csv</code> — the file wildintel-tools asks
+for beside a collection's deployments — the dates are taken from it instead of from the
+images, and this step says so. In an <em>Import session</em>, the same applies to each deployment
+that has a row in it.</p>
+</div>
+<p>When you press <strong>Next</strong>, the deployment is added to the collection's timestamp log.</p>
+<h3 id="step-5-postvalidation">Step 5 — Postvalidation<a class="headerlink" href="#step-5-postvalidation" title="Permanent link">&para;</a></h3>
+<p><img alt="Step 5 — Postvalidation" src="../img/screenshots/step-checks.png" /></p>
+<p>Now that the deployment is known, its names and dates are checked, and the images against it:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Looks for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Deployment id format</td>
+<td><code>R0033-DONA_01</code>.</td>
+</tr>
+<tr>
+<td>Deployment id starts with its collection</td>
+<td><code>R0033-…</code> belongs to <code>R0033</code>.</td>
+</tr>
+<tr>
+<td>Collection name</td>
+<td><code>R0033</code>.</td>
+</tr>
+<tr>
+<td>The id's location is the one chosen</td>
+<td>The location in the id is the one from step 3.</td>
+</tr>
+<tr>
+<td>Image dates fit the deployment</td>
+<td>The first image at the start, the last at the end, within the tolerance.</td>
+</tr>
+<tr>
+<td>Camera consistency</td>
+<td>The camera in the images is the one in the details.</td>
+</tr>
+<tr>
+<td>Number of images</td>
+<td>Like the previous revisions of the location.</td>
+</tr>
+<tr>
+<td>Number of sequences</td>
+<td>Like the previous revisions of the location.</td>
+</tr>
+<tr>
+<td>Length of the sequences</td>
+<td>Like the previous revisions of the location.</td>
+</tr>
+</tbody>
+</table>
+<p>The last three are <strong>statistical</strong>: a location is visited again and again, so what earlier
+revisions looked like says what this one should — about as many photos, about as many sequences,
+as long. A camera that fired non-stop, or died early, stands out, and is worth a look <em>before</em> it
+is uploaded. They need at least the <em>previous revisions needed</em> of the settings, or they are
+skipped; what a sequence is, what "similar" means and what it is compared to are the
+<a href="#postvalidation">Postvalidation settings</a>.</p>
+<p>As in the validation step, each check can be run and required, and the <a href="#9-reports">report</a> lists what failed — and downloads.</p>
+<h3 id="step-6-preprocessing">Step 6 — Preprocessing<a class="headerlink" href="#step-6-preprocessing" title="Permanent link">&para;</a></h3>
+<p><img alt="Step 6 — Preprocessing" src="../img/screenshots/step-preprocessing.png" /></p>
+<p>The list of what will be done to the images as they are imported. The originals are never touched.</p>
+<ol>
+<li><strong>Copy into the collection</strong> — always. Anything that isn't an image is copied as it is.</li>
+<li><strong>Read the capture dates</strong> — always. From each image's EXIF, as the camera's local time in the
+   location's timezone — ignoring summer time and converting to UTC, as the settings say. An image
+   with no EXIF date uses its file's date.</li>
+<li><strong>Rename the images</strong> — <code>&lt;DEPLOYMENT&gt;__&lt;YYYYMMDD&gt;_&lt;n&gt;.&lt;EXT&gt;</code> in upper case, <code>.jpg</code> becoming
+   <code>.jpeg</code>, e.g. <code>R0003-DONA_01__20240904_1.JPEG</code>; <em>n</em> is the image's place in file-name order.</li>
+<li><strong>Resize the images</strong> — to the width of the settings, keeping proportions, EXIF and colour
+   profile. Unlike wildintel-tools, the resized image is the one that is kept.</li>
+<li><strong>Add metadata</strong> — authorship, rights and license, written into each image as XMP with
+   ExifTool: <em>Creator</em>, <em>Owner</em>, <em>Publisher</em>, <em>Rights</em>, <em>License</em>, <em>Coverage</em> and the hash of the
+   original and of the image kept, so each can be traced back. It is switched off, with the reason
+   given, if ExifTool isn't available. Check the owner and publisher in the settings first: if
+   they're blank, the step says so.</li>
+</ol>
+<p>Each optional step can be switched off for this run. Its values come from the
+<a href="#preprocessing">Preprocessing settings</a>.</p>
+<h3 id="step-7-import">Step 7 — Import<a class="headerlink" href="#step-7-import" title="Permanent link">&para;</a></h3>
+<p><img alt="Step 7 — Import, finished" src="../img/screenshots/step-import.png" /></p>
+<p>Press <strong>Import deployment</strong>. Each image is listed as it is copied — <code>[3/241] IMG_0003.JPG</code> — then
+the metadata is written and the deployment is <strong>sealed</strong>. Images that fail are <em>skipped</em> and
+reported, and don't stop the rest. The <a href="#9-reports">report</a> of the preprocessing is shown below, and says what was done to each image.</p>
+<p>A good import says where the deployment was kept, and offers:</p>
+<ul>
+<li><strong>Open folder in file explorer</strong>.</li>
+<li><strong>Upload to Trapper</strong> — straight to <a href="#7-upload-a-deployment-to-trapper">the upload page</a> with the
+  research project and the collection already chosen.</li>
+<li><strong>Start over</strong>.</li>
+</ul>
+<h4 id="what-gets-written-next-to-the-images">What gets written next to the images<a class="headerlink" href="#what-gets-written-next-to-the-images" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>deployment.json</code></td>
+<td>The details of step 4.</td>
+</tr>
+<tr>
+<td><code>images.json</code></td>
+<td>Per image: its name (and the original, if renamed), when it was taken — the camera's wall clock and the instant —, the camera, size and pixels, and hashes. It lets later checks, and the statistics of the next revisions, work without opening the images again.</td>
+</tr>
+<tr>
+<td><code>preprocessing.json</code></td>
+<td>What was done to each image, with its hashes: <code>source_hash</code> of the original, <code>hash</code> of the image kept, <code>final_hash</code> of the file with its metadata.</td>
+</tr>
+<tr>
+<td><code>seal.json</code></td>
+<td>Which validation and postvalidation checks the deployment and each image passed, and the hash of everything.</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>seal</strong> protects against changes by mistake: if an image or <code>deployment.json</code> is changed
+after the import, the seal no longer matches, and the app can tell. It is not a signature —
+whoever edits the files on purpose could seal them again.</p>
+<h2 id="6-import-a-session">6. Import a session<a class="headerlink" href="#6-import-a-session" title="Permanent link">&para;</a></h2>
+<p><img alt="Import session — the details of each deployment" src="../img/screenshots/session-details.png" /></p>
+<p>Press <strong>🗂️ Import session</strong>. A <strong>session</strong> is a folder with <strong>one subfolder per deployment</strong> — the
+usual way a field trip's images come home. The revision, the checks and the preprocessing are the
+same for all; the location, dates and camera are asked for each deployment.</p>
+<p>The steps are those of <a href="#5-import-a-deployment">Import a deployment</a>, with the differences below.</p>
+<ol>
+<li><strong>Session</strong> — choose the folder and <strong>Scan</strong>. Its subfolders are listed, each with its images
+   and warnings; tick the ones to import.</li>
+<li><strong>Validate</strong> — the checks run over every chosen deployment, and the result is shown for each.</li>
+<li><strong>Origin</strong> — one research project for the whole session.</li>
+<li><strong>Details</strong> — first the <strong>revision</strong>, common to the session, which names all the deployments
+   (<code>R0003-DONA_01</code>, <code>R0003-DONA_02</code>…). Then each deployment's own details: a <strong>list</strong> of them,
+   with how many are complete (<em>"12 of 40 deployments complete"</em>), a <em>filter by name</em>, and
+   <strong>Previous</strong>, <strong>Next</strong> and <strong>Next incomplete</strong> to move between them. Each deployment has its
+   own location — you pick it or add it — and no two can share one. <strong>Fill in from the previous
+   revision</strong> works on one deployment or on all that have one.</li>
+<li><strong>Postvalidation</strong> — for each deployment.</li>
+<li><strong>Preprocessing</strong> — one list for all.</li>
+<li><strong>Import</strong> — each deployment in turn, with its own result. If some fail, importing again
+   resumes with the ones that are still pending.</li>
+</ol>
+<p>When it ends, <strong>Upload to Trapper</strong> goes to the upload page with the collection chosen.</p>
+<p>If the session folder has a <code>&lt;COLLECTION&gt;_FileTimestampLog.csv</code>, the dates of each deployment with
+a row in it come from there, and the details say so.</p>
+<h2 id="7-upload-a-deployment-to-trapper">7. Upload a deployment to Trapper<a class="headerlink" href="#7-upload-a-deployment-to-trapper" title="Permanent link">&para;</a></h2>
+<p><img alt="Upload — Test connection" src="../img/screenshots/upload.png" /></p>
+<p>Press <strong>☁️ Upload deployment to Trapper</strong>. It sends deployments kept in the collections folder.
+For each one it does what wildintel-tools did in three commands:</p>
+<ol>
+<li>creates the <strong>location</strong> in Trapper, from the deployment's coordinates, if the research project
+   doesn't have it, and the <strong>deployment</strong>, from its details;</li>
+<li>packs the images in <strong>zips</strong> and the <strong>yaml</strong> that describes them — what was recorded when —,
+   splitting in several parts when a zip would be larger than the limit;</li>
+<li>uploads each zip and its yaml, and tells Trapper to <strong>process them into a collection</strong>.</li>
+</ol>
+<p>The deployment must have been imported with the wizard — the yaml needs the dates its
+<code>preprocessing.json</code> records. One that wasn't says "Not preprocessed — import it again through the
+wizard before uploading it", and can't be ticked.</p>
+<h3 id="trapper_1">Trapper<a class="headerlink" href="#trapper_1" title="Permanent link">&para;</a></h3>
+<p>The account is the one saved in the settings. <strong>Test connection</strong> checks, changing nothing, that
+the account reaches the research project, its locations (and which of the deployments' own would
+be created) and the uploader's login, each reported on its own. Do it before a big upload.</p>
+<h3 id="what-to-upload">What to upload<a class="headerlink" href="#what-to-upload" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Research project</strong> — those kept in the collections folder.</li>
+<li><strong>Collection</strong> — and under it its deployments, each with how many images, its dates, and
+   whether it was already uploaded. The ones left to send start ticked.</li>
+<li><strong>Classification project</strong> — the collection is created in one of Trapper's classification
+   projects for the research project: pick it (or, if there is only one, it is used). Without a
+   Trapper account, type its pk.</li>
+</ol>
+<h3 id="what-to-do">What to do<a class="headerlink" href="#what-to-do" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Upload</strong></td>
+<td>The real thing.</td>
+</tr>
+<tr>
+<td><strong>Dry run</strong></td>
+<td>Looks at Trapper and says what would be created and how the images would be packed. Nothing is created, sent or written.</td>
+</tr>
+<tr>
+<td><strong>Only generate the files</strong></td>
+<td>Writes the zips, the yamls and the collection's <code>_deployments.csv</code> and leaves them, to send some other way. Needs no account if the research project was filled in from Trapper.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Largest zip (MB)</strong> — a deployment's images go up in zips of at most this size (500 by default,
+up to 5000).</p>
+<p>Press the button — <em>Upload 2 deployments</em>. Each deployment gets a card (below) with the steps it goes
+through (<em>connect</em>, <em>classification</em>, <em>location</em>, <em>deployment</em>, <em>package</em>, <em>csv</em>, <em>upload</em>,
+<em>process</em>, <em>wait</em>) each marked as running, done or skipped, a bar while a file goes up, and the
+outcome. When one fails, the others go on, and the summary says so: <em>"2 deployment(s) uploaded, 1
+failed."</em> <strong>Upload more</strong> starts over.</p>
+<p><img alt="An upload midway: the first deployment is done, the second is sending its zip" src="../img/screenshots/upload-running.png" /></p>
+<p>The zips and yamls are written under <code>&lt;images folder&gt;/packages/&lt;research project&gt;/</code>. A deployment
+that was uploaded gets an <code>upload.json</code>, which is what the list uses to say so.</p>
+<h2 id="8-sync-local-collections">8. Sync local collections<a class="headerlink" href="#8-sync-local-collections" title="Permanent link">&para;</a></h2>
+<p><img alt="Sync local collections" src="../img/screenshots/sync.png" /></p>
+<p>Press <strong>🔄 Sync local collections</strong>. Use it when Trapper already has deployments that the
+collections folder doesn't — say, imported years ago, or from another computer — so that the
+statistics of the <em>next</em> revisions can compare with them, and the folder reflects what Trapper
+holds.</p>
+<ol>
+<li>Pick a <strong>research project</strong>, then one of its <strong>classification projects</strong>.</li>
+<li>Pick a <strong>collection</strong> (those of the classification project whose name starts with <code>R</code>) and,
+   under it, the <strong>deployments</strong> to sync — with <em>Select all</em>.</li>
+<li>Press <strong>Sync</strong>.</li>
+</ol>
+<p>What is missing is created, one deployment at a time, and a live log says what is happening:</p>
+<ul>
+<li>the research project (<code>research_project.json</code>) and its <code>locations.json</code>;</li>
+<li>the collection (with its <code>collection.json</code> and <code>&lt;collection&gt;_FileTimestampLog.csv</code>);</li>
+<li>each chosen deployment's <code>deployment.json</code>, in the collection its id starts with, and an
+  <code>images.json</code> made from what Trapper holds for its images (names, when they were taken,
+  observations).</li>
+</ul>
+<p>What is already in the folder is <strong>left as it is</strong>, whatever Trapper says. <strong>Nothing is changed in
+Trapper</strong>, and <strong>no image is downloaded</strong> — so there is no <code>preprocessing.json</code>, and the size,
+pixels and hashes are missing from <code>images.json</code>, which is marked <code>"source": "trapper"</code>. A
+deployment synced this way is <em>read-only</em> for the app: what Trapper holds isn't modified here.</p>
+<p>The result lists, per kind, what was created and what was already there, the deployments no
+collection of the classification project claims, and any that Trapper holds in a way that isn't a
+valid deployment — with the reason — and were left out.</p>
+<h2 id="9-reports">9. Reports<a class="headerlink" href="#9-reports" title="Permanent link">&para;</a></h2>
+<p>Every <strong>validation</strong>, <strong>postvalidation</strong> and <strong>preprocessing</strong> leaves a <strong>report</strong> of what it checked and did,
+image by image. The step shows it right below its results — the same file you can download, so what you see is
+what is kept:</p>
+<ul>
+<li>the <strong>checks</strong>, with how many images passed and how many failed each;</li>
+<li>the <strong>images that failed</strong>, with the check and why — <em>IMG_0087.JPG · Duplicate images · same content as IMG_0087 (copy).JPG</em> —
+  that can be narrowed to one check, and are shown 100 at a time;</li>
+<li><strong>Download CSV</strong> — a row per image and check, to open in a spreadsheet — and <strong>Download JSON</strong>, with everything: when it
+  was made, the folder, the parameters it was run with and every entry.</li>
+</ul>
+<p><img alt="Reports" src="../img/screenshots/reports.png" /></p>
+<p>What each report holds:</p>
+<table>
+<thead>
+<tr>
+<th>Report</th>
+<th>An entry for</th>
+<th>Says</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Validation</strong></td>
+<td>each image and check — corrupted, shooting order, EXIF fields, duplicates —, and the folder for the structure and camera checks</td>
+<td>The ones that passed too, so the report says what was checked, not only what failed.</td>
+</tr>
+<tr>
+<td><strong>Postvalidation</strong></td>
+<td>the deployment for the naming and statistical checks, and each image for its date and camera</td>
+<td>Why a check failed — <em>241 images — like the previous revisions (median 238, ±50 %)</em>.</td>
+</tr>
+<tr>
+<td><strong>Preprocessing</strong></td>
+<td>each image</td>
+<td>What was done — <em>IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized</em> — and the ones that were <strong>skipped</strong>, with the reason.</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>📑 Reports</strong> task of the menu lists all of them, newest first, with <em>View</em>, <em>CSV</em>, <em>JSON</em> and <em>Delete</em> (which
+asks again). They are kept in the <code>reports</code> folder of the images folder until you delete them. A check you run twice
+makes two reports.</p>
+<h2 id="10-where-the-app-keeps-its-files">10. Where the app keeps its files<a class="headerlink" href="#10-where-the-app-keeps-its-files" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Settings</td>
+<td><code>settings.toml</code> in the app's config folder: <code>~/.config/wildintel-uploader/</code> (Linux), <code>%APPDATA%\wildintel-uploader\</code> (Windows), <code>~/Library/Application Support/wildintel-uploader/</code> (macOS). More configs in <code>configs/</code> there.</td>
+</tr>
+<tr>
+<td>Log</td>
+<td><code>logs/wildintel-uploader.log</code> next to it.</td>
+</tr>
+<tr>
+<td>Collections</td>
+<td><code>Documents/wildintel-uploader/collections/</code> (or <em>Images folder</em> of the settings).</td>
+</tr>
+<tr>
+<td>Packages to upload</td>
+<td><code>Documents/wildintel-uploader/packages/</code>.</td>
+</tr>
+<tr>
+<td>Unfinished runs</td>
+<td><code>Documents/wildintel-uploader/sessions/</code>.</td>
+</tr>
+<tr>
+<td>Reports</td>
+<td><code>Documents/wildintel-uploader/reports/</code> — one JSON file each.</td>
+</tr>
+</tbody>
+</table>
+<p>From a terminal, <code>wildintel-uploader config path</code> prints them — see the
+<a href="../user-manual-cli/#3-settings">command-line manual</a>.</p>
+<h2 id="11-troubleshooting">11. Troubleshooting<a class="headerlink" href="#11-troubleshooting" title="Permanent link">&para;</a></h2>
+<dl>
+<dt><strong>"Backend not reachable — is the server running?"</strong></dt>
+<dd>The red bar at the top. The window that started the app was closed, or it crashed. Start the app
+again, and look at the log (Settings › General) if it recurs.</dd>
+<dt><strong>The browser doesn't open</strong></dt>
+<dd>Open <a href="http://127.0.0.1:8769">http://127.0.0.1:8769</a> yourself. If that port was busy the app took the next free one:
+the window that started it says which (<code>Server on http://127.0.0.1:8770</code>).</dd>
+<dt><strong>"Incorrect Trapper username or password"</strong></dt>
+<dd>The username is the <strong>email</strong> of your account. Check it in Settings › Trapper and press
+<strong>Test connection</strong>.</dd>
+<dt><strong>"Could not connect to the Trapper server"</strong></dt>
+<dd>The URL is wrong — it needs <code>https://</code> and no trailing path — or the server is down or
+unreachable from your network.</dd>
+<dt><strong>The metadata step is greyed out: "ExifTool is not installed"</strong></dt>
+<dd>The downloadable app ships its own ExifTool. Running from the source code, install it
+(<code>sudo apt install libimage-exiftool-perl</code>, <code>brew install exiftool</code>) — or switch the step off.</dd>
+<dt><strong>"This deployment already exists"</strong></dt>
+<dd>A deployment with that id is already kept in the collections folder. Choose another revision or
+location, or move that folder away; importing would otherwise mix two sets of images.</dd>
+<dt><strong>A location has no timezone</strong></dt>
+<dd>Added by hand without one, or synced from a Trapper location that has none. Edit it in the
+<em>Origin</em> step; the app won't guess it.</dd>
+<dt><strong>"Not preprocessed — import it again through the wizard"</strong></dt>
+<dd>The deployment has no <code>preprocessing.json</code>: it was copied by hand, or synced from Trapper (which
+already has its images). Only deployments imported with the wizard can be uploaded.</dd>
+<dt><strong>The upload says Trapper refuses the package</strong></dt>
+<dd>Trapper checks the package's timezone and summer-time setting against the location's. If you
+changed them for the location in Trapper, they must be the same here — edit the location in the
+<em>Origin</em> step.</dd>
+<dt><strong>The upload fails with "Trapper's uploader accepted the login but gave no session"</strong></dt>
+<dd>The uploader's login answered without the session it should hand out. The message includes what
+Trapper said: send it to the Trapper administrator, or attach it to a bug report.</dd>
+<dt><strong>Files ending in <code>_exiftool_tmp</code> in a deployment's folder</strong></dt>
+<dd>ExifTool writes the metadata of each image through a temporary file; one it was interrupted in
+(the app stopped in the middle of an import) is left behind. The app removes them when the
+metadata step ends, or fails, but not if it was killed: delete them, and import again.</dd>
+<dt><strong>An image was skipped</strong></dt>
+<dd>The import lists skipped images with the reason, and goes on with the rest. A corrupted file is
+the usual cause; the <em>Corrupted images</em> validation finds them before importing.</dd>
+<dt><strong>Reporting a problem</strong></dt>
+<dd>Set the log level to <code>DEBUG</code> (Settings › General), repeat the steps and attach the log file
+to the report at
+<a href="https://github.com/wildintelproject/wildintel-uploader/issues">github.com/wildintelproject/wildintel-uploader/issues</a>.</dd>
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 <a href="https://wildintel.eu/">WildINTEL</a>
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/wildintelproject" target="_blank" rel="noopener" title="WildINTEL on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://wildintel.eu/" target="_blank" rel="noopener" title="WildINTEL website" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/termynal.js"></script>
+      
+        <script src="../javascripts/termynal-setup.js"></script>
+      
+    
+  </body>
+</html>
