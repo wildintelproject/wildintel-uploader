@@ -237,6 +237,10 @@ export const api = {
       research_project_id: researchProjectId, collection, deployment_ids: deploymentIds, classification_project_pk: classificationProjectPk,
     }),
 
+  // Whether the saved account has access to the research project and the collection chosen — changing nothing.
+  checkUploadSelection: (researchProjectId: string, collection: string) =>
+    post<{ checks: AccessCheck[] }>('/api/upload/check-selection', { research_project_id: researchProjectId, collection }),
+
   // The classification projects Trapper has for a research project kept locally — the collection goes to one of them.
   uploadClassificationProjects: (researchProjectId: string) =>
     post<{ results: ClassificationProject[] }>('/api/upload/classification-projects', { research_project_id: researchProjectId }),

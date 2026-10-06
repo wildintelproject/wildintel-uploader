@@ -458,7 +458,9 @@ wizard before uploading it", and can't be ticked.
 
 1. **Research project** — those kept in the collections folder.
 2. **Collection** — and under it its deployments, each with how many images, its dates, and
-   whether it was already uploaded. The ones left to send start ticked.
+   whether it was already uploaded. The ones left to send start ticked. As soon as the research project and the
+   collection are chosen, a message says whether **the account saved in the settings has access** to both in Trapper (and whether the
+   collection is already there, so the upload adds to it, or the upload creates it).
 3. **Classification project** — the collection is created in one of Trapper's classification
    projects for the research project: pick it (or, if there is only one, it is used). Without a
    Trapper account, type its pk.

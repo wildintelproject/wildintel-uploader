@@ -281,3 +281,17 @@ def test_open_folder_404_when_missing(tmp_path):
             patch("wildintel_uploader.web.api.routers.deployment_import._open_in_file_manager"):
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(tmp_path / "nope")})
     assert response.status_code == 404
+
+
+def test_checking_the_selection_says_what_the_account_sees_of_the_project_and_the_collection(tmp_path: Path):
+    _kept(tmp_path)
+    payload = {k: v for k, v in PAYLOAD.items() if k != "deployment_id"}
+
+    with _in(tmp_path / "collections"), patch.object(trapper_service, "_client", return_value=FakeTrapper()):
+        response = _client().post("/api/upload/check-selection", json=payload)
+        unknown = _client().post("/api/upload/check-selection", json={**payload, "research_project_id": "NOPE"})
+        no_collection = _client().post("/api/upload/check-selection", json={k: v for k, v in payload.items() if k != "collection"})
+
+    assert response.status_code == 200
+    assert [(c["check"], c["ok"]) for c in response.json()["checks"]] == [("research_project", True), ("collection", True)]
+    assert unknown.status_code == 404 and no_collection.status_code == 400

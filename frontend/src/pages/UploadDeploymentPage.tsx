@@ -30,7 +30,7 @@ interface Run {
 }
 
 const ACCESS_LABELS: Record<AccessCheck['check'], string> = {
-  research_project: 'Research project', classification_project: 'Classification project', location: 'Locations', uploader: 'Uploader',
+  research_project: 'Research project', collection: 'Collection', classification_project: 'Classification project', location: 'Locations', uploader: 'Uploader',
 }
 
 const EMPTY_RUN: Run = { steps: {}, progress: null, result: null, error: null }
@@ -95,6 +95,10 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
   const [classificationError, setClassificationError] = useState<string | null>(null)
   const [classificationPk, setClassificationPk] = useState('')
   const [access, setAccess] = useState<AccessCheck[] | null>(null)
+  // Whether the account has access to the research project and the collection chosen — looked up as soon as both are.
+  const [selectionChecks, setSelectionChecks] = useState<AccessCheck[] | null>(null)
+  const [checkingSelection, setCheckingSelection] = useState(false)
+  const [selectionError, setSelectionError] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
   const [accessError, setAccessError] = useState<string | null>(null)
 
@@ -168,6 +172,24 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, connected])
 
+  useEffect(() => {
+    setSelectionChecks(null); setSelectionError(null)
+    if (!projectId || !collectionName || !connected) { setCheckingSelection(false); return }
+    let cancelled = false
+    setCheckingSelection(true)
+    ;(async () => {
+      try {
+        const { checks } = await api.checkUploadSelection(projectId, collectionName)
+        if (!cancelled) setSelectionChecks(checks)
+      } catch (e) {
+        if (!cancelled) setSelectionError(e instanceof Error ? e.message : 'Could not check the access.')
+      } finally {
+        if (!cancelled) setCheckingSelection(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [projectId, collectionName, connected])
+
   const classificationValue = classificationPk.trim() === '' ? null : Number(classificationPk)
   const classificationValid = classificationValue === null || (Number.isInteger(classificationValue) && classificationValue >= 1)
   // The yaml needs one: with an account it is the one picked (or the only one); offline, the pk typed in.
@@ -233,6 +255,15 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
               value={collectionName} onChange={chooseCollection} disabled={uploading}
               placeholder={collections.length === 0 ? 'No collections yet' : 'Select a collection…'} clearLabel="Clear collection"
             />
+            {checkingSelection && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Checking your access in Trapper…</p>}
+            {selectionError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{selectionError}</p>}
+            {selectionChecks && (
+              <ul className="mt-1 space-y-0.5 text-xs" aria-label="Access to the selection">
+                {selectionChecks.map((c) => (
+                  <li key={c.check} className={c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>{c.ok ? '✔' : '⚠'} {c.message}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

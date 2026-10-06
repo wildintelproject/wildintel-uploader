@@ -863,6 +863,20 @@ def test_each_access_check_fails_on_its_own(monkeypatch: pytest.MonkeyPatch):
     assert "has no classification project" in checks[1]["message"]
 
 
+def test_checking_the_selection_says_whether_the_collection_is_there_or_would_be_created():
+    with _with(FakeTrapper(collections_appear=True)):
+        there = up.check_selection(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, "R0003")
+    with _with(FakeTrapper(collections_appear=False)):
+        new = up.check_selection(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, "R0003")
+    with _with(FakeTrapper(projects=[])):
+        nothing = up.check_selection(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None}, "R0003")
+
+    assert [(c["check"], c["ok"]) for c in there] == [("research_project", True), ("collection", True)]
+    assert "already in Trapper" in there[1]["message"]
+    assert "creates it" in new[1]["message"] and new[1]["ok"]
+    assert [c["ok"] for c in nothing] == [False, False] and "Not checked" in nothing[1]["message"]
+
+
 # ── the uploader's login ─────────────────────────────────────────────────────
 
 def _login(handler) -> httpx.Request | None:

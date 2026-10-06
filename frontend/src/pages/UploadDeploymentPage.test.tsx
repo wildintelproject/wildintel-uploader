@@ -7,7 +7,7 @@ import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { LocalResearchProject, UploadCollection, UploadDeploymentInfo, UploadEvent } from '../types'
 
 vi.mock('../api', () => ({
-  api: { listResearchProjects: vi.fn(), uploadCollections: vi.fn(), uploadDeployment: vi.fn(), openFolder: vi.fn(), trapperGetConfig: vi.fn(), checkUploadAccess: vi.fn(), uploadClassificationProjects: vi.fn() },
+  api: { listResearchProjects: vi.fn(), uploadCollections: vi.fn(), uploadDeployment: vi.fn(), openFolder: vi.fn(), trapperGetConfig: vi.fn(), checkUploadAccess: vi.fn(), checkUploadSelection: vi.fn(), uploadClassificationProjects: vi.fn() },
 }))
 
 const mockedApi = vi.mocked(api)
@@ -51,6 +51,10 @@ beforeEach(() => {
   mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice@example.org', has_password: true })
   mockedApi.uploadClassificationProjects.mockResolvedValue({ results: [{ pk: 7, name: 'Doñana classification', is_active: true }] })
   mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mb, _mode, onEvent) => { STEP_EVENTS(id).forEach(onEvent) })
+  mockedApi.checkUploadSelection.mockResolvedValue({ checks: [
+    { check: 'research_project', ok: true, message: 'You have access to the research project DONA (#2) in Trapper.' },
+    { check: 'collection', ok: true, message: 'You have access to the collection R0003: it is already in Trapper, so the upload adds to it.' },
+  ] })
 })
 
 async function pickCollection(name = 'R0003') {
@@ -347,6 +351,26 @@ describe('UploadDeploymentPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Upload 2 deployments' }))
       await screen.findByText(/2 deployment\(s\) uploaded\./)
       expect(mockedApi.uploadDeployment.mock.calls[0][6]).toBe(8)
+    })
+  })
+
+  describe('the access to what was chosen', () => {
+    it('says whether the account has access to the research project and the collection, once both are chosen', async () => {
+      await pickCollection()
+
+      const list = await screen.findByRole('list', { name: 'Access to the selection' })
+      expect(mockedApi.checkUploadSelection).toHaveBeenCalledWith('DONA', 'R0003')
+      expect(within(list).getByText(/access to the research project DONA/)).toBeInTheDocument()
+      expect(within(list).getByText(/access to the collection R0003/)).toBeInTheDocument()
+    })
+
+    it('says so when the account has no access, and when it cannot be checked', async () => {
+      mockedApi.checkUploadSelection.mockResolvedValueOnce({ checks: [
+        { check: 'research_project', ok: false, message: 'Trapper has no research project DONA.' },
+        { check: 'collection', ok: false, message: 'Not checked: the research project couldn\u2019t be found.' },
+      ] })
+      await pickCollection()
+      expect(await screen.findByText(/Trapper has no research project DONA/)).toBeInTheDocument()
     })
   })
 

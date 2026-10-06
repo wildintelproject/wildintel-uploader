@@ -291,6 +291,10 @@
       'POST /api/sessions/details': (body) => ({ ...UNFINISHED[0], task_id: body.task_id, phase: 'ready' }),
       'POST /api/upload/collections': () => ({ results: UPLOAD_COLLECTIONS }),
       'POST /api/upload/classification-projects': () => ({ results: [{ pk: 10, name: 'DONA 2024', is_active: true }] }),
+      'POST /api/upload/check-selection': () => ({ checks: [
+        { check: 'research_project', ok: true, message: 'You have access to the research project DONA (#2) in Trapper.' },
+        { check: 'collection', ok: true, message: 'You have access to the collection R0003: it is already in Trapper, so the upload adds to it.' },
+      ] }),
       'POST /api/upload/check-access': () => ({ checks: [
         { check: 'research_project', ok: true, message: 'Research project DONA found in Trapper (pk 2).' },
         { check: 'classification_project', ok: true, message: 'Classification project DONA 2024 (pk 10).' },

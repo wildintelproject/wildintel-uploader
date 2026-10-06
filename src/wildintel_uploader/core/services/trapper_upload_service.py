@@ -551,6 +551,31 @@ def check_access(
     return checks
 
 
+def check_selection(credentials: tuple[str, str, str], research_project: dict, collection: str, *, describe: Callable[[Exception], str] = str) -> list[dict]:
+    """What the account sees of the research project and the collection about to be uploaded, changing nothing —
+    [{"check": "research_project" | "collection", "ok", "message"}]. The collection is "ok" whether it is already in Trapper
+    (the upload adds to it) or isn't yet (the upload creates it): what matters is that the account can read the research
+    project's collections."""
+    checks: list[dict] = []
+    try:
+        project_pk = find_research_project(credentials, research_project)
+    except Exception as exc:
+        message = describe(exc)
+        return [{"check": "research_project", "ok": False, "message": message}, {"check": "collection", "ok": False, "message": "Not checked: the research project couldn't be found."}]
+    checks.append({"check": "research_project", "ok": True, "message": f"You have access to the research project {research_project.get('acronym')} (#{project_pk}) in Trapper."})
+    try:
+        client = trapper_service.client(*credentials)
+        found = [c for c in client.collections.where(research_projects=project_pk, search=collection) if c.name == collection]
+        if found:
+            message = f"You have access to the collection {collection}: it is already in Trapper, so the upload adds to it."
+        else:
+            message = f"You can read the collections of the research project; {collection} isn't in Trapper yet, so the upload creates it."
+        checks.append({"check": "collection", "ok": True, "message": message})
+    except Exception as exc:
+        checks.append({"check": "collection", "ok": False, "message": describe(exc)})
+    return checks
+
+
 def _wait_for_collection(client, research_project_pk: int, name: str, *, timeout: float, poll: float) -> bool:
     deadline = time.monotonic() + timeout
     while True:

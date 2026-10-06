@@ -50,6 +50,25 @@ def classification_projects(req: UploadClassificationProjectsRequest) -> dict:
         raise http_exc(exc) from exc
 
 
+@router.post("/check-selection")
+def check_selection(req: AccessCheckRequest) -> dict:
+    """Whether the account has access to the research project and the collection chosen — {"checks": [{"check", "ok", "message"}]},
+    always a 200 so a refusal says why."""
+    credentials = resolve(req)
+    if not req.collection:
+        raise HTTPException(400, "Say which collection.")
+    records = {p["acronym"]: p for p in local_folder_service.list_research_projects(config.collections_dir())}
+    record = records.get(req.research_project_id)
+    if record is None:
+        raise HTTPException(404, f"The research project '{req.research_project_id}' isn't in the collections folder.")
+
+    def describe(exc: Exception) -> str:
+        logger.warning("Checking the selection in Trapper failed: %s", exc, exc_info=debugging())
+        return str(exc) if isinstance(exc, trapper_upload_service.TrapperUploadError) else http_exc(exc).detail
+
+    return {"checks": trapper_upload_service.check_selection(credentials, record, req.collection, describe=describe)}
+
+
 @router.post("/check-access")
 def check_access(req: AccessCheckRequest) -> dict:
     """Whether the account can reach what an upload needs — the research project, its locations (and which of the

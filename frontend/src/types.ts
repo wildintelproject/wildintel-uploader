@@ -573,7 +573,7 @@ export interface UploadCollection {
 /** What an upload goes through, in order. */
 /** One thing an upload needs, checked without changing anything in Trapper. */
 export interface AccessCheck {
-  check: 'research_project' | 'classification_project' | 'location' | 'uploader'
+  check: 'research_project' | 'collection' | 'classification_project' | 'location' | 'uploader'
   ok: boolean
   message: string
 }
