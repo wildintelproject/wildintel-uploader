@@ -23,7 +23,7 @@ vi.mock('../api', () => ({
     browseFolder: vi.fn(),
     scanFolder: vi.fn(), guessDetails: vi.fn(),
     importDeployment: vi.fn(),
-    importLocal: vi.fn(),
+    importLocal: vi.fn(), preprocess: vi.fn(), consolidate: vi.fn(),
     openFolder: vi.fn(),
     existingDeployments: vi.fn(),
     previousDeployments: vi.fn(),
@@ -104,6 +104,12 @@ beforeEach(() => {
   mockedApi.saveScan.mockResolvedValue({ task_id: 'task-1' } as never)
   mockedApi.saveDetails.mockResolvedValue({ task_id: 'task-1' } as never)
   mockedApi.discardSession.mockResolvedValue({ status: 'discarded' })
+  mockedApi.preprocess.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+    onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0, sealed: null, report_id: null })
+  })
+  mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
+    onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0, sealed: true })
+  })
 })
 
 // ── Step-by-step helpers ─────────────────────────────────────────────────────
@@ -187,10 +193,17 @@ async function advanceToPreprocessing() {
   await screen.findByText('Preprocessing', { selector: 'h4' })
 }
 
-/** From the postvalidation → step "import", through the preprocessing list. */
+/** Runs the preprocessing, and goes on when it is done. */
+async function runPreprocessingAndContinue() {
+  await userEvent.click(screen.getByRole('button', { name: 'Run preprocessing' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled())
+  await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+}
+
+/** From the postvalidation → step "import", through the preprocessing. */
 async function advanceToImportStep() {
   await advanceToPreprocessing()
-  await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+  await runPreprocessingAndContinue()
   await screen.findByText('Import', { selector: 'h4' })
 }
 
@@ -227,7 +240,7 @@ describe('ImportDeploymentPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(await screen.findByText('Preprocessing', { selector: 'h4' })).toBeInTheDocument() // the list of what is done to the images
 
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await runPreprocessingAndContinue()
     expect(await screen.findByText('Import', { selector: 'h4' })).toBeInTheDocument()
   })
 
@@ -1575,7 +1588,7 @@ describe('ImportDeploymentPage', () => {
 
       expect(screen.queryByText('Import', { selector: 'h4' })).not.toBeInTheDocument()
       for (const title of ['Copy into the collection', 'Read the capture dates', 'Rename the images', 'Resize the images', 'Add metadata']) {
-        expect(screen.getByText(title, { selector: 'h5' })).toBeInTheDocument()
+        expect(screen.getByText(title)).toBeInTheDocument()
       }
       expect(screen.getAllByText('Always')).toHaveLength(2) // copying and reading the dates aren't optional
       expect(screen.getByText(/originals in the source folder are never touched/)).toBeInTheDocument()
@@ -1677,12 +1690,12 @@ describe('ImportDeploymentPage', () => {
 
     it('offers to open the created folder in the file explorer once imported', async () => {
       mockedApi.openFolder.mockResolvedValue({ opened: `${COLLECTIONS_DIR}/R0001-DONA_01` })
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0 })
       })
       await goToPostvalidation()
       await advanceToPreprocessing()
-      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await runPreprocessingAndContinue()
       await screen.findByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
       expect(screen.queryByRole('button', { name: 'Open folder in file explorer' })).not.toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
@@ -1695,12 +1708,12 @@ describe('ImportDeploymentPage', () => {
     it('offers to go on to the upload of the collection it was imported into, once imported', async () => {
       const onUpload = vi.fn()
       pageProps = { onUpload }
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0 })
       })
       await goToPostvalidation()
       await advanceToPreprocessing()
-      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await runPreprocessingAndContinue()
       await screen.findByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
       expect(screen.queryByRole('button', { name: 'Upload to Trapper' })).not.toBeInTheDocument() // not before it is imported
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
@@ -1711,12 +1724,12 @@ describe('ImportDeploymentPage', () => {
     })
 
     it('has no upload button when the page cannot go anywhere', async () => {
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0 })
       })
       await goToPostvalidation()
       await advanceToPreprocessing()
-      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await runPreprocessingAndContinue()
       await userEvent.click(await screen.findByRole('button', { name: 'Import deployment' }))
 
       await screen.findByText(/Deployment imported/)
@@ -1726,19 +1739,19 @@ describe('ImportDeploymentPage', () => {
     it('imports with the steps left ticked, and the values of the settings', async () => {
       locationsWithoutSummerTime()
       mockedApi.getSettings.mockResolvedValue(preSettings({ resize_width: 1600, owner: 'Universidad de Huelva', ignore_dst: false }))
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 0 })
       })
       await goToPostvalidation()
       await advanceToPreprocessing()
       await waitFor(() => expect(screen.getByText('1600 px')).toBeInTheDocument())
       await userEvent.click(screen.getByRole('checkbox', { name: 'Resize the images' })) // not this time
-      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await runPreprocessingAndContinue()
       await screen.findByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
 
       await screen.findByText(/Deployment imported/)
-      expect(mockedApi.importLocal).toHaveBeenCalledWith(
+      expect(mockedApi.preprocess).toHaveBeenCalledWith(
         '/home/me/deployments/DONA_01', COLLECTIONS_DIR, 'R0001', expect.anything(),
         {
           rename: true, resize: false, resize_width: 1600, metadata: true, owner: 'Universidad de Huelva', publisher: '', coverage: '',
@@ -1763,7 +1776,7 @@ describe('ImportDeploymentPage', () => {
 
     it('cannot add metadata without ExifTool: that step is disabled and not sent', async () => {
       mockedApi.exiftoolStatus.mockResolvedValue({ available: false, path: null })
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })
       })
       await goToPostvalidation()
@@ -1774,43 +1787,61 @@ describe('ImportDeploymentPage', () => {
       expect(metadata).toBeDisabled()
       expect(metadata).not.toBeChecked()
 
-      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await runPreprocessingAndContinue()
       await screen.findByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
       await screen.findByText(/Deployment imported/)
-      expect(mockedApi.importLocal.mock.calls[0][4]).toEqual(expect.objectContaining({ rename: true, resize: true, metadata: false }))
+      expect(mockedApi.preprocess.mock.calls[0][4]).toEqual(expect.objectContaining({ rename: true, resize: true, metadata: false }))
     })
 
-    it('always lets the user continue — every optional step can be off', async () => {
+    it('can run with every optional step off', async () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
       for (const name of ['Rename the images', 'Resize the images', 'Add metadata']) await userEvent.click(screen.getByRole('checkbox', { name }))
 
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
+      await runPreprocessingAndContinue()
+      expect(await screen.findByText('Import', { selector: 'h4' })).toBeInTheDocument()
+      expect(mockedApi.preprocess.mock.calls[0][4]).toEqual(expect.objectContaining({ rename: false, resize: false, metadata: false }))
+    })
+
+    it('cannot go on before the preprocessing has run, and has to run it again after going back', async () => {
+      await goToPostvalidation()
+      await advanceToPreprocessing()
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+      expect(screen.getByText('Run the preprocessing to continue.')).toBeInTheDocument()
+
+      await runPreprocessingAndContinue()
+      await screen.findByText('Import', { selector: 'h4' })
+      await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled() // still done: nothing before it changed
+
+      await userEvent.click(screen.getByRole('button', { name: 'Back' }))
       await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-      expect(await screen.findByText(/organize the images into their collection in the local collections folder, as they are/)).toBeInTheDocument()
+      await screen.findByText('Preprocessing', { selector: 'h4' })
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled() // what it did may be stale now
     })
 
-    it('says in the import step what will be done', async () => {
-      await walkToImportStep()
-
-      expect(screen.getByText(/renaming, resizing and adding metadata to them/)).toBeInTheDocument()
-    })
-
-    it('shows the progress of the metadata, and the images that had to be skipped', async () => {
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+    it('shows the progress of the preprocessing, and the images that had to be skipped', async () => {
+      mockedApi.preprocess.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
         onEvent({ type: 'copy', index: 1, total: 2, name: 'R0001-DONA_01__20240904_1.JPEG' })
         onEvent({ type: 'skipped', name: 'IMG_0002.JPG', detail: 'cannot identify image file' })
         onEvent({ type: 'metadata', total: 1 })
-        onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 1 })
+        onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01`, processed: 1, skipped: 1, sealed: null, report_id: null })
       })
-      await walkToImportStep()
-      await screen.findByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
+      await goToPostvalidation()
+      await advanceToPreprocessing()
+      await userEvent.click(screen.getByRole('button', { name: 'Run preprocessing' }))
 
       expect(await screen.findByText(/Skipped IMG_0002\.JPG: cannot identify image file/)).toBeInTheDocument()
       expect(screen.getByText('Writing the metadata of 1 image(s)…')).toBeInTheDocument()
-      expect(screen.getByText(/Imported 1 image\(s\), 1 skipped — organized in/)).toBeInTheDocument()
+      expect(screen.getByText('[1/2] R0001-DONA_01__20240904_1.JPEG')).toBeInTheDocument()
+    })
+
+    it('says in the import step that it consolidates the deployment', async () => {
+      await walkToImportStep()
+
+      expect(screen.getByText(/Importing consolidates the deployment/)).toBeInTheDocument()
+      expect(screen.getByText(/The images are ready — 1 preprocessed/)).toBeInTheDocument()
     })
   })
 
@@ -1823,8 +1854,8 @@ describe('ImportDeploymentPage', () => {
     })
 
     it('imports into a collection that does not exist yet, naming it after the deployment\'s prefix, and shows its progress', async () => {
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
-        onEvent({ type: 'copy', index: 1, total: 1, name: 'a.jpg' })
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
+        onEvent({ type: 'sealing' })
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })
       })
       await walkToImportStep()
@@ -1833,20 +1864,19 @@ describe('ImportDeploymentPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
 
       await screen.findByText(/Deployment imported/)
-      expect(mockedApi.importLocal).toHaveBeenCalledWith(
-        '/home/me/deployments/DONA_01', COLLECTIONS_DIR, 'R0001',
-        expect.objectContaining({ deployment_id: 'R0001-DONA_01', location_id: 'DONA_01', latitude: 37, longitude: -6.5 }),
-        expect.objectContaining({ rename: true, resize: true, metadata: true }),
-        expect.any(Function),
+      const deployment = expect.objectContaining({ deployment_id: 'R0001-DONA_01', location_id: 'DONA_01', latitude: 37, longitude: -6.5 })
+      expect(mockedApi.preprocess).toHaveBeenCalledWith(
+        '/home/me/deployments/DONA_01', COLLECTIONS_DIR, 'R0001', deployment, expect.objectContaining({ rename: true, resize: true, metadata: true }), expect.any(Function),
       )
-      expect(screen.getByText(/\[1\/1\] a\.jpg/)).toBeInTheDocument()
+      expect(mockedApi.consolidate).toHaveBeenCalledWith('/home/me/deployments/DONA_01', COLLECTIONS_DIR, deployment, expect.any(Function))
+      expect(screen.getByText(/Checking the images and sealing the deployment/)).toBeInTheDocument()
       expect(mockedApi.discardSession).toHaveBeenCalledWith('task-1')
       expect(screen.getByRole('button', { name: 'Start over' })).toBeInTheDocument()
     })
 
     it('reuses a collection that already exists, keeping the name it has', async () => {
       mockedApi.collectionPath.mockResolvedValue({ path: COLLECTIONS_DIR, collection: 'R0001', exists: true, name: 'R0001_winter' })
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })
       })
       await walkToImportStep()
@@ -1854,11 +1884,11 @@ describe('ImportDeploymentPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
 
       await screen.findByText(/Deployment imported/)
-      expect(mockedApi.importLocal).toHaveBeenCalledWith('/home/me/deployments/DONA_01', COLLECTIONS_DIR, null, expect.anything(), expect.anything(), expect.any(Function))
+      expect(mockedApi.preprocess).toHaveBeenCalledWith('/home/me/deployments/DONA_01', COLLECTIONS_DIR, null, expect.anything(), expect.anything(), expect.any(Function))
     })
 
     it('never talks to Trapper to import: registering there is a later phase', async () => {
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })
       })
       await walkToImportStep()
@@ -1870,7 +1900,7 @@ describe('ImportDeploymentPage', () => {
     })
 
     it('sends the Camtrap DP fields through to the import call', async () => {
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })
       })
       await walkToImportStep('1', async () => {
@@ -1885,7 +1915,7 @@ describe('ImportDeploymentPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
 
       await screen.findByText(/Deployment imported/)
-      expect(mockedApi.importLocal).toHaveBeenCalledWith(
+      expect(mockedApi.preprocess).toHaveBeenCalledWith(
         '/home/me/deployments/DONA_01', COLLECTIONS_DIR, 'R0001',
         expect.objectContaining({
           camera_depth: 4.8, feature_type: 'culvert', deployment_groups: 'season:winter 2020 | grid:A1',
@@ -1898,14 +1928,15 @@ describe('ImportDeploymentPage', () => {
 
     it('cannot import when its collection cannot be worked out, and says why', async () => {
       mockedApi.collectionPath.mockRejectedValue(new Error("The research project 'DONA' can only have letters, digits, '_', '-' and '.' to be a folder name."))
-      await walkToImportStep()
+      await goToPostvalidation()
+      await advanceToPreprocessing()
 
       expect(await screen.findByText(/can only have letters, digits/)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Import deployment' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Run preprocessing' })).toBeDisabled()
     })
 
     it('shows the error when the import fails', async () => {
-      mockedApi.importLocal.mockRejectedValue(new Error('No space left on device'))
+      mockedApi.consolidate.mockRejectedValue(new Error('No space left on device'))
       await walkToImportStep()
       await screen.findByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
@@ -1915,7 +1946,7 @@ describe('ImportDeploymentPage', () => {
     })
 
     it('starts over from the folder once it is done', async () => {
-      mockedApi.importLocal.mockImplementation(async (_src, _dir, _name, _dep, _pre, onEvent) => {
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })
       })
       await walkToImportStep()

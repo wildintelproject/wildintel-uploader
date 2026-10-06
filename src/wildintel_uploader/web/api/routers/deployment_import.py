@@ -303,10 +303,46 @@ def import_deployment(req: ImportDeploymentRequest) -> StreamingResponse:
     return StreamingResponse(lines(), media_type="application/x-ndjson")
 
 
+@router.post("/preprocess")
+def preprocess(req: ImportLocalRequest) -> StreamingResponse:
+    """Preprocesses the images into the collection, leaving the deployment pending — not sealed, so it can be done again — until
+    /consolidate freezes it. The same NDJSON events as /import-local, less the sealing."""
+    if req.preprocessing is None:
+        raise HTTPException(400, "Say what to preprocess.")
+    return _import_local(req, consolidate=False)
+
+
+@router.post("/consolidate")
+def consolidate(req: ImportLocalRequest) -> StreamingResponse:
+    """Freezes the preprocessed deployment: its metadata is written and it is sealed. Events: "sealing" and "done"."""
+    try:
+        events = preprocessing_service.consolidate_stream(req.source_dir, req.collection_dir, req.deployment)
+    except deployment_import_service.DeploymentImportError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return _stream(events, "Consolidating failed")
+
+
+def _stream(events: Iterator[dict], failure: str) -> StreamingResponse:
+    def lines() -> Iterator[str]:
+        try:
+            for event in events:
+                yield json.dumps(event) + "\n"
+        except Exception as exc:
+            logger.warning("%s: %s", failure, exc, exc_info=debugging())
+            yield json.dumps({"type": "error", "detail": str(exc)}) + "\n"
+            return
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+
 @router.post("/import-local")
 def import_local(req: ImportLocalRequest) -> StreamingResponse:
     """The same NDJSON shape as /import, without a "registering" event —
     the "Local folder" destination never talks to Trapper."""
+    return _import_local(req, consolidate=True)
+
+
+def _import_local(req: ImportLocalRequest, consolidate: bool) -> StreamingResponse:
     try:
         if req.preprocessing is not None:
             # The collection sits in its research project's folder, <research project>/<collection>: the images are read
@@ -317,7 +353,7 @@ def import_local(req: ImportLocalRequest) -> StreamingResponse:
             options = {**req.preprocessing.model_dump(), "timezone": time["timezone"], "ignore_dst": time.get("ignore_dst", True)}
             events = preprocessing_service.preprocess_stream(
                 req.source_dir, req.collection_dir, req.collection_name, req.deployment,
-                preprocessing_service.PreprocessOptions(**options),
+                preprocessing_service.PreprocessOptions(**options), consolidate=consolidate,
             )
         else:
             events = deployment_import_service.import_local_stream(
@@ -325,17 +361,7 @@ def import_local(req: ImportLocalRequest) -> StreamingResponse:
             )
     except deployment_import_service.DeploymentImportError as exc:
         raise HTTPException(400, str(exc)) from exc
-
-    def lines() -> Iterator[str]:
-        try:
-            for event in events:
-                yield json.dumps(event) + "\n"
-        except Exception as exc:
-            logger.warning("Local import failed: %s", exc, exc_info=debugging())
-            yield json.dumps({"type": "error", "detail": str(exc)}) + "\n"
-            return
-
-    return StreamingResponse(lines(), media_type="application/x-ndjson")
+    return _stream(events, "Local import failed")
 
 
 class OpenFolderRequest(BaseModel):

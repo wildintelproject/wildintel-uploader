@@ -84,6 +84,12 @@ def default_collection_dir(research_project_id: str, deployment_id: str) -> Path
     return config.collections_dir() / research_project_id / collection_code(deployment_id)
 
 
+def is_pending(dest: Path) -> bool:
+    """Whether dest holds a deployment that was preprocessed but not consolidated (sealed) yet — one that preprocessing may
+    redo, since nothing has frozen it."""
+    return (dest / "preprocessing.json").is_file() and not (dest / "seal.json").exists()
+
+
 def check_not_kept(dest: Path) -> None:
     """Raises:
         DeploymentImportError: the deployment is already kept in dest — importing again would mix the images — or it
@@ -104,7 +110,7 @@ def existing_deployment_dir(research_project_id: str, deployment_id: str) -> Pat
     except DeploymentImportError:
         return None
     try:
-        return dest if dest.is_dir() and any(dest.iterdir()) else None
+        return dest if dest.is_dir() and any(dest.iterdir()) and not is_pending(dest) else None
     except OSError:
         return None
 

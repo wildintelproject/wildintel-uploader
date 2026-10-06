@@ -306,7 +306,7 @@ export function CheckTable<T extends string>({ options, enabled, required, statu
 }
 
 /** Whether a check is running, or how it ended: passed, or failed — which stops you if it is required to continue. */
-function CheckStatusIcon({ status, required, label }: { status: CheckStatus; required: boolean; label: string }) {
+export function CheckStatusIcon({ status, required, label }: { status: CheckStatus; required: boolean; label: string }) {
   if (status === 'running') return <span role="status" aria-label={`${label}: running`} title="Running…" className="inline-flex"><SmallSpinner /></span>
   if (status === 'passed') return <span role="img" aria-label={`${label}: passed`} title="Passed" className="text-emerald-500">✔</span>
   if (status === 'failed') {
@@ -888,6 +888,11 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
   const [deploymentCheck, setDeploymentCheck] = useState<DeploymentCheckResult | null>(null)
   const [deploymentCheckError, setDeploymentCheckError] = useState<string | null>(null)
 
+  // The preprocessing runs in its own step and leaves the deployment pending; the import step then consolidates (seals) it.
+  const [preprocessing, setPreprocessing] = useState(false)
+  const [preprocessEvents, setPreprocessEvents] = useState<ImportEvent[]>([])
+  const [preprocessError, setPreprocessError] = useState<string | null>(null)
+  const [preprocessed, setPreprocessed] = useState<ImportEvent | null>(null)
   const [importing, setImporting] = useState(false)
   const [events, setEvents] = useState<ImportEvent[]>([])
   const [importError, setImportError] = useState<string | null>(null)
@@ -1442,27 +1447,49 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     setStep((s) => s + 1)
   }
 
+  // Going back to change anything before the preprocessing makes what it did stale: it is run again (the pending folder is simply redone).
+  useEffect(() => {
+    if (STEPS[step].key !== 'preprocessing' && STEPS[step].key !== 'import') { setPreprocessed(null); setPreprocessEvents([]) }
+  }, [step])
+
+  function preprocessOptions(): PreprocessingOptions {
+    return {
+      rename: effectivePreprocessSteps.has('rename'), resize: effectivePreprocessSteps.has('resize'), resize_width: preSettings.resize_width,
+      metadata: effectivePreprocessSteps.has('metadata'), owner: preSettings.owner, publisher: preSettings.publisher,
+      coverage: preSettings.coverage, license_url: preSettings.license_url, research_project: selectedProject?.name ?? '',
+      convert_to_utc: preSettings.convert_to_utc,
+    }
+  }
+
+  async function handlePreprocess() {
+    setPreprocessing(true); setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
+    try {
+      // Into its collection in the collections folder (a new one is named like the deployment's R0003 prefix) — still pending: not sealed.
+      await api.preprocess(
+        sourceDir, plannedCollection!.path, plannedCollection!.exists ? null : plannedCollection!.collection, deployment, preprocessOptions(),
+        (event) => {
+          setPreprocessEvents((prev) => [...prev, event])
+          if (event.type === 'done') setPreprocessed(event)
+        },
+      )
+    } catch (e) {
+      setPreprocessError(e instanceof Error ? e.message : 'The preprocessing failed.')
+    } finally {
+      setPreprocessing(false)
+    }
+  }
+
   async function handleImport() {
     setImporting(true); setEvents([]); setImportError(null); setDestDir(null)
-    const onEvent = (event: ImportEvent) => {
-      setEvents((prev) => [...prev, event])
-      if (event.type === 'done') {
-        setDestDir(event.dest_dir)
-        // The run finished — nothing left to resume.
-        if (taskId) api.discardSession(taskId).catch(() => {})
-      }
-    }
     try {
-      // Into its collection in the collections folder (a new one is named like the deployment's R0003 prefix).
-      const options: PreprocessingOptions = {
-        rename: effectivePreprocessSteps.has('rename'), resize: effectivePreprocessSteps.has('resize'), resize_width: preSettings.resize_width,
-        metadata: effectivePreprocessSteps.has('metadata'), owner: preSettings.owner, publisher: preSettings.publisher,
-        coverage: preSettings.coverage, license_url: preSettings.license_url, research_project: selectedProject?.name ?? '',
-        convert_to_utc: preSettings.convert_to_utc,
-      }
-      await api.importLocal(
-        sourceDir, plannedCollection!.path, plannedCollection!.exists ? null : plannedCollection!.collection, deployment, options, onEvent,
-      )
+      await api.consolidate(sourceDir, plannedCollection!.path, deployment, (event) => {
+        setEvents((prev) => [...prev, event])
+        if (event.type === 'done') {
+          setDestDir(event.dest_dir)
+          // The run finished — nothing left to resume.
+          if (taskId) api.discardSession(taskId).catch(() => {})
+        }
+      })
     } catch (e) {
       setImportError(e instanceof Error ? e.message : 'The import failed.')
     } finally {
@@ -1492,6 +1519,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set())
     setTimestampLogError(null)
     setEvents([]); setImportError(null); setDestDir(null)
+    setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
     setTaskId(null)
   }
 
@@ -1890,119 +1918,147 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
       )}
 
       {/* ── Step: preprocessing ── */}
-      {stepKey === 'preprocessing' && (
-        <div>
-          <StepHeading>Preprocessing</StepHeading>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            What will be done to the images as they are imported. The originals in the source folder are never touched.
-            Each optional step can be switched off for this run; its values come from Settings › Preprocessing.
-          </p>
-          <ol className="space-y-3 mb-2">
-            <PreprocessItem title="Copy into the collection" always>
-              The images are copied into{' '}
-              <span className="font-mono">{plannedCollection ? `${plannedCollection.path}/${deployment.deployment_id}` : 'the deployment’s folder in the collections folder'}</span>.
-              Anything that isn&rsquo;t an image is copied as it is.
-            </PreprocessItem>
-            <PreprocessItem title="Read the capture dates" always>
-              From each image&rsquo;s EXIF, as the camera&rsquo;s local time in <span className="font-mono">{timezone || 'the timezone of the details'}</span>
-              {ignoreDst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}.
-              They go into the names and the metadata. An image with no EXIF date uses its file&rsquo;s date.
-            </PreprocessItem>
-            <PreprocessItem title="Rename the images" checked={effectivePreprocessSteps.has('rename')} onToggle={() => togglePreprocessStep('rename')}>
-              <span className="font-mono">{'<deployment>__<YYYYMMDD>_<n>.<EXT>'}</span> in upper case — for example{' '}
-              <span className="font-mono">{exampleImageName}</span>. The images end up together in the deployment&rsquo;s folder, numbered in file-name order.
-            </PreprocessItem>
-            <PreprocessItem title="Resize the images" checked={effectivePreprocessSteps.has('resize')} onToggle={() => togglePreprocessStep('resize')}>
-              Images wider than <strong>{preSettings.resize_width} px</strong> are resized to that width, keeping their proportions, EXIF and colour profile.
-              Narrower ones stay as they are.
-            </PreprocessItem>
-            <PreprocessItem
-              title="Add metadata" checked={effectivePreprocessSteps.has('metadata')} onToggle={() => togglePreprocessStep('metadata')}
-              disabledReason={exiftool === false ? 'ExifTool is not installed, and writing the metadata needs it.' : undefined}
+      {stepKey === 'preprocessing' && (() => {
+        const rows: { key: string; label: string; always?: boolean; step?: PreprocessStep; text: ReactNode; disabledReason?: string }[] = [
+          { key: 'copy', label: 'Copy into the collection', always: true, text: <>Into <span className="font-mono break-all">{plannedCollection ? `${plannedCollection.path}/${deployment.deployment_id}` : 'the deployment’s folder in the collections folder'}</span>; anything that isn&rsquo;t an image is copied as it is.</> },
+          { key: 'dates', label: 'Read the capture dates', always: true, text: <>From each image&rsquo;s EXIF, as the camera&rsquo;s local time in <span className="font-mono">{timezone || 'the timezone of the details'}</span>{ignoreDst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}. An image with no EXIF date uses its file&rsquo;s date.</> },
+          { key: 'rename', label: 'Rename the images', step: 'rename', text: <><span className="font-mono">{'<deployment>__<YYYYMMDD>_<n>.<EXT>'}</span> in upper case — for example <span className="font-mono">{exampleImageName}</span>.</> },
+          { key: 'resize', label: 'Resize the images', step: 'resize', text: <>Images wider than <strong>{preSettings.resize_width} px</strong> are resized to that width, keeping their proportions, EXIF and colour profile.</> },
+          { key: 'metadata', label: 'Add metadata', step: 'metadata', text: <>Authorship, rights and license, written into each image as XMP.</>, disabledReason: exiftool === false ? 'ExifTool is not installed, and writing the metadata needs it.' : undefined },
+        ]
+        const doneRun = preprocessed?.type === 'done'
+        const active = (r: (typeof rows)[number]) => r.always || (r.step !== undefined && effectivePreprocessSteps.has(r.step))
+        return (
+          <div>
+            <StepHeading>Preprocessing</StepHeading>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              Pick what to do to the images and run it: they are copied, renamed, resized and tagged into the deployment&rsquo;s folder in the collections
+              folder. The originals in the source folder are never touched, and nothing is final until the next step. Its values come from Settings › Preprocessing.
+            </p>
+            <ValidationDashboard
+              title="Preprocessing" subtitle={`${deployment.deployment_id}${scan ? ` · ${scan.image_count} image(s)` : ''}`} preprocessing
+              reportId={preprocessed?.type === 'done' ? preprocessed.report_id ?? null : null}
+              running={preprocessing} canRun={Boolean(plannedCollection) && !preprocessing} onRun={handlePreprocess} runLabel="Run preprocessing" runningLabel="Preprocessing…"
             >
-              Authorship, rights and license, written into each image as XMP:
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 mt-2 text-xs">
-                <dt className="text-zinc-500 dark:text-zinc-400">Creator</dt>
-                <dd className="font-mono">{`CT (<camera make and model> ${selectedProject?.name || 'Unknown'})`}</dd>
-                <dt className="text-zinc-500 dark:text-zinc-400">Owner</dt>
-                <dd className="font-mono">{preSettings.owner || 'Unknown'}{!preSettings.owner && <span className="ml-2 text-amber-600 dark:text-amber-400 font-sans">not set in Settings</span>}</dd>
-                <dt className="text-zinc-500 dark:text-zinc-400">Publisher</dt>
-                <dd className="font-mono">{preSettings.publisher || 'Unknown'}{!preSettings.publisher && <span className="ml-2 text-amber-600 dark:text-amber-400 font-sans">not set in Settings</span>}</dd>
-                <dt className="text-zinc-500 dark:text-zinc-400">Rights</dt>
-                <dd className="font-mono">{`© ${preSettings.owner || 'Unknown'}, ${new Date().getFullYear()}. All rights reserved.`}</dd>
-                <dt className="text-zinc-500 dark:text-zinc-400">License</dt>
-                <dd className="font-mono break-all">{preSettings.license_url}</dd>
-                <dt className="text-zinc-500 dark:text-zinc-400">Coverage</dt>
-                <dd className="font-mono">{preSettings.coverage || deployment.location_name || deployment.location_id || 'the deployment’s location'}</dd>
-                <dt className="text-zinc-500 dark:text-zinc-400">Identifiers</dt>
-                <dd>The hash of each original and of the image kept, so each can be traced back.</dd>
-              </dl>
-            </PreprocessItem>
-          </ol>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            What was done to each image is recorded in a <span className="font-mono">preprocessing.json</span> beside them.
-          </p>
-        </div>
-      )}
+              {({ report, openCheck, open }) => (
+                <table className="w-full text-sm mb-4 border border-zinc-200 dark:border-zinc-700 rounded">
+                  <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+                    <tr className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      <th scope="col" className="px-3 py-2 w-12 text-center"><span className="sr-only">Status</span></th>
+                      <th scope="col" className="px-3 py-2 text-left">Steps</th>
+                      <th scope="col" className="px-3 py-2 text-center">Run</th>
+                      <th scope="col" className="px-3 py-2 text-center">Status</th>
+                      <th scope="col" className="px-3 py-2 text-center">Skipped images</th>
+                      <th scope="col" className="px-3 py-2 w-8"><span className="sr-only">Open</span></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                    {rows.map((r) => {
+                      const skipped = report?.checks.preprocessing?.failed ?? 0
+                      return (
+                        <tr key={r.key}>
+                          <td className="px-3 py-2 text-center">
+                            <CheckStatusIcon label={r.label} required={false} status={!active(r) ? 'none' : preprocessing ? 'running' : doneRun ? 'passed' : 'none'} />
+                          </td>
+                          <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                            {r.label}
+                            <span className="block text-xs text-zinc-500 dark:text-zinc-400">{r.text}</span>
+                            {r.disabledReason && <span className="block text-xs text-red-600 dark:text-red-400">{r.disabledReason}</span>}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {r.always
+                              ? <span className="text-xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Always</span>
+                              : <input type="checkbox" aria-label={r.label} checked={active(r)} disabled={Boolean(r.disabledReason) || preprocessing}
+                                       onChange={() => togglePreprocessStep(r.step!)} />}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {doneRun && active(r) && (
+                              <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${skipped ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'}`}>
+                                {skipped ? '▲ With skipped images' : '▲ Done'}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">{doneRun && r.key === 'copy' ? skipped : ''}</td>
+                          <td className="px-3 py-2 text-center">
+                            {doneRun && r.key === 'copy' && skipped > 0 && (
+                              <button type="button" aria-label={`${openCheck === 'preprocessing' ? 'Close' : 'Open'} the skipped images`} aria-expanded={openCheck === 'preprocessing'}
+                                      className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => open('preprocessing')}>{openCheck === 'preprocessing' ? '⌄' : '›'}</button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </ValidationDashboard>
+
+            {effectivePreprocessSteps.has('metadata') && (
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 mb-4">
+                <h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-2">The metadata written into each image</h5>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                  <dt className="text-zinc-500 dark:text-zinc-400">Creator</dt>
+                  <dd className="font-mono">{`CT (<camera make and model> ${selectedProject?.name || 'Unknown'})`}</dd>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Owner</dt>
+                  <dd className="font-mono">{preSettings.owner || 'Unknown'}{!preSettings.owner && <span className="ml-2 text-amber-600 dark:text-amber-400 font-sans">not set in Settings</span>}</dd>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Publisher</dt>
+                  <dd className="font-mono">{preSettings.publisher || 'Unknown'}{!preSettings.publisher && <span className="ml-2 text-amber-600 dark:text-amber-400 font-sans">not set in Settings</span>}</dd>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Rights</dt>
+                  <dd className="font-mono">{`© ${preSettings.owner || 'Unknown'}, ${new Date().getFullYear()}. All rights reserved.`}</dd>
+                  <dt className="text-zinc-500 dark:text-zinc-400">License</dt>
+                  <dd className="font-mono break-all">{preSettings.license_url}</dd>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Coverage</dt>
+                  <dd className="font-mono">{preSettings.coverage || deployment.location_name || deployment.location_id || 'the deployment’s location'}</dd>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Identifiers</dt>
+                  <dd>The hash of each original and of the image kept, so each can be traced back.</dd>
+                </dl>
+              </div>
+            )}
+
+            {preprocessEvents.length > 0 && (
+              <div className="rounded border border-zinc-200 dark:border-zinc-700 p-3 text-sm text-zinc-600 dark:text-zinc-400 max-h-48 overflow-y-auto mb-4">
+                {preprocessEvents.map((e, i) => (
+                  <p key={i}>
+                    {e.type === 'copy' && `[${e.index}/${e.total}] ${e.name}`}
+                    {e.type === 'metadata' && `Writing the metadata of ${e.total} image(s)…`}
+                    {e.type === 'skipped' && <span className="text-amber-600 dark:text-amber-400">⚠ Skipped {e.name}: {e.detail}</span>}
+                  </p>
+                ))}
+              </div>
+            )}
+            {plannedCollectionError && <p className="text-sm text-red-600 dark:text-red-400 mb-4">{plannedCollectionError}</p>}
+            {preprocessError && <p className="text-sm text-red-600 dark:text-red-400">{preprocessError}</p>}
+          </div>
+        )
+      })()}
 
       {/* ── Step: import ── */}
       {stepKey === 'import' && (
         <div>
           <StepHeading>Import</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Everything is ready — organize the images into their collection in the local collections folder
-            {`, ${describePreprocessing(effectivePreprocessSteps)}`}.
+            The images are ready{preprocessed?.type === 'done' ? ` — ${preprocessed.processed ?? 0} preprocessed${preprocessed.skipped ? `, ${preprocessed.skipped} skipped` : ''}` : ''}.
+            Importing consolidates the deployment: its metadata is written and it is <strong>sealed</strong>, so it can&rsquo;t be modified afterwards
+            — the app notices if an image or its details change — and it can then be uploaded.
           </p>
           {plannedCollection && (
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-              The images are kept locally in <span className="font-mono">{`${plannedCollection.path}/${deployment.deployment_id}`}</span> before they are uploaded.
+              It is kept locally in <span className="font-mono font-bold">{`${plannedCollection.path}/${deployment.deployment_id}`}</span> before it is uploaded.
             </p>
           )}
           {plannedCollectionError && <p className="text-sm text-red-600 dark:text-red-400 mb-4">{plannedCollectionError}</p>}
-          <ValidationDashboard
-            title="Preprocessing" subtitle={`${deployment.deployment_id}${scan ? ` · ${scan.image_count} image(s)` : ''}`} preprocessing
-            reportId={(() => { const done = events.find((e) => e.type === 'done'); return done && done.type === 'done' ? done.report_id ?? null : null })()}
-            running={importing} canRun={canImport} onRun={handleImport} runLabel="Import deployment" runningLabel="Importing…"
-          >
-            {({ report, openCheck, open }) => report ? (
-              <table className="w-full text-sm mb-4 border border-zinc-200 dark:border-zinc-700 rounded">
-                <thead className="bg-zinc-50 dark:bg-zinc-800/50">
-                  <tr className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    <th scope="col" className="px-3 py-2 text-left">Step</th><th scope="col" className="px-3 py-2 text-center">Status</th>
-                    <th scope="col" className="px-3 py-2 text-center">Skipped images</th><th scope="col" className="px-3 py-2 w-8"><span className="sr-only">Open</span></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                  {Object.entries(report.checks).map(([name, c]) => (
-                    <tr key={name}>
-                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{c.label}<span className="block text-xs text-zinc-500 dark:text-zinc-400">{describePreprocessing(effectivePreprocessSteps)}</span></td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${c.failed ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'}`}>
-                          {c.failed ? '▲ With skipped images' : '▲ Done'}</span>
-                      </td>
-                      <td className="px-3 py-2 text-center">{c.failed}</td>
-                      <td className="px-3 py-2 text-center">
-                        {c.failed > 0 && (
-                          <button type="button" aria-label={`${openCheck === name ? 'Close' : 'Open'} the skipped images`} aria-expanded={openCheck === name}
-                                  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => open(name)}>{openCheck === name ? '⌄' : '›'}</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-          </ValidationDashboard>
+          {!destDir && (
+            <div className="flex justify-end mb-6">
+              <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!canImport || importing} onClick={handleImport}>
+                {importing && <SmallSpinner />}{importing ? 'Importing…' : 'Import deployment'}
+              </button>
+            </div>
+          )}
 
           {events.length > 0 && (
             <div className="rounded border border-zinc-200 dark:border-zinc-700 p-3 text-sm text-zinc-600 dark:text-zinc-400 max-h-48 overflow-y-auto mb-4">
               {events.map((e, i) => (
                 <p key={i}>
-                  {e.type === 'copy' && `[${e.index}/${e.total}] ${e.name}`}
-                  {e.type === 'registering' && 'Registering the deployment in Trapper…'}
                   {e.type === 'sealing' && 'Checking the images and sealing the deployment…'}
-                  {e.type === 'metadata' && `Writing the metadata of ${e.total} image(s)…`}
-                  {e.type === 'skipped' && <span className="text-amber-600 dark:text-amber-400">⚠ Skipped {e.name}: {e.detail}</span>}
                   {e.type === 'done' && `✔ Imported${e.processed !== undefined ? ` ${e.processed} image(s)${e.skipped ? `, ${e.skipped} skipped` : ''}` : ''} — organized in ${e.dest_dir}${e.sealed === false ? ' (could not be sealed — see the log)' : ''}`}
                 </p>
               ))}
@@ -2029,7 +2085,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
         {destDir ? (
           <button type="button" className={btnOutline} onClick={handleStartOver}>Start over</button>
         ) : step > 0 ? (
-          <button type="button" className={btnOutline} disabled={importing} onClick={handleBack}>Back</button>
+          <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={handleBack}>Back</button>
         ) : (
           <div />
         )}
@@ -2056,7 +2112,10 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
           </div>
         )}
         {!destDir && stepKey === 'preprocessing' && (
-          <button type="button" className={btnPrimary} onClick={() => setStep((s) => s + 1)}>Continue</button>
+          <div className="flex flex-col items-end gap-1">
+            {preprocessed?.type !== 'done' && !preprocessing && <p className="text-xs text-amber-600 dark:text-amber-400">Run the preprocessing to continue.</p>}
+            <button type="button" className={btnPrimary} disabled={preprocessed?.type !== 'done' || preprocessing} onClick={() => setStep((s) => s + 1)}>Continue</button>
+          </div>
         )}
         {!destDir && stepKey === 'checks' && (
           <div className="flex flex-col items-end gap-1">

@@ -249,9 +249,12 @@ def _process(index: int, path: Path, source_dir: Path, dest: Path, deployment: D
 
 def preprocess_stream(
     source_dir: str, collection_dir: str, collection_name: str | None, deployment: DeploymentFields, options: PreprocessOptions,
+    consolidate: bool = True,
 ) -> Iterator[dict]:
     """Imports source_dir's images into collection_dir/<deployment_id>, preprocessed as
     `options` says, with the collection's and deployment's metadata beside them.
+    With consolidate False it stops there — the images, their images.json and preprocessing.json — leaving the
+    deployment *pending*: unsealed, so it can be preprocessed again, until consolidate_stream freezes it.
     Events, as the other imports': {"type": "copy", index, total, name} per file,
     {"type": "skipped", name, detail} for one that couldn't be processed (the rest go
     on), {"type": "metadata", total} once the XMP is being written, and finally
@@ -269,6 +272,8 @@ def preprocess_stream(
     exiftool = camera_info.exiftool_path()
     if options.metadata and exiftool is None:
         raise DeploymentImportError("Adding metadata needs ExifTool, and it isn't installed.")
+    if deployment_import_service.is_pending(dest) and not local_folder_service.is_synced(dest):
+        shutil.rmtree(dest)  # preprocessed before and never consolidated: nothing froze it, so it is done again
     deployment_import_service.check_not_kept(dest)
 
     def events() -> Iterator[dict]:
@@ -319,24 +324,63 @@ def preprocess_stream(
         for r in records:  # the file as it ends up, metadata included — what sha1sum gives; the XMP can't hold its own hash
             r["final_hash"] = _sha1(r["_target"])
 
-        local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
+        if consolidate:
+            local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
         local_folder_service.write_images_file(dest, deployment.deployment_id, [_image_entry(r) for r in records])
         public = [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
         (dest / PREPROCESSING_LOG_FILE).write_text(
             json.dumps({"options": asdict(options), "processed": len(records), "skipped": skipped, "images": public}, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        yield {"type": "sealing"}
-        sealed = deployment_import_service.seal_deployment(
-            source, dest, deployment, originals={r["name"]: r["original"] for r in records},
-            source_hashes={r["original"]: r["source_hash"] for r in records}, preprocessing=asdict(options),
-        )
-        logger.info("Deployment %s preprocessed and organized in %s (%d image(s), %d skipped)", deployment.deployment_id, dest, len(records), skipped)
+        sealed = None
+        if consolidate:
+            yield {"type": "sealing"}
+            sealed = deployment_import_service.seal_deployment(
+                source, dest, deployment, originals={r["name"]: r["original"] for r in records},
+                source_hashes={r["original"]: r["source_hash"] for r in records}, preprocessing=asdict(options),
+            )
+        logger.info("Deployment %s preprocessed in %s (%d image(s), %d skipped)", deployment.deployment_id, dest, len(records), skipped)
         report_id = None
         try:
             report_id = report_service.save(report_service.preprocessing_report(records, skipped_items, deployment.deployment_id, source, dest, asdict(options)))
         except Exception as exc:  # the import is done: not having its report is no reason to fail it
             logger.warning("Could not write the report of the preprocessing of %s: %s", deployment.deployment_id, exc)
         yield {"type": "done", "dest_dir": str(dest), "processed": len(records), "skipped": skipped, "sealed": sealed, "report_id": report_id}
+
+    return events()
+
+
+def consolidate_stream(source_dir: str, collection_dir: str, deployment: DeploymentFields) -> Iterator[dict]:
+    """Freezes a preprocessed (pending) deployment: writes its deployment.json and seals it — from then on the app
+    notices any change to it. Events: {"type": "sealing"} and {"type": "done", dest_dir, processed, skipped, sealed}.
+
+    Raises:
+        DeploymentImportError: the deployment wasn't preprocessed, or is already sealed or synced from Trapper.
+    """
+    source = Path(source_dir).expanduser()
+    dest = Path(collection_dir).expanduser() / deployment.deployment_id
+    if local_folder_service.is_synced(dest):
+        raise DeploymentImportError(f"{dest.name} was synced from Trapper, so it can't be modified here.")
+    if (dest / "seal.json").exists():
+        raise DeploymentImportError(f"{dest.name} is already consolidated.")
+    log_file = dest / PREPROCESSING_LOG_FILE
+    if not log_file.is_file():
+        raise DeploymentImportError(f"{dest.name} has not been preprocessed yet.")
+    try:
+        log = json.loads(log_file.read_text(encoding="utf-8"))
+        images = log["images"]
+        options = log["options"]
+    except (json.JSONDecodeError, OSError, KeyError, TypeError) as exc:
+        raise DeploymentImportError(f"Could not read {log_file}: {exc}") from exc
+
+    def events() -> Iterator[dict]:
+        yield {"type": "sealing"}
+        local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
+        sealed = deployment_import_service.seal_deployment(
+            source, dest, deployment, originals={r["name"]: r["original"] for r in images},
+            source_hashes={r["original"]: r["source_hash"] for r in images}, preprocessing=options,
+        )
+        logger.info("Deployment %s consolidated in %s", deployment.deployment_id, dest)
+        yield {"type": "done", "dest_dir": str(dest), "processed": log.get("processed", len(images)), "skipped": log.get("skipped", 0), "sealed": sealed}
 
     return events()

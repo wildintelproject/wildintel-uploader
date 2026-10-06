@@ -219,12 +219,16 @@ def to_preprocessing(page: Page) -> None:
 @shot("step-preprocessing")
 def step_preprocessing(page: Page) -> None:
     to_preprocessing(page)
+    button(page, "Run preprocessing").click()
+    expect(page.get_by_text("Images processed")).to_be_visible()
     save(page, "step-preprocessing")
 
 
 @shot("step-import")
 def step_import(page: Page) -> None:
     to_preprocessing(page)
+    button(page, "Run preprocessing").click()
+    expect(page.get_by_text("Images processed")).to_be_visible()
     button(page, "Continue").click()
     expect(heading(page, "Import")).to_be_visible()
     button(page, "Import deployment").click()

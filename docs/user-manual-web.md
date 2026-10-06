@@ -356,7 +356,11 @@ This step has the same dashboard as the validation (with a **Run checks** button
 
 ![Step 6 — Preprocessing](img/screenshots/step-preprocessing.png)
 
-The list of what will be done to the images as they are imported. The originals are never touched.
+This step **does** the preprocessing, with the same dashboard as the validation: choose what to do to the images, press
+**Run preprocessing**, and read the result — the images processed and skipped, a status for each step and, opened from the
+**›**, the skipped images as thumbnails. The images go into the deployment's folder in the collections folder; the originals
+are never touched. Nothing is final yet: you can go back, change something and run it again — the folder is simply redone —
+and you can't go on until it has run.
 
 1. **Copy into the collection** — always. Anything that isn't an image is copied as it is.
 2. **Read the capture dates** — always. From each image's EXIF, as the camera's local time in the
@@ -372,16 +376,16 @@ The list of what will be done to the images as they are imported. The originals 
    given, if ExifTool isn't available. Check the owner and publisher in the settings first: if
    they're blank, the step says so.
 
-Each optional step can be switched off for this run. Its values come from the
-[Preprocessing settings](#preprocessing).
+Each optional step can be switched off for this run (its checkbox). Its values come from the
+[Preprocessing settings](#preprocessing). The [report](#9-reports) says what was done to each image.
 
 ### Step 7 — Import
 
 ![Step 7 — Import, finished](img/screenshots/step-import.png)
 
-Press **Import deployment**. Each image is listed as it is copied — `[3/241] IMG_0003.JPG` — then
-the metadata is written and the deployment is **sealed**. Images that fail are *skipped* and
-reported, and don't stop the rest. The [report](#9-reports) of the preprocessing is shown below, and says what was done to each image.
+The images are ready, so this step **consolidates** the deployment: press **Import deployment** and its
+`deployment.json` is written and the deployment is **sealed**. From then on it can't be modified — the app notices if an image
+or its details change — and it can be uploaded.
 
 A good import says where the deployment was kept, and offers:
 

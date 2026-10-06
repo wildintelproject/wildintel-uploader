@@ -223,11 +223,19 @@ details step opens and fills in the fields that are still empty; the session wiz
 a time, skipping the dates a timestamp log already gave. The checks that need the same data (the validation) read it
 themselves.
 
-### The import
+### Preprocess, then consolidate
 
-`/api/deployment-import/import-local` calls `preprocessing_service.preprocess_stream` when the
-request has preprocessing options (the wizard always sends them), or
-`deployment_import_service.import_local_stream` (a plain copy) when it hasn't. It yields:
+The wizard imports in two steps, so the preprocessing is a step like the validations:
+
+- `POST /api/deployment-import/preprocess` — `preprocessing_service.preprocess_stream(..., consolidate=False)`: copies, renames,
+  resizes and tags the images into `collections/<RP>/<R0003>/<deployment id>`, writes `images.json` and `preprocessing.json`
+  and the report, and stops. The deployment is **pending**: it has a `preprocessing.json` and no `seal.json`
+  (`deployment_import_service.is_pending`), so running it again redoes the folder, and it doesn't count as already kept.
+- `POST /api/deployment-import/consolidate` — `preprocessing_service.consolidate_stream`: writes `deployment.json` and seals it
+  (`sealing`, `done`), reading what the seal needs (originals, source hashes, options) from `preprocessing.json`. A sealed
+  deployment is refused (`already consolidated`), and so is one never preprocessed.
+- `POST /api/deployment-import/import-local` does both at once (the session wizard uses it), or, without preprocessing options,
+  `deployment_import_service.import_local_stream` (a plain copy). It yields:
 
 | Event | |
 |---|---|
@@ -235,7 +243,7 @@ request has preprocessing options (the wizard always sends them), or
 | `{"type": "metadata", "total"}` | Writing XMP. |
 | `{"type": "skipped", "name", "detail"}` | An image that failed; the rest go on. |
 | `{"type": "sealing"}` | Checking the source images and writing `seal.json`. |
-| `{"type": "done", "dest_dir", "processed", "skipped", "sealed"}` | Finished. |
+| `{"type": "done", "dest_dir", "processed", "skipped", "sealed", "report_id"}` | Finished (`sealed` is null after `/preprocess`). |
 
 The wizard's import does **not** talk to Trapper: the deployment is registered when it is
 **uploaded**. `/api/deployment-import/import` — copy, then register it through Trapper's classic
@@ -404,7 +412,9 @@ bodies are JSON, and every `POST` that talks to Trapper takes optional `url`, `u
 | | `…/timestamp-log` | Add a deployment to the collection's timestamp log. |
 | | `…/seal` | Whether a kept deployment still matches its seal. |
 | | `…/exiftool` | Whether ExifTool is available. |
-| | `…/import-local` | **Streams** the wizard's import. |
+| | `…/preprocess` | **Streams** the preprocessing, leaving the deployment pending. |
+| | `…/consolidate` | **Streams** the sealing of a preprocessed deployment. |
+| | `…/import-local` | **Streams** both at once (the session wizard's import). |
 | | `…/import` | **Streams** copy-and-register (the command line's flow). |
 | | `…/open-folder` | Open a folder in the file explorer. |
 | reports | `GET /reports` | What each report says of itself, newest first. |

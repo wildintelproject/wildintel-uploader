@@ -212,6 +212,21 @@ export const api = {
       source_dir: sourceDir, collection_dir: collectionDir, collection_name: collectionName, deployment, preprocessing,
     }, onEvent, 'The import ended unexpectedly.'),
 
+  // Preprocesses the images into their collection and leaves the deployment pending — not sealed, so it can be done again — until consolidate.
+  preprocess: (
+    sourceDir: string, collectionDir: string, collectionName: string | null, deployment: DeploymentFields,
+    preprocessing: PreprocessingOptions, onEvent: (event: ImportEvent) => void,
+  ) =>
+    streamNdjson<ImportEvent>('/api/deployment-import/preprocess', {
+      source_dir: sourceDir, collection_dir: collectionDir, collection_name: collectionName, deployment, preprocessing,
+    }, onEvent, 'The preprocessing ended unexpectedly.'),
+
+  // Freezes the preprocessed deployment: writes its metadata and seals it.
+  consolidate: (sourceDir: string, collectionDir: string, deployment: DeploymentFields, onEvent: (event: ImportEvent) => void) =>
+    streamNdjson<ImportEvent>('/api/deployment-import/consolidate', {
+      source_dir: sourceDir, collection_dir: collectionDir, deployment,
+    }, onEvent, 'The import ended unexpectedly.'),
+
   // The collections kept for a research project, and the deployments in each — what can be uploaded to Trapper.
   uploadCollections: (researchProjectId: string) =>
     post<{ results: UploadCollection[] }>('/api/upload/collections', { research_project_id: researchProjectId }),

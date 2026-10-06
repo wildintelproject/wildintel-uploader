@@ -429,3 +429,56 @@ def test_a_deployment_synced_from_trapper_is_never_imported_into(tmp_path: Path)
     with pytest.raises(pre.DeploymentImportError, match="synced from Trapper"):
         _run(source, tmp_path / "out")
     assert not (synced / "preprocessing.json").exists()
+
+
+# ── preprocess now, consolidate later ────────────────────────────────────────
+
+def _two_images(tmp_path: Path) -> Path:
+    source = tmp_path / "card"
+    _jpeg(source / "a.jpg", taken="2024:07:01 10:00:00")
+    _jpeg(source / "b.jpg", taken="2024:07:01 11:00:00", color="blue")
+    return source
+
+
+def test_without_consolidating_the_deployment_is_left_pending_and_unsealed(tmp_path: Path):
+    source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
+
+    events = list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+
+    dest = collection / "R0003-DONA_01"
+    assert [e["type"] for e in events][-1] == "done" and "sealing" not in [e["type"] for e in events]
+    assert events[-1]["sealed"] is None and events[-1]["processed"] == 2
+    assert (dest / "preprocessing.json").is_file() and (dest / "images.json").is_file()
+    assert not (dest / "seal.json").exists() and not (dest / "deployment.json").exists()
+
+
+def test_a_pending_deployment_is_preprocessed_again_instead_of_refused(tmp_path: Path):
+    source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
+    list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+    _jpeg(source / "c.jpg", taken="2024:07:01 12:00:00", color="green")
+
+    events = list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+
+    assert events[-1]["processed"] == 3
+    assert len(list((collection / "R0003-DONA_01").glob("*.JPEG"))) == 3
+
+
+def test_consolidating_writes_the_deployment_and_seals_it_and_then_nothing_can_be_redone(tmp_path: Path):
+    source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
+    list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+
+    events = list(pre.consolidate_stream(str(source), str(collection), DEPLOYMENT))
+
+    dest = collection / "R0003-DONA_01"
+    assert [e["type"] for e in events] == ["sealing", "done"] and events[-1]["sealed"] is True and events[-1]["processed"] == 2
+    assert (dest / "deployment.json").is_file() and (dest / "seal.json").is_file()
+    with pytest.raises(pre.DeploymentImportError, match="already consolidated"):
+        pre.consolidate_stream(str(source), str(collection), DEPLOYMENT)
+    with pytest.raises(pre.DeploymentImportError, match="already exists"):
+        list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+
+
+def test_a_deployment_that_was_not_preprocessed_cannot_be_consolidated(tmp_path: Path):
+    source = _two_images(tmp_path)
+    with pytest.raises(pre.DeploymentImportError, match="has not been preprocessed"):
+        pre.consolidate_stream(str(source), str(tmp_path / "collections" / "R0003"), DEPLOYMENT)

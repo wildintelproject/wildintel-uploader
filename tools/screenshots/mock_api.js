@@ -157,7 +157,7 @@
     [VALIDATION_REPORT_ID]: validationReport(VALIDATION_REPORT_ID),
     '20261006-094930_preprocessing_R0003-DONA_01': {
       id: '20261006-094930_preprocessing_R0003-DONA_01', kind: 'preprocessing', title: 'Preprocessing of R0003-DONA_01', created_at: '2026-10-06T09:49:30+00:00',
-      source_dir: '/home/me/Pictures/R0003-DONA_01', deployment_id: 'R0003-DONA_01', checked: 241, parameters: {},
+      source_dir: '/home/me/Pictures/R0003-DONA_01', deployment_id: 'R0003-DONA_01', checked: 241, parameters: { rename: true, resize: true, metadata: true },
       checks: { preprocessing: { label: 'Preprocessing', scope: 'images', ok: 241, failed: 0 } },
       totals: { entries: 241, ok: 241, failed: 0 }, entries: [],
     },
@@ -197,6 +197,19 @@
     uploads: 0,
     streamDelay: 0,
     streams: {
+      '/api/deployment-import/preprocess': () => ({
+        events: [
+          ...Array.from({ length: 241 }, (_, i) => ({ type: 'copy', index: i + 1, total: 241, name: `R0003-DONA_01__20240904_${i + 1}.JPEG` })),
+          { type: 'metadata', total: 241 },
+          { type: 'done', dest_dir: `${COLLECTIONS}/DONA/R0003/R0003-DONA_01`, processed: 241, skipped: 0, sealed: null, report_id: '20261006-094930_preprocessing_R0003-DONA_01' },
+        ],
+      }),
+      '/api/deployment-import/consolidate': () => ({
+        events: [
+          { type: 'sealing' },
+          { type: 'done', dest_dir: `${COLLECTIONS}/DONA/R0003/R0003-DONA_01`, processed: 241, skipped: 0, sealed: true },
+        ],
+      }),
       '/api/deployment-import/import-local': () => ({
         events: [
           ...Array.from({ length: 241 }, (_, i) => ({ type: 'copy', index: i + 1, total: 241, name: `IMG_${String(i + 1).padStart(4, '0')}.JPG` })),

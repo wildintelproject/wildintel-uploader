@@ -291,7 +291,7 @@ export type ImportEvent =
   | { type: 'skipped'; name: string; detail: string }
   /** The images are being checked and the deployment sealed (see seal.json). */
   | { type: 'sealing' }
-  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean; report_id?: string | null }
+  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean | null; report_id?: string | null }
 
 /** What is done to the images as they are imported, and the values it uses — see
  * core.services.preprocessing_service. */

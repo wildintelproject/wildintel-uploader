@@ -870,3 +870,31 @@ def test_the_seal_endpoint_says_whether_a_kept_deployment_is_still_what_was_seal
 
     assert broken["status"] == "broken" and broken["deployment_changed"] is True
     assert missing.status_code == 404
+
+
+def test_preprocess_leaves_the_deployment_pending_and_consolidate_freezes_it(tmp_path: Path):
+    payload = _import_local_payload(tmp_path)
+    dest = tmp_path / "collections" / "DONA" / "R0003" / "R0003-DONA_01"
+
+    pending = _client().post("/api/deployment-import/preprocess", json=payload)
+    assert pending.status_code == 200
+    events = [json.loads(line) for line in pending.text.splitlines()]
+    assert events[-1]["type"] == "done" and events[-1]["report_id"] and events[-1]["sealed"] is None
+    assert not (dest / "seal.json").exists()
+
+    frozen = _client().post("/api/deployment-import/consolidate", json=payload)
+    assert frozen.status_code == 200
+    events = [json.loads(line) for line in frozen.text.splitlines()]
+    assert [e["type"] for e in events] == ["sealing", "done"] and events[-1]["sealed"] is True
+    assert (dest / "seal.json").is_file()
+
+    again = _client().post("/api/deployment-import/consolidate", json=payload)
+    assert again.status_code == 400 and "already consolidated" in again.json()["detail"]
+
+
+def test_preprocess_needs_to_be_told_what_to_do_and_consolidate_needs_something_preprocessed(tmp_path: Path):
+    payload = _import_local_payload(tmp_path)
+
+    assert _client().post("/api/deployment-import/consolidate", json=payload).status_code == 400
+    del payload["preprocessing"]
+    assert _client().post("/api/deployment-import/preprocess", json=payload).status_code == 400
