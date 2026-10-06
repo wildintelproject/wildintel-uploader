@@ -1264,7 +1264,6 @@ describe('ImportDeploymentPage', () => {
       mockedApi.validateDeployment.mockResolvedValue({ checked_count: 2 })
       await goToPostvalidation()
       expect(screen.queryByLabelText('Tolerance (hours)')).not.toBeInTheDocument()
-      expect(screen.getByText(/Some of these checks can be customized in the settings \(Settings › Postvalidation\)/)).toBeInTheDocument()
 
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
@@ -1435,19 +1434,6 @@ describe('ImportDeploymentPage', () => {
       expect(mockedApi.writeTimestampLog).toHaveBeenCalledWith('DONA', expect.objectContaining({
         deployment_id: 'R0001-DONA_01', start_date: '2024-09-04T13:10:00+02:00', end_date: '2024-11-04T14:28:00+01:00',
       }))
-      expect(await screen.findByText(`${COLLECTIONS_DIR}/R0001_FileTimestampLog.csv`)).toBeInTheDocument()
-      expect(screen.getByText(/Added the deployment in/)).toBeInTheDocument()
-    })
-
-    it.each([
-      ['updated', /Updated the deployment in/],
-      ['unchanged', /Already in the deployment in/],
-    ] as const)('says when the deployment was %s in the log', async (action, text) => {
-      mockedApi.writeTimestampLog.mockResolvedValue({ path: `${COLLECTIONS_DIR}/R0001_FileTimestampLog.csv`, action, rows: 3, collection: 'R0001' })
-      await goToPostvalidation()
-
-      expect(await screen.findByText(text)).toBeInTheDocument()
-      expect(screen.getByText('3 deployment(s)')).toBeInTheDocument()
     })
 
     it('cannot go on when the log cannot be written, and says why', async () => {

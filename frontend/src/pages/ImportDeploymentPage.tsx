@@ -13,7 +13,7 @@ import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
 import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } from '../researchProjectValidation'
 import { isValidTimezone, knownTimezones, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import type {
-  AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, SimilarityMethod, StatisticCheck, StatisticsParams, TimestampLogResult, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
+  AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, SimilarityMethod, StatisticCheck, StatisticsParams, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   FeatureType, GuessedDetails, ImageCheck, ImportEvent, Location, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
   SessionSummary, UploadTarget, ValidationResult,
 } from '../types'
@@ -882,7 +882,6 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
   const preprocessTouched = useRef(false)
   const [exiftool, setExiftool] = useState<boolean | null>(null) // whether ExifTool is installed; null until known
   // The deployment's row in its collection's FileTimestampLog, written on leaving the details.
-  const [timestampLog, setTimestampLog] = useState<TimestampLogResult | null>(null)
   const [timestampLogError, setTimestampLogError] = useState<string | null>(null)
   const [requiredDeploymentChecks, setRequiredDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set())
   const [checkingDeployment, setCheckingDeployment] = useState(false)
@@ -1433,7 +1432,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     }
     try {
       // The collection's FileTimestampLog — wildintel-tools' file, one row per deployment — before the postvalidation.
-      setTimestampLog(await api.writeTimestampLog(researchProjectId, deployment))
+      await api.writeTimestampLog(researchProjectId, deployment)
     } catch (e) {
       setTimestampLogError(e instanceof Error ? e.message : 'Could not write the collection\'s timestamp log.')
       setSavingDetails(false)
@@ -1491,7 +1490,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     preprocessTouched.current = false
     setShowAllFields(false); setRevision(''); revisionTouched.current = false; setRevisionHint(null)
     setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set())
-    setTimestampLog(null); setTimestampLogError(null)
+    setTimestampLogError(null)
     setEvents([]); setImportError(null); setDestDir(null)
     setTaskId(null)
   }
@@ -1865,16 +1864,6 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
             dates against wildintel-tools' own rules, and the images against the deployment. Pick which to run, and which must pass
             before moving on.
           </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
-            Some of these checks can be customized in the settings (Settings › Postvalidation): the tolerance of the image dates, and what the
-            comparison with the previous revisions means — the length of a sequence, the way of comparing and how much counts as similar.
-          </p>
-          {timestampLog && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
-              {timestampLog.action === 'added' ? 'Added' : timestampLog.action === 'updated' ? 'Updated' : 'Already in'} the deployment in{' '}
-              <span className="font-mono font-bold">{timestampLog.path}</span> — <span className="font-bold">{timestampLog.rows} deployment(s)</span> in that collection&rsquo;s timestamp log.
-            </p>
-          )}
           {shownDeploymentChecks.length === 0 ? (
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
               Every postvalidation check is turned off in the settings, so there is nothing to run here — go on.
