@@ -1447,7 +1447,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
 
       expect(await screen.findByText(text)).toBeInTheDocument()
-      expect(screen.getByText(/3 deployment\(s\) in that collection/)).toBeInTheDocument()
+      expect(screen.getByText('3 deployment(s)')).toBeInTheDocument()
     })
 
     it('cannot go on when the log cannot be written, and says why', async () => {

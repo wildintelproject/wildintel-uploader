@@ -1,4 +1,3 @@
-import ReportPanel from '../components/ReportPanel'
 import ValidationDashboard from '../components/ValidationDashboard'
 import TrapperAccountNotice, { trapperAccountReady } from '../components/TrapperAccountNotice'
 import type { TrapperAccount } from '../components/TrapperAccountNotice'
@@ -1971,11 +1970,40 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
             </p>
           )}
           {plannedCollectionError && <p className="text-sm text-red-600 dark:text-red-400 mb-4">{plannedCollectionError}</p>}
-          <div className="flex justify-end mb-6">
-            <button type="button" className={btnPrimary} disabled={!canImport || importing} onClick={handleImport}>
-              {importing ? 'Importing…' : 'Import deployment'}
-            </button>
-          </div>
+          <ValidationDashboard
+            title="Preprocessing" subtitle={`${deployment.deployment_id}${scan ? ` · ${scan.image_count} image(s)` : ''}`} preprocessing
+            reportId={(() => { const done = events.find((e) => e.type === 'done'); return done && done.type === 'done' ? done.report_id ?? null : null })()}
+            running={importing} canRun={canImport} onRun={handleImport} runLabel="Import deployment" runningLabel="Importing…"
+          >
+            {({ report, openCheck, open }) => report ? (
+              <table className="w-full text-sm mb-4 border border-zinc-200 dark:border-zinc-700 rounded">
+                <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+                  <tr className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    <th scope="col" className="px-3 py-2 text-left">Step</th><th scope="col" className="px-3 py-2 text-center">Status</th>
+                    <th scope="col" className="px-3 py-2 text-center">Skipped images</th><th scope="col" className="px-3 py-2 w-8"><span className="sr-only">Open</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                  {Object.entries(report.checks).map(([name, c]) => (
+                    <tr key={name}>
+                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{c.label}<span className="block text-xs text-zinc-500 dark:text-zinc-400">{describePreprocessing(effectivePreprocessSteps)}</span></td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${c.failed ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'}`}>
+                          {c.failed ? '▲ With skipped images' : '▲ Done'}</span>
+                      </td>
+                      <td className="px-3 py-2 text-center">{c.failed}</td>
+                      <td className="px-3 py-2 text-center">
+                        {c.failed > 0 && (
+                          <button type="button" aria-label={`${openCheck === name ? 'Close' : 'Open'} the skipped images`} aria-expanded={openCheck === name}
+                                  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => open(name)}>{openCheck === name ? '⌄' : '›'}</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </ValidationDashboard>
 
           {events.length > 0 && (
             <div className="rounded border border-zinc-200 dark:border-zinc-700 p-3 text-sm text-zinc-600 dark:text-zinc-400 max-h-48 overflow-y-auto mb-4">
@@ -1992,7 +2020,6 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
             </div>
           )}
           {importError && <p className="text-sm text-red-600 dark:text-red-400">{importError}</p>}
-          {(() => { const done = events.find((e) => e.type === 'done'); return done && done.type === 'done' && done.report_id ? <ReportPanel reportId={done.report_id} /> : null })()}
           {destDir && (
             <div className="flex items-center gap-3 flex-wrap">
               <p className="text-sm text-emerald-600 dark:text-emerald-400">✔ Deployment imported.</p>

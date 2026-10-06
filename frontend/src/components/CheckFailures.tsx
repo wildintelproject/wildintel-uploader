@@ -53,7 +53,7 @@ function ImageDetails({ report, path, onClose }: { report: Report; path: string;
 }
 
 /** The images that failed one check: to search, filter, sort and page through, as pictures or as a list. */
-export default function CheckFailures({ report, check, onBack }: { report: Report; check: string; onBack: () => void }) {
+export default function CheckFailures({ report, check, parent = 'Validation', onBack }: { report: Report; check: string; parent?: string; onBack: () => void }) {
   const info = report.checks[check]
   const failures = useMemo(() => report.entries.filter((e) => e.check === check && e.status === 'failed'), [report, check])
   const [search, setSearch] = useState('')
@@ -82,7 +82,7 @@ export default function CheckFailures({ report, check, onBack }: { report: Repor
   return (
     <section aria-label={`Failures of ${info?.label ?? check}`} className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
       <nav className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 mb-3" aria-label="Breadcrumb">
-        <button type="button" className="hover:underline" onClick={onBack}>← Validation</button><span aria-hidden="true">›</span><span className="text-zinc-900 dark:text-zinc-100">{info?.label ?? check}</span>
+        <button type="button" className="hover:underline" onClick={onBack}>← {parent}</button><span aria-hidden="true">›</span><span className="text-zinc-900 dark:text-zinc-100">{info?.label ?? check}</span>
       </nav>
       <div className="flex items-center gap-3 flex-wrap mb-4">
         <h4 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{info?.label ?? check}</h4>

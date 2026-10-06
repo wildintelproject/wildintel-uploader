@@ -28,7 +28,7 @@ function Kpi({ icon, tone, value, label }: { icon: string; tone: string; value: 
 
 /** The validation as a dashboard: what it was run on and when, how many images are fine, the checks with how each ended — and,
  * opened from one, the images that failed it. The table of checks is the page's (it has the choosing of them): it goes in `children`. */
-export default function ValidationDashboard({ title, subtitle, reportId, running, canRun, onRun, runLabel = 'Run validation', runningLabel = 'Validating…', children }: {
+export default function ValidationDashboard({ title, subtitle, reportId, running, canRun, onRun, runLabel = 'Run validation', runningLabel = 'Validating…', preprocessing = false, children }: {
   title: string
   subtitle: string
   /** The report of the last run, once there is one. */
@@ -38,6 +38,8 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
   onRun: () => void
   runLabel?: string
   runningLabel?: string
+  /** The report is of a preprocessing: its figures are the images processed and skipped, not tests. */
+  preprocessing?: boolean
   children: (context: DashboardContext) => ReactNode
 }) {
   const [report, setReport] = useState<Report | null>(null)
@@ -82,19 +84,26 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
         </div>
       </div>
 
-      {shown && (
+      {shown && (preprocessing ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" aria-label="Summary">
+          <Kpi icon="🖼️" tone="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" value={shown.checked} label="Images" />
+          <Kpi icon="✔" tone="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400" value={Math.max(0, shown.checked - withIssues)} label="Images processed" />
+          <Kpi icon="⚠" tone="bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400" value={withIssues} label="Images skipped" />
+          <Kpi icon="⚙️" tone="bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400" value={2 + (['rename', 'resize', 'metadata'] as const).filter((step) => shown.parameters[step] === true).length} label="Steps done" />
+        </div>
+      ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" aria-label="Summary">
           <Kpi icon="✔" tone="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400" value={Math.max(0, shown.checked - withIssues)} label="Valid images" />
           <Kpi icon="⚠" tone="bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400" value={withIssues} label="Images with issues" />
           <Kpi icon="🧪" tone="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" value={checks.length} label="Tests executed" />
           <Kpi icon="❗" tone="bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400" value={checks.filter((c) => c.failed > 0).length} label="Tests with errors" />
         </div>
-      )}
+      ))}
       {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
 
       {children({ report: shown, openCheck, open: (check) => setOpenCheck((current) => (current === check ? null : check)) })}
 
-      {shown && openCheck && shown.checks[openCheck] && <CheckFailures report={shown} check={openCheck} onBack={() => setOpenCheck(null)} />}
+      {shown && openCheck && shown.checks[openCheck] && <CheckFailures report={shown} check={openCheck} parent={title} onBack={() => setOpenCheck(null)} />}
     </div>
   )
 }

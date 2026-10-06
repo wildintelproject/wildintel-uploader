@@ -93,6 +93,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a badge and the number of failed images each, and — opened from one — the images that failed it as thumbnails, with search, filter by error, sort, a
   grid or a list, pages and a view of everything the report says of an image. A report's images are served as thumbnails
   (`/api/reports/{id}/image`).
+- The import step (preprocessing) has the same dashboard too: images processed and skipped, and the skipped ones as thumbnails.
 - The postvalidation step has the same dashboard (Run checks); the images out of range or from another camera open as thumbnails.
 - The tables of checks have a first column that shows the check running and then how it ended (✔ passed, ⚠ failed, ✘ failed and
   required), and the plain list of results below them is gone: the report is what is shown.
