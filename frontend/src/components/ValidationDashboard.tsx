@@ -79,7 +79,7 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
             </span>
           )}
           <button type="button" className={`${report ? btnOutline : btnPrimary} flex items-center gap-2`} disabled={running || !canRun} onClick={onRun}>
-            {running && <SmallSpinner />}{running ? runningLabel : runLabel}
+            {running ? <SmallSpinner /> : <span aria-hidden="true">▶</span>}{running ? runningLabel : runLabel}
           </button>
         </div>
       </div>
