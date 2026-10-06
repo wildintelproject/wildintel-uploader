@@ -43,6 +43,7 @@ _EXIF_IFD = 0x8769
 _DATE_TAGS = (("exif", 36867), ("exif", 36868), ("main", 306))  # DateTimeOriginal, DateTimeDigitized, DateTime
 _NO_DATA = {"0000:00:00 00:00:00"}
 _XMP_BATCH = 200  # files per ExifTool run
+EXIFTOOL_TMP_SUFFIX = "_exiftool_tmp"  # what ExifTool adds to a file's name while it rewrites it
 _JPEG_QUALITY = 90
 
 
@@ -182,18 +183,27 @@ def xmp_tags(options: PreprocessOptions, deployment: DeploymentFields, *, camera
 
 def write_xmp(exiftool: str, items: list[tuple[Path, dict[str, str]]]) -> None:
     """Writes each file's own tags, in place, with one ExifTool run per batch — the
-    files and their tags go in on stdin, so no command line limit is in the way."""
-    for start in range(0, len(items), _XMP_BATCH):
-        lines: list[str] = []
-        for path, tags in items[start:start + _XMP_BATCH]:
-            lines += [f"-{tag}={value.replace(chr(10), ' ')}" for tag, value in tags.items()]
-            lines += [str(path), "-execute"]
-        completed = subprocess.run(
-            [exiftool, "-@", "-", "-common_args", "-overwrite_original", "-charset", "filename=utf8", "-charset", "utf8"],
-            input="\n".join(lines) + "\n", capture_output=True, text=True, encoding="utf-8", check=False,
-        )
-        if completed.returncode != 0 or "error" in completed.stderr.lower():
-            raise DeploymentImportError(f"ExifTool could not write the metadata: {(completed.stderr or completed.stdout).strip()[:300]}")
+    files and their tags go in on stdin, so no command line limit is in the way.
+
+    ExifTool writes each file to a "<file>_exiftool_tmp" and renames it over the original; one it was
+    interrupted in the middle of (a failure, the app being stopped) is left behind, so those are
+    removed however this ends."""
+    try:
+        for start in range(0, len(items), _XMP_BATCH):
+            lines: list[str] = []
+            for path, tags in items[start:start + _XMP_BATCH]:
+                lines += [f"-{tag}={value.replace(chr(10), ' ')}" for tag, value in tags.items()]
+                lines += [str(path), "-execute"]
+            completed = subprocess.run(
+                [exiftool, "-@", "-", "-common_args", "-overwrite_original", "-charset", "filename=utf8", "-charset", "utf8"],
+                input="\n".join(lines) + "\n", capture_output=True, text=True, encoding="utf-8", check=False,
+            )
+            if completed.returncode != 0 or "error" in completed.stderr.lower():
+                raise DeploymentImportError(f"ExifTool could not write the metadata: {(completed.stderr or completed.stdout).strip()[:300]}")
+    finally:
+        for folder in {path.parent for path, _ in items}:
+            for leftover in folder.glob(f"*{EXIFTOOL_TMP_SUFFIX}"):
+                leftover.unlink(missing_ok=True)
 
 
 def _image_entry(record: dict) -> dict:

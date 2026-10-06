@@ -323,6 +323,22 @@ def test_adding_metadata_without_exiftool_is_refused_up_front_and_nothing_is_wri
     assert not (tmp_path / "out").exists()
 
 
+def test_the_files_exiftool_leaves_when_it_is_interrupted_are_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    image = tmp_path / "R0001-WICP_0001__20250612_1.JPEG"
+    image.write_bytes(b"x")
+
+    def interrupted(*args, **kwargs):  # ExifTool dies with a file half written
+        (tmp_path / "R0001-WICP_0001__20250612_1.JPEG_exiftool_tmp").write_bytes(b"half")
+        return subprocess.CompletedProcess(args, 1, stdout="", stderr="Error: killed")
+
+    monkeypatch.setattr(pre.subprocess, "run", interrupted)
+
+    with pytest.raises(pre.DeploymentImportError, match="could not write"):
+        pre.write_xmp("exiftool", [(image, {"XMP-dc:Creator": "x"})])
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == [image.name]
+
+
 def test_without_metadata_exiftool_is_not_needed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
 
