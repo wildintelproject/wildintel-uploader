@@ -275,7 +275,9 @@ export type ImportEvent =
   | { type: 'metadata'; total: number }
   /** An image that couldn't be processed — the rest go on. */
   | { type: 'skipped'; name: string; detail: string }
-  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number }
+  /** The images are being checked and the deployment sealed (see seal.json). */
+  | { type: 'sealing' }
+  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean }
 
 /** What is done to the images as they are imported, and the values it uses — see
  * core.services.preprocessing_service. */
@@ -305,6 +307,15 @@ export interface SyncResult {
   unassigned: string[]
   failed: { deployment_id: string; error: string }[]
 }
+
+/** A collection the sync can bring, and the deployments in it. */
+export interface SyncCollection {
+  name: string
+  deployments: string[]
+}
+
+/** What the sync reports as it goes: a message per step, and at the end the result. */
+export type SyncEvent = { type: 'progress'; message: string } | ({ type: 'done' } & SyncResult)
 
 /** What the upload page starts from when it is reached from a finished import: the research project and collection just imported into. */
 export interface UploadTarget {

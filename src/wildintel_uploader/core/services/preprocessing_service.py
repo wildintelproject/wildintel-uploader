@@ -197,16 +197,15 @@ def write_xmp(exiftool: str, items: list[tuple[Path, dict[str, str]]]) -> None:
 
 
 def _image_entry(record: dict) -> dict:
-    """What images.json keeps of a preprocessed image: its names, when it was taken (the camera's wall clock, the
-    instant and its epoch seconds), the camera, the file's size and pixels and its hashes."""
+    """What images.json keeps of a preprocessed image: its name and when it was taken (the camera's wall clock) and, as
+    extras, its original name, the instant and its epoch seconds, the camera, the file's size and pixels and its hashes."""
     target: Path = record["_target"]
     width, height = _dimensions(target)
-    return {
-        "name": record["name"], "original": record["original"], "local_time": record["_local"].isoformat(),
-        "taken_at": record["date"], "timestamp": record["_date"].timestamp(), "date_source": record["date_source"],
+    return local_folder_service.image_entry(record["name"], record["_local"].isoformat(), "local", {
+        "original": record["original"], "taken_at": record["date"], "timestamp": record["_date"].timestamp(), "date_source": record["date_source"],
         "camera": record["camera"], "width": width, "height": height, "size_bytes": target.stat().st_size,
         "resized": record["resized"], "sha1": record["final_hash"], "source_sha1": record["source_hash"],
-    }
+    })
 
 
 def _dimensions(path: Path) -> tuple[int | None, int | None]:
@@ -260,8 +259,7 @@ def preprocess_stream(
     exiftool = camera_info.exiftool_path()
     if options.metadata and exiftool is None:
         raise DeploymentImportError("Adding metadata needs ExifTool, and it isn't installed.")
-    if dest.exists() and any(dest.iterdir()):
-        raise DeploymentImportError(f"{dest} already exists — importing again would mix the images.")
+    deployment_import_service.check_not_kept(dest)
 
     def events() -> Iterator[dict]:
         local_folder_service.write_collection_metadata(collection, collection_name)
@@ -316,7 +314,12 @@ def preprocess_stream(
             json.dumps({"options": asdict(options), "processed": len(records), "skipped": skipped, "images": public}, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        yield {"type": "sealing"}
+        sealed = deployment_import_service.seal_deployment(
+            source, dest, deployment, originals={r["name"]: r["original"] for r in records},
+            source_hashes={r["original"]: r["source_hash"] for r in records}, preprocessing=asdict(options),
+        )
         logger.info("Deployment %s preprocessed and organized in %s (%d image(s), %d skipped)", deployment.deployment_id, dest, len(records), skipped)
-        yield {"type": "done", "dest_dir": str(dest), "processed": len(records), "skipped": skipped}
+        yield {"type": "done", "dest_dir": str(dest), "processed": len(records), "skipped": skipped, "sealed": sealed}
 
     return events()

@@ -731,7 +731,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
                 {duplicated(active.name) && <p className="text-sm text-red-600 dark:text-red-400 mb-3">Another deployment of the session has this id — each needs its own location.</p>}
                 {existingFolder(active.name) && (
                   <p role="alert" className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-                    ⚠ This deployment already exists: <span className="font-mono break-all">{existingFolder(active.name)}</span> has images in it, and
+                    ⚠ This deployment already exists: <span className="font-mono break-all">{existingFolder(active.name)}</span> is already kept, and
                     importing it again would be refused as it would mix them. Choose another location, or move that folder away.
                   </p>
                 )}

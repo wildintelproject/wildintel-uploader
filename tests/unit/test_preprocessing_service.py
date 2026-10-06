@@ -186,8 +186,8 @@ def test_the_images_are_renamed_resized_and_kept_flat_in_the_deployments_folder(
     for image in dest.glob("*.JPEG"):
         with Image.open(image) as img:
             assert img.width == 2400
-    assert [e["type"] for e in events] == ["copy", "copy", "copy", "done"]
-    assert events[-1] == {"type": "done", "dest_dir": str(dest), "processed": 3, "skipped": 0}
+    assert [e["type"] for e in events] == ["copy", "copy", "copy", "sealing", "done"]
+    assert events[-1] == {"type": "done", "dest_dir": str(dest), "processed": 3, "skipped": 0, "sealed": True}
     assert events[0]["name"] == "R0003-DONA_01__20240701_1.JPEG"
     assert json.loads((dest / "deployment.json").read_text())["deployment_id"] == "R0003-DONA_01"
     assert json.loads((collection / "collection.json").read_text())["name"] == "R0003"
@@ -379,3 +379,14 @@ def test_the_final_hash_is_the_one_of_the_file_with_its_metadata_and_the_identif
 
     assert entry["final_hash"] == hashlib.sha1((dest / entry["name"]).read_bytes()).hexdigest()  # what sha1sum gives
     assert entry["final_hash"] != entry["hash"]  # the XMP changed the file after the identifier was taken
+
+
+def test_a_deployment_synced_from_trapper_is_never_imported_into(tmp_path: Path):
+    source = _source(tmp_path, 1)
+    synced = tmp_path / "out" / DEPLOYMENT.deployment_id
+    synced.mkdir(parents=True)
+    (synced / "images.json").write_text('{"source": "trapper"}', encoding="utf-8")
+
+    with pytest.raises(pre.DeploymentImportError, match="synced from Trapper"):
+        _run(source, tmp_path / "out")
+    assert not (synced / "preprocessing.json").exists()

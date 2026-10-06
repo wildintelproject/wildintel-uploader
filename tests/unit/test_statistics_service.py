@@ -29,12 +29,12 @@ def _jpeg(path: Path, taken: datetime) -> None:
 
 
 def _revision(root: Path, rp: str, deployment_id: str, stamps: list[datetime], *, collection: str | None = None, log=True) -> Path:
-    """A previous revision kept in the collections folder, with its preprocessing.json (or just its images)."""
+    """A previous revision kept in the collections folder, with its images.json (or just its images)."""
     folder = root / rp / (collection or deployment_id[:5]) / deployment_id
     folder.mkdir(parents=True)
     if log:
-        images = [{"original": f"{i}.jpg", "name": f"{i}.jpeg", "date": t.replace(tzinfo=timezone.utc).isoformat()} for i, t in enumerate(stamps)]
-        (folder / "preprocessing.json").write_text(json.dumps({"images": images}), encoding="utf-8")
+        images = [{"name": f"{i}.jpeg", "local_time": t.isoformat(), "source": "trapper", "extra": {}} for i, t in enumerate(stamps)]
+        (folder / "images.json").write_text(json.dumps({"images": images}), encoding="utf-8")
     else:
         for i, t in enumerate(stamps):
             _jpeg(folder / f"IMG_{i:04d}.JPG", t)
@@ -90,7 +90,7 @@ def test_a_first_revision_an_odd_id_or_an_unknown_research_project_has_no_histor
     assert st.previous_revisions(tmp_path / "missing", "DONA", "R0002-DONA_01") == []
 
 
-def test_a_revisions_images_are_read_from_its_preprocessing_log_or_else_from_their_exif(tmp_path: Path):
+def test_a_revisions_images_are_read_from_its_images_file_or_else_from_their_exif(tmp_path: Path):
     with_log = _revision(tmp_path, "DONA", "R0001-DONA_01", _stamps(6, 3))
     without = _revision(tmp_path, "DONA", "R0002-DONA_01", _stamps(6, 3), log=False)
 
@@ -100,9 +100,9 @@ def test_a_revisions_images_are_read_from_its_preprocessing_log_or_else_from_the
     assert a.sequences(60) == b.sequences(60) == [3, 3]
 
 
-def test_a_preprocessing_log_that_cannot_be_read_falls_back_to_the_images(tmp_path: Path):
+def test_an_images_file_that_cannot_be_read_falls_back_to_the_images(tmp_path: Path):
     folder = _revision(tmp_path, "DONA", "R0001-DONA_01", _stamps(4, 2), log=False)
-    (folder / "preprocessing.json").write_text("{ not json", encoding="utf-8")
+    (folder / "images.json").write_text("{ not json", encoding="utf-8")
 
     assert st.times_of_revision(folder).image_count == 4
 

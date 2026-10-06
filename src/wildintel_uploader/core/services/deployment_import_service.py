@@ -84,6 +84,17 @@ def default_collection_dir(research_project_id: str, deployment_id: str) -> Path
     return config.collections_dir() / research_project_id / collection_code(deployment_id)
 
 
+def check_not_kept(dest: Path) -> None:
+    """Raises:
+        DeploymentImportError: the deployment is already kept in dest — importing again would mix the images — or it
+            was synced from Trapper, which is not modified here.
+    """
+    if local_folder_service.is_synced(dest):
+        raise DeploymentImportError(f"{dest.name} was synced from Trapper, so it can't be modified here.")
+    if dest.exists() and any(dest.iterdir()):
+        raise DeploymentImportError(f"{dest} already exists — importing again would mix the images.")
+
+
 def existing_deployment_dir(research_project_id: str, deployment_id: str) -> Path | None:
     """The folder where this deployment is already kept — <collections folder>/<research project>/<R0003>/<deployment id>
     — if it is there with something in it, which is when importing it again would be refused. None otherwise,
@@ -347,7 +358,7 @@ def _duplicate_groups(images: list[Path], source_dir: Path) -> list[dict]:
     return sorted(groups, key=lambda g: g["files"][0])
 
 
-def validate_images(source_dir: Path, checks: frozenset[str] | None = None) -> dict:
+def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, detail: bool = False) -> dict:
     """Independent, opt-in checks over a scanned folder's images — only
     "checked_count" plus whichever of these were asked for are present in
     the result:
@@ -377,6 +388,7 @@ def validate_images(source_dir: Path, checks: frozenset[str] | None = None) -> d
         content (a card copied twice, a file renamed and kept), each with
         the size and the files. Only files of the same size are compared,
         so a big folder isn't hashed in full.
+    With detail, exif_missing also lists in "files" every image that lacks each field, not just examples.
 
     Raises:
         DeploymentImportError: source_dir doesn't exist or isn't a folder.
@@ -411,7 +423,11 @@ def validate_images(source_dir: Path, checks: frozenset[str] | None = None) -> d
             if cameras[path].camera_id is None:
                 missing["camera_id"].append(path)
         result["exif_missing"] = {
-            field: {"count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]]} for field, paths in missing.items()
+            field: {
+                "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]],
+                **({"files": [str(p.relative_to(source_dir)) for p in paths]} if detail else {}),
+            }
+            for field, paths in missing.items()
         }
 
     if "duplicates" in checks:
@@ -719,7 +735,7 @@ def import_stream(
 
 def copied_images_info(dest: Path) -> list[dict]:
     """The images of a copied deployment folder, in natural order, as images.json keeps them: the name, the camera's
-    wall-clock time from the EXIF (None when it has none), the file's size and its pixels."""
+    wall-clock time from the EXIF (None when it has none) and, as extras, the file's size and its pixels."""
     entries = []
     for path in sorted((p for p in dest.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: _natural_key(p.relative_to(dest))):
         taken = _image_datetime(path)
@@ -728,11 +744,23 @@ def copied_images_info(dest: Path) -> list[dict]:
                 width, height = img.width, img.height
         except Exception:
             width = height = None
-        entries.append({
-            "name": str(path.relative_to(dest)), "local_time": taken.isoformat() if taken else None,
-            "width": width, "height": height, "size_bytes": path.stat().st_size,
-        })
+        entries.append(local_folder_service.image_entry(
+            str(path.relative_to(dest)), taken.isoformat() if taken else None, "local",
+            {"width": width, "height": height, "size_bytes": path.stat().st_size},
+        ))
     return entries
+
+
+def seal_deployment(source: Path, dest: Path, deployment: DeploymentFields, **details) -> bool:
+    """Checks the source images and seals the deployment kept in dest (see seal_service). A failure is logged and the
+    deployment is left without a seal — it was imported all the same — and False says so."""
+    from wildintel_uploader.core.services import seal_service  # imported here: the seal runs this module's own checks
+    try:
+        seal_service.seal(source, dest, deployment, **details)
+        return True
+    except Exception as exc:
+        logger.warning("Could not seal %s: %s", deployment.deployment_id, exc, exc_info=True)
+        return False
 
 
 def import_local_stream(source_dir: str, collection_dir: str, collection_name: str | None, deployment: DeploymentFields) -> Iterator[dict]:
@@ -743,19 +771,22 @@ def import_local_stream(source_dir: str, collection_dir: str, collection_name: s
     "registering" step.
 
     Raises:
-        DeploymentImportError: bad source/destination paths.
+        DeploymentImportError: bad source/destination paths, or the deployment is already kept.
     """
     source = Path(source_dir).expanduser()
     collection = Path(collection_dir).expanduser()
     dest = collection / deployment.deployment_id
     check_paths(source, dest)
+    check_not_kept(dest)
 
     def events() -> Iterator[dict]:
         local_folder_service.write_collection_metadata(collection, collection_name)
         yield from copy_folder(source, dest)
         local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
         local_folder_service.write_images_file(dest, deployment.deployment_id, copied_images_info(dest))
+        yield {"type": "sealing"}
+        sealed = seal_deployment(source, dest, deployment)
         logger.info("Deployment %s organized locally in %s", deployment.deployment_id, dest)
-        yield {"type": "done", "dest_dir": str(dest)}
+        yield {"type": "done", "dest_dir": str(dest), "sealed": sealed}
 
     return events()

@@ -438,3 +438,14 @@ class SyncCollectionsRequest(TrapperCredentials):
     research_project_name: Optional[str] = None
     research_project_acronym: Optional[str] = None
     classification_project_pk: int
+    # The collections to sync, by name; left out, every collection starting with R is synced.
+    collections: Optional[list[str]] = None
+    # The deployments to sync, by id, within those collections; left out, all of them are.
+    deployments: Optional[list[str]] = None
+
+
+class SyncCollectionNamesRequest(TrapperCredentials):
+    """The collections of a classification project that can be synced, and the deployments in each."""
+
+    research_project_pk: int
+    classification_project_pk: int

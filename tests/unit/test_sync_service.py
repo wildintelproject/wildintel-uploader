@@ -71,8 +71,9 @@ def test_creates_the_expected_structure(tmp_path: Path):
     info = json.loads((folder / "R0003" / "R0003-DONA_01" / "images.json").read_text(encoding="utf-8"))
     assert (info["source"], info["image_count"], info["first"], info["last"]) == ("trapper", 2, "2024-07-01T09:00:00", "2024-07-02T10:30:00")  # DONA_01 ignores DST
     first = info["images"][0]
-    assert first["name"] == "R0003-DONA_01__20240701_1.JPEG" and first["trapper_pk"] == 90 and first["timestamp"] == 1719820800.0 and first["tags"] == ["night"]
-    assert info["images"][1]["species"] == ["Lynx pardinus"]
+    assert first["name"] == "R0003-DONA_01__20240701_1.JPEG" and first["source"] == "trapper"
+    assert first["extra"]["trapper_pk"] == 90 and first["extra"]["timestamp"] == 1719820800.0 and first["extra"]["tags"] == ["night"]
+    assert info["images"][1]["extra"]["species"] == ["Lynx pardinus"]
     assert result["unassigned"] == ["R0009-DONA_01"]
     assert result["created"]["deployments"] == ["R0003-DONA_01", "R0003-DONA_02", "R0003-DONA_03"]
     saved = json.loads((folder / "R0003" / "R0003-DONA_03" / "deployment.json").read_text(encoding="utf-8"))
@@ -105,7 +106,9 @@ def test_the_endpoint_syncs_the_collections_folder(tmp_path: Path):
          patch("wildintel_uploader.core.services.sync_service.collection_names", return_value=["R0003"]):
         response = TestClient(app).post("/api/sync/collections", json=payload)
 
-    assert response.status_code == 200 and response.json()["research_project_id"] == "DONA"
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert response.status_code == 200 and events[-1]["type"] == "done" and events[-1]["research_project_id"] == "DONA"
+    assert any(e["type"] == "progress" and "R0003-DONA_01 (1/" in e["message"] for e in events)
     assert (tmp_path / "DONA" / "R0003" / "R0003-DONA_01" / "deployment.json").is_file()
 
 
@@ -114,3 +117,37 @@ def test_collection_names_keeps_those_starting_with_r_of_the_classification_proj
     client.classification_projects.where_project_collections.return_value = [SimpleNamespace(name=n) for n in ("R0002", "Pilot", "r0001", "R0002")]
     with patch("wildintel_uploader.core.services.sync_service.trapper_service.client", return_value=client):
         assert sync_service.collection_names(CREDS, 10) == ["r0001", "R0002"]
+
+
+def test_only_the_chosen_collections_are_synced(tmp_path: Path):
+    with patch("wildintel_uploader.core.services.sync_service.trapper_service.list_deployment_resources", return_value=RESOURCES), \
+         patch("wildintel_uploader.core.services.sync_service.trapper_service.list_locations", return_value=LOCATIONS), \
+         patch("wildintel_uploader.core.services.sync_service.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+         patch("wildintel_uploader.core.services.sync_service.collection_names", return_value=["R0003", "R0004"]):
+        result = sync_service.sync(CREDS, tmp_path, PROJECT, 10, ["r0004"])
+
+    assert result["collections"] == ["R0004"]
+    assert not (tmp_path / "DONA" / "R0003").exists()
+
+
+def test_only_the_chosen_deployments_are_synced_and_the_others_are_not_called_unassigned(tmp_path: Path):
+    with patch("wildintel_uploader.core.services.sync_service.trapper_service.list_deployment_resources", return_value=RESOURCES), \
+         patch("wildintel_uploader.core.services.sync_service.trapper_service.list_locations", return_value=LOCATIONS), \
+         patch("wildintel_uploader.core.services.sync_service.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+         patch("wildintel_uploader.core.services.sync_service.collection_names", return_value=["R0003"]):
+        result = sync_service.sync(CREDS, tmp_path, PROJECT, 10, None, ["r0003-dona_02"])
+
+    assert result["created"]["deployments"] == ["R0003-DONA_02"]
+    assert not (tmp_path / "DONA" / "R0003" / "R0003-DONA_01").exists()
+    assert "R0003-DONA_01" not in result["unassigned"]
+
+
+def test_the_endpoint_lists_the_collections_and_their_deployments():
+    from wildintel_uploader.web.main import app
+    payload = {**dict(zip(("url", "username", "password"), CREDS)), "research_project_pk": 2, "classification_project_pk": 10}
+    with patch("wildintel_uploader.core.services.sync_service.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+         patch("wildintel_uploader.core.services.sync_service.collection_names", return_value=["R0003"]):
+        response = TestClient(app).post("/api/sync/collection-names", json=payload)
+
+    assert response.json()["results"][0]["name"] == "R0003"
+    assert "R0003-DONA_01" in response.json()["results"][0]["deployments"]

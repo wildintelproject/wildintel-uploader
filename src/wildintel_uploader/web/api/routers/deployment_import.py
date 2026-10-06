@@ -21,7 +21,7 @@ from wildintel_uploader.core.schemas.requests import (
     ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
     NextRevisionRequest, UpdateLocationRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
-from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, statistics_service
+from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, seal_service, statistics_service
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
 
 router = APIRouter(prefix="/api/deployment-import", tags=["deployment-import"])
@@ -110,12 +110,24 @@ def timestamp_log(req: TimestampLogRequest) -> dict:
     the one the deployment id names, in the research project's folder."""
     try:
         collection = deployment_import_service.default_collection_dir(req.research_project_id, req.deployment.deployment_id)
+        if local_folder_service.is_synced(collection / req.deployment.deployment_id):
+            raise deployment_import_service.DeploymentImportError(f"{req.deployment.deployment_id} was synced from Trapper, so it can't be modified here.")
         # The camera's wall-clock time: what the images' EXIF holds, whatever the designator says.
         start = datetime.fromisoformat(req.deployment.start_date).replace(tzinfo=None)
         end = datetime.fromisoformat(req.deployment.end_date).replace(tzinfo=None)
         return {**local_folder_service.upsert_timestamp_log(collection, req.deployment.deployment_id, start, end), "collection": collection.name}
     except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/seal")
+def seal_status(req: CollectionPathRequest) -> dict:
+    """Whether the deployment kept in the collections folder is still what its seal.json says (see services.seal_service):
+    {"status": "none" | "valid" | "broken", "changed", "missing", "added", "deployment_changed", "seal_changed"}."""
+    dest = deployment_import_service.existing_deployment_dir(req.research_project_id, req.deployment_id)
+    if dest is None:
+        raise HTTPException(404, f"{req.deployment_id} isn't in the collections folder.")
+    return seal_service.verify(dest)
 
 
 @router.post("/collection-path")

@@ -470,7 +470,7 @@ def test_import_local_stream_organizes_files_and_writes_metadata(tmp_path: Path)
     events = list(svc.import_local_stream(str(source), str(collection), "Doñana 2024", _deployment()))
 
     assert events[0] == {"type": "copy", "index": 1, "total": 1, "name": "a.jpg"}
-    assert events[1]["type"] == "done"
+    assert [e["type"] for e in events] == ["copy", "sealing", "done"]
     dest = collection / "R0001-DONA_01"
     assert (dest / "a.jpg").is_file()
     assert (collection / "collection.json").is_file()

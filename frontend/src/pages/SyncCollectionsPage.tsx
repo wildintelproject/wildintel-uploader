@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
-import type { ClassificationProject, ResearchProject, SyncResult } from '../types'
+import Combobox from '../components/Combobox'
+import type { ClassificationProject, ResearchProject, SyncCollection, SyncResult } from '../types'
 
 const btnPrimary = 'px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
 const labelClass = 'block text-sm font-semibold mb-1.5 text-zinc-700 dark:text-zinc-300'
-const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
 
 const KINDS: { key: keyof SyncResult['created']; label: string }[] = [
   { key: 'research_project', label: 'Research project' },
@@ -26,9 +26,16 @@ export default function SyncCollectionsPage() {
   const [projectPk, setProjectPk] = useState('')
   const [classifications, setClassifications] = useState<ClassificationProject[]>([])
   const [classificationPk, setClassificationPk] = useState('')
+  const [collections, setCollections] = useState<SyncCollection[]>([])
+  const [collectionName, setCollectionName] = useState('')
+  const [chosenDeployments, setChosenDeployments] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [result, setResult] = useState<SyncResult | null>(null)
+  const [progress, setProgress] = useState<string[]>([])
+  const logRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight }, [progress])
 
   const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
 
@@ -39,7 +46,7 @@ export default function SyncCollectionsPage() {
   }, [])
 
   async function chooseProject(pk: string) {
-    setProjectPk(pk); setClassificationPk(''); setClassifications([]); setResult(null); setError(null)
+    setProjectPk(pk); setClassificationPk(''); setClassifications([]); setCollections([]); setCollectionName(''); setChosenDeployments(new Set()); setResult(null); setError(null)
     if (!pk) return
     try {
       setClassifications((await api.trapperClassificationProjects({}, Number(pk))).results)
@@ -48,12 +55,38 @@ export default function SyncCollectionsPage() {
     }
   }
 
+  async function chooseClassification(pk: string) {
+    setClassificationPk(pk); setCollections([]); setCollectionName(''); setChosenDeployments(new Set()); setResult(null); setError(null)
+    if (!pk) return
+    try {
+      const found = (await api.syncCollectionNames({}, Number(projectPk), Number(pk))).results
+      setCollections(found)
+    } catch (e) {
+      setError(message(e, 'The collections could not be read from Trapper.'))
+    }
+  }
+
+  const collection = collections.find((c) => c.name === collectionName)
+  const deployments = collection?.deployments ?? []
+  const allChosen = deployments.length > 0 && chosenDeployments.size === deployments.length
+
+  /** Choosing a collection starts with all its deployments ticked. */
+  function chooseCollection(name: string) {
+    setCollectionName(name); setResult(null); setProgress([])
+    setChosenDeployments(new Set(collections.find((c) => c.name === name)?.deployments ?? []))
+  }
+
+  const toggle = (id: string) => setChosenDeployments((s) => { const next = new Set(s); if (!next.delete(id)) next.add(id); return next })
+
   async function handleSync() {
     const project = projects.find((p) => String(p.pk) === projectPk)
-    if (!project || !classificationPk) return
-    setSyncing(true); setError(null); setResult(null)
+    if (!project || !classificationPk || !collection || chosenDeployments.size === 0) return
+    setSyncing(true); setError(null); setResult(null); setProgress([])
     try {
-      setResult(await api.syncCollections({}, project, Number(classificationPk)))
+      await api.syncCollections({}, project, Number(classificationPk), [collection.name], deployments.filter((d) => chosenDeployments.has(d)), (event) => {
+        if (event.type === 'progress') setProgress((lines) => [...lines, event.message])
+        else setResult(event)
+      })
     } catch (e) {
       setError(message(e, 'The sync failed.'))
     } finally {
@@ -65,27 +98,89 @@ export default function SyncCollectionsPage() {
     <div className="mx-auto px-4 py-8" style={{ maxWidth: 700 }}>
       <h1 className="text-2xl font-bold mb-1">Sync local collections</h1>
       <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">
-        Pick a classification project of Trapper. The local folders are checked against it, and what is missing is created: the research
-        project and its locations, the collections starting with R (each with its timestamp log) and the deployment of each. What is
+        Pick a classification project of Trapper, one of its collections, and the deployments to sync. The local folders are checked against them, and what is missing is created: the research
+        project and its locations, the collection (with its timestamp log) and the chosen deployments. What is
         already there is left as it is, and the images are not downloaded.
       </p>
 
-      <label className={labelClass} htmlFor="sync-research-project">Research project</label>
-      <select id="sync-research-project" className={`${inputClass} mb-4`} value={projectPk} onChange={(e) => chooseProject(e.target.value)}>
-        <option value="">Choose one…</option>
-        {projects.map((p) => <option key={p.pk} value={p.pk}>{p.acronym ? `${p.acronym} — ${p.name}` : p.name}</option>)}
-      </select>
+      <div className="mb-4">
+        <label className={labelClass} htmlFor="sync-research-project">Research project</label>
+        <Combobox
+          id="sync-research-project" options={projects.map((p) => ({ value: String(p.pk), label: p.acronym ? `${p.acronym} — ${p.name}` : p.name }))}
+          value={projectPk} onChange={chooseProject} disabled={syncing}
+          placeholder={projects.length === 0 ? 'No research projects' : 'Select a research project…'} clearLabel="Clear research project"
+        />
+      </div>
 
-      <label className={labelClass} htmlFor="sync-classification-project">Classification project</label>
-      <select id="sync-classification-project" className={`${inputClass} mb-4`} value={classificationPk} disabled={!projectPk}
-              onChange={(e) => { setClassificationPk(e.target.value); setResult(null) }}>
-        <option value="">Choose one…</option>
-        {classifications.map((c) => <option key={c.pk} value={c.pk}>{c.name}</option>)}
-      </select>
+      <div className="mb-4">
+        <label className={labelClass} htmlFor="sync-classification-project">Classification project</label>
+        <Combobox
+          id="sync-classification-project" options={classifications.map((c) => ({ value: String(c.pk), label: c.name }))}
+          value={classificationPk} onChange={chooseClassification} disabled={!projectPk || syncing}
+          placeholder="Select a classification project…" clearLabel="Clear classification project"
+        />
+      </div>
 
-      <button type="button" className={btnPrimary} disabled={!classificationPk || syncing} onClick={handleSync}>
+      {classificationPk && (
+        <div className="mb-4">
+          <label className={labelClass} htmlFor="sync-collection">Collection</label>
+          <Combobox
+            id="sync-collection" options={collections.map((c) => ({ value: c.name, label: `${c.name} — ${c.deployments.length} deployment(s)` }))}
+            value={collectionName} onChange={chooseCollection} disabled={syncing}
+            placeholder={collections.length === 0 ? 'No collections starting with R' : 'Select a collection…'} clearLabel="Clear collection"
+          />
+        </div>
+      )}
+
+      {collection && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Deployments</p>
+            {deployments.length > 0 && (
+              <button type="button" className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50" disabled={syncing}
+                      onClick={() => setChosenDeployments(new Set(allChosen ? [] : deployments))}>
+                {allChosen ? 'Deselect all' : 'Select all'}
+              </button>
+            )}
+          </div>
+          {deployments.length === 0 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">This collection has no deployments.</p>
+          ) : (
+            <table className="w-full text-sm border border-zinc-200 dark:border-zinc-700 rounded">
+              <thead className="bg-zinc-50 dark:bg-zinc-800/50 text-xs text-zinc-500 dark:text-zinc-400">
+                <tr>
+                  <th scope="col" className="px-3 py-2 text-center w-12">
+                    <input type="checkbox" aria-label="Select all deployments" checked={allChosen} disabled={syncing}
+                           onChange={() => setChosenDeployments(new Set(allChosen ? [] : deployments))} />
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left">Deployment</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                {deployments.map((id) => (
+                  <tr key={id}>
+                    <td className="px-3 py-2 text-center">
+                      <input type="checkbox" aria-label={id} checked={chosenDeployments.has(id)} disabled={syncing} onChange={() => toggle(id)} />
+                    </td>
+                    <td className="px-3 py-2 font-mono">{id}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      <button type="button" className={btnPrimary} disabled={!collection || chosenDeployments.size === 0 || syncing} onClick={handleSync}>
         {syncing ? 'Syncing…' : 'Sync'}
       </button>
+
+      {progress.length > 0 && (
+        <div ref={logRef} role="log" aria-label="Sync progress"
+             className="mt-4 max-h-56 overflow-y-auto rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-3 py-2 text-xs font-mono text-zinc-600 dark:text-zinc-400 space-y-0.5">
+          {progress.map((line, i) => <p key={i}>{line}</p>)}
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600 dark:text-red-400 mt-4">{error}</p>}
 

@@ -69,10 +69,24 @@ def write_deployment_metadata(path: Path, deployment: dict) -> None:
     )
 
 
+def is_synced(deployment_dir: Path) -> bool:
+    """Whether the deployment was synced from Trapper (its images.json says so): what Trapper holds is not modified here."""
+    info = _read_json(deployment_dir / IMAGES_FILE)
+    return isinstance(info, dict) and info.get("source") == "trapper"
+
+
+def image_entry(name: str, local_time: str | None, source: str, extra: dict) -> dict:
+    """One image of images.json: "name" and "local_time" (the camera's wall clock, None when unknown) are always there;
+    "source" says where the rest comes from ("local" or "trapper") and "extra" holds those attributes, which are
+    different for each source."""
+    return {"name": name, "local_time": local_time, "source": source, "extra": extra}
+
+
 def write_images_file(deployment_dir: Path, deployment_id: str, images: list[dict], *, source: str = "local") -> None:
     """images.json — what is known of each image of the deployment, for statistics and checks without opening the
     images again: {"deployment_id", "source", "image_count", "first", "last", "images": [...]}. "source" says where it
-    comes from: "local" (the images were read here) or "trapper" (what Trapper holds for them). "first" and "last" are the
+    comes from: "local" (the images were read here) or "trapper" (what Trapper holds for them); each image says it too.
+    Build the images with image_entry. "first" and "last" are the
     earliest and latest "local_time" of the images (the camera's wall clock) that have one."""
     times = sorted(i["local_time"] for i in images if i.get("local_time"))
     summary = {"deployment_id": deployment_id, "source": source, "image_count": len(images), "first": times[0] if times else None, "last": times[-1] if times else None}

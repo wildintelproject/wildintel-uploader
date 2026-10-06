@@ -8,8 +8,9 @@ before it's uploaded.
 
 What the previous revisions looked like is read from the collections folder: the
 deployments of the same location in the same research project, with a lower
-revision number. Their image dates come from the "preprocessing.json" an import
-leaves beside the images, or, for one imported without it, from the images' EXIF.
+revision number. Their image dates come from the "images.json" kept beside them
+(the camera's time of each image, whether it was imported here or synced from Trapper),
+or, for one that has none, from the images' EXIF.
 
 Both "what is a sequence" and "what is similar" are parameters:
   - a sequence starts when the gap to the previous image is at least
@@ -28,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from wildintel_uploader.core.services import deployment_import_service as dis
+from wildintel_uploader.core.services import deployment_import_service as dis, local_folder_service
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +94,13 @@ def times_of_folder(source_dir: Path) -> DeploymentTimes:
 
 
 def times_of_revision(path: Path) -> DeploymentTimes:
-    """A previous revision's images: from the preprocessing.json its import left, else from the EXIF of the images."""
-    log = path / "preprocessing.json"
+    """A previous revision's images: from the images.json kept beside them — only the "local_time" of each is used —
+    else from the EXIF of the images."""
+    log = path / local_folder_service.IMAGES_FILE
     if log.is_file():
         try:
             images = json.loads(log.read_text(encoding="utf-8")).get("images", [])
-            stamps = [t for t in (_timestamp(i.get("date", "")) for i in images) if t is not None]
+            stamps = [t for t in (_timestamp(i.get("local_time") or "") for i in images) if t is not None]
             return DeploymentTimes(len(images), sorted(stamps))
         except (json.JSONDecodeError, OSError, AttributeError) as exc:
             logger.warning("Could not read %s (%s) — reading the images instead.", log, exc)

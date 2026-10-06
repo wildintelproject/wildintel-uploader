@@ -72,7 +72,7 @@ def test_import_local(tmp_path: Path):
 
     assert response.status_code == 200
     events = [json.loads(line) for line in response.text.splitlines()]
-    assert [e["type"] for e in events] == ["copy", "done"]
+    assert [e["type"] for e in events] == ["copy", "sealing", "done"]
     assert (collection / "R0001-DONA_01" / "a.jpg").is_file()
     assert (collection / "R0001-DONA_01" / "deployment.json").is_file()
 
@@ -669,8 +669,8 @@ def _stat_payload(tmp_path: Path, **overrides) -> dict:
 def _history_revision(root: Path, revision: int, images: int) -> None:
     folder = root / "DONA" / f"R{revision:04d}" / f"R{revision:04d}-DONA_01"
     folder.mkdir(parents=True)
-    entries = [{"name": f"{i}.jpeg", "date": f"2024-0{revision}-04T{10 + (i // 3):02d}:0{(i % 3)}:00+00:00"} for i in range(images)]
-    (folder / "preprocessing.json").write_text(json.dumps({"images": entries}), encoding="utf-8")
+    entries = [{"name": f"{i}.jpeg", "local_time": f"2024-0{revision}-04T{10 + (i // 3):02d}:0{(i % 3)}:00", "source": "local", "extra": {}} for i in range(images)]
+    (folder / "images.json").write_text(json.dumps({"images": entries}), encoding="utf-8")
 
 
 def test_validate_deployment_compares_with_the_previous_revisions_of_the_location(tmp_path: Path):
@@ -819,7 +819,8 @@ def test_import_local_without_preprocessing_writes_images_json(tmp_path: Path):
 
     info = json.loads((tmp_path / "collections" / "DONA" / "R0003" / "R0003-DONA_01" / "images.json").read_text(encoding="utf-8"))
     assert (info["deployment_id"], info["image_count"], info["first"], info["last"]) == ("R0003-DONA_01", 1, "2024-07-01T10:00:00", "2024-07-01T10:00:00")
-    assert info["images"][0]["name"] == "IMG_0001.jpg" and (info["images"][0]["width"], info["images"][0]["height"]) == (4, 4)
+    image = info["images"][0]
+    assert image["name"] == "IMG_0001.jpg" and image["source"] == "local" and (image["extra"]["width"], image["extra"]["height"]) == (4, 4)
 
 
 def test_import_local_with_preprocessing_writes_images_json_with_the_dates_and_hashes(tmp_path: Path):
@@ -828,7 +829,35 @@ def test_import_local_with_preprocessing_writes_images_json_with_the_dates_and_h
     folder = tmp_path / "collections" / "DONA" / "R0003" / "R0003-DONA_01"
     info = json.loads((folder / "images.json").read_text(encoding="utf-8"))
     image = info["images"][0]
-    assert image["name"] == "R0003-DONA_01__20240701_1.JPEG" and image["original"] == "IMG_0001.jpg"
-    assert image["local_time"] == "2024-07-01T10:00:00" and image["taken_at"].startswith("2024-07-01T09:00:00")  # Madrid, ignoring summer time (UTC+1) → UTC
-    assert image["timestamp"] == 1719824400.0
-    assert image["size_bytes"] == (folder / image["name"]).stat().st_size and len(image["sha1"]) == 40
+    extra = image["extra"]
+    assert image["name"] == "R0003-DONA_01__20240701_1.JPEG" and image["source"] == "local" and extra["original"] == "IMG_0001.jpg"
+    assert image["local_time"] == "2024-07-01T10:00:00" and extra["taken_at"].startswith("2024-07-01T09:00:00")  # Madrid, ignoring summer time (UTC+1) → UTC
+    assert extra["timestamp"] == 1719824400.0
+    assert extra["size_bytes"] == (folder / image["name"]).stat().st_size and len(extra["sha1"]) == 40
+
+
+def test_import_local_refuses_a_deployment_synced_from_trapper(tmp_path: Path):
+    with_preprocessing = _import_local_payload(tmp_path)
+    plain = {k: v for k, v in with_preprocessing.items() if k != "preprocessing"}
+    folder = tmp_path / "collections" / "DONA" / "R0003" / "R0003-DONA_01"
+    folder.mkdir(parents=True)
+    (folder / "deployment.json").write_text('{"synced": true}', encoding="utf-8")
+    (folder / "images.json").write_text('{"source": "trapper", "images": []}', encoding="utf-8")
+
+    for body in (plain, with_preprocessing):
+        response = _client().post("/api/deployment-import/import-local", json=body)
+        assert response.status_code == 400 and "synced from Trapper" in response.json()["detail"]
+    assert json.loads((folder / "deployment.json").read_text(encoding="utf-8")) == {"synced": True}
+
+
+def test_the_seal_endpoint_says_whether_a_kept_deployment_is_still_what_was_sealed(tmp_path: Path):
+    with _in(tmp_path / "collections"):
+        _client().post("/api/deployment-import/import-local", json=_import_local_payload(tmp_path))
+        ask = lambda: _client().post("/api/deployment-import/seal", json={"research_project_id": "DONA", "deployment_id": "R0003-DONA_01"})
+        assert ask().json()["status"] == "valid"
+        (tmp_path / "collections" / "DONA" / "R0003" / "R0003-DONA_01" / "deployment.json").write_text("{}", encoding="utf-8")
+        broken = ask().json()
+        missing = _client().post("/api/deployment-import/seal", json={"research_project_id": "DONA", "deployment_id": "R0003-DONA_09"})
+
+    assert broken["status"] == "broken" and broken["deployment_changed"] is True
+    assert missing.status_code == 404

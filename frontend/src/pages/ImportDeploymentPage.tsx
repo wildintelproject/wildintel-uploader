@@ -1772,7 +1772,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
                 )}
                 {existingFolder && (
                   <p role="alert" className="mt-3 text-sm text-amber-700 dark:text-amber-400">
-                    ⚠ This deployment already exists: <span className="font-mono break-all">{existingFolder}</span> has images in it, and importing again
+                    ⚠ This deployment already exists: <span className="font-mono break-all">{existingFolder}</span> is already kept, and importing again
                     would be refused as it would mix them. Choose another revision or location, or move that folder away.
                   </p>
                 )}
@@ -1906,9 +1906,10 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
                 <p key={i}>
                   {e.type === 'copy' && `[${e.index}/${e.total}] ${e.name}`}
                   {e.type === 'registering' && 'Registering the deployment in Trapper…'}
+                  {e.type === 'sealing' && 'Checking the images and sealing the deployment…'}
                   {e.type === 'metadata' && `Writing the metadata of ${e.total} image(s)…`}
                   {e.type === 'skipped' && <span className="text-amber-600 dark:text-amber-400">⚠ Skipped {e.name}: {e.detail}</span>}
-                  {e.type === 'done' && `✔ Imported${e.processed !== undefined ? ` ${e.processed} image(s)${e.skipped ? `, ${e.skipped} skipped` : ''}` : ''} — organized in ${e.dest_dir}`}
+                  {e.type === 'done' && `✔ Imported${e.processed !== undefined ? ` ${e.processed} image(s)${e.skipped ? `, ${e.skipped} skipped` : ''}` : ''} — organized in ${e.dest_dir}${e.sealed === false ? ' (could not be sealed — see the log)' : ''}`}
                 </p>
               ))}
             </div>

@@ -1,7 +1,7 @@
 import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
-  AccessCheck, ScanResult, SessionSummary, StatisticsParams, SyncResult, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
+  AccessCheck, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
 } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
@@ -142,11 +142,20 @@ export const api = {
     post<{ last: number | null; next: number }>('/api/deployment-import/next-revision', { research_project_id: researchProjectId, location_id: locationId }),
 
   // Creates in the collections folder what Trapper has for the classification project and it lacks.
-  syncCollections: (creds: TrapperCredentials, researchProject: ResearchProject, classificationProjectPk: number) =>
-    post<SyncResult>('/api/sync/collections', {
+  // The collections of the classification project that can be synced, each with the ids of its deployments.
+  syncCollectionNames: (creds: TrapperCredentials, researchProjectPk: number, classificationProjectPk: number) =>
+    post<{ results: SyncCollection[] }>('/api/sync/collection-names', { ...creds, research_project_pk: researchProjectPk, classification_project_pk: classificationProjectPk }),
+
+  // Creates in the collections folder what Trapper has for the classification project and it lacks, one deployment at a time:
+  // onEvent gets a progress message per step, and the last event is the done one with the result.
+  syncCollections: (
+    creds: TrapperCredentials, researchProject: ResearchProject, classificationProjectPk: number, collections: string[], deployments: string[],
+    onEvent: (event: SyncEvent) => void,
+  ) =>
+    streamNdjson<SyncEvent>('/api/sync/collections', {
       ...creds, research_project_pk: researchProject.pk, research_project_name: researchProject.name,
-      research_project_acronym: researchProject.acronym ?? null, classification_project_pk: classificationProjectPk,
-    }),
+      research_project_acronym: researchProject.acronym ?? null, classification_project_pk: classificationProjectPk, collections, deployments,
+    }, onEvent, 'The sync ended unexpectedly.'),
 
   saveLocalLocation: (researchProjectId: string, location: LocalLocation) =>
     post<LocalLocation>('/api/deployment-import/locations/save', { research_project_id: researchProjectId, location }),
