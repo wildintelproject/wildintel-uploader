@@ -194,6 +194,7 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
   const classificationValid = classificationValue === null || (Number.isInteger(classificationValue) && classificationValue >= 1)
   // The yaml needs one: with an account it is the one picked (or the only one); offline, the pk typed in.
   const classificationReady = classificationValue !== null && classificationValid
+  const selectable = (collection?.deployments ?? []).filter(canUpload)
   const toUpload = (collection?.deployments ?? []).filter((d) => selected.has(d.deployment_id) && canUpload(d))
 
   /** Whether the account can reach the research project, its locations and the uploader — before sending anything. */
@@ -270,26 +271,58 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
           <div>
             <p className={labelClass}>Deployments</p>
             {collection.deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This collection has no deployments.</p>}
-            <ul className="divide-y divide-zinc-200 dark:divide-zinc-700 rounded border border-zinc-200 dark:border-zinc-700">
-              {collection.deployments.map((d) => (
-                <li key={d.deployment_id} className="px-3 py-2">
-                  <label className="flex items-start gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" className="mt-1" aria-label={d.deployment_id} checked={selected.has(d.deployment_id) && canUpload(d)}
-                           disabled={!canUpload(d) || uploading} onChange={() => toggle(d.deployment_id)} />
-                    <span className="flex-1">
-                      <span className="font-mono text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
-                      <span className="block text-xs text-zinc-500 dark:text-zinc-400">
-                        {d.images} image(s){d.start_date ? ` · ${d.start_date.slice(0, 10)} → ${(d.end_date ?? '').slice(0, 10)}` : ''}
-                      </span>
-                      {!d.preprocessed && (
-                        <span className="block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>
-                      )}
-                      {d.uploaded_at && <span className="block text-xs text-emerald-600 dark:text-emerald-400">Uploaded {d.uploaded_at.slice(0, 10)}</span>}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
+            {collection.deployments.length > 0 && (
+              <div className="overflow-x-auto rounded border border-zinc-200 dark:border-zinc-700">
+                <div className="flex items-center gap-3 flex-wrap px-3 py-2 text-xs border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+                  <span className="text-zinc-500 dark:text-zinc-400">{selectable.filter((d) => selected.has(d.deployment_id)).length} of {selectable.length} selected</span>
+                  <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50" disabled={uploading || selectable.length === 0}
+                          onClick={() => setSelected(new Set(selectable.map((d) => d.deployment_id)))}>Select all</button>
+                  <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50" disabled={uploading || selectable.every((d) => d.uploaded_at)}
+                          onClick={() => setSelected(new Set(selectable.filter((d) => !d.uploaded_at).map((d) => d.deployment_id)))}>Select the not uploaded</button>
+                  <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50" disabled={uploading || selected.size === 0}
+                          onClick={() => setSelected(new Set())}>Select none</button>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
+                      <th scope="col" className="px-3 py-2 w-10">
+                        <input type="checkbox" aria-label="Select all deployments" disabled={uploading || selectable.length === 0}
+                               checked={selectable.length > 0 && selectable.every((d) => selected.has(d.deployment_id))}
+                               ref={(el) => { if (el) el.indeterminate = selectable.some((d) => selected.has(d.deployment_id)) && !selectable.every((d) => selected.has(d.deployment_id)) }}
+                               onChange={() => setSelected(selectable.every((d) => selected.has(d.deployment_id)) ? new Set() : new Set(selectable.map((d) => d.deployment_id)))} />
+                      </th>
+                      <th scope="col" className="px-3 py-2 font-medium">Deployment</th>
+                      <th scope="col" className="px-3 py-2 font-medium text-right">Images</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Period</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Uploaded</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                    {collection.deployments.map((d) => (
+                      <tr key={d.deployment_id}>
+                        <td className="px-3 py-2">
+                          <input type="checkbox" aria-label={d.deployment_id} checked={selected.has(d.deployment_id) && canUpload(d)}
+                                 disabled={!canUpload(d) || uploading} onChange={() => toggle(d.deployment_id)} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="font-mono text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
+                          {!d.preprocessed && (
+                            <span className="block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">{d.images}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-zinc-600 dark:text-zinc-400">{d.start_date ? `${d.start_date.slice(0, 10)} → ${(d.end_date ?? '').slice(0, 10)}` : '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {d.uploaded_at
+                            ? <span className="text-emerald-600 dark:text-emerald-400">✔ {d.uploaded_at.slice(0, 10)}</span>
+                            : <span className="text-zinc-500 dark:text-zinc-400">Not uploaded</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
         {collection && (

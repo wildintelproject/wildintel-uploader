@@ -457,8 +457,9 @@ wizard before uploading it", and can't be ticked.
 ### What to upload
 
 1. **Research project** — those kept in the collections folder.
-2. **Collection** — and under it its deployments, each with how many images, its dates, and
-   whether it was already uploaded. The ones left to send start ticked. As soon as the research project and the
+2. **Collection** — and under it a table of its deployments: how many images, its dates, and the day it was
+   uploaded, if it was (from its `upload.json`, a local note). The ones left to send start ticked; **Select all**, **Select the not uploaded**
+   and **Select none**, or the box in the table's header, change the choice. As soon as the research project and the
    collection are chosen, a message says whether **the account saved in the settings has access** to both in Trapper (and whether the
    collection is already there, so the upload adds to it, or the upload creates it).
 3. **Classification project** — the collection is created in one of Trapper's classification

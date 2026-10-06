@@ -113,7 +113,8 @@ describe('UploadDeploymentPage', () => {
     await pickCollection()
 
     expect(await screen.findByText('R0003-DONA_01')).toBeInTheDocument()
-    expect(screen.getAllByText(/120 image\(s\) · 2024-09-04 → 2024-11-04/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('2024-09-04 → 2024-11-04').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('120').length).toBeGreaterThanOrEqual(1) // its images
   })
 
   it('picks the deployments still to send: preprocessed and not uploaded before', async () => {
@@ -137,7 +138,7 @@ describe('UploadDeploymentPage', () => {
   it('shows when a deployment was uploaded, which can still be chosen to send again', async () => {
     await pickCollection()
 
-    expect(await screen.findByText('Uploaded 2025-01-15')).toBeInTheDocument()
+    expect(await screen.findByText('✔ 2025-01-15')).toBeInTheDocument()
     const box = screen.getByRole('checkbox', { name: 'R0003-DONA_04' })
     expect(box).toBeEnabled()
     await userEvent.click(box)
@@ -215,7 +216,7 @@ describe('UploadDeploymentPage', () => {
       ? { ...c, deployments: c.deployments.map((d) => (d.deployment_id === 'R0003-DONA_01' ? { ...d, uploaded_at: '2026-10-01T08:00:00+00:00' } : d)) } : c) })
     await userEvent.click(await screen.findByRole('button', { name: 'Upload 2 deployments' }))
 
-    expect(await screen.findByText('Uploaded 2026-10-01')).toBeInTheDocument()
+    expect(await screen.findByText('✔ 2026-10-01')).toBeInTheDocument()
     expect(mockedApi.uploadCollections).toHaveBeenCalledTimes(2)
   })
 
@@ -351,6 +352,29 @@ describe('UploadDeploymentPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Upload 2 deployments' }))
       await screen.findByText(/2 deployment\(s\) uploaded\./)
       expect(mockedApi.uploadDeployment.mock.calls[0][6]).toBe(8)
+    })
+  })
+
+  describe('choosing the deployments', () => {
+    it('selects all of them, or only the ones not uploaded yet, or none', async () => {
+      await pickCollection()
+      const ticked = () => ['01', '02', '03', '04'].filter((n) => (screen.getByRole('checkbox', { name: `R0003-DONA_${n}` }) as HTMLInputElement).checked)
+      await screen.findByText('2 of 3 selected') // 03 can't be uploaded at all
+
+      await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
+      expect(ticked()).toEqual(['01', '02', '04'])
+      expect(screen.getByRole('checkbox', { name: 'Select all deployments' })).toBeChecked()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Select the not uploaded' }))
+      expect(ticked()).toEqual(['01', '02'])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Select none' }))
+      expect(ticked()).toEqual([])
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select all deployments' })) // the header's box does it too
+      expect(ticked()).toEqual(['01', '02', '04'])
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select all deployments' }))
+      expect(ticked()).toEqual([])
     })
   })
 
