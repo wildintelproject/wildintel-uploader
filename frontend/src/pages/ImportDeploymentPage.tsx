@@ -1873,7 +1873,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
           {timestampLog && (
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
               {timestampLog.action === 'added' ? 'Added' : timestampLog.action === 'updated' ? 'Updated' : 'Already in'} the deployment in{' '}
-              <span className="font-mono">{timestampLog.path}</span> — {timestampLog.rows} deployment(s) in that collection&rsquo;s timestamp log.
+              <span className="font-mono font-bold">{timestampLog.path}</span> — <span className="font-bold">{timestampLog.rows} deployment(s)</span> in that collection&rsquo;s timestamp log.
             </p>
           )}
           {shownDeploymentChecks.length === 0 ? (
