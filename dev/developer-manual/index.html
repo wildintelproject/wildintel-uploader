@@ -685,10 +685,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-import" class="md-nav__link">
+  <a href="#scan-and-guess" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The import
+        Scan and guess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#preprocess-then-consolidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preprocess, then consolidate
       
     </span>
   </a>
@@ -1106,10 +1117,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-import" class="md-nav__link">
+  <a href="#scan-and-guess" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The import
+        Scan and guess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#preprocess-then-consolidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preprocess, then consolidate
       
     </span>
   </a>
@@ -1516,6 +1538,11 @@ images; and sessions — <code>session_example</code>, and one with a <code>_Fil
 different, in bursts of three shots, numbered in the order they were taken, each with the camera's
 make, model and serial number and its capture date in the EXIF — a Reconyx HyperFire 2,
 <code>P800HG08</code>. It is what to try a long import, the statistical checks or an upload with.</p>
+<p>With <code>--faulty</code> (into <code>examples/deployment_example_3000_faulty/</code>, also ignored by git) the same 3000 files come with
+problems for every validation to find, about 14 % of them: corrupted images (cut short, or empty), duplicates
+(<code>IMG_0123 (copy).JPG</code>, <code>IMG_0123_bak.JPG</code>), shots out of order, no capture date, no camera model or serial number,
+a second camera (a Bushnell) and some images in a <code>backup/</code> subfolder. Run through the wizard, the validation report has
+something to say for each check.</p>
 <h2 id="4-backend">4. Backend<a class="headerlink" href="#4-backend" title="Permanent link">&para;</a></h2>
 <h3 id="services">Services<a class="headerlink" href="#services" title="Permanent link">&para;</a></h3>
 <p><code>core/services/</code>, one module per concern:</p>
@@ -1589,10 +1616,26 @@ decodes across brands. <code>camera_info.exiftool_path()</code> finds the copy b
 <code>build/exiftool</code>), then the one on the <code>PATH</code>. Without it, Pillow gives the make and model, and the
 result says which reader was used so the UI can say "may be incomplete". ExifTool also writes the
 XMP metadata of the preprocessing, which is why that step is disabled without it.</p>
-<h3 id="the-import">The import<a class="headerlink" href="#the-import" title="Permanent link">&para;</a></h3>
-<p><code>/api/deployment-import/import-local</code> calls <code>preprocessing_service.preprocess_stream</code> when the
-request has preprocessing options (the wizard always sends them), or
-<code>deployment_import_service.import_local_stream</code> (a plain copy) when it hasn't. It yields:</p>
+<h3 id="scan-and-guess">Scan and guess<a class="headerlink" href="#scan-and-guess" title="Permanent link">&para;</a></h3>
+<p><code>scan_folder</code> only counts — files, and images by extension — and never opens an image, so it is instant. What the
+images say of the deployment is <code>guess_details</code>: the earliest and latest capture date (Pillow, on <code>GENERAL.workers</code>
+threads) and the camera (one ExifTool run), the camera only when every image agrees. The wizard calls it when the
+details step opens and fills in the fields that are still empty; the session wizard does it for each deployment, one at
+a time, skipping the dates a timestamp log already gave. The checks that need the same data (the validation) read it
+themselves.</p>
+<h3 id="preprocess-then-consolidate">Preprocess, then consolidate<a class="headerlink" href="#preprocess-then-consolidate" title="Permanent link">&para;</a></h3>
+<p>The wizard imports in two steps, so the preprocessing is a step like the validations:</p>
+<ul>
+<li><code>POST /api/deployment-import/preprocess</code> — <code>preprocessing_service.preprocess_stream(..., consolidate=False)</code>: copies, renames,
+  resizes and tags the images into <code>collections/&lt;RP&gt;/&lt;R0003&gt;/&lt;deployment id&gt;</code>, writes <code>images.json</code> and <code>preprocessing.json</code>
+  and the report, and stops. The deployment is <strong>pending</strong>: it has a <code>preprocessing.json</code> and no <code>seal.json</code>
+  (<code>deployment_import_service.is_pending</code>), so running it again redoes the folder, and it doesn't count as already kept.</li>
+<li><code>POST /api/deployment-import/consolidate</code> — <code>preprocessing_service.consolidate_stream</code>: writes <code>deployment.json</code> and seals it
+  (<code>sealing</code>, <code>done</code>), reading what the seal needs (originals, source hashes, options) from <code>preprocessing.json</code>. A sealed
+  deployment is refused (<code>already consolidated</code>), and so is one never preprocessed.</li>
+<li><code>POST /api/deployment-import/import-local</code> does both at once (the session wizard uses it), or, without preprocessing options,
+  <code>deployment_import_service.import_local_stream</code> (a plain copy). It yields:</li>
+</ul>
 <table>
 <thead>
 <tr>
@@ -1618,8 +1661,8 @@ request has preprocessing options (the wizard always sends them), or
 <td>Checking the source images and writing <code>seal.json</code>.</td>
 </tr>
 <tr>
-<td><code>{"type": "done", "dest_dir", "processed", "skipped", "sealed"}</code></td>
-<td>Finished.</td>
+<td><code>{"type": "done", "dest_dir", "processed", "skipped", "sealed", "report_id"}</code></td>
+<td>Finished (<code>sealed</code> is null after <code>/preprocess</code>).</td>
 </tr>
 </tbody>
 </table>
@@ -1643,8 +1686,12 @@ looks at every image has an entry for each, the passed ones too. <code>validatio
 <code>read</code> and <code>delete</code> accept — never a path).</p>
 <p>They are made where the work is: <code>/deployment-import/validate-images</code> and <code>/validate-deployment</code> add <code>report_id</code> to
 their answer, and the import's <code>done</code> event carries the preprocessing's. A report that can't be written is logged and
-<code>report_id</code> is <code>null</code> — it never fails what it reports. The frontend's <code>ReportPanel</code> shows one (<code>api.getReport</code>) and links
-to the downloads; <code>ReportsPage</code> lists them.</p>
+<code>report_id</code> is <code>null</code> — it never fails what it reports. A failed image's entry also has a short <code>tag</code> (what is wrong, for a badge) and <code>taken</code> (its EXIF date, read only for the
+failed ones). <code>totals.images_with_issues</code> counts the distinct images that failed a check of images.</p>
+<p>The frontend: <code>ReportPanel</code> shows a report plainly (the Reports page, the preprocessing) and <code>ReportsPage</code> lists them.
+The validation step is a dashboard: <code>ValidationDashboard</code> (header, figures, and the page's table of checks as its child),
+<code>CheckTable</code>'s <code>outcome</code> columns, and <code>CheckFailures</code> — the failures of one check with their thumbnails
+(<code>api.reportImageUrl</code>), search, filter, sort, a grid or a list, pages and the details of an image.</p>
 <p>To report a new check, add its entries where the report is built (<code>report_service</code>) — see <a href="#7-adding-a-check">Adding a check</a>.</p>
 <h3 id="the-deployments-files">The deployment's files<a class="headerlink" href="#the-deployments-files" title="Permanent link">&para;</a></h3>
 <table>
@@ -1850,7 +1897,12 @@ bodies are JSON, and every <code>POST</code> that talks to Trapper takes optiona
 <tr>
 <td></td>
 <td><code>…/scan-folder</code>, <code>/scan-session</code></td>
-<td>Scan a deployment's / a session's folder.</td>
+<td>Scan a deployment's / a session's folder: only count its files and images (a session's also say which dates a timestamp log gives).</td>
+</tr>
+<tr>
+<td></td>
+<td><code>…/guess-details</code></td>
+<td>Read a folder's images for the deployment form's starting point: the date range and the camera.</td>
 </tr>
 <tr>
 <td></td>
@@ -1889,8 +1941,18 @@ bodies are JSON, and every <code>POST</code> that talks to Trapper takes optiona
 </tr>
 <tr>
 <td></td>
+<td><code>…/preprocess</code></td>
+<td><strong>Streams</strong> the preprocessing, leaving the deployment pending.</td>
+</tr>
+<tr>
+<td></td>
+<td><code>…/consolidate</code></td>
+<td><strong>Streams</strong> the sealing of a preprocessed deployment.</td>
+</tr>
+<tr>
+<td></td>
 <td><code>…/import-local</code></td>
-<td><strong>Streams</strong> the wizard's import.</td>
+<td><strong>Streams</strong> both at once (the session wizard's import).</td>
 </tr>
 <tr>
 <td></td>
@@ -1916,6 +1978,11 @@ bodies are JSON, and every <code>POST</code> that talks to Trapper takes optiona
 <td></td>
 <td><code>GET /reports/{id}/download?format=json\|csv</code></td>
 <td>The report as a file.</td>
+</tr>
+<tr>
+<td></td>
+<td><code>GET /reports/{id}/image?path=…&amp;size=thumb\|large</code></td>
+<td>An image the report lists, as a JPEG (320 or 1280 px). Only the images in the report are served, and <code>path</code> is only ever looked up in it.</td>
 </tr>
 <tr>
 <td>sessions</td>

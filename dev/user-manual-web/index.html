@@ -849,17 +849,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#trapper_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Trapper
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#what-to-upload" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1422,17 +1411,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#trapper_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Trapper
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#what-to-upload" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1728,6 +1706,8 @@ dot marks a section with an invalid value.</p>
 <p>The server's <strong>URL</strong>, and the <strong>username</strong> (its email — Trapper's import form only accepts
 that) and <strong>password</strong> of your account. <strong>Test connection</strong> reports the research projects it can
 see. The password is saved in <code>settings.toml</code> but never sent back to your browser.</p>
+<p><strong>Upload packages — Largest zip</strong> is the size, in MB, of the zips an <a href="#7-upload-a-deployment-to-trapper">upload</a> makes: a
+deployment's images go up in zips of at most this size (500 by default, up to 5000), each with its own yaml.</p>
 <h3 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h3>
 <p>Which of the <a href="#step-2-validate">folder checks</a> the wizard shows. Each is an entry with a switch;
 turn off the ones you never want to see. They are all on by default.</p>
@@ -1795,9 +1775,11 @@ and its folder opened.</p>
 <h3 id="step-1-folder">Step 1 — Folder<a class="headerlink" href="#step-1-folder" title="Permanent link">&para;</a></h3>
 <p><img alt="Step 1 — Folder" src="../img/screenshots/step-folder.png" /></p>
 <p>Press <strong>Browse…</strong> and choose the folder with the deployment's images (or type its path), then
-<strong>Scan</strong>. The app reads the images and tells you how many files and images it found and the date
-range — <code>2024-09-04 → 2024-10-12</code> — and warns about anything odd. The camera model and the dates
-are guessed from here and offered again later, editable.</p>
+<strong>Scan</strong>. The scan only <strong>counts</strong>: how many files there are and how many of them are images (by
+their extension) — <em>241 file(s), 241 image(s)</em> — with a warning if the folder is empty or has no
+images. It doesn't open them, which is why it is instant however many there are: reading the
+images is what the next steps are for. The dates and the camera model are read later, when the
+<a href="#step-4-details">details</a> are asked for.</p>
 <h3 id="step-2-validate">Step 2 — Validate<a class="headerlink" href="#step-2-validate" title="Permanent link">&para;</a></h3>
 <p><img alt="Step 2 — Validate" src="../img/screenshots/step-validate.png" /></p>
 <p>Checks over the images alone, before anything is known about the deployment:</p>
@@ -1835,9 +1817,21 @@ are guessed from here and offered again later, editable.</p>
 </tr>
 </tbody>
 </table>
-<p>For each check you choose whether to <strong>run</strong> it, and whether it is <strong>required</strong>: a required check
-that doesn't pass stops you from going on. The <em>all</em> boxes at the top of each column do it for the
-whole table. Press <strong>Run validation</strong>; the results are listed per check, and below them is the <a href="#9-reports">report</a> — which images failed which check, and why — with its downloads.</p>
+<p>The step is a small dashboard. At the top, what is being validated, <strong>when it was last run</strong>, the
+downloads of its <a href="#9-reports">report</a> and the <strong>Run validation</strong> button. Once it has run, four figures
+sum it up: the <strong>valid images</strong>, the <strong>images with issues</strong>, the <strong>tests executed</strong> and the <strong>tests
+with errors</strong>.</p>
+<p>Under them, the <strong>tests</strong>. For each you choose whether to <strong>run</strong> it, and whether it is
+<strong>required</strong>: a required check that doesn't pass stops you from going on. The <em>all</em> boxes at the top
+of each column do it for the whole table. The first column shows a test running and then how it
+ended — ✔ passed, ⚠ failed, ✘ failed and required —, and the last ones say how many images failed it.</p>
+<p>Open a test that failed (the <strong>›</strong> at its end) to see <strong>which images failed it</strong>: as pictures, each
+with what is wrong with it (<em>No date</em>, <em>Duplicate</em>, <em>Out of order</em>…) and when it was taken, or as a
+list. You can <strong>search by file name</strong>, filter by the kind of error, sort by name or by date, and go
+through the pages; <strong>View details</strong> opens the image bigger with everything the report says of it — what
+failed and what passed. A test of the whole folder (the structure, or the camera) has no pictures: it
+says what it found.</p>
+<p><img alt="The images that failed a test" src="../img/screenshots/validation-failures.png" /></p>
 <p>Reading the camera's model and id uses ExifTool, because the serial number of a camera trap lives
 in the manufacturer's own metadata. Without it the app falls back to the standard EXIF tags,
 which are less complete — it says which it used.</p>
@@ -1863,7 +1857,8 @@ collections folder you are told, and the import would be refused as it would mix
 images: choose another revision or location, or move that folder away.</p>
 <p>The rest of the form follows <a href="https://camtrap-dp.tdwg.org">Camtrap DP</a>'s deployment table — the
 same fields as Trapper's own deployment form. Only the <strong>start and end dates</strong> are required (and
-come from the images' EXIF, guessed); everything else is optional, and can be completed later in
+are read from the images' EXIF as this step opens — the earliest and the latest capture date —, along
+with the camera model and id, when every image has the same); everything else is optional, and can be completed later in
 Trapper. <em>Show all fields</em> reveals the whole list.</p>
 <table>
 <thead>
@@ -1903,7 +1898,7 @@ that has a row in it.</p>
 <p>When you press <strong>Next</strong>, the deployment is added to the collection's timestamp log.</p>
 <h3 id="step-5-postvalidation">Step 5 — Postvalidation<a class="headerlink" href="#step-5-postvalidation" title="Permanent link">&para;</a></h3>
 <p><img alt="Step 5 — Postvalidation" src="../img/screenshots/step-checks.png" /></p>
-<p>Now that the deployment is known, its names and dates are checked, and the images against it:</p>
+<p>Now that you know when, how and where the images were taken, new validation tests are run: the deployment's names and dates, and the images against it:</p>
 <table>
 <thead>
 <tr>
@@ -1956,10 +1951,14 @@ as long. A camera that fired non-stop, or died early, stands out, and is worth a
 is uploaded. They need at least the <em>previous revisions needed</em> of the settings, or they are
 skipped; what a sequence is, what "similar" means and what it is compared to are the
 <a href="#postvalidation">Postvalidation settings</a>.</p>
-<p>As in the validation step, each check can be run and required, and the <a href="#9-reports">report</a> lists what failed — and downloads.</p>
+<p>This step has the same dashboard as the validation (with a <strong>Run checks</strong> button): when it was last run, the figures, the table of checks with their status, and — opened from a check — the images that failed it (<em>Out of range</em>, <em>Other camera</em>) as thumbnails. Each check can be run and required, and the <a href="#9-reports">report</a> downloads.</p>
 <h3 id="step-6-preprocessing">Step 6 — Preprocessing<a class="headerlink" href="#step-6-preprocessing" title="Permanent link">&para;</a></h3>
 <p><img alt="Step 6 — Preprocessing" src="../img/screenshots/step-preprocessing.png" /></p>
-<p>The list of what will be done to the images as they are imported. The originals are never touched.</p>
+<p>This step <strong>does</strong> the preprocessing, with the same dashboard as the validation: choose what to do to the images, press
+<strong>Run preprocessing</strong>, and read the result — the images processed and skipped, a status for each step and, opened from the
+<strong>›</strong>, the skipped images as thumbnails. The images go into the deployment's folder in the collections folder; the originals
+are never touched. Nothing is final yet: you can go back, change something and run it again — the folder is simply redone —
+and you can't go on until it has run.</p>
 <ol>
 <li><strong>Copy into the collection</strong> — always. Anything that isn't an image is copied as it is.</li>
 <li><strong>Read the capture dates</strong> — always. From each image's EXIF, as the camera's local time in the
@@ -1975,13 +1974,13 @@ skipped; what a sequence is, what "similar" means and what it is compared to are
    given, if ExifTool isn't available. Check the owner and publisher in the settings first: if
    they're blank, the step says so.</li>
 </ol>
-<p>Each optional step can be switched off for this run. Its values come from the
-<a href="#preprocessing">Preprocessing settings</a>.</p>
+<p>Each optional step can be switched off for this run (its checkbox). Its values come from the
+<a href="#preprocessing">Preprocessing settings</a>. The <a href="#9-reports">report</a> says what was done to each image.</p>
 <h3 id="step-7-import">Step 7 — Import<a class="headerlink" href="#step-7-import" title="Permanent link">&para;</a></h3>
 <p><img alt="Step 7 — Import, finished" src="../img/screenshots/step-import.png" /></p>
-<p>Press <strong>Import deployment</strong>. Each image is listed as it is copied — <code>[3/241] IMG_0003.JPG</code> — then
-the metadata is written and the deployment is <strong>sealed</strong>. Images that fail are <em>skipped</em> and
-reported, and don't stop the rest. The <a href="#9-reports">report</a> of the preprocessing is shown below, and says what was done to each image.</p>
+<p>The images are ready, so this step <strong>consolidates</strong> the deployment: press <strong>Import deployment</strong> and its
+<code>deployment.json</code> is written and the deployment is <strong>sealed</strong>. From then on it can't be modified — the app notices if an image
+or its details change — and it can be uploaded.</p>
 <p>A good import says where the deployment was kept, and offers:</p>
 <ul>
 <li><strong>Open folder in file explorer</strong>.</li>
@@ -2058,18 +2057,21 @@ For each one it does what wildintel-tools did in three commands:</p>
 <p>The deployment must have been imported with the wizard — the yaml needs the dates its
 <code>preprocessing.json</code> records. One that wasn't says "Not preprocessed — import it again through the
 wizard before uploading it", and can't be ticked.</p>
-<h3 id="trapper_1">Trapper<a class="headerlink" href="#trapper_1" title="Permanent link">&para;</a></h3>
-<p>The account is the one saved in the settings. <strong>Test connection</strong> checks, changing nothing, that
-the account reaches the research project, its locations (and which of the deployments' own would
-be created) and the uploader's login, each reported on its own. Do it before a big upload.</p>
 <h3 id="what-to-upload">What to upload<a class="headerlink" href="#what-to-upload" title="Permanent link">&para;</a></h3>
+<p>A note above says which Trapper account is used: the one saved in the settings.</p>
 <ol>
 <li><strong>Research project</strong> — those kept in the collections folder.</li>
-<li><strong>Collection</strong> — and under it its deployments, each with how many images, its dates, and
-   whether it was already uploaded. The ones left to send start ticked.</li>
+<li><strong>Collection</strong> — and under it a table of its deployments: how many images, its dates, and the day it was
+   uploaded, if it was (from its <code>upload.json</code>, a local note). The ones left to send start ticked; <strong>Select all</strong>, <strong>Select the not uploaded</strong>
+   and <strong>Select none</strong>, or the box in the table's header, change the choice. As soon as the research project and the
+   collection are chosen, a message says whether <strong>the account saved in the settings has access</strong> to both in Trapper (and whether the
+   collection is already there, so the upload adds to it, or the upload creates it).</li>
 <li><strong>Classification project</strong> — the collection is created in one of Trapper's classification
    projects for the research project: pick it (or, if there is only one, it is used). Without a
    Trapper account, type its pk.</li>
+<li><strong>Test connection</strong> — appears once the classification project is chosen. It checks, changing nothing, that the account reaches the research
+   project, the classification project, its locations (and which of the deployments' own would be created) and the uploader's login, each
+   reported on its own. Do it before a big upload.</li>
 </ol>
 <h3 id="what-to-do">What to do<a class="headerlink" href="#what-to-do" title="Permanent link">&para;</a></h3>
 <table>
@@ -2094,12 +2096,13 @@ be created) and the uploader's login, each reported on its own. Do it before a b
 </tr>
 </tbody>
 </table>
-<p><strong>Largest zip (MB)</strong> — a deployment's images go up in zips of at most this size (500 by default,
-up to 5000).</p>
+<p>The size of the zips is a setting: <a href="#trapper">Settings › Trapper</a>.</p>
 <p>Press the button — <em>Upload 2 deployments</em>. Each deployment gets a card (below) with the steps it goes
 through (<em>connect</em>, <em>classification</em>, <em>location</em>, <em>deployment</em>, <em>package</em>, <em>csv</em>, <em>upload</em>,
 <em>process</em>, <em>wait</em>) each marked as running, done or skipped, a bar while a file goes up, and the
-outcome. When one fails, the others go on, and the summary says so: <em>"2 deployment(s) uploaded, 1
+outcome. The steps that made or found something in Trapper — the <em>location</em>, the <em>deployment</em> and, at the end, the
+<em>collection</em> — show <strong>a link to its page in Trapper</strong> (for example <code>https://trapper.example.org/geomap/deployment/detail/47/</code>),
+to check there that it was created or updated. A dry run links to what is already there; what it would create has no page yet. When one fails, the others go on, and the summary says so: <em>"2 deployment(s) uploaded, 1
 failed."</em> <strong>Upload more</strong> starts over.</p>
 <p><img alt="An upload midway: the first deployment is done, the second is sending its zip" src="../img/screenshots/upload-running.png" /></p>
 <p>The zips and yamls are written under <code>&lt;images folder&gt;/packages/&lt;research project&gt;/</code>. A deployment
