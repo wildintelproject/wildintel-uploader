@@ -82,7 +82,6 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
   const [collections, setCollections] = useState<UploadCollection[]>([])
   const [collectionName, setCollectionName] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [maxZipMb, setMaxZipMb] = useState('500')
   const [mode, setMode] = useState<UploadMode>('upload')
   const [trapper, setTrapper] = useState<{ base_url: string | null; user_name: string | null; has_password: boolean } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -160,8 +159,6 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
   }
 
   const collection = collections.find((c) => c.name === collectionName)
-  const zipMb = Number(maxZipMb)
-  const zipValid = maxZipMb.trim() !== '' && Number.isInteger(zipMb) && zipMb >= 1 && zipMb <= 5000
   const connected = Boolean(trapper?.base_url && trapper.user_name && trapper.has_password)
   // Generating the files needs no account — the others look at Trapper.
   const accountOk = mode === 'generate' || connected
@@ -217,7 +214,7 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
     setRuns(Object.fromEntries(ids.map((id) => [id, EMPTY_RUN])))
     for (const id of ids) {
       try {
-        await api.uploadDeployment(projectId, collection.name, id, zipMb, mode, (event) => setRuns((r) => ({ ...r, [id]: reduceRun(r[id] ?? EMPTY_RUN, event) })), classificationValue)
+        await api.uploadDeployment(projectId, collection.name, id, mode, (event) => setRuns((r) => ({ ...r, [id]: reduceRun(r[id] ?? EMPTY_RUN, event) })), classificationValue)
       } catch (e) {
         setRuns((r) => ({ ...r, [id]: { ...(r[id] ?? EMPTY_RUN), progress: null, error: e instanceof Error ? e.message : 'The upload failed.' } }))
       }
@@ -403,19 +400,8 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
       )}
 
       {collection && (
-        <Card title="Packages" description="A deployment's images go up in zips of at most this size, each with its own yaml.">
-          <div className="max-w-xs">
-            <label className={labelClass} htmlFor="upload-max-zip">Largest zip (MB)</label>
-            <input id="upload-max-zip" type="number" min={1} max={5000} step={1} className={inputClass} value={maxZipMb} disabled={uploading}
-                   onChange={(e) => setMaxZipMb(e.target.value)} aria-invalid={zipValid ? undefined : true} />
-            {!zipValid && <p className="text-xs text-red-600 dark:text-red-400 mt-1">A whole number from 1 to 5000.</p>}
-          </div>
-        </Card>
-      )}
-
-      {collection && (
         <div className="flex justify-end mb-6">
-          <button type="button" className={btnPrimary} disabled={uploading || !accountOk || toUpload.length === 0 || !zipValid || !classificationReady} onClick={handleUpload}>
+          <button type="button" className={btnPrimary} disabled={uploading || !accountOk || toUpload.length === 0 || !classificationReady} onClick={handleUpload}>
             {uploading ? modeInfo.busy : modeInfo.button(toUpload.length)}
           </button>
         </div>

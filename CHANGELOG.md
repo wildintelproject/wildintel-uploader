@@ -94,6 +94,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   grid or a list, pages and a view of everything the report says of an image. A report's images are served as thumbnails
   (`/api/reports/{id}/image`).
 - **Preprocessing is a step of its own** (`/api/deployment-import/preprocess`), run like the validations, with the same dashboard: the steps to do, a status for each, the images processed and skipped, and the skipped ones as thumbnails. The deployment is left pending — it can be preprocessed again — until the **Import** step consolidates it (`/api/deployment-import/consolidate`): its `deployment.json` is written and it is sealed.
+- The largest zip of an upload (`TRAPPER.max_zip_mb`, 500 MB by default) is set in Settings › Trapper, no longer on the upload page; the upload endpoint no longer takes it.
 - Upload: choosing the research project and the collection says whether the configured Trapper account has access to them (`/api/upload/check-selection`); **Test connection** comes after the classification project.
 - The postvalidation step has the same dashboard (Run checks); the images out of range or from another camera open as thumbnails.
 - The tables of checks have a first column that shows the check running and then how it ended (✔ passed, ⚠ failed, ✘ failed and

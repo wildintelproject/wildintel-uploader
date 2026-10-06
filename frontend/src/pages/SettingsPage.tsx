@@ -15,6 +15,7 @@ const SEQUENCE_GAP = { min: 0.001, max: 86400, decimal: true }
 const MIN_REVISIONS = { min: 1, max: 50 }
 const SIMILARITY_TOLERANCE = { min: 0, max: 1000, decimal: true }
 const WORKERS = { min: 1, max: 64 }
+const MAX_ZIP_MB = { min: 1, max: 5000 }
 
 type Limits = { min: number; max: number; decimal?: boolean }
 
@@ -98,6 +99,7 @@ interface Draft {
   workers: string
   dataDir: string
   trapperUrl: string
+  maxZipMb: string
   trapperUser: string
   trapperPassword: string
   validation: AppSettings['VALIDATION']
@@ -133,6 +135,7 @@ function toDraft(s: AppSettings): Draft {
     workers: String(s.GENERAL.workers),
     dataDir: s.DATA.dir,
     trapperUrl: s.TRAPPER.base_url ?? '',
+    maxZipMb: String(s.TRAPPER.max_zip_mb),
     trapperUser: s.TRAPPER.user_name ?? '',
     trapperPassword: '',
     validation: { ...s.VALIDATION },
@@ -175,6 +178,7 @@ function sectionValid(d: Draft, id: SectionId): boolean {
       && [d.imageTolerance, d.sequenceCountTolerance, d.sequenceLengthTolerance].every((t) => numberIn(t, SIMILARITY_TOLERANCE) !== null)
   }
   if (id === 'preprocessing') return numberIn(d.resizeWidth, RESIZE_WIDTH) !== null
+  if (id === 'trapper') return numberIn(d.maxZipMb, MAX_ZIP_MB) !== null
   return true
 }
 
@@ -182,7 +186,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
   if (!SECTIONS.every((s) => sectionValid(d, s.id))) return null
   return {
     GENERAL: { log_level: d.logLevel, workers: Number(d.workers) },
-    TRAPPER: { base_url: d.trapperUrl.trim() || null, user_name: d.trapperUser.trim() || null, user_password: d.trapperPassword },
+    TRAPPER: { base_url: d.trapperUrl.trim() || null, user_name: d.trapperUser.trim() || null, user_password: d.trapperPassword, max_zip_mb: Number(d.maxZipMb) },
     DATA: { dir: d.dataDir.trim() || null },
     VALIDATION: d.validation,
     POSTVALIDATION: {
@@ -788,6 +792,9 @@ export default function SettingsPage({ onClose }: Props) {
                 {conn.kind === 'ok' && <span className="text-sm text-emerald-700 dark:text-emerald-400">{conn.message}</span>}
                 {conn.kind === 'error' && <span className="text-sm text-red-600 dark:text-red-400">{conn.message}</span>}
               </div>
+            </Row>
+            <Row label="Upload packages" description="A deployment's images go up in zips of at most this size, each with its own yaml.">
+              <NumberBox label="Largest zip" value={draft.maxZipMb} limits={MAX_ZIP_MB} onChange={(v) => set('maxZipMb', v)} unit="MB" />
             </Row>
           </div>
         )}

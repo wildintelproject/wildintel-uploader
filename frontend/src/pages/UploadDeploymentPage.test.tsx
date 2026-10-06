@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
 import UploadDeploymentPage from './UploadDeploymentPage'
@@ -50,7 +50,7 @@ beforeEach(() => {
   mockedApi.uploadCollections.mockResolvedValue({ results: COLLECTIONS })
   mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice@example.org', has_password: true })
   mockedApi.uploadClassificationProjects.mockResolvedValue({ results: [{ pk: 7, name: 'Doñana classification', is_active: true }] })
-  mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mb, _mode, onEvent) => { STEP_EVENTS(id).forEach(onEvent) })
+  mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mode, onEvent) => { STEP_EVENTS(id).forEach(onEvent) })
   mockedApi.checkUploadSelection.mockResolvedValue({ checks: [
     { check: 'research_project', ok: true, message: 'You have access to the research project DONA (#2) in Trapper.' },
     { check: 'collection', ok: true, message: 'You have access to the collection R0003 (#26): it is already in Trapper, so the upload adds to it.' },
@@ -154,13 +154,13 @@ describe('UploadDeploymentPage', () => {
     expect(screen.getByRole('button', { name: 'Upload 0 deployments' })).toBeDisabled()
   })
 
-  it('uploads each chosen deployment in turn, with the largest zip asked for', async () => {
+  it('uploads each chosen deployment in turn', async () => {
     await pickCollection()
     await userEvent.click(await screen.findByRole('button', { name: 'Upload 2 deployments' }))
 
     await screen.findByText(/2 deployment\(s\) uploaded\./)
-    expect(mockedApi.uploadDeployment.mock.calls.map((c) => c.slice(0, 4))).toEqual([
-      ['DONA', 'R0003', 'R0003-DONA_01', 500], ['DONA', 'R0003', 'R0003-DONA_02', 500],
+    expect(mockedApi.uploadDeployment.mock.calls.map((c) => c.slice(0, 3))).toEqual([
+      ['DONA', 'R0003', 'R0003-DONA_01'], ['DONA', 'R0003', 'R0003-DONA_02'],
     ])
   })
 
@@ -179,7 +179,7 @@ describe('UploadDeploymentPage', () => {
 
   it('shows how much of a file has gone up while it does', async () => {
     let finish: () => void = () => {}
-    mockedApi.uploadDeployment.mockImplementation((_rp, _col, _id, _mb, _mode, onEvent) => new Promise<void>((resolve) => {
+    mockedApi.uploadDeployment.mockImplementation((_rp, _col, _id, _mode, onEvent) => new Promise<void>((resolve) => {
       onEvent({ type: 'upload_progress', file: 'package_2_x_part001.zip', bytes: 5 * 1024 * 1024, total: 20 * 1024 * 1024 })
       finish = resolve
     }))
@@ -196,7 +196,7 @@ describe('UploadDeploymentPage', () => {
   })
 
   it('a deployment that fails shows why, and the others go on', async () => {
-    mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mb, _mode, onEvent) => {
+    mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mode, onEvent) => {
       if (id === 'R0003-DONA_01') throw new Error("Trapper has no research project 'DONA' — create it there first")
       STEP_EVENTS(id).forEach(onEvent)
     })
@@ -231,22 +231,10 @@ describe('UploadDeploymentPage', () => {
     expect(screen.queryByRole('region', { name: 'Upload of R0003-DONA_01' })).not.toBeInTheDocument()
   })
 
-  it('the largest zip needs to be a whole number of megabytes from 1 to 5000', async () => {
+  it('has no size of zips to set here: it is a setting of Trapper', async () => {
     await pickCollection()
-    const field = await screen.findByLabelText('Largest zip (MB)')
-    expect(field).toHaveValue(500)
-
-    for (const bad of ['', '0', '5001', '2.5']) {
-      await userEvent.clear(field)
-      if (bad) await userEvent.type(field, bad)
-      expect(screen.getByText('A whole number from 1 to 5000.'), `"${bad}"`).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /^Upload \d+ deployment/ })).toBeDisabled()
-    }
-    await userEvent.clear(field)
-    await userEvent.type(field, '100')
-    expect(screen.getByRole('button', { name: /^Upload \d+ deployment/ })).toBeEnabled()
-    await userEvent.click(screen.getByRole('button', { name: /^Upload \d+ deployment/ }))
-    await waitFor(() => expect(mockedApi.uploadDeployment.mock.calls[0][3]).toBe(100))
+    await screen.findByRole('button', { name: 'Upload 2 deployments' })
+    expect(screen.queryByLabelText('Largest zip (MB)')).not.toBeInTheDocument()
   })
 
   it('changing the research project or the collection clears the previous upload', async () => {
@@ -271,7 +259,7 @@ describe('UploadDeploymentPage', () => {
   })
 
   it('runs a dry run, saying what would be done and changing nothing', async () => {
-    mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mb, _mode, onEvent) => {
+    mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mode, onEvent) => {
       onEvent({ type: 'done', mode: 'dry_run', collection: 'R0003', deployment_id: id, parts: 3, would_create_location: true, would_create_deployment: false })
     })
     await pickCollection()
@@ -279,7 +267,7 @@ describe('UploadDeploymentPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Dry run 2 deployments' }))
 
     await screen.findByText(/2 deployment\(s\) checked\./)
-    expect(mockedApi.uploadDeployment.mock.calls.map((c) => c[4])).toEqual(['dry_run', 'dry_run'])
+    expect(mockedApi.uploadDeployment.mock.calls.map((c) => c[3])).toEqual(['dry_run', 'dry_run'])
     expect(screen.getAllByText('The location would be created in Trapper.')).toHaveLength(2)
     expect(screen.getAllByText('The deployment is already in Trapper.')).toHaveLength(2)
     expect(screen.getAllByText('The images would go up in 3 package(s).')).toHaveLength(2)
@@ -288,7 +276,7 @@ describe('UploadDeploymentPage', () => {
   it('only generates the files without a Trapper account, and can open their folder', async () => {
     mockedApi.trapperGetConfig.mockResolvedValue({ base_url: null, user_name: null, has_password: false })
     mockedApi.openFolder.mockResolvedValue({ opened: '/out/R0003' })
-    mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mb, _mode, onEvent) => {
+    mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mode, onEvent) => {
       onEvent({ type: 'done', mode: 'generate', collection: 'R0003', deployment_id: id, parts: 1, output_dir: '/out/R0003', files: ['a_part001.zip', 'a_part001.yaml', 'R0003_deployments.csv'] })
     })
     await pickCollection()
@@ -301,8 +289,8 @@ describe('UploadDeploymentPage', () => {
     await userEvent.click(button)
 
     await screen.findByText(/2 deployment\(s\) generated\./)
-    expect(mockedApi.uploadDeployment.mock.calls[0][4]).toBe('generate')
-    expect(mockedApi.uploadDeployment.mock.calls[0][6]).toBe(7)
+    expect(mockedApi.uploadDeployment.mock.calls[0][3]).toBe('generate')
+    expect(mockedApi.uploadDeployment.mock.calls[0][5]).toBe(7)
     expect(screen.getAllByText('R0003_deployments.csv').length).toBeGreaterThan(0)
     await userEvent.click(screen.getAllByRole('button', { name: 'Open folder in file explorer' })[0])
     expect(mockedApi.openFolder).toHaveBeenCalledWith('/out/R0003')
@@ -334,7 +322,7 @@ describe('UploadDeploymentPage', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Upload 2 deployments' }))
       await screen.findByText(/2 deployment\(s\) uploaded\./)
       expect(mockedApi.uploadClassificationProjects).toHaveBeenCalledWith('DONA')
-      expect(mockedApi.uploadDeployment.mock.calls.map((c) => c[6])).toEqual([7, 7])
+      expect(mockedApi.uploadDeployment.mock.calls.map((c) => c[5])).toEqual([7, 7])
     })
 
     it('has to be picked when there are several, and holds the upload back until it is', async () => {
@@ -351,7 +339,7 @@ describe('UploadDeploymentPage', () => {
       await userEvent.click(await screen.findByRole('option', { name: 'B (#8)' }))
       await userEvent.click(screen.getByRole('button', { name: 'Upload 2 deployments' }))
       await screen.findByText(/2 deployment\(s\) uploaded\./)
-      expect(mockedApi.uploadDeployment.mock.calls[0][6]).toBe(8)
+      expect(mockedApi.uploadDeployment.mock.calls[0][5]).toBe(8)
     })
   })
 

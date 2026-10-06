@@ -41,8 +41,6 @@ class UploadDeploymentRequest(TrapperCredentials):
     research_project_id: str = Field(min_length=1)
     collection: str = Field(pattern=r"^R\d{4}(_.+)?$")
     deployment_id: str = Field(pattern=r"^R\d{4}-.+$")
-    # The zips are split in parts of at most this many megabytes.
-    max_zip_mb: int = Field(default=500, ge=1, le=5000)
     # "upload" sends it; "dry_run" says what that would do and changes nothing; "generate" only writes the
     # files (the zips, the yamls and the collection's deployments csv) and leaves them.
     mode: Literal["upload", "dry_run", "generate"] = "upload"

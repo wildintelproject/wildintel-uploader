@@ -155,9 +155,9 @@ def test_an_unknown_research_project_or_deployment_is_a_404_before_anything_star
 
 
 @pytest.mark.parametrize("bad", [
-    {"collection": "Doñana"}, {"collection": "R003"}, {"deployment_id": "DONA-01"}, {"deployment_id": "R0003"}, {"max_zip_mb": 0}, {"max_zip_mb": 5001},
+    {"collection": "Doñana"}, {"collection": "R003"}, {"deployment_id": "DONA-01"}, {"deployment_id": "R0003"},
 ])
-def test_names_that_are_not_collections_or_deployments_and_sizes_out_of_range_are_a_422(tmp_path: Path, bad: dict):
+def test_names_that_are_not_collections_or_deployments_are_a_422(tmp_path: Path, bad: dict):
     with _in(tmp_path):
         assert _client().post("/api/upload/deployment", json={**PAYLOAD, **bad}).status_code == 422
 
@@ -170,15 +170,16 @@ def test_missing_trapper_credentials_are_a_400_naming_what_is_missing(tmp_path: 
     assert "Missing Trapper URL, username, password" in response.json()["detail"]
 
 
-def test_the_zips_are_split_at_the_size_asked_for(tmp_path: Path, fake_uploader):
+def test_the_zips_are_split_at_the_size_of_the_settings(tmp_path: Path, fake_uploader):
     _kept(tmp_path)
     fake = FakeTrapper()
 
     with _in(tmp_path / "collections"), patch("wildintel_uploader.web.api.routers.upload.config.data_dir", return_value=tmp_path), \
-         patch.object(trapper_service, "_client", return_value=fake):
-        events = _events(_client().post("/api/upload/deployment", json={**PAYLOAD, "max_zip_mb": 1}))
+         patch.object(trapper_service, "_client", return_value=fake), patch.object(config, "max_zip_mb", return_value=1) as size:
+        events = _events(_client().post("/api/upload/deployment", json=PAYLOAD))
 
     assert events[-1]["parts"] == 1  # 1 MB is far bigger than two tiny images
+    size.assert_called()
 
 
 def test_when_the_collection_does_not_appear_the_error_says_how_long_it_waited(tmp_path: Path, fake_uploader):

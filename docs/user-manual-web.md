@@ -181,6 +181,9 @@ The server's **URL**, and the **username** (its email — Trapper's import form 
 that) and **password** of your account. **Test connection** reports the research projects it can
 see. The password is saved in `settings.toml` but never sent back to your browser.
 
+**Upload packages — Largest zip** is the size, in MB, of the zips an [upload](#7-upload-a-deployment-to-trapper) makes: a
+deployment's images go up in zips of at most this size (500 by default, up to 5000), each with its own yaml.
+
 ### Validation
 
 Which of the [folder checks](#step-2-validate) the wizard shows. Each is an entry with a switch;
@@ -479,8 +482,7 @@ A note above says which Trapper account is used: the one saved in the settings.
 | **Dry run** | Looks at Trapper and says what would be created and how the images would be packed. Nothing is created, sent or written. |
 | **Only generate the files** | Writes the zips, the yamls and the collection's `_deployments.csv` and leaves them, to send some other way. Needs no account if the research project was filled in from Trapper. |
 
-**Largest zip (MB)** — a deployment's images go up in zips of at most this size (500 by default,
-up to 5000).
+The size of the zips is a setting: [Settings › Trapper](#trapper).
 
 Press the button — *Upload 2 deployments*. Each deployment gets a card (below) with the steps it goes
 through (*connect*, *classification*, *location*, *deployment*, *package*, *csv*, *upload*,

@@ -248,11 +248,11 @@ export const api = {
   // Uploads one deployment: creates its location and the deployment in Trapper if need be, packs it and sends it — or,
   // as `mode` says, only shows what that would do, or only writes the files. The Trapper credentials are the saved ones.
   uploadDeployment: (
-    researchProjectId: string, collection: string, deploymentId: string, maxZipMb: number, mode: UploadMode,
+    researchProjectId: string, collection: string, deploymentId: string, mode: UploadMode,
     onEvent: (event: UploadEvent) => void, classificationProjectPk: number | null = null,
   ) =>
     streamNdjson<UploadEvent>('/api/upload/deployment', {
-      research_project_id: researchProjectId, collection, deployment_id: deploymentId, max_zip_mb: maxZipMb, mode,
+      research_project_id: researchProjectId, collection, deployment_id: deploymentId, mode,
       classification_project_pk: classificationProjectPk,
     }, onEvent, 'The upload ended unexpectedly.'),
 

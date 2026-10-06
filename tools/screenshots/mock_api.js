@@ -121,7 +121,7 @@
 
   const SETTINGS = {
     GENERAL: { log_level: 'INFO', workers: 4, cpu_count: 8, log_file: '/home/me/.config/wildintel-uploader/logs/wildintel-uploader.log', log_level_override: null },
-    TRAPPER: { base_url: TRAPPER_URL, user_name: 'field.team@example.org', has_password: true },
+    TRAPPER: { base_url: TRAPPER_URL, user_name: 'field.team@example.org', has_password: true, max_zip_mb: 500 },
     DATA: { dir: DATA_DIR },
     VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },
     POSTVALIDATION: {

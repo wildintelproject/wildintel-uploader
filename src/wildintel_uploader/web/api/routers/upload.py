@@ -127,7 +127,7 @@ def upload_deployment(req: UploadDeploymentRequest) -> StreamingResponse:
 
     events = trapper_upload_service.upload_stream(
         credentials, record, collection_dir, req.deployment_id, config.data_dir() / "packages" / req.research_project_id,
-        mode=req.mode, max_zip_bytes=req.max_zip_mb * 1024 * 1024, classification_project_pk=req.classification_project_pk,
+        mode=req.mode, max_zip_bytes=config.max_zip_mb() * 1024 * 1024, classification_project_pk=req.classification_project_pk,
     )
 
     def lines() -> Iterator[str]:

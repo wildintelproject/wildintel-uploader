@@ -159,8 +159,26 @@ describe('SettingsPage', () => {
       await userEvent.type(screen.getByLabelText('Username'), 'bob')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].TRAPPER).toEqual({ base_url: 'https://trapper.example.org', user_name: 'bob', user_password: '' })
+      expect(mockedApi.saveSettings.mock.calls[0][0].TRAPPER).toEqual({ base_url: 'https://trapper.example.org', user_name: 'bob', user_password: '', max_zip_mb: 500 })
       expect(await screen.findByText('Settings saved.')).toBeInTheDocument()
+    })
+
+    it('sets the largest zip an upload makes, from 1 to 5000 MB', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await section('Trapper')
+      const field = screen.getByLabelText('Largest zip')
+      expect(field).toHaveValue('500')
+
+      await userEvent.clear(field)
+      await userEvent.type(field, '5001')
+      expect(screen.getByText('A whole number from 1 to 5000.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+      await userEvent.clear(field)
+      await userEvent.type(field, '250')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(mockedApi.saveSettings.mock.calls[0][0].TRAPPER.max_zip_mb).toBe(250)
     })
 
     it('never keeps the password in the form once saved', async () => {
@@ -176,7 +194,7 @@ describe('SettingsPage', () => {
     })
 
     it('says there is no password saved yet', async () => {
-      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, TRAPPER: { base_url: null, user_name: null, has_password: false } })
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, TRAPPER: { base_url: null, user_name: null, has_password: false, max_zip_mb: 500 } })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await section('Trapper')

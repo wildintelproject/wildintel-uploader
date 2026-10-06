@@ -75,6 +75,10 @@ class TrapperSettings(BaseModel):
     user_password: Optional[str] = Field(
         default=None, description="Trapper password. (TRAPPER.user_password)", json_schema_extra={"secret": True},
     )
+    max_zip_mb: int = Field(
+        default=500, ge=1, le=5000,
+        description="A deployment's images go up in zips of at most this many megabytes, each with its own yaml. (TRAPPER.max_zip_mb)",
+    )
 
 
 class DataSettings(BaseModel):
@@ -291,6 +295,11 @@ def save_settings(settings: Settings, config_file: Optional[Path] = None) -> Non
 def workers(settings: Settings | None = None) -> int:
     """How many images are validated or preprocessed at once — GENERAL.workers."""
     return (settings or load_settings()).GENERAL.workers
+
+
+def max_zip_mb(settings: Settings | None = None) -> int:
+    """The largest zip an upload makes, in megabytes — TRAPPER.max_zip_mb."""
+    return (settings or load_settings()).TRAPPER.max_zip_mb
 
 
 def data_dir(settings: Settings | None = None) -> Path:
