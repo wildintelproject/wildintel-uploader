@@ -608,6 +608,10 @@ export interface ReportEntry {
   check: string
   status: 'ok' | 'failed'
   message: string
+  /** A failed image's problem in a few words, for a badge. */
+  tag?: string
+  /** A failed image's capture date, as its EXIF says. */
+  taken?: string
 }
 
 export interface ReportCheck {
@@ -626,7 +630,7 @@ export interface ReportSummary {
   source_dir: string | null
   deployment_id: string | null
   checked: number
-  totals: { entries: number; ok: number; failed: number }
+  totals: { entries: number; ok: number; failed: number; images_with_issues?: number }
 }
 
 export interface Report extends ReportSummary {

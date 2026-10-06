@@ -35,16 +35,60 @@
     loose_files: 0, warnings: [], timestamp_log: null,
   }
 
+  // The validation of 241 images, some with problems — the result, and (below) the report made of it.
+  const name = (n) => `IMG_${String(n).padStart(4, '0')}.JPG`
+  const taken = (n) => new Date(Date.UTC(2024, 8, 4, 11, 10) + n * 4 * 3600e3).toISOString().slice(0, 19)
+  const BAD = {
+    corrupted: [24, 28, 135, 167, 201, 218, 233], sequence: [7, 82, 141, 177, 209], noDate: [12, 56, 99, 150, 188, 230, 239], noModel: [56, 99, 203],
+    duplicates: [[87, 'IMG_0087 (copy).JPG']],
+  }
   const VALIDATION = {
     checked_count: 241,
-    corrupted: [],
-    sequence_issues: [],
+    corrupted: BAD.corrupted.map((n) => ({ path: name(n), error: 'image file is truncated' })),
+    sequence_issues: BAD.sequence.map((n) => ({ path_a: name(n), index_a: n, date_a: taken(n), path_b: name(n + 1), index_b: n + 1, date_b: taken(n - 1) })),
     subdirectories: [],
-    cameras: [{ model: CAMERA.model, camera_id: CAMERA.id, count: 241, examples: ['IMG_0001.JPG', 'IMG_0002.JPG'] }],
+    cameras: [{ model: CAMERA.model, camera_id: CAMERA.id, count: 241, examples: [name(1), name(2)] }],
     cameras_without_info: 0,
     exiftool: true,
-    exif_missing: { date: { count: 0, examples: [] }, camera_model: { count: 0, examples: [] }, camera_id: { count: 0, examples: [] } },
-    duplicates: [{ size: 1843211, files: ['IMG_0087.JPG', 'IMG_0087 (copy).JPG'] }],
+    exif_missing: {
+      date: { count: BAD.noDate.length, examples: BAD.noDate.slice(0, 3).map(name), files: BAD.noDate.map(name) },
+      camera_model: { count: BAD.noModel.length, examples: BAD.noModel.map(name), files: BAD.noModel.map(name) },
+      camera_id: { count: 0, examples: [], files: [] },
+    },
+    duplicates: BAD.duplicates.map(([n, copy]) => ({ size: 1843211, files: [name(n), copy] })),
+  }
+
+  const validationReport = (id) => {
+    const entries = []
+    const images = Array.from({ length: 241 }, (_, i) => i + 1)
+    const fails = (check, bad, message, tag) => images.forEach((n) => {
+      const hit = bad[n]
+      entries.push(hit ? { identifier: name(n), check, status: 'failed', message: hit.message ?? message, tag: hit.tag ?? tag, taken: taken(n) } : { identifier: name(n), check, status: 'ok', message: 'ok' })
+    })
+    fails('corrupted', Object.fromEntries(BAD.corrupted.map((n) => [n, {}])), 'image file is truncated', 'Corrupted')
+    fails('sequence', Object.fromEntries(BAD.sequence.map((n) => [n + 1, {}])), `dated before ${name(0)}, which has a lower number`, 'Out of order')
+    const missing = {}
+    BAD.noDate.forEach((n) => { missing[n] = { message: 'no date', tag: 'No date' } })
+    BAD.noModel.forEach((n) => { missing[n] = { message: (missing[n] ? 'no date, ' : '') + 'no camera model', tag: missing[n] ? 'No date, no camera model' : 'No camera model' } })
+    fails('exif', missing, 'no date', 'No date')
+    const dup = {}
+    BAD.duplicates.forEach(([n]) => { dup[n] = { message: `same content as ${BAD.duplicates[0][1]}` } })
+    fails('duplicates', dup, 'same content', 'Duplicate')
+    entries.push({ identifier: '(deployment)', check: 'structure', status: 'ok', message: 'all the images are in one folder' })
+    entries.push({ identifier: '(deployment)', check: 'camera', status: 'ok', message: '1 camera(s)' })
+    BAD.duplicates.forEach(([, copy]) => entries.push({ identifier: copy, check: 'duplicates', status: 'failed', message: `same content as ${name(87)}`, tag: 'Duplicate', taken: taken(87) }))
+    const by = (c, st) => entries.filter((e) => e.check === c && e.status === st).length
+    const checks = {}
+    ;[['corrupted', 'Corrupted images', 'images'], ['sequence', 'Shooting order vs. filename sequence', 'images'], ['exif', 'Required EXIF fields', 'images'],
+      ['duplicates', 'Duplicate images', 'images'], ['structure', 'Folder structure', 'deployment'], ['camera', 'Camera', 'deployment']]
+      .forEach(([c, label, scope]) => { checks[c] = { label, scope, ok: by(c, 'ok'), failed: by(c, 'failed') } })
+    const failed = entries.filter((e) => e.status === 'failed')
+    return {
+      id, kind: 'validation', title: 'Validation of R0003-DONA_01', created_at: '2026-10-06T09:45:12+00:00', source_dir: '/home/me/Pictures/R0003-DONA_01',
+      deployment_id: null, checked: 241, parameters: { checks: Object.keys(checks).sort() }, checks,
+      totals: { entries: entries.length, ok: entries.length - failed.length, failed: failed.length, images_with_issues: new Set(failed.filter((e) => checks[e.check].scope === 'images').map((e) => e.identifier)).size },
+      entries,
+    }
   }
 
   const statistic = (value, reference, lower, upper, history, message) => ({
@@ -110,23 +154,7 @@
   // The reports the validation, the postvalidation and the preprocessing leave.
   const VALIDATION_REPORT_ID = '20261006-094512_validation_R0003-DONA_01'
   const REPORTS = {
-    [VALIDATION_REPORT_ID]: {
-      id: VALIDATION_REPORT_ID, kind: 'validation', title: 'Validation of R0003-DONA_01', created_at: '2026-10-06T09:45:12+00:00',
-      source_dir: '/home/me/Pictures/R0003-DONA_01', deployment_id: null, checked: 241, parameters: { checks: ['camera', 'corrupted', 'duplicates', 'exif', 'sequence', 'structure'] },
-      checks: {
-        corrupted: { label: 'Corrupted images', scope: 'images', ok: 241, failed: 0 },
-        sequence: { label: 'Shooting order vs. filename sequence', scope: 'images', ok: 241, failed: 0 },
-        exif: { label: 'Required EXIF fields', scope: 'images', ok: 241, failed: 0 },
-        duplicates: { label: 'Duplicate images', scope: 'images', ok: 239, failed: 2 },
-        structure: { label: 'Folder structure', scope: 'deployment', ok: 1, failed: 0 },
-        camera: { label: 'Camera', scope: 'deployment', ok: 1, failed: 0 },
-      },
-      totals: { entries: 965, ok: 963, failed: 2 },
-      entries: [
-        { identifier: 'IMG_0087.JPG', check: 'duplicates', status: 'failed', message: 'same content as IMG_0087 (copy).JPG' },
-        { identifier: 'IMG_0087 (copy).JPG', check: 'duplicates', status: 'failed', message: 'same content as IMG_0087.JPG' },
-      ],
-    },
+    [VALIDATION_REPORT_ID]: validationReport(VALIDATION_REPORT_ID),
     '20261006-094930_preprocessing_R0003-DONA_01': {
       id: '20261006-094930_preprocessing_R0003-DONA_01', kind: 'preprocessing', title: 'Preprocessing of R0003-DONA_01', created_at: '2026-10-06T09:49:30+00:00',
       source_dir: '/home/me/Pictures/R0003-DONA_01', deployment_id: 'R0003-DONA_01', checked: 241, parameters: {},

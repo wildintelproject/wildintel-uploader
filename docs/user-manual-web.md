@@ -252,9 +252,24 @@ Checks over the images alone, before anything is known about the deployment:
 | Required EXIF fields | Images missing the capture date, camera model or id. |
 | Duplicate images | Files with the same content. |
 
-For each check you choose whether to **run** it, and whether it is **required**: a required check
-that doesn't pass stops you from going on. The *all* boxes at the top of each column do it for the
-whole table. Press **Run validation**; the results are listed per check, and below them is the [report](#9-reports) — which images failed which check, and why — with its downloads.
+The step is a small dashboard. At the top, what is being validated, **when it was last run**, the
+downloads of its [report](#9-reports) and the **Run validation** button. Once it has run, four figures
+sum it up: the **valid images**, the **images with issues**, the **tests executed** and the **tests
+with errors**.
+
+Under them, the **tests**. For each you choose whether to **run** it, and whether it is
+**required**: a required check that doesn't pass stops you from going on. The *all* boxes at the top
+of each column do it for the whole table. The first column shows a test running and then how it
+ended — ✔ passed, ⚠ failed, ✘ failed and required —, and the last ones say how many images failed it.
+
+Open a test that failed (the **›** at its end) to see **which images failed it**: as pictures, each
+with what is wrong with it (*No date*, *Duplicate*, *Out of order*…) and when it was taken, or as a
+list. You can **search by file name**, filter by the kind of error, sort by name or by date, and go
+through the pages; **View details** opens the image bigger with everything the report says of it — what
+failed and what passed. A test of the whole folder (the structure, or the camera) has no pictures: it
+says what it found.
+
+![The images that failed a test](img/screenshots/validation-failures.png)
 
 Reading the camera's model and id uses ExifTool, because the serial number of a camera trap lives
 in the manufacturer's own metadata. Without it the app falls back to the standard EXIF tags,

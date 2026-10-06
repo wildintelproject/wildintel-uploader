@@ -6,9 +6,10 @@ A report is a JSON file in config.reports_dir():
     {"id", "kind": "validation" | "postvalidation" | "preprocessing", "title", "created_at", "source_dir",
      "deployment_id", "parameters", "checked",
      "checks": {check: {"label", "scope": "images" | "deployment", "ok", "failed"}},
-     "totals": {"entries", "ok", "failed"},
-     "entries": [{"identifier", "check", "status": "ok" | "failed", "message"}]}
+     "totals": {"entries", "ok", "failed", "images_with_issues"},
+     "entries": [{"identifier", "check", "status": "ok" | "failed", "message", "tag"?, "taken"?}]}
 
+A failed image's entry also has a short "tag" (what is wrong, in a few words, for a badge) and "taken", its capture date.
 An entry is one check of one thing: an image (identified by its path in the source folder) or the whole
 deployment ("(deployment)"). A check that looks at every image has an entry for each, the ones that
 passed too — so the report says what was checked, not only what failed. The same file gives the CSV."""
@@ -22,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from wildintel_uploader.core import config
+from wildintel_uploader.core import config, parallel
 from wildintel_uploader.core.services import deployment_import_service as dis
 
 KINDS = ("validation", "postvalidation", "preprocessing")
@@ -54,19 +55,23 @@ class _Builder:
         self.scopes: dict[str, str] = {}
         self.checked = 0
 
-    def add(self, identifier: str, check: str, ok: bool, message: str, *, scope: str = "images") -> None:
+    def add(self, identifier: str, check: str, ok: bool, message: str, *, scope: str = "images", tag: str | None = None) -> None:
         self.scopes.setdefault(check, scope)
-        self.entries.append({"identifier": identifier, "check": check, "status": "ok" if ok else "failed", "message": message})
+        entry = {"identifier": identifier, "check": check, "status": "ok" if ok else "failed", "message": message}
+        if not ok and tag:
+            entry["tag"] = tag
+        self.entries.append(entry)
 
     def deployment(self, check: str, ok: bool, message: str) -> None:
         self.add(DEPLOYMENT, check, ok, message, scope="deployment")
 
-    def per_image(self, check: str, images: Iterable[str], problems: dict[str, str], ok_message: str) -> None:
-        """Every image has an entry for the check: its problem, or that it passed."""
+    def per_image(self, check: str, images: Iterable[str], problems: dict[str, str], ok_message: str, *, tags: dict[str, str] | None = None, tag: str | None = None) -> None:
+        """Every image has an entry for the check: its problem, or that it passed. A failed one gets the short tag
+        `tags` gives it, or `tag`."""
         self.scopes.setdefault(check, "images")
         for name in images:
             problem = problems.get(name)
-            self.add(name, check, problem is None, problem if problem is not None else ok_message)
+            self.add(name, check, problem is None, problem if problem is not None else ok_message, tag=(tags or {}).get(name, tag))
 
     def build(self) -> dict:
         checks: dict[str, dict] = {}
@@ -74,11 +79,26 @@ class _Builder:
             info = checks.setdefault(entry["check"], {"label": LABELS.get(entry["check"], entry["check"]), "scope": self.scopes[entry["check"]], "ok": 0, "failed": 0})
             info["ok" if entry["status"] == "ok" else "failed"] += 1
         failed = sum(1 for e in self.entries if e["status"] == "failed")
+        self._date_the_failures()
+        with_issues = {e["identifier"] for e in self.entries if e["status"] == "failed" and checks[e["check"]]["scope"] == "images"}
         return {
             "kind": self.kind, "title": self.title, "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "source_dir": self.source_dir, "deployment_id": self.deployment_id, "parameters": self.parameters, "checked": self.checked,
-            "checks": checks, "totals": {"entries": len(self.entries), "ok": len(self.entries) - failed, "failed": failed}, "entries": self.entries,
+            "checks": checks, "totals": {"entries": len(self.entries), "ok": len(self.entries) - failed, "failed": failed, "images_with_issues": len(with_issues)},
+            "entries": self.entries,
         }
+
+    def _date_the_failures(self) -> None:
+        """Gives each failed image's entries its capture date, as its EXIF says — the images that are fine aren't opened."""
+        if self.source_dir is None:
+            return
+        root = Path(self.source_dir)
+        names = sorted({e["identifier"] for e in self.entries if e["status"] == "failed" and e["identifier"] != DEPLOYMENT})
+        taken = dict(zip(names, parallel.pmap(lambda n: dis._image_datetime(root / n), names)))
+        for e in self.entries:
+            when = taken.get(e["identifier"]) if e["status"] == "failed" else None
+            if when is not None:
+                e["taken"] = when.isoformat()
 
 
 def images_of(folder: Path) -> list[str]:
@@ -96,18 +116,19 @@ def validation_report(found: dict, source: Path, checks: Iterable[str] | None = 
     b.checked = found.get("checked_count", len(images))
 
     if "corrupted" in ran:
-        b.per_image("corrupted", images, {i["path"]: i["error"] for i in found.get("corrupted", [])}, "can be read")
+        b.per_image("corrupted", images, {i["path"]: i["error"] for i in found.get("corrupted", [])}, "can be read", tag="Corrupted")
     if "sequence" in ran:
-        b.per_image("sequence", images, {i["path_b"]: f"dated before {i['path_a']}, which has a lower number" for i in found.get("sequence_issues", [])}, "in order")
+        b.per_image("sequence", images, {i["path_b"]: f"dated before {i['path_a']}, which has a lower number" for i in found.get("sequence_issues", [])}, "in order", tag="Out of order")
     if "exif" in ran:
         missing: dict[str, list[str]] = {}
         for field, info in found.get("exif_missing", {}).items():
             for name in info.get("files", []):
                 missing.setdefault(name, []).append(field.replace("_", " "))
-        b.per_image("exif", images, {name: "no " + ", no ".join(fields) for name, fields in missing.items()}, "has its capture date, camera model and camera id")
+        b.per_image("exif", images, {name: "no " + ", no ".join(fields) for name, fields in missing.items()}, "has its capture date, camera model and camera id",
+                    tags={name: ", ".join(f"No {field}" if i == 0 else f"no {field}" for i, field in enumerate(fields)) for name, fields in missing.items()})
     if "duplicates" in ran:
         problems = {name: "same content as " + ", ".join(f for f in g["files"] if f != name) for g in found.get("duplicates", []) for name in g["files"]}
-        b.per_image("duplicates", images, problems, "no other image has the same content")
+        b.per_image("duplicates", images, problems, "no other image has the same content", tag="Duplicate")
     if "structure" in ran:
         folders = found.get("subdirectories", [])
         b.deployment("structure", not folders, "all the images are in one folder" if not folders else f"images in subfolders: {', '.join(folders)}")
@@ -131,10 +152,10 @@ def postvalidation_report(result: dict, deployment_id: str, source: Path, parame
             b.deployment(check, bool(item.get("ok")) or bool(item.get("skipped")), item.get("message", ""))
     if "out_of_range" in result:
         problems = {i["path"]: f"{i['date']} is out of the range for the {i.get('rule', '')} image ({i.get('expected', '')})" for i in result["out_of_range"]}
-        b.per_image("time_range", images, problems, "its date fits the deployment")
+        b.per_image("time_range", images, problems, "its date fits the deployment", tag="Out of range")
     if "camera_mismatches" in result:
         problems = {i["path"]: f"camera {i['detected']} is not the deployment's" for i in result["camera_mismatches"]}
-        b.per_image("camera", images, problems, "its camera is the deployment's")
+        b.per_image("camera", images, problems, "its camera is the deployment's", tag="Other camera")
     return b.build()
 
 
@@ -231,3 +252,36 @@ def to_csv(report: dict) -> str:
     for entry in report["entries"]:
         writer.writerow([entry[c] for c in CSV_COLUMNS])
     return out.getvalue()
+
+
+# ── the images of a report ───────────────────────────────────────────────────
+
+THUMBNAIL = 320
+LARGE = 1280
+
+
+def image_jpeg(report_id: str, relative: str, size: int = THUMBNAIL, root: Path | None = None) -> bytes:
+    """An image a report names, as a JPEG that fits in size × size — to show it without sending the original.
+    Only the images the report lists are served, so this is no way to read other files.
+
+    Raises:
+        ReportError: there is no such report, it doesn't list the image, or the image can't be read.
+    """
+    from PIL import Image, ImageOps
+
+    report = read(report_id, root)
+    if not report.get("source_dir") or relative not in {e["identifier"] for e in report["entries"]}:
+        raise ReportError(f"The report doesn't have the image '{relative}'.")
+    folder = Path(report["source_dir"]).resolve()
+    path = (folder / relative).resolve()
+    if folder not in path.parents or not path.is_file():
+        raise ReportError(f"The report doesn't have the image '{relative}'.")
+    try:
+        with Image.open(path) as img:
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((size, size))
+            out = io.BytesIO()
+            img.convert("RGB").save(out, "JPEG", quality=75)
+            return out.getvalue()
+    except Exception as exc:
+        raise ReportError(f"'{relative}' can't be shown: {exc}") from exc

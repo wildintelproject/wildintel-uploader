@@ -264,8 +264,13 @@ looks at every image has an entry for each, the passed ones too. `validation_rep
 
 They are made where the work is: `/deployment-import/validate-images` and `/validate-deployment` add `report_id` to
 their answer, and the import's `done` event carries the preprocessing's. A report that can't be written is logged and
-`report_id` is `null` — it never fails what it reports. The frontend's `ReportPanel` shows one (`api.getReport`) and links
-to the downloads; `ReportsPage` lists them.
+`report_id` is `null` — it never fails what it reports. A failed image's entry also has a short `tag` (what is wrong, for a badge) and `taken` (its EXIF date, read only for the
+failed ones). `totals.images_with_issues` counts the distinct images that failed a check of images.
+
+The frontend: `ReportPanel` shows a report plainly (the Reports page, the preprocessing) and `ReportsPage` lists them.
+The validation step is a dashboard: `ValidationDashboard` (header, figures, and the page's table of checks as its child),
+`CheckTable`'s `outcome` columns, and `CheckFailures` — the failures of one check with their thumbnails
+(`api.reportImageUrl`), search, filter, sort, a grid or a list, pages and the details of an image.
 
 To report a new check, add its entries where the report is built (`report_service`) — see [Adding a check](#7-adding-a-check).
 
@@ -405,6 +410,7 @@ bodies are JSON, and every `POST` that talks to Trapper takes optional `url`, `u
 | reports | `GET /reports` | What each report says of itself, newest first. |
 | | `GET /reports/{id}`, `DELETE /reports/{id}` | A report, with its entries; delete it. |
 | | `GET /reports/{id}/download?format=json\|csv` | The report as a file. |
+| | `GET /reports/{id}/image?path=…&size=thumb\|large` | An image the report lists, as a JPEG (320 or 1280 px). Only the images in the report are served, and `path` is only ever looked up in it. |
 | sessions | `GET /sessions`; `POST /sessions/scan`, `/selection`, `/details`; `DELETE /sessions/{id}` | Resumable runs. |
 | upload | `POST /upload/collections` | The collections kept for a research project, with their deployments. |
 | | `…/classification-projects`, `/check-access` | For the page's pickers and *Test connection*. |

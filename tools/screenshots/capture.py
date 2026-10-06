@@ -149,7 +149,19 @@ def step_validate(page: Page) -> None:
     to_validate(page)
     button(page, "Run validation").click()
     expect(page.get_by_role("link", name="Download CSV")).to_be_visible()
-    save(page, "step-validate")
+    save(page, "step-validate", top=heading(page, "Validate folder contents"), bottom=button(page, "Continue"))
+
+
+@shot("validation-failures")
+def validation_failures(page: Page) -> None:
+    to_validate(page)
+    button(page, "Run validation").click()
+    expect(page.get_by_role("link", name="Download CSV")).to_be_visible()
+    page.get_by_role("button", name=re.compile("^Open the failures of Required EXIF fields")).click()
+    section = page.get_by_role("region", name="Failures of Required EXIF fields")
+    expect(section.get_by_role("button", name="View details of IMG_0012.JPG")).to_be_visible()
+    page.wait_for_load_state("networkidle")
+    save(page, "validation-failures", top=heading(page, "Validate folder contents"), bottom=section)
 
 
 def to_origin(page: Page) -> None:
@@ -288,6 +300,16 @@ def sync(page: Page) -> None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+PHOTOS = sorted((ROOT / "examples" / "deployment_example").glob("*.JPG"))
+
+
+def _photo(route) -> None:
+    """The pictures of a report: sample photos, a different one per image (the page's own fetch is faked, an <img> isn't)."""
+    from urllib.parse import parse_qs, urlparse
+    name = parse_qs(urlparse(route.request.url).query).get("path", [""])[0]
+    route.fulfill(status=200, content_type="image/jpeg", body=PHOTOS[sum(map(ord, name)) % len(PHOTOS)].read_bytes())
+
+
 def _browser(p):
     chrome = next((c for c in ("google-chrome", "chromium", "chromium-browser") if shutil.which(c)), None)
     return p.chromium.launch(executable_path=shutil.which(chrome) if chrome else None)
@@ -319,6 +341,7 @@ def main(names: list[str]) -> None:
             context = browser.new_context(base_url=base, viewport=VIEWPORT, color_scheme="dark", device_scale_factor=1,
                                           locale="en-GB", timezone_id="Europe/Madrid")
             context.add_init_script(path=str(MOCK))
+            context.route("**/api/reports/*/image*", _photo)
             page = context.new_page()
             page.set_default_timeout(8000)
             page.on("console", lambda m: print(f"    [console] {m.text}") if m.type in ("warning", "error") else None)

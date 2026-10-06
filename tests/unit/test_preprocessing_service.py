@@ -359,7 +359,7 @@ def test_the_import_leaves_a_report_of_what_was_done_to_each_image(tmp_path: Pat
     by_image = {e["identifier"]: e for e in report["entries"]}
     assert by_image["IMG_0001.JPG"]["status"] == "ok" and "→ R0003-DONA_01__" in by_image["IMG_0001.JPG"]["message"]
     assert by_image["IMG_0004.JPG"]["status"] == "failed"
-    assert report["totals"] == {"entries": 4, "ok": 3, "failed": 1}
+    assert report["totals"] == {"entries": 4, "ok": 3, "failed": 1, "images_with_issues": 1}
 
 
 def test_without_metadata_exiftool_is_not_needed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

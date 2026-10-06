@@ -41,6 +41,16 @@ def download_report(report_id: str, format: str = "json") -> Response:
     return Response(body, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{report_id}.{format}"'})
 
 
+@router.get("/{report_id}/image")
+def report_image(report_id: str, path: str, size: str = "thumb") -> Response:
+    """An image the report lists, as a JPEG — a thumbnail, or (size=large) one to look at closely."""
+    try:
+        body = report_service.image_jpeg(report_id, path, report_service.LARGE if size == "large" else report_service.THUMBNAIL)
+    except report_service.ReportError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return Response(body, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+
+
 @router.delete("/{report_id}")
 def delete_report(report_id: str) -> dict:
     try:

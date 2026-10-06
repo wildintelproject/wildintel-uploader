@@ -89,7 +89,7 @@ def test_a_preprocessing_report_lists_what_was_done_and_what_was_skipped(source:
     done = _entry(report, "IMG_0001.JPG", "preprocessing")
     assert done["status"] == "ok" and "→ R0003-DONA_01__20240904_1.JPEG" in done["message"] and "resized" in done["message"]
     assert _entry(report, "IMG_0004.JPG", "preprocessing") == {"identifier": "IMG_0004.JPG", "check": "preprocessing", "status": "failed", "message": "cannot identify image file"}
-    assert report["totals"] == {"entries": 2, "ok": 1, "failed": 1}
+    assert report["totals"] == {"entries": 2, "ok": 1, "failed": 1, "images_with_issues": 1}
 
 
 def test_a_report_is_kept_read_listed_and_deleted(source: Path, reports: Path):
@@ -173,3 +173,48 @@ def test_postvalidating_answers_with_the_id_of_its_report(source: Path, reports:
 
     assert answer["report_id"].endswith("_postvalidation_R0003-DONA_01")
     assert rs.read(answer["report_id"])["kind"] == "postvalidation"
+
+
+# ── what the dashboard shows of each failure ─────────────────────────────────
+
+def test_a_failed_image_has_a_short_tag_and_its_capture_date(source: Path):
+    report = rs.validation_report(dis.validate_images(source, None, detail=True), source)
+
+    out_of_order = _entry(report, "IMG_0002.JPG", "sequence")
+    assert out_of_order["tag"] == "Out of order" and out_of_order["taken"] == "2024-09-04T09:00:00"
+    assert _entry(report, "IMG_0003.JPG", "exif")["tag"].startswith("No date")
+    assert _entry(report, "IMG_0004.JPG", "corrupted")["tag"] == "Corrupted" and "taken" not in _entry(report, "IMG_0004.JPG", "corrupted")  # no date to read
+    assert "tag" not in _entry(report, "IMG_0001.JPG", "corrupted") and "taken" not in _entry(report, "IMG_0001.JPG", "corrupted")  # what passed has neither
+
+
+def test_the_totals_count_the_images_with_issues(source: Path):
+    checks = frozenset({"corrupted", "sequence", "duplicates", "structure"})
+    report = rs.validation_report(dis.validate_images(source, checks, detail=True), source, checks)
+
+    # IMG_0002 is out of order and IMG_0004 is corrupted; a check of the whole folder has no image to count.
+    assert report["totals"]["images_with_issues"] == 2
+
+
+def test_the_images_of_a_report_are_served_as_thumbnails_and_only_those(source: Path, reports: Path):
+    (source / "other.txt").write_text("secret")
+    report_id = rs.save(rs.validation_report(dis.validate_images(source, None, detail=True), source))
+
+    jpeg = rs.image_jpeg(report_id, "IMG_0001.JPG")
+
+    assert jpeg[:2] == b"\xff\xd8"  # a JPEG
+    for bad in ("other.txt", "../R0003-DONA_01/IMG_0001.JPG", "/etc/passwd", "IMG_9999.JPG"):
+        with pytest.raises(rs.ReportError, match="doesn't have the image"):
+            rs.image_jpeg(report_id, bad)
+    with pytest.raises(rs.ReportError, match="can't be shown"):  # listed, but it isn't an image
+        rs.image_jpeg(report_id, "IMG_0004.JPG")
+
+
+def test_the_api_serves_a_reports_image(source: Path, reports: Path):
+    client = _client()
+    report_id = client.post("/api/deployment-import/validate-images", json={"path": str(source)}).json()["report_id"]
+
+    ok = client.get(f"/api/reports/{report_id}/image", params={"path": "IMG_0001.JPG"})
+    assert ok.status_code == 200 and ok.headers["content-type"] == "image/jpeg"
+    assert client.get(f"/api/reports/{report_id}/image", params={"path": "IMG_0001.JPG", "size": "large"}).status_code == 200
+    assert client.get(f"/api/reports/{report_id}/image", params={"path": "IMG_0004.JPG"}).status_code == 404
+    assert client.get(f"/api/reports/{report_id}/image", params={"path": "../x.jpg"}).status_code == 404

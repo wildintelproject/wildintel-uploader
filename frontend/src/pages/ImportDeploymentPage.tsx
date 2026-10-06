@@ -1,4 +1,5 @@
 import ReportPanel from '../components/ReportPanel'
+import ValidationDashboard from '../components/ValidationDashboard'
 import TrapperAccountNotice, { trapperAccountReady } from '../components/TrapperAccountNotice'
 import type { TrapperAccount } from '../components/TrapperAccountNotice'
 import { useEffect, useRef, useState } from 'react'
@@ -212,8 +213,15 @@ export function describePreprocessing(steps: Set<PreprocessStep>): string {
  * meaningful — and only enabled — alongside "run". */
 export type CheckStatus = 'running' | 'passed' | 'failed' | 'none'
 
-export function CheckTable<T extends string>({ options, enabled, required, status, onToggleEnabled, onToggleRequired, onSetEnabled, onSetRequired }: {
+export function CheckTable<T extends string>({ options, enabled, required, status, describe, outcome, opened, onOpen, onToggleEnabled, onToggleRequired, onSetEnabled, onSetRequired }: {
   options: { value: T; label: string }[]; enabled: Set<T>; required: Set<T>
+  /** A line under each check's name, saying what it looks for. */
+  describe?: (value: T) => string | undefined
+  /** How a check ended — how many images failed it (null for a check of the whole folder) — shown as a badge and a count. Left out, no such columns. */
+  outcome?: (value: T) => { failed: number; images: number | null } | undefined
+  /** The check whose failures are open, and what opening one does: a check that failed has a chevron. */
+  opened?: T | null
+  onOpen?: (value: T) => void
   /** How each check is going — shown in a first column: running, or how it ended. Left out, there is no column. */
   status?: (value: T) => CheckStatus
   onToggleEnabled: (value: T) => void; onToggleRequired: (value: T) => void
@@ -235,7 +243,7 @@ export function CheckTable<T extends string>({ options, enabled, required, statu
       <thead className="bg-zinc-50 dark:bg-zinc-800/50">
         <tr>
           {status && <th scope="col" className={`${th} w-12 text-center`}><span className="sr-only">Status</span></th>}
-          <th scope="col" className={`${th} text-left`}>Check</th>
+          <th scope="col" className={`${th} text-left`}>{outcome ? 'Tests' : 'Check'}</th>
           <th scope="col" className={`${th} text-center`}>
             <span className="inline-flex items-center gap-2">
               <input type="checkbox" aria-label="Run all checks" checked={allRun} ref={indeterminate(someRun && !allRun)}
@@ -252,13 +260,19 @@ export function CheckTable<T extends string>({ options, enabled, required, statu
               Required to continue
             </span>
           </th>
+          {outcome && <th scope="col" className={`${th} text-center`}>Status</th>}
+          {outcome && <th scope="col" className={`${th} text-center`}>Failed images</th>}
+          {outcome && <th scope="col" className={`${th} w-8`}><span className="sr-only">Open</span></th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
         {options.map((opt) => (
           <tr key={opt.value}>
             {status && <td className="px-3 py-2 text-center"><CheckStatusIcon status={status(opt.value)} required={required.has(opt.value)} label={opt.label} /></td>}
-            <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{opt.label}</td>
+            <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+              {opt.label}
+              {describe?.(opt.value) && <span className="block text-xs text-zinc-500 dark:text-zinc-400">{describe(opt.value)}</span>}
+            </td>
             <td className="px-3 py-2 text-center">
               <input type="checkbox" aria-label={opt.label} checked={enabled.has(opt.value)} onChange={() => onToggleEnabled(opt.value)} />
             </td>
@@ -266,6 +280,25 @@ export function CheckTable<T extends string>({ options, enabled, required, statu
               <input type="checkbox" aria-label="Required to continue" checked={required.has(opt.value)}
                      disabled={!enabled.has(opt.value)} onChange={() => onToggleRequired(opt.value)} />
             </td>
+            {outcome && (() => {
+              const result = outcome(opt.value)
+              const failed = result !== undefined && result.failed > 0
+              return (
+                <>
+                  <td className="px-3 py-2 text-center">
+                    {result && <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${failed ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'}`}>
+                      {failed ? '▲ Failed' : '▲ Passed'}</span>}
+                  </td>
+                  <td className="px-3 py-2 text-center">{result ? (result.images === null ? (failed ? '—' : 0) : result.failed) : ''}</td>
+                  <td className="px-3 py-2 text-center">
+                    {failed && onOpen && (
+                      <button type="button" aria-label={`${opened === opt.value ? 'Close' : 'Open'} the failures of ${opt.label}`} aria-expanded={opened === opt.value}
+                              className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => onOpen(opt.value)}>{opened === opt.value ? '⌄' : '›'}</button>
+                    )}
+                  </td>
+                </>
+              )
+            })()}
           </tr>
         ))}
       </tbody>
@@ -316,6 +349,15 @@ export const IMAGE_CHECK_OPTIONS: { value: ImageCheck; label: string }[] = [
   { value: 'exif', label: 'Required EXIF fields (capture date, camera model and id)' },
   { value: 'duplicates', label: 'Duplicate images (same content)' },
 ]
+
+export const IMAGE_CHECK_DESCRIPTIONS: Record<ImageCheck, string> = {
+  corrupted: 'Checks that every image opens and decodes completely',
+  sequence: 'Checks that the shooting order matches the order of the file names',
+  structure: 'Checks that all the images are in one folder, with no subfolders',
+  camera: 'Checks that every image was taken by the same camera (model and id)',
+  exif: 'Checks that every image has its capture date, camera model and camera id',
+  duplicates: 'Checks for images with exactly the same content',
+}
 
 export const DEPLOYMENT_CHECK_OPTIONS: { value: DeploymentCheck; label: string }[] = [
   { value: 'deployment_id', label: 'Deployment id format (R0033-DONA_01)' },
@@ -1536,21 +1578,24 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
               Every validation check is turned off in the settings, so there is nothing to run here — go on.
             </p>
           ) : (
-            <>
-              <CheckTable options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks}
-                          status={(c) => checkStatus(imageChecks.has(c), validating, imageCheckPassed(c, validation))}
-                          onToggleEnabled={toggleImageCheck} onToggleRequired={(v) => setRequiredImageChecks((s) => toggled(s, v))}
-                          onSetEnabled={setImageChecks} onSetRequired={setRequiredImageChecks} />
-              <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={validating || runnableImageChecks.length === 0} onClick={handleValidate}>
-                {validating && <SmallSpinner />}
-                {validating ? 'Validating…' : 'Run validation'}
-              </button>
-            </>
+            <ValidationDashboard
+              title="Validation" subtitle={`${sourceDir.split(/[\\/]/).filter(Boolean).pop() ?? sourceDir}${scan ? ` · ${scan.image_count} image(s)` : ''}`}
+              reportId={validation?.report_id ?? null} running={validating} canRun={runnableImageChecks.length > 0} onRun={handleValidate}
+            >
+              {({ report, openCheck, open }) => (
+                <CheckTable options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks}
+                            status={(c) => checkStatus(imageChecks.has(c), validating, imageCheckPassed(c, validation))}
+                            describe={(c) => IMAGE_CHECK_DESCRIPTIONS[c]}
+                            outcome={(c) => { const r = report?.checks[c]; return r ? { failed: r.failed, images: r.scope === 'images' ? r.failed : null } : undefined }}
+                            opened={openCheck as ImageCheck | null} onOpen={open}
+                            onToggleEnabled={toggleImageCheck} onToggleRequired={(v) => setRequiredImageChecks((s) => toggled(s, v))}
+                            onSetEnabled={setImageChecks} onSetRequired={setRequiredImageChecks} />
+              )}
+            </ValidationDashboard>
           )}
           {validationError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{validationError}</p>}
           {/* The report says it all; the plain lines are only for when it couldn't be written. */}
           {validation && !validation.report_id && <ValidationReport validation={validation} />}
-          {validation?.report_id && <ReportPanel reportId={validation.report_id} />}
         </div>
       )}
 

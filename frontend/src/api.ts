@@ -246,6 +246,9 @@ export const api = {
   getReport: (id: string) => req<Report>(`/api/reports/${encodeURIComponent(id)}`),
   deleteReport: (id: string) => req<{ status: string }>(`/api/reports/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   /** Where a report can be downloaded from — its JSON, or a CSV with a row per image and check. */
+  /** An image a report lists, as a JPEG: a thumbnail, or one to look at closely. */
+  reportImageUrl: (id: string, path: string, size: 'thumb' | 'large' = 'thumb') =>
+    `/api/reports/${encodeURIComponent(id)}/image?path=${encodeURIComponent(path)}${size === 'large' ? '&size=large' : ''}`,
   reportUrl: (id: string, format: 'json' | 'csv') => `/api/reports/${encodeURIComponent(id)}/download?format=${format}`,
 
   listSessions: () => req<SessionSummary[]>('/api/sessions'),
