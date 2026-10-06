@@ -171,6 +171,12 @@ different, in bursts of three shots, numbered in the order they were taken, each
 make, model and serial number and its capture date in the EXIF — a Reconyx HyperFire 2,
 `P800HG08`. It is what to try a long import, the statistical checks or an upload with.
 
+With `--faulty` (into `examples/deployment_example_3000_faulty/`, also ignored by git) the same 3000 files come with
+problems for every validation to find, about 14 % of them: corrupted images (cut short, or empty), duplicates
+(`IMG_0123 (copy).JPG`, `IMG_0123_bak.JPG`), shots out of order, no capture date, no camera model or serial number,
+a second camera (a Bushnell) and some images in a `backup/` subfolder. Run through the wizard, the validation report has
+something to say for each check.
+
 ## 4. Backend
 
 ### Services
