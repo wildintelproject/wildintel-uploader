@@ -144,7 +144,7 @@ def test_validate_images_runs_only_the_requested_checks(tmp_path: Path):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"checked_count": 1, "subdirectories": ["sub"]}
+    assert {k: v for k, v in response.json().items() if k != "report_id"} == {"checked_count": 1, "subdirectories": ["sub"]}
 
 
 def test_validate_deployment(tmp_path: Path):
@@ -458,7 +458,7 @@ def test_validate_images_accepts_the_camera_check_and_returns_its_groups(tmp_pat
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"checked_count", "cameras", "cameras_without_info", "exiftool"}
+    assert set(body) == {"checked_count", "cameras", "cameras_without_info", "exiftool", "report_id"}
     assert body["cameras"] == [] and body["cameras_without_info"] == 2  # neither image says which camera took it
 
 

@@ -148,7 +148,7 @@ def to_validate(page: Page) -> None:
 def step_validate(page: Page) -> None:
     to_validate(page)
     button(page, "Run validation").click()
-    expect(page.get_by_text("IMG_0087 (copy).JPG").first).to_be_visible()
+    expect(page.get_by_role("link", name="Download CSV")).to_be_visible()
     save(page, "step-validate")
 
 
@@ -218,6 +218,14 @@ def step_import(page: Page) -> None:
     button(page, "Import deployment").click()
     expect(page.get_by_text("Deployment imported.")).to_be_visible()
     save(page, "step-import")
+
+
+@shot("reports")
+def reports(page: Page) -> None:
+    open_task(page, "Reports")
+    page.get_by_role("listitem", name="Validation of R0003-DONA_01").get_by_role("button", name="View").click()
+    expect(page.get_by_role("link", name="Download CSV")).to_be_visible()
+    save(page, "reports")
 
 
 # ── Import session ───────────────────────────────────────────────────────────

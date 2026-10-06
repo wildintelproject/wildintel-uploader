@@ -304,3 +304,9 @@ def collections_dir(settings: Settings | None = None) -> Path:
     <data directory>/collections/<research project id>/<collection, e.g.
     R0003>/<deployment id>/ (see services.deployment_import_service)."""
     return data_dir(settings) / "collections"
+
+
+def reports_dir(settings: Settings | None = None) -> Path:
+    """Where the reports of the validations, postvalidations and preprocessings are kept:
+    <data directory>/reports/ (see services.report_service)."""
+    return data_dir(settings) / "reports"

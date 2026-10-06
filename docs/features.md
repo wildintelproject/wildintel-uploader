@@ -55,6 +55,14 @@ What wildintel-tools did to a collection before uploading it, and a bit more:
 Each step can be switched off per run, and `preprocessing.json` records what happened to every
 image.
 
+### Reports
+
+Every validation, postvalidation and preprocessing writes a **report**: what was checked and done, image by image — the
+ones that failed, which check and why, and the ones that passed too. The step shows it as it is kept, and it can be
+downloaded as a **CSV** (a row per image and check, for a spreadsheet) or as a **JSON** with everything. They are kept in
+the `reports` folder, and a page of the menu lists them to look at again or delete — what wildintel-tools' `reports` command
+did with its YAML files, from the interface.
+
 ### The seal
 
 Every import writes `seal.json`: which checks each image and the deployment passed, tied by hash

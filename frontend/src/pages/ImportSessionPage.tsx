@@ -1,3 +1,4 @@
+import ReportPanel from '../components/ReportPanel'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { isValidTimezone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
@@ -612,6 +613,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
                   </summary>
                   {outcome.error && <p className="text-sm text-red-600 dark:text-red-400">{outcome.error}</p>}
                   {outcome.result && <ValidationReport validation={outcome.result} />}
+                  {outcome.result?.report_id && <ReportPanel reportId={outcome.result.report_id} />}
                 </details>
               )
             })}
@@ -842,6 +844,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
                   <summary className="cursor-pointer text-sm font-mono">{bad ? '⚠' : '✔'} {fieldsOf(d.name).deployment_id}</summary>
                   {outcome.error && <p className="text-sm text-red-600 dark:text-red-400">{outcome.error}</p>}
                   {outcome.result && <DeploymentCheckReport result={outcome.result} toleranceHours={toleranceHours} />}
+                  {outcome.result?.report_id && <ReportPanel reportId={outcome.result.report_id} />}
                 </details>
               )
             })}
@@ -900,6 +903,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
                     {(() => { const last = [...run.events].reverse().find((e) => e.type === 'copy'); return last && last.type === 'copy' ? ` ${last.index}/${last.total}` : '' })()}</span>}
                   {run?.done && <span className="text-emerald-600 dark:text-emerald-400">✔ imported — <span className="font-mono">{run.destDir}</span></span>}
                   {run?.error && !run.done && <span className="text-red-600 dark:text-red-400">⚠ {run.error}</span>}
+                  {(() => { const done = run?.events.find((e) => e.type === 'done'); return done && done.type === 'done' && done.report_id ? <ReportPanel reportId={done.report_id} /> : null })()}
                   {run?.events.filter((e) => e.type === 'skipped').map((e, i) => (
                     <p key={i} className="text-xs text-amber-600 dark:text-amber-400">⚠ Skipped {e.type === 'skipped' ? `${e.name}: ${e.detail}` : ''}</p>
                   ))}

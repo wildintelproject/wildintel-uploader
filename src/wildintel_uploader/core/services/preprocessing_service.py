@@ -33,7 +33,7 @@ from PIL import Image, ImageOps
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import camera_info, deployment_import_service, local_folder_service
+from wildintel_uploader.core.services import camera_info, deployment_import_service, local_folder_service, report_service
 from wildintel_uploader.core.services.deployment_import_service import DeploymentImportError
 
 logger = logging.getLogger(__name__)
@@ -283,6 +283,7 @@ def preprocess_stream(
 
         records: list[dict] = []
         skipped = 0
+        skipped_items: list[dict] = []
         done = 0
         dest.mkdir(parents=True, exist_ok=True)
         with ThreadPoolExecutor(max_workers=config.workers()) as pool:
@@ -294,6 +295,7 @@ def preprocess_stream(
                 except Exception as exc:  # one bad image doesn't stop the rest
                     skipped += 1
                     logger.warning("Could not preprocess %s: %s", path, exc)
+                    skipped_items.append({"name": str(path.relative_to(source)), "detail": str(exc)})
                     yield {"type": "skipped", "name": str(path.relative_to(source)), "detail": str(exc)}
                     continue
                 records.append(record)
@@ -330,6 +332,11 @@ def preprocess_stream(
             source_hashes={r["original"]: r["source_hash"] for r in records}, preprocessing=asdict(options),
         )
         logger.info("Deployment %s preprocessed and organized in %s (%d image(s), %d skipped)", deployment.deployment_id, dest, len(records), skipped)
-        yield {"type": "done", "dest_dir": str(dest), "processed": len(records), "skipped": skipped, "sealed": sealed}
+        report_id = None
+        try:
+            report_id = report_service.save(report_service.preprocessing_report(records, skipped_items, deployment.deployment_id, source, dest, asdict(options)))
+        except Exception as exc:  # the import is done: not having its report is no reason to fail it
+            logger.warning("Could not write the report of the preprocessing of %s: %s", deployment.deployment_id, exc)
+        yield {"type": "done", "dest_dir": str(dest), "processed": len(records), "skipped": skipped, "sealed": sealed, "report_id": report_id}
 
     return events()

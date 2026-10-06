@@ -79,11 +79,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tools/make_example_deployment.py` makes a deployment of any number of sample images (3000 by default), each with the
   camera's make, model and serial number and its capture date in the EXIF.
 
+- **Reports**: every validation, postvalidation and preprocessing writes a report of what was checked and done, image by image
+  (`<images folder>/reports/*.json`). Each step shows it — the checks with how many images passed and failed, and the images that
+  failed with the check and why — and it downloads as a CSV (a row per image and check) or a JSON. A **Reports** task lists the
+  reports to look at again or delete.
+
 ### Changed
 - Settings › Preprocessing › License is a list — CC0, CC BY and CC BY-NC — and shows the URL that is written into each image.
   A license set by hand in `settings.toml` is kept and shown as *Other*.
 
 ### Fixed
+- A location with the timezone `UTC` (or any other) is accepted on Windows: the app ships the `tzdata` timezone database, which Windows lacks for
+  Python's `zoneinfo`, and the executables bundle it.
+- Creating a deployment in Trapper no longer fails with *Type error in the cell … deploymentStart*: the CSV's dates are the wall clock of
+  the location's timezone, with no `Z` or offset, as Trapper's import form reads them.
 - Adding a research project or a location *from Trapper* no longer asks for the credentials: it connects by itself with the
   account saved in the settings, and says so when there isn't one.
 - The `*_exiftool_tmp` files ExifTool leaves when it is interrupted writing the metadata are removed.

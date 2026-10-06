@@ -267,7 +267,7 @@ error, printed as `✘  …` on the standard error.
 ## 7. Where the app keeps its files
 
 The same as the web app — see
-[its manual](user-manual-web.md#9-where-the-app-keeps-its-files). `wildintel-uploader config path`
+[its manual](user-manual-web.md#10-where-the-app-keeps-its-files). `wildintel-uploader config path`
 prints them for your machine.
 
 ## 8. Troubleshooting

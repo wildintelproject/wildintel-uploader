@@ -14,7 +14,7 @@ interface Props {
 }
 
 const TASK_TITLES: Record<SessionSummary['task'], string> = { deployment: 'Import deployment', upload: 'Upload deployment to Trapper', session: 'Import session',
-  'upload-session': 'Upload session to Trapper', sync: 'Sync local collections',
+  'upload-session': 'Upload session to Trapper', sync: 'Sync local collections', reports: 'Reports',
 }
 
 const PHASE_LABELS: Record<SessionSummary['phase'], string> = {

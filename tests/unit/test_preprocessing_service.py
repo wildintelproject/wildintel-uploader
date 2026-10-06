@@ -187,7 +187,8 @@ def test_the_images_are_renamed_resized_and_kept_flat_in_the_deployments_folder(
         with Image.open(image) as img:
             assert img.width == 2400
     assert [e["type"] for e in events] == ["copy", "copy", "copy", "sealing", "done"]
-    assert events[-1] == {"type": "done", "dest_dir": str(dest), "processed": 3, "skipped": 0, "sealed": True}
+    assert {k: v for k, v in events[-1].items() if k != "report_id"} == {"type": "done", "dest_dir": str(dest), "processed": 3, "skipped": 0, "sealed": True}
+    assert events[-1]["report_id"].endswith("_preprocessing_R0003-DONA_01")
     assert events[0]["name"] == "R0003-DONA_01__20240701_1.JPEG"
     assert json.loads((dest / "deployment.json").read_text())["deployment_id"] == "R0003-DONA_01"
     assert json.loads((collection / "collection.json").read_text())["name"] == "R0003"
@@ -337,6 +338,28 @@ def test_the_files_exiftool_leaves_when_it_is_interrupted_are_removed(tmp_path: 
         pre.write_xmp("exiftool", [(image, {"XMP-dc:Creator": "x"})])
 
     assert sorted(p.name for p in tmp_path.iterdir()) == [image.name]
+
+
+def test_the_import_leaves_a_report_of_what_was_done_to_each_image(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from wildintel_uploader.core import config
+    from wildintel_uploader.core.services import report_service
+
+    reports = tmp_path / "reports"
+    monkeypatch.setattr(config, "reports_dir", lambda settings=None: reports)
+    (tmp_path / "source").mkdir()
+    source = _source(tmp_path)
+    (source / "IMG_0004.JPG").write_bytes(b"not an image")  # it can't be processed: skipped
+
+    events = _run(source, tmp_path / "out" / "R0003", name="R0003")
+
+    done = events[-1]
+    assert done["type"] == "done" and done["skipped"] == 1
+    report = report_service.read(done["report_id"])
+    assert report["kind"] == "preprocessing" and report["deployment_id"] == "R0003-DONA_01"
+    by_image = {e["identifier"]: e for e in report["entries"]}
+    assert by_image["IMG_0001.JPG"]["status"] == "ok" and "→ R0003-DONA_01__" in by_image["IMG_0001.JPG"]["message"]
+    assert by_image["IMG_0004.JPG"]["status"] == "failed"
+    assert report["totals"] == {"entries": 4, "ok": 3, "failed": 1}
 
 
 def test_without_metadata_exiftool_is_not_needed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

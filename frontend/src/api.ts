@@ -2,6 +2,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
+  Report, ReportSummary,
 } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
@@ -237,6 +238,12 @@ export const api = {
   // Opens a folder kept by the app (inside its data folder) in the system's file explorer.
   openFolder: (path: string) => post<{ opened: string }>('/api/deployment-import/open-folder', { path }),
   exiftoolStatus: () => req<{ available: boolean; path: string | null }>('/api/deployment-import/exiftool'),
+
+  listReports: () => req<ReportSummary[]>('/api/reports'),
+  getReport: (id: string) => req<Report>(`/api/reports/${encodeURIComponent(id)}`),
+  deleteReport: (id: string) => req<{ status: string }>(`/api/reports/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  /** Where a report can be downloaded from — its JSON, or a CSV with a row per image and check. */
+  reportUrl: (id: string, format: 'json' | 'csv') => `/api/reports/${encodeURIComponent(id)}/download?format=${format}`,
 
   listSessions: () => req<SessionSummary[]>('/api/sessions'),
 

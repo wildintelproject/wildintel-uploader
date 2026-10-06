@@ -108,6 +108,35 @@
     ],
   }]
 
+  // The reports the validation, the postvalidation and the preprocessing leave.
+  const VALIDATION_REPORT_ID = '20261006-094512_validation_R0003-DONA_01'
+  const REPORTS = {
+    [VALIDATION_REPORT_ID]: {
+      id: VALIDATION_REPORT_ID, kind: 'validation', title: 'Validation of R0003-DONA_01', created_at: '2026-10-06T09:45:12+00:00',
+      source_dir: '/home/me/Pictures/R0003-DONA_01', deployment_id: null, checked: 241, parameters: { checks: ['camera', 'corrupted', 'duplicates', 'exif', 'sequence', 'structure'] },
+      checks: {
+        corrupted: { label: 'Corrupted images', scope: 'images', ok: 241, failed: 0 },
+        sequence: { label: 'Shooting order vs. filename sequence', scope: 'images', ok: 241, failed: 0 },
+        exif: { label: 'Required EXIF fields', scope: 'images', ok: 241, failed: 0 },
+        duplicates: { label: 'Duplicate images', scope: 'images', ok: 239, failed: 2 },
+        structure: { label: 'Folder structure', scope: 'deployment', ok: 1, failed: 0 },
+        camera: { label: 'Camera', scope: 'deployment', ok: 1, failed: 0 },
+      },
+      totals: { entries: 965, ok: 963, failed: 2 },
+      entries: [
+        { identifier: 'IMG_0087.JPG', check: 'duplicates', status: 'failed', message: 'same content as IMG_0087 (copy).JPG' },
+        { identifier: 'IMG_0087 (copy).JPG', check: 'duplicates', status: 'failed', message: 'same content as IMG_0087.JPG' },
+      ],
+    },
+    '20261006-094930_preprocessing_R0003-DONA_01': {
+      id: '20261006-094930_preprocessing_R0003-DONA_01', kind: 'preprocessing', title: 'Preprocessing of R0003-DONA_01', created_at: '2026-10-06T09:49:30+00:00',
+      source_dir: '/home/me/Pictures/R0003-DONA_01', deployment_id: 'R0003-DONA_01', checked: 241, parameters: {},
+      checks: { preprocessing: { label: 'Preprocessing', scope: 'images', ok: 241, failed: 0 } },
+      totals: { entries: 241, ok: 241, failed: 0 }, entries: [],
+    },
+  }
+  const reportSummary = ({ entries, parameters, checks, ...summary }) => summary
+
   const step = (name, status, message) => ({ type: 'step', step: name, status, message })
 
   // One deployment's upload: all done — or, held, halfway through sending a zip.
@@ -198,7 +227,7 @@
       'POST /api/deployment-import/browse-folder': () => ({ path: mock.browse }),
       'POST /api/deployment-import/scan-folder': () => SCAN,
       'POST /api/deployment-import/scan-session': () => SESSION_SCAN,
-      'POST /api/deployment-import/validate-images': () => VALIDATION,
+      'POST /api/deployment-import/validate-images': () => ({ ...VALIDATION, report_id: VALIDATION_REPORT_ID }),
       'POST /api/deployment-import/validate-deployment': () => POSTVALIDATION,
       'POST /api/deployment-import/research-projects/list': () => ({ results: [{
         ...PROJECT, sampling_design: 1, sensor_method: 1, animal_types: 1, bait_use: 1, event_interval: 0, keywords: '', abstract: '', methods: '', description: '',
@@ -211,6 +240,7 @@
       'POST /api/deployment-import/check-collection': () => ({ exists: true, name: 'R0003' }),
       'POST /api/deployment-import/timestamp-log': () => ({ path: `${COLLECTIONS}/DONA/R0003/R0003_FileTimestampLog.csv`, action: 'added', rows: 1, collection: 'R0003' }),
       'POST /api/deployment-import/open-folder': () => ({ opened: '' }),
+      'GET /api/reports': () => Object.values(REPORTS).map(reportSummary).sort((a, b) => b.created_at.localeCompare(a.created_at)),
       'GET /api/sessions': () => mock.sessions,
       'POST /api/sessions/scan': (body) => ({ ...UNFINISHED[0], task_id: body.task_id ?? 'new', phase: 'scanned' }),
       'POST /api/sessions/selection': (body) => ({ ...UNFINISHED[0], task_id: body.task_id, phase: 'selected' }),
@@ -249,6 +279,7 @@
     },
   ]
   mock.unfinished = UNFINISHED
+  mock.reports = REPORTS
   window.__mock = mock
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -277,6 +308,11 @@
           if (!hold) controller.close()
         },
       }), { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } })
+    }
+
+    const report = url.pathname.match(/^\/api\/reports\/([^/]+)$/)
+    if (report && method === 'GET' && mock.reports[decodeURIComponent(report[1])]) {
+      return new Response(JSON.stringify(mock.reports[decodeURIComponent(report[1])]), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }
 
     const key = `${method} ${url.pathname}`

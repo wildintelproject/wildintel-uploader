@@ -121,6 +121,8 @@ export interface ValidationResult {
   /** Images lacking the capture date, the camera model or the camera id. */
   exif_missing?: Record<ExifField, MissingExif>
   duplicates?: DuplicateGroup[]
+  /** The report this validation was kept in — see ReportPanel. Null if it couldn't be written. */
+  report_id?: string | null
 }
 
 /** An EXIF-dated shot outside the deployment's own date range. */
@@ -211,6 +213,8 @@ export interface DeploymentCheckResult {
   /** Every distinct EXIF camera model found — more than one usually means
    * images from different cameras got mixed into the folder. */
   camera_models_found?: string[]
+  /** The report this postvalidation was kept in. */
+  report_id?: string | null
 }
 
 /** Camtrap DP's own "featureType" enum — deployments-table-schema.json. */
@@ -277,7 +281,7 @@ export type ImportEvent =
   | { type: 'skipped'; name: string; detail: string }
   /** The images are being checked and the deployment sealed (see seal.json). */
   | { type: 'sealing' }
-  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean }
+  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean; report_id?: string | null }
 
 /** What is done to the images as they are imported, and the values it uses — see
  * core.services.preprocessing_service. */
@@ -295,7 +299,7 @@ export interface PreprocessingOptions {
 }
 
 /** What the app's menu offers — import a deployment, import a whole session of them, or upload one to Trapper. */
-export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'sync'
+export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'sync' | 'reports'
 
 /** What syncing the local collections folder with Trapper did: for each kind of thing, what it created and what was already there. */
 export interface SyncResult {
@@ -582,3 +586,41 @@ export type UploadEvent =
     /** generate */
     output_dir?: string; files?: string[]
   }
+
+// ── Reports ─────────────────────────────────────────────────────────────
+
+/** What a report was made of: a validation, a postvalidation or a preprocessing. */
+export type ReportKind = 'validation' | 'postvalidation' | 'preprocessing'
+
+/** One check of one image — or of the whole deployment, "(deployment)". */
+export interface ReportEntry {
+  identifier: string
+  check: string
+  status: 'ok' | 'failed'
+  message: string
+}
+
+export interface ReportCheck {
+  label: string
+  scope: 'images' | 'deployment'
+  ok: number
+  failed: number
+}
+
+/** What a report says of itself — the list of reports. */
+export interface ReportSummary {
+  id: string
+  kind: ReportKind
+  title: string
+  created_at: string
+  source_dir: string | null
+  deployment_id: string | null
+  checked: number
+  totals: { entries: number; ok: number; failed: number }
+}
+
+export interface Report extends ReportSummary {
+  parameters: Record<string, unknown>
+  checks: Record<string, ReportCheck>
+  entries: ReportEntry[]
+}

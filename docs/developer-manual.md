@@ -182,6 +182,7 @@ make, model and serial number and its capture date in the EXIF — a Reconyx Hyp
 | `deployment_import_service` | The wizard's backbone: scan a folder (EXIF dates, camera), the image **validations** and deployment **postvalidations**, the deployment id and revisions, copying, and the import streams. |
 | `preprocessing_service` | Dates, rename, resize and XMP metadata; writes `preprocessing.json`. Drives the import. |
 | `statistics_service` | The statistical postvalidation: sequences, and whether this revision is like the earlier ones of the location. |
+| `report_service` | The reports: builds them from a validation's, a postvalidation's or a preprocessing's results, keeps them as JSON in `<data dir>/reports/`, lists, deletes and exports them to CSV. |
 | `seal_service` | Runs the checks over the source images and writes/verifies `seal.json`. |
 | `local_folder_service` | The collections folder: research projects, locations, collections, deployments, `images.json`, the timestamp log. |
 | `camera_info` | The camera's model and id, through ExifTool when it's there (bundled or on the `PATH`), else Pillow. |
@@ -228,6 +229,30 @@ deployment form — is the command line's flow.
 The **timezone** is read from the location, in the research project's `locations.json`
 (`local_folder_service.location_time`), never from the request: `import-local` refuses a location
 with none. This is deliberate — see the [user manual](user-manual-web.md#the-location-owns-the-timezone).
+
+### Reports
+
+`report_service` turns the results the checks already return into one JSON shape:
+
+```json
+{"id": "20261006-094512_validation_R0003-DONA_01", "kind": "validation", "title": "…", "created_at": "…",
+ "source_dir": "…", "deployment_id": null, "parameters": {…}, "checked": 241,
+ "checks": {"duplicates": {"label": "Duplicate images", "scope": "images", "ok": 239, "failed": 2}},
+ "totals": {"entries": 965, "ok": 963, "failed": 2},
+ "entries": [{"identifier": "IMG_0087.JPG", "check": "duplicates", "status": "failed", "message": "same content as …"}]}
+```
+
+An entry is one check of one image (its path in the source folder) or of the deployment (`"(deployment)"`); a check that
+looks at every image has an entry for each, the passed ones too. `validation_report`, `postvalidation_report` and
+`preprocessing_report` build it; `save` writes it atomically and returns its id (the file's name, which is all
+`read` and `delete` accept — never a path).
+
+They are made where the work is: `/deployment-import/validate-images` and `/validate-deployment` add `report_id` to
+their answer, and the import's `done` event carries the preprocessing's. A report that can't be written is logged and
+`report_id` is `null` — it never fails what it reports. The frontend's `ReportPanel` shows one (`api.getReport`) and links
+to the downloads; `ReportsPage` lists them.
+
+To report a new check, add its entries where the report is built (`report_service`) — see [Adding a check](#7-adding-a-check).
 
 ### The deployment's files
 
@@ -361,6 +386,9 @@ bodies are JSON, and every `POST` that talks to Trapper takes optional `url`, `u
 | | `…/import-local` | **Streams** the wizard's import. |
 | | `…/import` | **Streams** copy-and-register (the command line's flow). |
 | | `…/open-folder` | Open a folder in the file explorer. |
+| reports | `GET /reports` | What each report says of itself, newest first. |
+| | `GET /reports/{id}`, `DELETE /reports/{id}` | A report, with its entries; delete it. |
+| | `GET /reports/{id}/download?format=json\|csv` | The report as a file. |
 | sessions | `GET /sessions`; `POST /sessions/scan`, `/selection`, `/details`; `DELETE /sessions/{id}` | Resumable runs. |
 | upload | `POST /upload/collections` | The collections kept for a research project, with their deployments. |
 | | `…/classification-projects`, `/check-access` | For the page's pickers and *Test connection*. |
@@ -389,7 +417,8 @@ an image check `x`:
    `core/config.py` — the switch in the settings page — and to the page's list.
 5. **The UI.** Add it to `IMAGE_CHECK_OPTIONS` (or `DEPLOYMENT_CHECK_OPTIONS`), its type in
    `types.ts`, and render its findings in `ValidationReport` (or `DeploymentCheckReport`).
-6. **Tests** — see below — and a line in the user manual's table of checks.
+6. **The report.** Add its entries to the report of its phase in `report_service`, and its label to `LABELS`.
+7. **Tests** — see below — and a line in the user manual's table of checks.
 
 ## 8. Testing
 

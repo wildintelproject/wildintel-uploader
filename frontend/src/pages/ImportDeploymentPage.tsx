@@ -1,3 +1,4 @@
+import ReportPanel from '../components/ReportPanel'
 import TrapperAccountNotice, { trapperAccountReady } from '../components/TrapperAccountNotice'
 import type { TrapperAccount } from '../components/TrapperAccountNotice'
 import { useEffect, useRef, useState } from 'react'
@@ -1494,6 +1495,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
           )}
           {validationError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{validationError}</p>}
           {validation && <ValidationReport validation={validation} />}
+          {validation?.report_id && <ReportPanel reportId={validation.report_id} />}
         </div>
       )}
 
@@ -1789,6 +1791,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
           )}
           {deploymentCheckError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{deploymentCheckError}</p>}
           {deploymentCheck && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} />}
+          {deploymentCheck?.report_id && <ReportPanel reportId={deploymentCheck.report_id} />}
         </div>
       )}
 
@@ -1883,6 +1886,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
             </div>
           )}
           {importError && <p className="text-sm text-red-600 dark:text-red-400">{importError}</p>}
+          {(() => { const done = events.find((e) => e.type === 'done'); return done && done.type === 'done' && done.report_id ? <ReportPanel reportId={done.report_id} /> : null })()}
           {destDir && (
             <div className="flex items-center gap-3 flex-wrap">
               <p className="text-sm text-emerald-600 dark:text-emerald-400">✔ Deployment imported.</p>

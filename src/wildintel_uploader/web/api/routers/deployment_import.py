@@ -21,7 +21,7 @@ from wildintel_uploader.core.schemas.requests import (
     ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
     NextRevisionRequest, UpdateLocationRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
-from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, seal_service, statistics_service
+from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
 
 router = APIRouter(prefix="/api/deployment-import", tags=["deployment-import"])
@@ -178,6 +178,15 @@ def scan_session(req: ScanFolderRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
+def _keep(build) -> str | None:
+    """Writes the report build() makes, and returns its id — None if it couldn't be, which is no reason to fail what it reports."""
+    try:
+        return report_service.save(build())
+    except Exception as exc:
+        logger.warning("Could not write the report: %s", exc, exc_info=debugging())
+        return None
+
+
 @router.post("/validate-images")
 def validate_images(req: ValidateImagesRequest) -> dict:
     """Opt-in checks over an already-scanned folder — corrupted files, an
@@ -185,9 +194,11 @@ def validate_images(req: ValidateImagesRequest) -> dict:
     (see services.deployment_import_service.validate_images)."""
     checks = frozenset(req.checks) if req.checks is not None else None
     try:
-        return deployment_import_service.validate_images(Path(req.path).expanduser(), checks)
+        source = Path(req.path).expanduser()
+        result = deployment_import_service.validate_images(source, checks, detail=True)
     except deployment_import_service.DeploymentImportError as exc:
         raise HTTPException(400, str(exc)) from exc
+    return {**result, "report_id": _keep(lambda: report_service.validation_report(result, source, checks))}
 
 
 @router.post("/previous-deployments")
@@ -233,9 +244,10 @@ def validate_deployment(req: ValidateDeploymentRequest) -> dict:
                     "sequence_length": stats.sequence_length_tolerance,
                 },
             ))
-        return result
     except deployment_import_service.DeploymentImportError as exc:
         raise HTTPException(400, str(exc)) from exc
+    parameters = {"checks": sorted(checks) if checks is not None else None, "tolerance_hours": req.tolerance_hours, **req.statistics.model_dump()}
+    return {**result, "report_id": _keep(lambda: report_service.postvalidation_report(result, req.deployment.deployment_id, source, parameters))}
 
 
 def _location_time(research_project_id: str | None, location_id: str | None) -> dict:

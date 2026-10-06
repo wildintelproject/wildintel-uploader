@@ -20,8 +20,9 @@ This manual covers the web interface. Part of it can also be done from a termina
 6. [Import a session](#6-import-a-session)
 7. [Upload a deployment to Trapper](#7-upload-a-deployment-to-trapper)
 8. [Sync local collections](#8-sync-local-collections)
-9. [Where the app keeps its files](#9-where-the-app-keeps-its-files)
-10. [Troubleshooting](#10-troubleshooting)
+9. [Reports](#9-reports)
+10. [Where the app keeps its files](#10-where-the-app-keeps-its-files)
+11. [Troubleshooting](#11-troubleshooting)
 
 ---
 
@@ -76,6 +77,7 @@ Trapper server you configure.
 | 🗂️ **Import session** | The same for a folder holding several deployments, one subfolder each. |
 | ☁️ **Upload deployment to Trapper** | Send deployments already kept locally to Trapper. |
 | 🔄 **Sync local collections** | Bring the collections folder up to date with what Trapper already has. |
+| 📑 **Reports** | The reports that the checks and the import leave — [look at them again, download them](#9-reports). |
 | 📦 *Upload session to Trapper* | Coming soon. |
 
 ![The task menu](img/screenshots/menu.png)
@@ -250,7 +252,7 @@ Checks over the images alone, before anything is known about the deployment:
 
 For each check you choose whether to **run** it, and whether it is **required**: a required check
 that doesn't pass stops you from going on. The *all* boxes at the top of each column do it for the
-whole table. Press **Run validation**; the report lists, per check, what was found and which files.
+whole table. Press **Run validation**; the results are listed per check, and below them is the [report](#9-reports) — which images failed which check, and why — with its downloads.
 
 Reading the camera's model and id uses ExifTool, because the serial number of a camera trap lives
 in the manufacturer's own metadata. Without it the app falls back to the standard EXIF tags,
@@ -330,7 +332,7 @@ is uploaded. They need at least the *previous revisions needed* of the settings,
 skipped; what a sequence is, what "similar" means and what it is compared to are the
 [Postvalidation settings](#postvalidation).
 
-As in the validation step, each check can be run and required.
+As in the validation step, each check can be run and required, and the [report](#9-reports) lists what failed — and downloads.
 
 ### Step 6 — Preprocessing
 
@@ -361,7 +363,7 @@ Each optional step can be switched off for this run. Its values come from the
 
 Press **Import deployment**. Each image is listed as it is copied — `[3/241] IMG_0003.JPG` — then
 the metadata is written and the deployment is **sealed**. Images that fail are *skipped* and
-reported, and don't stop the rest.
+reported, and don't stop the rest. The [report](#9-reports) of the preprocessing is shown below, and says what was done to each image.
 
 A good import says where the deployment was kept, and offers:
 
@@ -498,7 +500,33 @@ The result lists, per kind, what was created and what was already there, the dep
 collection of the classification project claims, and any that Trapper holds in a way that isn't a
 valid deployment — with the reason — and were left out.
 
-## 9. Where the app keeps its files
+## 9. Reports
+
+Every **validation**, **postvalidation** and **preprocessing** leaves a **report** of what it checked and did,
+image by image. The step shows it right below its results — the same file you can download, so what you see is
+what is kept:
+
+- the **checks**, with how many images passed and how many failed each;
+- the **images that failed**, with the check and why — *IMG_0087.JPG · Duplicate images · same content as IMG_0087 (copy).JPG* —
+  that can be narrowed to one check, and are shown 100 at a time;
+- **Download CSV** — a row per image and check, to open in a spreadsheet — and **Download JSON**, with everything: when it
+  was made, the folder, the parameters it was run with and every entry.
+
+![Reports](img/screenshots/reports.png)
+
+What each report holds:
+
+| Report | An entry for | Says |
+|---|---|---|
+| **Validation** | each image and check — corrupted, shooting order, EXIF fields, duplicates —, and the folder for the structure and camera checks | The ones that passed too, so the report says what was checked, not only what failed. |
+| **Postvalidation** | the deployment for the naming and statistical checks, and each image for its date and camera | Why a check failed — *241 images — like the previous revisions (median 238, ±50 %)*. |
+| **Preprocessing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized* — and the ones that were **skipped**, with the reason. |
+
+The **📑 Reports** task of the menu lists all of them, newest first, with *View*, *CSV*, *JSON* and *Delete* (which
+asks again). They are kept in the `reports` folder of the images folder until you delete them. A check you run twice
+makes two reports.
+
+## 10. Where the app keeps its files
 
 | What | Where |
 |---|---|
@@ -507,11 +535,12 @@ valid deployment — with the reason — and were left out.
 | Collections | `Documents/wildintel-uploader/collections/` (or *Images folder* of the settings). |
 | Packages to upload | `Documents/wildintel-uploader/packages/`. |
 | Unfinished runs | `Documents/wildintel-uploader/sessions/`. |
+| Reports | `Documents/wildintel-uploader/reports/` — one JSON file each. |
 
 From a terminal, `wildintel-uploader config path` prints them — see the
 [command-line manual](user-manual-cli.md#3-settings).
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 **"Backend not reachable — is the server running?"**
 :   The red bar at the top. The window that started the app was closed, or it crashed. Start the app
