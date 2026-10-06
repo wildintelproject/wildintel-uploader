@@ -266,9 +266,9 @@ kept in the collections folder; pick one already there, or add a new one:
 - **By hand** — the project's name and acronym (which names its folder); a location's id, name,
   latitude, longitude, coordinate uncertainty, **timezone** and whether its cameras ignore summer
   time.
-- **From Trapper** — pick the project, or its locations, from your Trapper account (the
-  connection is the one saved in the settings) and they are copied here, with their coordinates
-  and timezone.
+- **From Trapper** — pick the project, or its locations, from your Trapper account and they are
+  copied here, with their coordinates and timezone. The app connects by itself with the account
+  saved in the settings — it never asks for the credentials again; if there isn't one, it says so.
 
 ### Step 4 — Details
 
@@ -549,6 +549,15 @@ From a terminal, `wildintel-uploader config path` prints them — see the
 :   Trapper checks the package's timezone and summer-time setting against the location's. If you
     changed them for the location in Trapper, they must be the same here — edit the location in the
     *Origin* step.
+
+**The upload fails with "Trapper's uploader accepted the login but gave no session"**
+:   The uploader's login answered without the session it should hand out. The message includes what
+    Trapper said: send it to the Trapper administrator, or attach it to a bug report.
+
+**Files ending in `_exiftool_tmp` in a deployment's folder**
+:   ExifTool writes the metadata of each image through a temporary file; one it was interrupted in
+    (the app stopped in the middle of an import) is left behind. The app removes them when the
+    metadata step ends, or fails, but not if it was killed: delete them, and import again.
 
 **An image was skipped**
 :   The import lists skipped images with the reason, and goes on with the rest. A corrupted file is

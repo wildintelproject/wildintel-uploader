@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 import yaml
 from PIL import Image
@@ -860,3 +861,35 @@ def test_each_access_check_fails_on_its_own(monkeypatch: pytest.MonkeyPatch):
         checks = up.check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2})
     assert [c["ok"] for c in checks] == [True, False, True, False]
     assert "has no classification project" in checks[1]["message"]
+
+
+# ── the uploader's login ─────────────────────────────────────────────────────
+
+def _login(handler) -> httpx.Request | None:
+    """Runs the uploader's login against a fake Trapper answering with `handler`; returns what the page was left with."""
+    import asyncio
+
+    uploader = up._uploader_class()(client=SimpleNamespace(user_name="alice", user_password="secret"))
+
+    async def run():
+        async with httpx.AsyncClient(base_url="https://trapper.example.org/", transport=httpx.MockTransport(handler)) as http:
+            await uploader._login(http)
+            return next((c.value for c in http.cookies.jar if c.name == "sessionid"), None)
+
+    return asyncio.run(run())
+
+
+def test_the_uploader_login_takes_the_session_from_results():
+    assert _login(lambda request: httpx.Response(200, json={"results": [{"sessionid": "abc"}]})) == "abc"
+
+
+def test_the_uploader_login_takes_the_session_from_the_top_of_the_answer_or_from_its_cookie():
+    assert _login(lambda request: httpx.Response(200, json={"sessionid": "top"})) == "top"
+    assert _login(lambda request: httpx.Response(200, json={"detail": "ok"}, headers={"set-cookie": "sessionid=cookie; Path=/"})) == "cookie"
+
+
+def test_the_uploader_login_says_what_trapper_answered_when_it_gives_no_session():
+    with pytest.raises(up.TrapperUploadError, match=r'gave no session.*200: \{"status":"ok"\}'):
+        _login(lambda request: httpx.Response(200, json={"status": "ok"}))
+    with pytest.raises(up.TrapperUploadError, match="gave no session.*Welcome"):
+        _login(lambda request: httpx.Response(200, text="<html>Welcome</html>"))

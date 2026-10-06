@@ -426,9 +426,42 @@ def _trapper_message(exc: Exception) -> str:
     return text
 
 
-def _upload_files(client, files: list[Path], report: Callable[[dict], None]) -> None:
+def _session_id(data: object) -> str | None:
+    """The session the uploader's login hands out: {"results": [{"sessionid"}]} — or, in other Trapper versions, at the top."""
+    if not isinstance(data, dict):
+        return None
+    results = data.get("results")
+    row = results[0] if isinstance(results, list) and results and isinstance(results[0], dict) else data
+    session = row.get("sessionid")
+    return str(session) if session else None
+
+
+def _uploader_class():
+    """The SDK's HTTPUploader, with a login that copes with what Trapper really answers. The SDK's own expects
+    {"results": [{"sessionid": …}]} and fails with a bare KeyError("results") when the answer is anything else."""
     from trapper_client.components.http_uploader import HTTPUploader  # needs the SDK's "upload" extra
 
+    class TrapperUploader(HTTPUploader):
+        async def _login(self, http: httpx.AsyncClient) -> None:
+            response = await http.post("uploader/auth/login", json={"username": self.client.user_name, "password": self.client.user_password})
+            response.raise_for_status()
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+            session = _session_id(data)
+            if session:
+                http.cookies.set("sessionid", session)
+            elif not any(cookie.name == "sessionid" for cookie in http.cookies.jar):  # it may only have come as a cookie, kept already
+                body = " ".join(response.text.split())[:300]
+                raise TrapperUploadError(f"Trapper's uploader accepted the login but gave no session — {response.url} answered {response.status_code}{f': {body}' if body else ''}.")
+            if self.progress_callback:
+                self.progress_callback("login", {"username": data.get("username") if isinstance(data, dict) else None})
+
+    return TrapperUploader
+
+
+def _upload_files(client, files: list[Path], report: Callable[[dict], None]) -> None:
     for path in files:
         sent = {"bytes": 0}
 
@@ -437,7 +470,7 @@ def _upload_files(client, files: list[Path], report: Callable[[dict], None]) -> 
                 sent["bytes"] += info["bytes"]
                 report({"type": "upload_progress", "file": _name, "bytes": sent["bytes"], "total": _total})
 
-        uploader = HTTPUploader(client=client, progress_callback=on_progress)
+        uploader = _uploader_class()(client=client, progress_callback=on_progress)
         try:
             asyncio.run(uploader.upload_file(path, f"/collections/{path.name}"))
         except httpx.HTTPStatusError as exc:
@@ -451,13 +484,11 @@ def _uploader_login(credentials: tuple[str, str, str]) -> None:
     Raises:
         httpx.HTTPStatusError: the uploader refused the login.
     """
-    from trapper_client.components.http_uploader import HTTPUploader  # needs the SDK's "upload" extra
-
     client = trapper_service.client(*credentials)
 
     async def login() -> None:
         async with httpx.AsyncClient(base_url=client.base_url.rstrip("/") + "/", verify=client.verify_ssl) as http:
-            await HTTPUploader(client=client)._login(http)
+            await _uploader_class()(client=client)._login(http)
 
     asyncio.run(login())
 

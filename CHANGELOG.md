@@ -84,5 +84,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   A license set by hand in `settings.toml` is kept and shown as *Other*.
 
 ### Fixed
+- Adding a research project or a location *from Trapper* no longer asks for the credentials: it connects by itself with the
+  account saved in the settings, and says so when there isn't one.
+- The `*_exiftool_tmp` files ExifTool leaves when it is interrupted writing the metadata are removed.
+- The upload's login to Trapper copes with an answer without `results` (the session at the top, or as a cookie) and, when there is
+  no session at all, says what Trapper answered instead of failing with a bare `'results'`.
 - The frontend type-checks again (`npm run build`): the resume screen knows every task, the Trapper credentials may be left
   blank, and the tests' fixtures follow `SessionSummary`.
