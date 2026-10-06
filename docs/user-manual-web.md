@@ -308,12 +308,12 @@ The rest of the form follows [Camtrap DP](https://camtrap-dp.tdwg.org)'s deploym
 same fields as Trapper's own deployment form. Only the **start and end dates** are required (and
 are read from the images' EXIF as this step opens — the earliest and the latest capture date —, along
 with the camera model and id, when every image has the same); everything else is optional, and can be completed later in
-Trapper. A row of buttons — **Period**, **Camera**, **Site** and **Grouping and notes** — picks the section to fill in, one at a
-time; a red dot on a button says that section has a wrong field.
+Trapper. The **Period** is always in view — start and end, as the camera's local time. Under it, a row of buttons — **Camera**,
+**Site** and **Grouping and notes** — picks the section to fill in, one at a time; a red dot on a button says that
+section has a wrong field.
 
 | Section | Fields |
 |---|---|
-| **Period** | Start and end, as the camera's local time. |
 | **Camera** | Camera id and model, delay between triggers, height *or* depth (not both), tilt, heading, detection distance, timestamp issues. |
 | **Site** | Set up by, feature type (road, trail, burrow, water source…), habitat, bait used. |
 | **Grouping and notes** | Deployment groups, tags, comments. |

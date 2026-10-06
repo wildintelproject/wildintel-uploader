@@ -1190,18 +1190,20 @@ describe('ImportDeploymentPage', () => {
   })
 
 
-  it('shows one section of the details at a time, from a row of buttons, and flags the one with a wrong field', async () => {
+  it('keeps the period always in view, and shows one of the other sections at a time from a row of buttons, flagging the one with a wrong field', async () => {
     await goToNewDetailsStep()
-    expect(screen.getByRole('tab', { name: /Period/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByLabelText('Start date')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Camera model')).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
+    expect(screen.queryByRole('tab', { name: /Period/ })).not.toBeInTheDocument() // the period is not one of the sections
     expect(screen.getByRole('tab', { name: /Camera/ })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Camera model')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Habitat')).not.toBeInTheDocument()
+
     await userEvent.type(screen.getByLabelText('Camera height (m)'), '1.2')
     await userEvent.type(screen.getByLabelText('Camera depth (m)'), '4.8')
     await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
+    expect(screen.getByLabelText('Habitat')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Camera model')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Start date')).toBeInTheDocument() // still there
 
     expect(within(screen.getByRole('tab', { name: /Camera/ })).getByRole('img', { name: 'has a problem' })).toBeInTheDocument()
     expect(within(screen.getByRole('tab', { name: /Site/ })).queryByRole('img', { name: 'has a problem' })).not.toBeInTheDocument()

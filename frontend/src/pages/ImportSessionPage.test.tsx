@@ -381,7 +381,6 @@ describe('ImportSessionPage', () => {
     expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
     await userEvent.click(screen.getByRole('button', { name: 'DONA_02' }))
     expect(screen.getByLabelText('Habitat')).toHaveValue('Oak forest')
-    await userEvent.click(screen.getByRole('tab', { name: /Period/ }))
     expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-05T09:00') // the dates are this revision's own
   })
 
@@ -546,7 +545,6 @@ describe('ImportSessionPage', () => {
     expect(screen.getByLabelText('Tags (comma-separated)')).toHaveValue('forest')
     expect(screen.getByLabelText('Deployment id')).toHaveValue('R0003-DONA_01')
     expect(screen.getByLabelText('Location')).toHaveValue('DONA_01')
-    await userEvent.click(screen.getByRole('tab', { name: /Period/ }))
     expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-04T13:10') // this revision's own
   })
 

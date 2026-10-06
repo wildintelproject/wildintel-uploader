@@ -535,16 +535,15 @@ export function LocationTimeNote({ locationId, latitude, longitude, timezone, ig
 }
 
 /** The deployment's period, and — behind a tick — its camera, site and notes: Camtrap DP's own fields. */
-type DetailsSection = 'period' | 'camera' | 'site' | 'notes'
+type DetailsSection = 'camera' | 'site' | 'notes'
 
 const DETAILS_SECTIONS: { id: DetailsSection; label: string; icon: string }[] = [
-  { id: 'period', label: 'Period', icon: '📅' },
   { id: 'camera', label: 'Camera', icon: '📷' },
   { id: 'site', label: 'Site', icon: '📍' },
   { id: 'notes', label: 'Grouping and notes', icon: '📝' },
 ]
 
-/** The fields of the details, one section at a time — chosen from a row of buttons, as a segmented control. */
+/** The period, then the rest of the fields one section at a time — chosen from a row of buttons, as a segmented control. */
 export function DeploymentFormBody({ deployment, timezone, errors, onField, datesGuessed, datesFromLog }: {
   deployment: DeploymentFields; timezone: string; errors: ReturnType<typeof shownErrors>
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
@@ -552,10 +551,9 @@ export function DeploymentFormBody({ deployment, timezone, errors, onField, date
   /** The FileTimestampLog the dates were read from, if they were. */
   datesFromLog?: string
 }) {
-  const [section, setSection] = useState<DetailsSection>('period')
+  const [section, setSection] = useState<DetailsSection>('camera')
   // A section with a field that is wrong says so on its button, whichever is open.
   const flagged: Record<DetailsSection, boolean> = {
-    period: Boolean(errors.start_date || errors.end_date),
     camera: Boolean(errors.camera_interval || errors.detection_distance || errors.camera_height || errors.camera_depth || errors.camera_tilt || errors.camera_heading
       || (deployment.camera_height != null && deployment.camera_depth != null)),
     site: false,
@@ -563,7 +561,18 @@ export function DeploymentFormBody({ deployment, timezone, errors, onField, date
   }
   return (
     <>
-    <div role="tablist" aria-label="Section of the details" className="grid grid-cols-4 gap-1 p-1 mb-4 rounded-lg bg-zinc-100 dark:bg-zinc-800/70">
+    <FormCard title="Period" description="When the camera was recording. Pick a date from the calendar or type it.">
+      <div className="grid grid-cols-2 gap-4">
+        <DateTimeField label="Start date" required error={errors.start_date}
+                       value={deployment.start_date} onChange={(v) => onField('start_date', stampTimezone(v, timezone))} />
+        <DateTimeField label="End date" required error={errors.end_date}
+                       value={deployment.end_date ?? ''} onChange={(v) => onField('end_date', v ? stampTimezone(v, timezone) : null)} />
+      </div>
+      {datesGuessed && <p className={hintClass}>The dates were guessed from the images' EXIF data.</p>}
+      {datesFromLog && <p className={hintClass}>The dates were taken from {datesFromLog}, not from the images' EXIF data.</p>}
+    </FormCard>
+
+    <div role="tablist" aria-label="Section of the details" className="grid grid-cols-3 gap-1 p-1 mb-4 rounded-lg bg-zinc-100 dark:bg-zinc-800/70">
       {DETAILS_SECTIONS.map(({ id, label, icon }) => (
         <button key={id} type="button" role="tab" aria-selected={section === id} onClick={() => setSection(id)}
                 className={`relative flex flex-col items-center gap-0.5 rounded-md px-2 py-2 text-sm transition-colors ${section === id
@@ -575,17 +584,6 @@ export function DeploymentFormBody({ deployment, timezone, errors, onField, date
         </button>
       ))}
     </div>
-
-    {section === 'period' && <FormCard title="Period" description="When the camera was recording. Pick a date from the calendar or type it.">
-      <div className="grid grid-cols-2 gap-4">
-        <DateTimeField label="Start date" required error={errors.start_date}
-                       value={deployment.start_date} onChange={(v) => onField('start_date', stampTimezone(v, timezone))} />
-        <DateTimeField label="End date" required error={errors.end_date}
-                       value={deployment.end_date ?? ''} onChange={(v) => onField('end_date', v ? stampTimezone(v, timezone) : null)} />
-      </div>
-      {datesGuessed && <p className={hintClass}>The dates were guessed from the images' EXIF data.</p>}
-      {datesFromLog && <p className={hintClass}>The dates were taken from {datesFromLog}, not from the images' EXIF data.</p>}
-    </FormCard>}
 
     {section === 'camera' && (
       <>
