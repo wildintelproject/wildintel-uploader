@@ -14,8 +14,9 @@ CSV this builds from a DeploymentFields."""
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone as dt_timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from trapper_client import TrapperClient
 
@@ -191,9 +192,36 @@ def _csv_value(value) -> str:
     return str(value)
 
 
-def write_deployment_csv(deployment: DeploymentFields, path: Path) -> Path:
-    """One-row CSV in the column order Trapper's import form expects."""
+TRAPPER_DATETIME = "%Y-%m-%dT%H:%M:%S"
+
+
+def trapper_wall_clock(value: str | None, timezone_name: str | None, ignore_dst: bool = False) -> str | None:
+    """A date as Trapper's import form wants it: the camera's wall clock as YYYY-MM-DDThh:mm:ss, with no designator —
+    the form is told the timezone on its own, and reads the date in it. A date with an offset ("…+02:00", "…Z") is
+    moved to the wall clock of timezone_name; with ignore_dst, to the one its standard time has, which is the clock of a
+    camera that never changed to summer time. A date with no offset is already a wall clock: it is kept.
+
+    Raises:
+        ValueError: it isn't an ISO 8601 date, or timezone_name isn't a timezone.
+    """
+    if not value:
+        return value
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or not timezone_name:
+        return parsed.replace(tzinfo=None).strftime(TRAPPER_DATETIME)
+    local = parsed.astimezone(ZoneInfo(timezone_name))
+    if ignore_dst:
+        standard = local.utcoffset() - (local.dst() or timedelta(0))
+        local = parsed.astimezone(dt_timezone(standard))
+    return local.replace(tzinfo=None).strftime(TRAPPER_DATETIME)
+
+
+def write_deployment_csv(deployment: DeploymentFields, path: Path, *, timezone: str | None = None, ignore_dst: bool = False) -> Path:
+    """One-row CSV in the column order Trapper's import form expects. The dates are written as Trapper reads them —
+    the wall clock of `timezone`, with no designator (see trapper_wall_clock)."""
     values = deployment.model_dump()
+    for field in ("start_date", "end_date"):
+        values[field] = trapper_wall_clock(values[field], timezone, ignore_dst)
     header = ",".join(csv_name for _, csv_name in _CSV_COLUMNS)
     row = ",".join(f'"{_csv_value(values[attr]).replace(chr(34), chr(34) * 2)}"' for attr, _ in _CSV_COLUMNS)
     path.write_text(f"{header}\n{row}\n", encoding="utf-8")
@@ -207,7 +235,7 @@ def import_deployment(
 ) -> None:
     """Registers one deployment in Trapper from its CSV (see
     write_deployment_csv) — raises trapper_client.err.APIError on failure."""
-    write_deployment_csv(deployment, csv_path)
+    write_deployment_csv(deployment, csv_path, timezone=timezone, ignore_dst=ignore_dst)
     _client(url, username, password).deployments.import_deployments(
         file=csv_path, timezone=timezone, research_project=research_project_pk,
         classification_project=classification_project_pk, ignore_dst=ignore_dst,

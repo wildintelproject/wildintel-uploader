@@ -2,6 +2,8 @@
 expects, and import_deployment's call into the SDK (faked, no network)."""
 from datetime import datetime
 from pathlib import Path
+
+import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -114,3 +116,27 @@ def test_list_locations_still_works_when_the_export_fails():
         [location] = trapper_service.list_locations("https://trapper.example.org", "alice", "s3cret", 2)
 
     assert location["location_id"] == "DONA_01" and location["latitude"] is None and location["longitude"] is None
+
+
+# ── the dates of the deployment CSV: Trapper reads them as a wall clock, in the timezone it is told ──
+
+@pytest.mark.parametrize("value, timezone_name, ignore_dst, expected", [
+    ("2025-05-01T09:07:45Z", "Europe/Madrid", False, "2025-05-01T11:07:45"),          # UTC → the location's wall clock (summer time)
+    ("2025-05-01T11:07:45+02:00", "Europe/Madrid", False, "2025-05-01T11:07:45"),      # already its wall clock: kept
+    ("2025-05-01T09:07:45Z", "Europe/Madrid", True, "2025-05-01T10:07:45"),           # a camera that ignores summer time: standard time
+    ("2025-01-10T09:07:45Z", "Europe/Madrid", True, "2025-01-10T10:07:45"),           # no summer time in winter: the same
+    ("2025-05-01T09:07:45", "Europe/Madrid", False, "2025-05-01T09:07:45"),           # no designator: a wall clock already
+    ("2025-05-01T09:07:45Z", None, False, "2025-05-01T09:07:45"),                     # no timezone to move it to
+    (None, "Europe/Madrid", False, None),
+])
+def test_trapper_wall_clock(value, timezone_name, ignore_dst, expected):
+    assert trapper_service.trapper_wall_clock(value, timezone_name, ignore_dst) == expected
+
+
+def test_the_deployment_csv_has_the_dates_trapper_accepts(tmp_path: Path):
+    fields = _fields(start_date="2025-05-01T09:07:45Z", end_date="2025-06-12T08:15:27Z")
+
+    csv_path = trapper_service.write_deployment_csv(fields, tmp_path / "d.csv", timezone="Europe/Madrid")
+
+    _, row = csv_path.read_text(encoding="utf-8").splitlines()
+    assert '"2025-05-01T11:07:45"' in row and '"2025-06-12T10:15:27"' in row  # Madrid's wall clock, no Z
