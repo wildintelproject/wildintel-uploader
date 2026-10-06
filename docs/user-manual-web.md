@@ -454,12 +454,6 @@ The deployment must have been imported with the wizard — the yaml needs the da
 `preprocessing.json` records. One that wasn't says "Not preprocessed — import it again through the
 wizard before uploading it", and can't be ticked.
 
-### Trapper
-
-The account is the one saved in the settings. **Test connection** checks, changing nothing, that
-the account reaches the research project, its locations (and which of the deployments' own would
-be created) and the uploader's login, each reported on its own. Do it before a big upload.
-
 ### What to upload
 
 1. **Research project** — those kept in the collections folder.
@@ -468,6 +462,13 @@ be created) and the uploader's login, each reported on its own. Do it before a b
 3. **Classification project** — the collection is created in one of Trapper's classification
    projects for the research project: pick it (or, if there is only one, it is used). Without a
    Trapper account, type its pk.
+4. **Test connection** — appears once the classification project is chosen. It checks, changing nothing, that the account reaches the research
+   project, the classification project, its locations (and which of the deployments' own would be created) and the uploader's login, each
+   reported on its own. Do it before a big upload.
+
+### Trapper
+
+The account is the one saved in the settings; it is shown under what to upload.
 
 ### What to do
 

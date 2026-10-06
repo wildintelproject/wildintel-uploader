@@ -214,43 +214,6 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
         missing; then its images are packed into a zip and a yaml and uploaded for Trapper to process.
       </p>
 
-      <Card title="Trapper" description={mode === 'generate' ? 'The account saved in the settings — not needed just to generate the files.' : 'The account saved in the settings.'}>
-        {trapper === null ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the settings…</p>
-        ) : connected ? (
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="font-mono">{trapper.user_name}</span> at <span className="font-mono">{trapper.base_url}</span>
-          </p>
-        ) : (
-          <p className="text-sm text-amber-600 dark:text-amber-400">
-            There is no Trapper account saved yet — set its URL, username and password in Settings › Trapper first
-            {mode === 'generate' ? ' (to look up a research project that was not filled in from Trapper).' : '.'}
-          </p>
-        )}
-        {connected && (
-          <div className="mt-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <button type="button" className={btnOutline} disabled={!projectId || testing || uploading} onClick={handleTestAccess}>
-                {testing ? 'Testing…' : 'Test connection'}
-              </button>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {projectId ? 'Checks the research project, its locations and the uploader — nothing is created or sent.' : 'Pick a research project below to test the access to it.'}
-              </span>
-            </div>
-            {accessError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{accessError}</p>}
-            {access && (
-              <ul className="mt-2 space-y-1 text-sm" aria-label="Connection test">
-                {access.map((c) => (
-                  <li key={c.check} className={c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
-                    {c.ok ? '✔' : '⚠'} <span className="font-medium">{ACCESS_LABELS[c.check]}</span> — {c.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </Card>
-
       <Card title="What to upload" description="The research projects, collections and deployments kept in the collections folder.">
         <div className="mb-4">
           <label className={labelClass} htmlFor="upload-research-project">Research project</label>
@@ -323,7 +286,42 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
             )}
           </div>
         )}
+        {collection && connected && classificationReady && (
+          <div className="mt-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <button type="button" className={btnOutline} disabled={testing || uploading} onClick={handleTestAccess}>
+                {testing ? 'Testing…' : 'Test connection'}
+              </button>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">Checks the research project, the classification project, its locations and the uploader — nothing is created or sent.</span>
+            </div>
+            {accessError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{accessError}</p>}
+            {access && (
+              <ul className="mt-2 space-y-1 text-sm" aria-label="Connection test">
+                {access.map((c) => (
+                  <li key={c.check} className={c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+                    {c.ok ? '✔' : '⚠'} <span className="font-medium">{ACCESS_LABELS[c.check]}</span> — {c.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         {loadError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{loadError}</p>}
+      </Card>
+
+      <Card title="Trapper" description={mode === 'generate' ? 'The account saved in the settings — not needed just to generate the files.' : 'The account saved in the settings.'}>
+        {trapper === null ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the settings…</p>
+        ) : connected ? (
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="font-mono">{trapper.user_name}</span> at <span className="font-mono">{trapper.base_url}</span>
+          </p>
+        ) : (
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            There is no Trapper account saved yet — set its URL, username and password in Settings › Trapper first
+            {mode === 'generate' ? ' (to look up a research project that was not filled in from Trapper).' : '.'}
+          </p>
+        )}
       </Card>
 
       {collection && (

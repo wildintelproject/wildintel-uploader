@@ -351,15 +351,15 @@ describe('UploadDeploymentPage', () => {
   })
 
   describe('testing the connection', () => {
-    it('needs a research project, then checks the project, its locations and the uploader without uploading anything', async () => {
+    it('comes after the classification project, and checks the project, its locations and the uploader without uploading anything', async () => {
       mockedApi.checkUploadAccess.mockResolvedValue({ checks: [
         { check: 'research_project', ok: true, message: 'Research project DONA is #2 in Trapper.' },
         { check: 'location', ok: true, message: 'The 5 location(s) of the research project can be read. Would be created: DONA_02.' },
         { check: 'uploader', ok: false, message: "Trapper's uploader refused POST https://trapper.example.org/uploader/auth/login: 403 Forbidden." },
       ] })
       render(<UploadDeploymentPage />)
-      const button = await screen.findByRole('button', { name: 'Test connection' })
-      expect(button).toBeDisabled()
+      await screen.findByLabelText('Research project')
+      expect(screen.queryByRole('button', { name: 'Test connection' })).not.toBeInTheDocument() // only once the classification project is chosen
 
       await userEvent.click(await screen.findByLabelText('Research project'))
       await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
@@ -380,7 +380,9 @@ describe('UploadDeploymentPage', () => {
       render(<UploadDeploymentPage />)
       await userEvent.click(await screen.findByLabelText('Research project'))
       await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
+      await userEvent.click(await screen.findByLabelText('Collection'))
+      await userEvent.click(await screen.findByRole('option', { name: /^R0003/ }))
+      await userEvent.click(await screen.findByRole('button', { name: 'Test connection' }))
       expect(await screen.findByText(/account isn.t set up/)).toBeInTheDocument()
     })
   })
