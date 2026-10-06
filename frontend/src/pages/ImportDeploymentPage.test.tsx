@@ -848,7 +848,7 @@ describe('ImportDeploymentPage', () => {
     await goToNewDetailsStep()
 
     expect(screen.getByText(/Unique identifier of the deployment\./)).toBeInTheDocument()
-    expect(screen.getAllByText(/Formatted as an ISO 8601 string with timezone designator/)).toHaveLength(2)
+    expect(screen.queryByText(/Formatted as an ISO 8601 string with timezone designator/)).not.toBeInTheDocument() // the dates say no more than their labels
     expect(screen.getAllByText('Required').length).toBeGreaterThanOrEqual(3) // revision, start, end (the location came with its coordinates)
   })
 

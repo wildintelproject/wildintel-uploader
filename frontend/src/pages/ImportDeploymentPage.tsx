@@ -136,8 +136,6 @@ const DESCRIPTIONS = {
   latitude: 'Latitude of the deployment location in decimal degrees, using the WGS84 datum.',
   longitude: 'Longitude of the deployment location in decimal degrees, using the WGS84 datum.',
   coordinateUncertainty: 'Horizontal distance from the given latitude and longitude describing the smallest circle containing the deployment location. Expressed in meters. Especially relevant when coordinates are rounded to protect sensitive species.',
-  deploymentStart: 'Date and time at which the deployment was started. Formatted as an ISO 8601 string with timezone designator (YYYY-MM-DDThh:mm:ssZ or YYYY-MM-DDThh:mm:ss±hh:mm).',
-  deploymentEnd: 'Date and time at which the deployment was ended. Formatted as an ISO 8601 string with timezone designator (YYYY-MM-DDThh:mm:ssZ or YYYY-MM-DDThh:mm:ss±hh:mm).',
   timezone: "IANA timezone the camera's clock was set to (e.g. Europe/Madrid). It gives both dates their timezone designator.",
   setupBy: 'Name or identifier of the person or organization that deployed the camera.',
   cameraID: 'Identifier of the camera used for the deployment (e.g. the camera device serial number).',
@@ -549,9 +547,9 @@ export function DeploymentFormBody({ deployment, timezone, errors, showAll, onSh
     <>
     <FormCard title="Period" description="When the camera was recording. Pick a date from the calendar or type it.">
       <div className="grid grid-cols-2 gap-4">
-        <DateTimeField label="Start date" required hint={DESCRIPTIONS.deploymentStart} error={errors.start_date}
+        <DateTimeField label="Start date" required error={errors.start_date}
                        value={deployment.start_date} onChange={(v) => onField('start_date', stampTimezone(v, timezone))} />
-        <DateTimeField label="End date" required hint={DESCRIPTIONS.deploymentEnd} error={errors.end_date}
+        <DateTimeField label="End date" required error={errors.end_date}
                        value={deployment.end_date ?? ''} onChange={(v) => onField('end_date', v ? stampTimezone(v, timezone) : null)} />
       </div>
       {datesGuessed && <p className={hintClass}>The dates were guessed from the images' EXIF data.</p>}
