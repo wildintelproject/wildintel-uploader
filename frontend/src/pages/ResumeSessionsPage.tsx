@@ -13,7 +13,9 @@ interface Props {
   onSkip: () => void
 }
 
-const TASK_TITLES: Record<SessionSummary['task'], string> = { deployment: 'Import deployment', upload: 'Upload deployment to Trapper', session: 'Import session' }
+const TASK_TITLES: Record<SessionSummary['task'], string> = { deployment: 'Import deployment', upload: 'Upload deployment to Trapper', session: 'Import session',
+  'upload-session': 'Upload session to Trapper', sync: 'Sync local collections',
+}
 
 const PHASE_LABELS: Record<SessionSummary['phase'], string> = {
   scanned: 'Source folder scanned',

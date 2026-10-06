@@ -296,6 +296,16 @@ function SelectBox<T extends string>({ label, value, options, onChange }: {
   )
 }
 
+/** The licenses the images can be shared under. What is written into each image is the URL. */
+const LICENSES: { value: string; label: string; description: string }[] = [
+  { value: 'https://creativecommons.org/publicdomain/zero/1.0/', label: 'CC0',
+    description: 'Data are made available for any use without restriction or particular requirements on the part of users.' },
+  { value: 'https://creativecommons.org/licenses/by/4.0/', label: 'CC BY',
+    description: 'Data are made available for any use provided that attribution is appropriately given for the sources of data used, in the manner specified by the owner.' },
+  { value: 'https://creativecommons.org/licenses/by-nc/4.0/', label: 'CC BY-NC',
+    description: 'Data are made available for any use provided that attribution is appropriately given and provided the use is not for commercial purposes.' },
+]
+
 function CheckOption({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex items-start gap-3 cursor-pointer py-1">
@@ -846,8 +856,21 @@ export default function SettingsPage({ onClose }: Props) {
                 The coverage is where the images were taken — likewise open. Left blank, the deployment&rsquo;s location is used.
               </p>
             </Row>
-            <Row label="License" description="The license the images are shared under. wildintel-tools used Creative Commons BY-NC 4.0.">
-              <TextBox label="License URL" value={draft.licenseUrl} onChange={(v) => set('licenseUrl', v)} mono />
+            <Row label="License" description="The Creative Commons license the images are shared under. wildintel-tools used CC BY-NC 4.0.">
+              <SelectBox
+                label="License" value={draft.licenseUrl} onChange={(v) => set('licenseUrl', v)}
+                options={[
+                  ...LICENSES.map((l) => ({ value: l.value, label: l.label })),
+                  // A license set by hand in settings.toml is kept, and shown, until another is chosen.
+                  ...(LICENSES.some((l) => l.value === draft.licenseUrl) ? [] : [{ value: draft.licenseUrl, label: 'Other (set in settings.toml)' }]),
+                ]}
+              />
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+                {LICENSES.find((l) => l.value === draft.licenseUrl)?.description ?? 'A license that is not one of the above.'}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                What is written into each image: <span className="font-mono break-all">{draft.licenseUrl || '(none)'}</span>
+              </p>
             </Row>
             <Row label="Dates" description="The capture dates go into the image names and the metadata. They are read from the EXIF as the camera's local time, in the timezone given in the deployment's details.">
               <CheckOption label="Ignore summer time" hint="Read the camera's clock as if it never changed, using the timezone's standard offset — for cameras whose clock was set once and never adjusted."

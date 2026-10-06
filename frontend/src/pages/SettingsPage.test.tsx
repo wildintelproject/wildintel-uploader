@@ -479,9 +479,9 @@ describe('SettingsPage', () => {
       expect(screen.getByLabelText('Owner')).toHaveValue('')
       expect(screen.getByLabelText('Publisher')).toHaveValue('')
       expect(screen.getByLabelText('Coverage')).toHaveValue('')
-      expect(screen.getByLabelText('License URL')).toHaveValue('https://creativecommons.org/licenses/by-nc/4.0/')
+      expect(screen.getByLabelText('License')).toHaveValue('https://creativecommons.org/licenses/by-nc/4.0/')
       expect(screen.getByText(/wildintel-tools used 2400 pixels/)).toBeInTheDocument()
-      expect(screen.getByText(/Creative Commons BY-NC 4.0/)).toBeInTheDocument()
+      expect(screen.getByText(/wildintel-tools used CC BY-NC 4.0/)).toBeInTheDocument()
     })
 
     it('saves the steps, the width, the authorship, the license and the dates', async () => {
@@ -496,13 +496,12 @@ describe('SettingsPage', () => {
       await userEvent.type(screen.getByLabelText('Owner'), '  Universidad de Huelva ')
       await userEvent.type(screen.getByLabelText('Publisher'), 'WildINTEL')
       await userEvent.type(screen.getByLabelText('Coverage'), 'Doñana National Park')
-      await userEvent.clear(screen.getByLabelText('License URL'))
-      await userEvent.type(screen.getByLabelText('License URL'), 'https://example.org/license')
+      await userEvent.selectOptions(screen.getByLabelText('License'), 'CC BY')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].PREPROCESSING).toEqual({
         rename: false, resize: true, resize_width: 1600, metadata: true, owner: 'Universidad de Huelva', publisher: 'WildINTEL',
-        coverage: 'Doñana National Park', license_url: 'https://example.org/license', ignore_dst: false, convert_to_utc: true,
+        coverage: 'Doñana National Park', license_url: 'https://creativecommons.org/licenses/by/4.0/', ignore_dst: false, convert_to_utc: true,
       })
       expect(await screen.findByText('Settings saved.')).toBeInTheDocument()
     })

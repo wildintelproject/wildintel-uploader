@@ -34,7 +34,7 @@ export const SELECTED_SESSION: SessionSummary = { ...SESSION, phase: 'selected',
 
 /** Phase "ready" — the deployment's own fields are filled in too. */
 export const READY_SESSION: SessionSummary = {
-  ...SELECTED_SESSION, phase: 'ready', timezone: 'Europe/Madrid',
+  ...SELECTED_SESSION, phase: 'ready',
   deployment: {
     deployment_id: 'DONA-DONA_01', location_id: 'DONA_01', location_name: 'Doñana site 1', latitude: 37.0, longitude: -6.5,
     start_date: '2024-09-04T13:10:00+02:00', end_date: '2024-11-04T14:28:00+01:00', camera_model: 'Reconyx HC600', tags: [],
@@ -53,7 +53,7 @@ export const EXISTING_READY_SESSION: SessionSummary = {
 
 /** A "Local folder" run, new deployment, its own fields already filled in. */
 export const LOCAL_READY_SESSION: SessionSummary = {
-  ...SESSION, phase: 'ready', selection: LOCAL_SELECTION, timezone: 'Europe/Madrid',
+  ...SESSION, phase: 'ready', selection: LOCAL_SELECTION,
   deployment: {
     deployment_id: 'DONA-DONA_01', location_id: 'DONA_01', latitude: 37.0, longitude: -6.5,
     start_date: '2024-09-04T13:10:00+02:00', end_date: '2024-11-04T14:28:00+01:00', camera_model: 'Reconyx HC600', tags: [],
@@ -73,7 +73,7 @@ export const LOCAL_EXISTING_READY_SESSION: SessionSummary = {
 /** Phase "ready" as the wizard now saves it: the deployment's own details are filled in
  * (where it was taken isn't kept in a session). */
 export const DETAILED_SESSION: SessionSummary = {
-  ...SESSION, phase: 'ready', timezone: 'Europe/Madrid',
+  ...SESSION, phase: 'ready',
   deployment: {
     deployment_id: 'R0001-DONA_01', location_id: 'DONA_01', location_name: 'Doñana site 1', latitude: 37.0, longitude: -6.5,
     start_date: '2024-09-04T13:10:00+02:00', end_date: '2024-11-04T14:28:00+01:00', camera_model: 'Reconyx HC600', tags: [],

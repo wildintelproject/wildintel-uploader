@@ -59,9 +59,9 @@ async function streamNdjson<E extends { type: string }>(
 /** Blank fields fall back to what's saved in settings.toml (the password is
  * never sent back to the frontend — see services.trapper_service). */
 export interface TrapperCredentials {
-  url: string
-  username: string
-  password: string
+  url?: string
+  username?: string
+  password?: string
 }
 
 export const api = {
