@@ -53,7 +53,7 @@ beforeEach(() => {
   mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mb, _mode, onEvent) => { STEP_EVENTS(id).forEach(onEvent) })
   mockedApi.checkUploadSelection.mockResolvedValue({ checks: [
     { check: 'research_project', ok: true, message: 'You have access to the research project DONA (#2) in Trapper.' },
-    { check: 'collection', ok: true, message: 'You have access to the collection R0003: it is already in Trapper, so the upload adds to it.' },
+    { check: 'collection', ok: true, message: 'You have access to the collection R0003 (#26): it is already in Trapper, so the upload adds to it.' },
   ] })
 })
 

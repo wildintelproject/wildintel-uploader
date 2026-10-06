@@ -567,7 +567,7 @@ def check_selection(credentials: tuple[str, str, str], research_project: dict, c
         client = trapper_service.client(*credentials)
         found = [c for c in client.collections.where(research_projects=project_pk, search=collection) if c.name == collection]
         if found:
-            message = f"You have access to the collection {collection}: it is already in Trapper, so the upload adds to it."
+            message = f"You have access to the collection {collection} (#{found[0].pk}): it is already in Trapper, so the upload adds to it."
         else:
             message = f"You can read the collections of the research project; {collection} isn't in Trapper yet, so the upload creates it."
         checks.append({"check": "collection", "ok": True, "message": message})

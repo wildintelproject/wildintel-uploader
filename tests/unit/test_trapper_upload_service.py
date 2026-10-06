@@ -192,7 +192,7 @@ class FakeTrapper:
                                          export=lambda query=None: [SimpleNamespace(pk=i, latitude=None, longitude=None, ignore_dst=self.location_settings.get(l, ("Europe/Madrid", True))[1]) for i, l in enumerate(self.location_rows, 1)],
                                          import_locations=self._import_locations)
         self.deployments = SimpleNamespace(export=lambda query=None: [self._export(d) for d in self.deployment_rows], import_deployments=self._import_deployments)
-        self.collections = SimpleNamespace(where=lambda **kw: [SimpleNamespace(name=kw["search"])] if self.collections_appear else [], trigger_collection=self._trigger)
+        self.collections = SimpleNamespace(where=lambda **kw: [SimpleNamespace(name=kw["search"], pk=26)] if self.collections_appear else [], trigger_collection=self._trigger)
 
     @staticmethod
     def _export(deployment_id):
@@ -872,7 +872,7 @@ def test_checking_the_selection_says_whether_the_collection_is_there_or_would_be
         nothing = up.check_selection(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None}, "R0003")
 
     assert [(c["check"], c["ok"]) for c in there] == [("research_project", True), ("collection", True)]
-    assert "already in Trapper" in there[1]["message"]
+    assert "R0003 (#26)" in there[1]["message"] and "already in Trapper" in there[1]["message"]
     assert "creates it" in new[1]["message"] and new[1]["ok"]
     assert [c["ok"] for c in nothing] == [False, False] and "Not checked" in nothing[1]["message"]
 
