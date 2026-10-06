@@ -456,6 +456,8 @@ wizard before uploading it", and can't be ticked.
 
 ### What to upload
 
+A note above says which Trapper account is used: the one saved in the settings.
+
 1. **Research project** — those kept in the collections folder.
 2. **Collection** — and under it a table of its deployments: how many images, its dates, and the day it was
    uploaded, if it was (from its `upload.json`, a local note). The ones left to send start ticked; **Select all**, **Select the not uploaded**
@@ -468,10 +470,6 @@ wizard before uploading it", and can't be ticked.
 4. **Test connection** — appears once the classification project is chosen. It checks, changing nothing, that the account reaches the research
    project, the classification project, its locations (and which of the deployments' own would be created) and the uploader's login, each
    reported on its own. Do it before a big upload.
-
-### Trapper
-
-The account is the one saved in the settings; it is shown under what to upload.
 
 ### What to do
 

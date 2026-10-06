@@ -237,6 +237,20 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
         missing; then its images are packed into a zip and a yaml and uploaded for Trapper to process.
       </p>
 
+      {trapper === null ? (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">Reading the settings…</p>
+      ) : connected ? (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4 rounded border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 px-3 py-2">
+          <span aria-hidden="true">ℹ️ </span>Uploading with the Trapper account saved in the settings: <span className="font-mono">{trapper.user_name}</span> at <span className="font-mono">{trapper.base_url}</span>
+          {mode === 'generate' ? ' (not needed just to generate the files).' : '.'}
+        </p>
+      ) : (
+        <p className="text-sm text-amber-700 dark:text-amber-400 mb-4 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+          <span aria-hidden="true">ℹ️ </span>There is no Trapper account saved yet — set its URL, username and password in Settings › Trapper first
+          {mode === 'generate' ? ' (to look up a research project that was not filled in from Trapper).' : '.'}
+        </p>
+      )}
+
       <Card title="What to upload" description="The research projects, collections and deployments kept in the collections folder.">
         <div className="mb-4">
           <label className={labelClass} htmlFor="upload-research-project">Research project</label>
@@ -370,21 +384,6 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
           </div>
         )}
         {loadError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{loadError}</p>}
-      </Card>
-
-      <Card title="Trapper" description={mode === 'generate' ? 'The account saved in the settings — not needed just to generate the files.' : 'The account saved in the settings.'}>
-        {trapper === null ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the settings…</p>
-        ) : connected ? (
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="font-mono">{trapper.user_name}</span> at <span className="font-mono">{trapper.base_url}</span>
-          </p>
-        ) : (
-          <p className="text-sm text-amber-600 dark:text-amber-400">
-            There is no Trapper account saved yet — set its URL, username and password in Settings › Trapper first
-            {mode === 'generate' ? ' (to look up a research project that was not filled in from Trapper).' : '.'}
-          </p>
-        )}
       </Card>
 
       {collection && (
