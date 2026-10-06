@@ -93,6 +93,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a badge and the number of failed images each, and — opened from one — the images that failed it as thumbnails, with search, filter by error, sort, a
   grid or a list, pages and a view of everything the report says of an image. A report's images are served as thumbnails
   (`/api/reports/{id}/image`).
+- The postvalidation step has the same dashboard (Run checks); the images out of range or from another camera open as thumbnails.
 - The tables of checks have a first column that shows the check running and then how it ended (✔ passed, ⚠ failed, ✘ failed and
   required), and the plain list of results below them is gone: the report is what is shown.
 - Settings › Preprocessing › License is a list — CC0, CC BY and CC BY-NC — and shows the URL that is written into each image.

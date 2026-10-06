@@ -28,7 +28,7 @@ function Kpi({ icon, tone, value, label }: { icon: string; tone: string; value: 
 
 /** The validation as a dashboard: what it was run on and when, how many images are fine, the checks with how each ended — and,
  * opened from one, the images that failed it. The table of checks is the page's (it has the choosing of them): it goes in `children`. */
-export default function ValidationDashboard({ title, subtitle, reportId, running, canRun, onRun, children }: {
+export default function ValidationDashboard({ title, subtitle, reportId, running, canRun, onRun, runLabel = 'Run validation', runningLabel = 'Validating…', children }: {
   title: string
   subtitle: string
   /** The report of the last run, once there is one. */
@@ -36,6 +36,8 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
   running: boolean
   canRun: boolean
   onRun: () => void
+  runLabel?: string
+  runningLabel?: string
   children: (context: DashboardContext) => ReactNode
 }) {
   const [report, setReport] = useState<Report | null>(null)
@@ -75,7 +77,7 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
             </span>
           )}
           <button type="button" className={`${report ? btnOutline : btnPrimary} flex items-center gap-2`} disabled={running || !canRun} onClick={onRun}>
-            {running && <SmallSpinner />}{running ? 'Validating…' : 'Run validation'}
+            {running && <SmallSpinner />}{running ? runningLabel : runLabel}
           </button>
         </div>
       </div>

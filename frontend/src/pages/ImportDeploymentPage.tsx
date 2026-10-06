@@ -1880,20 +1880,23 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
               Every postvalidation check is turned off in the settings, so there is nothing to run here — go on.
             </p>
           ) : (
-            <CheckTable options={shownDeploymentChecks} enabled={deploymentChecks} required={requiredDeploymentChecks}
-                        status={(c) => checkStatus(deploymentChecks.has(c), checkingDeployment, deploymentCheckPassed(c, deploymentCheck))}
-                        onToggleEnabled={toggleDeploymentCheck} onToggleRequired={(v) => setRequiredDeploymentChecks((s) => toggled(s, v))}
-                        onSetEnabled={setDeploymentChecks} onSetRequired={setRequiredDeploymentChecks} />
-          )}
-          {shownDeploymentChecks.length > 0 && (
-            <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={checkingDeployment || runnableDeploymentChecks.length === 0} onClick={handleCheckDeployment}>
-              {checkingDeployment && <SmallSpinner />}
-              {checkingDeployment ? 'Checking…' : 'Run checks'}
-            </button>
+            <ValidationDashboard
+              title="Postvalidation" subtitle={`${deployment.deployment_id}${scan ? ` · ${scan.image_count} image(s)` : ''}`}
+              reportId={deploymentCheck?.report_id ?? null} running={checkingDeployment} canRun={runnableDeploymentChecks.length > 0}
+              onRun={handleCheckDeployment} runLabel="Run checks" runningLabel="Checking…"
+            >
+              {({ report, openCheck, open }) => (
+                <CheckTable options={shownDeploymentChecks} enabled={deploymentChecks} required={requiredDeploymentChecks}
+                            status={(c) => checkStatus(deploymentChecks.has(c), checkingDeployment, deploymentCheckPassed(c, deploymentCheck))}
+                            outcome={(c) => { const r = report?.checks[c]; return r ? { failed: r.failed, images: r.scope === 'images' ? r.failed : null } : undefined }}
+                            opened={openCheck as DeploymentCheck | null} onOpen={open}
+                            onToggleEnabled={toggleDeploymentCheck} onToggleRequired={(v) => setRequiredDeploymentChecks((s) => toggled(s, v))}
+                            onSetEnabled={setDeploymentChecks} onSetRequired={setRequiredDeploymentChecks} />
+              )}
+            </ValidationDashboard>
           )}
           {deploymentCheckError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{deploymentCheckError}</p>}
           {deploymentCheck && !deploymentCheck.report_id && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} />}
-          {deploymentCheck?.report_id && <ReportPanel reportId={deploymentCheck.report_id} />}
         </div>
       )}
 

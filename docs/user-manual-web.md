@@ -350,7 +350,7 @@ is uploaded. They need at least the *previous revisions needed* of the settings,
 skipped; what a sequence is, what "similar" means and what it is compared to are the
 [Postvalidation settings](#postvalidation).
 
-As in the validation step, each check can be run and required, and the [report](#9-reports) lists what failed — and downloads.
+This step has the same dashboard as the validation (with a **Run checks** button): when it was last run, the figures, the table of checks with their status, and — opened from a check — the images that failed it (*Out of range*, *Other camera*) as thumbnails. Each check can be run and required, and the [report](#9-reports) downloads.
 
 ### Step 6 — Preprocessing
 
