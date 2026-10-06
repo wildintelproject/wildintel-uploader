@@ -244,6 +244,9 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
             value={projectId} onChange={chooseProject} disabled={uploading}
             placeholder={projects.length === 0 ? 'No research projects yet' : 'Select a research project…'} clearLabel="Clear research project"
           />
+          {selectionChecks?.filter((c) => c.check === 'research_project').map((c) => (
+            <p key={c.check} className={`text-xs mt-1 ${c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{c.ok ? '✔' : '⚠'} {c.message}</p>
+          ))}
           {projects.length === 0 && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Nothing is kept in the collections folder yet — import a deployment first.</p>}
         </div>
 
@@ -257,13 +260,9 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
             />
             {checkingSelection && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Checking your access in Trapper…</p>}
             {selectionError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{selectionError}</p>}
-            {selectionChecks && (
-              <ul className="mt-1 space-y-0.5 text-xs" aria-label="Access to the selection">
-                {selectionChecks.map((c) => (
-                  <li key={c.check} className={c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>{c.ok ? '✔' : '⚠'} {c.message}</li>
-                ))}
-              </ul>
-            )}
+            {selectionChecks?.filter((c) => c.check === 'collection').map((c) => (
+              <p key={c.check} className={`text-xs mt-1 ${c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{c.ok ? '✔' : '⚠'} {c.message}</p>
+            ))}
           </div>
         )}
 

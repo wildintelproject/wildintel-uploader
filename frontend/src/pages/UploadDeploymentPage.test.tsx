@@ -358,10 +358,12 @@ describe('UploadDeploymentPage', () => {
     it('says whether the account has access to the research project and the collection, once both are chosen', async () => {
       await pickCollection()
 
-      const list = await screen.findByRole('list', { name: 'Access to the selection' })
+      const project = await screen.findByText(/access to the research project DONA/)
       expect(mockedApi.checkUploadSelection).toHaveBeenCalledWith('DONA', 'R0003')
-      expect(within(list).getByText(/access to the research project DONA/)).toBeInTheDocument()
-      expect(within(list).getByText(/access to the collection R0003/)).toBeInTheDocument()
+      expect(screen.getByText(/access to the collection R0003/)).toBeInTheDocument()
+      // each message sits under its own field
+      expect(project.closest('div')).toContainElement(screen.getByLabelText('Research project'))
+      expect(project.closest('div')).not.toContainElement(screen.getByLabelText('Collection'))
     })
 
     it('says so when the account has no access, and when it cannot be checked', async () => {
