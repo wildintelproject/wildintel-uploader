@@ -10,7 +10,7 @@ import { APP_SETTINGS } from '../test/fixtures'
 
 vi.mock('../api', () => ({
   api: {
-    getSettings: vi.fn(), exiftoolStatus: vi.fn(), browseFolder: vi.fn(), scanSession: vi.fn(), validateImages: vi.fn(),
+    getSettings: vi.fn(), exiftoolStatus: vi.fn(), browseFolder: vi.fn(), scanSession: vi.fn(), guessDetails: vi.fn(), validateImages: vi.fn(),
     listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(),
     writeTimestampLog: vi.fn(), validateDeployment: vi.fn(), previousDeployments: vi.fn(), existingDeployments: vi.fn(), collectionPath: vi.fn(), importLocal: vi.fn(), openFolder: vi.fn(),
     trapperGetConfig: vi.fn(), trapperTestConnection: vi.fn(), trapperResearchProjects: vi.fn(), nextRevision: vi.fn(),
@@ -25,10 +25,15 @@ const loc = (id: string, over: Partial<LocalLocation> = {}): LocalLocation => ({
   location_id: id, name: null, timezone: 'Europe/Madrid', latitude: 37, longitude: -6.5, coordinate_uncertainty: null, trapper_pk: null, ...over,
 })
 
-const scanned = (name: string, images: number, start: string | null, end: string | null) => ({
-  name, path: `/s/${name}`, file_count: images, image_count: images, start_date: start, end_date: end,
-  camera_model: images ? 'Reconyx HC600' : null, camera_id: null as string | null, warnings: [] as string[], from_timestamp_log: false, log_deployment_id: null as string | null,
-})
+// What each folder's images say of their dates and camera, by path — the scan only counts, they are read when the details are asked for.
+const IMAGES_SAY = new Map<string, { start: string | null; end: string | null; camera: string | null }>()
+const scanned = (name: string, images: number, start: string | null, end: string | null) => {
+  IMAGES_SAY.set(`/s/${name}`, { start, end, camera: images ? 'Reconyx HC600' : null })
+  return {
+    name, path: `/s/${name}`, file_count: images, image_count: images, start_date: null as string | null, end_date: null as string | null,
+    warnings: [] as string[], from_timestamp_log: false, log_deployment_id: null as string | null,
+  }
+}
 
 const SCAN: SessionScan = {
   deployments: [
@@ -46,6 +51,10 @@ beforeEach(() => {
   mockedApi.exiftoolStatus.mockResolvedValue({ available: true, path: '/usr/bin/exiftool' })
   mockedApi.browseFolder.mockResolvedValue({ path: '/s' })
   mockedApi.scanSession.mockResolvedValue(SCAN)
+  mockedApi.guessDetails.mockImplementation(async (path) => {
+    const says = IMAGES_SAY.get(path)
+    return { start_date: says?.start ?? null, end_date: says?.end ?? null, camera_model: says?.camera ?? null, camera_id: null, warnings: [] }
+  })
   mockedApi.validateImages.mockResolvedValue({ checked_count: 10, corrupted: [] })
   mockedApi.listResearchProjects.mockResolvedValue({ results: [DONA] })
   mockedApi.listLocalLocations.mockResolvedValue({ results: [loc('DONA_01'), loc('DONA_02')] })

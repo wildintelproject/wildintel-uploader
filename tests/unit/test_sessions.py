@@ -1,9 +1,6 @@
 from fastapi.testclient import TestClient
 
-SCAN = {
-    "file_count": 12, "image_count": 12, "start_date": "2024-09-04T13:10:00", "end_date": "2024-11-04T14:28:00",
-    "camera_model": "Reconyx HC600", "warnings": [],
-}
+SCAN = {"file_count": 12, "image_count": 12, "warnings": []}
 
 SELECTION = {
     "destination": "trapper", "mode": "new",

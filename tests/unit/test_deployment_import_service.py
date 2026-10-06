@@ -62,18 +62,35 @@ def test_check_paths_accepts_a_sibling_destination(tmp_path: Path):
 
 # ── scan_folder ──────────────────────────────────────────────────────────────
 
-def test_scan_folder_reports_date_range_and_camera_model(tmp_path: Path):
+def test_scan_folder_only_counts_the_files_and_the_images(tmp_path: Path):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 13:10:00", make="Reconyx", model="HC600")
     _make_jpeg(tmp_path / "sub" / "b.jpg", taken="2024:09:05 08:00:00", make="Reconyx", model="HC600")
+    (tmp_path / "notes.txt").write_text("x")
 
     result = svc.scan_folder(tmp_path)
 
-    assert result["file_count"] == 2
-    assert result["image_count"] == 2
+    # Reading the images is for the steps that follow: the scan doesn't open them.
+    assert result == {"file_count": 3, "image_count": 2, "warnings": []}
+
+
+def test_scan_folder_does_not_open_the_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 13:10:00")
+    monkeypatch.setattr(svc.Image, "open", lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened an image")))
+    monkeypatch.setattr(svc.camera_info, "read_cameras", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read the cameras")))
+
+    assert svc.scan_folder(tmp_path)["image_count"] == 1
+
+
+def test_guess_details_reads_the_date_range_and_the_camera_model(tmp_path: Path):
+    _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 13:10:00", make="Reconyx", model="HC600")
+    _make_jpeg(tmp_path / "sub" / "b.jpg", taken="2024:09:05 08:00:00", make="Reconyx", model="HC600")
+
+    result = svc.guess_details(tmp_path)
+
     assert result["start_date"] == "2024-09-04T13:10:00"
     assert result["end_date"] == "2024-09-05T08:00:00"
     assert result["camera_model"] == "Reconyx HC600"
-    assert result["warnings"] == []
+    assert not [w for w in result["warnings"] if "ExifTool" not in w]
 
 
 def test_scan_session_scans_each_subfolder_in_name_order(tmp_path: Path):
@@ -89,7 +106,7 @@ def test_scan_session_scans_each_subfolder_in_name_order(tmp_path: Path):
     assert [d["name"] for d in result["deployments"]] == ["SITE_01", "SITE_02", "SITE_03"]
     first = result["deployments"][0]
     assert first["path"] == str(tmp_path / "SITE_01") and first["image_count"] == 2
-    assert (first["start_date"], first["end_date"]) == ("2024-09-01T08:00:00", "2024-09-02T08:00:00")
+    assert (first["start_date"], first["end_date"]) == (None, None)  # read from the images when the details are asked for
     assert result["deployments"][2]["image_count"] == 0
     assert result["loose_files"] == 1 and "1 loose file(s)" in result["warnings"][0]
 
@@ -114,7 +131,7 @@ def test_scan_session_takes_the_dates_from_the_timestamp_log(tmp_path: Path):
     first, second, third = result["deployments"]
     assert (first["start_date"], first["end_date"], first["from_timestamp_log"]) == ("2024-09-01T08:00:00", "2024-11-01T09:30:00", True)
     assert (second["start_date"], second["end_date"], second["from_timestamp_log"]) == ("2024-09-02T10:00:00", "2024-11-02T11:00:00", True)
-    assert (third["start_date"], third["from_timestamp_log"]) == ("2024-09-06T09:00:00", False)  # no row: the EXIF stays
+    assert (third["start_date"], third["from_timestamp_log"]) == (None, False)  # no row: no dates here — they are read from its images later
     assert result["timestamp_log"] == {"name": "R0033_FileTimestampLog.csv", "path": str(session / "R0033_FileTimestampLog.csv"), "rows": 3, "matched": 2, "revision": 33}
     assert (first["log_deployment_id"], second["log_deployment_id"], third["log_deployment_id"]) == ("R0033-DONA_01", "dona_02", None)
     assert any("1 row(s)" in w and "match no subfolder" in w for w in result["warnings"])
@@ -131,13 +148,14 @@ def test_scan_session_gives_no_revision_when_the_ids_disagree_or_have_none(tmp_p
     assert svc.scan_session(tmp_path)["timestamp_log"]["revision"] is None
 
 
-def test_scan_session_without_a_timestamp_log_keeps_the_exif_dates(tmp_path: Path):
+def test_scan_session_without_a_timestamp_log_gives_no_dates(tmp_path: Path):
     _make_jpeg(tmp_path / "SITE_01" / "a.jpg", taken="2024:09:04 13:10:00")
 
     result = svc.scan_session(tmp_path)
 
     assert result["timestamp_log"] is None
     assert result["deployments"][0]["from_timestamp_log"] is False
+    assert result["deployments"][0]["start_date"] is None
 
 
 def test_scan_session_uses_the_only_timestamp_log_whatever_it_is_called(tmp_path: Path):
@@ -184,21 +202,25 @@ def test_scan_session_needs_subfolders(tmp_path: Path):
         svc.scan_session(tmp_path / "missing")
 
 
-def test_scan_folder_warns_about_images_with_no_exif_date(tmp_path: Path):
+def test_guess_details_warns_about_images_with_no_exif_date(tmp_path: Path):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 13:10:00")
     _make_jpeg(tmp_path / "b.jpg")  # no DateTime tag
 
-    result = svc.scan_folder(tmp_path)
+    result = svc.guess_details(tmp_path)
 
-    assert result["image_count"] == 2
-    assert any("no readable EXIF date" in w for w in result["warnings"])
+    assert any("1 of 2 image(s) have no readable EXIF date" in w for w in result["warnings"])
 
 
 def test_scan_folder_warns_when_empty(tmp_path: Path):
     result = svc.scan_folder(tmp_path)
     assert result["file_count"] == 0
-    assert result["start_date"] is None
     assert "empty" in result["warnings"][0]
+    assert svc.guess_details(tmp_path)["start_date"] is None
+
+
+def test_scan_folder_warns_when_nothing_looks_like_an_image(tmp_path: Path):
+    (tmp_path / "notes.txt").write_text("x")
+    assert "None of the 1 file(s) look like images" in svc.scan_folder(tmp_path)["warnings"][0]
 
 
 def test_scan_folder_rejects_missing_folder(tmp_path: Path):
@@ -555,45 +577,45 @@ def _cameras_folder(tmp_path: Path, *cameras: tuple[str, str, str | None]) -> Pa
     return tmp_path
 
 
-def test_scan_folder_fills_in_the_camera_model_and_id_when_every_image_agrees(tmp_path: Path, no_exiftool):
+def test_guess_details_fills_in_the_camera_model_and_id_when_every_image_agrees(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG08"))
 
-    result = svc.scan_folder(folder)
+    result = svc.guess_details(folder)
 
     assert result["camera_model"] == "Reconyx HC600"
     assert result["camera_id"] == "P800HG08"
 
 
-def test_scan_folder_leaves_the_camera_blank_when_the_images_come_from_different_cameras(tmp_path: Path, no_exiftool):
+def test_guess_details_leaves_the_camera_blank_when_the_images_come_from_different_cameras(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG99"), ("Browning", "Recon Force", "P800HG08"))
 
-    result = svc.scan_folder(folder)
+    result = svc.guess_details(folder)
 
     assert result["camera_model"] is None and result["camera_id"] is None
     assert any("2 different camera models" in w for w in result["warnings"])
     assert any("2 different camera ids" in w for w in result["warnings"])
 
 
-def test_scan_folder_needs_every_image_to_have_the_camera_information(tmp_path: Path, no_exiftool):
+def test_guess_details_needs_every_image_to_have_the_camera_information(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG08"))
     _make_jpeg(folder / "IMG_9999.jpg", taken="2024:09:09 10:00:00")  # no camera information at all
 
-    result = svc.scan_folder(folder)
+    result = svc.guess_details(folder)
 
     assert result["camera_model"] is None and result["camera_id"] is None
 
 
-def test_scan_folder_can_have_a_model_without_an_id(tmp_path: Path, no_exiftool):
+def test_guess_details_can_have_a_model_without_an_id(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", None), ("Reconyx", "HC600", None))
 
-    result = svc.scan_folder(folder)
+    result = svc.guess_details(folder)
 
     assert result["camera_model"] == "Reconyx HC600"
     assert result["camera_id"] is None
 
 
-def test_scan_folder_says_when_exiftool_is_missing(tmp_path: Path, no_exiftool):
-    result = svc.scan_folder(_cameras_folder(tmp_path, ("Reconyx", "HC600", "SN1")))
+def test_guess_details_says_when_exiftool_is_missing(tmp_path: Path, no_exiftool):
+    result = svc.guess_details(_cameras_folder(tmp_path, ("Reconyx", "HC600", "SN1")))
 
     assert any("ExifTool isn't installed" in w for w in result["warnings"])
 
@@ -606,7 +628,7 @@ def test_exiftool_reads_the_model_and_the_serial_number(tmp_path: Path):
 
     assert reader == "exiftool"
     assert {c for c in cameras.values()} == {camera_info.CameraInfo(model="Reconyx HC600", camera_id="P800HG08")}
-    result = svc.scan_folder(folder)
+    result = svc.guess_details(folder)
     assert (result["camera_model"], result["camera_id"]) == ("Reconyx HC600", "P800HG08")
     assert not any("ExifTool isn't installed" in w for w in result["warnings"])
 

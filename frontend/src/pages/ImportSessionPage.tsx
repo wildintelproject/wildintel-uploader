@@ -5,13 +5,13 @@ import { isValidTimezone, shownErrors, stampTimezone, validateDeployment } from 
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type {
-  DeploymentCheck, DeploymentCheckResult, DeploymentFields, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject,
+  DeploymentCheck, DeploymentCheckResult, DeploymentFields, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject,
   PreprocessingOptions, SessionScan, StatisticsParams, UploadTarget, ValidationResult,
 } from '../types'
 import {
   ALL_DEPLOYMENT_CHECKS, CheckTable, DEFAULT_CHECK_SETTINGS, DEPLOYMENT_CHECK_OPTIONS, DeploymentCheckReport, Field,
   FormCard, IMAGE_CHECK_OPTIONS, PreprocessItem, SelectField, SmallSpinner, StepHeading,
-  DeploymentFormBody, LocationTimeNote, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
+  DeploymentFormBody, LocationTimeNote, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, allPassed, checkStatus, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, statParamsOf, statParamsValid, toggled,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, WizardSettings } from './ImportDeploymentPage'
@@ -108,6 +108,11 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
 
   // ── Per deployment ──
   const [drafts, setDrafts] = useState<Record<string, Entry>>({})
+  const [guessed, setGuessed] = useState<Record<string, GuessedDetails>>({})
+  const [guessingLeft, setGuessingLeft] = useState(0)
+  const guessRequested = useRef(new Set<string>())
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const [activeName, setActiveName] = useState('')
   const [filter, setFilter] = useState('')
   const [onlyIncomplete, setOnlyIncomplete] = useState(false)
@@ -179,8 +184,8 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
           timezone, ignoreDst: location?.ignore_dst ?? null, showAll: false, locationFrom: byFolder ? 'folder' : byLog ? 'log' : undefined,
           fields: {
             ...EMPTY_DEPLOYMENT_FIELDS, ...locationFields(location),
+            // Only the dates a timestamp log gives are known by now: the rest are read from the images, below.
             start_date: stampTimezone(d.start_date ?? '', timezone), end_date: d.end_date ? stampTimezone(d.end_date, timezone) : null,
-            camera_model: d.camera_model, camera_id: d.camera_id,
           },
         }
       }
@@ -188,6 +193,36 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
     })
     setActiveName((name) => (name && included.has(name) ? name : [...included][0] ?? ''))
   }, [stepKey, scan, included, localLocations])
+
+  // What each deployment's images say of it — its dates and camera — read once the details are asked for, one deployment at a time.
+  useEffect(() => {
+    if (stepKey !== 'details') return
+    const pending = chosen.filter((d) => drafts[d.name] && !guessRequested.current.has(d.name))
+    if (pending.length === 0) return
+    pending.forEach((d) => guessRequested.current.add(d.name))
+    setGuessingLeft((n) => n + pending.length)
+    void (async () => {
+      for (const d of pending) {
+        try {
+          const g = await api.guessDetails(d.path)
+          if (!mounted.current) return
+          setGuessed((prev) => ({ ...prev, [d.name]: g }))
+          // What was already typed (or given by a timestamp log) stays: only the empty fields are filled in.
+          setDrafts((current) => {
+            const entry = current[d.name]
+            if (!entry) return current
+            const f = entry.fields
+            return { ...current, [d.name]: { ...entry, fields: {
+              ...f, start_date: f.start_date || stampTimezone(g.start_date ?? '', entry.timezone),
+              end_date: f.end_date || (g.end_date ? stampTimezone(g.end_date, entry.timezone) : null),
+              camera_model: f.camera_model || g.camera_model, camera_id: f.camera_id || g.camera_id,
+            } } }
+          })
+        } catch { /* the details are typed by hand then */ }
+        if (mounted.current) setGuessingLeft((n) => n - 1)
+      }
+    })()
+  }, [stepKey, drafts, chosen])
 
   // Which of the deployments the revision and the locations name are already kept — said as soon as it can be known.
   const knownIds = chosen.map((d) => fieldsOf(d.name).deployment_id).filter(Boolean).sort().join('\n')
@@ -238,7 +273,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
       if (logged) { setRevision(String(logged)); setRevisionFromLog(result.timestamp_log!.name) }
       else if (revisionFromLog) { setRevision(''); setRevisionFromLog(null) }
       setIncluded(new Set(result.deployments.filter((d) => d.image_count > 0).map((d) => d.name)))
-      autoFilled.current.clear(); setPreviousKnown({}); setDrafts({}); setValidations({}); setChecks({}); setRuns({})
+      autoFilled.current.clear(); guessRequested.current.clear(); setGuessed({}); setGuessingLeft(0); setPreviousKnown({}); setDrafts({}); setValidations({}); setChecks({}); setRuns({})
     } catch (e) {
       setScanError(e instanceof Error ? e.message : 'Could not scan the folder.')
     } finally {
@@ -568,7 +603,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
                         {d.warnings.map((w, i) => <p key={i} className="text-xs font-sans text-amber-600 dark:text-amber-400">⚠ {w}</p>)}
                       </td>
                       <td className="px-3 py-2 text-right">{d.image_count}</td>
-                      <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">{d.start_date?.slice(0, 10) ?? '?'} → {d.end_date?.slice(0, 10) ?? '?'}</td>
+                      <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">{d.from_timestamp_log ? `${d.start_date?.slice(0, 10) ?? '?'} → ${d.end_date?.slice(0, 10) ?? '?'}` : <span title="Read from the images when the details are asked for">—</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -590,6 +625,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
           ) : (
             <>
               <CheckTable options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks}
+                          status={(c) => checkStatus(imageChecks.has(c), validating, allPassed(chosen.map((d) => imageCheckPassed(c, validations[d.name]?.result ?? null))))}
                           onToggleEnabled={(c) => setImageChecks((prev) => {
                             const next = toggled(prev, c)
                             if (!next.has(c)) setRequiredImageChecks((r) => (r.has(c) ? toggled(r, c) : r))
@@ -612,7 +648,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
                     {outcome.error ? '⚠' : all.every((x) => x !== false) ? '✔' : '⚠'} {d.name}
                   </summary>
                   {outcome.error && <p className="text-sm text-red-600 dark:text-red-400">{outcome.error}</p>}
-                  {outcome.result && <ValidationReport validation={outcome.result} />}
+                  {outcome.result && !outcome.result.report_id && <ValidationReport validation={outcome.result} />}
                   {outcome.result?.report_id && <ReportPanel reportId={outcome.result.report_id} />}
                 </details>
               )
@@ -637,6 +673,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
       {stepKey === 'details' && (
         <div>
           <StepHeading>Deployment details</StepHeading>
+          {guessingLeft > 0 && <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Reading the dates and the cameras from the images… ({guessingLeft} deployment(s) left)</p>}
           <FormCard title="Which revision is this?" description="The same revision number names all the deployments of the session — R0003-DONA_01, R0003-DONA_02…">
             <div className="max-w-sm">
               <Field label="What revision number are you importing?" required type="number" min={1} max={9999} step={1} placeholder="e.g. 3" value={revision} onChange={(v) => { revisionTouched.current = true; setRevision(v); setRevisionFromLog(null); setRevisionSuggested(false) }}
@@ -796,7 +833,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
               <DeploymentFormBody deployment={activeFields} timezone={activeEntry.timezone} errors={activeErrors} showAll={activeEntry.showAll}
                                   onShowAllChange={(v) => updateEntry(active.name, (e) => ({ ...e, showAll: v }))}
                                   onField={(key, value) => updateField(active.name, key, value)}
-                                  datesGuessed={Boolean(active.start_date) && !active.from_timestamp_log}
+                                  datesGuessed={Boolean(guessed[active.name]?.start_date) && !active.from_timestamp_log}
                                   datesFromLog={active.from_timestamp_log ? scan?.timestamp_log?.name : undefined} />
 
             </div>
@@ -821,6 +858,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">Every postvalidation check is turned off in the settings, so there is nothing to run here — go on.</p>
           ) : (
             <CheckTable options={shownDeploymentChecks} enabled={deploymentChecks} required={requiredDeploymentChecks}
+                        status={(c) => checkStatus(deploymentChecks.has(c), checking, allPassed(chosen.map((d) => deploymentCheckPassed(c, checks[d.name]?.result ?? null))))}
                         onToggleEnabled={(c) => setDeploymentChecks((prev) => {
                           const next = toggled(prev, c)
                           if (!next.has(c)) setRequiredDeploymentChecks((r) => (r.has(c) ? toggled(r, c) : r))
@@ -843,7 +881,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
                 <details key={d.name} className="rounded border border-zinc-200 dark:border-zinc-700 px-3 py-2" open={bad}>
                   <summary className="cursor-pointer text-sm font-mono">{bad ? '⚠' : '✔'} {fieldsOf(d.name).deployment_id}</summary>
                   {outcome.error && <p className="text-sm text-red-600 dark:text-red-400">{outcome.error}</p>}
-                  {outcome.result && <DeploymentCheckReport result={outcome.result} toleranceHours={toleranceHours} />}
+                  {outcome.result && !outcome.result.report_id && <DeploymentCheckReport result={outcome.result} toleranceHours={toleranceHours} />}
                   {outcome.result?.report_id && <ReportPanel reportId={outcome.result.report_id} />}
                 </details>
               )

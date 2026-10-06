@@ -200,9 +200,13 @@ def import_deployment() -> None:
 
     source_dir = Prompt.ask("Source images folder")
     scan = call(lambda: deployment_import_service.scan_folder(Path(source_dir).expanduser()))
-    console.print(f"  {scan['file_count']} file(s), {scan['image_count']} image(s) with a readable date range:")
-    console.print(f"  {scan['start_date'] or '—'} → {scan['end_date'] or '—'}")
+    console.print(f"  {scan['file_count']} file(s), {scan['image_count']} image(s)")
     for warning in scan["warnings"]:
+        console.print(f"  [yellow]⚠ {warning}[/yellow]")
+    # What the form starts from — the images' date range and camera.
+    guess = call(lambda: deployment_import_service.guess_details(Path(source_dir).expanduser()))
+    console.print(f"  Capture dates: {guess['start_date'] or '—'} → {guess['end_date'] or '—'}")
+    for warning in guess["warnings"]:
         console.print(f"  [yellow]⚠ {warning}[/yellow]")
 
     revision = IntPrompt.ask("Revision number (1, 2, 3…)")
@@ -211,9 +215,9 @@ def import_deployment() -> None:
     timezone = Prompt.ask("Timezone (IANA, e.g. Europe/Madrid)", default=location["timezone"] or "")
     latitude = FloatPrompt.ask("Latitude (decimal degrees, WGS84, -90..90)")
     longitude = FloatPrompt.ask("Longitude (decimal degrees, WGS84, -180..180)")
-    start_date = Prompt.ask("Start date (local time, YYYY-MM-DDThh:mm:ss)", default=scan["start_date"] or "")
-    end_date = Prompt.ask("End date (local time, YYYY-MM-DDThh:mm:ss)", default=scan["end_date"] or "")
-    camera_model = _optional_prompt("Camera model", scan["camera_model"])
+    start_date = Prompt.ask("Start date (local time, YYYY-MM-DDThh:mm:ss)", default=guess["start_date"] or "")
+    end_date = Prompt.ask("End date (local time, YYYY-MM-DDThh:mm:ss)", default=guess["end_date"] or "")
+    camera_model = _optional_prompt("Camera model", guess["camera_model"])
 
     # Camtrap DP wants the dates with a timezone designator (±hh:mm).
     start_date = call(lambda: deployment_import_service.with_timezone(start_date, timezone))

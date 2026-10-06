@@ -21,7 +21,7 @@ vi.mock('../api', () => ({
     trapperLocations: vi.fn(),
     trapperDeployments: vi.fn(),
     browseFolder: vi.fn(),
-    scanFolder: vi.fn(),
+    scanFolder: vi.fn(), guessDetails: vi.fn(),
     importDeployment: vi.fn(),
     importLocal: vi.fn(),
     openFolder: vi.fn(),
@@ -58,9 +58,11 @@ const LOCAL_DEPLOYMENTS = [{
 }]
 // Where the app's collections folder keeps DONA's R0001 by default.
 const COLLECTIONS_DIR = '/home/me/Documents/wildintel-uploader/collections/DONA/R0001'
-const SCAN_RESULT = {
-  file_count: 12, image_count: 12, start_date: '2024-09-04T13:10:00', end_date: '2024-11-04T14:28:00',
-  camera_model: 'Reconyx HC600', camera_id: null as string | null, warnings: [] as string[],
+// The scan only counts; the images' dates and camera are read when the details are asked for.
+const SCAN_RESULT = { file_count: 12, image_count: 12, warnings: [] as string[] }
+const GUESS = {
+  start_date: '2024-09-04T13:10:00', end_date: '2024-11-04T14:28:00',
+  camera_model: 'Reconyx HC600' as string | null, camera_id: null as string | null, warnings: [] as string[],
 }
 
 // What the collections folder holds — empty at first, like a first run — kept by the fakes below.
@@ -94,6 +96,7 @@ beforeEach(() => {
   mockedApi.trapperLocations.mockResolvedValue({ results: LOCATIONS })
   mockedApi.trapperDeployments.mockResolvedValue({ results: EXISTING_DEPLOYMENTS })
   mockedApi.scanFolder.mockResolvedValue(SCAN_RESULT)
+  mockedApi.guessDetails.mockResolvedValue(GUESS)
   mockedApi.checkCollection.mockResolvedValue({ exists: true, name: 'Doñana 2024' })
   mockedApi.collectionPath.mockResolvedValue({ path: COLLECTIONS_DIR, collection: 'R0001', exists: false, name: null })
   mockedApi.listLocalDeployments.mockResolvedValue({ results: LOCAL_DEPLOYMENTS })
@@ -137,6 +140,8 @@ async function goToNewDetailsStep() {
   await addLocationByHand()
   await userEvent.click(screen.getByRole('button', { name: 'Next' }))
   await screen.findByText('Deployment details')
+  // The images' dates and camera are read as the details open.
+  await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
 }
 
 async function addProjectByHand(name = 'Doñana', acronym = 'DONA') {
@@ -667,8 +672,25 @@ describe('ImportDeploymentPage', () => {
     })
   })
 
+  it('the scan only counts the images: their dates and camera are read when the details are asked for', async () => {
+    await goToOriginStep()
+    expect(mockedApi.scanFolder).toHaveBeenCalledTimes(1)
+    expect(mockedApi.guessDetails).not.toHaveBeenCalled() // not through the scan, the validation or the origin
+
+    await addProjectByHand()
+    await addLocationByHand()
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByText('Deployment details')
+    await waitFor(() => expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-04T13:10'))
+
+    expect(mockedApi.guessDetails).toHaveBeenCalledTimes(1)
+    expect(mockedApi.guessDetails).toHaveBeenCalledWith(expect.stringContaining('/'))
+    expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-04T13:10')
+    expect(screen.getByText(/dates were guessed from the images/)).toBeInTheDocument()
+  })
+
   it('fills in the camera model and id from the images when every image has the same', async () => {
-    mockedApi.scanFolder.mockResolvedValue({ ...SCAN_RESULT, camera_model: 'Reconyx HC600', camera_id: 'P800HG08' })
+    mockedApi.guessDetails.mockResolvedValue({ ...GUESS, camera_model: 'Reconyx HC600', camera_id: 'P800HG08' })
     await goToNewDetailsStep()
     await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
 
@@ -677,7 +699,7 @@ describe('ImportDeploymentPage', () => {
   })
 
   it('leaves the camera model and id blank when the images do not agree on them', async () => {
-    mockedApi.scanFolder.mockResolvedValue({ ...SCAN_RESULT, camera_model: null, camera_id: null })
+    mockedApi.guessDetails.mockResolvedValue({ ...GUESS, camera_model: null, camera_id: null })
     await goToNewDetailsStep()
     await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
 
@@ -686,7 +708,7 @@ describe('ImportDeploymentPage', () => {
   })
 
   it('keeps the camera the images gave when going on to the postvalidation and back', async () => {
-    mockedApi.scanFolder.mockResolvedValue({ ...SCAN_RESULT, camera_id: 'P800HG08' })
+    mockedApi.guessDetails.mockResolvedValue({ ...GUESS, camera_id: 'P800HG08' })
     await goToPostvalidation()
     await userEvent.click(screen.getByRole('button', { name: 'Back' }))
     await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))

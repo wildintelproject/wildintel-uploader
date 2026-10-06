@@ -1,7 +1,7 @@
 import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
-  AccessCheck, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
+  AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
   Report, ReportSummary,
 } from './types'
 
@@ -112,6 +112,9 @@ export const api = {
 
   scanFolder: (path: string) =>
     post<ScanResult>('/api/deployment-import/scan-folder', { path }),
+  /** The date range and the camera of a folder's images — what the deployment form starts from. */
+  guessDetails: (path: string) =>
+    post<GuessedDetails>('/api/deployment-import/guess-details', { path }),
 
   // For each deployment id, the folder where it is already kept in the collections folder (null if it is not there yet).
   existingDeployments: (researchProjectId: string, deploymentIds: string[]) =>

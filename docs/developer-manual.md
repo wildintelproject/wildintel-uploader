@@ -214,6 +214,15 @@ decodes across brands. `camera_info.exiftool_path()` finds the copy bundled with
 result says which reader was used so the UI can say "may be incomplete". ExifTool also writes the
 XMP metadata of the preprocessing, which is why that step is disabled without it.
 
+### Scan and guess
+
+`scan_folder` only counts — files, and images by extension — and never opens an image, so it is instant. What the
+images say of the deployment is `guess_details`: the earliest and latest capture date (Pillow, on `GENERAL.workers`
+threads) and the camera (one ExifTool run), the camera only when every image agrees. The wizard calls it when the
+details step opens and fills in the fields that are still empty; the session wizard does it for each deployment, one at
+a time, skipping the dates a timestamp log already gave. The checks that need the same data (the validation) read it
+themselves.
+
 ### The import
 
 `/api/deployment-import/import-local` calls `preprocessing_service.preprocess_stream` when the
@@ -381,7 +390,8 @@ bodies are JSON, and every `POST` that talks to Trapper takes optional `url`, `u
 | | `GET`/`DELETE /settings/log` | Download / delete the log. |
 | | `GET`/`POST /settings/configs`, `POST …/{id}/activate`, `GET …/{id}/download`, `POST …/{id}/open-folder` | Several settings files. |
 | deployment-import | `POST /deployment-import/browse-folder` | The native folder dialog. |
-| | `…/scan-folder`, `/scan-session` | Scan a deployment's / a session's folder. |
+| | `…/scan-folder`, `/scan-session` | Scan a deployment's / a session's folder: only count its files and images (a session's also say which dates a timestamp log gives). |
+| | `…/guess-details` | Read a folder's images for the deployment form's starting point: the date range and the camera. |
 | | `…/validate-images`, `/validate-deployment` | The two sets of checks. |
 | | `…/research-projects/list`, `/save`; `…/locations/list`, `/save`, `/update` | The collections folder's research projects and locations. |
 | | `…/check-collection`, `/collection-path`, `/existing-deployments`, `/list-local-deployments` | What is already kept. |

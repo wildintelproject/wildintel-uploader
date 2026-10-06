@@ -19,10 +19,9 @@
 
   const CAMERA = { model: 'Reconyx HyperFire 2', id: 'P800HG08' }
 
-  const SCAN = {
-    file_count: 241, image_count: 241, start_date: '2024-09-04T13:10:00', end_date: '2024-10-12T07:02:41',
-    camera_model: CAMERA.model, camera_id: CAMERA.id, warnings: [],
-  }
+  // The scan only counts; the dates and the camera are read when the details are asked for.
+  const SCAN = { file_count: 241, image_count: 241, warnings: [] }
+  const GUESS = { start_date: '2024-09-04T13:10:00', end_date: '2024-10-12T07:02:41', camera_model: CAMERA.model, camera_id: CAMERA.id, warnings: [] }
 
   const SESSION_SCAN = {
     deployments: [
@@ -30,8 +29,8 @@
       ['DONA_02', 188, '2024-09-04T14:02:11', '2024-10-12T07:40:09'],
       ['DONA_03', 305, '2024-09-05T09:31:00', '2024-10-13T08:15:33'],
     ].map(([name, n, start_date, end_date]) => ({
-      name, path: `/home/me/Pictures/trip-2024-09/${name}`, file_count: n, image_count: n, start_date, end_date,
-      camera_model: CAMERA.model, camera_id: CAMERA.id, warnings: [], from_timestamp_log: false, log_deployment_id: null,
+      name, path: `/home/me/Pictures/trip-2024-09/${name}`, file_count: n, image_count: n, start_date: null, end_date: null,
+      warnings: [], from_timestamp_log: false, log_deployment_id: null, guess: { start_date, end_date },
     })),
     loose_files: 0, warnings: [], timestamp_log: null,
   }
@@ -226,7 +225,11 @@
       'GET /api/deployment-import/exiftool': () => ({ available: true, path: '/usr/bin/exiftool' }),
       'POST /api/deployment-import/browse-folder': () => ({ path: mock.browse }),
       'POST /api/deployment-import/scan-folder': () => SCAN,
-      'POST /api/deployment-import/scan-session': () => SESSION_SCAN,
+      'POST /api/deployment-import/guess-details': (body) => {
+        const found = SESSION_SCAN.deployments.find((d) => d.path === body.path)
+        return found ? { ...GUESS, ...found.guess } : GUESS
+      },
+      'POST /api/deployment-import/scan-session': () => ({ ...SESSION_SCAN, deployments: SESSION_SCAN.deployments.map(({ guess, ...d }) => d) }),
       'POST /api/deployment-import/validate-images': () => ({ ...VALIDATION, report_id: VALIDATION_REPORT_ID }),
       'POST /api/deployment-import/validate-deployment': () => POSTVALIDATION,
       'POST /api/deployment-import/research-projects/list': () => ({ results: [{

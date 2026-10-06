@@ -92,8 +92,17 @@ def test_scan_folder(tmp_path: Path):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["file_count"] == 1
-    assert body["start_date"] == "2024-09-04T13:10:00"
+    assert body == {"file_count": 1, "image_count": 1, "warnings": []}
+
+
+def test_guess_details(tmp_path: Path):
+    _make_jpeg(tmp_path / "a.jpg", "2024:09:04 13:10:00")
+
+    response = _client().post("/api/deployment-import/guess-details", json={"path": str(tmp_path)})
+
+    assert response.status_code == 200
+    assert response.json()["start_date"] == "2024-09-04T13:10:00"
+    assert _client().post("/api/deployment-import/guess-details", json={"path": "/no/such/folder"}).status_code == 400
 
 
 def test_scan_folder_missing_path_is_a_400():

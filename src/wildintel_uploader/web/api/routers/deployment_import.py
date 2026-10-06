@@ -169,6 +169,15 @@ def scan_folder(req: ScanFolderRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.post("/guess-details")
+def guess_details(req: ScanFolderRequest) -> dict:
+    """The date range and the camera of a folder's images, read from their metadata — what the deployment form starts from."""
+    try:
+        return deployment_import_service.guess_details(Path(req.path).expanduser())
+    except deployment_import_service.DeploymentImportError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.post("/scan-session")
 def scan_session(req: ScanFolderRequest) -> dict:
     """A session folder — one subfolder per deployment — and the scan of each subfolder."""

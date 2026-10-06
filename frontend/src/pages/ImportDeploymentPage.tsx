@@ -14,7 +14,7 @@ import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } 
 import { isValidTimezone, knownTimezones, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import type {
   AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, SimilarityMethod, StatisticCheck, StatisticsParams, TimestampLogResult, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
-  FeatureType, ImageCheck, ImportEvent, Location, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
+  FeatureType, GuessedDetails, ImageCheck, ImportEvent, Location, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
   SessionSummary, UploadTarget, ValidationResult,
 } from '../types'
 
@@ -210,8 +210,12 @@ export function describePreprocessing(steps: Set<PreprocessStep>): string {
 /** The opt-in checks as a table: one row per check, with whether to run it
  * and whether it must pass to move past this step. "Required" is only
  * meaningful — and only enabled — alongside "run". */
-export function CheckTable<T extends string>({ options, enabled, required, onToggleEnabled, onToggleRequired, onSetEnabled, onSetRequired }: {
+export type CheckStatus = 'running' | 'passed' | 'failed' | 'none'
+
+export function CheckTable<T extends string>({ options, enabled, required, status, onToggleEnabled, onToggleRequired, onSetEnabled, onSetRequired }: {
   options: { value: T; label: string }[]; enabled: Set<T>; required: Set<T>
+  /** How each check is going — shown in a first column: running, or how it ended. Left out, there is no column. */
+  status?: (value: T) => CheckStatus
   onToggleEnabled: (value: T) => void; onToggleRequired: (value: T) => void
   /** The whole new set of checks to run / that must pass — what the "all" boxes in the header ask for. */
   onSetEnabled: (next: Set<T>) => void; onSetRequired: (next: Set<T>) => void
@@ -230,6 +234,7 @@ export function CheckTable<T extends string>({ options, enabled, required, onTog
     <table className="w-full text-sm mb-4 border border-zinc-200 dark:border-zinc-700 rounded">
       <thead className="bg-zinc-50 dark:bg-zinc-800/50">
         <tr>
+          {status && <th scope="col" className={`${th} w-12 text-center`}><span className="sr-only">Status</span></th>}
           <th scope="col" className={`${th} text-left`}>Check</th>
           <th scope="col" className={`${th} text-center`}>
             <span className="inline-flex items-center gap-2">
@@ -252,6 +257,7 @@ export function CheckTable<T extends string>({ options, enabled, required, onTog
       <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
         {options.map((opt) => (
           <tr key={opt.value}>
+            {status && <td className="px-3 py-2 text-center"><CheckStatusIcon status={status(opt.value)} required={required.has(opt.value)} label={opt.label} /></td>}
             <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{opt.label}</td>
             <td className="px-3 py-2 text-center">
               <input type="checkbox" aria-label={opt.label} checked={enabled.has(opt.value)} onChange={() => onToggleEnabled(opt.value)} />
@@ -265,6 +271,18 @@ export function CheckTable<T extends string>({ options, enabled, required, onTog
       </tbody>
     </table>
   )
+}
+
+/** Whether a check is running, or how it ended: passed, or failed — which stops you if it is required to continue. */
+function CheckStatusIcon({ status, required, label }: { status: CheckStatus; required: boolean; label: string }) {
+  if (status === 'running') return <span role="status" aria-label={`${label}: running`} title="Running…" className="inline-flex"><SmallSpinner /></span>
+  if (status === 'passed') return <span role="img" aria-label={`${label}: passed`} title="Passed" className="text-emerald-500">✔</span>
+  if (status === 'failed') {
+    return required
+      ? <span role="img" aria-label={`${label}: failed`} title="Failed — it is required to continue" className="text-red-500">✘</span>
+      : <span role="img" aria-label={`${label}: failed`} title="Failed" className="text-amber-500">⚠</span>
+  }
+  return <span aria-hidden="true" className="text-zinc-400 dark:text-zinc-600">–</span>
 }
 
 export function toggled<T>(set: Set<T>, value: T): Set<T> {
@@ -426,6 +444,19 @@ export const EXIF_FIELD_LABELS: Record<ExifField, string> = { date: 'a capture d
 /** "Reconyx HC600 · id P800HG08", whichever of the two is known. */
 export function describeCamera(camera: CameraGroup): string {
   return [camera.model ?? 'unknown model', camera.camera_id ? `id ${camera.camera_id}` : 'no id'].join(' · ')
+}
+
+/** One check over several deployments: failed if it failed in any, passed if it passed in all, unknown otherwise. */
+export function allPassed(results: (boolean | null)[]): boolean | null {
+  if (results.some((r) => r === false)) return false
+  return results.length > 0 && results.every((r) => r === true) ? true : null
+}
+
+/** The status a check shows: running while its step runs, then how it ended — or nothing, if it didn't run. */
+export function checkStatus(runs: boolean, running: boolean, passed: boolean | null): CheckStatus {
+  if (!runs) return 'none'
+  if (running) return 'running'
+  return passed === null ? 'none' : passed ? 'passed' : 'failed'
 }
 
 export function imageCheckPassed(check: ImageCheck, result: ValidationResult | null): boolean | null {
@@ -734,6 +765,10 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
   // source folder is scanned, which is when it's first created.
   const [taskId, setTaskId] = useState<string | null>(resumeSession?.task_id ?? null)
 
+  // What the images say of the deployment — its dates and camera — read when the details are asked for, not when the folder is scanned.
+  const [guess, setGuess] = useState<GuessedDetails | null>(null)
+  const [guessing, setGuessing] = useState(false)
+  const guessedFor = useRef<string | null>(null)
   const [sourceDir, setSourceDir] = useState('')
   const [browsing, setBrowsing] = useState(false)
   const [browseError, setBrowseError] = useState<string | null>(null)
@@ -854,7 +889,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
   const preSettings = checkSettings.PREPROCESSING
   const ignoreDst = ignoreDstChoice ?? preSettings.ignore_dst
   const effectivePreprocessSteps = new Set([...preprocessSteps].filter((step) => step !== 'metadata' || exiftool !== false))
-  const startDay = (scan?.start_date ?? '').slice(0, 10).replace(/-/g, '')
+  const startDay = (guess?.start_date ?? '').slice(0, 10).replace(/-/g, '')
   const exampleImageName = `${deployment.deployment_id || 'R0003-DONA_01'}__${startDay || 'YYYYMMDD'}_1.JPEG`.toUpperCase()
   function togglePreprocessStep(step: PreprocessStep) {
     preprocessTouched.current = true
@@ -881,6 +916,29 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeSession])
 
+  useEffect(() => {
+    if (stepKey !== 'deployment' || !sourceDir || guessedFor.current === sourceDir) return
+    guessedFor.current = sourceDir
+    let cancelled = false
+    let finished = false
+    setGuessing(true)
+    api.guessDetails(sourceDir)
+      .then((g) => {
+        if (cancelled) return
+        finished = true
+        setGuess(g)
+        // What was already typed stays: only the empty fields are filled in.
+        setDeployment((d) => ({
+          ...d, start_date: d.start_date || stampTimezone(g.start_date ?? '', timezone), end_date: d.end_date || (g.end_date ? stampTimezone(g.end_date, timezone) : null),
+          camera_model: d.camera_model || g.camera_model, camera_id: d.camera_id || g.camera_id,
+        }))
+      })
+      .catch(() => { guessedFor.current = null })
+      .finally(() => { if (!cancelled) setGuessing(false) })
+    return () => { cancelled = true; if (!finished) guessedFor.current = null; setGuessing(false) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey, sourceDir])
+
   async function handleBrowse() {
     setBrowsing(true); setBrowseError(null)
     try {
@@ -900,13 +958,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     try {
       const result = await api.scanFolder(sourceDir)
       setScan(result)
-      setDeployment((d) => ({
-        ...d,
-        start_date: d.start_date || result.start_date || '',
-        end_date: d.end_date || result.end_date,
-        camera_model: d.camera_model || result.camera_model,
-        camera_id: d.camera_id || result.camera_id,
-      }))
+      setGuess(null); guessedFor.current = null  // the details are read from the images when they are asked for
       try {
         const session = await api.saveScan(sourceDir, result, taskId ?? undefined)
         setTaskId(session.task_id)
@@ -1387,6 +1439,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
   function handleStartOver() {
     setStep(0)
     setSourceDir(''); setScan(null); setScanError(null); setValidation(null); setValidationError(null)
+    setGuess(null); guessedFor.current = null
     setImageChecks(new Set(['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates'])); setRequiredImageChecks(new Set())
     resetOriginChoice()
     setConn({ status: 'idle', message: '' })
@@ -1463,7 +1516,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
             {scanError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{scanError}</p>}
             {scan && (
               <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                {scan.file_count} file(s), {scan.image_count} image(s) — {scan.start_date?.slice(0, 10) ?? '?'} → {scan.end_date?.slice(0, 10) ?? '?'}
+                {scan.file_count} file(s), {scan.image_count} image(s)
                 {scan.warnings.map((w, i) => <p key={i} className="text-amber-600 dark:text-amber-400">⚠ {w}</p>)}
               </div>
             )}
@@ -1485,6 +1538,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
           ) : (
             <>
               <CheckTable options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks}
+                          status={(c) => checkStatus(imageChecks.has(c), validating, imageCheckPassed(c, validation))}
                           onToggleEnabled={toggleImageCheck} onToggleRequired={(v) => setRequiredImageChecks((s) => toggled(s, v))}
                           onSetEnabled={setImageChecks} onSetRequired={setRequiredImageChecks} />
               <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={validating || runnableImageChecks.length === 0} onClick={handleValidate}>
@@ -1494,7 +1548,8 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
             </>
           )}
           {validationError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{validationError}</p>}
-          {validation && <ValidationReport validation={validation} />}
+          {/* The report says it all; the plain lines are only for when it couldn't be written. */}
+          {validation && !validation.report_id && <ValidationReport validation={validation} />}
           {validation?.report_id && <ReportPanel reportId={validation.report_id} />}
         </div>
       )}
@@ -1710,6 +1765,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
       {stepKey === 'deployment' && (
         <div>
           <StepHeading>Deployment details</StepHeading>
+          {guessing && <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Reading the dates and the camera from the images…</p>}
 
           {(
             <>
@@ -1750,7 +1806,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
 
               <DeploymentFormBody deployment={deployment} timezone={timezone} errors={fieldErrors} showAll={showAllFields}
                                   onShowAllChange={setShowAllFields} onField={updateField}
-                                  datesGuessed={Boolean(scan?.start_date)} />
+                                  datesGuessed={Boolean(guess?.start_date)} />
             </>
           )}
         </div>
@@ -1780,6 +1836,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
             </p>
           ) : (
             <CheckTable options={shownDeploymentChecks} enabled={deploymentChecks} required={requiredDeploymentChecks}
+                        status={(c) => checkStatus(deploymentChecks.has(c), checkingDeployment, deploymentCheckPassed(c, deploymentCheck))}
                         onToggleEnabled={toggleDeploymentCheck} onToggleRequired={(v) => setRequiredDeploymentChecks((s) => toggled(s, v))}
                         onSetEnabled={setDeploymentChecks} onSetRequired={setRequiredDeploymentChecks} />
           )}
@@ -1790,7 +1847,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
             </button>
           )}
           {deploymentCheckError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{deploymentCheckError}</p>}
-          {deploymentCheck && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} />}
+          {deploymentCheck && !deploymentCheck.report_id && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} />}
           {deploymentCheck?.report_id && <ReportPanel reportId={deploymentCheck.report_id} />}
         </div>
       )}

@@ -22,9 +22,16 @@ export interface Location {
   longitude?: number | null
 }
 
+/** What scanning a folder finds: how many files, and how many of them are images. Nothing is read from the images —
+ * that is for the steps that follow (the validation, and GuessedDetails for the deployment form). */
 export interface ScanResult {
   file_count: number
   image_count: number
+  warnings: string[]
+}
+
+/** The deployment form's starting point, read from a folder's images: their date range and camera. */
+export interface GuessedDetails {
   start_date: string | null
   end_date: string | null
   /** Filled in only when every image has the same one. */
@@ -37,6 +44,9 @@ export interface ScanResult {
 export interface SessionScanDeployment extends ScanResult {
   name: string
   path: string
+  /** Only given when they come from the collection's FileTimestampLog — otherwise they are read from the images later. */
+  start_date: string | null
+  end_date: string | null
   /** Its start and end come from the collection's FileTimestampLog, not from the images' EXIF. */
   from_timestamp_log: boolean
   /** The id its row in the log names it by (R0033-DONA_01), when it has one. */

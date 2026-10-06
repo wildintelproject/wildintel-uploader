@@ -158,20 +158,41 @@ def _image_camera_model(path: Path) -> str | None:
         return None
 
 
+def _files_and_images(source_dir: Path) -> tuple[list[Path], list[Path]]:
+    files = [p for p in source_dir.rglob("*") if p.is_file()]
+    return files, [p for p in files if p.suffix.lower() in IMAGE_EXTENSIONS]
+
+
 def scan_folder(source_dir: Path) -> dict:
-    """A folder's file count, and the date range / camera model and id guessed
-    from its images' metadata — the deployment form's starting point. The
-    camera model and id are only filled in when every image agrees on them
-    (a folder mixing cameras has no single one to suggest).
+    """What a folder holds, and nothing more: how many files, and how many of them are images (by their
+    extension). Reading the images is the job of the steps that follow — the validation, and guess_details
+    for the deployment form's starting point.
 
     Raises:
         DeploymentImportError: source_dir doesn't exist or isn't a folder.
     """
     if not source_dir.is_dir():
         raise DeploymentImportError(f"Not a folder: {source_dir}")
+    files, images = _files_and_images(source_dir)
+    warnings: list[str] = []
+    if not files:
+        warnings.append("The folder is empty.")
+    elif not images:
+        warnings.append(f"None of the {len(files)} file(s) look like images.")
+    return {"file_count": len(files), "image_count": len(images), "warnings": warnings}
 
-    files = [p for p in source_dir.rglob("*") if p.is_file()]
-    images = [p for p in files if p.suffix.lower() in IMAGE_EXTENSIONS]
+
+def guess_details(source_dir: Path) -> dict:
+    """The deployment form's starting point, read from the images' metadata: the date range (the earliest and
+    latest capture date) and the camera model and id — the last two only when every image agrees on them (a
+    folder mixing cameras has no single one to suggest). "warnings" says what couldn't be read.
+
+    Raises:
+        DeploymentImportError: source_dir doesn't exist or isn't a folder.
+    """
+    if not source_dir.is_dir():
+        raise DeploymentImportError(f"Not a folder: {source_dir}")
+    files, images = _files_and_images(source_dir)
 
     dates: list[datetime] = []
     dated_images = 0
@@ -187,10 +208,8 @@ def scan_folder(source_dir: Path) -> dict:
     camera_id = camera_info.common_value(ids)
 
     warnings: list[str] = []
-    if not files:
-        warnings.append("The folder is empty.")
-    elif not images:
-        warnings.append(f"None of the {len(files)} file(s) look like images — start/end dates must be entered by hand.")
+    if not images:
+        warnings.append("There are no images to read — the dates must be entered by hand.")
     elif dated_images < len(images):
         warnings.append(f"{len(images) - dated_images} of {len(images)} image(s) have no readable EXIF date.")
     if images:
@@ -204,8 +223,6 @@ def scan_folder(source_dir: Path) -> dict:
             warnings.append("ExifTool isn't installed, so the camera id (serial number) may be missing — install it for a fuller reading.")
 
     return {
-        "file_count": len(files),
-        "image_count": len(images),
         "start_date": min(dates).isoformat() if dates else None,
         "end_date": max(dates).isoformat() if dates else None,
         "camera_model": camera_model,
@@ -253,12 +270,13 @@ def _timestamp_log_periods(path: Path) -> tuple[dict[str, tuple[str, datetime, d
 
 
 def scan_session(session_dir: Path) -> dict:
-    """A session folder — one subfolder per deployment — scanned: each subfolder's own scan_folder result,
-    named after it (hidden ones are left out), and how many loose files sit beside them.
+    """A session folder — one subfolder per deployment — scanned: each subfolder's own scan_folder result (its files
+    and images), named after it (hidden ones are left out), and how many loose files sit beside them.
 
     If the folder holds a <collection>_FileTimestampLog.csv (the file wildintel-tools asks for beside a
     collection's deployments), the start and end of each subfolder it has a row for — by the subfolder's
-    name, or by a deployment id like R0033-<name> — are taken from it instead of from the images' EXIF, and
+    name, or by a deployment id like R0033-<name> — have them given as "start_date" and "end_date" (the others
+    don't: they are read from the images when the details are asked for, see guess_details), and
     that deployment says so in "from_timestamp_log" and gives the id the row names it by in
     "log_deployment_id" (None otherwise). "timestamp_log" is then {"name", "path", "rows", "matched",
     "revision"} — the revision number every matched id starts with (R0033-… → 33), None if they
@@ -275,7 +293,7 @@ def scan_session(session_dir: Path) -> dict:
     suffix = local_folder_service.TIMESTAMP_LOG_SUFFIX.lower()  # a timestamp log is not a stray file
     loose = sum(1 for p in session_dir.iterdir() if p.is_file() and not p.name.startswith(".") and not p.name.lower().endswith(suffix))
     warnings = [f"{loose} loose file(s) beside the subfolders will be ignored."] if loose else []
-    deployments = [{"name": p.name, "path": str(p), **scan_folder(p), "from_timestamp_log": False, "log_deployment_id": None} for p in subfolders]
+    deployments = [{"name": p.name, "path": str(p), **scan_folder(p), "start_date": None, "end_date": None, "from_timestamp_log": False, "log_deployment_id": None} for p in subfolders]
 
     timestamp_log = None
     log_path, log_warnings = _find_timestamp_log(session_dir)

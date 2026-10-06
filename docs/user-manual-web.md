@@ -231,9 +231,11 @@ Press **📷 Import deployment**. A wizard of seven steps — the bar at the top
 ![Step 1 — Folder](img/screenshots/step-folder.png)
 
 Press **Browse…** and choose the folder with the deployment's images (or type its path), then
-**Scan**. The app reads the images and tells you how many files and images it found and the date
-range — `2024-09-04 → 2024-10-12` — and warns about anything odd. The camera model and the dates
-are guessed from here and offered again later, editable.
+**Scan**. The scan only **counts**: how many files there are and how many of them are images (by
+their extension) — *241 file(s), 241 image(s)* — with a warning if the folder is empty or has no
+images. It doesn't open them, which is why it is instant however many there are: reading the
+images is what the next steps are for. The dates and the camera model are read later, when the
+[details](#step-4-details) are asked for.
 
 ### Step 2 — Validate
 
@@ -286,7 +288,8 @@ images: choose another revision or location, or move that folder away.
 
 The rest of the form follows [Camtrap DP](https://camtrap-dp.tdwg.org)'s deployment table — the
 same fields as Trapper's own deployment form. Only the **start and end dates** are required (and
-come from the images' EXIF, guessed); everything else is optional, and can be completed later in
+are read from the images' EXIF as this step opens — the earliest and the latest capture date —, along
+with the camera model and id, when every image has the same); everything else is optional, and can be completed later in
 Trapper. *Show all fields* reveals the whole list.
 
 | Card | Fields |

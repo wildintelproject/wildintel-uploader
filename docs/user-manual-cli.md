@@ -224,8 +224,8 @@ What it asks, in order:
 
 1. **Research project**, **classification project** (optional — pick *(none)*) and **location**,
    from your Trapper account.
-2. **Source images folder** — it is scanned and reports how many files and images it found, the
-   date range, and warnings.
+2. **Source images folder** — it reports how many files and images it found, then reads their
+   capture dates and camera, and reports the date range and any warnings.
 3. **Revision number** — the deployment id (`R0003-DONA_01`) is built from it and the location.
 4. **Timezone**, **latitude**, **longitude**, **start** and **end** dates (the camera's local
    time) and **camera model**, with the guesses from the images as defaults. The dates are stamped
