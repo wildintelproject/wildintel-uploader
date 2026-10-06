@@ -107,3 +107,18 @@ def test_session_and_array_are_merged_into_deployment_groups():
     fields = DeploymentFields.model_validate({**BASE, "deployment_groups": "season:winter 2020 | grid:A1"})
     assert fields.deployment_groups == "season:winter 2020 | grid:A1"
     assert not hasattr(fields, "session") and not hasattr(fields, "array")
+
+
+# ── the timezones ────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("name", ["UTC", "Europe/Madrid", "America/Argentina/Buenos_Aires", "Etc/GMT+1"])
+def test_a_location_accepts_the_iana_timezones_including_utc(name: str):
+    from wildintel_uploader.core.schemas.requests import SaveLocationRequest
+    request = SaveLocationRequest(research_project_id="DONA", location={"location_id": "DONA_01", "latitude": 1, "longitude": 1, "timezone": name})
+    assert request.location.timezone == name
+
+
+def test_the_timezone_database_is_shipped_with_the_app():
+    """Windows has no timezone database for zoneinfo: without the tzdata package even "UTC" is unknown there."""
+    import importlib.util
+    assert importlib.util.find_spec("tzdata") is not None

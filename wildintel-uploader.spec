@@ -11,7 +11,7 @@
 import os
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules, copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ONEDIR = os.environ.get("WU_ONEDIR") == "1"
 NAME = "wildintel-uploader"
@@ -32,9 +32,11 @@ hiddenimports = [
     "platformdirs",
     "pydantic_settings",
     "PIL",
+    "tzdata",
 ]
 
-datas = [(str(FRONTEND_DIST), "static")]
+# The timezones: Windows has no tz database of its own for zoneinfo, so the tzdata package's goes with the app.
+datas = [(str(FRONTEND_DIST), "static"), *collect_data_files("tzdata")]
 EXIFTOOL_DIR = Path(SPECPATH) / "build" / "exiftool"
 if EXIFTOOL_DIR.is_dir():
     datas.append((str(EXIFTOOL_DIR), "exiftool"))
