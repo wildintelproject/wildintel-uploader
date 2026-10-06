@@ -86,6 +86,10 @@ plugins:
 
 nav:
   - Home: index.md
-  - User Manual: user-manual.md
+  - User Manual:
+      - Web app: user-manual-web.md
+      - Command line: user-manual-cli.md
   - Developer Manual: developer-manual.md
+  - Features: features.md
   - Changelog: changelog.md
+  - About: about.md

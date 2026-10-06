@@ -9,7 +9,7 @@ Uso (o, equivalente, `uv run wildintel-uploader …`):
     uv run wucli backend serve [dev|prod|debug] [--port 8769]
     uv run wucli backend test [-v] [-k filtro]
     uv run wucli frontend dev|build|preview|test|lint
-    uv run wucli docs serve|build
+    uv run wucli docs serve|build|screenshots [nombre …]
     uv run wucli package build [--format auto|appimage|windows|macos] [--version 0.1.0]
 """
 import os
@@ -126,6 +126,19 @@ def docs_build(
     console.print("[green]Generando manuales...[/green]")
     _run("mkdocs", "build", "--config-file", str(MKDOCS_CFG), *(["--strict"] if strict else []), cwd=ROOT_DIR)
     console.print(f"[green]✔  Sitio generado en {ROOT_DIR / 'site'}[/green]")
+
+
+@docs_app.command("screenshots")
+def docs_screenshots(
+    names: Optional[list[str]] = typer.Argument(None, help="Solo estas capturas (p. ej. welcome step-details); por defecto, todas."),
+    build: bool = typer.Option(True, "--build/--no-build", help="Compilar antes el frontend."),
+) -> None:
+    """Regenera las capturas del manual web (docs/img/screenshots/) con datos de ejemplo —
+    el backend simulado en la página: sin Trapper, sin carpetas ni cuentas reales."""
+    if build:
+        # vite build, sin el `tsc -b` de `npm run build`: para las capturas basta el bundle.
+        _npm("exec", "--", "vite", "build")
+    _run(sys.executable, str(ROOT_DIR / "tools" / "screenshots" / "capture.py"), *(names or []), cwd=ROOT_DIR)
 
 
 # ── backend ───────────────────────────────────────────────────────────────────

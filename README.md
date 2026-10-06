@@ -7,15 +7,21 @@ Sibling project of [wildintel-zooniverse](https://github.com/wildintelproject/wi
 same architecture: a FastAPI backend with a React frontend, packaged into one executable per
 platform.
 
-**Today's only feature — import deployment:** pick a local folder of images (copied off the
-camera's memory card first, not the card itself), the research project / classification project /
-location it belongs to, and its details (dates, camera setup, habitat...) — the same fields
-Trapper's own deployment form asks for, most guessed or optional. The images are organized locally
-and the deployment is registered in Trapper. Uploading the images themselves isn't part of this
-yet.
+**What it does:**
 
-See the [documentation](https://wildintelproject.github.io/wildintel-uploader/) for the full user
-and developer manuals.
+- **Import deployment / session** — pick a local folder of images (copied off the camera's memory
+  card first, not the card itself), validate them, fill in the deployment's details (the same
+  fields Trapper's own deployment form asks for, most guessed or optional), and organize them
+  locally — renamed, resized and tagged with authorship and license metadata. The source folder
+  is never touched.
+- **Upload to Trapper** — send the deployments kept locally: location and deployment are created in
+  Trapper if missing, and the images go up in zips. With a dry run.
+- **Sync local collections** — bring the local folder up to date with what Trapper holds.
+
+The command line is a smaller flow: connection test, settings, Trapper lookups and a quick import.
+
+See the [documentation](https://wildintelproject.github.io/wildintel-uploader/) for the web and
+command-line user manuals and the developer manual.
 
 ## Quick start
 

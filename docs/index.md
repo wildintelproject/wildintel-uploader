@@ -1,25 +1,52 @@
 # WildINTEL Uploader
 
-Import camera-trap deployments into [Trapper](https://gitlab.com/trapper-project/trapper) from a
-local folder of images — as a web app or from the command line.
+![WildINTEL](img/wildIntel_logo.webp){ style="display: block; margin: 0 auto;" }
 
-## What it does today
+**WildINTEL Uploader** is an open-source desktop web application that takes the images of a
+camera-trap deployment — copied off the camera's memory card — checks them, organizes them in a
+local collections folder, and sends them to [Trapper](https://gitlab.com/trapper-project/trapper),
+the WildINTEL project's camera-trap platform.
 
-**Import deployment** — the only option so far:
+It runs on your own computer, with a guided interface in your browser — and a command line for the
+quick jobs:
 
-1. Pick a local folder of images (copy them off the camera's memory card first; don't point this
-   at the card itself).
-2. Pick the research project, classification project and location the deployment belongs to.
-3. Fill in the deployment's details — the same fields Trapper's own deployment form asks for
-   (dates, camera setup, habitat, bait, comments...). Start/end dates and the camera model are
-   guessed from the images' EXIF data and can be edited.
-4. The images are organized into a local folder (nothing in the source folder is touched), and the
-   deployment is registered in Trapper.
+- **Import deployments** — one folder of images, or a session with one subfolder per deployment.
+  The images are validated (corrupted, duplicated, out of order, mixed cameras…), the deployment's
+  details are filled in and checked against the earlier revisions of its location, and the images
+  are renamed, resized and tagged with authorship and license metadata. Your source folder is never
+  touched.
+- **Upload to Trapper** — pick a collection kept locally and send its deployments: the location and
+  the deployment are created in Trapper if they are missing, and the images go up in zips for Trapper
+  to process. A dry run says what would happen first.
+- **Sync local collections** — bring the collections folder up to date with what Trapper already
+  holds for a classification project.
 
-It does not upload the images themselves to Trapper yet — that's a separate option this app
-doesn't have.
+## Documentation Map
 
-## Getting started
+### [User Manual — web app](user-manual-web.md)
 
-See the [User Manual](user-manual.md) for how to run an import, or the
-[Developer Manual](developer-manual.md) to set the project up locally.
+Installation, settings, and a step-by-step guide to every task in the web interface: importing a
+deployment or a session, uploading to Trapper and syncing.
+
+### [User Manual — command line](user-manual-cli.md)
+
+The `wildintel-uploader` command: connection test, settings, Trapper lookups and a quick
+interactive import.
+
+### [Developer Manual](developer-manual.md)
+
+Architecture, development setup, backend and frontend structure, the files a deployment keeps, API
+reference, how to add a check, testing, building executables, documentation and the release
+process.
+
+### [Features](features.md)
+
+What the application does, in detail — and how it differs from wildintel-tools.
+
+### [Changelog](changelog.md)
+
+What changed in each release.
+
+### [About](about.md)
+
+The WildINTEL project and its funding.
