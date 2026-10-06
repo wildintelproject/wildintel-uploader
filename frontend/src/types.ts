@@ -585,7 +585,8 @@ export type UploadStep = 'connect' | 'classification' | 'location' | 'deployment
 export type UploadMode = 'upload' | 'dry_run' | 'generate'
 
 export type UploadEvent =
-  | { type: 'step'; step: UploadStep; status: 'running' | 'done' | 'skipped'; message: string }
+  /** url: the page of what the step made or found, in Trapper's own web interface (the location, the deployment, the collection). */
+  | { type: 'step'; step: UploadStep; status: 'running' | 'done' | 'skipped'; message: string; url?: string }
   | { type: 'upload_progress'; file: string; bytes: number; total: number }
   | {
     type: 'done'; mode: UploadMode; collection: string; deployment_id: string; parts: number

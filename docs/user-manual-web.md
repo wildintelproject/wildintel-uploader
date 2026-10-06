@@ -487,7 +487,9 @@ The size of the zips is a setting: [Settings › Trapper](#trapper).
 Press the button — *Upload 2 deployments*. Each deployment gets a card (below) with the steps it goes
 through (*connect*, *classification*, *location*, *deployment*, *package*, *csv*, *upload*,
 *process*, *wait*) each marked as running, done or skipped, a bar while a file goes up, and the
-outcome. When one fails, the others go on, and the summary says so: *"2 deployment(s) uploaded, 1
+outcome. The steps that made or found something in Trapper — the *location*, the *deployment* and, at the end, the
+*collection* — show **a link to its page in Trapper** (for example `https://trapper.example.org/geomap/deployment/detail/47/`),
+to check there that it was created or updated. A dry run links to what is already there; what it would create has no page yet. When one fails, the others go on, and the summary says so: *"2 deployment(s) uploaded, 1
 failed."* **Upload more** starts over.
 
 ![An upload midway: the first deployment is done, the second is sending its zip](img/screenshots/upload-running.png)

@@ -23,7 +23,7 @@ const STEPS: { step: UploadStep; label: string }[] = [
 
 /** One deployment's upload as it goes. */
 interface Run {
-  steps: Partial<Record<UploadStep, { status: 'running' | 'done' | 'skipped'; message: string }>>
+  steps: Partial<Record<UploadStep, { status: 'running' | 'done' | 'skipped'; message: string; url?: string }>>
   progress: { file: string; bytes: number; total: number } | null
   result: Extract<UploadEvent, { type: 'done' }> | null
   error: string | null
@@ -36,7 +36,7 @@ const ACCESS_LABELS: Record<AccessCheck['check'], string> = {
 const EMPTY_RUN: Run = { steps: {}, progress: null, result: null, error: null }
 
 function reduceRun(run: Run, event: UploadEvent): Run {
-  if (event.type === 'step') return { ...run, steps: { ...run.steps, [event.step]: { status: event.status, message: event.message } } }
+  if (event.type === 'step') return { ...run, steps: { ...run.steps, [event.step]: { status: event.status, message: event.message, url: event.url } } }
   if (event.type === 'upload_progress') return { ...run, progress: { file: event.file, bytes: event.bytes, total: event.total } }
   return { ...run, result: event, progress: null }
 }
@@ -420,6 +420,9 @@ export default function UploadDeploymentPage({ initial }: Props = {}) {
                     return (
                       <li key={step} className={info.status === 'done' ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-600 dark:text-zinc-400'}>
                         {info.status === 'done' ? '✔' : '…'} <span className="font-medium">{label}</span> — {info.message}
+                        {info.url && (
+                          <span className="block text-xs ml-5"><a className="text-blue-600 dark:text-blue-400 hover:underline break-all" href={info.url} target="_blank" rel="noreferrer">{info.url}</a></span>
+                        )}
                       </li>
                     )
                   })}

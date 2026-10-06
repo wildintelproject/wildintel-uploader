@@ -337,6 +337,20 @@ def find_deployment(credentials: tuple[str, str, str], research_project_pk: int,
     return next((d["deployment_id"] for d in trapper_service.list_deployments(*credentials, research_project_pk) if (d["deployment_id"] or "").lower() == wanted), None)
 
 
+def find_deployment_record(credentials: tuple[str, str, str], research_project_pk: int, deployment: DeploymentFields) -> dict | None:
+    """The deployment as the research project has it in Trapper (found ignoring case) — its "pk" and "deployment_id" — or None."""
+    wanted = deployment.deployment_id.lower()
+    return next((d for d in trapper_service.list_deployments(*credentials, research_project_pk) if (d["deployment_id"] or "").lower() == wanted), None)
+
+
+def trapper_link(credentials: tuple[str, str, str] | None, kind: str, pk: int | None) -> str | None:
+    """The page of a location, a deployment or a collection in Trapper's own web interface — to check it there."""
+    if credentials is None or pk is None:
+        return None
+    path = {"location": "geomap/location/detail", "deployment": "geomap/deployment/detail", "collection": "storage/collection/detail"}[kind]
+    return f"{credentials[0].rstrip('/')}/{path}/{pk}/"
+
+
 def deployment_exists(credentials: tuple[str, str, str], research_project_pk: int, deployment: DeploymentFields) -> bool:
     """Whether the research project already has the deployment in Trapper (ignoring case)."""
     return find_deployment(credentials, research_project_pk, deployment) is not None
@@ -576,13 +590,15 @@ def check_selection(credentials: tuple[str, str, str], research_project: dict, c
     return checks
 
 
-def _wait_for_collection(client, research_project_pk: int, name: str, *, timeout: float, poll: float) -> bool:
+def _wait_for_collection(client, research_project_pk: int, name: str, *, timeout: float, poll: float):
+    """The collection, once Trapper has it (waiting up to `timeout` seconds), or None if it didn't appear."""
     deadline = time.monotonic() + timeout
     while True:
-        if any(c.name == name for c in client.collections.where(research_projects=research_project_pk, search=name)):
-            return True
+        found = next((c for c in client.collections.where(research_projects=research_project_pk, search=name) if c.name == name), None)
+        if found is not None:
+            return found
         if time.monotonic() >= deadline:
-            return False
+            return None
         time.sleep(poll)
 
 
@@ -631,8 +647,11 @@ def upload_stream(
     timezone_name, ignore_dst = options.get("timezone") or "UTC", bool(options.get("ignore_dst", True))
     dry = mode == "dry_run"
 
-    def step(name: str, status: str, message: str) -> dict:
-        return {"type": "step", "step": name, "status": status, "message": message}
+    def step(name: str, status: str, message: str, url: str | None = None) -> dict:
+        event = {"type": "step", "step": name, "status": status, "message": message}
+        if url:
+            event["url"] = url  # where to look at it in Trapper
+        return event
 
     # ── the research project's pk in Trapper ──
     project_pk: int | None = None
@@ -675,25 +694,31 @@ def upload_stream(
             found = find_location(credentials, project_pk, deployment)  # type: ignore[arg-type]
             location_created = found is None
             note = _location_time_settings(found, timezone_name, ignore_dst)[2]
-            yield step("location", "done", f"Location {deployment.location_id} would be created." if location_created else f"Location {deployment.location_id} is already in Trapper.{note}")
+            yield step("location", "done", f"Location {deployment.location_id} would be created." if location_created else f"Location {deployment.location_id} is already in Trapper.{note}",
+                       trapper_link(credentials, "location", (found or {}).get("pk")))
         else:
             work_dir.mkdir(parents=True, exist_ok=True)
             location_created = ensure_location(credentials, project_pk, deployment, timezone_name=timezone_name, ignore_dst=ignore_dst, work_dir=work_dir)  # type: ignore[arg-type]
             # The package has to declare the timezone and summer-time setting of the location it goes to.
-            timezone_name, ignore_dst, note = _location_time_settings(find_location(credentials, project_pk, deployment), timezone_name, ignore_dst)  # type: ignore[arg-type]
-            yield step("location", "done", f"Location {deployment.location_id} {'created' if location_created else 'was already in Trapper'}.{note}")
+            location = find_location(credentials, project_pk, deployment)  # type: ignore[arg-type]
+            timezone_name, ignore_dst, note = _location_time_settings(location, timezone_name, ignore_dst)
+            yield step("location", "done", f"Location {deployment.location_id} {'created' if location_created else 'was already in Trapper'}.{note}",
+                       trapper_link(credentials, "location", (location or {}).get("pk")))
 
         yield step("deployment", "running", f"Looking for the deployment {deployment_id} in Trapper…")
         if dry:
-            deployment_created = not deployment_exists(credentials, project_pk, deployment)  # type: ignore[arg-type]
-            yield step("deployment", "done", f"Deployment {deployment_id} would be created." if deployment_created else f"Deployment {deployment_id} is already in Trapper.")
+            existing = find_deployment_record(credentials, project_pk, deployment)  # type: ignore[arg-type]
+            deployment_created = existing is None
+            yield step("deployment", "done", f"Deployment {deployment_id} would be created." if deployment_created else f"Deployment {deployment_id} is already in Trapper.",
+                       trapper_link(credentials, "deployment", (existing or {}).get("pk")))
         else:
             deployment_created = ensure_deployment(credentials, project_pk, deployment, timezone_name=timezone_name, ignore_dst=ignore_dst, work_dir=work_dir)  # type: ignore[arg-type]
-            trapper_deployment_id = find_deployment(credentials, project_pk, deployment)  # type: ignore[arg-type]
+            record = find_deployment_record(credentials, project_pk, deployment)  # type: ignore[arg-type]
+            trapper_deployment_id = record["deployment_id"] if record else None
             message = f"Deployment {deployment_id} {'created' if deployment_created else 'was already in Trapper'}"
             if trapper_deployment_id and trapper_deployment_id != deployment_id:
                 message += f", as {trapper_deployment_id} — the package uses that id"
-            yield step("deployment", "done", message + ".")
+            yield step("deployment", "done", message + ".", trapper_link(credentials, "deployment", (record or {}).get("pk")))
 
     elif credentials is not None:  # only generating: what the location says is read — nothing is created
         timezone_name, ignore_dst, note = _location_time_settings(find_location(credentials, project_pk, deployment), timezone_name, ignore_dst)  # type: ignore[arg-type]
@@ -746,9 +771,10 @@ def upload_stream(
         yield step("process", "done", "Trapper is processing the package.")
 
     yield step("wait", "running", f"Waiting for the collection {collection} to appear in Trapper…")
-    if not _wait_for_collection(client, project_pk, collection, timeout=wait_seconds, poll=poll_seconds):
+    found_collection = _wait_for_collection(client, project_pk, collection, timeout=wait_seconds, poll=poll_seconds)
+    if found_collection is None:
         raise TrapperUploadError(f"The collection {collection} didn't appear in Trapper within {int(wait_seconds)} seconds — it may still be processing.")
-    yield step("wait", "done", f"Collection {collection} is in Trapper.")
+    yield step("wait", "done", f"Collection {collection} is in Trapper.", trapper_link(credentials, "collection", getattr(found_collection, "pk", None)))
 
     for package in packages:  # what went up is on Trapper now
         package["zip"].unlink(missing_ok=True)

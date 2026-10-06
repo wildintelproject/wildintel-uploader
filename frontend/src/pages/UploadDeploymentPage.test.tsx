@@ -343,6 +343,28 @@ describe('UploadDeploymentPage', () => {
     })
   })
 
+  describe('links to Trapper', () => {
+    it('links the location, the deployment and the collection once they are in Trapper, to check them there', async () => {
+      mockedApi.uploadDeployment.mockImplementation(async (_rp, _col, id, _mode, onEvent) => {
+        onEvent({ type: 'step', step: 'location', status: 'done', message: 'Location DONA_01 created.', url: 'https://trapper.example.org/geomap/location/detail/12/' })
+        onEvent({ type: 'step', step: 'deployment', status: 'done', message: `Deployment ${id} created.`, url: 'https://trapper.example.org/geomap/deployment/detail/47/' })
+        onEvent({ type: 'step', step: 'package', status: 'done', message: 'Packed.' })
+        onEvent({ type: 'step', step: 'wait', status: 'done', message: 'Collection R0003 is in Trapper.', url: 'https://trapper.example.org/storage/collection/detail/26/' })
+      })
+      await pickCollection()
+      await userEvent.click(await screen.findByRole('button', { name: 'Upload 2 deployments' }))
+
+      const section = await screen.findByRole('region', { name: 'Upload of R0003-DONA_01' })
+      const links = within(section).getAllByRole('link').map((a) => [a.getAttribute('href'), a.getAttribute('target')])
+      expect(links).toEqual([
+        ['https://trapper.example.org/geomap/location/detail/12/', '_blank'],
+        ['https://trapper.example.org/geomap/deployment/detail/47/', '_blank'],
+        ['https://trapper.example.org/storage/collection/detail/26/', '_blank'],
+      ])
+      expect(within(section).getByText('https://trapper.example.org/geomap/deployment/detail/47/')).toBeInTheDocument()
+    })
+  })
+
   describe('choosing the deployments', () => {
     it('selects all of them, or only the ones not uploaded yet, or none', async () => {
       await pickCollection()

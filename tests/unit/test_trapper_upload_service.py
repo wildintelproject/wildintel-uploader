@@ -636,6 +636,30 @@ def test_a_dry_run_says_what_would_be_created_and_how_it_would_be_packed(tmp_pat
     }
 
 
+def test_the_steps_link_to_the_location_the_deployment_and_the_collection_in_trapper(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 3)
+    fake = FakeTrapper(locations=["DONA_0006_B"], deployments=[DEPLOYMENT_ID])
+
+    events = _run(tmp_path, collection, fake, "upload")
+
+    urls = {e["step"]: e.get("url") for e in events if e["type"] == "step" and e["status"] == "done"}
+    assert urls["location"] == "https://trapper.example.org/geomap/location/detail/1/"
+    assert urls["deployment"] == "https://trapper.example.org/geomap/deployment/detail/1/"
+    assert urls["wait"] == "https://trapper.example.org/storage/collection/detail/26/"
+    assert urls["package"] is None and urls["classification"] is None  # only what exists in Trapper has a page
+
+
+def test_a_dry_run_links_to_what_is_already_there_and_not_to_what_would_be_created(tmp_path: Path, fake_uploader):
+    collection = _imported(tmp_path, 3)
+
+    new = {e["step"]: e.get("url") for e in _run(tmp_path, collection, FakeTrapper(), "dry_run") if e["type"] == "step" and e["status"] == "done"}
+    there = {e["step"]: e.get("url") for e in _run(tmp_path, collection, FakeTrapper(locations=["DONA_0006_B"], deployments=[DEPLOYMENT_ID]), "dry_run")
+             if e["type"] == "step" and e["status"] == "done"}
+
+    assert new["location"] is None and new["deployment"] is None
+    assert there["location"].endswith("/geomap/location/detail/1/") and there["deployment"].endswith("/geomap/deployment/detail/1/")
+
+
 def test_a_dry_run_changes_nothing_in_trapper_nor_on_disk(tmp_path: Path, fake_uploader):
     collection = _imported(tmp_path, 3)
     before = _tree(tmp_path)

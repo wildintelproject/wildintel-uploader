@@ -164,7 +164,7 @@
   }
   const reportSummary = ({ entries, parameters, checks, ...summary }) => summary
 
-  const step = (name, status, message) => ({ type: 'step', step: name, status, message })
+  const step = (name, status, message, url) => ({ type: 'step', step: name, status, message, ...(url ? { url } : {}) })
 
   // One deployment's upload: all done — or, held, halfway through sending a zip.
   const uploadEvents = (body, halfway) => {
@@ -173,8 +173,8 @@
     const events = [
       step('connect', 'done', `Connected to ${TRAPPER_URL}.`),
       step('classification', 'done', 'Classification project: DONA 2024.'),
-      step('location', 'done', `Location ${id.split('-')[1]} already in Trapper.`),
-      step('deployment', 'done', `Deployment ${id} created in Trapper.`),
+      step('location', 'done', `Location ${id.split('-')[1]} already in Trapper.`, `${TRAPPER_URL}/geomap/location/detail/${12 + Number(id.slice(-1))}/`),
+      step('deployment', 'done', `Deployment ${id} created in Trapper.`, `${TRAPPER_URL}/geomap/deployment/detail/${46 + Number(id.slice(-1))}/`),
       step('package', 'done', `Packed ${images} images in 1 zip (${Math.round(images * 0.49)} MB).`),
       step('csv', 'done', 'R0003_deployments.csv updated.'),
     ]
@@ -186,7 +186,7 @@
     events.push(
       step('upload', 'done', 'Uploaded R0003-DONA_01_part1.zip.'),
       step('process', 'done', 'Trapper is processing the collection.'),
-      step('wait', 'done', 'The collection is ready.'),
+      step('wait', 'done', 'The collection is ready.', `${TRAPPER_URL}/storage/collection/detail/26/`),
       { type: 'done', mode: body.mode, collection: 'R0003', deployment_id: id, parts: 1, location_created: false, deployment_created: true },
     )
     return events
