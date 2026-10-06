@@ -191,6 +191,8 @@ def to_details(page: Page) -> None:
 @shot("step-details")
 def step_details(page: Page) -> None:
     to_details(page)
+    page.get_by_role("tab", name="Camera").click()
+    expect(page.get_by_label("Camera model")).to_be_visible()
     save(page, "step-details", bottom=button(page, "Next"))
 
 

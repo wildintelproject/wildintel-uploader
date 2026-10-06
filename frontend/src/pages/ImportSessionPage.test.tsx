@@ -377,9 +377,11 @@ describe('ImportSessionPage', () => {
 
     expect(await screen.findByText(/Filled in 2 of 2 from their previous revision/)).toBeInTheDocument()
     expect(mockedApi.previousDeployments).toHaveBeenCalledWith('DONA', ['R0003-DONA_01', 'R0003-DONA_02'])
+    await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
     expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
     await userEvent.click(screen.getByRole('button', { name: 'DONA_02' }))
     expect(screen.getByLabelText('Habitat')).toHaveValue('Oak forest')
+    await userEvent.click(screen.getByRole('tab', { name: /Period/ }))
     expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-05T09:00') // the dates are this revision's own
   })
 
@@ -387,6 +389,7 @@ describe('ImportSessionPage', () => {
     mockedApi.previousDeployments.mockResolvedValue({ results: { 'R0003-DONA_01': previous('R0002-DONA_01', { habitat: 'Pine forest' }), 'R0003-DONA_02': null } })
     await toDetails()
     await screen.findByText(/Filled in 1 of 2/)
+    await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
     fireEvent.change(screen.getByLabelText('Habitat'), { target: { value: 'My own habitat' } })
     await userEvent.click(screen.getByRole('button', { name: 'DONA_02' }))
     await userEvent.click(screen.getByRole('button', { name: 'DONA_01' }))
@@ -504,9 +507,11 @@ describe('ImportSessionPage', () => {
 
   it('asks the same fields as a single deployment — and sends them with the deployment', async () => {
     await toDetails()
-    await userEvent.click(await screen.findByLabelText('Camera setup, habitat, bait and comments'))
+    await userEvent.click(await screen.findByRole('tab', { name: /Site/ }))
     fireEvent.change(screen.getByLabelText('Set up by'), { target: { value: 'Ana' } })
+    await userEvent.click(screen.getByRole('tab', { name: /Grouping/ }))
     fireEvent.change(screen.getByLabelText('Comments'), { target: { value: 'Near the pond' } })
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
     fireEvent.change(screen.getByLabelText('Camera height (m)'), { target: { value: '1.2' } })
     await next(); await next(); await next()
     await userEvent.click(await screen.findByRole('button', { name: 'Import 2 deployments' }))
@@ -532,14 +537,17 @@ describe('ImportSessionPage', () => {
 
     expect(await screen.findByText('Filled in from R0002-DONA_01.')).toBeInTheDocument()
     expect(mockedApi.previousDeployments).toHaveBeenCalledWith('DONA', ['R0003-DONA_01'])
+    await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
     expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
     expect(screen.getByLabelText('Set up by')).toHaveValue('Ana')
+    expect(screen.getByLabelText('Timestamps have issues')).not.toBeChecked() // not carried over
+    await userEvent.click(screen.getByRole('tab', { name: /Grouping/ }))
     expect(screen.getByLabelText('Comments')).toHaveValue('Near the pond')
     expect(screen.getByLabelText('Tags (comma-separated)')).toHaveValue('forest')
     expect(screen.getByLabelText('Deployment id')).toHaveValue('R0003-DONA_01')
     expect(screen.getByLabelText('Location')).toHaveValue('DONA_01')
+    await userEvent.click(screen.getByRole('tab', { name: /Period/ }))
     expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-04T13:10') // this revision's own
-    expect(screen.getByLabelText('Timestamps have issues')).not.toBeChecked() // not carried over
   })
 
   it('does not offer to fill in from a previous revision once it is known there is none', async () => {
@@ -570,10 +578,11 @@ describe('ImportSessionPage', () => {
 
     expect(await screen.findByText(/Filled in 1 of 2 from their previous revision — the other 1 have none/)).toBeInTheDocument()
     expect(mockedApi.previousDeployments).toHaveBeenCalledWith('DONA', ['R0003-DONA_01', 'R0003-DONA_02'])
+    await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
     expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
     await userEvent.click(screen.getByRole('button', { name: 'DONA_02' }))
     expect(screen.getByLabelText('Location')).toHaveValue('DONA_02')
-    expect(screen.queryByLabelText('Habitat')).not.toBeInTheDocument() // nothing filled in, so the form stays closed
+    expect(screen.getByLabelText('Habitat')).toHaveValue('') // nothing filled in
   })
 
   it('does not offer to fill in from a previous revision without a revision', async () => {

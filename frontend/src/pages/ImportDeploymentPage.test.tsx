@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
 import ImportDeploymentPage from './ImportDeploymentPage'
@@ -705,7 +705,7 @@ describe('ImportDeploymentPage', () => {
   it('fills in the camera model and id from the images when every image has the same', async () => {
     mockedApi.guessDetails.mockResolvedValue({ ...GUESS, camera_model: 'Reconyx HC600', camera_id: 'P800HG08' })
     await goToNewDetailsStep()
-    await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
 
     expect(screen.getByLabelText('Camera model')).toHaveValue('Reconyx HC600')
     expect(screen.getByLabelText('Camera id')).toHaveValue('P800HG08')
@@ -714,7 +714,7 @@ describe('ImportDeploymentPage', () => {
   it('leaves the camera model and id blank when the images do not agree on them', async () => {
     mockedApi.guessDetails.mockResolvedValue({ ...GUESS, camera_model: null, camera_id: null })
     await goToNewDetailsStep()
-    await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
 
     expect(screen.getByLabelText('Camera model')).toHaveValue('')
     expect(screen.getByLabelText('Camera id')).toHaveValue('')
@@ -724,7 +724,7 @@ describe('ImportDeploymentPage', () => {
     mockedApi.guessDetails.mockResolvedValue({ ...GUESS, camera_id: 'P800HG08' })
     await goToPostvalidation()
     await userEvent.click(screen.getByRole('button', { name: 'Back' }))
-    await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
 
     expect(screen.getByLabelText('Camera id')).toHaveValue('P800HG08')
   })
@@ -854,7 +854,7 @@ describe('ImportDeploymentPage', () => {
 
   it('flags camera height and depth given together', async () => {
     await goToNewDetailsStep()
-    await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
     await userEvent.type(screen.getByLabelText('Camera height (m)'), '1.2')
     await userEvent.type(screen.getByLabelText('Camera depth (m)'), '4.8')
 
@@ -1190,26 +1190,47 @@ describe('ImportDeploymentPage', () => {
   })
 
 
+  it('shows one section of the details at a time, from a row of buttons, and flags the one with a wrong field', async () => {
+    await goToNewDetailsStep()
+    expect(screen.getByRole('tab', { name: /Period/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByLabelText('Start date')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Camera model')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
+    expect(screen.getByRole('tab', { name: /Camera/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Camera height (m)'), '1.2')
+    await userEvent.type(screen.getByLabelText('Camera depth (m)'), '4.8')
+    await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
+
+    expect(within(screen.getByRole('tab', { name: /Camera/ })).getByRole('img', { name: 'has a problem' })).toBeInTheDocument()
+    expect(within(screen.getByRole('tab', { name: /Site/ })).queryByRole('img', { name: 'has a problem' })).not.toBeInTheDocument()
+  })
+
   it('exposes the Camtrap DP camera and grouping fields', async () => {
     await goToNewDetailsStep()
-    await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
-
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
     await userEvent.type(screen.getByLabelText('Camera depth (m)'), '4.8')
+    await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
     await userEvent.selectOptions(screen.getByLabelText('Feature type'), 'culvert')
-    await userEvent.type(screen.getByLabelText('Deployment groups'), 'season:winter 2020 | grid:A1')
-    fireEvent.change(screen.getByLabelText('Tags (comma-separated)'), { target: { value: 'forest, north' } })
     await userEvent.click(screen.getByLabelText('Bait used'))
     await userEvent.click(screen.getByLabelText('Timestamps have issues'))
+    await userEvent.click(screen.getByRole('tab', { name: /Grouping/ }))
+    await userEvent.type(screen.getByLabelText('Deployment groups'), 'season:winter 2020 | grid:A1')
+    fireEvent.change(screen.getByLabelText('Tags (comma-separated)'), { target: { value: 'forest, north' } })
 
-    expect(screen.getByLabelText('Camera depth (m)')).toHaveValue(4.8)
+    expect(screen.getByLabelText('Deployment groups')).toHaveValue('season:winter 2020 | grid:A1')
+    await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
     expect(screen.getByLabelText('Feature type')).toHaveValue('culvert')
     expect(screen.getByLabelText('Bait used')).toBeChecked()
     expect(screen.getByLabelText('Timestamps have issues')).toBeChecked()
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
+    expect(screen.getByLabelText('Camera depth (m)')).toHaveValue(4.8)
   })
 
   it('warns when camera height and depth are both set', async () => {
     await goToNewDetailsStep()
-    await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
+    await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
 
     await userEvent.type(screen.getByLabelText('Camera height (m)'), '1.2')
     await userEvent.type(screen.getByLabelText('Camera depth (m)'), '4.8')
@@ -1904,12 +1925,14 @@ describe('ImportDeploymentPage', () => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })
       })
       await walkToImportStep('1', async () => {
-        await userEvent.click(screen.getByText('Camera setup, habitat, bait and comments'))
+        await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
         await userEvent.type(screen.getByLabelText('Camera depth (m)'), '4.8')
+        await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
         await userEvent.selectOptions(screen.getByLabelText('Feature type'), 'culvert')
+        await userEvent.click(screen.getByLabelText('Bait used'))
+        await userEvent.click(screen.getByRole('tab', { name: /Grouping/ }))
         await userEvent.type(screen.getByLabelText('Deployment groups'), 'season:winter 2020 | grid:A1')
         fireEvent.change(screen.getByLabelText('Tags (comma-separated)'), { target: { value: 'forest, north' } })
-        await userEvent.click(screen.getByLabelText('Bait used'))
       })
       await screen.findByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
       await userEvent.click(screen.getByRole('button', { name: 'Import deployment' }))
@@ -2048,14 +2071,17 @@ describe('ImportDeploymentPage', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Fill in from R0001-DONA_01' }))
 
       expect(await screen.findByRole('status')).toHaveTextContent('Filled in from R0001-DONA_01')
-      expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
-      expect(screen.getByLabelText('Set up by')).toHaveValue('Ana')
-      expect(screen.getByLabelText('Comments')).toHaveValue('Near the pond')
-      expect(screen.getByLabelText('Camera height (m)')).toHaveValue(1.2)
-      expect(screen.getByLabelText('Tags (comma-separated)')).toHaveValue('forest')
       expect(screen.getByLabelText('Deployment id')).toHaveValue('R0002-DONA_01')
       expect(screen.getByLabelText('Start date')).toHaveValue('2024-09-04T13:10') // the new revision's own
+      await userEvent.click(screen.getByRole('tab', { name: /Site/ }))
+      expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
+      expect(screen.getByLabelText('Set up by')).toHaveValue('Ana')
       expect(screen.getByLabelText('Timestamps have issues')).not.toBeChecked() // belongs to that revision
+      await userEvent.click(screen.getByRole('tab', { name: /Grouping/ }))
+      expect(screen.getByLabelText('Comments')).toHaveValue('Near the pond')
+      expect(screen.getByLabelText('Tags (comma-separated)')).toHaveValue('forest')
+      await userEvent.click(screen.getByRole('tab', { name: /Camera/ }))
+      expect(screen.getByLabelText('Camera height (m)')).toHaveValue(1.2)
     })
 
     it('does not offer it when there is no earlier revision', async () => {

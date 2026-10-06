@@ -535,17 +535,48 @@ export function LocationTimeNote({ locationId, latitude, longitude, timezone, ig
 }
 
 /** The deployment's period, and — behind a tick — its camera, site and notes: Camtrap DP's own fields. */
-export function DeploymentFormBody({ deployment, timezone, errors, showAll, onShowAllChange, onField, datesGuessed, datesFromLog }: {
+type DetailsSection = 'period' | 'camera' | 'site' | 'notes'
+
+const DETAILS_SECTIONS: { id: DetailsSection; label: string; icon: string }[] = [
+  { id: 'period', label: 'Period', icon: '📅' },
+  { id: 'camera', label: 'Camera', icon: '📷' },
+  { id: 'site', label: 'Site', icon: '📍' },
+  { id: 'notes', label: 'Grouping and notes', icon: '📝' },
+]
+
+/** The fields of the details, one section at a time — chosen from a row of buttons, as a segmented control. */
+export function DeploymentFormBody({ deployment, timezone, errors, onField, datesGuessed, datesFromLog }: {
   deployment: DeploymentFields; timezone: string; errors: ReturnType<typeof shownErrors>
-  showAll: boolean; onShowAllChange: (v: boolean) => void
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
   datesGuessed: boolean
   /** The FileTimestampLog the dates were read from, if they were. */
   datesFromLog?: string
 }) {
+  const [section, setSection] = useState<DetailsSection>('period')
+  // A section with a field that is wrong says so on its button, whichever is open.
+  const flagged: Record<DetailsSection, boolean> = {
+    period: Boolean(errors.start_date || errors.end_date),
+    camera: Boolean(errors.camera_interval || errors.detection_distance || errors.camera_height || errors.camera_depth || errors.camera_tilt || errors.camera_heading
+      || (deployment.camera_height != null && deployment.camera_depth != null)),
+    site: false,
+    notes: false,
+  }
   return (
     <>
-    <FormCard title="Period" description="When the camera was recording. Pick a date from the calendar or type it.">
+    <div role="tablist" aria-label="Section of the details" className="grid grid-cols-4 gap-1 p-1 mb-4 rounded-lg bg-zinc-100 dark:bg-zinc-800/70">
+      {DETAILS_SECTIONS.map(({ id, label, icon }) => (
+        <button key={id} type="button" role="tab" aria-selected={section === id} onClick={() => setSection(id)}
+                className={`relative flex flex-col items-center gap-0.5 rounded-md px-2 py-2 text-sm transition-colors ${section === id
+                  ? 'bg-white dark:bg-zinc-600 text-zinc-900 dark:text-zinc-50 shadow-sm'
+                  : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-700/60'}`}>
+          <span aria-hidden="true" className="text-base leading-none">{icon}</span>
+          {label}
+          {flagged[id] && <span role="img" aria-label="has a problem" className="absolute top-1.5 right-2 h-2 w-2 rounded-full bg-red-500" />}
+        </button>
+      ))}
+    </div>
+
+    {section === 'period' && <FormCard title="Period" description="When the camera was recording. Pick a date from the calendar or type it.">
       <div className="grid grid-cols-2 gap-4">
         <DateTimeField label="Start date" required error={errors.start_date}
                        value={deployment.start_date} onChange={(v) => onField('start_date', stampTimezone(v, timezone))} />
@@ -554,13 +585,9 @@ export function DeploymentFormBody({ deployment, timezone, errors, showAll, onSh
       </div>
       {datesGuessed && <p className={hintClass}>The dates were guessed from the images' EXIF data.</p>}
       {datesFromLog && <p className={hintClass}>The dates were taken from {datesFromLog}, not from the images' EXIF data.</p>}
-    </FormCard>
+    </FormCard>}
 
-    <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-4 cursor-pointer">
-      <input type="checkbox" checked={showAll} onChange={(e) => onShowAllChange(e.target.checked)} />
-      Camera setup, habitat, bait and comments
-    </label>
-    {showAll && (
+    {section === 'camera' && (
       <>
         <FormCard title="Camera">
           <div className="grid grid-cols-2 gap-4">
@@ -585,7 +612,11 @@ export function DeploymentFormBody({ deployment, timezone, errors, showAll, onSh
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-3">Camera height and depth are mutually exclusive — only one should be set.</p>
           )}
         </FormCard>
+      </>
+    )}
 
+    {section === 'site' && (
+      <>
         <FormCard title="Site">
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Feature type" value={deployment.feature_type ?? ''} options={FEATURE_TYPE_OPTIONS} hint={DESCRIPTIONS.featureType}
@@ -600,7 +631,11 @@ export function DeploymentFormBody({ deployment, timezone, errors, showAll, onSh
             <CheckboxField label="Timestamps have issues" hint={DESCRIPTIONS.timestampIssues} checked={!!deployment.timestamp_issues} onChange={(v) => onField('timestamp_issues', v || null)} />
           </div>
         </FormCard>
+      </>
+    )}
 
+    {section === 'notes' && (
+      <>
         <FormCard title="Grouping and notes">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Deployment groups" placeholder="e.g. season:winter 2020 | grid:A1" hint={DESCRIPTIONS.deploymentGroups}
@@ -866,7 +901,6 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
   // The revision starts as the next one expected for the location, until it is typed.
   const revisionTouched = useRef(false)
   const [revisionHint, setRevisionHint] = useState<string | null>(null)
-  const [showAllFields, setShowAllFields] = useState(false)
   const [savingDetails, setSavingDetails] = useState(false)
 
   // Step "checks": opt-in checks of the images against the deployment's own
@@ -1389,7 +1423,6 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
   function handleFillFromPrevious() {
     if (!previousRevision) return
     setDeployment((d) => fillFromPreviousRevision(d, previousRevision.deployment))
-    setShowAllFields(true) // so what was filled in is there to see
     setFilledFrom(previousRevision.deployment_id)
   }
 
@@ -1513,7 +1546,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
     setPlannedCollection(null); setPlannedCollectionError(null)
     setDeploymentCheck(null); setDeploymentCheckError(null)
     preprocessTouched.current = false
-    setShowAllFields(false); setRevision(''); revisionTouched.current = false; setRevisionHint(null)
+    setRevision(''); revisionTouched.current = false; setRevisionHint(null)
     setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set())
     setTimestampLogError(null)
     setEvents([]); setImportError(null); setDestDir(null)
@@ -1873,8 +1906,8 @@ export default function ImportDeploymentPage({ resumeSession, onUpload }: Props)
                 )}
               </FormCard>
 
-              <DeploymentFormBody deployment={deployment} timezone={timezone} errors={fieldErrors} showAll={showAllFields}
-                                  onShowAllChange={setShowAllFields} onField={updateField}
+              <DeploymentFormBody deployment={deployment} timezone={timezone} errors={fieldErrors}
+                                  onField={updateField}
                                   datesGuessed={Boolean(guess?.start_date)} />
             </>
           )}

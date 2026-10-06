@@ -36,7 +36,6 @@ interface Entry {
   /** The location's summer-time setting, as its timezone is: read from it, kept in it. */
   ignoreDst: boolean | null
   /** Whether the camera, site and notes are open in the form. */
-  showAll: boolean
   /** Where the location was deduced from, until it is picked by hand. */
   locationFrom?: 'folder' | 'log'
 }
@@ -181,7 +180,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
         const location = byFolder ?? byLog
         const timezone = location?.timezone ?? ''
         next[d.name] = {
-          timezone, ignoreDst: location?.ignore_dst ?? null, showAll: false, locationFrom: byFolder ? 'folder' : byLog ? 'log' : undefined,
+          timezone, ignoreDst: location?.ignore_dst ?? null, locationFrom: byFolder ? 'folder' : byLog ? 'log' : undefined,
           fields: {
             ...EMPTY_DEPLOYMENT_FIELDS, ...locationFields(location),
             // Only the dates a timestamp log gives are known by now: the rest are read from the images, below.
@@ -374,7 +373,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
         names.forEach((name, i) => {
           const previous = results[ids[i]]?.deployment
           if (!previous || !next[name]) return
-          next[name] = { ...next[name], showAll: true, fields: fillFromPreviousRevision(next[name].fields, previous) }
+          next[name] = { ...next[name], fields: fillFromPreviousRevision(next[name].fields, previous) }
         })
         return next
       })
@@ -830,8 +829,7 @@ export default function ImportSessionPage({ onUpload }: Props = {}) {
                 </div>
               )}
 
-              <DeploymentFormBody deployment={activeFields} timezone={activeEntry.timezone} errors={activeErrors} showAll={activeEntry.showAll}
-                                  onShowAllChange={(v) => updateEntry(active.name, (e) => ({ ...e, showAll: v }))}
+              <DeploymentFormBody deployment={activeFields} timezone={activeEntry.timezone} errors={activeErrors}
                                   onField={(key, value) => updateField(active.name, key, value)}
                                   datesGuessed={Boolean(guessed[active.name]?.start_date) && !active.from_timestamp_log}
                                   datesFromLog={active.from_timestamp_log ? scan?.timestamp_log?.name : undefined} />
