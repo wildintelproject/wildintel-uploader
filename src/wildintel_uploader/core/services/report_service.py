@@ -3,7 +3,7 @@ screen shows of it and what can be downloaded to look at it in detail afterwards
 
 A report is a JSON file in config.reports_dir():
 
-    {"id", "kind": "validation" | "postvalidation" | "preprocessing", "title", "created_at", "source_dir",
+    {"id", "kind": "validation" | "postvalidation" | "preprocessing" | "repair", "title", "created_at", "source_dir",
      "deployment_id", "parameters", "checked",
      "checks": {check: {"label", "scope": "images" | "deployment", "ok", "failed"}},
      "totals": {"entries", "ok", "failed", "images_with_issues"},
@@ -26,11 +26,11 @@ from typing import Iterable
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.core.services import deployment_import_service as dis
 
-KINDS = ("validation", "postvalidation", "preprocessing")
+KINDS = ("validation", "postvalidation", "preprocessing", "repair")
 DEPLOYMENT = "(deployment)"
 CSV_COLUMNS = ("identifier", "check", "status", "message")
 
-_ID = re.compile(r"^\d{8}-\d{6}_(validation|postvalidation|preprocessing)_[0-9A-Za-z_.-]*$")
+_ID = re.compile(r"^\d{8}-\d{6}_(validation|postvalidation|preprocessing|repair)_[0-9A-Za-z_.-]*$")
 
 LABELS = {
     "corrupted": "Corrupted images", "sequence": "Shooting order vs. filename sequence", "structure": "Folder structure",
@@ -39,6 +39,9 @@ LABELS = {
     "collection_name": "Collection name", "location": "The id's location is the one chosen", "time_range": "Image dates fit the deployment",
     "image_count": "Number of images", "sequence_count": "Number of sequences", "sequence_length": "Length of the sequences",
     "preprocessing": "Preprocessing",
+    "metadata_files": "Metadata files", "camera_match": "The camera is the deployment's",
+    "preprocessing_names": "Names of the preprocessed images", "preprocessing_size": "Size of the preprocessed images",
+    "preprocessing_metadata": "XMP metadata of the images", "preprocessing_hash": "Images unchanged since they were preprocessed",
 }
 
 
@@ -156,6 +159,34 @@ def postvalidation_report(result: dict, deployment_id: str, source: Path, parame
     if "camera_mismatches" in result:
         problems = {i["path"]: f"camera {i['detected']} is not the deployment's" for i in result["camera_mismatches"]}
         b.per_image("camera", images, problems, "its camera is the deployment's", tag="Other camera")
+    return b.build()
+
+
+def repair_report(deployment_id: str, dest: Path, files: list[tuple[str, bool, str]], seal: dict | None, preprocessing: dict[str, dict[str, str]]) -> dict:
+    """What a repair did and found: which metadata files it wrote (files: (name, ok, what)), what the folder's own images
+    passed of the validation and the postvalidation — as the seal it wrote says — and of the preprocessing
+    (preprocessing: check -> {image: problem}; an image that isn't in a check's dict passed it)."""
+    images = images_of(dest)
+    b = _Builder("repair", f"Repair of {deployment_id}", source_dir=str(dest), deployment_id=deployment_id, parameters={})
+    b.checked = len(images)
+    for name, ok, message in files:
+        b.add(name, "metadata_files", ok, message, scope="deployment", tag="Not rebuilt")
+    if seal is not None:
+        entries = seal.get("images", [])
+        by_name = {e["name"]: e for e in entries}
+        for check in sorted({c for e in entries for c in e.get("validations", {})}):
+            b.per_image(check, images, {n: e["validations"][check] for n, e in by_name.items() if e["validations"].get(check, "ok") != "ok"}, "passed",
+                        tag={"corrupted": "Corrupted", "sequence": "Out of order", "exif": "Missing EXIF", "duplicates": "Duplicate"}.get(check, check))
+        for check in sorted({c for e in entries for c in e.get("postvalidations", {})}):
+            key = "camera_match" if check == "camera" else check
+            b.per_image(key, images, {n: e["postvalidations"][check] for n, e in by_name.items() if e["postvalidations"].get(check, "ok") != "ok"}, "passed",
+                        tag={"time_range": "Out of range", "camera": "Other camera"}.get(check, check))
+        for group in ("validations", "postvalidations"):
+            for check, result in seal["deployment"].get(group, {}).items():
+                if isinstance(result, dict):
+                    b.deployment(check, bool(result.get("ok")) or bool(result.get("skipped")), result.get("message", ""))
+    for check, problems in preprocessing.items():
+        b.per_image(check, images, problems, "passed", tag="Not as preprocessed")
     return b.build()
 
 

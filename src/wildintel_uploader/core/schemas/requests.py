@@ -35,6 +35,14 @@ class UploadCollectionsRequest(BaseModel):
     research_project_id: str = Field(min_length=1)
 
 
+class RepairRequest(BaseModel):
+    """One deployment kept in the collections folder, to look at or to repair."""
+
+    research_project_id: str = Field(min_length=1)
+    collection: str = Field(pattern=r"^R\d{4}(_.+)?$")
+    deployment_id: str = Field(pattern=r"^R\d{4}-.+$")
+
+
 class UploadDeploymentRequest(TrapperCredentials):
     """Upload one deployment of a collection kept locally to Trapper."""
 

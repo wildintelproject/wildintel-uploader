@@ -138,13 +138,14 @@ def run_checks(source: Path, dest: Path, deployment: DeploymentFields) -> dict:
 def seal(
     source: Path, dest: Path, deployment: DeploymentFields, *,
     originals: dict[str, str] | None = None, source_hashes: dict[str, str] | None = None, preprocessing: dict | None = None,
+    recovered: bool = False,
 ) -> dict:
     """Checks the source images, then writes dest/seal.json for what the import left in dest.
 
     originals maps each image of dest to the source image it came from (the same name when it is None) — how a
     preprocessed, renamed image gets the checks of its original. source_hashes holds the SHA-1 of those originals,
-    and preprocessing the options the images were processed with (None when they were only copied).
-    Returns what was written."""
+    and preprocessing the options the images were processed with (None when they were only copied). recovered says the
+    seal was written by a repair, from what the folder held, not by the import. Returns what was written."""
     checked = run_checks(source, dest, deployment)
     files = _images_of(dest)
     names = [str(p.relative_to(dest)) for p in files]
@@ -164,6 +165,8 @@ def seal(
         },
         "images": entries,
     }
+    if recovered:
+        body["recovered"] = {"at": body["sealed_at"], "from": "the contents of the deployment's own folder"}
     body["seal"] = _seal_of(body)
     (dest / SEAL_FILE).write_text(json.dumps(body, indent=2, ensure_ascii=False), encoding="utf-8")
     return body
