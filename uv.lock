@@ -1052,6 +1052,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyepicollect"
+version = "5.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2b/bd/e408e7b8b2e0f3dbcfe48fad25110ade8359cb315ab486ee943c62db3169/pyepicollect-5.1.1.tar.gz", hash = "sha256:ae0b45fa6a5fc0aaa001d05c173f96519d31045edc062d991f024fb36105c384", size = 5233, upload-time = "2020-08-07T11:33:11.173Z" }
+
+[[package]]
 name = "pygments"
 version = "2.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1674,6 +1683,7 @@ dependencies = [
     { name = "platformdirs" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyepicollect" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "typer" },
@@ -1701,6 +1711,7 @@ requires-dist = [
     { name = "platformdirs", specifier = ">=4.10.0" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pyepicollect", specifier = ">=5.1.1" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0" },
     { name = "typer", specifier = ">=0.15" },

@@ -488,6 +488,7 @@ export interface AppSettings {
   /** workers: how many images are validated or preprocessed at once; cpu_count: the CPUs this machine has (read-only). */
   GENERAL: { log_level: LogLevel; workers: number; cpu_count: number; log_file: string; log_level_override: string | null }
   TRAPPER: { base_url: string | null; user_name: string | null; has_password: boolean; max_zip_mb: number }
+  EPICOLLECT5: { project_slug: string | null; client_id: string | null; has_secret: boolean }
   /** The folder where the app keeps the images — its collections go in a "collections" folder inside. */
   DATA: { dir: string }
   VALIDATION: ValidationSettings
@@ -499,6 +500,7 @@ export interface AppSettings {
 export interface AppSettingsUpdate {
   GENERAL: { log_level: LogLevel; workers: number }
   TRAPPER: { base_url: string | null; user_name: string | null; user_password: string; max_zip_mb: number }
+  EPICOLLECT5: { project_slug: string | null; client_id: string | null; client_secret: string }
   DATA: { dir: string | null }
   VALIDATION: ValidationSettings
   POSTVALIDATION: PostvalidationSettings

@@ -110,6 +110,9 @@ interface Draft {
   maxZipMb: string
   trapperUser: string
   trapperPassword: string
+  epicollectSlug: string
+  epicollectClientId: string
+  epicollectClientSecret: string
   validation: AppSettings['VALIDATION']
   postvalidation: Record<DeploymentCheck, boolean>
   toleranceHours: string
@@ -146,6 +149,9 @@ function toDraft(s: AppSettings): Draft {
     maxZipMb: String(s.TRAPPER.max_zip_mb),
     trapperUser: s.TRAPPER.user_name ?? '',
     trapperPassword: '',
+    epicollectSlug: s.EPICOLLECT5.project_slug ?? '',
+    epicollectClientId: s.EPICOLLECT5.client_id ?? '',
+    epicollectClientSecret: '',
     validation: { ...s.VALIDATION },
     postvalidation: checks,
     toleranceHours: String(post.tolerance_hours),
@@ -195,6 +201,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
   return {
     GENERAL: { log_level: d.logLevel, workers: Number(d.workers) },
     TRAPPER: { base_url: d.trapperUrl.trim() || null, user_name: d.trapperUser.trim() || null, user_password: d.trapperPassword, max_zip_mb: Number(d.maxZipMb) },
+    EPICOLLECT5: { project_slug: d.epicollectSlug.trim() || null, client_id: d.epicollectClientId.trim() || null, client_secret: d.epicollectClientSecret },
     DATA: { dir: d.dataDir.trim() || null },
     VALIDATION: d.validation,
     POSTVALIDATION: {
@@ -212,11 +219,12 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
 
 // ── Layout pieces ───────────────────────────────────────────────────────
 
-type SectionId = 'general' | 'trapper' | 'validation' | 'postvalidation' | 'preprocessing' | 'reports' | 'config'
+type SectionId = 'general' | 'trapper' | 'epicollect' | 'validation' | 'postvalidation' | 'preprocessing' | 'reports' | 'config'
 
 const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'general', label: 'General', icon: SlidersIcon },
   { id: 'trapper', label: 'Trapper', icon: CameraIcon },
+  { id: 'epicollect', label: 'Epicollect5', icon: FileIcon },
   { id: 'validation', label: 'Validation', icon: CheckIcon },
   { id: 'postvalidation', label: 'Postvalidation', icon: ShieldIcon },
   { id: 'preprocessing', label: 'Preprocessing', icon: ImageIcon },
@@ -804,6 +812,21 @@ export default function SettingsPage({ onClose }: Props) {
             </Row>
             <Row label="Upload packages" description="A deployment's images go up in zips of at most this size, each with its own yaml.">
               <NumberBox label="Largest zip" value={draft.maxZipMb} limits={MAX_ZIP_MB} onChange={(v) => set('maxZipMb', v)} unit="MB" />
+            </Row>
+          </div>
+        )}
+
+        {draft && saved && section === 'epicollect' && (
+          <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
+            <Row label="Project" description="The Epicollect5 project the deployment information will be imported from (coming soon): the name in its URL, five.epicollect.net/project/<slug>.">
+              <TextBox label="Slug" value={draft.epicollectSlug} onChange={(v) => set('epicollectSlug', v)} placeholder="my-camera-trap-project" mono />
+            </Row>
+            <Row
+              label="API client"
+              description={saved.EPICOLLECT5.has_secret ? 'Only private projects need it. A secret is saved — leave it blank to keep it.' : 'Only private projects need it. No secret saved yet.'}
+            >
+              <TextBox label="Client id" value={draft.epicollectClientId} onChange={(v) => set('epicollectClientId', v)} mono />
+              <TextBox label="Client secret" type="password" value={draft.epicollectClientSecret} onChange={(v) => set('epicollectClientSecret', v)} />
             </Row>
           </div>
         )}

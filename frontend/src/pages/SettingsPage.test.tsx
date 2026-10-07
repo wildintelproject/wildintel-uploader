@@ -20,6 +20,7 @@ beforeEach(() => {
   mockedApi.saveSettings.mockImplementation(async (update) => ({
     GENERAL: { ...APP_SETTINGS.GENERAL, ...update.GENERAL },
     TRAPPER: { ...APP_SETTINGS.TRAPPER, base_url: update.TRAPPER.base_url, user_name: update.TRAPPER.user_name, has_password: APP_SETTINGS.TRAPPER.has_password || !!update.TRAPPER.user_password },
+    EPICOLLECT5: { project_slug: update.EPICOLLECT5.project_slug, client_id: update.EPICOLLECT5.client_id, has_secret: APP_SETTINGS.EPICOLLECT5.has_secret || !!update.EPICOLLECT5.client_secret },
     DATA: { dir: update.DATA.dir ?? APP_SETTINGS.DATA.dir },
     VALIDATION: update.VALIDATION,
     POSTVALIDATION: update.POSTVALIDATION,

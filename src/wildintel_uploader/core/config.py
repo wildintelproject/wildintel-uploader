@@ -81,6 +81,14 @@ class TrapperSettings(BaseModel):
     )
 
 
+class Epicollect5Settings(BaseModel):
+    project_slug: Optional[str] = Field(default=None, description="Slug of the Epicollect5 project — the name in its URL (five.epicollect.net/project/<slug>). (EPICOLLECT5.project_slug)")
+    client_id: Optional[str] = Field(default=None, description="Client id of the Epicollect5 API client app, for private projects. (EPICOLLECT5.client_id)")
+    client_secret: Optional[str] = Field(
+        default=None, description="Client secret of the Epicollect5 API client app. (EPICOLLECT5.client_secret)", json_schema_extra={"secret": True},
+    )
+
+
 class DataSettings(BaseModel):
     # None until first read/saved — resolved against default_data_dir() so
     # moving the app's documents dir (a platformdirs choice) doesn't strand
@@ -183,6 +191,7 @@ class PreprocessingSettings(BaseModel):
 class Settings(BaseModel):
     GENERAL: GeneralSettings = Field(default_factory=GeneralSettings)
     TRAPPER: TrapperSettings = Field(default_factory=TrapperSettings)
+    EPICOLLECT5: Epicollect5Settings = Field(default_factory=Epicollect5Settings)
     DATA: DataSettings = Field(default_factory=DataSettings)
     VALIDATION: ValidationSettings = Field(default_factory=ValidationSettings)
     POSTVALIDATION: PostvalidationSettings = Field(default_factory=PostvalidationSettings)

@@ -562,6 +562,12 @@ export function DeploymentFormBody({ deployment, timezone, errors, onField, date
   }
   return (
     <>
+    <div className="flex justify-end mb-3">
+      <button type="button" disabled title="Coming soon"
+              className="rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm text-zinc-400 dark:text-zinc-500 cursor-not-allowed">
+        Import info from Epicollect5 — coming soon
+      </button>
+    </div>
     <FormCard title="Period" description="When the camera was recording. Pick a date from the calendar or type it.">
       <div className="grid grid-cols-2 gap-4">
         <DateTimeField label="Start date" required error={errors.start_date}

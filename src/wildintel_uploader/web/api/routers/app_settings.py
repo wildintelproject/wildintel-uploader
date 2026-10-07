@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 def _public(settings: config.Settings) -> dict:
     data = settings.model_dump(mode="json")
     data["TRAPPER"]["has_password"] = bool(data["TRAPPER"].pop("user_password"))
+    data["EPICOLLECT5"]["has_secret"] = bool(data["EPICOLLECT5"].pop("client_secret"))
     data["DATA"]["dir"] = data["DATA"]["dir"] or str(config.default_data_dir())
     # Read-only: where the log goes, and whether the environment overrides
     # the level set here.
@@ -41,9 +42,12 @@ def save_settings(new: config.Settings) -> dict:
     current = config.load_settings()
     if not new.TRAPPER.user_password:
         new.TRAPPER.user_password = current.TRAPPER.user_password
-    for field in ("base_url", "user_name"):
-        if not getattr(new.TRAPPER, field):
-            setattr(new.TRAPPER, field, None)
+    if not new.EPICOLLECT5.client_secret:
+        new.EPICOLLECT5.client_secret = current.EPICOLLECT5.client_secret
+    for section, fields in ((new.TRAPPER, ("base_url", "user_name")), (new.EPICOLLECT5, ("project_slug", "client_id"))):
+        for field in fields:
+            if not getattr(section, field):
+                setattr(section, field, None)
     config.save_settings(new)
     logging_setup.apply_level(logging_setup.effective_level())
     return _public(new)
