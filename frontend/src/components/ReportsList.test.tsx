@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
-import ReportsPage from './ReportsPage'
+import ReportsList from './ReportsList'
 import type { ReportSummary } from '../types'
 
 vi.mock('../api', () => ({
@@ -21,9 +21,9 @@ beforeEach(() => {
   vi.mocked(api.deleteReport).mockResolvedValue({ status: 'ok' })
 })
 
-describe('ReportsPage', () => {
+describe('ReportsList', () => {
   it('lists the reports with what they found, and offers their downloads', async () => {
-    render(<ReportsPage />)
+    render(<ReportsList />)
 
     const validation = await screen.findByRole('listitem', { name: 'Validation of R0003-DONA_01' })
     expect(validation).toHaveTextContent('2 problem(s)')
@@ -32,7 +32,7 @@ describe('ReportsPage', () => {
   })
 
   it('deletes a report only after asking again', async () => {
-    render(<ReportsPage />)
+    render(<ReportsList />)
     await screen.findByRole('listitem', { name: 'Validation of R0003-DONA_01' })
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0])
@@ -45,7 +45,7 @@ describe('ReportsPage', () => {
 
   it('says so when there are none', async () => {
     vi.mocked(api.listReports).mockResolvedValue([])
-    render(<ReportsPage />)
+    render(<ReportsList />)
     expect(await screen.findByText(/There are no reports yet/)).toBeInTheDocument()
   })
 })

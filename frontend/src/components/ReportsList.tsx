@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import ReportPanel from '../components/ReportPanel'
+import ReportPanel from './ReportPanel'
 import type { ReportKind, ReportSummary } from '../types'
-import { btnOutline } from './ImportDeploymentPage'
+import { btnOutline } from '../pages/ImportDeploymentPage'
 
-const KIND_LABELS: Record<ReportKind, string> = { validation: 'Validation', postvalidation: 'Postvalidation', preprocessing: 'Preprocessing' }
+const KIND_LABELS: Record<ReportKind, string> = { validation: 'Validation', postvalidation: 'Postvalidation', preprocessing: 'Preprocessing', repair: 'Repair' }
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
-/** The reports the validations, postvalidations and preprocessings left: to look at again, download or delete. */
-export default function ReportsPage() {
+/** The reports the validations, postvalidations, preprocessings and repairs left: to look at again, download or delete. */
+export default function ReportsList() {
   const [reports, setReports] = useState<ReportSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
@@ -32,10 +32,9 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="mx-auto px-4 py-8" style={{ maxWidth: 800 }}>
-      <h1 className="text-2xl font-bold mb-1">Reports</h1>
-      <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">
-        Every validation, postvalidation and preprocessing leaves a report of what was checked and done, image by image. Look at one again, download it
+    <div className="py-3">
+      <p className="text-zinc-500 dark:text-zinc-400 mb-5 text-sm">
+        Every validation, postvalidation, preprocessing and repair leaves a report of what was checked and done, image by image. Look at one again, download it
         (a CSV opens in a spreadsheet; the JSON has everything), or delete the ones you no longer need.
       </p>
       {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}

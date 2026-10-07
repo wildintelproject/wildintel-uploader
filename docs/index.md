@@ -18,6 +18,8 @@ quick jobs:
 - **Upload to Trapper** — pick a collection kept locally and send its deployments: the location and
   the deployment are created in Trapper if they are missing, and the images go up in zips for Trapper
   to process. A dry run says what would happen first.
+- **Repair local deployments** — check which deployments of a local collection are still valid and write the
+  metadata of the others again from what their folders hold.
 - **Sync local collections** — bring the collections folder up to date with what Trapper already
   holds for a classification project.
 

@@ -60,7 +60,7 @@ image.
 Every validation, postvalidation and preprocessing writes a **report**: what was checked and done, image by image — the
 ones that failed, which check and why, and the ones that passed too. The step shows it as it is kept, and it can be
 downloaded as a **CSV** (a row per image and check, for a spreadsheet) or as a **JSON** with everything. They are kept in
-the `reports` folder, and a page of the menu lists them to look at again or delete — what wildintel-tools' `reports` command
+the `reports` folder, and Settings › Reports lists them to look at again or delete — what wildintel-tools' `reports` command
 did with its YAML files, from the interface.
 
 ### The seal
@@ -107,6 +107,14 @@ created in the collections folder — nothing is changed in Trapper, nothing alr
 overwritten, and no image is downloaded. Their `images.json`, marked `"source": "trapper"`, is
 built from what Trapper lists for each image, so they feed the statistical checks of later
 revisions. Deployments Trapper holds in an invalid way are reported, not fatal.
+
+## Repair
+
+A deployment kept locally is **valid** when its `seal.json` still matches it. For one that isn't — lost metadata files,
+images that changed — **Repair** writes `deployment.json`, `preprocessing.json`, `images.json` and `seal.json` again from
+what its folder holds: the capture dates and camera of the images, the location's details and the collection's
+`FileTimestampLog.csv`, which always prevails over what the images say (a deployment it doesn't have gets its row). The images
+are validated, postvalidated and checked against what preprocessing leaves, and a report says what was found.
 
 ## Settings
 

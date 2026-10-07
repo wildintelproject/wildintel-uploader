@@ -204,6 +204,17 @@
           { type: 'done', dest_dir: `${COLLECTIONS}/DONA/R0003/R0003-DONA_01`, processed: 241, skipped: 0, sealed: null, report_id: '20261006-094930_preprocessing_R0003-DONA_01' },
         ],
       }),
+      '/api/repair/deployment': (body) => ({
+        events: [
+          { type: 'step', step: 'inspect', status: 'done', message: '188 image(s), 2 of 4 metadata files.' },
+          { type: 'step', step: 'dates', status: 'done', message: '2024-09-04 14:02:11 → 2024-10-12 07:40:09 (the timestamp log says so).' },
+          { type: 'step', step: 'deployment', status: 'done', message: 'deployment.json rebuilt.' },
+          { type: 'step', step: 'preprocessing', status: 'done', message: 'preprocessing.json written for 188 image(s).' },
+          { type: 'step', step: 'images', status: 'done', message: 'images.json written: 188 image(s).' },
+          { type: 'step', step: 'seal', status: 'done', message: 'Sealed. The images passed every check.' },
+          { type: 'done', deployment_id: body.deployment_id, images: 188, written: ['deployment.json', 'preprocessing.json', 'images.json', 'seal.json'], problems: 0, status: 'valid', report_id: '20261006-094930_preprocessing_R0003-DONA_01' },
+        ],
+      }),
       '/api/deployment-import/consolidate': () => ({
         events: [
           { type: 'sealing' },
@@ -289,6 +300,23 @@
       'POST /api/sessions/scan': (body) => ({ ...UNFINISHED[0], task_id: body.task_id ?? 'new', phase: 'scanned' }),
       'POST /api/sessions/selection': (body) => ({ ...UNFINISHED[0], task_id: body.task_id, phase: 'selected' }),
       'POST /api/sessions/details': (body) => ({ ...UNFINISHED[0], task_id: body.task_id, phase: 'ready' }),
+      'POST /api/repair/collections': () => ({ results: [{
+        name: 'R0003', path: `${COLLECTIONS}/DONA/R0003`,
+        deployments: ['R0003-DONA_01', 'R0003-DONA_02', 'R0003-DONA_03'].map((deployment_id, i) => ({
+          deployment_id, images: [241, 188, 305][i], synced: false,
+          files: { 'deployment.json': i !== 1, 'images.json': i !== 1, 'preprocessing.json': true, 'seal.json': i === 0 },
+        })),
+      }] }),
+      'POST /api/repair/inspect': (body) => {
+        const files = { 'deployment.json': 'ok', 'images.json': 'ok', 'preprocessing.json': 'ok', 'seal.json': 'ok' }
+        if (body.deployment_id === 'R0003-DONA_01') return { deployment_id: body.deployment_id, status: 'valid', files, images: 241, log: 'row', problems: [] }
+        if (body.deployment_id === 'R0003-DONA_02') {
+          return { deployment_id: body.deployment_id, status: 'broken', files: { ...files, 'deployment.json': 'missing', 'images.json': 'missing' }, images: 188, log: 'row',
+            problems: ['deployment.json is missing', 'images.json is missing', '3 image(s) changed since they were sealed', 'deployment.json is not what was sealed'] }
+        }
+        return { deployment_id: body.deployment_id, status: 'unsealed', files: { ...files, 'seal.json': 'missing' }, images: 305, log: 'no row',
+          problems: ['It has no seal: its images were never sealed.', 'The collection’s timestamp log has no row for it.'] }
+      },
       'POST /api/upload/collections': () => ({ results: UPLOAD_COLLECTIONS }),
       'POST /api/upload/classification-projects': () => ({ results: [{ pk: 10, name: 'DONA 2024', is_active: true }] }),
       'POST /api/upload/check-selection': () => ({ checks: [

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
 import { COVERAGE_AREAS, ENTITIES } from '../entities'
+import ReportsList from '../components/ReportsList'
 import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, ImageCheck, LogLevel, SimilarityMethod, UpdateCheck } from '../types'
 
 const hintClass = 'text-xs text-zinc-500 dark:text-zinc-400'
@@ -58,6 +59,13 @@ const ImageIcon = () => (
     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
     <circle cx="8.5" cy="8.5" r="1.5" />
     <path d="m21 15-5-5L5 21" />
+  </Icon>
+)
+const ReportIcon = () => (
+  <Icon>
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" />
   </Icon>
 )
 const FileIcon = () => (
@@ -204,7 +212,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
 
 // ── Layout pieces ───────────────────────────────────────────────────────
 
-type SectionId = 'general' | 'trapper' | 'validation' | 'postvalidation' | 'preprocessing' | 'config'
+type SectionId = 'general' | 'trapper' | 'validation' | 'postvalidation' | 'preprocessing' | 'reports' | 'config'
 
 const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'general', label: 'General', icon: SlidersIcon },
@@ -212,6 +220,7 @@ const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'validation', label: 'Validation', icon: CheckIcon },
   { id: 'postvalidation', label: 'Postvalidation', icon: ShieldIcon },
   { id: 'preprocessing', label: 'Preprocessing', icon: ImageIcon },
+  { id: 'reports', label: 'Reports', icon: ReportIcon },
   { id: 'config', label: 'Config', icon: FileIcon },
 ]
 
@@ -888,10 +897,13 @@ export default function SettingsPage({ onClose }: Props) {
           </div>
         )}
 
+        {section === 'reports' && <ReportsList />}
+
         {section === 'config' && (
           <ConfigsEditor onSwitched={reloadSettings} onError={(message) => setStatus({ kind: 'error', message })} />
         )}
 
+        {section !== 'reports' && (
         <div className="flex items-center justify-end gap-4 pt-5 mt-2 border-t border-zinc-200 dark:border-zinc-800">
           {status.kind === 'error' && <p className="text-sm text-red-600 dark:text-red-400 mr-auto">{status.message}</p>}
           {status.kind === 'saved' && <p className="text-sm text-emerald-700 dark:text-emerald-400 mr-auto">Settings saved.</p>}
@@ -900,6 +912,7 @@ export default function SettingsPage({ onClose }: Props) {
             {status.kind === 'saving' ? 'Saving…' : 'Save'}
           </button>
         </div>
+        )}
       </div>
     </div>
   )

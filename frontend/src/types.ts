@@ -309,7 +309,7 @@ export interface PreprocessingOptions {
 }
 
 /** What the app's menu offers — import a deployment, import a whole session of them, or upload one to Trapper. */
-export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'sync' | 'reports'
+export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'sync' | 'repair'
 
 /** What syncing the local collections folder with Trapper did: for each kind of thing, what it created and what was already there. */
 export interface SyncResult {
@@ -601,7 +601,7 @@ export type UploadEvent =
 // ── Reports ─────────────────────────────────────────────────────────────
 
 /** What a report was made of: a validation, a postvalidation or a preprocessing. */
-export type ReportKind = 'validation' | 'postvalidation' | 'preprocessing'
+export type ReportKind = 'validation' | 'postvalidation' | 'preprocessing' | 'repair'
 
 /** One check of one image — or of the whole deployment, "(deployment)". */
 export interface ReportEntry {
@@ -639,3 +639,33 @@ export interface Report extends ReportSummary {
   checks: Record<string, ReportCheck>
   entries: ReportEntry[]
 }
+
+// ── Repair ──────────────────────────────────────────────────────────────
+
+/** A deployment folder of a local collection, as the repair lists it — whatever state it is in. */
+export interface RepairDeployment {
+  deployment_id: string
+  images: number
+  /** Which of the metadata files (deployment.json, images.json, preprocessing.json, seal.json) are there. */
+  files: Record<string, boolean>
+  synced: boolean
+}
+
+export interface RepairCollection { name: string; path: string; deployments: RepairDeployment[] }
+
+/** The state of a deployment. Valid is what its seal.json says; anything else is not valid. */
+export interface RepairState {
+  deployment_id: string
+  status: 'valid' | 'broken' | 'unsealed' | 'synced'
+  files: Record<string, 'ok' | 'missing' | 'unreadable'>
+  images: number
+  /** What the collection's timestamp log has for it: "row", "no row", "no log" — or what is wrong with the log. */
+  log: string
+  problems: string[]
+}
+
+export type RepairStep = 'inspect' | 'dates' | 'deployment' | 'preprocessing' | 'images' | 'seal'
+
+export type RepairEvent =
+  | { type: 'step'; step: RepairStep; status: 'running' | 'done' | 'skipped'; message: string }
+  | { type: 'done'; deployment_id: string; images: number; written: string[]; problems: number; status: RepairState['status']; report_id: string | null }

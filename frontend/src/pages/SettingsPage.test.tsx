@@ -8,7 +8,7 @@ import { APP_SETTINGS } from '../test/fixtures'
 vi.mock('../api', () => ({
   api: {
     getSettings: vi.fn(), saveSettings: vi.fn(), clearLog: vi.fn(), browseFolder: vi.fn(), trapperTestConnection: vi.fn(),
-    checkForUpdate: vi.fn(), configs: vi.fn(), addConfig: vi.fn(), activateConfig: vi.fn(), openConfigFolder: vi.fn(),
+    checkForUpdate: vi.fn(), listReports: vi.fn(), deleteReport: vi.fn(), getReport: vi.fn(), reportUrl: (id: string, format: string) => `/api/reports/${id}/download?format=${format}`, configs: vi.fn(), addConfig: vi.fn(), activateConfig: vi.fn(), openConfigFolder: vi.fn(),
   },
 }))
 
@@ -643,6 +643,27 @@ describe('SettingsPage', () => {
     render(<SettingsPage onClose={vi.fn()} />)
 
     expect(await screen.findByText('Backend not reachable')).toBeInTheDocument()
+  })
+
+  describe('Reports', () => {
+    it('lists the reports of the validations, postvalidations, preprocessings and repairs, to download or delete', async () => {
+      mockedApi.listReports.mockResolvedValue([
+        { id: '20261006-153012_repair_R0003-DONA_01', kind: 'repair', title: 'Repair of R0003-DONA_01', created_at: '2026-10-06T15:30:12+00:00',
+          source_dir: '/c/DONA/R0003/R0003-DONA_01', deployment_id: 'R0003-DONA_01', checked: 3, totals: { entries: 20, ok: 18, failed: 2, images_with_issues: 1 } },
+      ])
+      mockedApi.deleteReport.mockResolvedValue({ status: 'ok' })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+
+      await section('Reports')
+
+      const report = await screen.findByRole('listitem', { name: 'Repair of R0003-DONA_01' })
+      expect(report).toHaveTextContent('2 problem(s)')
+      expect(within(report).getByRole('link', { name: 'CSV' })).toHaveAttribute('href', '/api/reports/20261006-153012_repair_R0003-DONA_01/download?format=csv')
+      await userEvent.click(within(report).getByRole('button', { name: 'Delete' }))
+      await userEvent.click(within(report).getByRole('button', { name: 'Delete it' }))
+      expect(mockedApi.deleteReport).toHaveBeenCalledWith('20261006-153012_repair_R0003-DONA_01')
+    })
   })
 
   describe('Config', () => {

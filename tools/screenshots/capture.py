@@ -240,7 +240,9 @@ def step_import(page: Page) -> None:
 
 @shot("reports")
 def reports(page: Page) -> None:
-    open_task(page, "Reports")
+    start(page)
+    page.get_by_role("button", name="Settings").click()
+    page.get_by_role("navigation", name="Settings sections").get_by_text("Reports").click()
     page.get_by_role("listitem", name="Validation of R0003-DONA_01").get_by_role("button", name="View").click()
     expect(page.get_by_role("link", name="Download CSV")).to_be_visible()
     save(page, "reports")
@@ -288,6 +290,20 @@ def upload_running(page: Page) -> None:
     expect(page.get_by_label("Upload of R0003-DONA_02")).to_be_visible()
     expect(page.get_by_text("Uploading R0003-DONA_02_part1.zip").first).to_be_visible()
     save(page, "upload-running", top=page.get_by_text("What to do", exact=True).first, bottom=page.get_by_label("Upload of R0003-DONA_02"))
+
+
+# ── Repair ───────────────────────────────────────────────────────────────────
+
+@shot("repair")
+def repair(page: Page) -> None:
+    open_task(page, "Repair local deployments")
+    choose(page, "repair-research-project", "DONA")
+    choose(page, "repair-collection", "R0003")
+    button(page, "Check the deployments").click()
+    expect(page.get_by_text("deployment.json is missing")).to_be_visible()
+    button(page, "Repair 2 deployments").click()
+    expect(page.get_by_text("Valid again").first).to_be_visible()
+    save(page, "repair")
 
 
 # ── Sync ─────────────────────────────────────────────────────────────────────

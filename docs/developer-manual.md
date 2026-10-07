@@ -194,6 +194,7 @@ something to say for each check.
 | `camera_info` | The camera's model and id, through ExifTool when it's there (bundled or on the `PATH`), else Pillow. |
 | `trapper_service` | Thin wrapper over the SDK for lookups; registers a deployment through the classic import form. |
 | `trapper_upload_service` | Uploading a deployment: location, deployment, packing in zips + yaml, upload, wait. Also the access check. |
+| `repair_service` | Looks at a deployment folder (valid as its `seal.json` says) and rebuilds its metadata files from the folder's own contents; the timestamp log prevails over the images. |
 | `sync_service` | Fills the collections folder from a Trapper classification project. |
 | `session_store` | The wizard's resumable runs. |
 | `folder_picker`, `file_manager` | The OS's native folder dialog and file explorer — this is a local tool, so the backend can open them on the user's screen. |
@@ -275,7 +276,7 @@ their answer, and the import's `done` event carries the preprocessing's. A repor
 `report_id` is `null` — it never fails what it reports. A failed image's entry also has a short `tag` (what is wrong, for a badge) and `taken` (its EXIF date, read only for the
 failed ones). `totals.images_with_issues` counts the distinct images that failed a check of images.
 
-The frontend: `ReportPanel` shows a report plainly (the Reports page, the preprocessing) and `ReportsPage` lists them.
+The frontend: `ReportPanel` shows a report plainly (the preprocessing, the repair) and `ReportsList` lists them — it is Settings › Reports.
 The validation step is a dashboard: `ValidationDashboard` (header, figures, and the page's table of checks as its child),
 `CheckTable`'s `outcome` columns, and `CheckFailures` — the failures of one check with their thumbnails
 (`api.reportImageUrl`), search, filter, sort, a grid or a list, pages and the details of an image.
@@ -313,6 +314,18 @@ file goes alone). The yaml names the **classification project's** pk — not the
 project's — the deployment in lower case, as Trapper keeps it, and the location's timezone and
 summer-time setting, which Trapper checks against the location it has. Locations and deployments
 are found ignoring case: Trapper keeps its ids in lower case, the collections folder in upper.
+
+### Repair
+
+`repair_service.inspect` is the state of a deployment: *valid* is `seal_service.verify` saying so, nothing else. `repair_stream`
+rebuilds, in this order: the dates (`pre._camera_time` of every image — the camera's wall clock — then the period: the
+deployment's row in `<collection>_FileTimestampLog.csv` if there is one, else the `deployment.json` that is left, else the
+images; the row is added when missing), `deployment.json` (what is left + the location's record + the camera +
+the period, validated as `DeploymentFields`), `preprocessing.json` and `images.json` (one entry per image; the options are
+the old file's, else the settings' with the location's timezone), and `seal_service.seal(dest, dest, …, recovered=True)`,
+which runs the validation and postvalidation over the folder's own images. `report_service.repair_report` joins what it wrote,
+the seal's per-image results and `_preprocessing_problems` (names, size, XMP identifier, hash). A deployment synced from
+Trapper is refused. The routes are `POST /api/repair/collections`, `/inspect` and `/deployment` (the stream).
 
 ### Sync
 
@@ -425,6 +438,9 @@ bodies are JSON, and every `POST` that talks to Trapper takes optional `url`, `u
 | upload | `POST /upload/collections` | The collections kept for a research project, with their deployments. |
 | | `…/classification-projects`, `/check-access` | For the page's pickers and *Test connection*. |
 | | `…/deployment` | **Streams** one deployment's upload (any mode). |
+| repair | `POST /repair/collections` | The collections of a local research project and their deployment folders, whatever their state. |
+| | `…/inspect` | A deployment's state: valid as its seal says, what is wrong with it. |
+| | `…/deployment` | **Streams** its repair. |
 | sync | `POST /sync/collection-names` | The classification project's collections starting with `R`. |
 | | `…/collections` | **Streams** the sync. |
 

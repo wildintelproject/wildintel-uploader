@@ -45,4 +45,16 @@ describe('MenuPage', () => {
     expect(sessionUpload).toBeDisabled()
     expect(sessionUpload).toHaveTextContent(/coming soon/i)
   })
+
+  it('offers to repair the local deployments', async () => {
+    const onChoose = vi.fn()
+    render(<MenuPage onChoose={onChoose} />)
+
+    const repairButton = screen.getByRole('button', { name: /repair local deployments/i })
+    expect(repairButton).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /^reports/i })).not.toBeInTheDocument() // the reports are in the settings now
+
+    await userEvent.click(repairButton)
+    expect(onChoose).toHaveBeenCalledWith('repair')
+  })
 })

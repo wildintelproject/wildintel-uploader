@@ -4,7 +4,7 @@ import Footer from './components/Footer'
 import ImportDeploymentPage from './pages/ImportDeploymentPage'
 import ImportSessionPage from './pages/ImportSessionPage'
 import MenuPage from './pages/MenuPage'
-import ReportsPage from './pages/ReportsPage'
+import RepairPage from './pages/RepairPage'
 import ResumeSessionsPage from './pages/ResumeSessionsPage'
 import SettingsPage from './pages/SettingsPage'
 import SyncCollectionsPage from './pages/SyncCollectionsPage'
@@ -85,8 +85,8 @@ export default function App() {
               ? <UploadDeploymentPage initial={uploadTarget ?? undefined} />
               : task === 'sync'
               ? <SyncCollectionsPage />
-              : task === 'reports'
-              ? <ReportsPage />
+              : task === 'repair'
+              ? <RepairPage />
               : showResumeScreen
                 ? (
                   <ResumeSessionsPage

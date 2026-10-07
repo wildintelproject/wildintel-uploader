@@ -20,7 +20,7 @@ This manual covers the web interface. Part of it can also be done from a termina
 6. [Import a session](#6-import-a-session)
 7. [Upload a deployment to Trapper](#7-upload-a-deployment-to-trapper)
 8. [Sync local collections](#8-sync-local-collections)
-9. [Reports](#9-reports)
+9. [Repair local deployments](#9-repair-local-deployments)
 10. [Where the app keeps its files](#10-where-the-app-keeps-its-files)
 11. [Troubleshooting](#11-troubleshooting)
 
@@ -77,10 +77,12 @@ Trapper server you configure.
 | 🗂️ **Import session** | The same for a folder holding several deployments, one subfolder each. |
 | ☁️ **Upload deployment to Trapper** | Send deployments already kept locally to Trapper. |
 | 🔄 **Sync local collections** | Bring the collections folder up to date with what Trapper already has. |
-| 📑 **Reports** | The reports that the checks and the import leave — [look at them again, download them](#9-reports). |
+| 🛠️ **Repair local deployments** | Check which deployments of a local collection are still valid, and write the metadata files of the others again from their folders. |
 | 📦 *Upload session to Trapper* | Coming soon. |
 
 ![The task menu](img/screenshots/menu.png)
+
+Reports are in the settings — [Settings › Reports](#reports).
 
 The usual order is **Import** (or **Import session**) first, then **Upload**. *Sync* is for when
 Trapper already holds deployments that this computer's collections folder doesn't know about.
@@ -217,6 +219,33 @@ switch each step off.
   written into each image is the license's URL, shown beside each name.
 - **Dates** — **Ignore summer time**, and **Convert the dates to UTC**.
 
+### Reports
+
+Every **validation**, **postvalidation**, **preprocessing** and **repair** leaves a **report** of what it checked and did,
+image by image. The step shows it right below its results — the same file you can download, so what you see is
+what is kept:
+
+- the **checks**, with how many images passed and how many failed each;
+- the **images that failed**, with the check and why — *IMG_0087.JPG · Duplicate images · same content as IMG_0087 (copy).JPG* —
+  that can be narrowed to one check, and are shown 100 at a time;
+- **Download CSV** — a row per image and check, to open in a spreadsheet — and **Download JSON**, with everything: when it
+  was made, the folder, the parameters it was run with and every entry.
+
+![Settings › Reports](img/screenshots/reports.png)
+
+What each report holds:
+
+| Report | An entry for | Says |
+|---|---|---|
+| **Validation** | each image and check — corrupted, shooting order, EXIF fields, duplicates —, and the folder for the structure and camera checks | The ones that passed too, so the report says what was checked, not only what failed. |
+| **Postvalidation** | the deployment for the naming and statistical checks, and each image for its date and camera | Why a check failed — *241 images — like the previous revisions (median 238, ±50 %)*. |
+| **Repair** | each image and check, and each metadata file | What the repair wrote and what the images passed, as the new seal says — and the preprocessing checks: names, size, metadata. |
+| **Preprocessing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized* — and the ones that were **skipped**, with the reason. |
+
+**Settings › Reports** lists all of them, newest first, with *View*, *CSV*, *JSON* and *Delete* (which
+asks again). They are kept in the `reports` folder of the images folder until you delete them. A check you run twice
+makes two reports.
+
 ### Config
 
 The settings are saved in a file, `settings.toml`. Here you can keep **several**: **+** adds one
@@ -256,7 +285,7 @@ Checks over the images alone, before anything is known about the deployment:
 | Duplicate images | Files with the same content. |
 
 The step is a small dashboard. At the top, what is being validated, **when it was last run**, the
-downloads of its [report](#9-reports) and the **Run validation** button. Once it has run, four figures
+downloads of its [report](#reports) and the **Run validation** button. Once it has run, four figures
 sum it up: the **valid images**, the **images with issues**, the **tests executed** and the **tests
 with errors**.
 
@@ -354,7 +383,7 @@ is uploaded. They need at least the *previous revisions needed* of the settings,
 skipped; what a sequence is, what "similar" means and what it is compared to are the
 [Postvalidation settings](#postvalidation).
 
-This step has the same dashboard as the validation (with a **Run checks** button): when it was last run, the figures, the table of checks with their status, and — opened from a check — the images that failed it (*Out of range*, *Other camera*) as thumbnails. Each check can be run and required, and the [report](#9-reports) downloads.
+This step has the same dashboard as the validation (with a **Run checks** button): when it was last run, the figures, the table of checks with their status, and — opened from a check — the images that failed it (*Out of range*, *Other camera*) as thumbnails. Each check can be run and required, and the [report](#reports) downloads.
 
 ### Step 6 — Preprocessing
 
@@ -381,7 +410,7 @@ and you can't go on until it has run.
    they're blank, the step says so.
 
 Each optional step can be switched off for this run (its checkbox). Its values come from the
-[Preprocessing settings](#preprocessing). The [report](#9-reports) says what was done to each image.
+[Preprocessing settings](#preprocessing). The [report](#reports) says what was done to each image.
 
 ### Step 7 — Import
 
@@ -529,31 +558,38 @@ The result lists, per kind, what was created and what was already there, the dep
 collection of the classification project claims, and any that Trapper holds in a way that isn't a
 valid deployment — with the reason — and were left out.
 
-## 9. Reports
+## 9. Repair local deployments
 
-Every **validation**, **postvalidation** and **preprocessing** leaves a **report** of what it checked and did,
-image by image. The step shows it right below its results — the same file you can download, so what you see is
-what is kept:
+![Repair local deployments](img/screenshots/repair.png)
 
-- the **checks**, with how many images passed and how many failed each;
-- the **images that failed**, with the check and why — *IMG_0087.JPG · Duplicate images · same content as IMG_0087 (copy).JPG* —
-  that can be narrowed to one check, and are shown 100 at a time;
-- **Download CSV** — a row per image and check, to open in a spreadsheet — and **Download JSON**, with everything: when it
-  was made, the folder, the parameters it was run with and every entry.
+Press **🛠️ Repair local deployments**. Use it when a deployment of the collections folder has lost its metadata files, or
+its images were touched — so it no longer matches its seal — and you want it back in working order.
 
-![Reports](img/screenshots/reports.png)
+1. Pick a **research project** and one of its **collections**, both from the collections folder.
+2. Press **Check the deployments**. A deployment is **valid** if its `seal.json` still matches it: every image and its
+   `deployment.json` are as they were sealed. Anything else — no seal, changed or missing images, a missing or unreadable
+   metadata file — is *not valid*, and the table says what is wrong. A deployment synced from Trapper is not touched.
+3. The ones that are not valid start ticked (*Select all*, *Select the not valid* and *Select none* change it). Press **Repair**.
 
-What each report holds:
+Each deployment is repaired in turn, with its steps shown:
 
-| Report | An entry for | Says |
-|---|---|---|
-| **Validation** | each image and check — corrupted, shooting order, EXIF fields, duplicates —, and the folder for the structure and camera checks | The ones that passed too, so the report says what was checked, not only what failed. |
-| **Postvalidation** | the deployment for the naming and statistical checks, and each image for its date and camera | Why a check failed — *241 images — like the previous revisions (median 238, ±50 %)*. |
-| **Preprocessing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized* — and the ones that were **skipped**, with the reason. |
+- **Dates.** The capture date of every image is read from its EXIF, as the camera's wall clock, and the deployment's period
+  is decided: if the collection's `<collection>_FileTimestampLog.csv` has a row for it, **the log says it**, whatever the
+  images say; otherwise the period is the one the `deployment.json` that is left has, or else the one of the images, and the
+  row is **added to the log**. The log itself is never rewritten but to add that row.
+- **`deployment.json`** — what is left of it, plus the location's details (name, coordinates), the camera of the images,
+  and the period. If something required can't be known — the location has no coordinates, say — the repair stops and says so.
+- **`preprocessing.json`** and **`images.json`** — one entry for every image in the folder, with its date, hashes, camera and size.
+  What can't be known is left empty: the original name of a renamed image, unless an earlier `preprocessing.json` says it, and the
+  hash of the original, unless the image's XMP metadata does.
+- **`seal.json`** — the images are **validated and postvalidated** again, as in the wizard, and sealed with the result (marked as
+  *recovered*). A deployment is sealed even if its images fail a check: the report says which.
 
-The **📑 Reports** task of the menu lists all of them, newest first, with *View*, *CSV*, *JSON* and *Delete* (which
-asks again). They are kept in the `reports` folder of the images folder until you delete them. A check you run twice
-makes two reports.
+A **report** is written, and shown, with what was written and what the images passed — and four checks of the
+**preprocessing** the folder can answer: the names (`<DEPLOYMENT>__<YYYYMMDD>_<n>.<EXT>`, with the day of the capture date and each
+number once), the size (not wider than the width of the settings), the XMP metadata (needs ExifTool) and that the images are
+still the ones that were preprocessed. What the preprocessing *did* — the resizing, the renaming — can't be checked beyond that:
+the originals are gone.
 
 ## 10. Where the app keeps its files
 

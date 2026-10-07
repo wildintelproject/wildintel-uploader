@@ -10,6 +10,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // The wizard's long walks take a few seconds each when every test file runs at once.
+    testTimeout: 20000,
   },
   server: {
     proxy: {
