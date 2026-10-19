@@ -1529,7 +1529,7 @@ deployment's images go up in zips of at most this size (500 by default, up to 50
 <p>The Epicollect5 project the deployments' information will be imported from (see <a href="#stage-2-origin-and-dates">When was it collected?</a>): its <strong>slug</strong>, the
 name in its URL (<code>five.epicollect.net/project/&lt;slug&gt;</code>), and, only if the project is private, the <strong>client id</strong> and <strong>secret</strong> of
 its API client, which you create at <a href="https://developers.epicollect.net">https://developers.epicollect.net</a>. <strong>Test connection</strong> reads the project with what is typed — saved or not — and says its name and how many inputs
-it has; a blank secret is the saved one. Below, the <strong>Mapping</strong> relates each field of a deployment to an input of the project's form. Epicollect5 has no input for a date and a time together, so the day and the time of the start and of the end are mapped apart, along with the revision.</p>
+it has; a blank secret is the saved one. The <strong>Import deployment information from Epicollect5</strong> switch turns the use of Epicollect5 on or off — it is off until you turn it on, and while it is off nothing is read from Epicollect5. <strong>Add them to the comments</strong> sends what an entry answers in the inputs that are not mapped to any field to the comments of the deployment, a line each (<em>question: answer</em>; photos are left out). Below, the <strong>Mapping</strong> relates each field of a deployment to an input of the project's form. Epicollect5 has no input for a date and a time together, so the day and the time of the start and of the end are mapped apart, along with the revision.</p>
 <h3 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h3>
 <p>Which of the <a href="#stage-1-images">folder checks</a> the wizard shows. Each is an entry with a switch;
 turn off the ones you never want to see. They are all on by default.</p>
@@ -1796,14 +1796,14 @@ for beside a collection's deployments — the dates are taken from it instead of
 images, and this step says so. In an <em>Import session</em>, the same applies to each deployment
 that has a row in it.</p>
 </div>
-<p><strong>Import info from Epicollect5</strong> (top right of this step) fills in the period, the camera, the site and the notes from the
+<p>When Epicollect5 has an entry for the location and the revision, a notice offers <strong>Import from Epicollect5</strong>, which fills in the period, the camera, the site and the notes from the
 project's form saved in <a href="#epicollect5">Settings › Epicollect5</a>. In that form <strong>each row is one deployment</strong>: the app looks
 for the entry whose <strong>location id</strong> is the location you chose and whose <strong>revision</strong> is the one above (if the revision isn't mapped,
 the location is enough). The location's own data — its id, name and coordinates — are never taken from the entry, and the camera
 model and id only complete what the images didn't give. The day and the time of the start and the end come in two questions; a
 day with no time takes the time the images gave on that day, or the whole day (from its first second for the start, to its last
-for the end). If there are several entries, you pick one. It needs the <em>location id</em> mapped in the settings, and it
-reads the project with the client saved there, so it may be refused for a while if Epicollect5 limits the requests.</p>
+for the end). If there are several entries, the newest is used. It needs the <em>location id</em> mapped in the settings, and it
+reads the project with the client saved there, so it may be refused for a while if Epicollect5 limits the requests. When Epicollect5 has an entry for the location and the revision, a notice says so and offers to import it.</p>
 <p><strong>3. More details.</strong></p>
 <p><img alt="Stage 2 — More details" src="../img/screenshots/step-details.png" /></p>
 <p>Everything here is optional, and can be completed later in Trapper. The form follows
