@@ -251,7 +251,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../user-manual-web/" class="md-tabs__link">
+        <a href="../user-manual/" class="md-tabs__link">
           
   
   
@@ -463,6 +463,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-manual/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -840,8 +868,8 @@ adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Import deployment</strong>: organize a folder of camera-trap images into the local collections folder
-  (<code>&lt;Documents&gt;/wildintel-uploader/collections/&lt;research project&gt;/&lt;R000N&gt;/&lt;deployment id&gt;</code>), in a wizard:
-  folder → validate → origin → details → postvalidation → preprocessing → import.</li>
+  (<code>&lt;Documents&gt;/wildintel-uploader/collections/&lt;research project&gt;/&lt;R000N&gt;/&lt;deployment id&gt;</code>), in a wizard of four
+  stages: images → origin and dates → check details → prepare and save.</li>
 <li><em>Validate</em>: corrupted images, shooting order vs. filename sequence, folder structure, same camera,
     required EXIF fields and duplicate images — each one optional, and each one can be required to continue.</li>
 <li><em>Origin</em>: the research project and location, picked from the collections folder, added by hand or
@@ -885,14 +913,15 @@ adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>
   one it has; typed by pk when generating without an account) — not the research project's own pk.
   The package names the deployment in lower case, as Trapper keeps it, and declares the timezone and summer-time
   setting of the location it goes to (Trapper refuses a package that disagrees with it).</li>
+<li><strong>Import info from Epicollect5</strong>: in <em>When was it collected?</em>, the period, camera, site and notes of the deployment are filled in from the entry of the Epicollect5 form (one row per deployment) of that location and revision, through the mapping of Settings › Epicollect5, whose <em>When</em> group keeps the day and the time apart and maps the revision; <em>Test connection</em> tries the project and client typed there.</li>
+<li><strong>Utils</strong> (menu): <em>Repair local deployments</em> and <em>Sync local collections</em> are kept under one button, apart from the import and upload tasks.</li>
 <li><strong>Sync local collections</strong>: pick a research project and one of its classification projects in Trapper, and the collections
   folder gets what it lacks — the research project (<code>research_project.json</code>) and its <code>locations.json</code>, the collections
   starting with R (each with its <code>collection.json</code> and <code>&lt;collection&gt;_FileTimestampLog.csv</code>) and each deployment's
   <code>deployment.json</code>, a deployment going to the collection its id starts with. What is already there is kept as it is, nothing is
-  changed in Trapper and no image is downloaded, so no <code>preprocessing.json</code> is made. Each deployment also gets an <code>images.json</code> made
+  changed in Trapper and no image is downloaded unless asked for (<em>Also download the images from Trapper</em>: through the classification project's media, four at a time, the ones already there kept), so no <code>preprocessing.json</code> is made. Each deployment also gets an <code>images.json</code> made
   from what Trapper holds for its images (names, Trapper's pk, when they were taken, observation types, species and tags — not the
-  size, the pixels nor the hashes), marked <code>"source": "trapper"</code>. <strong>Upload session to Trapper</strong> is listed as
-  coming soon.</li>
+  size, the pixels nor the hashes), marked <code>"source": "trapper"</code>.</li>
 <li>Every deployment kept locally gets an <strong><code>images.json</code></strong> beside its <code>deployment.json</code>: the number of images, the first and the
   last, and for each one its name (and the original, when renamed), when it was taken — the camera's wall clock, the instant
   and its epoch seconds — the camera, the size and the pixels, and the hashes, for statistics without opening the images again.
@@ -929,6 +958,9 @@ adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>
   grid or a list, pages and a view of everything the report says of an image. A report's images are served as thumbnails
   (<code>/api/reports/{id}/image</code>).</li>
 <li><strong>Preprocessing is a step of its own</strong> (<code>/api/deployment-import/preprocess</code>), run like the validations, with the same dashboard: the steps to do, a status for each, the images processed and skipped, and the skipped ones as thumbnails. The deployment is left pending — it can be preprocessed again — until the <strong>Import</strong> step consolidates it (<code>/api/deployment-import/consolidate</code>): its <code>deployment.json</code> is written and it is sealed.</li>
+<li><strong>Repair local deployments</strong> (new task): a deployment is valid if its <code>seal.json</code> still matches it; for the others the metadata files (<code>deployment.json</code>, <code>preprocessing.json</code>, <code>images.json</code>, <code>seal.json</code>) are written again from the folder's own contents, the collection's <code>FileTimestampLog.csv</code> prevailing over the images' dates, and the images are validated, postvalidated and checked against what preprocessing leaves (<code>/api/repair/*</code>, a <code>repair</code> report).</li>
+<li>The reports moved from the menu to <strong>Settings › Reports</strong>.</li>
+<li>The deployment's details keep the period always in view and show the rest one section at a time — Camera, Site, Grouping and notes — from a row of buttons (with a red dot on the one that has a wrong field), instead of the <em>show all fields</em> checkbox.</li>
 <li>The steps of an upload link to the location, the deployment and the collection in Trapper (<code>url</code> in the step events), to check them there.</li>
 <li>The largest zip of an upload (<code>TRAPPER.max_zip_mb</code>, 500 MB by default) is set in Settings › Trapper, no longer on the upload page; the upload endpoint no longer takes it.</li>
 <li>Upload: choosing the research project and the collection says whether the configured Trapper account has access to them (<code>/api/upload/check-selection</code>); <strong>Test connection</strong> comes after the classification project.</li>

@@ -251,7 +251,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../user-manual-web/" class="md-tabs__link">
+        <a href="../user-manual/" class="md-tabs__link">
           
   
   
@@ -463,6 +463,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-manual/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -733,6 +761,17 @@
     <span class="md-ellipsis">
       
         The upload
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#repair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repair
       
     </span>
   </a>
@@ -1172,6 +1211,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#repair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#sync" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1403,7 +1453,7 @@ and built the same way, so what you know of one carries over.</p>
 directly, in the same process, without HTTP.)</p>
 <ul>
 <li><strong>Local first.</strong> The app's own data — the <strong>collections folder</strong> — is plain files and JSON
-  (see the <a href="../user-manual-web/#the-collections-folder">user manual</a>); there is no database. Trapper
+  (see the <a href="../user-manual/#the-collections-folder">user manual</a>); there is no database. Trapper
   is only talked to when asked: looking things up, registering and uploading deployments, syncing.
   The source folder of an import is only ever <em>read</em>.</li>
 <li><strong>No server-side login session.</strong> Every request carries the credentials it needs; blank ones
@@ -1591,6 +1641,10 @@ something to say for each check.</p>
 <td>Uploading a deployment: location, deployment, packing in zips + yaml, upload, wait. Also the access check.</td>
 </tr>
 <tr>
+<td><code>repair_service</code></td>
+<td>Looks at a deployment folder (valid as its <code>seal.json</code> says) and rebuilds its metadata files from the folder's own contents; the timestamp log prevails over the images.</td>
+</tr>
+<tr>
 <td><code>sync_service</code></td>
 <td>Fills the collections folder from a Trapper classification project.</td>
 </tr>
@@ -1671,7 +1725,7 @@ themselves.</p>
 deployment form — is the command line's flow.</p>
 <p>The <strong>timezone</strong> is read from the location, in the research project's <code>locations.json</code>
 (<code>local_folder_service.location_time</code>), never from the request: <code>import-local</code> refuses a location
-with none. This is deliberate — see the <a href="../user-manual-web/#the-location-owns-the-timezone">user manual</a>.</p>
+with none. This is deliberate — see the <a href="../user-manual/#the-location-owns-the-timezone">user manual</a>.</p>
 <h3 id="reports">Reports<a class="headerlink" href="#reports" title="Permanent link">&para;</a></h3>
 <p><code>report_service</code> turns the results the checks already return into one JSON shape:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"20261006-094512_validation_R0003-DONA_01"</span><span class="p">,</span><span class="w"> </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"validation"</span><span class="p">,</span><span class="w"> </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"created_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
@@ -1688,7 +1742,7 @@ looks at every image has an entry for each, the passed ones too. <code>validatio
 their answer, and the import's <code>done</code> event carries the preprocessing's. A report that can't be written is logged and
 <code>report_id</code> is <code>null</code> — it never fails what it reports. A failed image's entry also has a short <code>tag</code> (what is wrong, for a badge) and <code>taken</code> (its EXIF date, read only for the
 failed ones). <code>totals.images_with_issues</code> counts the distinct images that failed a check of images.</p>
-<p>The frontend: <code>ReportPanel</code> shows a report plainly (the Reports page, the preprocessing) and <code>ReportsPage</code> lists them.
+<p>The frontend: <code>ReportPanel</code> shows a report plainly (the preprocessing, the repair) and <code>ReportsList</code> lists them — it is Settings › Reports.
 The validation step is a dashboard: <code>ValidationDashboard</code> (header, figures, and the page's table of checks as its child),
 <code>CheckTable</code>'s <code>outcome</code> columns, and <code>CheckFailures</code> — the failures of one check with their thumbnails
 (<code>api.reportImageUrl</code>), search, filter, sort, a grid or a list, pages and the details of an image.</p>
@@ -1749,12 +1803,24 @@ file goes alone). The yaml names the <strong>classification project's</strong> p
 project's — the deployment in lower case, as Trapper keeps it, and the location's timezone and
 summer-time setting, which Trapper checks against the location it has. Locations and deployments
 are found ignoring case: Trapper keeps its ids in lower case, the collections folder in upper.</p>
+<h3 id="repair">Repair<a class="headerlink" href="#repair" title="Permanent link">&para;</a></h3>
+<p><code>repair_service.inspect</code> is the state of a deployment: <em>valid</em> is <code>seal_service.verify</code> saying so, nothing else. <code>repair_stream</code>
+rebuilds, in this order: the dates (<code>pre._camera_time</code> of every image — the camera's wall clock — then the period: the
+deployment's row in <code>&lt;collection&gt;_FileTimestampLog.csv</code> if there is one, else the <code>deployment.json</code> that is left, else the
+images; the row is added when missing), <code>deployment.json</code> (what is left + the location's record + the camera +
+the period, validated as <code>DeploymentFields</code>), <code>preprocessing.json</code> and <code>images.json</code> (one entry per image; the options are
+the old file's, else the settings' with the location's timezone), and <code>seal_service.seal(dest, dest, …, recovered=True)</code>,
+which runs the validation and postvalidation over the folder's own images. <code>report_service.repair_report</code> joins what it wrote,
+the seal's per-image results and <code>_preprocessing_problems</code> (names, size, XMP identifier, hash). A deployment synced from
+Trapper is refused. The routes are <code>POST /api/repair/collections</code>, <code>/inspect</code> and <code>/deployment</code> (the stream).</p>
 <h3 id="sync">Sync<a class="headerlink" href="#sync" title="Permanent link">&para;</a></h3>
 <p><code>sync_service.sync_stream</code> reads Trapper only. Collections are those of the classification project
 whose name starts with <code>R</code>; a deployment goes to the one its id starts with
-(<code>R0003-DONA_01</code> → <code>R0003</code>); what the folder already has is kept; and the images aren't
-downloaded, so <code>images.json</code> is built from the resources Trapper lists, in the location's
-timezone. Deployments Trapper holds in a way that isn't a valid <code>DeploymentFields</code> are reported
+(<code>R0003-DONA_01</code> → <code>R0003</code>); what the folder already has is kept; and <code>images.json</code> is built from the resources Trapper lists, in the location's
+timezone. The images are downloaded only with <code>download_images</code>: <code>trapper_service.list_deployment_media</code> lists the files through the
+classification project's media — the URL that carries the access token (<code>?rt=</code>), without which Trapper answers 404 — and
+<code>file_downloader</code> fetches them, <code>DOWNLOAD_WORKERS</code> at a time, each written as <code>*.part</code> and moved into place; an image the project doesn't
+hold is reported in <code>downloaded.not_held</code>. Deployments Trapper holds in a way that isn't a valid <code>DeploymentFields</code> are reported
 in <code>failed</code>, not raised.</p>
 <h3 id="sessions">Sessions<a class="headerlink" href="#sessions" title="Permanent link">&para;</a></h3>
 <p>A <strong>session</strong> is one wizard run's own directory under <code>&lt;Documents&gt;/wildintel-uploader/sessions/&lt;task_id&gt;/</code>,
@@ -1801,15 +1867,23 @@ the current task and shows one page.</p>
 </tr>
 <tr>
 <td><code>ImportDeploymentPage</code></td>
-<td>The seven-step wizard. The biggest file: its step components and the forms.</td>
+<td>The wizard of four stages (images, origin and dates, check details, prepare and save), each with steps of its own (<code>WizardStep</code>). The biggest file: its step components and the forms.</td>
 </tr>
 <tr>
 <td><code>ImportSessionPage</code></td>
-<td>The same steps for a folder of deployments. Reuses the wizard's pieces, exported from <code>ImportDeploymentPage</code>.</td>
+<td>The same stages for a folder of deployments. Reuses the wizard's pieces, exported from <code>ImportDeploymentPage</code>.</td>
 </tr>
 <tr>
 <td><code>UploadDeploymentPage</code></td>
-<td>Research project → collection → deployments → mode, and a card per deployment.</td>
+<td>Steps: what to upload (research project → collection → deployments), what to do (mode), then the upload, with a card per deployment.</td>
+</tr>
+<tr>
+<td><code>UtilsPage</code></td>
+<td>The menu's <em>Utils</em> button: a list of maintenance tasks, each shown in place of the list once chosen — <code>RepairPage</code> and <code>SyncCollectionsPage</code>.</td>
+</tr>
+<tr>
+<td><code>RepairPage</code></td>
+<td>Research project → collection → state of each deployment, and what each repair did.</td>
 </tr>
 <tr>
 <td><code>SyncCollectionsPage</code></td>
@@ -2003,6 +2077,36 @@ bodies are JSON, and every <code>POST</code> that talks to Trapper takes optiona
 <td></td>
 <td><code>…/deployment</code></td>
 <td><strong>Streams</strong> one deployment's upload (any mode).</td>
+</tr>
+<tr>
+<td>repair</td>
+<td><code>POST /repair/collections</code></td>
+<td>The collections of a local research project and their deployment folders, whatever their state.</td>
+</tr>
+<tr>
+<td></td>
+<td><code>…/inspect</code></td>
+<td>A deployment's state: valid as its seal says, what is wrong with it.</td>
+</tr>
+<tr>
+<td></td>
+<td><code>…/deployment</code></td>
+<td><strong>Streams</strong> its repair.</td>
+</tr>
+<tr>
+<td>epicollect</td>
+<td><code>GET /epicollect/form</code></td>
+<td>The inputs of the project saved in the settings, flattened.</td>
+</tr>
+<tr>
+<td></td>
+<td><code>POST /epicollect/test-connection</code></td>
+<td>Whether the project can be read with the values typed (saved or not). Saves nothing.</td>
+</tr>
+<tr>
+<td></td>
+<td><code>POST /epicollect/entries</code></td>
+<td>The entries of a location (and revision), as the fields of a deployment through the mapping: <code>epicollect_service.find_entries</code>.</td>
 </tr>
 <tr>
 <td>sync</td>

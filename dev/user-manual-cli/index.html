@@ -253,7 +253,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../user-manual-web/" class="md-tabs__link">
+        <a href="../user-manual/" class="md-tabs__link">
           
   
   
@@ -476,6 +476,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../user-manual/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-manual-web/" class="md-nav__link">
         
   
@@ -577,10 +605,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#1-installation" class="md-nav__link">
+  <a href="#1-running-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Installation
+        1. Running it
       
     </span>
   </a>
@@ -643,21 +671,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-where-the-app-keeps-its-files" class="md-nav__link">
+  <a href="#7-troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Where the app keeps its files
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#8-troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        8. Troubleshooting
+        7. Troubleshooting
       
     </span>
   </a>
@@ -828,10 +845,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#1-installation" class="md-nav__link">
+  <a href="#1-running-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Installation
+        1. Running it
       
     </span>
   </a>
@@ -894,21 +911,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-where-the-app-keeps-its-files" class="md-nav__link">
+  <a href="#7-troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Where the app keeps its files
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#8-troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        8. Troubleshooting
+        7. Troubleshooting
       
     </span>
   </a>
@@ -941,7 +947,9 @@ terminal: test the connection to Trapper, find its ids, change the settings, and
 deployment.</p>
 <p>The command line and the web app are two faces of one application: they share <strong>the same
 settings and the same log</strong>, and the deployments they import end up in the same collections
-folder.</p>
+folder. The <a href="../user-manual/">common part of the manual</a> explains what they share — the
+installation, the concepts and the folders and files; <code>wildintel-uploader config path</code> prints where
+they are on your machine.</p>
 <div class="admonition warning">
 <p class="admonition-title">The web app does more</p>
 <p>The command line is the app's first, simpler flow. It <strong>does not</strong> run the validation and
@@ -952,19 +960,18 @@ a quick import into Trapper, use the <a href="../user-manual-web/">web app</a>.<
 <hr />
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ol>
-<li><a href="#1-installation">Installation</a></li>
+<li><a href="#1-running-it">Running it</a></li>
 <li><a href="#2-getting-started">Getting started</a></li>
 <li><a href="#3-settings">Settings</a></li>
 <li><a href="#4-finding-the-ids">Finding the ids</a></li>
 <li><a href="#5-importing-a-deployment">Importing a deployment</a></li>
 <li><a href="#6-command-reference">Command reference</a></li>
-<li><a href="#7-where-the-app-keeps-its-files">Where the app keeps its files</a></li>
-<li><a href="#8-troubleshooting">Troubleshooting</a></li>
+<li><a href="#7-troubleshooting">Troubleshooting</a></li>
 </ol>
 <hr />
-<h2 id="1-installation">1. Installation<a class="headerlink" href="#1-installation" title="Permanent link">&para;</a></h2>
-<p>The command line is in the same package as the web app — see the
-<a href="../user-manual-web/#1-installation">web manual's installation</a>. Run with no arguments, the
+<h2 id="1-running-it">1. Running it<a class="headerlink" href="#1-running-it" title="Permanent link">&para;</a></h2>
+<p>The command line is in the same package as the web app — see
+<a href="../user-manual/#1-installation">Installation</a> in the common part. Run with no arguments, the
 package opens the web app; run with any, it's the command line:</p>
 <div class="termy">
 
@@ -1048,7 +1055,7 @@ way to set a password without leaving it in your shell's history. An empty value
 
 <p>The sections are <code>GENERAL</code>, <code>TRAPPER</code>, <code>DATA</code>, <code>VALIDATION</code>, <code>POSTVALIDATION</code> and
 <code>PREPROCESSING</code>; each setting is described in the
-<a href="../user-manual-web/#4-settings">web manual's Settings</a>. A value is checked before it is saved. The
+<a href="../user-manual-web/#2-settings">web manual's Settings</a>. A value is checked before it is saved. The
 file can also be edited by hand.</p>
 <p>Which settings file is in use (the web app lets you keep several) is the one chosen there; the
 command line follows it.</p>
@@ -1207,11 +1214,7 @@ error, printed as <code>✘  …</code> on the standard error.</p>
 </tr>
 </tbody>
 </table>
-<h2 id="7-where-the-app-keeps-its-files">7. Where the app keeps its files<a class="headerlink" href="#7-where-the-app-keeps-its-files" title="Permanent link">&para;</a></h2>
-<p>The same as the web app — see
-<a href="../user-manual-web/#10-where-the-app-keeps-its-files">its manual</a>. <code>wildintel-uploader config path</code>
-prints them for your machine.</p>
-<h2 id="8-troubleshooting">8. Troubleshooting<a class="headerlink" href="#8-troubleshooting" title="Permanent link">&para;</a></h2>
+<h2 id="7-troubleshooting">7. Troubleshooting<a class="headerlink" href="#7-troubleshooting" title="Permanent link">&para;</a></h2>
 <dl>
 <dt><strong><code>✘  Missing Trapper username, password — …</code></strong></dt>
 <dd>A Trapper setting is missing — it names which. Set the URL, the username and the password as in

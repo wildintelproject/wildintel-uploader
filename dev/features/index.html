@@ -251,7 +251,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../user-manual-web/" class="md-tabs__link">
+        <a href="../user-manual/" class="md-tabs__link">
           
   
   
@@ -463,6 +463,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-manual/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -761,6 +789,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#repair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repair
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#settings" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1022,6 +1061,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#repair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repair
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#settings" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1121,7 +1171,7 @@ image.</p>
 <p>Every validation, postvalidation and preprocessing writes a <strong>report</strong>: what was checked and done, image by image — the
 ones that failed, which check and why, and the ones that passed too. The step shows it as it is kept, and it can be
 downloaded as a <strong>CSV</strong> (a row per image and check, for a spreadsheet) or as a <strong>JSON</strong> with everything. They are kept in
-the <code>reports</code> folder, and a page of the menu lists them to look at again or delete — what wildintel-tools' <code>reports</code> command
+the <code>reports</code> folder, and Settings › Reports lists them to look at again or delete — what wildintel-tools' <code>reports</code> command
 did with its YAML files, from the interface.</p>
 <h3 id="the-seal">The seal<a class="headerlink" href="#the-seal" title="Permanent link">&para;</a></h3>
 <p>Every import writes <code>seal.json</code>: which checks each image and the deployment passed, tied by hash
@@ -1145,8 +1195,9 @@ resume or discard. Passwords are never saved with it.</p>
 </ul>
 <p>A <strong>dry run</strong> reads Trapper only and says what would be created and how the images would be
 packed. <strong>Only generate the files</strong> writes the zips, yamls and <code>_deployments.csv</code> to leave them
-for another route — with no Trapper account if the project is known. A <strong>Test connection</strong> checks
-the account can do what an upload needs, step by step, before sending anything.</p>
+for another route — with no Trapper account if the project is known. The upload page says
+whether the account reaches the research project and the collection before anything is sent, and
+<strong>Test connection</strong> (Settings › Trapper) checks the login.</p>
 <p>Progress is shown per deployment, step by step, with a bar while a file goes up; if one
 deployment fails the others go on. Ids are matched ignoring case, as Trapper keeps them in lower
 case.</p>
@@ -1154,9 +1205,15 @@ case.</p>
 <p>For deployments Trapper holds that this computer doesn't know: a classification project's
 collections (those starting with <code>R</code>), its research project, locations and chosen deployments are
 created in the collections folder — nothing is changed in Trapper, nothing already there is
-overwritten, and no image is downloaded. Their <code>images.json</code>, marked <code>"source": "trapper"</code>, is
+overwritten, and no image is downloaded unless asked for (four at a time, only those of the classification project: Trapper gives a file's access token only there). Their <code>images.json</code>, marked <code>"source": "trapper"</code>, is
 built from what Trapper lists for each image, so they feed the statistical checks of later
 revisions. Deployments Trapper holds in an invalid way are reported, not fatal.</p>
+<h2 id="repair">Repair<a class="headerlink" href="#repair" title="Permanent link">&para;</a></h2>
+<p>A deployment kept locally is <strong>valid</strong> when its <code>seal.json</code> still matches it. For one that isn't — lost metadata files,
+images that changed — <strong>Repair</strong> writes <code>deployment.json</code>, <code>preprocessing.json</code>, <code>images.json</code> and <code>seal.json</code> again from
+what its folder holds: the capture dates and camera of the images, the location's details and the collection's
+<code>FileTimestampLog.csv</code>, which always prevails over what the images say (a deployment it doesn't have gets its row). The images
+are validated, postvalidated and checked against what preprocessing leaves, and a report says what was found.</p>
 <h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
 <p>Trapper account, images folder, how many images are worked on at once, which checks are shown
 and what they mean, the preprocessing — all in <code>settings.toml</code>, edited from the ⚙️ page. You can keep
