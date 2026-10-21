@@ -3,7 +3,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  Report, ReportSummary, RepairCollection, RepairEvent, RepairState, EpicollectForm,
+  Report, ReportSummary, RepairCollection, RepairEvent, RepairState, EpicollectForm, OtherCollection, FieldlogColumn, FieldlogResult, CardsStatus, FieldCorrection, CardCollection, FieldDetail, CardInspection, CardCopyEvent, TreeFolder, Timeline,
 } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
@@ -109,6 +109,60 @@ export const api = {
   // The backend and frontend always run on the same machine (a local
   // desktop app — see web.app_entry), so this pops the OS's own native
   // folder dialog and returns what was picked (null if cancelled).
+  // Field records: the Epicollect download of a field trip and the fieldwork datasheet (see the backend's fieldlog_service).
+  fieldlogPickFile: (kind: 'epicollect' | 'datasheet') =>
+    post<{ path: string | null }>('/api/fieldlog/pick-file', { kind }),
+  fieldlogLast: () =>
+    req<{ epicollect: string | null; datasheet: string | null; research_project_id: string | null }>('/api/fieldlog/last'),
+  fieldlogColumns: () =>
+    req<{ results: FieldlogColumn[] }>('/api/fieldlog/columns'),
+  fieldlogAnalyze: (epicollect: string, datasheet: string, researchProjectId: string | null) =>
+    post<FieldlogResult>('/api/fieldlog/analyze', { epicollect, datasheet, research_project_id: researchProjectId }),
+  fieldlogApply: (epicollect: string, datasheet: string, researchProjectId: string) =>
+    post<FieldlogResult>('/api/fieldlog/apply', { epicollect, datasheet, research_project_id: researchProjectId }),
+  /** A research project of Trapper and its locations, taken into the collections folder — no classification project needed. */
+  fieldlogTakeProject: (project: { pk: number; name?: string; acronym?: string }) =>
+    post<{ research_project: string; created: string[]; kept: string[] }>('/api/fieldlog/take-project', project),
+  /** Sites of the field records saved as locations of the research project — the upload creates them in Trapper. */
+  fieldlogAddLocations: (researchProjectId: string, locations: { location_id: string; latitude: number; longitude: number }[]) =>
+    post<{ results: LocalLocation[] }>('/api/fieldlog/add-locations', { research_project_id: researchProjectId, locations }),
+  fieldlogOpenFolder: (path: string) =>
+    post<{ opened: string }>('/api/fieldlog/open-folder', { path }),
+
+  // Copying the SD cards, guided by the field records (see the backend's ingest_service).
+  ingestCollections: (researchProjectId: string) =>
+    post<{ results: string[] }>('/api/ingest/collections', { research_project_id: researchProjectId }),
+  ingestStatus: (researchProjectId: string, collection: string) =>
+    post<CardsStatus>('/api/ingest/status', { research_project_id: researchProjectId, collection }),
+  ingestPrepare: (researchProjectId: string, collection: string) =>
+    post<CardsStatus>('/api/ingest/prepare', { research_project_id: researchProjectId, collection }),
+  ingestInspect: (researchProjectId: string, collection: string, source: string, cardLabel: string) =>
+    post<CardInspection>('/api/ingest/inspect', { research_project_id: researchProjectId, collection, source, card_label: cardLabel || null }),
+  ingestCopy: (researchProjectId: string, collection: string, source: string, cardLabel: string, deploymentId: string, onEvent: (event: CardCopyEvent) => void, allowUnknown = false, labelConfirmed = false) =>
+    streamNdjson<CardCopyEvent>('/api/ingest/copy', {
+      research_project_id: researchProjectId, collection, source, card_label: cardLabel || null, deployment_id: deploymentId, allow_unknown: allowUnknown,
+      label_confirmed: labelConfirmed,
+    }, onEvent, 'The copy ended unexpectedly.'),
+  ingestCardCollections: (researchProjectId: string | null = null) =>
+    post<{ results: CardCollection[] }>('/api/ingest/card-collections', { research_project_id: researchProjectId }),
+  ingestFieldDetails: (researchProjectId: string, collection: string) =>
+    post<{ results: Record<string, FieldDetail> }>('/api/ingest/field-details', { research_project_id: researchProjectId, collection }),
+  ingestEject: (source: string) => post<{ ejected: boolean; message: string }>('/api/ingest/eject', { source }),
+  ingestCorrections: (researchProjectId: string, collection: string) =>
+    post<{ results: FieldCorrection[] }>('/api/ingest/corrections', { research_project_id: researchProjectId, collection }),
+  ingestScanTree: (root: string, researchProjectId: string | null) =>
+    post<{ root: string; folders: TreeFolder[] }>('/api/ingest/scan-tree', { root, research_project_id: researchProjectId }),
+
+  // Fixing the dates and times of a copied card (see the backend's timefix_service).
+  timefixCollections: (researchProjectId: string) =>
+    post<{ results: { collection: string; deployments: string[] }[] }>('/api/timefix/collections', { research_project_id: researchProjectId }),
+  timefixTimeline: (researchProjectId: string, collection: string, deploymentId: string) =>
+    post<Timeline>('/api/timefix/timeline', { research_project_id: researchProjectId, collection, deployment_id: deploymentId }),
+  timefixShift: (researchProjectId: string, collection: string, deploymentId: string, first: string, last: string | null, offsetSeconds: number, reason: string) =>
+    post<Timeline>('/api/timefix/shift', { research_project_id: researchProjectId, collection, deployment_id: deploymentId, first, last, offset_seconds: offsetSeconds, reason }),
+  timefixRemove: (researchProjectId: string, collection: string, deploymentId: string, names: string[], reason: string) =>
+    post<Timeline>('/api/timefix/remove', { research_project_id: researchProjectId, collection, deployment_id: deploymentId, names, reason }),
+
   browseFolder: (title?: string) =>
     post<{ path: string | null }>('/api/deployment-import/browse-folder', { title: title ?? null }),
 
@@ -148,19 +202,20 @@ export const api = {
     post<{ last: number | null; next: number }>('/api/deployment-import/next-revision', { research_project_id: researchProjectId, location_id: locationId }),
 
   // Creates in the collections folder what Trapper has for the classification project and it lacks.
-  // The collections of the classification project that can be synced, each with the ids of its deployments.
-  syncCollectionNames: (creds: TrapperCredentials, researchProjectPk: number, classificationProjectPk: number) =>
-    post<{ results: SyncCollection[] }>('/api/sync/collection-names', { ...creds, research_project_pk: researchProjectPk, classification_project_pk: classificationProjectPk }),
+  // The research project's collections: the field ones with their deployments and what is already here, and the others.
+  syncCollectionNames: (creds: TrapperCredentials, researchProject: ResearchProject) =>
+    post<{ field: SyncCollection[]; other: OtherCollection[] }>('/api/sync/collection-names', { ...creds, research_project_pk: researchProject.pk, research_project_acronym: researchProject.acronym ?? null }),
 
   // Creates in the collections folder what Trapper has for the classification project and it lacks, one deployment at a time:
   // onEvent gets a progress message per step, and the last event is the done one with the result.
   syncCollections: (
-    creds: TrapperCredentials, researchProject: ResearchProject, classificationProjectPk: number, collections: string[], deployments: string[],
-    downloadImages: boolean, onEvent: (event: SyncEvent) => void,
+    creds: TrapperCredentials, researchProject: ResearchProject, classificationProjectPk: number | null, collections: string[], deployments: string[],
+    downloadImages: boolean, otherCollections: { pk: number; name: string }[], onEvent: (event: SyncEvent) => void,
   ) =>
     streamNdjson<SyncEvent>('/api/sync/collections', {
       ...creds, research_project_pk: researchProject.pk, research_project_name: researchProject.name,
       research_project_acronym: researchProject.acronym ?? null, classification_project_pk: classificationProjectPk, collections, deployments, download_images: downloadImages,
+      other_collections: otherCollections,
     }, onEvent, 'The sync ended unexpectedly.'),
 
   saveLocalLocation: (researchProjectId: string, location: LocalLocation) =>
@@ -221,7 +276,7 @@ export const api = {
   ) =>
     streamNdjson<ImportEvent>('/api/deployment-import/preprocess', {
       source_dir: sourceDir, collection_dir: collectionDir, collection_name: collectionName, deployment, preprocessing,
-    }, onEvent, 'The preprocessing ended unexpectedly.'),
+    }, onEvent, 'Preparing the images ended unexpectedly.'),
 
   // Freezes the preprocessed deployment: writes its metadata and seals it.
   consolidate: (sourceDir: string, collectionDir: string, deployment: DeploymentFields, onEvent: (event: ImportEvent) => void) =>

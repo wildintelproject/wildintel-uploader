@@ -147,7 +147,7 @@ class ValidationSettings(BaseModel):
     sequence: bool = Field(default=True, description="Shooting order vs. filename sequence. (VALIDATION.sequence)")
     structure: bool = Field(default=True, description="Folder structure (subdirectories). (VALIDATION.structure)")
     camera: bool = Field(default=True, description="Same camera (model and id) on every image. (VALIDATION.camera)")
-    exif: bool = Field(default=True, description="Required EXIF fields (capture date, camera model and id). (VALIDATION.exif)")
+    exif: bool = Field(default=True, description="Required EXIF fields (capture date and camera model; the camera id comes from the field records). (VALIDATION.exif)")
     duplicates: bool = Field(default=True, description="Duplicate images (same content). (VALIDATION.duplicates)")
 
 
@@ -161,7 +161,7 @@ class PostvalidationSettings(BaseModel):
     collection_name: bool = Field(default=True, description="Collection name. (POSTVALIDATION.collection_name)")
     location: bool = Field(default=True, description="The id's location is the one chosen. (POSTVALIDATION.location)")
     time_range: bool = Field(default=True, description="Image dates fit the deployment. (POSTVALIDATION.time_range)")
-    camera: bool = Field(default=True, description="Camera consistency. (POSTVALIDATION.camera)")
+    camera: bool = Field(default=False, description="The camera declared is the one in the images. Off: the camera id comes from the field records, not from the camera. (POSTVALIDATION.camera)")
     image_count: bool = Field(default=True, description="The number of images is like the previous revisions'. (POSTVALIDATION.image_count)")
     sequence_count: bool = Field(default=True, description="The number of sequences is like the previous revisions'. (POSTVALIDATION.sequence_count)")
     sequence_length: bool = Field(default=True, description="The length of the sequences is like the previous revisions'. (POSTVALIDATION.sequence_length)")
@@ -218,6 +218,59 @@ class PreprocessingSettings(BaseModel):
         return value.strip()
 
 
+class FieldlogSettings(BaseModel):
+    """Field records: how the Epicollect download of a field trip and the fieldwork datasheet are read, and what is
+    made of them (see services.fieldlog_service). Every time is UTC: the time of the visit is when its Epicollect
+    entry was created, and the cameras' clocks are taken to be in UTC unless camera_timezone says otherwise."""
+
+    time_source: Literal["created_at", "hour"] = Field(
+        default="created_at",
+        description="When a visit happened: created_at, the time its Epicollect entry was created (UTC); or hour, the date and hour typed in the form. (FIELDLOG.time_source)",
+    )
+    keep_seconds: bool = Field(
+        default=False, description="Keep the seconds of the visits in the deployments' start and end; off, they are cut to the minute. (FIELDLOG.keep_seconds)",
+    )
+    datasheet_format: Literal["original", "standard", "both"] = Field(
+        default="original",
+        description="The updated datasheet, when it isn't in the standard format (Doñana's): as it is written (original), with the standard headers and codes (standard), or both. (FIELDLOG.datasheet_format)",
+    )
+    camera_timezone: str = Field(
+        default="UTC", description="The timezone the cameras' clocks are set to. UTC unless the field team set them otherwise. (FIELDLOG.camera_timezone)",
+    )
+    columns: dict[str, str] = Field(
+        default_factory=dict,
+        description="The Epicollect column that gives each datasheet field, for forms whose questions are named otherwise — blank, the default names. (FIELDLOG.columns)",
+    )
+    last_epicollect: Optional[str] = Field(default=None, description="The Epicollect download used last. (FIELDLOG.last_epicollect)")
+    last_datasheet: Optional[str] = Field(default=None, description="The fieldwork datasheet used last. (FIELDLOG.last_datasheet)")
+    last_research_project: Optional[str] = Field(default=None, description="The research project used last. (FIELDLOG.last_research_project)")
+
+    @field_validator("camera_timezone")
+    @classmethod
+    def _timezone(cls, value: str) -> str:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        value = (value or "").strip() or "UTC"
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"'{value}' is not a timezone (like UTC or Europe/Madrid)") from None
+        return value
+
+
+class IngestSettings(BaseModel):
+    """Copying the SD cards (see services.ingest_service): each card is copied, untouched, into the cards folder —
+    <data directory>/cards/<research project>/<R000N>/<deployment id>/ — ready to be imported as a session."""
+
+    keep_cards: Literal["until_verified", "always", "until_imported"] = Field(
+        default="until_verified",
+        description="Not used any more: no second copy of a card is kept when its dates are fixed. Kept so older settings files still load. (INGEST.keep_cards)",
+    )
+    count_tolerance: float = Field(
+        default=10.0, ge=0, le=1000,
+        description="How far, in percent, the files on a card can be from the photos counted in the field before it is pointed out. (INGEST.count_tolerance)",
+    )
+
+
 class Settings(BaseModel):
     GENERAL: GeneralSettings = Field(default_factory=GeneralSettings)
     TRAPPER: TrapperSettings = Field(default_factory=TrapperSettings)
@@ -226,6 +279,8 @@ class Settings(BaseModel):
     VALIDATION: ValidationSettings = Field(default_factory=ValidationSettings)
     POSTVALIDATION: PostvalidationSettings = Field(default_factory=PostvalidationSettings)
     PREPROCESSING: PreprocessingSettings = Field(default_factory=PreprocessingSettings)
+    FIELDLOG: FieldlogSettings = Field(default_factory=FieldlogSettings)
+    INGEST: IngestSettings = Field(default_factory=IngestSettings)
 
 
 class ConfigInfo(BaseModel):
@@ -355,6 +410,12 @@ def collections_dir(settings: Settings | None = None) -> Path:
     settings = settings or load_settings()
     custom = settings.DATA.collections_dir
     return Path(custom).expanduser() if custom else data_dir(settings) / "collections"
+
+
+def cards_dir(settings: Settings | None = None) -> Path:
+    """Where the SD cards are copied, untouched, before they are imported: <data directory>/cards/<research project
+    id>/<collection>/<deployment id>/ (see services.ingest_service)."""
+    return data_dir(settings) / "cards"
 
 
 def reports_dir(settings: Settings | None = None) -> Path:

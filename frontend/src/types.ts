@@ -95,7 +95,7 @@ export interface SequenceIssue {
 export type ImageCheck = 'corrupted' | 'sequence' | 'structure' | 'camera' | 'exif' | 'duplicates'
 
 /** The EXIF fields the wizard needs of every image. */
-export type ExifField = 'date' | 'camera_model' | 'camera_id'
+export type ExifField = 'date' | 'camera_model'
 
 /** How many images lack one of them, with a few examples. */
 export interface MissingExif {
@@ -311,7 +311,7 @@ export interface PreprocessingOptions {
 }
 
 /** What the app's menu offers — import a deployment, import a whole session of them, or upload one to Trapper. */
-export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'utils' | 'sync' | 'repair'
+export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'utils' | 'sync' | 'repair' | 'fieldlog' | 'cards' | 'timefix'
 
 /** What syncing the local collections folder with Trapper did: for each kind of thing, what it created and what was already there. */
 export interface SyncResult {
@@ -330,12 +330,23 @@ export interface SyncResult {
     failed: { deployment_id: string; name: string; error: string }[]
     not_held: Record<string, string[]>
   }
+  /** Only when other collections were asked for: what was downloaded of each, and where. */
+  others?: { name: string; folder: string; downloaded: number; already: number; bytes: number; failed: { deployment_id: string; name: string; error: string }[] }[]
 }
 
-/** A collection the sync can bring, and the deployments in it. */
+/** A field collection the sync can bring (R0003…), its deployments in Trapper, and what the collections folder already has of it. */
 export interface SyncCollection {
   name: string
   deployments: string[]
+  local: { exists: boolean; deployments: string[]; with_images: string[] }
+}
+
+/** A collection of the research project that is not a field one — a subset made in Trapper — downloaded by its images. */
+export interface OtherCollection {
+  pk: number
+  name: string
+  /** How many of its files are already in the downloads folder. */
+  downloaded: number
 }
 
 /** What the sync reports as it goes: a message per step, and at the end the result. */
@@ -468,6 +479,227 @@ export interface PreprocessingSettings {
   convert_to_utc: boolean
 }
 
+/** Field records: how the Epicollect download of a field trip and the fieldwork datasheet are read. Every time is UTC. */
+export interface FieldlogSettings {
+  time_source: 'created_at' | 'hour'
+  keep_seconds: boolean
+  datasheet_format: 'original' | 'standard' | 'both'
+  camera_timezone: string
+  /** The Epicollect column that gives each datasheet field, when it isn't the default one. */
+  columns: Record<string, string>
+  last_epicollect: string | null
+  last_datasheet: string | null
+  last_research_project: string | null
+}
+
+/** Copying the SD cards: how long the untouched copy of each card is kept, and how far the files may be from the photos counted. */
+export interface IngestSettings {
+  keep_cards: 'until_verified' | 'always' | 'until_imported'
+  count_tolerance: number
+}
+
+/** One visit of the field records, as a deployment's start or end. */
+export interface FieldVisit {
+  session: string
+  action: string
+  when: string
+  camera: number | null
+  card: string | null
+  photos: number | null
+  trappers: string | null
+  notes: string | null
+  new: boolean
+}
+
+/** A deployment as the field records say it: closed once the visit that collects its card is recorded, open until then. */
+export interface FieldDeployment {
+  deployment_id: string
+  collection: string
+  site: string
+  status: 'closed' | 'open'
+  start: string
+  end: string | null
+  setup_by: string | null
+  camera_id: string | null
+  card: string | null
+  photos_counted: number | null
+  comments: string
+  start_visit: FieldVisit
+  end_visit: FieldVisit | null
+}
+
+/** A site visited in the field that isn't among the research project's locations yet. */
+export interface NewSite {
+  site: string
+  /** Its installation: the first visit. */
+  session: string
+  action: string
+  when: string
+  latitude: number | null
+  longitude: number | null
+  visits: number
+  /** The nearest location kept, and how far — a "new" site a few metres from a known one is likely misnamed. */
+  nearest: { location_id: string; distance_m: number } | null
+  /** Locations whose id is one character apart from this one's. */
+  similar: string[]
+}
+
+/** POST /api/fieldlog/analyze (and apply, with the files written). */
+export interface FieldlogResult {
+  datasheet: string
+  sessions: [string, string]
+  new_rows: number
+  new_visits: (FieldVisit & { site: string })[]
+  collections: string[]
+  deployments: FieldDeployment[]
+  new_sites: NewSite[]
+  locations_known: boolean
+  warnings: string[]
+  notes: string[]
+  camera_timezone: string
+  /** Which of its collections Trapper already has — null when that couldn't be asked. */
+  in_trapper?: string[] | null
+  files?: string[]
+  collection_dirs?: string[]
+}
+
+/** A copy record's summary (card_copy.json). */
+export interface CardCopy {
+  card_label: string | null
+  copied_at: string | null
+  copied_by: string | null
+  file_count: number
+  total_bytes: number
+  source: string
+  first: string | null
+  last: string | null
+}
+
+/** A deployment of a collection as far as its card goes: camera still out, card to copy, copied, or already processed
+ * into the collection by Process collection. */
+export interface CardDeployment {
+  deployment_id: string
+  site: string | null
+  state: 'out' | 'to_copy' | 'copied' | 'processed'
+  start: string | null
+  end: string | null
+  card: string | null
+  camera_id: string | null
+  photos_counted: number | null
+  copy: CardCopy | null
+}
+
+export interface CardsStatus {
+  collection: string
+  cards_dir: string
+  has_fieldwork_log: boolean
+  deployments: CardDeployment[]
+  unexpected: { deployment_id: string; copy: CardCopy | null }[]
+  counts: { out: number; to_copy: number; copied: number; processed: number }
+}
+
+/** A correction for the field data, written down while copying a card (a label that is not the one noted in the field). */
+export interface FieldCorrection {
+  deployment: string
+  what: string
+  'field records say': string
+  found: string
+  'when (UTC)': string
+  by: string
+}
+
+/** A deployment a card may belong to, best first, with what fits and what doesn't. */
+export interface CardCandidate extends CardDeployment {
+  score: number
+  fits: string[]
+  problems: string[]
+}
+
+/** A card looked at before it is copied. */
+export interface CardInspection {
+  source: string
+  file_count: number
+  image_count: number
+  video_count: number
+  other_count: number
+  total_bytes: number
+  subfolders: number
+  first: string | null
+  last: string | null
+  undated: number
+  camera_models: string[]
+  fingerprint: string
+  already_copied: { deployment_id: string; collection: string; copied_at: string | null; card_label: string | null }[]
+  candidates: CardCandidate[]
+  collection: string
+}
+
+export type CardCopyEvent =
+  | { type: 'copy'; index: number; total: number; name: string }
+  | { type: 'done'; record: CardCopy & { deployment_id: string; path: string } }
+
+/** A folder with images found under a tree that comes from elsewhere, with its collection and site guessed from the path. */
+export interface TreeFolder {
+  path: string
+  relative: string
+  image_count: number
+  file_count: number
+  collection: string | null
+  site: string | null
+  deployment_id: string | null
+}
+
+/** A run of a deployment's images whose time never goes backwards, set against the deployment's period. */
+export interface TimeSegment {
+  first_index: number
+  last_index: number
+  first: string
+  last: string
+  first_time: string
+  last_time: string
+  count: number
+  inside: number
+  state: 'ok' | 'outside' | 'partly'
+  suggestion: { offset_seconds: number; why: string } | null
+}
+
+/** A fix made to a deployment's images (time_corrections.json). */
+export interface TimeCorrection {
+  at: string
+  by: string | null
+  action: 'shift' | 'remove' | 'restore'
+  first?: string
+  last?: string
+  count?: number
+  offset_seconds?: number
+  names?: string[]
+  reason?: string | null
+}
+
+/** A copied card's images in the camera's order, with when each says it was taken. */
+export interface Timeline {
+  deployment_id: string
+  collection: string
+  folder: string
+  period: { start: string; end: string } | null
+  tolerance_hours: number
+  camera_timezone: string
+  images: { name: string; time: string | null }[]
+  segments: TimeSegment[]
+  undated: string[]
+  outside: number
+  problems: string[]
+  ok: boolean
+  corrections: TimeCorrection[]
+}
+
+/** An Epicollect column the field records read: the datasheet field it gives, and its name unless the settings map it. */
+export interface FieldlogColumn {
+  field: string
+  default: string
+  label: string
+}
+
 /** The details kept for the closest earlier revision of a deployment's location. */
 export interface PreviousDeployment {
   revision: number
@@ -510,6 +742,8 @@ export interface AppSettings {
   VALIDATION: ValidationSettings
   POSTVALIDATION: PostvalidationSettings
   PREPROCESSING: PreprocessingSettings
+  FIELDLOG: FieldlogSettings
+  INGEST: IngestSettings
 }
 
 /** What the settings page saves. A blank password keeps the saved one. */
@@ -521,6 +755,8 @@ export interface AppSettingsUpdate {
   VALIDATION: ValidationSettings
   POSTVALIDATION: PostvalidationSettings
   PREPROCESSING: PreprocessingSettings
+  FIELDLOG: FieldlogSettings
+  INGEST: IngestSettings
 }
 
 /** A research project entered by hand — the fields of Trapper's own "Add
@@ -715,4 +951,39 @@ export interface EpicollectInput {
 export interface EpicollectForm {
   project: { name: string; slug: string }
   inputs: EpicollectInput[]
+}
+
+/** A collection in the cards folder, as Copy SD cards left it: one subfolder per deployment. */
+export interface CardCollection {
+  research_project_id: string
+  collection: string
+  folder: string
+  deployments: number
+  /** How many of them are already processed into the collections folder. */
+  processed: number
+}
+
+/** What the field records say of a deployment (its row of the collection's FieldworkLog). */
+export interface FieldDetail {
+  location_id: string | null
+  start: string | null
+  end: string | null
+  setup_by: string | null
+  camera_id: string | null
+  tags: string[]
+  comments: string | null
+  card: string | null
+  // The other Camtrap DP fields, when the field survey noted them.
+  camera_model?: string | null
+  camera_interval?: number | null
+  camera_height?: number | null
+  camera_depth?: number | null
+  camera_tilt?: number | null
+  camera_heading?: number | null
+  detection_distance?: number | null
+  timestamp_issues?: boolean | null
+  bait_use?: boolean | null
+  feature_type?: FeatureType | null
+  habitat?: string | null
+  deployment_groups?: string | null
 }

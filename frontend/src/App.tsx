@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
+import CardsPage from './pages/CardsPage'
+import type { ProcessTarget } from './pages/CardsPage'
+import type { CollectionTarget } from './pages/FieldLogPage'
+import TimeFixPage from './pages/TimeFixPage'
+import type { TimeFixTarget } from './pages/TimeFixPage'
+import FieldLogPage from './pages/FieldLogPage'
 import ImportDeploymentPage from './pages/ImportDeploymentPage'
 import ImportSessionPage from './pages/ImportSessionPage'
 import MenuPage from './pages/MenuPage'
@@ -10,15 +16,13 @@ import SettingsPage from './pages/SettingsPage'
 import SyncCollectionsPage from './pages/SyncCollectionsPage'
 import UploadDeploymentPage from './pages/UploadDeploymentPage'
 import UtilsPage from './pages/UtilsPage'
-import WelcomePage from './pages/WelcomePage'
 import { api } from './api'
 import type { SessionSummary, Task, UploadTarget } from './types'
 
 export default function App() {
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
   const [backendDown, setBackendDown] = useState(false)
-  // Shown once the welcome screen is dismissed — the menu of tasks, unless
-  // a session is offered for resuming first (see showResumeScreen below).
+  // The menu of tasks is what the app opens on, unless a session is offered for resuming first (see showResumeScreen below).
   const [menuShown, setMenuShown] = useState(false)
   const [task, setTask] = useState<Task | null>(null)
   // A run an earlier visit left unfinished (see the backend's own
@@ -32,10 +36,17 @@ export default function App() {
   // The section the settings open on, when something sends the user to one in particular.
   const [settingsSection, setSettingsSection] = useState<'epicollect' | undefined>(undefined)
   function openSettings(section?: 'epicollect') { setSettingsSection(section); setSettingsOpen(true) }
-  // Back on the welcome screen by the title: it is shown ahead of anything else until "Get Started" is pressed again.
-  const [home, setHome] = useState(false)
   // Where the upload page starts from, when it is reached from a finished import.
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null)
+  // The deployment Check and fix dates and times opens on, when it is reached from where its dates were found wrong.
+  const [timefixTarget, setTimefixTarget] = useState<TimeFixTarget | null>(null)
+  function goToTimeFix(target: TimeFixTarget) { setTimefixTarget(target); setTask('timefix') }
+  // The collection Copy SD cards opens on, when it is reached from Field records.
+  const [cardsTarget, setCardsTarget] = useState<CollectionTarget | null>(null)
+  function goToCards(target: CollectionTarget) { setCardsTarget(target); setTask('cards') }
+  // The cards folder Process collection opens on, when it is reached from Copy SD cards or Check and fix dates and times.
+  const [processTarget, setProcessTarget] = useState<ProcessTarget | null>(null)
+  function goToProcess(target: ProcessTarget) { setProcessTarget(target); setTask('session') }
 
   useEffect(() => {
     let cancelled = false
@@ -61,14 +72,15 @@ export default function App() {
   }, [])
 
   function goHome() {
-    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setMenuShown(false); setHome(true)
+    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setTimefixTarget(null); setCardsTarget(null); setProcessTarget(null)
+    setMenuShown(true)
   }
 
   function goToUpload(target: UploadTarget) {
     setUploadTarget(target); setTask('upload')
   }
 
-  const showResumeScreen = !task && !menuShown && !home && unfinishedSessions !== null && unfinishedSessions.length > 0
+  const showResumeScreen = !task && !menuShown && unfinishedSessions !== null && unfinishedSessions.length > 0
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
@@ -84,15 +96,21 @@ export default function App() {
           {task === 'deployment'
             ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
             : task === 'session'
-              ? <ImportSessionPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
+              ? <ImportSessionPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onFixDates={goToTimeFix} initial={processTarget ?? undefined} onBack={() => setTask(null)} />
               : task === 'upload'
               ? <UploadDeploymentPage initial={uploadTarget ?? undefined} onOpenSettings={() => openSettings()} onBack={() => setTask(null)} />
               : task === 'utils'
-              ? <UtilsPage onBack={() => setTask(null)} />
+              ? <UtilsPage onBack={() => setTask(null)} onProcess={goToProcess} onCopyCards={goToCards} />
               : task === 'sync'
               ? <SyncCollectionsPage onBack={() => setTask(null)} />
               : task === 'repair'
               ? <RepairPage onBack={() => setTask(null)} />
+              : task === 'fieldlog'
+              ? <FieldLogPage onCopyCards={goToCards} onBack={() => setTask(null)} />
+              : task === 'cards'
+              ? <CardsPage onFixDates={goToTimeFix} onProcess={goToProcess} initial={cardsTarget ?? undefined} onBack={() => setTask(null)} />
+              : task === 'timefix'
+              ? <TimeFixPage initial={timefixTarget ?? undefined} onProcess={goToProcess} onCopyCards={goToCards} onBack={() => setTask(null)} />
               : showResumeScreen
                 ? (
                   <ResumeSessionsPage
@@ -102,9 +120,7 @@ export default function App() {
                     onSkip={() => { setUnfinishedSessions([]); setMenuShown(true) }}
                   />
                 )
-                : menuShown
-                  ? <MenuPage onChoose={setTask} />
-                  : <WelcomePage onStart={() => { setHome(false); if (!unfinishedSessions?.length) setMenuShown(true) }} />}
+                : <MenuPage onChoose={setTask} />}
         </div>
       </main>
       <Footer />

@@ -5,7 +5,7 @@ import EpicollectMapping from '../components/EpicollectMapping'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
 import { COVERAGE_AREAS, ENTITIES } from '../entities'
 import ReportsList from '../components/ReportsList'
-import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, ImageCheck, LogLevel, SimilarityMethod, UpdateCheck } from '../types'
+import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, FieldlogColumn, FieldlogSettings, IngestSettings, ImageCheck, LogLevel, SimilarityMethod, UpdateCheck } from '../types'
 
 const hintClass = 'text-xs text-zinc-500 dark:text-zinc-400'
 const btnPrimary = 'px-6 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -77,6 +77,13 @@ const FileIcon = () => (
     <path d="M16 13H8" /><path d="M16 17H8" />
   </Icon>
 )
+const ClipboardIcon = () => (
+  <Icon>
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="m9 14 2 2 4-4" />
+  </Icon>
+)
 const FolderIcon = () => (
   <Icon>
     <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
@@ -140,6 +147,9 @@ interface Draft {
   licenseUrl: string
   ignoreDst: boolean
   convertToUtc: boolean
+  fieldlog: FieldlogSettings
+  keepCards: IngestSettings['keep_cards']
+  countTolerance: string
 }
 
 function toDraft(s: AppSettings): Draft {
@@ -185,7 +195,15 @@ function toDraft(s: AppSettings): Draft {
     licenseUrl: s.PREPROCESSING.license_url,
     ignoreDst: s.PREPROCESSING.ignore_dst,
     convertToUtc: s.PREPROCESSING.convert_to_utc,
+    fieldlog: { ...s.FIELDLOG, columns: { ...s.FIELDLOG.columns } },
+    keepCards: s.INGEST.keep_cards,
+    countTolerance: String(s.INGEST.count_tolerance),
   }
+}
+
+/** A timezone name the browser knows — UTC, Europe/Madrid… The backend checks it again. */
+function isTimezone(name: string): boolean {
+  try { new Intl.DateTimeFormat('en', { timeZone: name.trim() || 'UTC' }); return true } catch { return false }
 }
 
 function numberIn(value: string, { min, max, decimal }: Limits): number | null {
@@ -207,6 +225,7 @@ function sectionValid(d: Draft, id: SectionId): boolean {
   }
   if (id === 'preprocessing') return numberIn(d.resizeWidth, RESIZE_WIDTH) !== null
   if (id === 'trapper') return numberIn(d.maxZipMb, MAX_ZIP_MB) !== null
+  if (id === 'fieldlog') return isTimezone(d.fieldlog.camera_timezone) && numberIn(d.countTolerance, SIMILARITY_TOLERANCE) !== null
   return true
 }
 
@@ -228,6 +247,11 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
       owner: d.owner.trim(), publisher: d.publisher.trim(), coverage: d.coverage.trim(), license_url: d.licenseUrl.trim(),
       ignore_dst: d.ignoreDst, convert_to_utc: d.convertToUtc,
     },
+    FIELDLOG: {
+      ...d.fieldlog, camera_timezone: d.fieldlog.camera_timezone.trim() || 'UTC',
+      columns: Object.fromEntries(Object.entries(d.fieldlog.columns).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v)),
+    },
+    INGEST: { keep_cards: d.keepCards, count_tolerance: Number(d.countTolerance) },
   }
 }
 
@@ -239,22 +263,23 @@ const FOLDERS: { draftKey: 'collectionsDir' | 'reportsDir' | 'packagesDir'; labe
     description: 'Where the collections are kept before they are uploaded — <folder>/<research project>/<R0003>/<deployment>. Left blank, they go in a “collections” folder inside the data folder.',
     hint: 'Handy to keep the collections on another disk.' },
   { draftKey: 'reportsDir', label: 'Reports folder', dialog: 'Select the folder to keep the reports in',
-    description: 'Where the reports of the checks and of the preprocessing are kept. Left blank, they go in a “reports” folder inside the data folder.',
+    description: 'Where the reports of the checks and of the image preparation are kept. Left blank, they go in a “reports” folder inside the data folder.',
     hint: 'Reports already made stay where they are: move them by hand if you want them in the new folder.' },
   { draftKey: 'packagesDir', label: 'Packages folder', dialog: 'Select the folder to keep the packages in',
     description: 'Where the zips, the yamls and the deployments csv made to upload to Trapper are written — <folder>/<research project>/<R0003>. Left blank, they go in a “packages” folder inside the data folder.',
     hint: 'Handy when the packages are big and the data folder is on a small disk.' },
 ]
 
-type SectionId = 'general' | 'trapper' | 'epicollect' | 'validation' | 'postvalidation' | 'preprocessing' | 'reports' | 'config'
+type SectionId = 'general' | 'trapper' | 'fieldlog' | 'epicollect' | 'validation' | 'postvalidation' | 'preprocessing' | 'reports' | 'config'
 
 const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'general', label: 'General', icon: SlidersIcon },
   { id: 'trapper', label: 'Trapper', icon: CameraIcon },
+  { id: 'fieldlog', label: 'Field records', icon: ClipboardIcon },
   { id: 'epicollect', label: 'Epicollect5', icon: FileIcon },
   { id: 'validation', label: 'Validation', icon: CheckIcon },
   { id: 'postvalidation', label: 'Postvalidation', icon: ShieldIcon },
-  { id: 'preprocessing', label: 'Preprocessing', icon: ImageIcon },
+  { id: 'preprocessing', label: 'Prepare images', icon: ImageIcon },
   { id: 'reports', label: 'Reports', icon: ReportIcon },
   { id: 'config', label: 'Config', icon: FileIcon },
 ]
@@ -419,7 +444,7 @@ const IMAGE_CHECKS: { key: ImageCheck; label: string; hint: string }[] = [
   { key: 'sequence', label: 'Shooting order vs. filename sequence', hint: 'A higher-numbered file dated earlier than a lower-numbered one — a clock reset, or cards mixed.' },
   { key: 'structure', label: 'Folder structure (subdirectories)', hint: 'Images spread over subfolders instead of one flat folder.' },
   { key: 'camera', label: 'Same camera (model and id) on every image', hint: 'More than one camera among the images. Reads the serial number with ExifTool when it is installed.' },
-  { key: 'exif', label: 'Required EXIF fields', hint: 'Capture date, camera model and camera id on every image.' },
+  { key: 'exif', label: 'Required EXIF fields', hint: 'Capture date and camera model on every image. The camera id comes from the field records.' },
   { key: 'duplicates', label: 'Duplicate images', hint: 'Files with exactly the same content.' },
 ]
 
@@ -592,7 +617,7 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
     <div className="space-y-4">
       <p className={`${hintClass} leading-relaxed`}>
         Each config is a settings file; the active one is what the app reads and saves — the folder the images are kept in,
-        the Trapper account, the checks and the preprocessing. A new one starts from the default values. Keep in mind these
+        the Trapper account, the checks and how the images are prepared. A new one starts from the default values. Keep in mind these
         files hold your passwords as plain text.
       </p>
       <div className="flex items-center justify-between">
@@ -656,6 +681,16 @@ export default function SettingsPage({ onClose, initialSection }: Props) {
   const [conn, setConn] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; message?: string }>({ kind: 'idle' })
   const [epiConn, setEpiConn] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; message?: string }>({ kind: 'idle' })
   const [browsing, setBrowsing] = useState(false)
+  const [fieldColumns, setFieldColumns] = useState<FieldlogColumn[]>([])
+
+  useEffect(() => {
+    api.fieldlogColumns().then(({ results }) => setFieldColumns(results)).catch(() => setFieldColumns([]))
+  }, [])
+
+  function setFieldlog<K extends keyof FieldlogSettings>(key: K, value: FieldlogSettings[K]) {
+    setDraft((d) => (d && { ...d, fieldlog: { ...d.fieldlog, [key]: value } }))
+    setStatus({ kind: 'idle' })
+  }
 
   // Also called after switching config, which discards whatever wasn't saved.
   function reloadSettings() {
@@ -1058,6 +1093,53 @@ export default function SettingsPage({ onClose, initialSection }: Props) {
                            checked={draft.ignoreDst} onChange={(v) => set('ignoreDst', v)} />
               <CheckOption label="Convert the dates to UTC" hint="Otherwise they keep the timezone's own offset."
                            checked={draft.convertToUtc} onChange={(v) => set('convertToUtc', v)} />
+            </Row>
+          </div>
+        )}
+
+        {draft && saved && section === 'fieldlog' && (
+          <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
+            <Row label="Times" description="Every time is UTC, from the field to Trapper: the visits, the deployments' start and end and the cameras' clocks.">
+              <SelectBox
+                label="Time of a visit" value={draft.fieldlog.time_source} onChange={(v) => setFieldlog('time_source', v)}
+                options={[
+                  { value: 'created_at', label: 'When its entry was created in the field app (UTC), recommended' },
+                  { value: 'hour', label: 'The date and hour typed in the form' },
+                ]}
+              />
+              <TextBox
+                label="Cameras' clock" value={draft.fieldlog.camera_timezone} onChange={(v) => setFieldlog('camera_timezone', v)} mono
+                error={isTimezone(draft.fieldlog.camera_timezone) ? null : 'A timezone, like UTC or Europe/Madrid.'}
+              />
+              <p className={`${hintClass} px-1`}>The timezone the cameras are set to. Leave it at UTC unless the field team set them otherwise.</p>
+              <CheckOption label="Keep the seconds" hint="Off, a deployment's start and end are cut to the minute, as the old R script and wildintel-tools did."
+                           checked={draft.fieldlog.keep_seconds} onChange={(v) => setFieldlog('keep_seconds', v)} />
+            </Row>
+            <Row label="Datasheet" description="The updated datasheet is always a new file beside the original, named after the new range of sessions. The original is never changed.">
+              <SelectBox
+                label="Format of the updated datasheet" value={draft.fieldlog.datasheet_format} onChange={(v) => setFieldlog('datasheet_format', v)}
+                options={[
+                  { value: 'original', label: 'As it is written (recommended)' },
+                  { value: 'standard', label: 'Standard headers and codes' },
+                  { value: 'both', label: 'Both' },
+                ]}
+              />
+              <p className={`${hintClass} px-1`}>Only matters for datasheets that are not in the standard format, like Doñana&rsquo;s (Spanish headers, R/I/D/ROBADA).</p>
+            </Row>
+            <Row label="SD cards" description="Each card is copied untouched into the cards folder (inside the images folder), ready for Process collection.">
+              <NumberBox label="Files vs. photos counted in the field" value={draft.countTolerance} limits={SIMILARITY_TOLERANCE} onChange={(v) => set('countTolerance', v)} unit="% apart before it is pointed out" />
+            </Row>
+            <Row label="Field data columns" description="The column of the field survey (the CSV from the field app) that gives each field. Blank, the default name is used — Tatra's and Doñana's forms need nothing here. Fill in only the ones a form names otherwise.">
+              <div className="space-y-2">
+                {fieldColumns.map((c) => (
+                  <TextBox
+                    key={c.field} label={c.label} mono placeholder={c.default}
+                    value={draft.fieldlog.columns[c.field] ?? ''}
+                    onChange={(v) => setFieldlog('columns', { ...draft.fieldlog.columns, [c.field]: v })}
+                  />
+                ))}
+                {fieldColumns.length === 0 && <p className={hintClass}>The columns could not be loaded.</p>}
+              </div>
             </Row>
           </div>
         )}
