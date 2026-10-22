@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Added
+- **Release**: a macOS `.dmg` for Intel Macs (`macos-x86_64`), beside the Apple Silicon one (`macos-arm64`).
 - **Import deployment**: organize a folder of camera-trap images into the local collections folder
   (`<Documents>/wildintel-uploader/collections/<research project>/<R000N>/<deployment id>`), in a wizard of four
   stages: images → origin and dates → check details → prepare and save.
