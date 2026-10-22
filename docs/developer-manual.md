@@ -508,7 +508,7 @@ uv run wucli package build -f appimage -v 0.1.0
 |---|---|
 | Linux | `wildintel-uploader-X.Y.Z-linux-x86_64.AppImage` (built on Ubuntu 22.04, an older glibc, so it runs on more distributions) |
 | Windows | `wildintel-uploader-X.Y.Z-windows-x64.exe`, portable |
-| macOS | `wildintel-uploader-X.Y.Z-macos-arm64.dmg`, Apple Silicon |
+| macOS | `wildintel-uploader-X.Y.Z-macos-arm64.dmg` (Apple Silicon); `wildintel-uploader-X.Y.Z-macos-x86_64.dmg` (Intel) |
 
 The command builds the frontend first. The version defaults to the git tag, or `0.0.0-dev` —
 written into `src/wildintel_uploader/_version.py` (not committed), which `core/version.py` reads.
@@ -577,7 +577,7 @@ from GitHub's **Actions** tab → the workflow → **Run workflow**, choosing th
 |---|---|---|---|
 | `ci.yml` | Pushes and pull requests to `main` | ✓ | Backend tests; frontend lint, tests, type check and build; docs build. |
 | `docs.yml` | Docs changes on `main`, `v*` tags | ✓ | Publishes this site to GitHub Pages with mike — see [Documentation versions](#documentation-versions). |
-| `release.yml` | `v*` tags | ✓ | Runs the tests, builds the packages — Linux AppImage, Windows portable `.exe`, macOS `.dmg` — and publishes a GitHub release, or (by hand) the rolling **dev** pre-release. |
+| `release.yml` | `v*` tags | ✓ | Runs the tests, builds the packages — Linux AppImage, Windows portable `.exe`, macOS `.dmg` for Apple Silicon and Intel — and publishes a GitHub release, or (by hand) the rolling **dev** pre-release. |
 
 !!! warning "The Trapper SDK in CI"
     `pyproject.toml` takes the SDK from `../wildintel-trapper-sdk`. Every workflow clones it

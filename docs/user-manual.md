@@ -45,7 +45,8 @@ Download the file for your system from the
 
 === "macOS"
 
-    Download `wildintel-uploader-X.Y.Z-macos-arm64.dmg` (Apple Silicon), open it and copy
+    Download `wildintel-uploader-X.Y.Z-macos-arm64.dmg` for Apple Silicon or
+    `wildintel-uploader-X.Y.Z-macos-x86_64.dmg` for an Intel Mac. Open the DMG and copy
     `wildintel-uploader` out of it to a folder of your own (for example *Applications* or your home folder).
 
     !!! warning "The app isn't signed by an Apple developer"
