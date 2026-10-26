@@ -3,10 +3,12 @@ import OptionCards from '../components/OptionCards'
 import type { Option } from '../components/OptionCards'
 import RepairPage from './RepairPage'
 import SyncCollectionsPage from './SyncCollectionsPage'
+import TimeFixPage from './TimeFixPage'
 
-export type Util = 'repair' | 'sync'
+export type Util = 'timefix' | 'repair' | 'sync'
 
 const UTIL_OPTIONS: Option<Util>[] = [
+  { value: 'timefix', emoji: '🕑', title: 'Check and fix dates and times', description: 'Look at the dates of the images in a folder whose camera clock went wrong, against the period of the visit that left the camera: shift a run of images, or remove the ones with no time to trust. Every fix is written down.', available: true },
   { value: 'repair', emoji: '🛠️', title: 'Repair local deployments', description: 'Check which deployments of a local collection are still valid — as their seal says — and write the metadata files of the others again from what their folders hold.', available: true },
   { value: 'sync', emoji: '🔄', title: 'Sync local collections', description: 'Check the local folders against what Trapper has for a classification project, and create the ones missing: research project, locations, collections and deployments.', available: true },
 ]
@@ -22,7 +24,7 @@ export default function UtilsPage({ onBack }: Props) {
   if (util) {
     return (
       <div>
-        {util === 'repair' ? <RepairPage onBack={() => setUtil(null)} /> : <SyncCollectionsPage onBack={() => setUtil(null)} />}
+        {util === 'timefix' ? <TimeFixPage onBack={() => setUtil(null)} /> : util === 'repair' ? <RepairPage onBack={() => setUtil(null)} /> : <SyncCollectionsPage onBack={() => setUtil(null)} />}
       </div>
     )
   }
