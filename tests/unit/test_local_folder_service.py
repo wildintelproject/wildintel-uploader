@@ -169,3 +169,33 @@ def test_a_research_project_in_two_folders_is_listed_once_from_the_one_named_by_
     listed = svc.list_research_projects(tmp_path)
 
     assert [(p["acronym"], p["marker"]) for p in listed] == [("DONA_24", "DONA_24"), ("WICP_01", "WICP_01")]
+
+
+def _project(root: Path, acronym: str = "DONA") -> None:
+    svc.write_research_project(root, {"name": "Doñana", "acronym": acronym})
+
+
+def test_a_research_project_starts_with_no_visits_and_gets_them_registered_in_order(tmp_path: Path):
+    _project(tmp_path)
+    assert svc.list_visits(tmp_path, "DONA") == []
+
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0001", "actions": ["Installation"]})
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_02", "session": "R0001", "actions": ["Installation"]})
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0002", "actions": ["Revision"]})
+
+    assert [v["session"] for v in svc.list_visits(tmp_path, "DONA")] == ["R0001", "R0001", "R0002"]
+    assert (tmp_path / "DONA" / svc.VISITS_FILE).is_file()
+
+
+def test_the_visits_to_one_location_are_found_ignoring_case(tmp_path: Path):
+    _project(tmp_path)
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_0023_B", "session": "R0001", "actions": ["Installation"]})
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0001", "actions": ["Installation"]})
+
+    assert [v["location_id"] for v in svc.list_visits(tmp_path, "DONA", "dona_0023_b")] == ["DONA_0023_B"]
+    assert svc.list_visits(tmp_path, "DONA", "DONA_99") == []
+
+
+def test_a_visit_cannot_be_registered_to_a_research_project_that_is_not_kept(tmp_path: Path):
+    with pytest.raises(svc.LocalFolderError, match="isn't in the collections folder"):
+        svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01"})

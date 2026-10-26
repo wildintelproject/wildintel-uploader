@@ -3,7 +3,7 @@ import WizardStep from '../components/WizardStep'
 import { formatDay, formatPeriod } from '../dateFormat'
 import TrapperAccountNotice, { trapperAccountReady } from '../components/TrapperAccountNotice'
 import type { TrapperAccount } from '../components/TrapperAccountNotice'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
 import type { TrapperCredentials } from '../api'
@@ -12,8 +12,10 @@ import Combobox from '../components/Combobox'
 import OptionCards from '../components/OptionCards'
 import type { Option } from '../components/OptionCards'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
+import type { ClosedVisit, ClosedVisitTarget, SdCard } from '../types'
 import { applyEntry, entryLabel, entryPeriod } from '../epicollectImport'
 import DateSourcePicker from '../components/DateSourcePicker'
+import TimeFixPage from './TimeFixPage'
 import Notice, { BadgeIcon, Mark, mark, StatusIcon } from '../components/Notice'
 import type { DateSource, Period, SourceOption } from '../components/DateSourcePicker'
 import type { EpicollectEntry } from '../epicollectImport'
@@ -45,10 +47,25 @@ function fieldId(label: string) {
   return `field-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 }
 
+/** Whether the fields of the details say they are Camtrap DP's — on for a page that also asks for others (see MoreDetailsForm). */
+const CamtrapDpContext = createContext(false)
+
+/** The tag of a field that is one of Camtrap DP's deployments table, when the page asks for it. */
+export function CamtrapDpTag() {
+  if (!useContext(CamtrapDpContext)) return null
+  return (
+    <span title="A field of the Camtrap Data Package deployments table"
+          className="shrink-0 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Camtrap DP</span>
+  )
+}
+
 function FieldLabel({ id, label, required }: { id: string; label: string; required?: boolean }) {
   return (
     <div className="flex items-baseline justify-between mb-1.5">
-      <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
+      <span className="flex items-baseline gap-2">
+        <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
+        <CamtrapDpTag />
+      </span>
       {required && <span className="text-[11px] uppercase tracking-wide text-blue-600 dark:text-blue-400">Required</span>}
     </div>
   )
@@ -135,14 +152,14 @@ function CheckboxField({ label, checked, onChange, hint }: { label: string; chec
 }
 
 /** A yes/no field as a card with a switch — off means "not recorded", not "no". */
-function SwitchRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+export function SwitchRow({ label, hint, checked, onChange, disabled = false }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-5 py-4">
+    <div className={`flex items-center gap-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-5 py-4 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex-1 min-w-0">
-        <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{label}</p>
+        <p className="flex items-baseline gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">{label}<CamtrapDpTag /></p>
         <p className={`${hintClass} mt-0.5`}>{hint}</p>
       </div>
-      <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}
+      <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
               className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}>
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : ''}`} />
       </button>
@@ -152,7 +169,7 @@ function SwitchRow({ label, hint, checked, onChange }: { label: string; hint: st
 
 /** Each field's description, as worded by Camtrap DP's own
  * deployments-table-schema.json. */
-const DESCRIPTIONS = {
+export const DESCRIPTIONS = {
   deploymentID: 'Unique identifier of the deployment.',
   locationID: 'Identifier of the deployment location.',
   locationName: 'Name given to the deployment location.',
@@ -452,7 +469,7 @@ export function toggled<T>(set: Set<T>, value: T): Set<T> {
 }
 
 /** What's wrong with a typed number that must lie in a range ('' is only "missing" when required). */
-function rangeError(text: string, min: number, max: number, required: boolean): string | undefined {
+export function rangeError(text: string, min: number, max: number, required: boolean): string | undefined {
   if (text.trim() === '') return required ? 'Required' : undefined
   const n = Number(text)
   return Number.isFinite(n) && n >= min && n <= max ? undefined : `Must be between ${min} and ${max}.`
@@ -461,7 +478,12 @@ function rangeError(text: string, min: number, max: number, required: boolean): 
 export type OriginSource = 'trapper' | 'manual'
 
 // A new location's form, its numbers as typed.
-const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', ignore_dst: true, latitude: '', longitude: '', coordinate_uncertainty: '' }
+/** A closed visit as an option: when it was, where, which session, what was done there, and when its card was collected — and how many photos it had. */
+export const visitKey = (c: ClosedVisit) => `${c.visit.location_id}|${c.visit.date}|${c.visit.time}`
+export const visitLabel = (c: ClosedVisit) =>
+  `${c.visit.date} ${c.visit.time} · ${c.visit.location_id} · ${c.visit.session} · ${c.visit.actions.join(' + ')}${c.visit.sd ? ` · card ${c.visit.sd}` : ''} · collected on ${c.end.date}${c.end.num_photos != null ? ` (${c.end.num_photos} photos)` : ''}`
+
+export const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', ignore_dst: true, latitude: '', longitude: '', coordinate_uncertainty: '' }
 
 export const ORIGIN_SOURCE_OPTIONS: Option<OriginSource>[] = [
   { value: 'trapper', emoji: '🪤', title: 'From Trapper', description: 'Connect to Trapper and pick one — its fields fill in the form.', available: true },
@@ -699,7 +721,10 @@ function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, sugg
   const id = fieldId(label)
   return (
     <div>
-      <label className="block text-sm font-semibold mb-1.5 text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
+      <div className="flex items-baseline gap-2 mb-1.5">
+        <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
+        <CamtrapDpTag />
+      </div>
       {hint && <p className={`${hintClass} mb-2 mt-0`}>{hint}</p>}
       <div className="flex gap-2">
         <input id={id} className={`${inputClass} flex-1`} placeholder={placeholder} value={text} onChange={(e) => setText(e.target.value)}
@@ -729,7 +754,7 @@ function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, sugg
 }
 
 /** A section of the details — shut until it is opened, with how much of it is filled in on its header: "3 of 7". */
-function SectionCard({ title, icon, filled, total, summary, optional = false, children }: { title: string; icon: ReactNode; filled: number; total: number; summary?: string; optional?: boolean; children: ReactNode }) {
+export function SectionCard({ title, icon, filled, total, summary, optional = false, children }: { title: string; icon: ReactNode; filled: number; total: number; summary?: string; optional?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
     <section className="rounded-lg border border-zinc-200 dark:border-zinc-700 mb-3" aria-label={title}>
@@ -761,7 +786,10 @@ function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, 
   const id = fieldId(label)
   return (
     <div>
-      <label className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5" htmlFor={id}>{label}</label>
+      <div className="flex items-baseline gap-2 mb-1.5">
+        <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
+        <CamtrapDpTag />
+      </div>
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative w-32">
           <input id={id} type="number" min={min} max={max} step={1} placeholder={placeholder} aria-invalid={error ? true : undefined}
@@ -780,9 +808,15 @@ function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, 
 const TILTS: { label: string; degrees: number }[] = [{ label: 'Down −90°', degrees: -90 }, { label: 'Level 0°', degrees: 0 }, { label: 'Up 90°', degrees: 90 }]
 
 /** The optional details of a deployment — its camera, its site, its groups, tags and comments — as three cards, every field in view. */
-export function MoreDetailsForm({ deployment, errors, onField }: {
+export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraPicker, camtrapTags = false }: {
   deployment: DeploymentFields; errors: ReturnType<typeof shownErrors>
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
+  /** More fields for the Camera card, of the page that uses the form: how many there are, how many are filled in, and the fields themselves. */
+  cameraExtra?: { total: number; filled: number; children: ReactNode }
+  /** What stands in the Camera card for the camera model and the camera id: a page that keeps its cameras asks for one of them instead. */
+  cameraPicker?: ReactNode
+  /** Tags each field of the form as one of Camtrap DP's — for a page that asks for fields that are not, beside them. */
+  camtrapTags?: boolean
 }) {
   const [mount, setMount] = useState<'above' | 'below'>(deployment.camera_depth != null ? 'below' : 'above')
   const groups = (deployment.deployment_groups ?? '').split('|').map((g) => g.trim()).filter(Boolean)
@@ -807,15 +841,18 @@ export function MoreDetailsForm({ deployment, errors, onField }: {
   ])
   const notesSummary = sum([groups.length > 0 && groups.join(', '), deployment.tags.length > 0 && `${deployment.tags.length} ${deployment.tags.length === 1 ? 'tag' : 'tags'}`, deployment.comments && 'comments'])
   return (
+    <CamtrapDpContext.Provider value={camtrapTags}>
     <div>
-      <SectionCard title="Camera" icon={camera.icon} total={7} summary={cameraSummary}
-                   filled={count([deployment.camera_model, deployment.camera_id, mount === 'above' ? deployment.camera_height : deployment.camera_depth, deployment.camera_tilt, deployment.camera_heading, deployment.camera_interval, deployment.detection_distance])}>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Camera model" placeholder="e.g. Reconyx-PC800" hint={DESCRIPTIONS.cameraModel}
-                 value={deployment.camera_model ?? ''} onChange={(v) => onField('camera_model', v || null)} />
-          <Field label="Camera id" placeholder="e.g. P800HG08192031" hint={DESCRIPTIONS.cameraID}
-                 value={deployment.camera_id ?? ''} onChange={(v) => onField('camera_id', v || null)} />
-        </div>
+      <SectionCard title="Camera" icon={camera.icon} total={7 + (cameraExtra?.total ?? 0)} summary={cameraSummary}
+                   filled={count([deployment.camera_model, deployment.camera_id, mount === 'above' ? deployment.camera_height : deployment.camera_depth, deployment.camera_tilt, deployment.camera_heading, deployment.camera_interval, deployment.detection_distance]) + (cameraExtra?.filled ?? 0)}>
+        {cameraPicker ?? (
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Camera model" placeholder="e.g. Reconyx-PC800" hint={DESCRIPTIONS.cameraModel}
+                   value={deployment.camera_model ?? ''} onChange={(v) => onField('camera_model', v || null)} />
+            <Field label="Camera id" placeholder="e.g. P800HG08192031" hint={DESCRIPTIONS.cameraID}
+                   value={deployment.camera_id ?? ''} onChange={(v) => onField('camera_id', v || null)} />
+          </div>
+        )}
 
         <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-1">How was it mounted?</p>
         <p className={`${hintClass} mt-0 mb-2`}>A camera is either above the ground or below the surface (snow, ice, water) — so there is one measurement.</p>
@@ -852,10 +889,17 @@ export function MoreDetailsForm({ deployment, errors, onField }: {
           <Field label="Detection distance (m)" type="number" min={0} step="any" placeholder="e.g. 9.5" hint={DESCRIPTIONS.detectionDistance} error={errors.detection_distance}
                  value={deployment.detection_distance?.toString() ?? ''} onChange={(v) => onField('detection_distance', v ? Number(v) : null)} />
         </div>
+        {cameraExtra && (
+          <>
+            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-2">How is it doing?</p>
+            {/* what the page puts here is its own, not Camtrap DP's */}
+            <CamtrapDpContext.Provider value={false}>{cameraExtra.children}</CamtrapDpContext.Provider>
+          </>
+        )}
       </SectionCard>
 
       <SectionCard title="Site" icon={site.icon} total={5} summary={siteSummary} filled={count([deployment.feature_type, deployment.habitat, deployment.setup_by, deployment.bait_use, deployment.timestamp_issues])}>
-        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">What is the camera aimed at?</p>
+        <p className="flex items-baseline gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">What is the camera aimed at?<CamtrapDpTag /></p>
         <p className={`${hintClass} mt-0 mb-2`}>The kind of feature in view, if any.</p>
         <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Feature type">
           {FEATURE_TYPE_OPTIONS.map((o) => (
@@ -885,6 +929,7 @@ export function MoreDetailsForm({ deployment, errors, onField }: {
         </div>
       </SectionCard>
     </div>
+    </CamtrapDpContext.Provider>
   )
 }
 
@@ -1209,6 +1254,8 @@ interface Props {
    * the deployment's details, those too. Where the images were taken isn't
    * kept in a session, so the wizard picks up at that step. */
   resumeSession?: SessionSummary
+  /** The visit this import starts from — the research project and the visit whose card was collected are chosen for you. */
+  closedVisit?: ClosedVisitTarget
   /** Offered once a deployment is imported: goes to the upload page, on the collection it went into. */
   onUpload?: (target: UploadTarget) => void
   /** Opens the settings — where the owner and publisher written into the images are set — on a section when given one. */
@@ -1220,9 +1267,9 @@ interface Props {
 }
 
 // Blank credentials: the backend uses the ones saved in the settings.
-const NO_CREDENTIALS: TrapperCredentials = {}
+export const NO_CREDENTIALS: TrapperCredentials = {}
 
-export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSettings, settingsOpen = false, onBack }: Props) {
+export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpload, onOpenSettings, settingsOpen = false, onBack }: Props) {
   const [step, setStep] = useState(resumeSession ? STEPS.findIndex((s) => s.key === 'origin') : 0)
 
   // The Trapper account is the one saved in the settings: nothing is asked for here, and the backend
@@ -1268,6 +1315,11 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
   const [savingProject, setSavingProject] = useState(false)
   const [localLocations, setLocalLocations] = useState<LocalLocation[]>([])
   const [selectedLocationId, setSelectedLocationId] = useState('')
+  // The visits of the research project that left a camera, whose card was collected, and have no deployment yet — null until they are read — and the one this deployment is of.
+  const [closedVisits, setClosedVisits] = useState<ClosedVisit[] | null>(null)
+  const [linkedVisit, setLinkedVisit] = useState<ClosedVisit | null>(null)
+  // Fix dates and times, opened over the wizard from the results of the checks — the wizard stays as it is under it.
+  const [fixingDates, setFixingDates] = useState(false)
   const [addingLocation, setAddingLocation] = useState(false)
   const [locationSource, setLocationSource] = useState<OriginSource | null>(null)
   const [locationDraft, setLocationDraft] = useState(EMPTY_LOCATION_DRAFT)
@@ -1285,6 +1337,9 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
   // The closest earlier revision of this deployment, if one was kept — to offer filling the form in from it.
   const [previousRevision, setPreviousRevision] = useState<PreviousDeployment | null>(null)
   const [filledFrom, setFilledFrom] = useState<string | null>(null)
+  // The SD card the images come from, as the user says it: the cards of the settings are offered. It is checked against the visit's.
+  const [sdCards, setSdCards] = useState<SdCard[]>([])
+  const [sdCard, setSdCard] = useState('')
   // The entry of the Epicollect5 form that gives the period, and fills the camera, site and notes in.
   // Whether the settings turn Epicollect5 on — until they say so, nothing of it is offered.
   const [epicollectOn, setEpicollectOn] = useState(false)
@@ -1363,6 +1418,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
     api.getSettings()
       .then((s) => {
         if (cancelled) return
+        setSdCards(s.FIELDWORK?.sd_cards ?? [])
         setCheckSettings({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
         // What can be edited in the wizard starts from the settings, until it has been.
         if (!preprocessTouched.current) setPreprocessSteps(new Set((['rename', 'resize', 'metadata'] as const).filter((step) => s.PREPROCESSING[step])))
@@ -1540,6 +1596,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
     setSelectedProjectId(''); setAddingProject(false); setProjectSource(null); setProjectDraft(EMPTY_RESEARCH_PROJECT)
     setTrapperProjectPks([])
     setLocalLocations([]); setSelectedLocationId(''); setAddingLocation(false); setLocationSource(null)
+    setClosedVisits(null); setLinkedVisit(null)
     setLocationDraft(EMPTY_LOCATION_DRAFT)
     setTrapperLocationProjectPk(''); setTrapperLocations([]); setTrapperLocationPks([]); setOriginError(null)
     setDeployment((d) => ({ ...d, location_id: '', location_name: null }))
@@ -1571,9 +1628,12 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
 
   // ── Research project ──
 
+  // The cards of the project chosen — and those free for any.
+  const projectSdCards = sdCards.filter((c) => !c.research_project || c.research_project.toLowerCase() === selectedProjectId.toLowerCase())
+
   function selectProject(project: LocalResearchProject | undefined) {
     setSelectedProjectId(project?.acronym ?? '')
-    setSelectedLocationId(''); setAddingLocation(false); setOriginError(null)
+    setSelectedLocationId(''); setAddingLocation(false); setOriginError(null); setLinkedVisit(null); setSdCard('')
     setOrigin({ researchProject: project ? `${project.acronym} — ${project.name}` : '', locationId: '', locationName: '', timezone: '' })
     applyOriginLocation(undefined)
   }
@@ -1648,6 +1708,55 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
     applyOriginLocation(location)
     applyTimezone(location?.timezone ?? '')
     setIgnoreDst(location?.ignore_dst ?? null)
+  }
+
+  // Coming from a visit that was just closed: its research project and then the visit are picked, once they are read.
+  const closedVisitApplied = useRef(false)
+  useEffect(() => {
+    if (!closedVisit || closedVisitApplied.current || selectedProjectId === closedVisit.researchProjectId) return
+    const project = localProjects.find((p) => p.acronym === closedVisit.researchProjectId)
+    if (project) selectProject(project)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closedVisit, localProjects, selectedProjectId])
+  useEffect(() => {
+    if (!closedVisit || closedVisitApplied.current || selectedProjectId !== closedVisit.researchProjectId || !closedVisits || localLocations.length === 0) return
+    const wanted = visitKey({ visit: closedVisit.visit, end: closedVisit.visit })
+    const found = closedVisits.find((c) => visitKey(c) === wanted)
+    closedVisitApplied.current = true
+    if (found) selectClosedVisit(found)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closedVisit, selectedProjectId, closedVisits, localLocations])
+
+  /** What the visit that left the card knows of the camera and the site fills in the details: the camera, who set it up, how it was put up — not the
+   * notes, which are of each visit. The visit that collected the card gives only where the period ends: the next deployment starts there. */
+  function fillFromVisits({ visit: start }: ClosedVisit) {
+    setDeployment((d) => ({
+      ...d,
+      camera_id: start.camera_id ?? d.camera_id, camera_model: start.camera_model ?? d.camera_model,
+      setup_by: start.setup_by ?? start.trappers ?? d.setup_by,
+      camera_interval: start.camera_interval ?? d.camera_interval, camera_height: start.camera_height ?? d.camera_height, camera_depth: start.camera_depth ?? d.camera_depth,
+      camera_tilt: start.camera_tilt ?? d.camera_tilt, camera_heading: start.camera_heading ?? d.camera_heading, detection_distance: start.detection_distance ?? d.detection_distance,
+      timestamp_issues: start.timestamp_issues ?? d.timestamp_issues, bait_use: start.bait_use ?? d.bait_use,
+      feature_type: start.feature_type ?? d.feature_type, habitat: start.habitat ?? d.habitat, deployment_groups: start.deployment_groups ?? d.deployment_groups,
+      tags: start.tags?.length ? start.tags : d.tags,
+    }))
+    setFilledFrom(`the visit ${start.session}`)
+  }
+
+  /** The visit the deployment is of, where its card was left — its location is the deployment's, and its session is the revision. */
+  function selectClosedVisit(closed: ClosedVisit | undefined) {
+    setOriginError(null)
+    if (!closed) { setLinkedVisit(null); selectLocation(undefined); return }
+    const location = localLocations.find((l) => l.location_id.toLowerCase() === closed.visit.location_id.toLowerCase())
+    if (!location) {
+      setOriginError(`The location ${closed.visit.location_id} of that visit is not among those of ${selectedProjectId}.`)
+      return
+    }
+    setLinkedVisit(closed)
+    selectLocation(location)
+    fillFromVisits(closed)
+    const session = Number(/\d+/.exec(closed.visit.session)?.[0])
+    if (session >= 1) { revisionTouched.current = true; setRevisionHint(null); applyRevision(String(session)) }
   }
 
   function startAddingLocation() {
@@ -1838,7 +1947,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
     if (stepKey !== 'origin' || settingsOpen) return
     let cancelled = false
     api.getSettings()
-      .then((s) => { if (!cancelled) setEpicollectOn(s.EPICOLLECT5.enabled) })
+      .then((s) => { if (!cancelled) { setEpicollectOn(s.EPICOLLECT5.enabled); setSdCards(s.FIELDWORK?.sd_cards ?? []) } })
       .catch(() => { if (!cancelled) setEpicollectOn(false) })
     return () => { cancelled = true }
   }, [stepKey, settingsOpen])
@@ -1846,7 +1955,8 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
   // ...and whether an earlier revision of it was kept, to offer its details.
   useEffect(() => {
     const id = deployment.deployment_id
-    setFilledFrom(null)
+    // What was filled in from the visits stays said, whatever the id does.
+    setFilledFrom(linkedVisit ? `the visit ${linkedVisit.visit.session}` : null)
     if (stepKey !== 'origin' || !researchProjectId || !id) { setPreviousRevision(null); return }
     let cancelled = false
     api.previousDeployments(researchProjectId, [id])
@@ -1881,6 +1991,10 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
   function periodOf(source: DateSource): Period | null {
     if (source === 'exif') return guess?.start_date ? { start: stampTimezone(guess.start_date, timezone), end: guess.end_date ? stampTimezone(guess.end_date, timezone) : null } : null
     if (source === 'epicollect') return entryPeriod(epicollectEntry?.fields, timezone)
+    if (source === 'visit' && linkedVisit) {
+      const { visit: start, end } = linkedVisit
+      return { start: stampTimezone(`${start.date}T${start.time}`, timezone), end: stampTimezone(`${end.date}T${end.time}`, timezone) }
+    }
     return null
   }
 
@@ -1895,10 +2009,10 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
   useEffect(() => {
     if (stepKey !== 'origin' || sourcePicked.current) return
     const looking = guessing || (epicollectOn && !epicollectDone)
-    const best = (['epicollect', 'exif', 'manual'] as DateSource[]).find((src) => (src === 'manual' ? !looking : periodOf(src) !== null))
+    const best = ([...(linkedVisit ? ['visit'] : []), 'epicollect', 'exif', 'manual'] as DateSource[]).find((src) => (src === 'manual' ? !looking : periodOf(src) !== null))
     if (best && best !== dateSource) takePeriod(best)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepKey, guess, guessing, epicollectEntry, epicollectOn, epicollectDone, timezone])
+  }, [stepKey, guess, guessing, epicollectEntry, epicollectOn, epicollectDone, timezone, linkedVisit])
 
   function pickSource(source: DateSource) {
     sourcePicked.current = true
@@ -1936,6 +2050,18 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
     api.listLocalLocations(selectedProjectId)
       .then(({ results }) => { if (!cancelled) setLocalLocations(results) })
       .catch((e) => { if (!cancelled) setOriginError(e instanceof Error ? e.message : 'Could not read the locations.') })
+    return () => { cancelled = true }
+  }, [selectedProjectId])
+
+  // ...and its visits that closed a deployment with none yet: the deployment is of one of them, and its location is the visit's. When there are
+  // none (or they can't be read) the location is asked for as it always was.
+  useEffect(() => {
+    setClosedVisits(null)
+    if (!selectedProjectId) return
+    let cancelled = false
+    Promise.resolve().then(() => api.closedVisits(selectedProjectId))
+      .then(({ results }) => { if (!cancelled) setClosedVisits(results) })
+      .catch(() => { if (!cancelled) setClosedVisits([]) })
     return () => { cancelled = true }
   }, [selectedProjectId])
 
@@ -2017,6 +2143,8 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
         setEvents((prev) => [...prev, event])
         if (event.type === 'done') {
           setDestDir(event.dest_dir)
+          // The visit that closed it now has its deployment.
+          if (linkedVisit && selectedProjectId) api.linkVisit(selectedProjectId, linkedVisit.visit, deployment.deployment_id).catch(() => {})
           // The run finished — nothing left to resume.
           if (taskId) api.discardSession(taskId).catch(() => {})
         }
@@ -2049,6 +2177,7 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
     setRevision(''); revisionTouched.current = false; setRevisionHint(null)
     setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set())
     setTimestampLogError(null)
+    setSdCard('')
     setEvents([]); setImportError(null); setDestDir(null)
     setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
     setTaskId(null)
@@ -2067,7 +2196,11 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
   const connectionForm = <TrapperAccountNotice account={account} conn={conn} onRetry={handleTestConnection} />
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <>
+    {fixingDates && (
+      <TimeFixPage initial={{ folder: sourceDir, researchProjectId: selectedProjectId, visit: linkedVisit?.visit }} onBack={() => setFixingDates(false)} />
+    )}
+    <div className={fixingDates ? 'hidden' : 'mx-auto max-w-[900px] px-4 py-8'}>
       <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">Import deployment</h2>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         Organizes a folder of camera-trap images into a local collection. It doesn't upload them to Trapper yet.
@@ -2107,6 +2240,11 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
         const runChecks = () => { openImagesStep(3); handleValidate() }
         return (
         <div>
+          {closedVisit && (
+            <Notice kind="info" className="mb-4">
+              The images of the visit <strong>{closedVisit.visit.session}</strong> to <strong>{closedVisit.visit.location_id}</strong> ({closedVisit.researchProjectId}), whose card was collected: its research project and its visit are chosen for you.
+            </Notice>
+          )}
           <StepHeading>Images</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
             Select a folder with the camera-trap images, choose which checks to run, and validate the images before they go any further.
@@ -2262,10 +2400,13 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
             Say where the images were taken and when they were collected, then add what you know about the camera and the site — the rest can wait.
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
-          <WizardStep n={1} title="Where was it taken?" status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
-                      description="The research project and the location the images come from. They are kept in the collections folder — pick one that is already there, or add a new one, by hand or from Trapper."
+          <WizardStep n={1} title="Where and when was it taken?" status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
+                      description={closedVisits && closedVisits.length > 0
+                        ? 'The research project and the visit the images come from — the visit whose card was collected. It says where they were taken. Research projects are kept in the collections folder.'
+                        : 'The research project and the location the images come from. They are kept in the collections folder — pick one that is already there, or add a new one, by hand or from Trapper.'}
                       summary={selectedProject && selectedLocation && <>
                         {selectedProject.acronym} · {selectedLocation.location_id}{selectedLocation.name ? `, ${selectedLocation.name}` : ''}<br />
+                        {linkedVisit && <>Closed visit: {visitLabel(linkedVisit)}<br /></>}
                         {selectedLocation.latitude != null && selectedLocation.longitude != null && <>GPS {selectedLocation.latitude}, {selectedLocation.longitude} · </>}Timezone {timezone || 'unknown'}
                       </>}>
           <FormCard title="Research project" description="Those found in the collections folder.">
@@ -2361,6 +2502,31 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
           </FormCard>
 
           {selectedProjectId && !addingProject && (
+            <FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project. Optional: it is checked against the card the visit says was left in the camera.`}>
+              <label className="sr-only" htmlFor="origin-sd-card">SD card</label>
+              <Combobox
+                id="origin-sd-card" options={projectSdCards.map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
+                value={sdCard} onChange={setSdCard} placeholder={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet` : 'Select the SD card the images come from…'} clearLabel="Clear SD card"
+              />
+            </FormCard>
+          )}
+
+          {selectedProjectId && !addingProject && closedVisits !== null && closedVisits.length > 0 && (
+            <FormCard title="Closed visit" description={`The visits to ${selectedProjectId} that left a camera and whose card has been collected, with no deployment yet. The deployment is of the visit you pick — where its card was left — and its location is the visit's.`}>
+              <label className="sr-only" htmlFor="origin-visit">Closed visit</label>
+              <Combobox
+                id="origin-visit"
+                options={closedVisits.map((c) => ({ value: visitKey(c), label: visitLabel(c) }))}
+                value={linkedVisit ? visitKey(linkedVisit) : ''} onChange={(key) => selectClosedVisit(closedVisits.find((c) => visitKey(c) === key))}
+                placeholder="Select a closed visit…" clearLabel="Clear closed visit"
+              />
+              {linkedVisit && locationLacksCoordinates && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{selectedLocationId} has no coordinates, and a deployment needs them — add them to the location.</p>
+              )}
+            </FormCard>
+          )}
+
+          {selectedProjectId && !addingProject && closedVisits !== null && closedVisits.length === 0 && (
             <FormCard title="Location" description={`Locations of ${selectedProjectId}, found in the collections folder.`}>
               {!addingLocation ? (
                 <>
@@ -2549,6 +2715,8 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
                 <DateSourcePicker
                   name={deployment.deployment_id || 'deployment'} value={dateSource} onPick={pickSource} start={deployment.start_date || null} end={deployment.end_date ?? null} timezone={timezone}
                   options={[
+                    ...(linkedVisit ? [{ source: 'visit' as const, title: 'Visits of the field work', period: periodOf('visit'),
+                      hint: `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), where the card was left, to ${linkedVisit.end.session} (${linkedVisit.end.date}), where it was collected — in the timezone of the location.` }] : []),
                     { source: 'exif', title: 'Camera data in the photos', period: periodOf('exif'),
                       hint: `First and last photo of the deployment.${scan && periodOf('exif') ? ` ${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'photo' : 'photos'}, read from their EXIF data.` : ''}` },
                     { source: 'epicollect', title: 'Epicollect5 project', period: periodOf('epicollect'),
@@ -2603,6 +2771,32 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
             Choose how strict each check should be.
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
+
+          {linkedVisit && (
+            <div className="mt-4 space-y-2" role="group" aria-label="Checks against the visit">
+              <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Against the visit</p>
+              {(() => {
+                const left = linkedVisit.visit.sd
+                const counted = linkedVisit.end.num_photos
+                const photos = scan?.image_count ?? null
+                const plural = (n: number) => `${n.toLocaleString('en-US')} ${n === 1 ? 'photo' : 'photos'}`
+                return (
+                  <>
+                    {!sdCard || !left
+                      ? <Notice kind="info">{!sdCard ? 'No SD card was said for these images' : `The visit ${linkedVisit.visit.session} does not say which card it left`}, so the card cannot be checked.</Notice>
+                      : sdCard.trim().toLowerCase() === left.trim().toLowerCase()
+                        ? <Notice kind="success">The SD card is <strong>{sdCard}</strong>, the one the visit {linkedVisit.visit.session} left in the camera.</Notice>
+                        : <Notice kind="warning" role="alert">You said the images come from the card <strong>{sdCard}</strong>, but the visit {linkedVisit.visit.session} left <strong>{left}</strong> in the camera.</Notice>}
+                    {counted == null || photos == null
+                      ? <Notice kind="info">{counted == null ? `The visit ${linkedVisit.end.session} did not count the photos on the card` : 'The folder was not counted'}, so the number of photos cannot be checked.</Notice>
+                      : counted === photos
+                        ? <Notice kind="success">The folder has <strong>{plural(photos)}</strong>, as the visit {linkedVisit.end.session} counted.</Notice>
+                        : <Notice kind="warning" role="alert">The visit {linkedVisit.end.session} counted <strong>{plural(counted)}</strong> on the card, and the folder has <strong>{plural(photos)}</strong> — {plural(Math.abs(counted - photos))} {counted > photos ? 'missing' : 'more'}.</Notice>}
+                  </>
+                )
+              })()}
+            </div>
+          )}
 
           <WizardStep n={1} title="Choose the checks" status={checksOpen === 1 ? 'open' : 'done'} canEdit={!checkingDeployment} onEdit={() => setChecksOpen(1)}
                       description="Choose how strict each check should be: skip it, warn about what it finds, or make it a must."
@@ -2665,6 +2859,12 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
                                   ? `${plural(blocking.length, 'is', 'are')} set to Must pass — resolve ${blocking.length === 1 ? 'it' : 'them'} to continue.`
                                   : requiredDeploymentChecks.size === 0 ? 'None is set to Must pass, so you can continue.' : 'The ones set to Must pass passed, so you can continue.'
                               }</>}
+                        </Notice>
+                      )}
+                      {((report?.checks.time_range?.failed ?? 0) > 0 || (deploymentCheck?.out_of_range?.length ?? 0) > 0) && (
+                        <Notice kind="warning" className="mb-4">
+                          Some images were taken outside the deployment&rsquo;s dates — a camera clock that went wrong?{' '}
+                          <button type="button" className="font-medium underline" onClick={() => setFixingDates(true)}>Fix the dates and times</button>, then run the checks again.
                         </Notice>
                       )}
                       <StrictnessTable
@@ -2975,5 +3175,6 @@ export default function ImportDeploymentPage({ resumeSession, onUpload, onOpenSe
         )}
       </div>
     </div>
+    </>
   )
 }

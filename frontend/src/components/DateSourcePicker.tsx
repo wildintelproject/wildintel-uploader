@@ -3,9 +3,9 @@ import { formatDay } from '../dateFormat'
 
 /** Where the period of a deployment comes from: Epicollect5, the collection's timestamp log, the images' EXIF data — in that order of
  * preference — or typed by hand, the only one that lets it be edited. */
-export type DateSource = 'exif' | 'epicollect' | 'log' | 'manual'
+export type DateSource = 'exif' | 'epicollect' | 'log' | 'visit' | 'manual'
 export const SOURCE_ORDER: DateSource[] = ['epicollect', 'log', 'exif', 'manual']
-export const SOURCE_LABELS: Record<DateSource, string> = { exif: 'Camera metadata (EXIF)', epicollect: 'Epicollect5', log: 'Timestamp log file', manual: 'Manual entry' }
+export const SOURCE_LABELS: Record<DateSource, string> = { exif: 'Camera metadata (EXIF)', epicollect: 'Epicollect5', log: 'Timestamp log file', visit: 'Visits of the field work', manual: 'Manual entry' }
 
 export interface Period { start: string | null; end: string | null }
 

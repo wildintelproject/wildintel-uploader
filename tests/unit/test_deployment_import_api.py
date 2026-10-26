@@ -384,6 +384,17 @@ def test_a_locations_timezone_and_summer_time_can_be_changed_and_belong_to_it(tm
     assert (location["name"], location["timezone"], location["ignore_dst"]) == ("Site", "Europe/Madrid", True)
 
 
+def test_a_location_can_be_renamed_moved_and_cleared_of_what_is_not_known_any_more(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "latitude": 37.0, "longitude": -6.5, "coordinate_uncertainty": 50}})
+        changed = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "name": "Site 1", "latitude": 37.1, "coordinate_uncertainty": None})
+        bad = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "latitude": 95})
+
+    assert changed.status_code == 200 and bad.status_code == 422
+    assert (changed.json()["name"], changed.json()["latitude"], changed.json()["longitude"], changed.json()["coordinate_uncertainty"]) == ("Site 1", 37.1, -6.5, None)
+
+
 def test_updating_a_location_that_is_not_there_is_a_404_and_a_bad_timezone_a_422(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)

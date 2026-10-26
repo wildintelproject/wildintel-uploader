@@ -25,7 +25,7 @@ interface Props {
 
 const byAcronym = (a: LocalResearchProject, b: LocalResearchProject) => a.acronym.toLowerCase().localeCompare(b.acronym.toLowerCase())
 
-/** The research project the images were taken for, as the "Where was it taken?" step of Import deployment asks for it: one of those kept in
+/** The research project the images were taken for, as the "Where and when was it taken?" step of Import deployment asks for it: one of those kept in
  * the collections folder, picked from a list that filters as you type — or a new one, by hand or taken from Trapper. */
 export default function ResearchProjectPicker({ value, onSelect, onError }: Props) {
   const [projects, setProjects] = useState<LocalResearchProject[]>([])

@@ -311,7 +311,7 @@ export interface PreprocessingOptions {
 }
 
 /** What the app's menu offers — import a deployment, import a whole session of them, or upload one to Trapper. */
-export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'utils' | 'sync' | 'repair'
+export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'utils' | 'sync' | 'repair' | 'visits'
 
 /** What syncing the local collections folder with Trapper did: for each kind of thing, what it created and what was already there. */
 export interface SyncResult {
@@ -510,6 +510,8 @@ export interface AppSettings {
   VALIDATION: ValidationSettings
   POSTVALIDATION: PostvalidationSettings
   PREPROCESSING: PreprocessingSettings
+  /** trappers: the people who go to the field — suggested as who went when a visit is registered. */
+  FIELDWORK: FieldworkSettings
 }
 
 /** What the settings page saves. A blank password keeps the saved one. */
@@ -521,6 +523,41 @@ export interface AppSettingsUpdate {
   VALIDATION: ValidationSettings
   POSTVALIDATION: PostvalidationSettings
   PREPROCESSING: PreprocessingSettings
+  FIELDWORK: FieldworkSettings
+}
+
+/** The people, the SD cards and the cameras of the field work, kept in the settings. */
+export interface FieldworkSettings {
+  trappers: Trapper[]
+  sd_cards: SdCard[]
+  cameras: Camera[]
+}
+
+/** One of the SD cards: what it is called (its number, or the label on it), who makes it, what it holds and the day it was put into production. */
+export interface SdCard {
+  label: string
+  brand: string | null
+  capacity: string | null
+  /** YYYY-MM-DD */
+  in_service: string | null
+  /** The acronym of the research project it belongs to; none, it is free for any. */
+  research_project: string | null
+}
+
+/** One of the camera traps, named as Camtrap DP names it. */
+export interface Camera {
+  camera_id: string
+  camera_model: string | null
+  /** YYYY-MM-DD — the day it was put into production. */
+  in_service: string | null
+  /** The acronym of the research project it belongs to; none, it is free for any. */
+  research_project: string | null
+}
+
+/** One of the people who go to the field, as wildintel-publisher keeps an author. */
+export interface Trapper {
+  name: string
+  affiliation: string | null
 }
 
 /** A research project entered by hand — the fields of Trapper's own "Add
@@ -564,6 +601,67 @@ export interface LocalLocation {
   longitude: number | null
   coordinate_uncertainty: number | null
   trapper_pk: number | null
+}
+
+/** A visit to a camera trap kept in a research project's visits.json (see the backend's VisitRecord): the visit's own fields, and
+ * what the visit says of the deployment — named as DeploymentFields names them. */
+export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'location_id' | 'location_name' | 'coordinate_uncertainty' | 'start_date' | 'end_date' | 'latitude' | 'longitude'> {
+  location_id: string
+  session: string
+  /** YYYY-MM-DD */
+  date: string
+  /** HH:MM:SS */
+  time: string
+  /** What was done at the visit — one or more. */
+  actions: ('Installation' | 'Revision' | 'Desinstallation' | 'Stolen')[]
+  /** Who went on the visit. */
+  trappers: string | null
+  status: string | null
+  /** How the card and the batteries were, as the datasheet writes it: OK, CarFull (card full), SinPilas (no batteries) or both. */
+  card_batteries_ok: 'OK' | 'CarFull' | 'SinPilas' | 'CarFullSinPilas' | null
+  num_photos: number | null
+  sd: string | null
+  date_time_ok: string | null
+  latitude: number | null
+  longitude: number | null
+  /** The deployment this visit closed, once it is imported. */
+  deployment_id?: string | null
+}
+
+/** A visit that left a camera, and the next one at the same location, which collected its card: the visit is closed, and the deployment is of it. */
+export interface ClosedVisit {
+  visit: StoredVisit
+  end: StoredVisit
+}
+
+/** Where Import deployment starts from when it is reached from a visit that was just closed: the research project, and the visit whose card was
+ * collected — the deployment is of it. */
+export interface ClosedVisitTarget {
+  researchProjectId: string
+  visit: StoredVisit
+}
+
+/** How a CSV file of visits is read: as an Epicollect download, or with the column of each field said. */
+export type VisitsCsvFormat = 'epicollect' | 'mapped'
+
+/** The columns of a CSV file, a few of its rows, the fields of a visit it can give (those a visit needs marked) and the column that most
+ * likely gives each. */
+export interface VisitsCsvColumns {
+  columns: string[]
+  sample: string[][]
+  mapping: Record<string, string>
+  fields: { field: string; label: string; required: boolean }[]
+}
+
+/** What reading a CSV file of visits gave: the visits that can be kept, the rows that cannot (numbered as in the file, the header being 1),
+ * those already kept, and how many were kept when asked to. */
+export interface VisitsCsvResult {
+  visits: StoredVisit[]
+  problems: { row: number; message: string }[]
+  skipped: number
+  /** Entries of old versions of the Epicollect form (no collection number or site), left out. */
+  ignored: number
+  saved: number | null
 }
 
 // ── Uploading a deployment to Trapper ───────────────────────────────────
@@ -715,4 +813,50 @@ export interface EpicollectInput {
 export interface EpicollectForm {
   project: { name: string; slug: string }
   inputs: EpicollectInput[]
+}
+
+// Fixing the dates and times of a deployment's images (see the backend's timefix_service).
+export interface TimeSegment {
+  first_index: number
+  last_index: number
+  first: string
+  last: string
+  first_time: string
+  last_time: string
+  count: number
+  inside: number
+  state: 'ok' | 'outside' | 'partly'
+  suggestion: { offset_seconds: number; why: string } | null
+}
+export interface TimeCorrection {
+  at: string
+  by: string | null
+  action: 'shift' | 'remove' | 'restore'
+  first?: string
+  last?: string
+  count?: number
+  offset_seconds?: number
+  names?: string[]
+  reason?: string | null
+}
+export interface Timeline {
+  folder: string
+  period: { start: string; end: string } | null
+  tolerance_hours: number
+  images: { name: string; time: string | null }[]
+  segments: TimeSegment[]
+  undated: string[]
+  outside: number
+  problems: string[]
+  ok: boolean
+  corrections: TimeCorrection[]
+}
+
+/** What says which images and which period when their dates are fixed: a folder and, optionally, the visit that left the camera. */
+export interface TimeFixTarget {
+  folder: string
+  research_project_id?: string
+  location_id?: string
+  date?: string
+  time?: string
 }

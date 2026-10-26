@@ -19,3 +19,8 @@ export const COVERAGE_AREAS: string[] = [
   'Hardangervidda National Park',
   'Lower Oder Valley National Park',
 ]
+
+/** The makes of SD card most used in the field — suggestions for the brand of a card; any other can be typed. */
+export const SD_CARD_BRANDS: string[] = [
+  'SanDisk', 'Kingston', 'Samsung', 'Lexar', 'Transcend', 'PNY', 'Toshiba', 'Verbatim', 'Silicon Power', 'ADATA', 'Integral', 'Delkin',
+]

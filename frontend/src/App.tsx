@@ -10,9 +10,10 @@ import SettingsPage from './pages/SettingsPage'
 import SyncCollectionsPage from './pages/SyncCollectionsPage'
 import UploadDeploymentPage from './pages/UploadDeploymentPage'
 import UtilsPage from './pages/UtilsPage'
+import VisitsPage from './pages/VisitsPage'
 import WelcomePage from './pages/WelcomePage'
 import { api } from './api'
-import type { SessionSummary, Task, UploadTarget } from './types'
+import type { ClosedVisitTarget, SessionSummary, Task, UploadTarget } from './types'
 
 export default function App() {
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
@@ -30,12 +31,15 @@ export default function App() {
   // hidden) — so a run in progress isn't lost.
   const [settingsOpen, setSettingsOpen] = useState(false)
   // The section the settings open on, when something sends the user to one in particular.
-  const [settingsSection, setSettingsSection] = useState<'epicollect' | undefined>(undefined)
-  function openSettings(section?: 'epicollect') { setSettingsSection(section); setSettingsOpen(true) }
+  const [settingsSection, setSettingsSection] = useState<'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations' | undefined>(undefined)
+  const [settingsProject, setSettingsProject] = useState<string | undefined>(undefined)
+  function openSettings(section?: 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations', researchProjectId?: string) { setSettingsSection(section); setSettingsProject(researchProjectId); setSettingsOpen(true) }
   // Back on the welcome screen by the title: it is shown ahead of anything else until "Get Started" is pressed again.
   const [home, setHome] = useState(false)
   // Where the upload page starts from, when it is reached from a finished import.
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null)
+  // The visit Import deployment starts from, when it is reached from the visits page, right after one was closed.
+  const [closedVisitTarget, setClosedVisitTarget] = useState<ClosedVisitTarget | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -61,7 +65,11 @@ export default function App() {
   }, [])
 
   function goHome() {
-    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setMenuShown(false); setHome(true)
+    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setClosedVisitTarget(null); setMenuShown(false); setHome(true)
+  }
+
+  function goToImportOfVisit(target: ClosedVisitTarget) {
+    setClosedVisitTarget(target); setTask('deployment')
   }
 
   function goToUpload(target: UploadTarget) {
@@ -79,10 +87,10 @@ export default function App() {
         </div>
       )}
       <main className="flex-1">
-        {settingsOpen && <SettingsPage initialSection={settingsSection} onClose={() => setSettingsOpen(false)} />}
+        {settingsOpen && <SettingsPage initialSection={settingsSection} initialProject={settingsProject} onClose={() => setSettingsOpen(false)} />}
         <div className={settingsOpen ? 'hidden' : ''}>
           {task === 'deployment'
-            ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
+            ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} closedVisit={closedVisitTarget ?? undefined} onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => { setTask(null); setClosedVisitTarget(null) }} />
             : task === 'session'
               ? <ImportSessionPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
               : task === 'upload'
@@ -93,6 +101,8 @@ export default function App() {
               ? <SyncCollectionsPage onBack={() => setTask(null)} />
               : task === 'repair'
               ? <RepairPage onBack={() => setTask(null)} />
+              : task === 'visits'
+              ? <VisitsPage settingsOpen={settingsOpen} onOpenSettings={openSettings} onImportImages={goToImportOfVisit} onBack={() => setTask(null)} />
               : showResumeScreen
                 ? (
                   <ResumeSessionsPage
@@ -103,7 +113,7 @@ export default function App() {
                   />
                 )
                 : menuShown
-                  ? <MenuPage onChoose={setTask} />
+                  ? <MenuPage onChoose={(t) => { setClosedVisitTarget(null); setTask(t) }} />
                   : <WelcomePage onStart={() => { setHome(false); if (!unfinishedSessions?.length) setMenuShown(true) }} />}
         </div>
       </main>

@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from datetime import date
 from typing import Literal, Optional
 
 import platformdirs
@@ -218,6 +219,121 @@ class PreprocessingSettings(BaseModel):
         return value.strip()
 
 
+class Trapper(BaseModel):
+    """One of the people who go to the field — {name, affiliation}, as wildintel-publisher keeps an author."""
+    name: str = Field(min_length=1, description="The trapper's full name, written as it should be on a visit.")
+    affiliation: Optional[str] = Field(default=None, description="Where the trapper works, free text.")
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        return " ".join(value.split())
+
+    @field_validator("affiliation")
+    @classmethod
+    def _affiliation(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
+
+
+def _tidy(value: Optional[str]) -> Optional[str]:
+    return (" ".join(value.split()) if value else "") or None
+
+
+def _blank_date(value):
+    """A date left blank is no date."""
+    return None if isinstance(value, str) and not value.strip() else value
+
+
+class SdCard(BaseModel):
+    """One of the SD cards of the field work — its label, as it is written on it, and optionally its brand, its capacity and the
+    day it was put into production."""
+    label: str = Field(min_length=1, description="What the card is called — its number or the label on it (e.g. A12).")
+    brand: Optional[str] = Field(default=None, description="Who makes it, free text (e.g. SanDisk).")
+    capacity: Optional[str] = Field(default=None, description="How much it holds, free text (e.g. 64 GB).")
+    in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
+    research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to; none, it is free for any.")
+
+    _blank_in_service = field_validator("in_service", mode="before")(_blank_date)
+    _research_project = field_validator("research_project")(lambda cls, v: _tidy(v))
+
+    @field_validator("brand")
+    @classmethod
+    def _brand(cls, value: Optional[str]) -> Optional[str]:
+        return _tidy(value)
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, value: str) -> str:
+        return " ".join(value.split())
+
+    @field_validator("capacity")
+    @classmethod
+    def _capacity(cls, value: Optional[str]) -> Optional[str]:
+        return _tidy(value)
+
+
+class Camera(BaseModel):
+    """One of the camera traps — its id (the serial number) and optionally its model, as Camtrap DP names them, and the day it was
+    put into production."""
+    camera_id: str = Field(min_length=1, description="The camera's id — its serial number. (cameraID)")
+    camera_model: Optional[str] = Field(default=None, description="Manufacturer and model, written as manufacturer-model. (cameraModel)")
+    in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
+    research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to; none, it is free for any.")
+
+    _blank_in_service = field_validator("in_service", mode="before")(_blank_date)
+    _research_project = field_validator("research_project")(lambda cls, v: _tidy(v))
+
+    @field_validator("camera_id")
+    @classmethod
+    def _camera_id(cls, value: str) -> str:
+        return " ".join(value.split())
+
+    @field_validator("camera_model")
+    @classmethod
+    def _camera_model(cls, value: Optional[str]) -> Optional[str]:
+        return _tidy(value)
+
+
+def _unique(items: list, key: str, scope: str | None = None) -> list:
+    """What is listed once by its `key` (whatever its case) — within its `scope`, when it has one — in the order given; the blank ones go."""
+    kept: dict[tuple, object] = {}
+    for item in items:
+        name = getattr(item, key)
+        if name:
+            kept.setdefault(((getattr(item, scope) or "").lower() if scope else "", name.lower()), item)
+    return list(kept.values())
+
+
+class FieldworkSettings(BaseModel):
+    trappers: list[Trapper] = Field(
+        default_factory=list,
+        description="The people who go to the field — suggested when a visit is registered, as who went. (FIELDWORK.trappers)",
+    )
+    sd_cards: list[SdCard] = Field(default_factory=list, description="The SD cards of the field work. (FIELDWORK.sd_cards)")
+    cameras: list[Camera] = Field(default_factory=list, description="The camera traps of the field work. (FIELDWORK.cameras)")
+
+    @field_validator("trappers", mode="before")
+    @classmethod
+    def _from_names(cls, trappers):
+        """A plain name is a trapper without affiliation."""
+        return [{"name": t} if isinstance(t, str) else t for t in trappers] if isinstance(trappers, list) else trappers
+
+    @field_validator("trappers")
+    @classmethod
+    def _unique_trappers(cls, trappers: list[Trapper]) -> list[Trapper]:
+        return _unique(trappers, "name")
+
+    @field_validator("sd_cards")
+    @classmethod
+    def _unique_sd_cards(cls, cards: list[SdCard]) -> list[SdCard]:
+        return _unique(cards, "label", "research_project")
+
+    @field_validator("cameras")
+    @classmethod
+    def _unique_cameras(cls, cameras: list[Camera]) -> list[Camera]:
+        return _unique(cameras, "camera_id", "research_project")
+
+
 class Settings(BaseModel):
     GENERAL: GeneralSettings = Field(default_factory=GeneralSettings)
     TRAPPER: TrapperSettings = Field(default_factory=TrapperSettings)
@@ -226,6 +342,7 @@ class Settings(BaseModel):
     VALIDATION: ValidationSettings = Field(default_factory=ValidationSettings)
     POSTVALIDATION: PostvalidationSettings = Field(default_factory=PostvalidationSettings)
     PREPROCESSING: PreprocessingSettings = Field(default_factory=PreprocessingSettings)
+    FIELDWORK: FieldworkSettings = Field(default_factory=FieldworkSettings)
 
 
 class ConfigInfo(BaseModel):

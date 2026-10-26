@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
 import SettingsPage from './SettingsPage'
 import { APP_SETTINGS } from '../test/fixtures'
+import { EMPTY_RESEARCH_PROJECT } from '../types'
+import type { Camera, SdCard } from '../types'
 
 vi.mock('../api', () => ({
   api: {
+    listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), updateLocalLocation: vi.fn(), trapperResearchProjects: vi.fn(), trapperLocations: vi.fn(),
     getSettings: vi.fn(), saveSettings: vi.fn(), clearLog: vi.fn(), browseFolder: vi.fn(), trapperTestConnection: vi.fn(), epicollectTestConnection: vi.fn(),
     checkVersion: vi.fn(), checkForUpdate: vi.fn(), listReports: vi.fn(), deleteReport: vi.fn(), getReport: vi.fn(), reportUrl: (id: string, format: string) => `/api/reports/${id}/download?format=${format}`, configs: vi.fn(), addConfig: vi.fn(), activateConfig: vi.fn(), openConfigFolder: vi.fn(),
   },
@@ -17,6 +20,8 @@ const mockedApi = vi.mocked(api)
 beforeEach(() => {
   vi.clearAllMocks()
   mockedApi.getSettings.mockResolvedValue(APP_SETTINGS)
+  mockedApi.listResearchProjects.mockResolvedValue({ results: [DONA] })
+  mockedApi.listLocalLocations.mockResolvedValue({ results: [] })
   mockedApi.saveSettings.mockImplementation(async (update) => ({
     GENERAL: { ...APP_SETTINGS.GENERAL, ...update.GENERAL },
     TRAPPER: { ...APP_SETTINGS.TRAPPER, base_url: update.TRAPPER.base_url, user_name: update.TRAPPER.user_name, has_password: APP_SETTINGS.TRAPPER.has_password || !!update.TRAPPER.user_password },
@@ -26,10 +31,18 @@ beforeEach(() => {
     VALIDATION: update.VALIDATION,
     POSTVALIDATION: update.POSTVALIDATION,
     PREPROCESSING: update.PREPROCESSING,
+    FIELDWORK: update.FIELDWORK,
   }))
 })
 
 const section = (name: string) => userEvent.click(screen.getByRole('button', { name }))
+// The entities are one section with a tab for each; the SD cards, the cameras and the locations are those of a research project.
+const entity = async (tab: string) => { await section('Entities'); await userEvent.click(screen.getByRole('tab', { name: tab })) }
+const pickProject = async (option = 'DONA — Doñana') => {
+  await userEvent.click(await screen.findByLabelText('Research project'))
+  await userEvent.click(await screen.findByRole('option', { name: option }))
+}
+const DONA = { ...EMPTY_RESEARCH_PROJECT, name: 'Doñana', acronym: 'DONA', trapper_pk: 2 }
 /** Opens the settings of a check, behind its gear. */
 const gear = (check: RegExp) => userEvent.click(screen.getByRole('button', { name: new RegExp(`^Configure .*${check.source}`) }))
 const settingsOf = (check: RegExp) => within(screen.getByRole('group', { name: new RegExp(`${check.source}.* settings$`) }))
@@ -770,6 +783,237 @@ describe('SettingsPage', () => {
     expect(await screen.findByText('Backend not reachable')).toBeInTheDocument()
   })
 
+  describe('Trappers', () => {
+    const ANA = { name: 'Ana Pérez', affiliation: 'University of Huelva' }
+    const LUIS = { name: 'Luis', affiliation: null }
+
+    async function open(trappers: { name: string; affiliation: string | null }[] = []) {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('Trappers')
+    }
+
+    it('lists the trappers saved as cards, with their affiliation under the name', async () => {
+      await open([ANA, LUIS])
+
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      expect(screen.getByText('University of Huelva')).toBeInTheDocument()
+      expect(screen.getByText('Luis')).toBeInTheDocument()
+      expect(screen.getByText('No affiliation')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Edit Ana Pérez' })).toBeInTheDocument()
+    })
+
+    it('says when there are none yet', async () => {
+      await open()
+
+      expect(screen.getByText(/No trapper yet/)).toBeInTheDocument()
+    })
+
+    it('adds a trapper with +, names it in the window that opens, and saves it with the rest of the settings', async () => {
+      await open([ANA])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add trapper' }))
+      const dialog = within(screen.getByRole('dialog', { name: 'Trapper' }))
+      await userEvent.clear(dialog.getByLabelText('Name'))
+      await userEvent.type(dialog.getByLabelText('Name'), 'Luis Gómez')
+      await userEvent.type(dialog.getByLabelText('Affiliation'), 'CSIC')
+      await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([ANA, { name: 'Luis Gómez', affiliation: 'CSIC' }])
+    })
+
+    it('imports trappers from a CSV file — the new ones are added, one with the same name is updated — and saves them with the rest', async () => {
+      await open([ANA])
+
+      const file = new File(['name,affiliation\nana pérez,CSIC\nLuis,\n,nobody\n'], 'trappers.csv', { type: 'text/csv' })
+      await userEvent.upload(screen.getByLabelText('Import Trappers from a CSV file'), file)
+
+      expect(await screen.findByRole('status')).toHaveTextContent('1 added, 1 updated from the file')
+      expect(screen.getByRole('status')).toHaveTextContent('Row 4: no name')
+      expect(screen.getByText('CSIC')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([{ name: 'ana pérez', affiliation: 'CSIC' }, { name: 'Luis', affiliation: null }])
+    })
+
+    it('exports the trappers to a CSV file, and has nothing to export when there are none', async () => {
+      const created: Blob[] = []
+      URL.createObjectURL = vi.fn((b: Blob) => { created.push(b); return 'blob:x' })
+      URL.revokeObjectURL = vi.fn()
+      await open([ANA, LUIS])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+      expect(await created[0].text()).toBe('name,affiliation\r\nAna Pérez,University of Huelva\r\nLuis,\r\n')
+    })
+
+    it('has nothing to export when there are no trappers', async () => {
+      await open()
+
+      expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled()
+    })
+
+    it('edits a trapper with its gear, and removes it from the window', async () => {
+      await open([ANA, LUIS])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
+      await userEvent.type(within(screen.getByRole('dialog', { name: 'Trapper' })).getByLabelText('Affiliation'), 'IOP PAS')
+      await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+      expect(screen.getByText('IOP PAS')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit Ana Pérez' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Remove trapper' }))
+      expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('does not let a trapper be done without a name or with the name of another', async () => {
+      await open([ANA, LUIS])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
+      const name = screen.getByLabelText('Name')
+      await userEvent.clear(name)
+      expect(screen.getByText('A name is required.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+
+      await userEvent.type(name, 'ana pérez')
+      expect(screen.getByText('ana pérez is already in the list.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+    })
+  })
+
+  describe('SD cards', () => {
+    const A12: SdCard = { label: 'A12', brand: 'SanDisk', capacity: '64 GB', in_service: '2026-03-01', research_project: 'DONA' }
+    const B3: SdCard = { label: 'B3', brand: null, capacity: null, in_service: null, research_project: 'DONA' }
+
+    async function open(sd_cards: SdCard[] = []) {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('SD cards')
+      await pickProject()
+    }
+
+    it('lists the cards with their brand, capacity and the day they were put into production', async () => {
+      await open([A12, B3])
+
+      expect(screen.getByText('A12')).toBeInTheDocument()
+      expect(screen.getByText('SanDisk · 64 GB · in production since 2026-03-01')).toBeInTheDocument()
+      expect(screen.getByText('No details')).toBeInTheDocument()
+    })
+
+    it('says when there are none yet', async () => {
+      await open()
+
+      expect(screen.getByText('No SD card yet.')).toBeInTheDocument()
+    })
+
+    it('adds a card with its label, a brand picked from the suggestions, its capacity and a day, and saves it', async () => {
+      await open()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add SD card' }))
+      const dialog = within(screen.getByRole('dialog', { name: 'SD card' }))
+      await userEvent.clear(dialog.getByLabelText('Label'))
+      await userEvent.type(dialog.getByLabelText('Label'), 'C7')
+      await userEvent.click(dialog.getByLabelText('Brand'))
+      await userEvent.click(await dialog.findByRole('option', { name: 'Kingston' }))
+      await userEvent.type(dialog.getByLabelText('Capacity'), '128 GB')
+      fireEvent.change(dialog.getByLabelText('In production since'), { target: { value: '2026-05-20' } })
+      await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: '2026-05-20', research_project: 'DONA' }])
+    })
+
+    it('suggests the brands as they are typed, and keeps any other that is typed', async () => {
+      await open([B3])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
+      const brand = screen.getByLabelText('Brand')
+      await userEvent.type(brand, 'san')
+      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['SanDisk'])
+
+      await userEvent.clear(brand)
+      await userEvent.type(brand, 'Acme Storage')
+      expect(screen.queryByRole('option')).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ ...B3, brand: 'Acme Storage' }])
+    })
+
+    it('needs a label, and a different one from the other cards', async () => {
+      await open([A12, B3])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
+      const label = screen.getByLabelText('Label')
+      await userEvent.clear(label)
+      expect(screen.getByText('A label is required.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+
+      await userEvent.type(label, 'a12')
+      expect(screen.getByText('a12 is already in the list.')).toBeInTheDocument()
+    })
+  })
+
+  describe('Cameras', () => {
+    async function open(cameras: Camera[] = []) {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, cameras } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('Cameras')
+      await pickProject()
+    }
+
+    it('lists the cameras with their model, and says when there are none', async () => {
+      await open([{ camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA' }, { camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      expect(screen.getByText('Reconyx-PC800 · in production since 2025-11-12')).toBeInTheDocument()
+      expect(screen.getByText('No details')).toBeInTheDocument()
+    })
+
+    it('adds a camera by its id and model, and saves it', async () => {
+      await open()
+      expect(screen.getByText('No camera yet.')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add camera' }))
+      const dialog = within(screen.getByRole('dialog', { name: 'Camera' }))
+      await userEvent.clear(dialog.getByLabelText('Camera id'))
+      await userEvent.type(dialog.getByLabelText('Camera id'), 'P800HG08192031')
+      await userEvent.type(dialog.getByLabelText('Camera model'), 'Reconyx-PC800')
+      fireEvent.change(dialog.getByLabelText('In production since'), { target: { value: '2025-11-12' } })
+      await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA' }])
+    })
+
+    it('removes a camera from its window', async () => {
+      await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Remove camera' }))
+
+      expect(screen.queryByText('X1')).not.toBeInTheDocument()
+    })
+
+    it('needs a camera id, and a different one from the other cameras', async () => {
+      await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }, { camera_id: 'X2', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit X2' }))
+      const id = screen.getByLabelText('Camera id')
+      await userEvent.clear(id)
+      expect(screen.getByText('A camera id is required.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+
+      await userEvent.type(id, 'x1')
+      expect(screen.getByText('x1 is already in the list.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+    })
+  })
+
   describe('Reports', () => {
     it('lists the reports of the validations, postvalidations, preprocessings and repairs, to download or delete', async () => {
       mockedApi.listReports.mockResolvedValue([
@@ -898,5 +1142,214 @@ describe('SettingsPage', () => {
       expect(await screen.findByText(/up to date/)).toBeInTheDocument()
       expect(screen.queryByText(/offline/)).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('SettingsPage — Entities', () => {
+  async function open(tab: string) {
+    render(<SettingsPage onClose={vi.fn()} />)
+    await screen.findByLabelText('Level')
+    await entity(tab)
+  }
+  const file = (text: string) => new File([text], 'f.csv', { type: 'text/csv' })
+
+  it('has a tab for the research projects, the trappers, the locations, the cameras and the SD cards, and takes the old sections to their tab', async () => {
+    render(<SettingsPage onClose={vi.fn()} initialSection="sdcards" />)
+    await screen.findByRole('tablist', { name: 'Entities' })
+
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Research projects', 'Trappers', 'Locations', 'Cameras', 'SD cards'])
+    expect(screen.getByRole('tab', { name: 'SD cards' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('button', { name: 'Trappers' })).not.toBeInTheDocument() // no longer a section of its own
+  })
+
+  describe('research projects', () => {
+    it('lists those of the collections folder', async () => {
+      await open('Research projects')
+
+      expect(await screen.findByText('DONA')).toBeInTheDocument()
+      expect(screen.getByText('Doñana · from Trapper')).toBeInTheDocument()
+    })
+
+    it('adds one by hand — kept at once, not with Save — and refuses an acronym that is not one', async () => {
+      mockedApi.saveResearchProject.mockImplementation(async (p) => p)
+      await open('Research projects')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add research project' }))
+      const dialog = within(screen.getByRole('dialog', { name: 'Research project' }))
+      await userEvent.type(dialog.getByLabelText('Acronym'), 'T!')
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.clear(dialog.getByLabelText('Acronym'))
+      await userEvent.type(dialog.getByLabelText('Acronym'), 'TATR')
+      await userEvent.type(dialog.getByLabelText('Name'), 'Tatra')
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ acronym: 'TATR', name: 'Tatra', trapper_pk: null })))
+      expect(mockedApi.saveSettings).not.toHaveBeenCalled()
+    })
+
+    it('reads them from a CSV file, leaving out those that are there already and those that are not research projects', async () => {
+      mockedApi.saveResearchProject.mockImplementation(async (p) => p)
+      await open('Research projects')
+
+      await userEvent.upload(screen.getByLabelText('Import Research projects from a CSV file'), file('acronym,name,description\nTATR,Tatra,Mountains\ndona,Doñana again,\nX,Too short,\n'))
+
+      expect(await screen.findByRole('status')).toHaveTextContent('1 added, 1 already there.')
+      expect(screen.getByRole('status')).toHaveTextContent('X: From 3 to 10 letters')
+      expect(mockedApi.saveResearchProject).toHaveBeenCalledTimes(1)
+      expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ acronym: 'TATR', description: 'Mountains' }))
+    })
+
+    it('takes them from Trapper, those with an acronym that can be one', async () => {
+      mockedApi.trapperResearchProjects.mockResolvedValue({ results: [{ pk: 5, name: 'Tatra', acronym: 'TATR' }, { pk: 6, name: 'No acronym', acronym: null }] })
+      mockedApi.saveResearchProject.mockImplementation(async (p) => p)
+      await open('Research projects')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Import from Trapper' }))
+      const panel = within(await screen.findByRole('group', { name: 'Import research projects from Trapper' }))
+      await userEvent.click(await panel.findByRole('checkbox', { name: /TATR — Tatra/ }))
+      await userEvent.click(panel.getByRole('checkbox', { name: /No acronym/ }))
+      await userEvent.click(panel.getByRole('button', { name: 'Add 2 research projects' }))
+
+      expect(await panel.findByRole('status')).toHaveTextContent('1 added from Trapper.')
+      expect(panel.getByRole('status')).toHaveTextContent('“No acronym” has no acronym')
+      expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ acronym: 'TATR', name: 'Tatra', trapper_pk: 5 }))
+    })
+
+    it('says why Trapper cannot be reached', async () => {
+      mockedApi.trapperResearchProjects.mockRejectedValue(new Error('No Trapper account in the settings.'))
+      await open('Research projects')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Import from Trapper' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No Trapper account in the settings.')
+    })
+  })
+
+  describe('locations', () => {
+    const RIDGE = { location_id: 'DONA_01', name: 'Ridge', timezone: 'Europe/Madrid', ignore_dst: null, latitude: 37.1, longitude: -6.4, coordinate_uncertainty: null, trapper_pk: null }
+
+    async function openLocations(locations = [RIDGE]) {
+      mockedApi.listLocalLocations.mockResolvedValue({ results: locations })
+      await open('Locations')
+      expect(screen.getByText('Pick a research project to see its locations.')).toBeInTheDocument()
+      await pickProject()
+    }
+
+    it('lists those of the research project picked, kept in the collections folder', async () => {
+      await openLocations()
+
+      expect(await screen.findByText('DONA_01')).toBeInTheDocument()
+      expect(screen.getByText('Ridge · 37.1, -6.4 · Europe/Madrid')).toBeInTheDocument()
+      expect(mockedApi.listLocalLocations).toHaveBeenCalledWith('DONA')
+    })
+
+    it('adds one by hand, with its numbers as numbers, and will not let a wrong coordinate or timezone be done with', async () => {
+      mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
+      await openLocations([])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add location' }))
+      const dialog = within(screen.getByRole('dialog', { name: 'Location' }))
+      await userEvent.type(dialog.getByLabelText('Location id'), 'DONA_02')
+      await userEvent.type(dialog.getByLabelText('Latitude'), '95')
+      expect(dialog.getByText('A number from -90 to 90.')).toBeInTheDocument()
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.clear(dialog.getByLabelText('Latitude'))
+      await userEvent.type(dialog.getByLabelText('Latitude'), '37.01')
+      await userEvent.type(dialog.getByLabelText('Longitude'), '-6.44')
+      await userEvent.type(dialog.getByLabelText('Timezone (IANA)'), 'Mars/Base')
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.clear(dialog.getByLabelText('Timezone (IANA)'))
+      await userEvent.type(dialog.getByLabelText('Timezone (IANA)'), 'Europe/Madrid')
+      await userEvent.click(dialog.getByLabelText('Its cameras ignore summer time (DST)'))
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
+        location_id: 'DONA_02', name: null, latitude: 37.01, longitude: -6.44, coordinate_uncertainty: null, timezone: 'Europe/Madrid', ignore_dst: true, trapper_pk: null,
+      }))
+    })
+
+    it('edits one — but not its id — and keeps it at once', async () => {
+      mockedApi.updateLocalLocation.mockResolvedValue(RIDGE)
+      await openLocations()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
+      const dialog = within(screen.getByRole('dialog', { name: 'Location' }))
+      expect(dialog.getByLabelText('Location id')).toBeDisabled()
+      await userEvent.clear(dialog.getByLabelText('Location name'))
+      await userEvent.type(dialog.getByLabelText('Location name'), 'Ridge top')
+      await userEvent.click(dialog.getByRole('button', { name: 'Save' }))
+
+      await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01', expect.objectContaining({ name: 'Ridge top', latitude: 37.1, timezone: 'Europe/Madrid' })))
+    })
+
+    it('reads them from a CSV file: new ones are added, one that is there is updated, a wrong value is left blank', async () => {
+      mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
+      mockedApi.updateLocalLocation.mockResolvedValue(RIDGE)
+      await openLocations()
+
+      await userEvent.upload(await screen.findByLabelText('Import Locations of DONA from a CSV file'), file('location_id,name,latitude,longitude\nDONA_01,Ridge 2,37.2,-6.4\nDONA_03,New,95,-6.1\n'))
+
+      expect(await screen.findByText(/1 added, 1 updated in DONA/)).toBeInTheDocument()
+      expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01', expect.objectContaining({ name: 'Ridge 2', latitude: 37.2 }))
+      expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', expect.objectContaining({ location_id: 'DONA_03', latitude: null, longitude: -6.1 }))
+      expect(screen.getByText(/latitude “95”/)).toBeInTheDocument()
+    })
+
+    it('takes them from the Trapper research project of the one picked, those with coordinates', async () => {
+      mockedApi.trapperLocations.mockResolvedValue({ results: [
+        { pk: 11, location_id: 'DONA_01', name: 'There already', timezone: null },
+        { pk: 12, location_id: 'DONA_07', name: 'Marsh', timezone: 'Europe/Madrid', latitude: 37.3, longitude: -6.2 },
+        { pk: 13, location_id: 'DONA_08', name: 'No GPS', timezone: null },
+      ] })
+      mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
+      await openLocations()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Import from Trapper' }))
+      const panel = within(await screen.findByRole('group', { name: 'Import locations from Trapper' }))
+      for (const name of [/DONA_01/, /DONA_07/, /DONA_08/]) await userEvent.click(await panel.findByRole('checkbox', { name }))
+      await userEvent.click(panel.getByRole('button', { name: 'Add 3 locations' }))
+
+      expect(await panel.findByRole('status')).toHaveTextContent('1 added from Trapper.')
+      expect(panel.getByRole('status')).toHaveTextContent('DONA_01 is already there.')
+      expect(panel.getByRole('status')).toHaveTextContent('“DONA_08” has no coordinates in Trapper')
+      expect(mockedApi.trapperLocations).toHaveBeenCalledWith({}, 2)
+      expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', expect.objectContaining({ location_id: 'DONA_07', latitude: 37.3, longitude: -6.2, timezone: 'Europe/Madrid', trapper_pk: 12 }))
+    })
+
+    it('cannot take them from Trapper for a research project that was not taken from there', async () => {
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...DONA, trapper_pk: null }] })
+      await openLocations()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Import from Trapper' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('was not taken from Trapper')
+    })
+  })
+
+  it('keeps the cameras and the SD cards by research project: those of another project, or of none, are not mixed up', async () => {
+    const card = (label: string, research_project: string | null) => ({ label, brand: null, capacity: null, in_service: null, research_project })
+    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [card('A1', 'DONA'), card('B1', 'TATR'), card('F1', null)] } })
+    await open('SD cards')
+
+    await pickProject()
+    expect(screen.getByText('A1')).toBeInTheDocument()
+    expect(screen.queryByText('B1')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add SD card' }))
+    await userEvent.type(within(screen.getByRole('dialog', { name: 'SD card' })).getByLabelText('Label'), '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards.map((c) => [c.label, c.research_project])).toEqual([['B1', 'TATR'], ['F1', null], ['A1', 'DONA'], ['New SD card2', 'DONA']])
+  })
+
+  it('shows the cards of no project under their own choice', async () => {
+    const card = (label: string, research_project: string | null) => ({ label, brand: null, capacity: null, in_service: null, research_project })
+    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [card('A1', 'DONA'), card('F1', null)] } })
+    await open('SD cards')
+
+    await pickProject('Not assigned to a project')
+
+    expect(screen.getByText('F1')).toBeInTheDocument()
+    expect(screen.queryByText('A1')).not.toBeInTheDocument()
   })
 })

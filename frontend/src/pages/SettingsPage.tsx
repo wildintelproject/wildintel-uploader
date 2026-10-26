@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
+import CheckboxList from '../components/CheckboxList'
+import Combobox from '../components/Combobox'
+import { download, itemsToCsv, readItems } from '../csvFile'
+import { NO_CREDENTIALS } from './ImportDeploymentPage'
 import EpicollectMapping from '../components/EpicollectMapping'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
-import { COVERAGE_AREAS, ENTITIES } from '../entities'
+import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS } from '../entities'
 import ReportsList from '../components/ReportsList'
-import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, ImageCheck, LogLevel, SimilarityMethod, UpdateCheck } from '../types'
+import { isValidTimezone } from '../deploymentValidation'
+import { EMPTY_RESEARCH_PROJECT } from '../types'
+import type { Location, ResearchProject } from '../types'
+import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, ImageCheck, Camera, LocalLocation, LocalResearchProject, LogLevel, SdCard, SimilarityMethod, Trapper, UpdateCheck } from '../types'
 
 const hintClass = 'text-xs text-zinc-500 dark:text-zinc-400'
 const btnPrimary = 'px-6 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -68,6 +75,31 @@ const ReportIcon = () => (
     <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
     <path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" />
+  </Icon>
+)
+const SdCardIcon = () => (
+  <Icon>
+    <path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
+    <path d="M8 6v3M11 6v3M14 7v2" />
+  </Icon>
+)
+const PinIcon = () => (
+  <Icon>
+    <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </Icon>
+)
+const UserIcon = () => (
+  <Icon>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </Icon>
+)
+const UsersIcon = () => (
+  <Icon>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </Icon>
 )
 const FileIcon = () => (
@@ -140,7 +172,24 @@ interface Draft {
   licenseUrl: string
   ignoreDst: boolean
   convertToUtc: boolean
+  trappers: Trapper[]
+  sdCards: SdCard[]
+  cameras: Camera[]
 }
+
+/** A location of the settings as it is edited: every field a text, as it is typed. */
+interface LocationDraft {
+  location_id: string
+  name: string | null
+  latitude: string | null
+  longitude: string | null
+  coordinate_uncertainty: string | null
+  timezone: string | null
+  /** 'yes' when its cameras ignore summer time. */
+  ignore_dst: string | null
+}
+
+const text = (n: number | null) => (n === null ? null : String(n))
 
 function toDraft(s: AppSettings): Draft {
   const post = s.POSTVALIDATION
@@ -185,6 +234,9 @@ function toDraft(s: AppSettings): Draft {
     licenseUrl: s.PREPROCESSING.license_url,
     ignoreDst: s.PREPROCESSING.ignore_dst,
     convertToUtc: s.PREPROCESSING.convert_to_utc,
+    trappers: s.FIELDWORK.trappers.map((t) => ({ ...t })),
+    sdCards: s.FIELDWORK.sd_cards.map((c) => ({ ...c })),
+    cameras: s.FIELDWORK.cameras.map((c) => ({ ...c })),
   }
 }
 
@@ -228,6 +280,9 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
       owner: d.owner.trim(), publisher: d.publisher.trim(), coverage: d.coverage.trim(), license_url: d.licenseUrl.trim(),
       ignore_dst: d.ignoreDst, convert_to_utc: d.convertToUtc,
     },
+    FIELDWORK: {
+      trappers: d.trappers, sd_cards: d.sdCards, cameras: d.cameras,
+    },
   }
 }
 
@@ -246,7 +301,11 @@ const FOLDERS: { draftKey: 'collectionsDir' | 'reportsDir' | 'packagesDir'; labe
     hint: 'Handy when the packages are big and the data folder is on a small disk.' },
 ]
 
-type SectionId = 'general' | 'trapper' | 'epicollect' | 'validation' | 'postvalidation' | 'preprocessing' | 'reports' | 'config'
+type SectionId = 'general' | 'trapper' | 'epicollect' | 'validation' | 'postvalidation' | 'preprocessing' | 'entities' | 'reports' | 'config'
+
+/** The lists of the entities, each with its own tab. The sections of the settings that used to be one each open the entities on their tab. */
+type EntityTab = 'projects' | 'trappers' | 'locations' | 'cameras' | 'sdcards'
+const ENTITY_SECTIONS: Record<string, EntityTab> = { trappers: 'trappers', sdcards: 'sdcards', cameras: 'cameras', locations: 'locations' }
 
 const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'general', label: 'General', icon: SlidersIcon },
@@ -255,6 +314,7 @@ const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'validation', label: 'Validation', icon: CheckIcon },
   { id: 'postvalidation', label: 'Postvalidation', icon: ShieldIcon },
   { id: 'preprocessing', label: 'Preprocessing', icon: ImageIcon },
+  { id: 'entities', label: 'Entities', icon: UsersIcon },
   { id: 'reports', label: 'Reports', icon: ReportIcon },
   { id: 'config', label: 'Config', icon: FileIcon },
 ]
@@ -292,7 +352,8 @@ function BoxField({ label, error, children }: { label: string; error?: string | 
 
 const boxInput = 'block w-full bg-transparent text-base text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none py-0.5'
 
-function TextBox({ label, value, onChange, type = 'text', placeholder, mono, error, list }: {
+function TextBox({ label, value, onChange, type = 'text', placeholder, mono, error, list, disabled }: {
+  disabled?: boolean
   label: string; value: string; onChange: (v: string) => void; type?: 'text' | 'password'; placeholder?: string; mono?: boolean; error?: string | null
   /** The id of a <datalist> of suggestions: pick one, or type anything. */
   list?: string
@@ -300,7 +361,7 @@ function TextBox({ label, value, onChange, type = 'text', placeholder, mono, err
   return (
     <BoxField label={label} error={error}>
       <input
-        type={type} className={`${boxInput} ${mono ? 'font-mono text-sm' : ''}`} value={value} placeholder={placeholder} aria-label={label} list={list}
+        type={type} className={`${boxInput} ${mono ? 'font-mono text-sm' : ''}`} value={value} placeholder={placeholder} aria-label={label} list={list} disabled={disabled}
         aria-invalid={error ? true : undefined} onChange={(e) => onChange(e.target.value)} autoComplete={type === 'password' ? 'new-password' : 'off'}
       />
     </BoxField>
@@ -369,6 +430,7 @@ function CheckOption({ label, hint, checked, onChange }: { label: string; hint?:
   )
 }
 
+const btnOutline = 'px-3 h-10 flex items-center text-sm border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 const iconBtn = 'w-10 h-10 shrink-0 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors'
 
 /** One check as an entry of its own: its name and what it looks at, a switch to turn it on or off at once, and — only when
@@ -444,10 +506,609 @@ const SIMILARITY_METHODS: { value: SimilarityMethod; label: string }[] = [
 
 // ── The page ────────────────────────────────────────────────────────────
 
+const btnDanger = 'inline-flex items-center px-4 py-2 text-sm rounded-xl bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/70 transition-colors'
+
+/** A window over the page, closed by a click outside it. */
+function DialogShell({ label, title, onClose, children }: { label: string; title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()}
+           className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 p-6 space-y-4">
+        <h5 className="text-lg font-semibold">{title}</h5>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/** One entry of a card list: icon tile, name and what is under it, and the gear that edits it. */
+function ItemCard({ icon, title, subtitle, editLabel, onEdit }: { icon: ReactNode; title: string; subtitle: string; editLabel: string; onEdit: () => void }) {
+  return (
+    <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800">
+      <span className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300" aria-hidden="true">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-base truncate">{title}</p>
+        <p className={`${hintClass} truncate`}>{subtitle}</p>
+      </div>
+      <button type="button" className={iconBtn} aria-label={editLabel} title="Edit" onClick={onEdit}><GearIcon /></button>
+    </div>
+  )
+}
+
+/** A field of an item of a card list: the first of them names the item — it is required, and no two items have the same. */
+interface ItemField<T> {
+  key: keyof T & string; label: string; placeholder?: string; hint?: string
+  /** A text (the default), a day, or a text that suggests values — as a research project is picked from a list, but any other can be typed. */
+  kind?: 'text' | 'date' | 'suggest' | 'bool'
+  /** What is wrong with a value, if anything: it is said under the field, and the item cannot be done with until it is put right. */
+  validate?: (value: string) => string | null
+  suggestions?: string[]
+}
+
+/** A field of an item as the text it is — nothing when it is left blank. */
+function textOf<T extends object>(item: T, key: keyof T & string): string {
+  return String((item as Record<string, unknown>)[key] ?? '')
+}
+
+/** A text that suggests values as it is typed, from a list that filters — pick one, or type any other. */
+function SuggestBox({ label, value, onChange, suggestions, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; suggestions: string[]; placeholder?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const needle = value.trim().toLowerCase()
+  const shown = suggestions.filter((o) => !needle || o.toLowerCase().includes(needle))
+  return (
+    <div className="relative">
+      <BoxField label={label}>
+        <input
+          role="combobox" aria-expanded={open} aria-autocomplete="list" aria-label={label} autoComplete="off" className={boxInput} value={value} placeholder={placeholder}
+          onFocus={() => setOpen(true)} onClick={() => setOpen(true)} onBlur={() => setOpen(false)} onChange={(e) => { onChange(e.target.value); setOpen(true) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+        />
+      </BoxField>
+      {open && shown.length > 0 && (
+        <ul role="listbox" aria-label={`${label} suggestions`}
+            className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg">
+          {shown.map((o) => (
+            <li key={o} role="option" aria-selected={o === value}
+                className="px-4 py-2 text-sm cursor-pointer text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                onMouseDown={(e) => { e.preventDefault(); onChange(o); setOpen(false) }}>{o}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function DateBox({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <BoxField label={label}>
+      <input type="date" aria-label={label} className={`${boxInput} [color-scheme:light] dark:[color-scheme:dark]`} value={value} onChange={(e) => onChange(e.target.value)} />
+    </BoxField>
+  )
+}
+
+function ItemDialog<T extends object>({ noun, fields, item, others, onChange, onRemove, onClose, onDone = onClose, doneLabel = 'Done', lockFirst = false }: {
+  noun: string; fields: ItemField<T>[]; item: T; others: T[]; onChange: (patch: Partial<T>) => void; onClose: () => void
+  /** Without it the item cannot be removed from here. */
+  onRemove?: () => void
+  /** What Done does, when it is not just closing the window — as when the item is kept as it is done with. */
+  onDone?: () => void
+  doneLabel?: string
+  /** What names the item cannot be changed. */
+  lockFirst?: boolean
+}) {
+  const [first] = fields
+  const name = textOf(item, first.key).trim()
+  const error = !name ? `A ${first.label.toLowerCase()} is required.` : others.some((o) => textOf(o, first.key).trim().toLowerCase() === name.toLowerCase()) ? `${name} is already in the list.` : null
+  const fieldError = (f: ItemField<T>, i: number) => (i === 0 ? error : null) ?? f.validate?.(textOf(item, f.key).trim()) ?? null
+  const invalid = fields.some((f, i) => !!fieldError(f, i))
+  const Noun = noun[0].toUpperCase() + noun.slice(1)
+  return (
+    <DialogShell label={Noun} title={name || `New ${noun}`} onClose={onClose}>
+      {fields.map((f, i) => (
+        <div key={f.key}>
+          {(() => {
+            const change = (v: string) => onChange({ [f.key]: i === 0 ? v : (v || null) } as Partial<T>)
+            return f.kind === 'bool' ? (
+                <label className="flex items-center gap-3 px-1 py-2 text-sm text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                  <input type="checkbox" checked={textOf(item, f.key) !== ''} onChange={(e) => change(e.target.checked ? 'yes' : '')} />
+                  {f.label}
+                </label>
+              )
+              : f.kind === 'date' ? <DateBox label={f.label} value={textOf(item, f.key)} onChange={change} />
+              : f.kind === 'suggest' ? <SuggestBox label={f.label} value={textOf(item, f.key)} onChange={change} suggestions={f.suggestions ?? []} placeholder={f.placeholder} />
+              : <TextBox label={f.label} value={textOf(item, f.key)} placeholder={f.placeholder} error={fieldError(f, i)} onChange={change} disabled={lockFirst && i === 0} />
+          })()}
+          {f.hint && <p className={`${hintClass} px-1 mt-1`}>{f.hint}</p>}
+        </div>
+      ))}
+      <div className="flex items-center justify-between pt-3 border-t border-zinc-200 dark:border-zinc-800">
+        {onRemove ? <button type="button" className={btnDanger} onClick={onRemove}>Remove {noun}</button> : <span />}
+        <button type="button" className={btnPrimary} disabled={invalid} onClick={onDone}>{doneLabel}</button>
+      </div>
+    </DialogShell>
+  )
+}
+
+/** A list kept in the settings as the Authors of wildintel-publisher are: cards with a + to add one and a gear to edit it. */
+function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, fields, subtitle, empty, icon, fileName }: {
+  heading: string; noun: string; items: T[]; onChange: (v: T[]) => void
+  /** What an item is when it is added, before it is edited. */
+  blank: T
+  fields: ItemField<T>[]
+  /** What goes under the name on the card. */
+  subtitle: (item: T) => string
+  empty: string
+  icon: ReactNode
+  /** The name of the file the list is exported to, without the extension. */
+  fileName: string
+}) {
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const editing = editingIndex !== null ? items[editingIndex] ?? null : null
+  const key = fields[0].key
+
+  function add() {
+    onChange([...items, blank])
+    setEditingIndex(items.length)
+  }
+
+  // What reading a CSV file gave: its items join the list (one with the same name replaces that of the list), and what was left out is said.
+  const [imported, setImported] = useState<{ added: number; updated: number; problems: string[] } | null>(null)
+
+  async function importFile(file: File | undefined) {
+    if (!file) return
+    const { items: read, problems } = readItems<T>(await file.text(), fields, blank, noun)
+    const next = [...items]
+    let added = 0
+    let updated = 0
+    for (const item of read) {
+      const same = next.findIndex((it) => textOf(it, key).toLowerCase() === textOf(item, key).toLowerCase())
+      if (same >= 0) { next[same] = item; updated++ } else { next.push(item); added++ }
+    }
+    if (added + updated > 0) onChange(next)
+    setImported({ added, updated, problems })
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-base text-zinc-800 dark:text-zinc-200">{heading}</span>
+        <div className="flex items-center gap-2">
+          <label className={`${btnOutline} cursor-pointer`}>
+            Import CSV
+            <input type="file" accept=".csv,text/csv" className="sr-only" aria-label={`Import ${heading} from a CSV file`}
+                   onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = '' }} />
+          </label>
+          <button type="button" className={btnOutline} disabled={items.length === 0} onClick={() => download(`${fileName}.csv`, itemsToCsv(items, fields))}>Export CSV</button>
+          <button type="button" className={`${iconBtn} text-xl`} aria-label={`Add ${noun}`} title={`Add ${noun}`} onClick={add}>+</button>
+        </div>
+      </div>
+      {imported && (
+        <div role="status" className="mb-3 text-sm">
+          <p className="text-emerald-700 dark:text-emerald-400">
+            {imported.added} added, {imported.updated} updated from the file — save the settings to keep them.
+          </p>
+          {imported.problems.length > 0 && <ul className="list-disc pl-5 text-amber-700 dark:text-amber-400">{imported.problems.map((p) => <li key={p}>{p}</li>)}</ul>}
+        </div>
+      )}
+      <div className="space-y-3">
+        {items.length === 0 && <p className={hintClass}>{empty}</p>}
+        {items.map((item, i) => (
+          <ItemCard key={i} icon={icon} title={textOf(item, key)} subtitle={subtitle(item)} editLabel={`Edit ${textOf(item, key)}`} onEdit={() => setEditingIndex(i)} />
+        ))}
+      </div>
+      {editing && editingIndex !== null && (
+        <ItemDialog
+          noun={noun} fields={fields} item={editing} others={items.filter((_, i) => i !== editingIndex)}
+          onChange={(patch) => onChange(items.map((it, i) => (i === editingIndex ? { ...it, ...patch } : it)))}
+          onRemove={() => { onChange(items.filter((_, i) => i !== editingIndex)); setEditingIndex(null) }}
+          onClose={() => setEditingIndex(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+const numberRange = (min: number, max: number) => (v: string) => (v === '' || (Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max) ? null : `A number from ${min} to ${max}.`)
+
+/** The fields of a location of the settings, the first naming it. */
+const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
+  { key: 'location_id', label: 'Location id', placeholder: 'e.g. DONA_0001', hint: 'The id of the location — what names it in a research project, so no two have the same.' },
+  { key: 'name', label: 'Location name', placeholder: 'e.g. Doñana site 1' },
+  { key: 'latitude', label: 'Latitude', placeholder: 'e.g. 37.0123', hint: 'Decimal degrees, WGS84.', validate: numberRange(-90, 90) },
+  { key: 'longitude', label: 'Longitude', placeholder: 'e.g. -6.4412', hint: 'Decimal degrees, WGS84.', validate: numberRange(-180, 180) },
+  { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty (m)', placeholder: 'e.g. 100', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
+  { key: 'timezone', label: 'Timezone (IANA)', placeholder: 'e.g. Europe/Madrid', hint: "The location's own — every deployment there is read in it.", validate: (v) => (v === '' || isValidTimezone(v) ? null : 'Not a known IANA timezone (e.g. Europe/Madrid).') },
+  { key: 'ignore_dst', label: 'Its cameras ignore summer time (DST)', kind: 'bool' },
+]
+
+/** What a research project is when it is added by hand, or read from a CSV file: its acronym and name, and the fields free text. */
+interface ProjectDraft { acronym: string; name: string | null; description: string | null; keywords: string | null }
+const BLANK_PROJECT: ProjectDraft = { acronym: '', name: null, description: null, keywords: null }
+const PROJECT_FIELDS: ItemField<ProjectDraft>[] = [
+  { key: 'acronym', label: 'Acronym', placeholder: 'e.g. DONA', hint: 'From 3 to 10 letters, digits, _, . or -; it names the research project’s folder.',
+    validate: (v) => (/^[0-9A-Za-z][0-9A-Za-z_.-]{2,9}$/.test(v) ? null : 'From 3 to 10 letters, digits, _, . or -.') },
+  { key: 'name', label: 'Name', validate: (v) => (v ? null : 'A name is required.') },
+  { key: 'description', label: 'Description' },
+  { key: 'keywords', label: 'Keywords' },
+]
+
+const locationDraft = (l: LocalLocation): LocationDraft => ({
+  location_id: l.location_id, name: l.name, latitude: text(l.latitude), longitude: text(l.longitude),
+  coordinate_uncertainty: text(l.coordinate_uncertainty), timezone: l.timezone, ignore_dst: l.ignore_dst ? 'yes' : null,
+})
+const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: null, ignore_dst: null }
+const numberOrNull = (t: string | null) => (t === null ? null : Number(t))
+/** The fields of a location as they are kept — the numbers as numbers. */
+const locationFields = (d: LocationDraft) => ({
+  name: d.name, latitude: numberOrNull(d.latitude), longitude: numberOrNull(d.longitude), coordinate_uncertainty: numberOrNull(d.coordinate_uncertainty),
+  timezone: d.timezone, ignore_dst: d.ignore_dst ? true : null,
+})
+
+const NOT_ASSIGNED = '__none__'
+
+/** The line over a list that is kept as it is changed: its name, and to import from a CSV file, export to one, import from Trapper, or add. */
+function ListHeader({ heading, noun, onFile, onExport, exportDisabled, onTrapper, onAdd, addDisabled }: {
+  heading: string; noun: string; onFile: (file: File | undefined) => void; onExport: () => void; exportDisabled: boolean
+  onTrapper: () => void; onAdd: () => void; addDisabled?: boolean
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <span className="text-base text-zinc-800 dark:text-zinc-200">{heading}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className={`${btnOutline} cursor-pointer`}>
+          Import CSV
+          <input type="file" accept=".csv,text/csv" className="sr-only" aria-label={`Import ${heading} from a CSV file`} disabled={addDisabled}
+                 onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = '' }} />
+        </label>
+        <button type="button" className={btnOutline} onClick={onTrapper} disabled={addDisabled}>Import from Trapper</button>
+        <button type="button" className={btnOutline} disabled={exportDisabled} onClick={onExport}>Export CSV</button>
+        <button type="button" className={`${iconBtn} text-xl`} aria-label={`Add ${noun}`} title={`Add ${noun}`} onClick={onAdd} disabled={addDisabled}>+</button>
+      </div>
+    </div>
+  )
+}
+
+/** What importing gave — and what was left out. */
+function ImportResult({ message, problems }: { message: string; problems: string[] }) {
+  return (
+    <div role="status" className="mb-3 text-sm">
+      <p className="text-emerald-700 dark:text-emerald-400">{message}</p>
+      {problems.length > 0 && <ul className="list-disc pl-5 text-amber-700 dark:text-amber-400">{problems.map((p, i) => <li key={i}>{p}</li>)}</ul>}
+    </div>
+  )
+}
+
+/** Picks what to import from Trapper — with the account of the settings — from a list that filters as you type. */
+function TrapperPanel<T>({ noun, load, keyOf, labelOf, onAdd, onClose }: {
+  noun: string; load: () => Promise<T[]>; keyOf: (t: T) => string; labelOf: (t: T) => string
+  /** Keeps the ones picked; says how many were kept and what was left out. */
+  onAdd: (chosen: T[]) => Promise<{ added: number; problems: string[] }>; onClose: () => void
+}) {
+  const [items, setItems] = useState<T[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [chosen, setChosen] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState<{ added: number; problems: string[] } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(load)
+      .then((found) => { if (!cancelled) setItems(found) })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Could not reach Trapper.') })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function add() {
+    setBusy(true)
+    try {
+      setDone(await onAdd((items ?? []).filter((t) => chosen.includes(keyOf(t)))))
+      setChosen([])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-zinc-200 dark:border-zinc-700 p-4" role="group" aria-label={`Import ${noun}s from Trapper`}>
+      <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">Import {noun}s from Trapper</p>
+      {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
+      {!error && items === null && <p className={hintClass}>Connecting to Trapper…</p>}
+      {items !== null && (
+        <CheckboxList
+          filterLabel={`Filter Trapper ${noun}s`} emptyText={`Trapper has no ${noun}s to offer.`} disabled={busy}
+          options={items.map((t) => ({ value: keyOf(t), label: labelOf(t) }))} selected={chosen} onChange={setChosen}
+        />
+      )}
+      {done && <div className="mt-3"><ImportResult message={`${done.added} added from Trapper.`} problems={done.problems} /></div>}
+      <div className="flex items-center gap-3 mt-3">
+        <button type="button" className={btnPrimary} disabled={chosen.length === 0 || busy} onClick={() => void add()}>
+          Add {chosen.length} {noun}{chosen.length === 1 ? '' : 's'}
+        </button>
+        <button type="button" className={btnOutline} onClick={onClose}>Close</button>
+      </div>
+    </div>
+  )
+}
+
+/** The research projects of the collections folder: listed, added by hand, read from a CSV file or taken from Trapper. They are kept as they are added. */
+function ProjectsTab({ projects, onChanged }: { projects: LocalResearchProject[]; onChanged: () => void }) {
+  const [adding, setAdding] = useState<ProjectDraft | null>(null)
+  const [trapper, setTrapper] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ message: string; problems: string[] } | null>(null)
+
+  const keep = (p: ProjectDraft, trapperPk: number | null = null) =>
+    api.saveResearchProject({ ...EMPTY_RESEARCH_PROJECT, acronym: p.acronym.trim(), name: (p.name ?? '').trim(), description: p.description ?? '', keywords: p.keywords ?? '', trapper_pk: trapperPk })
+
+  async function addByHand() {
+    if (!adding) return
+    setError(null)
+    try { await keep(adding); setAdding(null); onChanged() } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the research project.') }
+  }
+
+  async function importFile(file: File | undefined) {
+    if (!file) return
+    setError(null)
+    const { items, problems } = readItems<ProjectDraft>(await file.text(), PROJECT_FIELDS, BLANK_PROJECT, 'research project')
+    let added = 0
+    let there = 0
+    for (const item of items) {
+      if (projects.some((p) => p.acronym.toLowerCase() === item.acronym.toLowerCase())) { there++; continue }
+      const wrong = PROJECT_FIELDS.map((f) => f.validate?.(String(item[f.key] ?? ''))).find(Boolean)
+      if (wrong) { problems.push(`${item.acronym}: ${wrong}`); continue }
+      try { await keep(item); added++ } catch (e) { problems.push(`${item.acronym}: ${e instanceof Error ? e.message : 'could not be saved.'}`) }
+    }
+    setResult({ message: `${added} added${there ? `, ${there} already there` : ''}.`, problems })
+    if (added) onChanged()
+  }
+
+  return (
+    <div>
+      <ListHeader
+        heading="Research projects" noun="research project" onFile={(f) => void importFile(f)} exportDisabled={projects.length === 0} onTrapper={() => setTrapper(true)}
+        onExport={() => download('research_projects.csv', itemsToCsv(projects.map((p) => ({ acronym: p.acronym, name: p.name, description: p.description, keywords: p.keywords })), PROJECT_FIELDS))}
+        onAdd={() => setAdding({ ...BLANK_PROJECT })}
+      />
+      {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {result && <ImportResult message={result.message} problems={result.problems} />}
+      {trapper && (
+        <TrapperPanel<ResearchProject>
+          noun="research project" onClose={() => setTrapper(false)} keyOf={(p) => String(p.pk)} labelOf={(p) => (p.acronym ? `${p.acronym} — ${p.name}` : p.name)}
+          load={async () => (await api.trapperResearchProjects(NO_CREDENTIALS)).results}
+          onAdd={async (chosen) => {
+            const problems: string[] = []
+            let added = 0
+            for (const t of chosen) {
+              const acronym = (t.acronym ?? '').trim()
+              if (!PROJECT_FIELDS[0].validate!(acronym)) {
+                if (projects.some((p) => p.acronym.toLowerCase() === acronym.toLowerCase())) { problems.push(`${acronym} is already there.`); continue }
+                try { await keep({ ...BLANK_PROJECT, acronym, name: t.name }, t.pk); added++ } catch (e) { problems.push(`${acronym}: ${e instanceof Error ? e.message : 'could not be saved.'}`) }
+              } else problems.push(`“${t.name}” has no acronym of 3 to 10 characters in Trapper: add it by hand instead.`)
+            }
+            if (added) onChanged()
+            return { added, problems }
+          }}
+        />
+      )}
+      <div className="space-y-3">
+        {projects.length === 0 && <p className={hintClass}>No research project yet — add the first one, or take them from Trapper.</p>}
+        {projects.map((p) => (
+          <div key={p.acronym} className="flex items-center gap-4 px-4 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800">
+            <div className="flex-1 min-w-0">
+              <p className="text-base truncate">{p.acronym}</p>
+              <p className={`${hintClass} truncate`}>{[p.name, p.trapper_pk != null && 'from Trapper'].filter(Boolean).join(' · ')}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      {adding && (
+        <ItemDialog<ProjectDraft>
+          noun="research project" fields={PROJECT_FIELDS} item={adding} others={projects.map((p) => ({ ...BLANK_PROJECT, acronym: p.acronym }))}
+          onChange={(patch) => setAdding((a) => (a ? { ...a, ...patch } : a))} onClose={() => setAdding(null)} onDone={() => void addByHand()} doneLabel="Add"
+        />
+      )}
+    </div>
+  )
+}
+
+/** The locations of one research project, kept in its folder of the collections folder: listed, added, edited, read from a CSV file or taken from Trapper. */
+function LocationsTab({ project }: { project: LocalResearchProject }) {
+  const [locations, setLocations] = useState<LocalLocation[]>([])
+  const [editing, setEditing] = useState<{ item: LocationDraft; isNew: boolean } | null>(null)
+  const [trapper, setTrapper] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ message: string; problems: string[] } | null>(null)
+
+  const load = () => { Promise.resolve().then(() => api.listLocalLocations(project.acronym)).then(({ results }) => setLocations(results)).catch((e) => setError(e instanceof Error ? e.message : 'Could not read the locations.')) }
+  useEffect(() => { setLocations([]); setError(null); setResult(null); setTrapper(false); load() }, [project.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const there = (id: string) => locations.find((l) => l.location_id.toLowerCase() === id.toLowerCase())
+  const keep = (d: LocationDraft, trapperPk: number | null = null) => api.saveLocalLocation(project.acronym, { location_id: d.location_id.trim(), ...locationFields(d), trapper_pk: trapperPk })
+
+  async function done() {
+    if (!editing) return
+    setError(null)
+    try {
+      if (editing.isNew) await keep(editing.item)
+      else await api.updateLocalLocation(project.acronym, editing.item.location_id, locationFields(editing.item))
+      setEditing(null); load()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the location.') }
+  }
+
+  async function importFile(file: File | undefined) {
+    if (!file) return
+    setError(null)
+    const { items, problems } = readItems<LocationDraft>(await file.text(), LOCATION_FIELDS, BLANK_LOCATION, 'location')
+    let added = 0
+    let updated = 0
+    for (const item of items) {
+      try {
+        if (there(item.location_id)) { await api.updateLocalLocation(project.acronym, there(item.location_id)!.location_id, locationFields(item)); updated++ } else { await keep(item); added++ }
+      } catch (e) { problems.push(`${item.location_id}: ${e instanceof Error ? e.message : 'could not be saved.'}`) }
+    }
+    setResult({ message: `${added} added, ${updated} updated in ${project.acronym}.`, problems })
+    if (added || updated) load()
+  }
+
+  const subtitle = (l: LocationDraft) => [l.name, l.latitude && l.longitude && `${l.latitude}, ${l.longitude}`, l.timezone].filter(Boolean).join(' · ') || 'No details'
+
+  return (
+    <div>
+      <ListHeader
+        heading={`Locations of ${project.acronym}`} noun="location" onFile={(f) => void importFile(f)} exportDisabled={locations.length === 0} onTrapper={() => setTrapper(true)}
+        onExport={() => download(`${project.acronym}_locations.csv`, itemsToCsv(locations.map(locationDraft), LOCATION_FIELDS))}
+        onAdd={() => setEditing({ item: { ...BLANK_LOCATION }, isNew: true })}
+      />
+      {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {result && <ImportResult message={result.message} problems={result.problems} />}
+      {trapper && (
+        <TrapperPanel<Location>
+          noun="location" onClose={() => setTrapper(false)} keyOf={(l) => String(l.pk)} labelOf={(l) => `${l.location_id}${l.name ? ` — ${l.name}` : ''}`}
+          load={async () => {
+            if (project.trapper_pk == null) throw new Error(`${project.acronym} was not taken from Trapper, so there are no locations of it to import. Add the research project from Trapper first.`)
+            return (await api.trapperLocations(NO_CREDENTIALS, project.trapper_pk)).results
+          }}
+          onAdd={async (chosen) => {
+            const problems: string[] = []
+            let added = 0
+            for (const t of chosen) {
+              if (there(t.location_id)) { problems.push(`${t.location_id} is already there.`); continue }
+              if (t.latitude == null || t.longitude == null) { problems.push(`“${t.location_id}” has no coordinates in Trapper, and a deployment needs them. Add it by hand instead.`); continue }
+              try {
+                await keep({ ...BLANK_LOCATION, location_id: t.location_id, name: t.name, latitude: String(t.latitude), longitude: String(t.longitude), timezone: t.timezone && isValidTimezone(t.timezone) ? t.timezone : null, ignore_dst: t.ignore_dst ? 'yes' : null }, t.pk)
+                added++
+              } catch (e) { problems.push(`“${t.location_id}”: ${e instanceof Error ? e.message : 'could not be saved.'}`) }
+            }
+            if (added) load()
+            return { added, problems }
+          }}
+        />
+      )}
+      <div className="space-y-3">
+        {locations.length === 0 && <p className={hintClass}>{project.acronym} has no locations yet.</p>}
+        {locations.map((l) => (
+          <ItemCard key={l.location_id} icon={<PinIcon />} title={l.location_id} subtitle={subtitle(locationDraft(l))} editLabel={`Edit ${l.location_id}`}
+                    onEdit={() => setEditing({ item: locationDraft(l), isNew: false })} />
+        ))}
+      </div>
+      {editing && (
+        <ItemDialog<LocationDraft>
+          noun="location" fields={LOCATION_FIELDS} item={editing.item} others={editing.isNew ? locations.map(locationDraft) : []} lockFirst={!editing.isNew}
+          onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))} onClose={() => setEditing(null)} onDone={() => void done()} doneLabel={editing.isNew ? 'Add' : 'Save'}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Research projects, trappers, locations, cameras and SD cards: a settings screen of their own. The trappers are the project's own people
+ * but can be in several; the locations, the cameras and the SD cards belong each to a research project. */
+function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, onSdCards, initialTab, initialProject }: {
+  trappers: Trapper[]; cameras: Camera[]; sdCards: SdCard[]
+  onTrappers: (v: Trapper[]) => void; onCameras: (v: Camera[]) => void; onSdCards: (v: SdCard[]) => void
+  initialTab: EntityTab
+  initialProject?: string
+}) {
+  const [tab, setTab] = useState<EntityTab>(initialTab)
+  const [projects, setProjects] = useState<LocalResearchProject[]>([])
+  const [projectId, setProjectId] = useState(initialProject ?? '')
+  const loadProjects = () => { Promise.resolve().then(() => api.listResearchProjects()).then(({ results }) => setProjects(results)).catch(() => {}) }
+  useEffect(loadProjects, [])
+
+  const project = projects.find((p) => p.acronym === projectId)
+  const tabs: { id: EntityTab; label: string }[] = [
+    { id: 'projects', label: 'Research projects' }, { id: 'trappers', label: 'Trappers' }, { id: 'locations', label: 'Locations' },
+    { id: 'cameras', label: 'Cameras' }, { id: 'sdcards', label: 'SD cards' },
+  ]
+  const belongs = (rp: string | null) => (projectId === NOT_ASSIGNED ? !rp : !!project && (rp ?? '').toLowerCase() === project.acronym.toLowerCase())
+  const owner = projectId === NOT_ASSIGNED ? null : project?.acronym ?? null
+
+  return (
+    <div className="py-5 space-y-5">
+      <p className={`${hintClass} leading-relaxed max-w-prose`}>
+        The research projects, the people who go to the field, and what belongs to each project: its locations, its cameras and its SD cards.
+      </p>
+      <div role="tablist" aria-label="Entities" className="flex flex-wrap gap-2">
+        {tabs.map((t) => (
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+                  className={`px-4 py-2 rounded-xl text-sm transition-colors ${tab === t.id ? 'bg-blue-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {(tab === 'locations' || tab === 'cameras' || tab === 'sdcards') && (
+        <div className="max-w-md">
+          <label className={`${hintClass} block mb-1`} htmlFor="entities-project">Research project</label>
+          <Combobox
+            id="entities-project" value={projectId} onChange={setProjectId}
+            options={[...(tab === 'locations' ? [] : [{ value: NOT_ASSIGNED, label: 'Not assigned to a project' }]), ...projects.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))]}
+            placeholder={projects.length === 0 ? 'No research projects yet' : 'Select a research project…'} clearLabel="Clear research project"
+          />
+        </div>
+      )}
+
+      {tab === 'projects' && <ProjectsTab projects={projects} onChanged={loadProjects} />}
+
+      {tab === 'trappers' && (
+        <>
+          <p className={`${hintClass} leading-relaxed max-w-prose`}>The people who go to the field — one can be in several research projects. When a visit is registered, they are the ones to pick as who went.</p>
+          <ItemsEditor<Trapper>
+            heading="Trappers" noun="trapper" fileName="trappers" icon={<UserIcon />} items={trappers} onChange={onTrappers}
+            blank={{ name: 'New trapper', affiliation: null }} subtitle={(t) => t.affiliation || 'No affiliation'}
+            empty="No trapper yet — a visit will have none to pick as who went."
+            fields={[{ key: 'name', label: 'Name' }, { key: 'affiliation', label: 'Affiliation', placeholder: 'e.g. University of Huelva', hint: 'Where the trapper works — free text.' }]}
+          />
+        </>
+      )}
+
+      {tab === 'locations' && (project ? <LocationsTab project={project} /> : <p className={hintClass}>Pick a research project to see its locations.</p>)}
+
+      {tab === 'sdcards' && (!projectId ? <p className={hintClass}>Pick a research project to see its SD cards.</p> : (
+        <ItemsEditor<SdCard>
+          heading={`SD cards${owner ? ` of ${owner}` : ' of no project'}`} noun="SD card" fileName={`${owner ?? 'unassigned'}_sd_cards`} icon={<SdCardIcon />}
+          items={sdCards.filter((c) => belongs(c.research_project))}
+          onChange={(v) => onSdCards([...sdCards.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
+          blank={{ label: 'New SD card', brand: null, capacity: null, in_service: null, research_project: owner }}
+          subtitle={(c) => [c.brand, c.capacity, c.in_service && `in production since ${c.in_service}`].filter(Boolean).join(' · ') || 'No details'}
+          empty="No SD card yet."
+          fields={[
+            { key: 'label', label: 'Label', placeholder: 'e.g. A12', hint: 'The number or the label written on the card.' },
+            { key: 'brand', label: 'Brand', kind: 'suggest', suggestions: SD_CARD_BRANDS, placeholder: 'Pick a make, or type any', hint: 'Who makes it — the usual ones are suggested, but any other can be typed.' },
+            { key: 'capacity', label: 'Capacity', placeholder: 'e.g. 64 GB' },
+            { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the card was put into production.' },
+          ]}
+        />
+      ))}
+
+      {tab === 'cameras' && (!projectId ? <p className={hintClass}>Pick a research project to see its cameras.</p> : (
+        <>
+          <p className={`${hintClass} leading-relaxed max-w-prose`}>The camera traps, named as Camtrap DP names them. The camera id — its serial number — names each one, so no two of a project have the same.</p>
+          <ItemsEditor<Camera>
+            heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />}
+            items={cameras.filter((c) => belongs(c.research_project))}
+            onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
+            blank={{ camera_id: 'New camera', camera_model: null, in_service: null, research_project: owner }}
+            subtitle={(c) => [c.camera_model, c.in_service && `in production since ${c.in_service}`].filter(Boolean).join(' · ') || 'No details'}
+            empty="No camera yet."
+            fields={[{ key: 'camera_id', label: 'Camera id', placeholder: 'e.g. P800HG08192031', hint: "The camera's serial number." }, { key: 'camera_model', label: 'Camera model', placeholder: 'e.g. Reconyx-PC800', hint: 'Manufacturer and model, written as manufacturer-model.' },
+              { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the camera was put into production.' }]}
+          />
+        </>
+      ))}
+    </div>
+  )
+}
+
 interface Props {
   onClose: () => void
   /** The section to open on; the general one when left out. */
-  initialSection?: SectionId
+  initialSection?: SectionId | 'trappers' | 'sdcards' | 'cameras' | 'locations'
+  /** The research project the entities are shown for, when opened on its locations. */
+  initialProject?: string
 }
 
 type UpdateState =
@@ -647,8 +1308,8 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
 /** Edits the app's own settings.toml, one section at a time: the folder the
  * images are kept in and the log, the Trapper account, which validation
  * and postvalidation checks the wizard shows, and how the images are preprocessed. One Save saves every section. */
-export default function SettingsPage({ onClose, initialSection }: Props) {
-  const [section, setSection] = useState<SectionId>(initialSection ?? 'general')
+export default function SettingsPage({ onClose, initialSection, initialProject }: Props) {
+  const [section, setSection] = useState<SectionId>(initialSection && initialSection in ENTITY_SECTIONS ? 'entities' : (initialSection as SectionId | undefined) ?? 'general')
   const [saved, setSaved] = useState<AppSettings | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [status, setStatus] = useState<{ kind: 'idle' | 'saving' | 'saved' | 'error'; message?: string }>({ kind: 'idle' })
@@ -1060,6 +1721,14 @@ export default function SettingsPage({ onClose, initialSection }: Props) {
                            checked={draft.convertToUtc} onChange={(v) => set('convertToUtc', v)} />
             </Row>
           </div>
+        )}
+
+        {draft && saved && section === 'entities' && (
+          <EntitiesSection
+            trappers={draft.trappers} cameras={draft.cameras} sdCards={draft.sdCards}
+            onTrappers={(v) => set('trappers', v)} onCameras={(v) => set('cameras', v)} onSdCards={(v) => set('sdCards', v)}
+            initialTab={initialSection && initialSection in ENTITY_SECTIONS ? ENTITY_SECTIONS[initialSection] : 'projects'} initialProject={initialProject}
+          />
         )}
 
         {section === 'reports' && <ReportsList />}

@@ -1,0 +1,8 @@
+ec5_uuid,created_at,1_Responsable,2_Collection,3_Date,4_Location,5_Camera,6_Action,7_Status_of_the_came,8_Card_Batteries,9_Number_of_pictures,10_SD,11_Date_and_hour,12_Observation,lat_13_Coordenates,long_13_Coordenates,14_Hour
+e001,2026-06-10T07:41:12.000Z,Ana Pérez,1,10/06/2026,1,P800HG08192031,Installation,OK,OK,,A13,Yes,New camera on the ridge,49.2312,20.0871,09:41
+e002,2026-06-10T09:05:40.000Z,Ana Pérez,1,10/06/2026,TATR_0002,X1,Installation,OK,OK,,B2,Yes,,49.2405,20.0934,11:05
+e003,2026-08-05T06:58:03.000Z,Ana Pérez; Luis,2,05/08/2026,1,P800HG08192031,Revision,OK,OK,1620,B2,Yes,Batteries changed,49.2312,20.0871,08:58
+e004,2026-08-05T08:30:21.000Z,Ana Pérez; Luis,2,05/08/2026,TATR_0002,X1,Revision,Knocked down,CarFull,2310,A13,No,Camera had fallen,49.2405,20.0934,10:30
+e005,2026-10-02T08:14:05.000Z,Luis,3,02/10/2026,1,P800HG08192031,Desinstallation,OK,SinPilas,980,,Yes,Taken away for repair,49.2312,20.0871,10:14
+e006,2026-10-02T10:20:00.000Z,Luis,3,02/10/2026,TATR_0002,X1,Stolen,,,,,,Only the post was left,49.2405,20.0934,12:20
+e007,2026-10-02T11:00:00.000Z,Luis,,02/10/2026,TATR_0001,P800HG08192031,Revision,,,,,,Entry of an old form version (no collection number): ignored,,,

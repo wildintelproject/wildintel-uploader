@@ -24,6 +24,7 @@ DEPLOYMENT_METADATA_FILE = "deployment.json"
 IMAGES_FILE = "images.json"
 RESEARCH_PROJECT_METADATA_FILE = "research_project.json"
 LOCATIONS_FILE = "locations.json"
+VISITS_FILE = "visits.json"
 
 # A research project's id (its acronym) names its folder in the collections folder.
 _PROJECT_ID = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_.-]*$")
@@ -225,6 +226,99 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
     locations[index] = {**locations[index], **changes}
     (project_dir(root, research_project_id) / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
     return locations[index]
+
+
+def list_visits(root: Path, research_project_id: str, location_id: str | None = None) -> list[dict]:
+    """The visits kept for a research project, in the order they were registered — those to one location (found ignoring
+    case) when it is given. Empty until one is registered.
+
+    Raises:
+        LocalFolderError: the research project id can't be a folder name.
+    """
+    visits = _read_json(project_dir(root, research_project_id) / VISITS_FILE)
+    visits = [v for v in visits if isinstance(v, dict)] if isinstance(visits, list) else []
+    if location_id is None:
+        return visits
+    return [v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower()]
+
+
+def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
+    """Registers a visit to a research project that's already kept here.
+
+    Raises:
+        LocalFolderError: the research project isn't there.
+    """
+    folder = project_dir(root, research_project_id)
+    if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
+        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    visits = list_visits(root, research_project_id)
+    visits.append(visit)
+    (folder / VISITS_FILE).write_text(json.dumps(visits, indent=2, ensure_ascii=False), encoding="utf-8")
+    return visit
+
+
+def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
+    """Registers several visits at once to a research project that's already kept here; returns how many.
+
+    Raises:
+        LocalFolderError: the research project isn't there.
+    """
+    folder = project_dir(root, research_project_id)
+    if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
+        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    if new:
+        (folder / VISITS_FILE).write_text(json.dumps(list_visits(root, research_project_id) + new, indent=2, ensure_ascii=False), encoding="utf-8")
+    return len(new)
+
+
+def closes_collection(visit: dict) -> bool:
+    """Whether a visit closes a deployment: it collected the card — a Revision or a Desinstallation — and something was on it. Not an
+    explicit 0 photos (nothing to timestamp), not an Installation (no card is taken), not a stolen camera, not a visit where nothing was
+    collected (status 'Not revised')."""
+    actions = visit.get("actions") or []
+    if "Stolen" in actions or not {"Revision", "Desinstallation"} & set(actions):
+        return False
+    if str(visit.get("status") or "").lower() in ("not revised", "no revisada", "no revisado"):
+        return False
+    photos = visit.get("num_photos")
+    return photos is None or photos > 0
+
+
+def closed_visits(root: Path, research_project_id: str) -> list[dict]:
+    """The visits of a research project that left a camera (an Installation or a Revision) whose card a later visit has collected, and
+    that have no deployment yet linked, newest first: {"visit", "end"} — the visit that left the camera and the next one at the same
+    location, which collected the card (see closes_collection). The deployment is of the first: its card is the one that was collected.
+
+    Raises:
+        LocalFolderError: the research project id can't be a folder name.
+    """
+    by_location: dict[str, list[dict]] = {}
+    for visit in list_visits(root, research_project_id):
+        by_location.setdefault(str(visit.get("location_id", "")).lower(), []).append(visit)
+    out = []
+    for visits in by_location.values():
+        visits.sort(key=lambda v: (str(v.get("date")), str(v.get("time"))))
+        for start, end in zip(visits, visits[1:]):
+            if start.get("deployment_id") or not closes_collection(end):
+                continue
+            if {"Installation", "Revision"} & set(start.get("actions") or []):
+                out.append({"visit": start, "end": end})
+    return sorted(out, key=lambda c: (str(c["visit"].get("date")), str(c["visit"].get("time"))), reverse=True)
+
+
+def link_visit(root: Path, research_project_id: str, location_id: str, date: str, time: str, deployment_id: str) -> dict:
+    """Records on a visit (found by its location, ignoring case, day and time) the deployment it closed.
+
+    Raises:
+        LocalFolderError: the visit isn't in the research project.
+    """
+    visits = list_visits(root, research_project_id)
+    visit = next((v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower() and v.get("date") == date and v.get("time") == time), None)
+    if visit is None:
+        raise LocalFolderError(f"There is no visit to {location_id} on {date} at {time} in {research_project_id}.")
+    visit["deployment_id"] = deployment_id
+    (project_dir(root, research_project_id) / VISITS_FILE).write_text(json.dumps(visits, indent=2, ensure_ascii=False), encoding="utf-8")
+    return visit
 
 
 def location_time(root: Path, research_project_id: str, location_id: str | None) -> dict:

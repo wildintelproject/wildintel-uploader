@@ -1,9 +1,9 @@
 import type { EpicollectEntry } from './epicollectImport'
 import type {
-  AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
+  AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  Report, ReportSummary, RepairCollection, RepairEvent, RepairState, EpicollectForm,
+  ClosedVisit, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm,
 } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
@@ -143,6 +143,27 @@ export const api = {
   listLocalLocations: (researchProjectId: string) =>
     post<{ results: LocalLocation[] }>('/api/deployment-import/locations/list', { research_project_id: researchProjectId }),
 
+  // The visits kept for a research project — those to one location only when it is given.
+  listVisits: (researchProjectId: string, locationId?: string) =>
+    post<{ results: StoredVisit[] }>('/api/visits/list', { research_project_id: researchProjectId, location_id: locationId ?? null }),
+
+  saveVisit: (researchProjectId: string, visit: StoredVisit) =>
+    post<StoredVisit>('/api/visits/save', { research_project_id: researchProjectId, visit }),
+
+  // The visits of a research project that closed a deployment — they collected the card — and have none linked yet.
+  closedVisits: (researchProjectId: string) => post<{ results: ClosedVisit[] }>('/api/visits/closed', { research_project_id: researchProjectId }),
+
+  // Records on a visit the deployment it closed.
+  linkVisit: (researchProjectId: string, visit: StoredVisit, deploymentId: string) =>
+    post<StoredVisit>('/api/visits/link', { research_project_id: researchProjectId, location_id: visit.location_id, date: visit.date, time: visit.time, deployment_id: deploymentId }),
+
+  // The visits of a CSV file for a research project: what can be kept and what is wrong with the rest — kept too when `save` is set.
+  importVisitsCsv: (researchProjectId: string, csv: string, save = false, format: VisitsCsvFormat = 'mapped', mapping?: Record<string, string>) =>
+    post<VisitsCsvResult>('/api/visits/import-csv', { research_project_id: researchProjectId, csv, save, format, mapping: mapping ?? null }),
+
+  // The columns of a CSV file, a few of its rows, the fields of a visit it can give and the column that most likely gives each.
+  visitsCsvColumns: (csv: string) => post<VisitsCsvColumns>('/api/visits/csv-columns', { csv }),
+
   // The revision a new deployment at this location is expected to have: one after the highest kept for it, or 1.
   nextRevision: (researchProjectId: string, locationId: string) =>
     post<{ last: number | null; next: number }>('/api/deployment-import/next-revision', { research_project_id: researchProjectId, location_id: locationId }),
@@ -165,6 +186,10 @@ export const api = {
 
   saveLocalLocation: (researchProjectId: string, location: LocalLocation) =>
     post<LocalLocation>('/api/deployment-import/locations/save', { research_project_id: researchProjectId, location }),
+
+  // Changes a kept location: the fields given are the ones that change (null clears one).
+  updateLocalLocation: (researchProjectId: string, locationId: string, changes: Partial<Pick<LocalLocation, 'name' | 'latitude' | 'longitude' | 'coordinate_uncertainty' | 'timezone' | 'ignore_dst'>>) =>
+    post<LocalLocation>('/api/deployment-import/locations/update', { research_project_id: researchProjectId, location_id: locationId, ...changes }),
 
   collectionPath: (researchProjectId: string, deploymentId: string) =>
     post<CollectionPath>('/api/deployment-import/collection-path', { research_project_id: researchProjectId, deployment_id: deploymentId }),
@@ -247,6 +272,11 @@ export const api = {
     post<RepairState>('/api/repair/inspect', { research_project_id: researchProjectId, collection, deployment_id: deploymentId }),
   repairDeployment: (researchProjectId: string, collection: string, deploymentId: string, onEvent: (event: RepairEvent) => void) =>
     streamNdjson<RepairEvent>('/api/repair/deployment', { research_project_id: researchProjectId, collection, deployment_id: deploymentId }, onEvent, 'The repair ended unexpectedly.'),
+  // Fixing the dates and times of the images in a folder, against the period of the visit that left the camera (see the backend's timefix_service).
+  timefixTimeline: (target: TimeFixTarget) => post<Timeline>('/api/timefix/timeline', target),
+  timefixShift: (target: TimeFixTarget, first: string, last: string | null, offsetSeconds: number, reason: string) =>
+    post<Timeline>('/api/timefix/shift', { ...target, first, last, offset_seconds: offsetSeconds, reason }),
+  timefixRemove: (target: TimeFixTarget, names: string[], reason: string) => post<Timeline>('/api/timefix/remove', { ...target, names, reason }),
 
   // Whether the saved account has access to the research project and the collection chosen — changing nothing.
   checkUploadSelection: (researchProjectId: string, collection: string) =>

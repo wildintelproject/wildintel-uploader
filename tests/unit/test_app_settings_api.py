@@ -35,12 +35,67 @@ def _put(**sections) -> dict:
 def test_the_defaults_have_every_section_and_every_check_shown():
     body = _client().get("/api/settings").json()
 
-    assert set(body) == {"GENERAL", "TRAPPER", "EPICOLLECT5", "DATA", "VALIDATION", "POSTVALIDATION", "PREPROCESSING"}
+    assert set(body) == {"GENERAL", "TRAPPER", "EPICOLLECT5", "DATA", "VALIDATION", "POSTVALIDATION", "PREPROCESSING", "FIELDWORK"}
     assert all(body["VALIDATION"].values())
     assert body["POSTVALIDATION"]["tolerance_hours"] == 1.0
     assert body["GENERAL"]["log_level"] == "INFO"
     assert body["GENERAL"]["log_file"].endswith("wildintel-uploader.log")
     assert 1 <= body["GENERAL"]["workers"] <= 4 and body["GENERAL"]["cpu_count"] >= 1
+
+
+def test_the_trappers_start_empty_and_are_saved_clean():
+    assert _client().get("/api/settings").json()["FIELDWORK"] == {"trappers": [], "sd_cards": [], "cameras": []}
+
+    saved = _put(FIELDWORK={"trappers": [
+        {"name": "  Ana   Pérez ", "affiliation": " University of Huelva "}, {"name": "Luis", "affiliation": "  "}, {"name": "ana pérez"},
+    ]})
+
+    expected = [{"name": "Ana Pérez", "affiliation": "University of Huelva"}, {"name": "Luis", "affiliation": None}]
+    assert saved["FIELDWORK"]["trappers"] == expected
+    assert _client().get("/api/settings").json()["FIELDWORK"]["trappers"] == expected
+
+
+def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
+    saved = _put(FIELDWORK={
+        "sd_cards": [{"label": " A12 ", "brand": " SanDisk ", "capacity": " 64   GB ", "in_service": "2026-03-01"}, {"label": "a12"},
+                     {"label": "B3", "brand": "", "capacity": "", "in_service": ""}],
+        "cameras": [{"camera_id": "P800HG0819", "camera_model": " Reconyx-PC800 ", "in_service": "2025-11-12"}, {"camera_id": "p800hg0819"}, {"camera_id": "X1", "in_service": ""}],
+    })
+
+    assert saved["FIELDWORK"]["sd_cards"] == [
+        {"label": "A12", "brand": "SanDisk", "capacity": "64 GB", "in_service": "2026-03-01", "research_project": None},
+        {"label": "B3", "brand": None, "capacity": None, "in_service": None, "research_project": None},
+    ]
+    # kept in the settings file, and read back as it was
+    assert _client().get("/api/settings").json()["FIELDWORK"]["sd_cards"][0]["in_service"] == "2026-03-01"
+    assert saved["FIELDWORK"]["cameras"] == [
+        {"camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": None},
+        {"camera_id": "X1", "camera_model": None, "in_service": None, "research_project": None},
+    ]
+
+
+def test_the_sd_cards_and_the_cameras_belong_to_a_research_project_and_are_listed_once_in_each():
+    saved = _put(FIELDWORK={
+        "sd_cards": [{"label": "A1", "research_project": " DONA "}, {"label": "a1", "research_project": "dona"}, {"label": "A1", "research_project": "TATR"}, {"label": "A1"}],
+        "cameras": [{"camera_id": "X1", "research_project": "DONA"}, {"camera_id": "x1", "research_project": "DONA"}, {"camera_id": "X1", "research_project": ""}],
+    })
+
+    assert [(c["label"], c["research_project"]) for c in saved["FIELDWORK"]["sd_cards"]] == [("A1", "DONA"), ("A1", "TATR"), ("A1", None)]
+    assert [(c["camera_id"], c["research_project"]) for c in saved["FIELDWORK"]["cameras"]] == [("X1", "DONA"), ("X1", None)]
+
+
+def test_an_sd_card_needs_a_label_and_a_camera_an_id():
+    for field, item in (("sd_cards", {"label": ""}), ("cameras", {"camera_id": ""})):
+        body = config.Settings().model_dump(mode="json")
+        body["FIELDWORK"][field] = [item]
+        assert _client().put("/api/settings", json=body).status_code == 422
+
+
+def test_a_trapper_needs_a_name():
+    body = config.Settings().model_dump(mode="json")
+    body["FIELDWORK"]["trappers"] = [{"name": ""}]
+
+    assert _client().put("/api/settings", json=body).status_code == 422
 
 
 def test_the_workers_are_saved_and_must_be_between_one_and_sixty_four():

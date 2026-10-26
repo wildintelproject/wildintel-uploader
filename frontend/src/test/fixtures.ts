@@ -98,4 +98,5 @@ export const APP_SETTINGS: AppSettings = {
     rename: true, resize: true, resize_width: 2400, metadata: true, owner: '', publisher: '', coverage: '',
     license_url: 'https://creativecommons.org/licenses/by-nc/4.0/', ignore_dst: true, convert_to_utc: true,
   },
+  FIELDWORK: { trappers: [], sd_cards: [], cameras: [] },
 }

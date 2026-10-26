@@ -1,0 +1,6 @@
+created_at,1_Tramperos,2_Sesion,3_Fecha,4_Sitio,5_Camara,6_Accion,7_Estado,8_CardPilasOK,9_NumFotos,10_SD,11_FechaHoraOK,12_Observaciones,lat_13_Localizacin_actua,long_13_Localizacin_actua,14_Hora
+2026-03-12T08:02:11.000Z,Carlos; Marta,12,12/03/2026,5,1042,R,OK,OK,3400,A7,Yes,Todo bien,37.0123,-6.4412,09:02
+2026-03-12T09:40:30.000Z,Carlos; Marta,12,12/03/2026,5B,1043,R,OK,CarFull,5120,A8,Yes,Tarjeta llena,37.0124,-6.4415,10:40
+2026-03-12T11:15:00.000Z,Carlos; Marta,12,12/03/2026,7,1050,ROBADA,,,,,,Cámara robada,37.0301,-6.4120,12:15
+2026-03-13T07:50:45.000Z,Carlos,13,13/03/2026,9,1060,I,OK,OK,,A9,Yes,Nueva instalación,37.0500,-6.4000,08:50
+2026-03-13T10:10:10.000Z,Carlos,13,13/03/2026,5,1042,D,OK,SinPilas,410,,No,Retirada sin pilas,37.0123,-6.4412,11:10

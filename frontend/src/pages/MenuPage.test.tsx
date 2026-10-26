@@ -20,6 +20,14 @@ describe('MenuPage', () => {
     expect(onChoose).toHaveBeenCalledWith('session')
   })
 
+  it('offers to register the visits', async () => {
+    const onChoose = vi.fn()
+    render(<MenuPage onChoose={onChoose} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /register visits/i }))
+    expect(onChoose).toHaveBeenCalledWith('visits')
+  })
+
   it('offers to upload a deployment to Trapper', async () => {
     const onChoose = vi.fn()
     render(<MenuPage onChoose={onChoose} />)

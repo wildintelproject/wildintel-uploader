@@ -146,6 +146,21 @@ def test_the_preprocessing_settings_survive_a_roundtrip_and_text_is_stripped(tmp
     assert reloaded.owner == "Universidad de Huelva" and reloaded.coverage == "Doñana National Park"
 
 
+def test_the_trappers_of_the_fieldwork_survive_a_roundtrip(tmp_path: Path):
+    config_file = tmp_path / "settings.toml"
+    settings = config.load_settings(config_file)
+    assert settings.FIELDWORK.trappers == []
+    settings.FIELDWORK.trappers = [config.Trapper(name="Ana", affiliation="University of Huelva"), config.Trapper(name="Luis")]
+    config.save_settings(settings, config_file)
+
+    reloaded = config.load_settings(config_file).FIELDWORK.trappers
+    assert [(t.name, t.affiliation) for t in reloaded] == [("Ana", "University of Huelva"), ("Luis", None)]
+
+
+def test_a_trapper_given_as_a_plain_name_has_no_affiliation():
+    assert config.FieldworkSettings(trappers=["Ana"]).trappers == [config.Trapper(name="Ana")]
+
+
 import pytest
 
 

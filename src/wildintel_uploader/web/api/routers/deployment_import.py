@@ -87,9 +87,9 @@ def save_location(req: SaveLocationRequest) -> dict:
 
 @router.post("/locations/update")
 def update_location(req: UpdateLocationRequest) -> dict:
-    """Changes the timezone and/or the summer-time setting of a kept location — they belong to the location, not to
-    a deployment. The fields left out stay as they are; 404 if the location isn't there."""
-    changes = req.model_dump(include={"timezone", "ignore_dst"}, exclude_unset=True)
+    """Changes a kept location — its name, where it is, its timezone and/or its summer-time setting (the last two belong to the location,
+    not to a deployment). The fields left out stay as they are; 404 if the location isn't there."""
+    changes = req.model_dump(include={"name", "latitude", "longitude", "coordinate_uncertainty", "timezone", "ignore_dst"}, exclude_unset=True)
     try:
         return local_folder_service.update_location(config.collections_dir(), req.research_project_id, req.location_id, changes)
     except local_folder_service.LocalFolderError as exc:

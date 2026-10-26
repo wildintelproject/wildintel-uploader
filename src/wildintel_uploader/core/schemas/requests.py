@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date as date_type, datetime, time as time_type
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Literal, Optional
 
@@ -285,10 +285,105 @@ class SaveLocationRequest(LocalLocationsRequest):
     location: LocationRecord
 
 
-class UpdateLocationRequest(LocalLocationsRequest):
-    """Change the timezone and/or summer-time setting of a location already kept — the fields left out stay as they are."""
+class VisitRecord(BaseModel):
+    """A visit to a camera trap, as the fieldwork datasheet keeps it, at a location of the research project.
+
+    What the datasheet has that Camtrap DP does not is the visit's own (session, action, status, card and batteries, the
+    photos counted, the SD card, whether the camera's date and time were right, and who went: trappers); what it has of a
+    deployment is named as DeploymentFields names it — camera_id (Camera), comments (Notes), the coordinates, setup_by —
+    beside the optional details the field app may also ask for."""
+
+    location_id: str = Field(min_length=1, max_length=100)
+    session: str = Field(pattern=r"^R\d+$")
+    date: date_type
+    time: time_type
+    # A visit may do several things: a camera revised and another put up, a card changed and the camera taken away…
+    actions: list[Literal["Installation", "Revision", "Desinstallation", "Stolen"]] = Field(min_length=1)
+    trappers: Optional[str] = None
+    status: Optional[str] = None
+    # How the card and the batteries were, as the datasheet writes it: OK, CarFull (card full), SinPilas (no batteries) or both.
+    card_batteries_ok: Optional[Literal["OK", "CarFull", "SinPilas", "CarFullSinPilas"]] = None
+    num_photos: Optional[int] = Field(default=None, ge=0)
+    sd: Optional[str] = None
+    date_time_ok: Optional[str] = None
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    # The deployment this visit closed, once it is imported (see local_folder_service.closed_visits).
+    deployment_id: Optional[str] = None
+
+    setup_by: Optional[str] = None
+    camera_id: Optional[str] = None
+    camera_model: Optional[str] = None
+    camera_interval: Optional[int] = Field(default=None, ge=0)
+    camera_height: Optional[float] = Field(default=None, ge=0)
+    camera_depth: Optional[float] = Field(default=None, ge=0)
+    camera_tilt: Optional[int] = Field(default=None, ge=-90, le=90)
+    camera_heading: Optional[int] = Field(default=None, ge=0, le=360)
+    detection_distance: Optional[float] = Field(default=None, ge=0)
+    timestamp_issues: Optional[bool] = None
+    bait_use: Optional[bool] = None
+    feature_type: Optional[FeatureType] = None
+    habitat: Optional[str] = None
+    deployment_groups: Optional[str] = None
+    comments: Optional[str] = None
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("actions")
+    @classmethod
+    def _once_each(cls, actions: list[str]) -> list[str]:
+        return list(dict.fromkeys(actions))
+
+    @model_validator(mode="after")
+    def _height_or_depth(self) -> "VisitRecord":
+        if self.camera_height is not None and self.camera_depth is not None:
+            raise ValueError("camera_height and camera_depth are mutually exclusive: only one should be set.")
+        return self
+
+
+class ListVisitsRequest(LocalLocationsRequest):
+    """The visits of a research project — only those to one location when it is given."""
+
+    location_id: Optional[str] = None
+
+
+class SaveVisitRequest(LocalLocationsRequest):
+    visit: VisitRecord
+
+
+class LinkVisitRequest(LocalLocationsRequest):
+    """The visit that closed a deployment (found by its location, day and time), and the deployment."""
 
     location_id: str = Field(min_length=1)
+    date: date_type
+    time: time_type
+    deployment_id: str = Field(min_length=1)
+
+
+class ImportVisitsCsvRequest(LocalLocationsRequest):
+    """The text of a CSV file with visits — only read and checked unless `save` is set, then the visits that can be kept are."""
+
+    csv: str
+    save: bool = False
+    # How the file is read: as an Epicollect download, or with the column of each field said in `mapping`.
+    format: Literal["epicollect", "mapped"] = "mapped"
+    mapping: Optional[dict[str, str]] = None
+
+
+class VisitsCsvColumnsRequest(BaseModel):
+    """The text of a CSV file whose columns are asked for, to map them to the fields of a visit."""
+
+    csv: str
+
+
+class UpdateLocationRequest(LocalLocationsRequest):
+    """Change a location already kept — its name, where it is, its timezone and/or summer-time setting. The fields left out stay as
+    they are; one given as null is cleared."""
+
+    location_id: str = Field(min_length=1)
+    name: Optional[str] = None
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    coordinate_uncertainty: Optional[int] = Field(default=None, ge=1)
     timezone: Optional[str] = None
     ignore_dst: Optional[bool] = None
 
