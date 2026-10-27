@@ -826,23 +826,23 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
           <WizardStep n={source === 'csv' ? 5 : 4} title="Check and add the visits" status={csvResult ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept.">
             {csvResult && (
               <>
-                <p className="text-sm">
+                <p className="text-base">
                   <strong>{csvResult.visits.length}</strong> {csvResult.visits.length === 1 ? 'visit' : 'visits'} to add
                   {csvResult.skipped > 0 && <> · {csvResult.skipped} already kept</>}
-                  {csvResult.ignored > 0 && <> · {csvResult.ignored} of old versions of the form, ignored</>}
+                  {csvResult.ignored > 0 && <> · {csvResult.ignored} {csvResult.ignored === 1 ? 'entry' : 'entries'} from an old version of the form, ignored</>}
                   {csvResult.problems.length > 0 && <> · <span className="text-red-600 dark:text-red-400">{csvResult.problems.length} {csvResult.problems.length === 1 ? 'row' : 'rows'} with a problem</span></>}
                 </p>
                 {csvResult.problems.length > 0 && (
-                  <ul className="mt-2 text-sm text-red-600 dark:text-red-400 list-disc pl-5" aria-label="Rows with a problem">
+                  <ul className="mt-4 mb-5 space-y-2 text-base text-red-600 dark:text-red-400 list-disc pl-6" aria-label="Rows with a problem">
                     {csvResult.problems.map((p) => <li key={p.row}>Row {p.row}: {p.message}</li>)}
                   </ul>
                 )}
                 {missingLocations && (
-                  <Notice kind="info" className="mt-3">
-                    Some of the sites are not locations of {project?.acronym} yet. You can create the locations — by hand, from a CSV file or from Trapper — and the file is checked again when you come back.
+                  <Notice kind="info" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed">
+                    Some of the sites are not locations of {project?.acronym} yet. You can create the locations by hand, from a spreadsheet file or from Trapper. The file is checked again when you come back.
                     {onOpenSettings && project && (
-                      <div className="mt-2">
-                        <button type="button" className={btnOutline} onClick={() => onOpenSettings('locations', project.acronym)}>Go to the locations of {project.acronym}</button>
+                      <div className="mt-4">
+                        <button type="button" className="px-6 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 bg-white/5 text-base font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" onClick={() => onOpenSettings('locations', project.acronym)}>Go to the locations of {project.acronym}</button>
                       </div>
                     )}
                   </Notice>

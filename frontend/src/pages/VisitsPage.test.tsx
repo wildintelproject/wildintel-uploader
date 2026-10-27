@@ -825,7 +825,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
 
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.any(String), false, 'epicollect'))
-    expect(await screen.findByText(/to add/)).toHaveTextContent('3 of old versions of the form, ignored')
+    expect(await screen.findByText(/to add/)).toHaveTextContent('3 entries from an old version of the form, ignored')
     expect(mockedApi.visitsCsvColumns).not.toHaveBeenCalled()
     expect(screen.queryByText('Match the columns')).not.toBeInTheDocument()
   })
