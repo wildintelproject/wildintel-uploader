@@ -617,13 +617,14 @@ const FEATURE_TYPE_OPTIONS: { value: FeatureType; label: string }[] = [
 // details, what can be checked once they are known, the list of what is done to
 // the images, and the import into the local collections folder.
 
-type StepKey = 'images' | 'origin' | 'checks' | 'prepare'
+type StepKey = 'origin' | 'images' | 'dates' | 'checks' | 'prepare'
 
 interface StepDescriptor { key: StepKey; label: string }
 
 const STEPS: StepDescriptor[] = [
+  { key: 'origin', label: 'Origin' },
   { key: 'images', label: 'Images' },
-  { key: 'origin', label: 'Origin and dates' },
+  { key: 'dates', label: 'Dates and details' },
   { key: 'checks', label: 'Check details' },
   { key: 'prepare', label: 'Prepare and save' },
 ]
@@ -1271,7 +1272,7 @@ interface Props {
 export const NO_CREDENTIALS: TrapperCredentials = {}
 
 export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpload, onOpenSettings, settingsOpen = false, onBack }: Props) {
-  const [step, setStep] = useState(resumeSession ? STEPS.findIndex((s) => s.key === 'origin') : 0)
+  const [step, setStep] = useState(0)
 
   // The Trapper account is the one saved in the settings: nothing is asked for here, and the backend
   // fills in the blank credentials from it.
@@ -1403,6 +1404,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const [destDir, setDestDir] = useState<string | null>(null)
 
   const stepKey = STEPS[step]?.key
+  // The origin (where) and the dates and details (when, camera, site) are two steps of what the deployment is: they share what is looked up.
+  const inOrigin = stepKey === 'origin' || stepKey === 'dates'
 
   // The images screen is three steps: the folder, the checks, their results. The one open, and the furthest reached.
   const [imagesOpen, setImagesOpen] = useState(1)
@@ -1478,7 +1481,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   }, [resumeSession])
 
   useEffect(() => {
-    if (stepKey !== 'origin' || originOpen < 2 || !sourceDir || guessedFor.current === sourceDir) return
+    if (stepKey !== 'dates' || originOpen < 2 || !sourceDir || guessedFor.current === sourceDir) return
     guessedFor.current = sourceDir
     let cancelled = false
     let finished = false
@@ -1919,17 +1922,17 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   // Whether the deployment the revision and the location name is already kept — said as soon as it can be known.
   useEffect(() => {
     const id = deployment.deployment_id
-    if (stepKey !== 'origin' || !researchProjectId || !id) { setExistingFolder(null); return }
+    if (!inOrigin || !researchProjectId || !id) { setExistingFolder(null); return }
     let cancelled = false
     api.existingDeployments(researchProjectId, [id])
       .then(({ results }) => { if (!cancelled) setExistingFolder(results[id] ?? null) })
       .catch(() => { if (!cancelled) setExistingFolder(null) })
     return () => { cancelled = true }
-  }, [stepKey, researchProjectId, deployment.deployment_id])
+  }, [inOrigin, researchProjectId, deployment.deployment_id])
 
   // The revision starts as the next one expected for the location — one after the highest kept — until it is typed.
   useEffect(() => {
-    if (stepKey !== 'origin' || !selectedProjectId || !deployment.location_id || revisionTouched.current) return
+    if (!inOrigin || !selectedProjectId || !deployment.location_id || revisionTouched.current) return
     let cancelled = false
     api.nextRevision(selectedProjectId, deployment.location_id)
       .then(({ last, next }) => {
@@ -1942,35 +1945,35 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
       .catch(() => { /* no suggestion: it is typed */ })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepKey, selectedProjectId, deployment.location_id])
+  }, [inOrigin, selectedProjectId, deployment.location_id])
 
   // Whether the settings turn Epicollect5 on — read again when they are closed, as they may have changed.
   useEffect(() => {
-    if (stepKey !== 'origin' || settingsOpen) return
+    if (!inOrigin || settingsOpen) return
     let cancelled = false
     api.getSettings()
       .then((s) => { if (!cancelled) { setEpicollectOn(s.EPICOLLECT5.enabled); setSdCards(s.FIELDWORK?.sd_cards ?? []) } })
       .catch(() => { if (!cancelled) setEpicollectOn(false) })
     return () => { cancelled = true }
-  }, [stepKey, settingsOpen])
+  }, [inOrigin, settingsOpen])
 
   // ...and whether an earlier revision of it was kept, to offer its details.
   useEffect(() => {
     const id = deployment.deployment_id
     // What was filled in from the visits stays said, whatever the id does.
     setFilledFrom(linkedVisit ? `the visit ${linkedVisit.visit.session}` : null)
-    if (stepKey !== 'origin' || !researchProjectId || !id) { setPreviousRevision(null); return }
+    if (!inOrigin || !researchProjectId || !id) { setPreviousRevision(null); return }
     let cancelled = false
     api.previousDeployments(researchProjectId, [id])
       .then(({ results }) => { if (!cancelled) setPreviousRevision(results[id] ?? null) })
       .catch(() => { if (!cancelled) setPreviousRevision(null) })
     return () => { cancelled = true }
-  }, [stepKey, researchProjectId, deployment.deployment_id])
+  }, [inOrigin, researchProjectId, deployment.deployment_id])
 
   // ...and whether Epicollect5 has the details of this location and revision, to offer them.
   useEffect(() => {
     setEpicollectEntry(null); setEpicollectMissing(null); setEpicollectDone(false); setEpicollectImported(false)
-    if (stepKey !== 'origin' || settingsOpen || !epicollectOn || !deployment.location_id || !revisionValid) return
+    if (!inOrigin || settingsOpen || !epicollectOn || !deployment.location_id || !revisionValid) return
     let cancelled = false
     void (async () => {
       try {
@@ -1987,7 +1990,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     })()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepKey, settingsOpen, epicollectOn, deployment.location_id, revisionNumber, revisionValid])
+  }, [inOrigin, settingsOpen, epicollectOn, deployment.location_id, revisionNumber, revisionValid])
 
   /** The period each source gives — null when it has none. */
   function periodOf(source: DateSource): Period | null {
@@ -2009,7 +2012,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   // The period comes from the first source that has it: Epicollect5, the images — and by hand if neither does, once both have been looked at.
   // A better one found later replaces the one taken, unless one was picked.
   useEffect(() => {
-    if (stepKey !== 'origin' || sourcePicked.current) return
+    if (stepKey !== 'dates' || sourcePicked.current) return
     const looking = guessing || (epicollectOn && !epicollectDone)
     const best = ([...(linkedVisit ? ['visit'] : []), 'epicollect', 'exif', 'manual'] as DateSource[]).find((src) => (src === 'manual' ? !looking : periodOf(src) !== null))
     if (best && best !== dateSource) takePeriod(best)
@@ -2108,6 +2111,12 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     setSavingDetails(false)
     setStep((s) => s + 1)
   }
+
+  // The dates and details come after the images: they open at their first part (the origin was the step before).
+  useEffect(() => {
+    if (stepKey !== 'dates') return
+    setOriginOpen((n) => Math.max(n, 2)); setOriginReached((n) => Math.max(n, 2))
+  }, [stepKey])
 
   // Going back to change anything before the preprocessing makes what it did stale: it is run again (the pending folder is simply redone).
   useEffect(() => {
@@ -2307,8 +2316,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
             ) : sourceDir ? (
               <button type="button" className={btnOutline} onClick={() => handleScan()}>Scan</button>
             ) : null}
-            <div className="flex justify-between items-center mt-4">
-              {onBack ? <button type="button" className={btnOutline} disabled={scanning} onClick={onBack}><span aria-hidden="true">← </span>Back</button> : <div />}
+            <div className="flex justify-end items-center mt-4">
               <button type="button" aria-label="Continue to the checks" className={btnPrimary} disabled={!scan || scanning} onClick={() => openImagesStep(2)}>Continue<span aria-hidden="true"> →</span></button>
             </div>
           </WizardStep>
@@ -2387,11 +2395,13 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
       })()}
 
       {/* ── Step: where and when the images were taken ── */}
-      {stepKey === 'origin' && (() => {
+      {(stepKey === 'origin' || stepKey === 'dates') && (() => {
         const folderName = sourceDir.split(/[\\/]/).filter(Boolean).pop() ?? sourceDir
         const chip = 'rounded-full border border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300'
-        const whenOpen = originOpen === 2 && originReady
-        const moreOpen = originOpen === 3 && originReady
+        // The origin is the first step; the dates and the details are the third, whose own two parts are the 2nd and the 3rd.
+        const part = stepKey === 'origin' ? 1 : Math.max(originOpen, 2)
+        const whenOpen = part === 2 && originReady
+        const moreOpen = part === 3 && originReady
         const originStatus = (n: number): 'open' | 'done' | 'locked' => {
           if (n === 1) return !whenOpen && !moreOpen ? 'open' : 'done'
           if (n === 2) return whenOpen ? 'open' : originReady && originReached >= 2 ? 'done' : 'locked'
@@ -2402,17 +2412,24 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
           deployment.tags.length || null].filter((v) => v != null && v !== '' && v !== false).length
         return (
         <div>
-          <div className="flex flex-wrap gap-2 mb-6">
-            {scan && <span className={chip}>{scan.image_count.toLocaleString('en-US')} {scan.image_count === 1 ? 'image' : 'images'}</span>}
-            <span className={`${chip} font-mono`}>{folderName}</span>
-          </div>
+          {stepKey === 'dates' && (
+            <div className="flex flex-wrap gap-2 mb-6">
+              {scan && <span className={chip}>{scan.image_count.toLocaleString('en-US')} {scan.image_count === 1 ? 'image' : 'images'}</span>}
+              <span className={`${chip} font-mono`}>{folderName}</span>
+              {selectedProject && selectedLocation && <span className={chip}>{selectedProject.acronym} · {selectedLocation.location_id}</span>}
+              {linkedVisit && <span className={chip}>Closed visit: {visitLabel(linkedVisit)}</span>}
+            </div>
+          )}
 
-          <StepHeading>Origin and dates</StepHeading>
+          <StepHeading>{stepKey === 'origin' ? 'Origin' : 'Dates and details'}</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Say where the images were taken and when they were collected, then add what you know about the camera and the site — the rest can wait.
+            {stepKey === 'origin'
+              ? 'Say where the images were taken: the research project and the visit or the location they come from. Next you pick the folder with the images.'
+              : 'Say when the images were collected, then add what you know about the camera and the site — the rest can wait.'}
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
-          <WizardStep n={1} title="Where and when was it taken?" status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
+          {stepKey === 'origin' && (
+          <WizardStep n={1} title="Where was it taken?" status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
                       description={closedVisits && closedVisits.length > 0
                         ? 'The research project and the visit the images come from — the visit whose card was collected. It says where they were taken. Research projects are kept in the collections folder.'
                         : 'The research project and the location the images come from. They are kept in the collections folder — pick one that is already there, or add a new one, by hand or from Trapper.'}
@@ -2512,16 +2529,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
               </div>
             )}
           </FormCard>
-
-          {selectedProjectId && !addingProject && (
-            <FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project. Optional: it is checked against the card the visit says was left in the camera.`}>
-              <label className="sr-only" htmlFor="origin-sd-card">SD card</label>
-              <Combobox
-                id="origin-sd-card" options={projectSdCards.map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
-                value={sdCard} onChange={setSdCard} placeholder={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet` : 'Select the SD card the images come from…'} clearLabel="Clear SD card"
-              />
-            </FormCard>
-          )}
 
           {selectedProjectId && !addingProject && closedVisits !== null && closedVisits.length > 0 && (
             <FormCard title="Closed visit" description={`The visits to ${selectedProjectId} that left a camera and whose card has been collected, with no deployment yet. The deployment is of the visit you pick — where its card was left — and its location is the visit's.`}>
@@ -2640,13 +2647,25 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
             </FormCard>
           )}
 
+          {selectedProjectId && !addingProject && (
+            <FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project. Optional: it is checked against the card the visit says was left in the camera.`}>
+              <label className="sr-only" htmlFor="origin-sd-card">SD card</label>
+              <Combobox
+                id="origin-sd-card" options={projectSdCards.map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
+                value={sdCard} onChange={setSdCard} placeholder={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet` : 'Select the SD card the images come from…'} clearLabel="Clear SD card"
+              />
+            </FormCard>
+          )}
+
           {originError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{originError}</p>}
             <div className="flex justify-between items-center mt-4">
-              <button type="button" className={btnOutline} onClick={handleBack}><span aria-hidden="true">← </span>Back</button>
-              <button type="button" aria-label="Continue to the dates" className={btnPrimary} disabled={!originReady} onClick={() => { setOriginOpen(2); setOriginReached(2) }}>Continue<span aria-hidden="true"> →</span></button>
+              {onBack ? <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button> : <div />}
+              <button type="button" aria-label="Continue to the images" className={btnPrimary} disabled={!originReady} onClick={() => setStep((n) => n + 1)}>Continue<span aria-hidden="true"> →</span></button>
             </div>
           </WizardStep>
+          )}
 
+          {stepKey === 'dates' && (
           <WizardStep n={2} title="When was it collected?" status={originStatus(2)} canEdit onEdit={() => setOriginOpen(2)}
                       description={!timezone
                         ? <span className="text-red-600 dark:text-red-400">The location <strong>{deployment.location_id}</strong> has no timezone, and a deployment needs it: add it to the location.</span>
@@ -2728,7 +2747,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                   name={deployment.deployment_id || 'deployment'} value={dateSource} onPick={pickSource} start={deployment.start_date || null} end={deployment.end_date ?? null} timezone={timezone}
                   options={[
                     ...(linkedVisit ? [{ source: 'visit' as const, title: 'Visits of the field work', period: periodOf('visit'),
-                      hint: `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), where the card was left, to ${linkedVisit.end.session} (${linkedVisit.end.date}), where it was collected — in the timezone of the location.` }] : []),
+                      hint: `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), where the card was left, to ${linkedVisit.end.session} (${linkedVisit.end.date}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
                     { source: 'exif', title: 'Camera data in the photos', period: periodOf('exif'),
                       hint: `First and last photo of the deployment.${scan && periodOf('exif') ? ` ${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'photo' : 'photos'}, read from their EXIF data.` : ''}` },
                     { source: 'epicollect', title: 'Epicollect5 project', period: periodOf('epicollect'),
@@ -2740,23 +2759,27 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                   manualForm={<DeploymentFormBody collapsible periodOnly deployment={deployment} timezone={timezone} errors={fieldErrors} onField={updateField} datesGuessed={false} />} />
               </FormCard>
               <div className="flex justify-between items-center mt-4">
-                <button type="button" className={btnOutline} onClick={() => setOriginOpen(1)}><span aria-hidden="true">← </span>Back</button>
+                <button type="button" className={btnOutline} onClick={handleBack}><span aria-hidden="true">← </span>Back</button>
                 <button type="button" aria-label="Continue to more details" className={btnPrimary} onClick={() => { setOriginOpen(3); setOriginReached(3) }}>Continue<span aria-hidden="true"> →</span></button>
               </div>
           </WizardStep>
 
+          )}
+
+          {stepKey === 'dates' && (
           <WizardStep n={3} title="More details" status={originStatus(3)} canEdit onEdit={() => { setOriginOpen(3); setOriginReached(3) }}
                       description="Everything here is optional. Fill in what you know now — you can add the rest later."
                       summary={moreFilled > 0 ? `${moreFilled} ${moreFilled === 1 ? 'detail' : 'details'} filled in` : 'Nothing filled in yet'}>
             {filledFrom && (
               <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-5 py-4 text-sm text-emerald-900 dark:text-emerald-100">
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
-                <span className="flex-1"><strong className="font-semibold">Filled in from {filledFrom}.</strong> Change anything that&rsquo;s different this time.</span>
+                <span className="flex-1"><strong className="font-semibold">Filled in from {filledFrom}.</strong> Change anything that&rsquo;s different this time.{linkedVisit && filledFrom?.startsWith('the visit') && <> What you change stays in the deployment: the visits (the field sheet) are not changed.</>}</span>
                 <button type="button" className="rounded-lg border border-emerald-400 dark:border-emerald-800 px-4 py-2 text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/40" onClick={handleStartEmpty}>Start empty</button>
               </div>
             )}
             <MoreDetailsForm deployment={deployment} errors={fieldErrors} onField={updateField} />
           </WizardStep>
+          )}
         </div>
         )
       })()}
@@ -3147,8 +3170,14 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
         {destDir ? (
           <div />
         ) : stepKey === 'origin' ? (
-          originOpen === 3 ? <button type="button" className={btnOutline} onClick={() => setOriginOpen(2)}><span aria-hidden="true">← </span>Back</button> : <div />  // the other two have their own
-        ) : step > 0 && !(stepKey === 'prepare' && !preprocessing && !resultsDone && (preprocessed?.type === 'done' || preprocessError)) ? (
+          <div />  // its own Back and Continue are in the step
+        ) : stepKey === 'dates' && originOpen !== 3 ? (
+          <div />  // its own Back is in the step
+        ) : stepKey === 'dates' ? (
+          <button type="button" className={btnOutline} onClick={() => setOriginOpen(2)}><span aria-hidden="true">← </span>Back</button>
+        ) : stepKey === 'images' && imagesOpen === 2 ? (
+          <div />  // its own Back is in the step
+        ) : step > 0 && !(stepKey === 'prepare' && !preprocessing && !resultsDone && (preprocessed?.type === 'done' || preprocessError)) && !(stepKey === 'images' && imagesOpen === 3) ? (
           <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={handleBack}><span aria-hidden="true">← </span>Back</button>
         ) : stepKey === 'images' && imagesOpen === 3 ? (
           <button type="button" className={btnOutline} disabled={validating} onClick={() => setImagesOpen(2)}><span aria-hidden="true">← </span>Back</button>
@@ -3162,7 +3191,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
             <button type="button" className={btnPrimary} disabled={!scan || !requiredImageChecksOk} onClick={() => setStep((s) => s + 1)}>Continue<span aria-hidden="true"> →</span></button>
           </div>
         )}
-        {!destDir && stepKey === 'origin' && (
+        {!destDir && stepKey === 'dates' && (
           <div className="flex flex-col items-end gap-1 max-w-md">
             {timestampLogError && <p className="text-xs text-red-600 dark:text-red-400 text-right">{timestampLogError}</p>}
             <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!originReady || !newDetailsReady || savingDetails} onClick={handleContinueFromDeployment}>

@@ -122,8 +122,8 @@ beforeEach(() => {
 // Props the page is rendered with — reset for every test.
 let pageProps: ComponentProps<typeof ImportDeploymentPage> = {}
 
+/** The folder of the images, typed and scanned — the second step, after the origin. */
 async function scanTheFolder() {
-  render(<ImportDeploymentPage {...pageProps} />)
   await userEvent.type(screen.getByLabelText('Folder'), '/home/me/deployments/DONA_01')
   await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
   await screen.findByText(/12 images found/)
@@ -159,18 +159,36 @@ const DEPLOYMENT_CHECK_LABELS = [
 ]
 const chooseDeploymentStrictness = (index: number, choice: 'Skip' | 'Warn' | 'Must pass') => chooseStrictness(DEPLOYMENT_CHECK_LABELS[index], choice)
 
-/** → step "validate". */
+/** → the first step, the origin. */
+async function goToOriginStep() {
+  render(<ImportDeploymentPage {...pageProps} />)
+  await screen.findByText('Where was it taken?')
+}
+
+/** The origin filled in by hand (DONA and DONA_01), then on to the images → the folder, scanned. */
+async function goToImagesStep() {
+  await goToOriginStep()
+  await addProjectByHand()
+  await addLocationByHand()
+  await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+  await screen.findByLabelText('Folder')
+}
+
+/** → the images' checks (their folder is scanned, and the checks are to choose). */
 async function goToValidateStep() {
+  await goToImagesStep()
   await scanTheFolder()
   await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
   await screen.findByText('Choose the checks')
 }
 
-/** → step "origin". */
-async function goToOriginStep() {
-  await goToValidateStep()
+/** From the origin, filled in: the images (scanned, with their checks left as they are) and on to the dates and details. */
+async function continueToDates() {
+  await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+  await scanTheFolder()
+  await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
+  await screen.findByText('Choose the checks')
   await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-  await screen.findByText('Where and when was it taken?')
 }
 
 /** Adds DONA and its location DONA_01 by hand to the empty collections
@@ -179,7 +197,7 @@ async function goToNewDetailsStep() {
   await goToOriginStep()
   await addProjectByHand()
   await addLocationByHand()
-  await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+  await continueToDates()
   await screen.findByText('When was it collected?')
   // The images' dates and camera are read as the details open.
   await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
@@ -208,7 +226,7 @@ async function addLocationByHand(locationId = 'DONA_01', name = 'Doñana site 1'
   await userEvent.type(screen.getByLabelText('Longitude'), '-6.5')
   if (timezone) await userEvent.type(screen.getByLabelText('Timezone (IANA)'), timezone)
   await userEvent.click(screen.getByRole('button', { name: 'Save location' }))
-  await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled())
+  await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
 }
 
 /** What the details step requires: the revision (which gives the deployment
@@ -254,23 +272,25 @@ async function walkToImportStep(revision = '1', fillDetails?: () => Promise<void
 }
 
 describe('ImportDeploymentPage', () => {
-  it('asks for the source folder before anything else', () => {
+  it('asks where it was taken before anything else: the folder of the images comes next', () => {
     render(<ImportDeploymentPage />)
-    expect(screen.getByText(/don't point this at the card itself/i)).toBeInTheDocument()
-    expect(screen.getByLabelText('Folder')).toBeInTheDocument()
+    expect(screen.getByText('Where was it taken?')).toBeInTheDocument()
+    expect(screen.getByLabelText('Research project')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Folder')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
   })
 
   it('walks through validate, origin, details, postvalidation, preprocessing and import as separate screens', async () => {
-    await goToValidateStep()
-    expect(screen.getByText('Choose the checks')).toBeInTheDocument() // the folder and the checks are one screen
-
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('Where and when was it taken?')).toBeInTheDocument()
-
+    await goToOriginStep()
     await addProjectByHand()
     await addLocationByHand()
-    await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+    expect(await screen.findByLabelText('Folder')).toBeInTheDocument() // the folder and the checks are one screen
+    await scanTheFolder()
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
+    expect(await screen.findByText('Choose the checks')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(await screen.findByText('When was it collected?')).toBeInTheDocument()
 
     await fillRequiredDetails()
@@ -290,7 +310,7 @@ describe('ImportDeploymentPage', () => {
     for (const gone of ['New or existing deployment?', 'Where to import', 'Collection folder', 'Connect to Trapper']) {
       expect(screen.queryByText(gone)).not.toBeInTheDocument()
     }
-    for (const label of ['Images', 'Origin and dates', 'Check details', 'Prepare and save']) {
+    for (const label of ['Origin', 'Images', 'Dates and details', 'Check details', 'Prepare and save']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
     expect(screen.queryByText('Mode')).not.toBeInTheDocument()
@@ -302,7 +322,7 @@ describe('ImportDeploymentPage', () => {
       await goToOriginStep()
 
       expect(screen.getByLabelText('Research project')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
     })
 
     it('first run: the collections folder has no research projects, so the first one is added', async () => {
@@ -321,13 +341,13 @@ describe('ImportDeploymentPage', () => {
       await userEvent.type(await screen.findByLabelText('Research project'), 'Doñ')
       expect(screen.queryByRole('option', { name: 'SINE — Sierra Nevada' })).not.toBeInTheDocument() // filtered as you type
       await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-      expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeDisabled() // no location yet
+      expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled() // no location yet
 
       await userEvent.type(await screen.findByLabelText('Location'), 'DONA_01')
       await userEvent.click(await screen.findByRole('option', { name: 'DONA_01 — Doñana site 1' }))
-      expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled()
+      expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()
 
-      await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+      await continueToDates()
       await screen.findByText('When was it collected?')
       expect(screen.getByText('Europe/Madrid')).toBeInTheDocument() // from the location, in the sentence about it
       expect(screen.queryByLabelText('Timezone (IANA)')).not.toBeInTheDocument() // not asked for the deployment
@@ -377,7 +397,7 @@ describe('ImportDeploymentPage', () => {
           '2026-06-10 09:00:00 · DONA_01 · R0001 · Installation · card A13 · collected on 2026-08-05 (300 photos)',
         ])
         expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeDisabled()
+        expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
         expect(mockedApi.closedVisits).toHaveBeenCalledWith('DONA')
       })
 
@@ -386,8 +406,8 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByLabelText('Closed visit'))
         await userEvent.click(await screen.findByRole('option', { name: /R0002/ }))
 
-        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled())
-        await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
+        await continueToDates()
         await screen.findByText('When was it collected?')
         expect(screen.getByText(/Closed visit: 2026-08-05 08:14:05/)).toBeInTheDocument()
         expect(screen.getByLabelText('Revision')).toHaveValue(2)
@@ -397,7 +417,7 @@ describe('ImportDeploymentPage', () => {
         await pickProject()
         await userEvent.click(await screen.findByLabelText('Closed visit'))
         await userEvent.click(await screen.findByRole('option', { name: /R0002/ }))
-        await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+        await continueToDates()
         await screen.findByText('When was it collected?')
         await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
         await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
@@ -416,10 +436,10 @@ describe('ImportDeploymentPage', () => {
         pageProps = { closedVisit: { researchProjectId: 'DONA', visit: CLOSED[1].visit } }
         await goToOriginStep()
 
-        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled())
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
         expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
         expect((screen.getByLabelText('Closed visit') as HTMLInputElement).value).toMatch(/R0001/)
-        await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+        await continueToDates()
         await screen.findByText('When was it collected?')
         expect(screen.getByLabelText('Revision')).toHaveValue(1)
       })
@@ -435,14 +455,15 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
         await userEvent.click(await screen.findByLabelText('Closed visit'))
         await userEvent.click(await screen.findByRole('option', { name: /R0001/ }))
-        await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+        await continueToDates()
         await screen.findByText('When was it collected?')
 
         expect(screen.getByLabelText('Revision')).toHaveValue(1)
         expect(screen.getByRole('radio', { name: /Visits of the field work/ })).toBeChecked()
-        expect(screen.getByText(/From the visit R0001 \(2026-06-10\)/)).toBeInTheDocument()
+        expect(screen.getByText(/From the visit R0001 \(2026-06-10\)/)).toHaveTextContent('the visits are not changed')
         await userEvent.click(screen.getByRole('button', { name: 'Continue to more details' }))
         expect(await screen.findByText(/Filled in from the visit R0001/)).toBeInTheDocument()
+        expect(screen.getByText(/the visits \(the field sheet\) are not changed/)).toBeInTheDocument() // what is changed here stays in the deployment
         await openSection(/^Camera/); await openSection(/^Site/); await openSection(/^Grouping and notes/)
         expect(screen.getByLabelText('Camera id')).toHaveValue('P800')
         expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
@@ -463,11 +484,7 @@ describe('ImportDeploymentPage', () => {
           mockedApi.closedVisits.mockResolvedValue({ results: [{ visit: start, end: stored({ session: 'R0002', date: '2026-08-05', actions: ['Revision'], num_photos: counted }) }] })
           storedProjects = [DONA_PROJECT]
           storedLocations = { DONA: [DONA_01] }
-          await scanTheFolder()
-          await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
-          await screen.findByText('Choose the checks')
-          await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-          await screen.findByText('Where and when was it taken?')
+          await goToOriginStep()
           await userEvent.click(await screen.findByLabelText('Research project'))
           await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
           if (card) {
@@ -476,7 +493,7 @@ describe('ImportDeploymentPage', () => {
           }
           await userEvent.click(await screen.findByLabelText('Closed visit'))
           await userEvent.click(await screen.findByRole('option', { name: /R0001/ }))
-          await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+          await continueToDates()
           await screen.findByText('When was it collected?')
           await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
           await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
@@ -488,12 +505,8 @@ describe('ImportDeploymentPage', () => {
           SD_SETTINGS()
           storedProjects = [DONA_PROJECT]
           storedLocations = { DONA: [DONA_01] }
-          await scanTheFolder()
+          await goToOriginStep()
           expect(screen.queryByLabelText('SD card')).not.toBeInTheDocument()
-          await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
-          await screen.findByText('Choose the checks')
-          await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-          await screen.findByText('Where and when was it taken?')
           await userEvent.click(await screen.findByLabelText('Research project'))
           await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
 
@@ -638,10 +651,10 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
         await userEvent.click(await screen.findByLabelText('Location'))
         await userEvent.click(await screen.findByRole('option', { name: 'DONA_01 — Doñana site 1' }))
-        expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled()
+        expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()
 
         await userEvent.click(screen.getByRole('button', { name: /add a new research project/i }))
-        expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeDisabled()
+        expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
       })
     })
 
@@ -777,7 +790,7 @@ describe('ImportDeploymentPage', () => {
         expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
           location_id: 'DONA_02', name: null, timezone: null, ignore_dst: true, latitude: 37.1, longitude: -6.4, coordinate_uncertainty: 100, trapper_pk: null,
         })
-        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled()) // picked
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()) // picked
         expect(screen.getByLabelText('Location')).toHaveValue('DONA_02')
       })
 
@@ -821,7 +834,7 @@ describe('ImportDeploymentPage', () => {
           latitude: 37, longitude: -6.5, coordinate_uncertainty: null, // its coordinates come from Trapper
         }))
         expect(screen.queryByRole('button', { name: 'Save location' })).not.toBeInTheDocument() // no form
-        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled()) // added and picked
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()) // added and picked
         expect(screen.getByLabelText('Location')).toHaveValue('DONA_01 — Doñana site 1')
       })
 
@@ -833,7 +846,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByRole('checkbox', { name: 'DONA_01 — Doñana site 1' }))
         await userEvent.click(screen.getByRole('button', { name: /add 1 location$/i }))
 
-        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled())
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
         expect(mockedApi.saveLocalLocation).not.toHaveBeenCalled()
       })
 
@@ -847,7 +860,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByRole('option', { name: 'DONA_01 — Doñana site 1' }))
 
         expect(screen.getByText(/DONA_01 has no coordinates/)).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeDisabled()
+        expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
       })
 
       it('from Trapper: one with no coordinates there is not added, and says why', async () => {
@@ -877,7 +890,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(screen.getByRole('checkbox', { name: 'DONA_08 — No point' }))
         await userEvent.click(screen.getByRole('button', { name: /add 3 locations/i }))
 
-        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled())
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
         expect(storedLocations.DONA.map((l) => l.location_id)).toEqual(['DONA_02', 'DONA_01']) // the one without coordinates is left out
         expect(screen.getByLabelText('Location')).toHaveValue('DONA_02 — Doñana site 2') // the first ticked, marked by default
         expect(screen.getByText(/DONA_08.*has no coordinates in Trapper/)).toBeInTheDocument()
@@ -904,24 +917,24 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
         await userEvent.click(await screen.findByLabelText('Location'))
         await userEvent.click(await screen.findByRole('option', { name: 'DONA_01 — Doñana site 1' }))
-        expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeEnabled()
+        expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()
 
         await userEvent.click(screen.getByLabelText('Research project'))
         await userEvent.click(await screen.findByRole('option', { name: 'SINE — Sierra Nevada' }))
 
-        expect(screen.getByRole('button', { name: /Continue to the dates/ })).toBeDisabled()
+        expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
       })
     })
   })
 
   it('the scan only counts the images: their dates and camera are read when the details are asked for', async () => {
-    await goToOriginStep()
+    await goToImagesStep()
+    await scanTheFolder()
     expect(mockedApi.scanFolder).toHaveBeenCalledTimes(1)
-    expect(mockedApi.guessDetails).not.toHaveBeenCalled() // not through the scan, the validation or the origin
-
-    await addProjectByHand()
-    await addLocationByHand()
-    await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+    expect(mockedApi.guessDetails).not.toHaveBeenCalled() // not through the origin, the scan or the validation
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
+    await screen.findByText('Choose the checks')
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByText('When was it collected?')
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Camera metadata (EXIF)' })).toBeChecked())
 
@@ -1127,11 +1140,15 @@ describe('ImportDeploymentPage', () => {
 
     expect(await screen.findByLabelText('Folder')).toHaveValue('/home/me/deployments/DONA_01')
     expect(screen.getByText(/12 images found/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Back' }).at(-1)!) // the one of the step: the other belongs to the checks, shut
+    expect(await screen.findByText('Where was it taken?')).toBeInTheDocument()
+    expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
   })
 
   it('fills the folder path from the native browser', async () => {
     mockedApi.browseFolder.mockResolvedValue({ path: '/home/me/deployments/DONA_01' })
-    render(<ImportDeploymentPage />)
+    await goToImagesStep()
 
     await userEvent.click(screen.getByRole('button', { name: /^browse/i }))
 
@@ -1141,7 +1158,7 @@ describe('ImportDeploymentPage', () => {
 
   it('shows an error when no native folder dialog is available', async () => {
     mockedApi.browseFolder.mockRejectedValue(new Error('No folder dialog tool found — install zenity (GNOME) or kdialog (KDE).'))
-    render(<ImportDeploymentPage />)
+    await goToImagesStep()
 
     await userEvent.click(screen.getByRole('button', { name: /^browse/i }))
 
@@ -1150,7 +1167,7 @@ describe('ImportDeploymentPage', () => {
 
   it('shows a scan error without crashing', async () => {
     mockedApi.scanFolder.mockRejectedValue(new Error('Not a folder: /nope'))
-    render(<ImportDeploymentPage />)
+    await goToImagesStep()
     await userEvent.type(screen.getByLabelText('Folder'), '/nope')
     await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
 
@@ -1767,7 +1784,7 @@ describe('ImportDeploymentPage', () => {
 
       mockedApi.getSettings.mockResolvedValue(settings({ corrupted: false }))
       await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-      await screen.findByText('Where and when was it taken?')
+      await screen.findByText('When was it collected?')
       await userEvent.click(screen.getByRole('button', { name: 'Back' })) // read again on entering the step
 
       await waitFor(() => expect(screen.queryByRole('radiogroup', { name: 'How strict: Corrupted images' })).not.toBeInTheDocument())
@@ -2236,7 +2253,8 @@ describe('ImportDeploymentPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Start over' }))
 
-      expect(await screen.findByLabelText('Folder')).toHaveValue('')
+      expect(await screen.findByText('Where was it taken?')).toBeInTheDocument() // from the beginning, the origin first
+      expect(screen.getByLabelText('Research project')).toHaveValue('')
     })
   })
 
@@ -2245,12 +2263,16 @@ describe('ImportDeploymentPage', () => {
     storedLocations = { DONA: [DONA_01] }
     render(<ImportDeploymentPage resumeSession={DETAILED_SESSION} />)
 
-    expect(await screen.findByText('Where and when was it taken?')).toBeInTheDocument() // the origin isn't saved in a session
+    expect(await screen.findByText('Where was it taken?')).toBeInTheDocument() // the origin isn't saved in a session
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
     await userEvent.click(await screen.findByLabelText('Location'))
     await userEvent.click(await screen.findByRole('option', { name: 'DONA_01 — Doñana site 1' }))
-    await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+    expect(await screen.findByLabelText('Folder')).toHaveValue('/home/me/DONA_01') // its folder was kept, and scanned
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
+    await screen.findByText('Choose the checks')
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     await screen.findByText('When was it collected?')
     expect(screen.getByLabelText('Revision')).toHaveValue(1)
@@ -2261,10 +2283,16 @@ describe('ImportDeploymentPage', () => {
   })
 
   it('resumes a scanned-only session and lets the user pick up from the origin step', async () => {
+    storedProjects = [DONA_PROJECT]
+    storedLocations = { DONA: [DONA_01] }
     render(<ImportDeploymentPage resumeSession={SESSION} />)
-    expect(await screen.findByText('Where and when was it taken?')).toBeInTheDocument()
+    expect(await screen.findByText('Where was it taken?')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+    await userEvent.click(await screen.findByLabelText('Location'))
+    await userEvent.click(await screen.findByRole('option', { name: 'DONA_01 — Doñana site 1' }))
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
     expect(await screen.findByLabelText('Folder')).toHaveValue('/home/me/DONA_01')
   })
 
@@ -2481,7 +2509,7 @@ describe('ImportDeploymentPage', () => {
       await goToOriginStep()
       await addProjectByHand()
       await addLocationByHand('DONA_01', 'Doñana site 1', '')
-      await userEvent.click(screen.getByRole('button', { name: /Continue to the dates/ }))
+      await continueToDates()
       await screen.findByText('When was it collected?')
 
       expect(screen.getByText(/has no timezone, and a deployment needs it/)).toBeInTheDocument()
