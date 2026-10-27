@@ -847,7 +847,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     )}
                   </Notice>
                 )}
-                {csvResult.visits.length > 0 && (
+                {csvResult.visits.length > 0 && csvSaved === null && (
                   <div className="overflow-x-auto mt-3">
                     <table className="w-full text-sm">
                       <thead>
@@ -875,8 +875,15 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   </div>
                 ) : (
                   <>
-                    <Notice kind="success" role="status" className="mt-4">{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added to the visits file of {project?.acronym}.</Notice>
+                    <Notice kind="success" role="status" className="mt-4 !items-center !rounded-2xl !px-6 !py-5 !text-base">
+                      <strong>{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added</strong> to {project?.acronym}. The deployments will be worked out from {csvSaved === 1 ? 'it' : 'them'}.
+                    </Notice>
                     {closedLinks}
+                    <div className="mt-5 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
+                      <button type="button" className="px-6 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-base font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                              onClick={() => { forgetCsv(); setCsvName(null); setProject(undefined); setSource(null) }}>Register more visits</button>
+                      <button type="button" className="px-6 h-12 rounded-xl bg-blue-600 text-white text-base font-medium hover:bg-blue-700 transition-colors" onClick={onBack}>Back to the menu</button>
+                    </div>
                   </>
                 )}
               </>

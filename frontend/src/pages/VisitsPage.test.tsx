@@ -772,7 +772,13 @@ describe('VisitsPage from a CSV file', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Add 2 visits' }))
     expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', expect.any(String), true, 'mapped', MAPPING)
-    expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to the visits file of TATR.')
+    expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to TATR. The deployments will be worked out from them.')
+    expect(screen.queryByRole('table')).not.toBeInTheDocument() // the visits are kept: the list of them goes
+    expect(screen.getByRole('button', { name: 'Back to the menu' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Register more visits' }))
+    expect(screen.getByText('Where do the visits come from?')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
   it('does not read the visits until the site, the actions and when are mapped', async () => {
