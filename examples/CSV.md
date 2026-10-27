@@ -7,6 +7,9 @@ For trying the CSV options of the app.
 
 - `visits_epicollect.csv` — "From Wildintel Epicollect": the Epicollect download of a field trip, as the field records read it. The time is
   `created_at` (UTC), put in the timezone of the location. The last row, with no collection number, is ignored.
+- `visit_epicollect_valid.csv` — "From Wildintel Epicollect" for the project WICP, with the entities of `entities_example/` imported: 18 visits in three field trips
+  to six active sites (`WICP_0008` … `WICP_0020`), with active cameras and SD cards, and the trappers of `trappers.csv`. The cameras and the cards are where
+  the visits before say they are, so every row is read with nothing left out.
 - `visits_donana.csv` — the same with the Spanish headers and codes of the Doñana form (R, I, D, ROBADA).
 - `visits_mapped.csv` — "From a CSV file": a CSV with columns of its own. The page shows its columns and you say which field each gives;
   `Lugar`, `Dia`, `Tarea`, `Quien`, `Fotos` and `Tarjeta` are not matched by themselves — pick them. Dates are written day first.
