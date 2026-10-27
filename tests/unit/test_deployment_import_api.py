@@ -405,6 +405,26 @@ def test_updating_a_location_that_is_not_there_is_a_404_and_a_bad_timezone_a_422
     assert bad.status_code == 422
 
 
+def test_a_location_is_deleted_unless_it_has_visits_or_comes_from_trapper(tmp_path: Path):
+    visit = {"location_id": "DONA_02", "session": "R0001", "date": "2026-10-02", "time": "08:14:05", "actions": ["Revision"], "camera_id": "12", "num_photos": 10}
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        for location in ({"location_id": "DONA_01"}, {"location_id": "DONA_02"}, {"location_id": "DONA_03", "trapper_pk": 7}):
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": location})
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit})
+        free = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "dona_01"})
+        visited = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "DONA_02"})
+        trapper = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "DONA_03"})
+        missing = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "NOPE"})
+        listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
+
+    assert free.status_code == 200 and free.json() == {"deleted": "DONA_01"}
+    assert visited.status_code == 409 and "1 visit" in visited.json()["detail"]
+    assert trapper.status_code == 409 and "Trapper" in trapper.json()["detail"]
+    assert missing.status_code == 404
+    assert [l["location_id"] for l in listed] == ["DONA_02", "DONA_03"]
+
+
 def test_the_next_revision_is_asked_by_research_project_and_location(tmp_path: Path):
     deployment = tmp_path / "DONA" / "R0002" / "R0002-DONA_01"
     deployment.mkdir(parents=True)

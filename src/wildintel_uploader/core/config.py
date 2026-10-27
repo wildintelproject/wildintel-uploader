@@ -97,7 +97,7 @@ class TrapperSettings(BaseModel):
     )
     max_zip_mb: int = Field(
         default=500, ge=1, le=5000,
-        description="A deployment's images go up in zips of at most this many megabytes, each with its own yaml. (TRAPPER.max_zip_mb)",
+        description="The images of each deployment are uploaded in packages of at most this many megabytes. (TRAPPER.max_zip_mb)",
     )
 
 
@@ -263,7 +263,7 @@ class SdCard(BaseModel):
     capacity: Optional[str] = Field(default=None, description="How much it holds, free text (e.g. 64 GB).")
     in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
     research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to; none, it is free for any.")
-    status: Literal["active", "retired", "lost", "broken"] = Field(default="active", description="Whether it can still be used; only an active one is offered for a visit.")
+    status: Literal["active", "retired", "stolen", "lost", "broken"] = Field(default="active", description="Whether it can still be used; only an active one is offered for a visit.")
     status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
 

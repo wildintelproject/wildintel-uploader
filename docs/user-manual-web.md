@@ -62,8 +62,8 @@ The server's **URL**, and the **username** (its email — Trapper's import form 
 that) and **password** of your account. **Test connection** reports the research projects it can
 see. The password is saved in `settings.toml` but never sent back to your browser.
 
-**Upload packages — Largest zip** is the size, in MB, of the zips an [upload](#7-upload-a-deployment-to-trapper) makes: a
-deployment's images go up in zips of at most this size (500 by default, up to 5000), each with its own yaml.
+**Upload packages — Largest package** is the size, in MB, of the packages an [upload](#7-upload-a-deployment-to-trapper) makes: the
+images of each deployment are uploaded in packages of this size at most (500 by default, up to 5000).
 
 ### Epicollect5
 

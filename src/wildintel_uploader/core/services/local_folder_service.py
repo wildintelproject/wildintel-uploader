@@ -266,6 +266,27 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
     return locations[index]
 
 
+def delete_location(root: Path, research_project_id: str, location_id: str) -> dict:
+    """Removes a kept location (found ignoring case). One that holds visits stays, as they would be left with no place; so does one taken from
+    Trapper, which is only read here — mark a location as retired instead and it is no longer offered.
+
+    Raises:
+        LocalFolderError: the location isn't there, it comes from Trapper, or visits were made to it.
+    """
+    locations = list_locations(root, research_project_id)
+    index = next((i for i, l in enumerate(locations) if l.get("location_id", "").lower() == location_id.lower()), None)
+    if index is None:
+        raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
+    if locations[index].get("trapper_pk") is not None:
+        raise LocalFolderError(f"The location '{location_id}' comes from Trapper, so it can't be deleted here.")
+    visits = len(list_visits(root, research_project_id, location_id))
+    if visits:
+        raise LocalFolderError(f"The location '{location_id}' still has {visits} visit{'s' if visits != 1 else ''}: it can't be deleted — mark it as retired instead.")
+    removed = locations.pop(index)
+    (project_dir(root, research_project_id) / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"deleted": removed["location_id"]}
+
+
 def list_visits(root: Path, research_project_id: str, location_id: str | None = None) -> list[dict]:
     """The visits kept for a research project, in the order they were registered — those to one location (found ignoring
     case) when it is given. Empty until one is registered.

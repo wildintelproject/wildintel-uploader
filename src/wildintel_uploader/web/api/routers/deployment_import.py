@@ -18,7 +18,7 @@ from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
 from wildintel_uploader.core.schemas.requests import (
     BrowseFolderRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
-    ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
+    DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
     NextRevisionRequest, UpdateLocationRequest, UpdateResearchProjectRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
 from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service
@@ -117,6 +117,15 @@ def update_location(req: UpdateLocationRequest) -> dict:
         return local_folder_service.update_location(config.collections_dir(), req.research_project_id, req.location_id, changes)
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(404 if "isn't in" in str(exc) else 400, str(exc)) from exc
+
+
+@router.post("/locations/delete")
+def delete_location(req: DeleteLocationRequest) -> dict:
+    """Deletes a kept location — 409 when visits were made to it (or it comes from Trapper), 404 if it isn't there."""
+    try:
+        return local_folder_service.delete_location(config.collections_dir(), req.research_project_id, req.location_id)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(404 if "isn't in" in str(exc) else 409 if "still has" in str(exc) or "comes from Trapper" in str(exc) else 400, str(exc)) from exc
 
 
 @router.get("/exiftool")

@@ -305,6 +305,10 @@ class LocalLocationsRequest(BaseModel):
     research_project_id: str = Field(min_length=1)
 
 
+class DeleteLocationRequest(LocalLocationsRequest):
+    location_id: str = Field(min_length=1)
+
+
 class SaveLocationRequest(LocalLocationsRequest):
     location: LocationRecord
 

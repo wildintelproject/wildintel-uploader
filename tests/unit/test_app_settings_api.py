@@ -90,8 +90,8 @@ def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_onl
     assert (saved["FIELDWORK"]["sd_cards"][0]["status"], saved["FIELDWORK"]["sd_cards"][0]["status_date"]) == ("lost", None)
     assert saved["FIELDWORK"]["trappers"][0]["status"] == "inactive"
 
-    # each has its own: a card is not stolen, a trapper is not broken
-    for field, item in (("sd_cards", {"label": "A1", "status": "stolen"}), ("trappers", {"name": "Ana", "status": "broken"}), ("cameras", {"camera_id": "X1", "status": "planned"})):
+    # each has its own: a card is not planned, a trapper is not broken
+    for field, item in (("sd_cards", {"label": "A1", "status": "planned"}), ("trappers", {"name": "Ana", "status": "broken"}), ("cameras", {"camera_id": "X1", "status": "planned"})):
         body = config.Settings().model_dump(mode="json")
         body["FIELDWORK"][field] = [item]
         assert _client().put("/api/settings", json=body).status_code == 422
