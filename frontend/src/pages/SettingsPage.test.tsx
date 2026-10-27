@@ -853,6 +853,19 @@ describe('SettingsPage', () => {
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([expect.objectContaining({ name: 'Luis', status: 'inactive' })])
     })
 
+    it('takes the title of the page and the text over the list away while a trapper is added or edited', async () => {
+      await open([LUIS])
+      expect(screen.getByRole('heading', { name: 'Entities' })).toBeInTheDocument()
+      expect(screen.getByText(/The people who go to the field/)).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add trapper' }))
+      expect(screen.queryByRole('heading', { name: 'Entities' })).not.toBeInTheDocument()
+      expect(screen.queryByText(/The people who go to the field/)).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(screen.getByRole('heading', { name: 'Entities' })).toBeInTheDocument()
+    })
+
     it('exports the trappers to a CSV file, and has nothing to export when there are none', async () => {
       const created: Blob[] = []
       URL.createObjectURL = vi.fn((b: Blob) => { created.push(b); return 'blob:x' })

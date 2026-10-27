@@ -1407,15 +1407,19 @@ const initialsOf = (name: string) => {
 
 /** Research projects, trappers, locations, cameras and SD cards: a settings screen of their own. The trappers are the project's own people
  * but can be in several; the locations, the cameras and the SD cards belong each to a research project. */
-function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, onSdCards, initialTab, initialProject }: {
+function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, onSdCards, initialTab, initialProject, onDetail }: {
   trappers: Trapper[]; cameras: Camera[]; sdCards: SdCard[]
   onTrappers: (v: Trapper[]) => void; onCameras: (v: Camera[]) => void; onSdCards: (v: SdCard[]) => void
   initialTab: EntityTab
   initialProject?: string
+  /** Told whether a form is open in place of a list, which takes the title of the page away too. */
+  onDetail?: (open: boolean) => void
 }) {
   const [tab, setTab] = useState<EntityTab>(initialTab)
   // A form open in place of a list takes the place of what is over it too.
   const [detail, setDetail] = useState(false)
+  useEffect(() => { onDetail?.(detail) }, [detail]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onDetail?.(false), []) // eslint-disable-line react-hooks/exhaustive-deps
   // How many visits each trapper went on, over all the research projects — read when the trappers are shown.
   const [visitCounts, setVisitCounts] = useState<Record<string, number> | null>(null)
   const [projects, setProjects] = useState<LocalResearchProject[]>([])
@@ -1484,7 +1488,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
 
       {tab === 'trappers' && (
         <>
-          <p className={`${hintClass} leading-relaxed max-w-prose`}>The people who go to the field — one can be in several research projects. When a visit is registered, they are the ones to pick as who went.</p>
+          {!detail && <p className={`${hintClass} leading-relaxed max-w-prose`}>The people who go to the field — one can be in several research projects. When a visit is registered, they are the ones to pick as who went.</p>}
           <ItemsEditor<Trapper>
             heading="Trappers" noun="trapper" fileName="trappers" styled sectionTitle="Who is it?" plain onDetail={setDetail} items={trappers} onChange={onTrappers}
             icon={(t) => initialsOf(t.name)} dim={(t) => t.status === 'inactive'} readOnly={(t) => t.trapper_pk != null}
@@ -1886,6 +1890,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
   }
 
   const current = SECTIONS.find((s) => s.id === section)!
+  const [entityDetail, setEntityDetail] = useState(false)
   const dataDirError = draft && draft.dataDir.trim() !== '' && !isAbsolutePath(draft.dataDir) ? 'An absolute path (or one starting with ~).' : null
   const canTest = draft !== null && draft.trapperUrl.trim() !== '' && draft.trapperUser.trim() !== '' && (draft.trapperPassword !== '' || saved?.TRAPPER.has_password === true)
 
@@ -1924,7 +1929,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
 
       {/* Section */}
       <div className="flex-1 min-w-0">
-        <h4 className="text-2xl font-semibold mb-2">{current.label}</h4>
+        {!(section === 'entities' && entityDetail) && <h4 className="text-2xl font-semibold mb-2">{current.label}</h4>}
 
         {!draft && status.kind !== 'error' && <p className="text-sm text-zinc-500 dark:text-zinc-400 py-5">Loading…</p>}
 
@@ -2184,7 +2189,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
           <EntitiesSection
             trappers={draft.trappers} cameras={draft.cameras} sdCards={draft.sdCards}
             onTrappers={(v) => set('trappers', v)} onCameras={(v) => set('cameras', v)} onSdCards={(v) => set('sdCards', v)}
-            initialTab={initialSection && initialSection in ENTITY_SECTIONS ? ENTITY_SECTIONS[initialSection] : 'projects'} initialProject={initialProject}
+            initialTab={initialSection && initialSection in ENTITY_SECTIONS ? ENTITY_SECTIONS[initialSection] : 'projects'} initialProject={initialProject} onDetail={setEntityDetail}
           />
         )}
 
