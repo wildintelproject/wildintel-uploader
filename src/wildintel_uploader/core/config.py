@@ -78,6 +78,15 @@ class GeneralSettings(BaseModel):
         default_factory=default_workers, ge=1, le=MAX_WORKERS,
         description="How many images are validated or preprocessed at once — up to the CPUs of the machine pays off. (GENERAL.workers)",
     )
+    default_research_project: Optional[str] = Field(
+        default=None,
+        description="The acronym of the research project that comes filled in wherever one is asked for; it can still be changed there. (GENERAL.default_research_project)",
+    )
+
+    @field_validator("default_research_project")
+    @classmethod
+    def _default_research_project(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
 
 
 class TrapperSettings(BaseModel):
@@ -223,6 +232,8 @@ class Trapper(BaseModel):
     """One of the people who go to the field — {name, affiliation}, as wildintel-publisher keeps an author."""
     name: str = Field(min_length=1, description="The trapper's full name, written as it should be on a visit.")
     affiliation: Optional[str] = Field(default=None, description="Where the trapper works, free text.")
+    status: Literal["active", "inactive"] = Field(default="active", description="Whether the trapper still goes to the field; an inactive one is no longer suggested.")
+    trapper_pk: Optional[int] = Field(default=None, description="Its id in Trapper, when it was taken from there — such a trapper can only be seen here.")
 
     @field_validator("name")
     @classmethod
@@ -252,9 +263,14 @@ class SdCard(BaseModel):
     capacity: Optional[str] = Field(default=None, description="How much it holds, free text (e.g. 64 GB).")
     in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
     research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to; none, it is free for any.")
+    status: Literal["active", "retired", "lost", "broken"] = Field(default="active", description="Whether it can still be used; only an active one is offered for a visit.")
+    status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
+    status_note: Optional[str] = Field(default=None, description="Why, free text.")
 
     _blank_in_service = field_validator("in_service", mode="before")(_blank_date)
+    _blank_status_date = field_validator("status_date", mode="before")(_blank_date)
     _research_project = field_validator("research_project")(lambda cls, v: _tidy(v))
+    _status_note = field_validator("status_note")(lambda cls, v: _tidy(v))
 
     @field_validator("brand")
     @classmethod
@@ -279,9 +295,14 @@ class Camera(BaseModel):
     camera_model: Optional[str] = Field(default=None, description="Manufacturer and model, written as manufacturer-model. (cameraModel)")
     in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
     research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to; none, it is free for any.")
+    status: Literal["active", "retired", "stolen", "lost", "broken"] = Field(default="active", description="Whether it can still be used; only an active one is offered for a visit.")
+    status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
+    status_note: Optional[str] = Field(default=None, description="Why, free text.")
 
     _blank_in_service = field_validator("in_service", mode="before")(_blank_date)
+    _blank_status_date = field_validator("status_date", mode="before")(_blank_date)
     _research_project = field_validator("research_project")(lambda cls, v: _tidy(v))
+    _status_note = field_validator("status_note")(lambda cls, v: _tidy(v))
 
     @field_validator("camera_id")
     @classmethod

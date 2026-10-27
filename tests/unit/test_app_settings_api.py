@@ -50,7 +50,7 @@ def test_the_trappers_start_empty_and_are_saved_clean():
         {"name": "  Ana   Pérez ", "affiliation": " University of Huelva "}, {"name": "Luis", "affiliation": "  "}, {"name": "ana pérez"},
     ]})
 
-    expected = [{"name": "Ana Pérez", "affiliation": "University of Huelva"}, {"name": "Luis", "affiliation": None}]
+    expected = [{"name": "Ana Pérez", "affiliation": "University of Huelva", "status": "active", "trapper_pk": None}, {"name": "Luis", "affiliation": None, "status": "active", "trapper_pk": None}]
     assert saved["FIELDWORK"]["trappers"] == expected
     assert _client().get("/api/settings").json()["FIELDWORK"]["trappers"] == expected
 
@@ -63,15 +63,38 @@ def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     })
 
     assert saved["FIELDWORK"]["sd_cards"] == [
-        {"label": "A12", "brand": "SanDisk", "capacity": "64 GB", "in_service": "2026-03-01", "research_project": None},
-        {"label": "B3", "brand": None, "capacity": None, "in_service": None, "research_project": None},
+        {"label": "A12", "brand": "SanDisk", "capacity": "64 GB", "in_service": "2026-03-01", "research_project": None, **ACTIVE},
+        {"label": "B3", "brand": None, "capacity": None, "in_service": None, "research_project": None, **ACTIVE},
     ]
     # kept in the settings file, and read back as it was
     assert _client().get("/api/settings").json()["FIELDWORK"]["sd_cards"][0]["in_service"] == "2026-03-01"
     assert saved["FIELDWORK"]["cameras"] == [
-        {"camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": None},
-        {"camera_id": "X1", "camera_model": None, "in_service": None, "research_project": None},
+        {"camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": None, **ACTIVE},
+        {"camera_id": "X1", "camera_model": None, "in_service": None, "research_project": None, **ACTIVE},
     ]
+
+
+ACTIVE = {"status": "active", "status_date": None, "status_note": None}
+
+
+def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_only_the_known_ones_are_taken():
+    saved = _put(FIELDWORK={
+        "cameras": [{"camera_id": "X1", "status": "stolen", "status_date": "2026-05-02", "status_note": "  taken from the tree "}],
+        "sd_cards": [{"label": "A1", "status": "lost", "status_date": ""}],
+        "trappers": [{"name": "Ana", "status": "inactive"}],
+    })
+
+    assert saved["FIELDWORK"]["cameras"][0]["status"] == "stolen"
+    assert saved["FIELDWORK"]["cameras"][0]["status_date"] == "2026-05-02"
+    assert saved["FIELDWORK"]["cameras"][0]["status_note"] == "taken from the tree"
+    assert (saved["FIELDWORK"]["sd_cards"][0]["status"], saved["FIELDWORK"]["sd_cards"][0]["status_date"]) == ("lost", None)
+    assert saved["FIELDWORK"]["trappers"][0]["status"] == "inactive"
+
+    # each has its own: a card is not stolen, a trapper is not broken
+    for field, item in (("sd_cards", {"label": "A1", "status": "stolen"}), ("trappers", {"name": "Ana", "status": "broken"}), ("cameras", {"camera_id": "X1", "status": "planned"})):
+        body = config.Settings().model_dump(mode="json")
+        body["FIELDWORK"][field] = [item]
+        assert _client().put("/api/settings", json=body).status_code == 422
 
 
 def test_the_sd_cards_and_the_cameras_belong_to_a_research_project_and_are_listed_once_in_each():

@@ -185,6 +185,44 @@ def write_research_project(root: Path, project: dict) -> dict:
     return project
 
 
+def update_research_project(root: Path, research_project_id: str, changes: dict) -> dict:
+    """Changes a kept research project's fields — only the keys in changes, the rest stay. The acronym names its folder, so it is not one of them.
+
+    Raises:
+        LocalFolderError: the research project isn't there.
+    """
+    file = project_dir(root, research_project_id) / RESEARCH_PROJECT_METADATA_FILE
+    project = _read_json(file)
+    if not isinstance(project, dict):
+        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    project = {**project, **{k: v for k, v in changes.items() if k != "acronym"}}
+    file.write_text(json.dumps(project, indent=2, ensure_ascii=False), encoding="utf-8")
+    return project
+
+
+def delete_research_project(root: Path, research_project_id: str) -> dict:
+    """Removes a research project with its locations and its visits. Only what the app keeps of the project itself goes: a project that holds
+    anything else (a collection, a deployment, images) is not touched, as it would take the work with it.
+
+    Raises:
+        LocalFolderError: the research project isn't there, or it holds more than its own files.
+    """
+    folder = project_dir(root, research_project_id)
+    own = {RESEARCH_PROJECT_METADATA_FILE, LOCATIONS_FILE, VISITS_FILE}
+    if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
+        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    others = sorted(e.name for e in folder.iterdir() if e.name not in own)
+    if others:
+        raise LocalFolderError(
+            f"The research project '{research_project_id}' still holds {', '.join(others[:5])}{' and more' if len(others) > 5 else ''}: "
+            "it can't be deleted until those are removed (they hold collections, deployments or images)."
+        )
+    for name in own:
+        (folder / name).unlink(missing_ok=True)
+    folder.rmdir()
+    return {"deleted": research_project_id}
+
+
 def list_locations(root: Path, research_project_id: str) -> list[dict]:
     """The locations kept for a research project — empty until one is added.
 

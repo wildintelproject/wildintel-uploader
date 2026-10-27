@@ -242,12 +242,32 @@ class ResearchProjectRecord(BaseModel):
     animal_types: int = Field(default=1, ge=1, le=3)
     bait_use: int = Field(default=1, ge=1, le=6)
     event_interval: int = Field(default=0, ge=0)
+    # Whether it is being prepared, running or over: a finished one is not offered when a deployment is imported.
+    status: Literal["planned", "active", "finished"] = "active"
     keywords: str = ""
     abstract: str = Field(default="", max_length=2000)
     methods: str = Field(default="", max_length=2000)
     description: str = Field(default="", max_length=2000)
     # Set when it was filled in from Trapper — to find its locations there later.
     trapper_pk: Optional[int] = None
+
+
+class UpdateResearchProjectRequest(ResearchProjectRecord):
+    """Change a research project already kept: the fields given are the ones that change, the rest stay. The acronym names it, and its folder,
+    so it is the one that is found, never changed."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)  # type: ignore[assignment]
+    acronym: str = Field(min_length=1)
+    sampling_design: Optional[int] = Field(default=None, ge=1, le=6)  # type: ignore[assignment]
+    sensor_method: Optional[int] = Field(default=None, ge=1, le=3)  # type: ignore[assignment]
+    animal_types: Optional[int] = Field(default=None, ge=1, le=3)  # type: ignore[assignment]
+    bait_use: Optional[int] = Field(default=None, ge=1, le=6)  # type: ignore[assignment]
+    event_interval: Optional[int] = Field(default=None, ge=0)  # type: ignore[assignment]
+    status: Optional[Literal["planned", "active", "finished"]] = None  # type: ignore[assignment]
+    keywords: Optional[str] = None  # type: ignore[assignment]
+    abstract: Optional[str] = Field(default=None, max_length=2000)  # type: ignore[assignment]
+    methods: Optional[str] = Field(default=None, max_length=2000)  # type: ignore[assignment]
+    description: Optional[str] = Field(default=None, max_length=2000)  # type: ignore[assignment]
 
 
 class LocationRecord(BaseModel):
@@ -264,6 +284,10 @@ class LocationRecord(BaseModel):
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     coordinate_uncertainty: Optional[int] = Field(default=None, ge=1)
     trapper_pk: Optional[int] = None
+    # Whether it is in use; a retired or a planned one is not offered for a visit. When it changed (YYYY-MM-DD) and why are free to leave out.
+    status: Literal["active", "retired", "planned"] = "active"
+    status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    status_note: Optional[str] = None
 
     @field_validator("timezone")
     @classmethod
@@ -386,6 +410,9 @@ class UpdateLocationRequest(LocalLocationsRequest):
     coordinate_uncertainty: Optional[int] = Field(default=None, ge=1)
     timezone: Optional[str] = None
     ignore_dst: Optional[bool] = None
+    status: Optional[Literal["active", "retired", "planned"]] = None
+    status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    status_note: Optional[str] = None
 
     @field_validator("timezone")
     @classmethod

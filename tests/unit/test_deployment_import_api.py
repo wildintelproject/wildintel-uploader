@@ -909,3 +909,58 @@ def test_preprocess_needs_to_be_told_what_to_do_and_consolidate_needs_something_
     assert _client().post("/api/deployment-import/consolidate", json=payload).status_code == 400
     del payload["preprocessing"]
     assert _client().post("/api/deployment-import/preprocess", json=payload).status_code == 400
+
+
+def test_the_status_of_a_location_and_of_a_research_project_is_kept_and_defaults_to_active(tmp_path: Path):
+    with _in(tmp_path):
+        project = _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "status": "planned"})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01"}})
+        retired = _client().post("/api/deployment-import/locations/update", json={
+            "research_project_id": "DONA", "location_id": "DONA_01", "status": "retired", "status_date": "2026-06-01", "status_note": "the road was closed",
+        })
+        # a null status (the field left blank) changes nothing
+        same = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": None, "name": "Site"})
+        wrong = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "stolen"})
+        bad_day = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status_date": "June"})
+
+    assert project.json()["status"] == "planned"
+    assert (retired.json()["status"], retired.json()["status_date"], retired.json()["status_note"]) == ("retired", "2026-06-01", "the road was closed")
+    assert (same.json()["status"], same.json()["name"]) == ("retired", "Site")
+    assert wrong.status_code == 422 and bad_day.status_code == 422
+
+
+def test_a_location_and_a_research_project_start_active(tmp_path: Path):
+    with _in(tmp_path):
+        project = _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        location = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01"}})
+
+    assert project.json()["status"] == "active" and location.json()["status"] == "active"
+
+
+def test_a_research_project_can_be_changed_but_not_renamed(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "keywords": "wetland"})
+        changed = _client().post("/api/deployment-import/research-projects/update", json={"acronym": "DONA", "name": "Doñana NP", "status": "finished"})
+        bad = _client().post("/api/deployment-import/research-projects/update", json={"acronym": "DONA", "status": "stolen"})
+        missing = _client().post("/api/deployment-import/research-projects/update", json={"acronym": "NOPE", "name": "x"})
+        listed = _client().post("/api/deployment-import/research-projects/list").json()["results"]
+
+    assert changed.status_code == 200 and bad.status_code == 422 and missing.status_code == 404
+    [project] = listed
+    assert (project["acronym"], project["name"], project["status"], project["keywords"]) == ("DONA", "Doñana NP", "finished", "wetland")  # the rest stayed
+
+
+def test_a_research_project_is_deleted_with_its_locations_unless_it_holds_collections(tmp_path: Path):
+    with _in(tmp_path):
+        for acronym in ("DONA", "TATR"):
+            _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "acronym": acronym})
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": acronym, "location": {"location_id": f"{acronym}_01"}})
+        (tmp_path / "TATR" / "R0001").mkdir()
+        kept = _client().post("/api/deployment-import/research-projects/delete", json={"research_project_id": "TATR"})
+        gone = _client().post("/api/deployment-import/research-projects/delete", json={"research_project_id": "DONA"})
+        again = _client().post("/api/deployment-import/research-projects/delete", json={"research_project_id": "DONA"})
+        listed = _client().post("/api/deployment-import/research-projects/list").json()["results"]
+
+    assert kept.status_code == 409 and "R0001" in kept.json()["detail"]
+    assert gone.status_code == 200 and again.status_code == 404
+    assert [p["acronym"] for p in listed] == ["TATR"] and (tmp_path / "TATR" / "R0001").is_dir() and not (tmp_path / "DONA").exists()
