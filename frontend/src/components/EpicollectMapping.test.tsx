@@ -39,10 +39,11 @@ describe('EpicollectMapping', () => {
     expect(await screen.findByText(/5 inputs to choose from/)).toBeInTheDocument()
     for (const group of ['Where', 'When', 'Camera', 'Site', 'Grouping and notes']) expect(screen.getByRole('region', { name: group })).toBeInTheDocument()
     const dateOptions = Array.from(field('Start date').options).map((o) => o.textContent)
-    expect(dateOptions).toEqual(['— Not mapped —', 'Location — text', 'Start date — date', 'End date — date', 'Camera model — text'])
+    expect(screen.getAllByText(/\d+ of \d+ matched/).length).toBeGreaterThan(1) // each group says how many of its fields are matched
+    expect(dateOptions).toEqual(['Not matched', 'Location · text', 'Start date · date', 'End date · date', 'Camera model · text'])
     const heightOptions = Array.from(field('Camera height (m)').options).map((o) => o.textContent)
-    expect(heightOptions).toContain('Height — whole number')
-    expect(heightOptions).not.toContain('Start date — date')
+    expect(heightOptions).toContain('Height · whole number')
+    expect(heightOptions).not.toContain('Start date · date')
     expect(screen.getByText('0 of 26 fields mapped. What is not mapped is filled in by hand, as now.')).toBeInTheDocument()
   })
 

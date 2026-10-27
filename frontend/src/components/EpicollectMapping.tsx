@@ -14,7 +14,7 @@ const TYPE_NAMES: Record<string, string> = {
   radio: 'one choice', checkbox: 'several choices', searchsingle: 'search', searchmultiple: 'search (several)', barcode: 'barcode', phone: 'phone',
 }
 
-const optionLabel = (i: EpicollectInput) => `${i.label} — ${TYPE_NAMES[i.type] ?? i.type}`
+const optionLabel = (i: EpicollectInput) => `${i.label} · ${TYPE_NAMES[i.type] ?? i.type}`
 
 interface Props {
   /** Deployment field → ref of the Epicollect5 input that gives it. */
@@ -92,7 +92,15 @@ export default function EpicollectMapping({ mapping, onChange, projectSaved, uns
 
       {DEPLOYMENT_FIELD_GROUPS.map((group) => (
         <section key={group.id} aria-label={group.label} className="rounded-xl border border-zinc-200 dark:border-zinc-800">
-          <h3 className="px-4 py-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800">{group.label}</h3>
+          {(() => {
+            const matched = group.fields.filter((f) => mapping[f.key]).length
+            return (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{group.label}</h3>
+                <span className={`text-xs ${matched === group.fields.length ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-500 dark:text-zinc-400'}`}>{matched} of {group.fields.length} matched</span>
+              </div>
+            )
+          })()}
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {group.fields.map((field) => {
               const ref = mapping[field.key] ?? ''
@@ -109,7 +117,7 @@ export default function EpicollectMapping({ mapping, onChange, projectSaved, uns
                   <div className="min-w-0">
                     <select className={selectClass} value={ref} aria-label={`Epicollect5 input for ${field.label}`} disabled={form === null && !ref}
                             onChange={(e) => choose(field, e.target.value)}>
-                      <option value="">— Not mapped —</option>
+                      <option value="">Not matched</option>
                       {stale && <option value={ref}>{ref} — not in the form any more</option>}
                       {groups.map((g) => {
                         const items = options(field).filter((i) => (i.group ?? '') === g)
