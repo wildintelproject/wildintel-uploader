@@ -300,13 +300,13 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
 /** The folders of the app that can be put somewhere of their own; blank, each is a folder inside the data folder. */
 const FOLDERS: { draftKey: 'collectionsDir' | 'reportsDir' | 'packagesDir'; label: string; description: string; hint: string; dialog: string }[] = [
   { draftKey: 'collectionsDir', label: 'Collections folder', dialog: 'Select the folder to keep the collections in',
-    description: 'Where the collections are kept before they are uploaded — <folder>/<research project>/<R0003>/<deployment>. Left blank, they go in a “collections” folder inside the data folder.',
+    description: 'Where the collections are kept before they are uploaded. Inside it, each research project, visit and deployment has its own folder.',
     hint: 'Handy to keep the collections on another disk.' },
   { draftKey: 'reportsDir', label: 'Reports folder', dialog: 'Select the folder to keep the reports in',
-    description: 'Where the reports of the checks and of the preprocessing are kept. Left blank, they go in a “reports” folder inside the data folder.',
+    description: 'Where the reports of the checks and of the image preparation are kept.',
     hint: 'Reports already made stay where they are: move them by hand if you want them in the new folder.' },
   { draftKey: 'packagesDir', label: 'Packages folder', dialog: 'Select the folder to keep the packages in',
-    description: 'Where the zips, the yamls and the deployments csv made to upload to Trapper are written — <folder>/<research project>/<R0003>. Left blank, they go in a “packages” folder inside the data folder.',
+    description: 'Where the packages made to upload a deployment to Trapper are written, before and while they are sent.',
     hint: 'Handy when the packages are big and the data folder is on a small disk.' },
 ]
 
@@ -422,10 +422,10 @@ function NumberBox({ label, value, limits, onChange, unit }: {
 }
 
 const LOG_LEVELS: { value: LogLevel; label: string; hint: string }[] = [
-  { value: 'ERROR', label: 'Error', hint: 'Only what went wrong.' },
-  { value: 'WARNING', label: 'Warning', hint: 'Also what may be wrong: retries, failed images…' },
-  { value: 'INFO', label: 'Info', hint: 'Also what the app does: each scan, validation and import started and finished.' },
-  { value: 'DEBUG', label: 'Debug', hint: 'Everything: each image scanned and copied, each Trapper query, full tracebacks. Big logs — for tracking a problem down.' },
+  { value: 'ERROR', label: 'Errors only', hint: 'Only what goes wrong.' },
+  { value: 'WARNING', label: 'Warnings', hint: 'Problems and things worth checking.' },
+  { value: 'INFO', label: 'Normal', hint: 'What the app does: each scan, check and import started and finished.' },
+  { value: 'DEBUG', label: 'Everything', hint: 'For tracking a problem down. Makes the file bigger.' },
 ]
 
 /** A filled, rounded select with its label inside — like BoxField. */
@@ -502,11 +502,12 @@ function CheckEntry({ label, hint, enabled, onToggle, settings, invalid }: {
 }
 
 /** Turns every check of a section on or off in one go. */
-function AllChecksButtons({ onAll }: { onAll: (on: boolean) => void }) {
+function AllChecksButtons({ on, total, onAll }: { on: number; total: number; onAll: (on: boolean) => void }) {
+  const all = on === total
   return (
-    <div className="flex gap-2">
-      <button type="button" className={btnSoft} onClick={() => onAll(true)}>Turn all on</button>
-      <button type="button" className={btnSoft} onClick={() => onAll(false)}>Turn all off</button>
+    <div className="flex items-center justify-between gap-4 flex-wrap rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
+      <p role="status" className="text-base text-zinc-600 dark:text-zinc-400">{on} of {total} checks are on</p>
+      <button type="button" className={btnOutline} onClick={() => onAll(!all)}>{all ? 'Turn all off' : 'Turn all on'}</button>
     </div>
   )
 }
@@ -1759,6 +1760,41 @@ const LINK_ICONS: Record<string, ReactNode> = {
 }
 
 /** The app, its version and the places to go for help: the update check on the left, the links on the right. */
+/** A card of settings of its own, with its title and what it is for. */
+function GroupCard({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
+  return (
+    <section aria-label={title} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-4">
+      <div>
+        <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h5>
+        {description && <p className={`${hintClass} mt-1 leading-relaxed max-w-prose`}>{description}</p>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** A folder of the settings: where it is, or that the default is used, with the way to choose another or to go back to the default. */
+function FolderField({ label, inputLabel, description, value, placeholder, error, browsing, browseLabel, defaultLabel, hint, onChange, onBrowse }: {
+  label: string; inputLabel: string; description: string; value: string; placeholder?: string; error: string | null; browsing: boolean
+  browseLabel: string; defaultLabel: string; hint: string; onChange: (v: string) => void; onBrowse: () => void
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <h6 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{label}</h6>
+        {value === '' && <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">Default</span>}
+      </div>
+      <p className={`${hintClass} max-w-prose`}>{description}</p>
+      <TextBox label={inputLabel} value={value} onChange={onChange} mono error={error} placeholder={placeholder} />
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={btnOutline} aria-label={browseLabel} disabled={browsing} onClick={onBrowse}>{browsing ? 'Browsing…' : 'Choose folder…'}</button>
+        <button type="button" className={btnOutline} aria-label={defaultLabel} onClick={() => onChange('')} disabled={value === ''}>Use the default</button>
+      </div>
+      <p className={hintClass}>{hint}</p>
+    </div>
+  )
+}
+
 function AboutBlock() {
   const [version, setVersion] = useState<string | null>(null)
   useEffect(() => {
@@ -1771,32 +1807,32 @@ function AboutBlock() {
     `**Version:** ${version ?? 'unknown'}\n**Browser:** ${navigator.userAgent}\n\n**What happened?**\n\n**What did you expect?**\n\n**How to reproduce it**\n1. \n\n_Attach the log file (Settings › General › Log file) if you can._\n`,
   )}`
   const links = [
-    { icon: 'bug', title: 'Report a problem', subtitle: 'Open a pre-filled GitHub issue', href: issue },
+    { icon: 'bug', title: 'Report a problem', subtitle: 'Opens a GitHub issue directly filled in', href: issue },
     { icon: 'book', title: 'Documentation', subtitle: 'The user manual', href: DOCS_URL },
     { icon: 'code', title: 'GitHub', subtitle: 'Source code', href: REPO_URL },
-    { icon: 'notes', title: 'What’s new', subtitle: 'Show release notes', href: `${REPO_URL}/releases` },
+    { icon: 'notes', title: 'What’s new', subtitle: 'Release notes', href: `${REPO_URL}/releases` },
   ]
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6 py-6" aria-label="About the app" role="group">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-6" aria-label="About the app" role="group">
       <div>
         <div className="flex items-center gap-3">
-          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-3xl">📤</span>
+          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white text-2xl">⇪</span>
           <div>
             <h4 className="text-2xl font-semibold leading-tight">WildINTEL Uploader</h4>
-            {shownVersion && <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono" aria-label="Version">{shownVersion}</p>}
+            {shownVersion && <p className="text-sm text-zinc-500 dark:text-zinc-400" aria-label="Version">{version && version !== 'dev' ? `Version ${version}` : shownVersion}</p>}
           </div>
         </div>
         <div className="mt-5 space-y-2"><UpdateCheckButton /></div>
       </div>
-      <ul className="space-y-1">
+      <ul className="grid grid-cols-2 gap-3">
         {links.map((l) => (
           <li key={l.title}>
             <a href={l.href} target="_blank" rel="noreferrer"
-               className="flex items-center gap-4 rounded-lg px-4 py-2.5 no-underline text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition-colors">
+               className="flex h-full items-start gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3 no-underline text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition-colors">
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current text-zinc-600 dark:text-zinc-300" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{LINK_ICONS[l.icon]}</svg>
               <span>
-                <span className="block text-base leading-tight">{l.title}</span>
-                <span className="block text-sm text-zinc-500 dark:text-zinc-400">{l.subtitle}</span>
+                <span className="block text-sm font-semibold leading-tight">{l.title}</span>
+                <span className="block text-xs text-zinc-500 dark:text-zinc-400">{l.subtitle}</span>
               </span>
             </a>
           </li>
@@ -2088,73 +2124,66 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
         {!draft && status.kind !== 'error' && <p className="text-sm text-zinc-500 dark:text-zinc-400 py-5">Loading…</p>}
 
         {draft && saved && section === 'general' && (
-          <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
+          <div className="space-y-5 pt-5">
             <AboutBlock />
-            <Row
-              label="Data folder"
-              description="Where the app keeps what it makes: the collections, the reports and the packages, each in a folder inside it. You can put any of them somewhere else below."
-            >
-              <TextBox label="Folder" value={draft.dataDir} onChange={(v) => set('dataDir', v)} mono error={dataDirError} />
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" className={btnSoft} aria-label="Browse for the data folder" disabled={browsing} onClick={() => handleBrowse('dataDir')}>{browsing ? 'Browsing…' : 'Browse…'}</button>
-                <button type="button" className={btnSoft} aria-label="Use the default data folder" onClick={() => set('dataDir', '')} disabled={draft.dataDir === ''}>Use the default</button>
+            <GroupCard title="Where files are kept" description="Everything the app makes goes into one data folder. Each research project gets its own folder inside. You can move any part somewhere else, for example to another disk.">
+              <div className="space-y-6">
+                <FolderField
+                  label="Data folder" inputLabel="Folder" description="Where the app keeps everything it makes: the collections, the reports and the packages. Each one has its own folder inside it unless you choose another place below."
+                  value={draft.dataDir} error={dataDirError} browsing={browsing} browseLabel="Browse for the data folder" defaultLabel="Use the default data folder"
+                  hint="Left as the default, it is a folder named after the app, inside your Documents folder." onChange={(v) => set('dataDir', v)} onBrowse={() => handleBrowse('dataDir')}
+                />
+                {FOLDERS.map(({ draftKey, label, description, hint }) => {
+                  const error = draft[draftKey].trim() !== '' && !isAbsolutePath(draft[draftKey]) ? 'An absolute path (or one starting with ~).' : null
+                  const defaultKey = draftKey.replace('Dir', '') as 'collections' | 'reports' | 'packages'
+                  return (
+                    <FolderField
+                      key={draftKey} label={label} inputLabel={label} description={description} value={draft[draftKey]} placeholder={saved.DATA[`default_${defaultKey}_dir`]} error={error} browsing={browsing}
+                      browseLabel={`Browse for the ${defaultKey} folder`} defaultLabel={`Use the default ${defaultKey} folder`} hint={hint} onChange={(v) => set(draftKey, v)} onBrowse={() => handleBrowse(draftKey)}
+                    />
+                  )
+                })}
               </div>
-              <p className={`${hintClass} px-1`}>
-                By default a folder named like the app, in your documents folder. Left blank, that is what is used.
-              </p>
-            </Row>
-            {FOLDERS.map(({ draftKey, label, description, hint }) => {
-              const error = draft[draftKey].trim() !== '' && !isAbsolutePath(draft[draftKey]) ? 'An absolute path (or one starting with ~).' : null
-              const defaultKey = draftKey.replace('Dir', '') as 'collections' | 'reports' | 'packages'
-              return (
-                <Row key={draftKey} label={label} description={description}>
-                  <TextBox label={label} value={draft[draftKey]} onChange={(v) => set(draftKey, v)} mono error={error} placeholder={saved.DATA[`default_${defaultKey}_dir`]} />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className={btnSoft} aria-label={`Browse for the ${defaultKey} folder`} disabled={browsing} onClick={() => handleBrowse(draftKey)}>{browsing ? 'Browsing…' : 'Browse…'}</button>
-                    <button type="button" className={btnSoft} aria-label={`Use the default ${defaultKey} folder`} onClick={() => set(draftKey, '')} disabled={draft[draftKey] === ''}>Use the default</button>
-                  </div>
-                  <p className={`${hintClass} px-1`}>{hint}</p>
-                </Row>
-              )
-            })}
-            <Row
-              label="Default research project"
-              description="The research project that comes filled in wherever one is asked for — when a visit is registered, a deployment imported, dates fixed… It can still be changed there."
-            >
+            </GroupCard>
+            <GroupCard title="Default research project" description="Filled in for you whenever a research project is asked for, such as when a visit is registered or a deployment imported. You can still change it each time.">
               <label className="sr-only" htmlFor="default-research-project">Default research project</label>
               <Combobox
                 id="default-research-project" value={draft.defaultResearchProject} onChange={(v) => set('defaultResearchProject', v)}
                 options={projectChoices.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))}
                 placeholder={projectChoices.length === 0 ? 'No research projects yet' : 'None — pick one each time'} clearLabel="Clear the default research project"
               />
-            </Row>
-            <Row
-              label="Parallel work"
-              description="How many images are validated or preprocessed at once. More workers use more CPUs and finish sooner, up to what the machine has."
-            >
-              <NumberBox label="Workers" value={draft.workers} limits={WORKERS} onChange={(v) => set('workers', v)} unit="images at once" />
-              <p className={`${hintClass} px-1`}>
-                This machine has {saved.GENERAL.cpu_count} CPU{saved.GENERAL.cpu_count === 1 ? '' : 's'}. The default is the CPUs it has, up to 4;
-                with a hard disk or a network drive, more workers may not help, as the files are read slower than they are worked on.
+            </GroupCard>
+            <GroupCard title="Parallel work" description="How many images are checked or prepared at the same time. More at once finishes sooner, up to what this computer can do.">
+              <div className="max-w-xs"><NumberBox label="Images at once" value={draft.workers} limits={WORKERS} onChange={(v) => set('workers', v)} unit="at once" /></div>
+              <p className={hintClass}>
+                This computer has {saved.GENERAL.cpu_count} CPU{saved.GENERAL.cpu_count === 1 ? '' : 's'}. The default is the CPUs it has, up to 4;
+                with a hard disk or a network drive, more may not help, as the files are read slower than they are worked on.
               </p>
-            </Row>
-            <Row
-              label="Log level"
-              description="How much the app writes to its log — raise it to Debug to track a problem down, then lower it again. Applied as soon as it's saved."
-            >
-              <SelectBox label="Level" value={draft.logLevel} options={LOG_LEVELS} onChange={(v) => set('logLevel', v)} />
-              <p className={`${hintClass} px-1`}>{LOG_LEVELS.find((l) => l.value === draft.logLevel)?.hint}</p>
+            </GroupCard>
+            <GroupCard title="Activity log" description="The app writes down what it does, so a problem can be tracked down. Raise the detail only while you look for one, then lower it again. It applies right away.">
+              <div role="radiogroup" aria-label="Level" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {LOG_LEVELS.map((l) => (
+                  <button key={l.value} type="button" role="radio" aria-checked={draft.logLevel === l.value} onClick={() => set('logLevel', l.value)}
+                          className={`text-left rounded-xl px-4 py-3 border transition-colors ${draft.logLevel === l.value ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>
+                    <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">{l.label}</span>
+                    <span className={`block ${hintClass}`}>{l.hint}</span>
+                  </button>
+                ))}
+              </div>
               {saved.GENERAL.log_level_override && (
-                <p className="text-xs text-amber-700 dark:text-amber-400 px-1">
+                <p className="text-xs text-amber-700 dark:text-amber-400">
                   The environment variable <span className="font-mono">WILDINTEL_UPLOADER_WEB_LOG_LEVEL</span> sets it
                   to <strong>{saved.GENERAL.log_level_override}</strong> for now — it wins over this setting.
                 </p>
               )}
-            </Row>
-            <Row label="Log file" description="Rotated at 5 MB, keeping the last 5. Attach it to a bug report.">
-              <BoxField label="Location">
-                <span className="block font-mono text-sm text-zinc-900 dark:text-zinc-100 break-all py-0.5">{saved.GENERAL.log_file}</span>
-              </BoxField>
+              <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+                <div>
+                  <h6 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Log file</h6>
+                  <p className={hintClass}>Rotated at 5 MB, keeping the last 5. Attach it to a bug report.</p>
+                </div>
+                <BoxField label="Location">
+                  <span className="block font-mono text-sm text-zinc-900 dark:text-zinc-100 break-all py-0.5">{saved.GENERAL.log_file}</span>
+                </BoxField>
               <div className="flex flex-wrap gap-2">
                 <a href="/api/settings/log" download className={btnSoft}>Download log</a>
                 {clearLog.kind !== 'confirming' && (
@@ -2181,7 +2210,8 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
               )}
               {clearLog.kind === 'cleared' && <p className="text-xs text-emerald-700 dark:text-emerald-400 px-1">Log cleared — a new one starts now.</p>}
               {clearLog.kind === 'error' && <p className="text-xs text-red-600 dark:text-red-400 px-1">{clearLog.message}</p>}
-            </Row>
+              </div>
+            </GroupCard>
           </div>
         )}
 
@@ -2278,8 +2308,9 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
                 The checks of the &ldquo;Validate folder contents&rdquo; step. They look at the images alone, without knowing the deployment.
                 One that is turned off is neither shown nor run.
               </p>
-              <AllChecksButtons onAll={(on) => set('validation', Object.fromEntries(IMAGE_CHECKS.map((c) => [c.key, on])) as typeof draft.validation)} />
             </div>
+            <AllChecksButtons on={IMAGE_CHECKS.filter((c) => draft.validation[c.key]).length} total={IMAGE_CHECKS.length}
+                              onAll={(on) => set('validation', Object.fromEntries(IMAGE_CHECKS.map((c) => [c.key, on])) as typeof draft.validation)} />
             <div className="space-y-3">
               {IMAGE_CHECKS.map(({ key, label, hint }) => (
                 <CheckEntry key={key} label={label} hint={hint} enabled={draft.validation[key]}
@@ -2296,8 +2327,9 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
                 Once the deployment&rsquo;s details are known: its names and dates, and the images against them. One that is turned off is
                 neither shown nor run. The gear opens the settings of the checks that have any — the wizard uses them as they are here.
               </p>
-              <AllChecksButtons onAll={(on) => set('postvalidation', Object.fromEntries(DEPLOYMENT_CHECKS.map((c) => [c.key, on])) as typeof draft.postvalidation)} />
             </div>
+            <AllChecksButtons on={DEPLOYMENT_CHECKS.filter((c) => draft.postvalidation[c.key]).length} total={DEPLOYMENT_CHECKS.length}
+                              onAll={(on) => set('postvalidation', Object.fromEntries(DEPLOYMENT_CHECKS.map((c) => [c.key, on])) as typeof draft.postvalidation)} />
             <div className="space-y-3">
               {DEPLOYMENT_CHECKS.map(({ key, label, hint }) => (
                 <CheckEntry key={key} label={label} hint={hint} enabled={draft.postvalidation[key]}

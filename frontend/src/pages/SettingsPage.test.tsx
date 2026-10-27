@@ -50,7 +50,7 @@ const settingsOf = (check: RegExp) => within(screen.getByRole('group', { name: n
 describe('SettingsPage', () => {
   it('shows one section at a time, from the sidebar: General, Trapper, Validation and Postvalidation', async () => {
     render(<SettingsPage onClose={vi.fn()} />)
-    expect(await screen.findByLabelText('Level')).toHaveValue('INFO')
+    expect(await screen.findByRole('radio', { name: /Normal/ })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page')
 
     await section('Trapper')
@@ -84,7 +84,7 @@ describe('SettingsPage', () => {
 
       expect(await screen.findByLabelText('Folder')).toHaveValue('/home/me/Documents/wildintel-uploader')
       expect(screen.getByText('Data folder')).toBeInTheDocument()
-      expect(screen.getByText(/the collections, the reports and the packages, each in a folder inside it/)).toBeInTheDocument()
+      expect(screen.getByText(/the collections, the reports and the packages. Each one has its own folder inside it/)).toBeInTheDocument()
     })
 
     it('changes the data folder by typing it, or with the native folder browser', async () => {
@@ -130,12 +130,12 @@ describe('SettingsPage', () => {
 
     it('sets the log level, and shows where the log file is', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
-      const level = await screen.findByLabelText('Level')
+      await screen.findByLabelText('Level')
       expect(screen.getByText(APP_SETTINGS.GENERAL.log_file)).toBeInTheDocument()
       expect(screen.getByRole('link', { name: /download log/i })).toHaveAttribute('href', '/api/settings/log')
 
-      await userEvent.selectOptions(level, 'DEBUG')
-      expect(screen.getByText(/each image scanned and copied/i)).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('radio', { name: /Everything/ }))
+      expect(screen.getByRole('radio', { name: /Everything/ })).toHaveAttribute('aria-checked', 'true')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL).toEqual({ log_level: 'DEBUG', workers: 4, default_research_project: null })
@@ -372,14 +372,14 @@ describe('SettingsPage', () => {
     it('shows how many images are worked on at once, and the CPUs of the machine', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
 
-      expect(await screen.findByLabelText('Workers')).toHaveValue('4')
-      expect(screen.getByText(/This machine has 8 CPUs/)).toBeInTheDocument()
+      expect(await screen.findByLabelText('Images at once')).toHaveValue('4')
+      expect(screen.getByText(/This computer has 8 CPUs/)).toBeInTheDocument()
     })
 
     it('saves the number of workers', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
-      await userEvent.clear(await screen.findByLabelText('Workers'))
-      await userEvent.type(screen.getByLabelText('Workers'), '6')
+      await userEvent.clear(await screen.findByLabelText('Images at once'))
+      await userEvent.type(screen.getByLabelText('Images at once'), '6')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL.workers).toBe(6)
@@ -387,8 +387,8 @@ describe('SettingsPage', () => {
 
     it.each(['0', '65', '2.5', 'abc', ''])('marks %j workers as invalid, and cannot save', async (bad) => {
       render(<SettingsPage onClose={vi.fn()} />)
-      await userEvent.clear(await screen.findByLabelText('Workers'))
-      if (bad) await userEvent.type(screen.getByLabelText('Workers'), bad)
+      await userEvent.clear(await screen.findByLabelText('Images at once'))
+      if (bad) await userEvent.type(screen.getByLabelText('Images at once'), bad)
 
       expect(screen.getByText('A whole number from 1 to 64.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
@@ -432,6 +432,7 @@ describe('SettingsPage', () => {
       await screen.findByLabelText('Level')
       await section('Validation')
 
+      expect(screen.getByText('6 of 6 checks are on')).toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Turn all off' }))
       for (const label of IMAGE_CHECKS) expect(screen.getByRole('switch', { name: new RegExp(label.replace(/[()]/g, '\\$&')) })).not.toBeChecked()
       await userEvent.click(screen.getByRole('button', { name: 'Turn all on' }))
@@ -753,7 +754,7 @@ describe('SettingsPage', () => {
   it('saves every section at once', async () => {
     render(<SettingsPage onClose={vi.fn()} />)
     await screen.findByLabelText('Level')
-    await userEvent.selectOptions(screen.getByLabelText('Level'), 'WARNING')
+    await userEvent.click(screen.getByRole('radio', { name: /Warnings/ }))
     await section('Trapper')
     await userEvent.clear(screen.getByLabelText('Web address'))
     await userEvent.type(screen.getByLabelText('Web address'), 'https://other.example.org')
