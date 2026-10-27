@@ -1000,9 +1000,9 @@ describe('SettingsPage', () => {
     }
 
     it('lists the cameras with their model, and says when there are none', async () => {
-      await open([{ camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA' }, { camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+      await open([{ label: 'P800HG08192031', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA' }, { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
 
-      expect(screen.getByText('Reconyx-PC800')).toBeInTheDocument()
+      expect(screen.getByText('Reconyx-PC800 · P800HG08192031')).toBeInTheDocument() // the model and the serial number under the label
       expect(await screen.findByText('In production since 12 Nov 2025 · No visits yet')).toBeInTheDocument()
     })
 
@@ -1012,18 +1012,18 @@ describe('SettingsPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Add camera' }))
       const dialog = within(screen.getByRole('region', { name: 'Camera' }))
-      await userEvent.clear(dialog.getByLabelText('Camera id'))
+      await userEvent.type(dialog.getByLabelText('Label'), 'North gate')
       await userEvent.type(dialog.getByLabelText('Camera id'), 'P800HG08192031')
       await userEvent.type(dialog.getByLabelText('Camera model'), 'Reconyx-PC800')
       fireEvent.change(dialog.getByLabelText('In production since'), { target: { value: '2025-11-12' } })
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
     })
 
     it('gives a camera a status, the day it began and why — and says it on its card', async () => {
-      await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
       const dialog = within(screen.getByRole('region', { name: 'Camera' }))
@@ -1041,7 +1041,7 @@ describe('SettingsPage', () => {
       expect(screen.getByText(/Stolen since 2 May 2026/)).toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([
-        { camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'stolen', status_date: '2026-05-02', status_note: 'taken from the tree' },
+        { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'stolen', status_date: '2026-05-02', status_note: 'taken from the tree' },
       ])
     })
 
@@ -1049,7 +1049,7 @@ describe('SettingsPage', () => {
       const visit = (camera_id: string) => ({ project: 'DONA', camera_id })
       mockedApi.listResearchProjects.mockResolvedValue({ results: [DONA] })
       mockedApi.listVisits.mockResolvedValue({ results: [visit('X1'), visit('x1')] } as never)
-      await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }, { camera_id: 'X2', camera_model: null, in_service: null, research_project: 'DONA' }])
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }, { label: 'X2', camera_id: 'X2', camera_model: null, in_service: null, research_project: 'DONA' }])
 
       expect(await screen.findByText('Used in 2 visits')).toBeInTheDocument()
       expect(screen.getByText('No visits yet')).toBeInTheDocument()
@@ -1059,7 +1059,7 @@ describe('SettingsPage', () => {
     })
 
     it('deletes a camera from its page', async () => {
-      await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
       await userEvent.click(screen.getByRole('button', { name: 'Delete camera' }))
@@ -1067,13 +1067,13 @@ describe('SettingsPage', () => {
       expect(screen.queryByText('X1')).not.toBeInTheDocument()
     })
 
-    it('needs a camera id, and a different one from the other cameras', async () => {
-      await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }, { camera_id: 'X2', camera_model: null, in_service: null, research_project: 'DONA' }])
+    it('needs a label, and a different one from the other cameras — its serial number is optional', async () => {
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }, { label: 'X2', camera_id: 'X2', camera_model: null, in_service: null, research_project: 'DONA' }])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit X2' }))
-      const id = screen.getByLabelText('Camera id')
+      const id = screen.getByLabelText('Label')
       await userEvent.clear(id)
-      expect(screen.getByText('A camera id is required.')).toBeInTheDocument()
+      expect(screen.getByText('A label is required.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
 
       await userEvent.type(id, 'x1')

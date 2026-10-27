@@ -557,7 +557,10 @@ export interface SdCard {
 
 /** One of the camera traps, named as Camtrap DP names it. */
 export interface Camera {
-  camera_id: string
+  /** What it is called in the field: the one thing it is asked for. */
+  label: string
+  /** Its serial number, when it is known. */
+  camera_id: string | null
   camera_model: string | null
   /** YYYY-MM-DD — the day it was put into production. */
   in_service: string | null

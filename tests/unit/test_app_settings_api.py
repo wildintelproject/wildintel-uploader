@@ -69,9 +69,9 @@ def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     # kept in the settings file, and read back as it was
     assert _client().get("/api/settings").json()["FIELDWORK"]["sd_cards"][0]["in_service"] == "2026-03-01"
     assert saved["FIELDWORK"]["cameras"] == [
-        {"camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": None, **ACTIVE},
-        {"camera_id": "X1", "camera_model": None, "in_service": None, "research_project": None, **ACTIVE},
-    ]
+        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": None, **ACTIVE},
+        {"label": "X1", "camera_id": "X1", "camera_model": None, "in_service": None, "research_project": None, **ACTIVE},
+    ]  # one kept before it had a label is called by its id
 
 
 ACTIVE = {"status": "active", "status_date": None, "status_note": None}
@@ -107,8 +107,14 @@ def test_the_sd_cards_and_the_cameras_belong_to_a_research_project_and_are_liste
     assert [(c["camera_id"], c["research_project"]) for c in saved["FIELDWORK"]["cameras"]] == [("X1", "DONA"), ("X1", None)]
 
 
-def test_an_sd_card_needs_a_label_and_a_camera_an_id():
-    for field, item in (("sd_cards", {"label": ""}), ("cameras", {"camera_id": ""})):
+def test_a_camera_is_called_by_its_label_and_its_serial_number_is_optional():
+    saved = _put(FIELDWORK={"cameras": [{"label": " North  gate ", "camera_id": " "}, {"label": "north gate"}, {"label": "Ridge", "camera_id": "P800 1"}]})
+
+    assert [(c["label"], c["camera_id"]) for c in saved["FIELDWORK"]["cameras"]] == [("North gate", None), ("Ridge", "P800 1")]  # one label, once
+
+
+def test_an_sd_card_needs_a_label_and_a_camera_one_too():
+    for field, item in (("sd_cards", {"label": ""}), ("cameras", {"label": " ", "camera_id": ""})):
         body = config.Settings().model_dump(mode="json")
         body["FIELDWORK"][field] = [item]
         assert _client().put("/api/settings", json=body).status_code == 422

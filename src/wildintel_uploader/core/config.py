@@ -15,7 +15,7 @@ from typing import Literal, Optional
 
 import platformdirs
 from dynaconf import Dynaconf, loaders
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 APP_NAME = "wildintel-uploader"
 DEFAULT_CONFIG_FILE = Path(platformdirs.user_config_dir(APP_NAME)) / "settings.toml"
@@ -289,9 +289,10 @@ class SdCard(BaseModel):
 
 
 class Camera(BaseModel):
-    """One of the camera traps — its id (the serial number) and optionally its model, as Camtrap DP names them, and the day it was
-    put into production."""
-    camera_id: str = Field(min_length=1, description="The camera's id — its serial number. (cameraID)")
+    """One of the camera traps — its label (what it is called), optionally its id (the serial number) and its model, as Camtrap DP names
+    them, and the day it was put into production."""
+    label: str = Field(min_length=1, description="What the camera is called — the name it goes by in the field.")
+    camera_id: Optional[str] = Field(default=None, description="The camera's id — its serial number. (cameraID)")
     camera_model: Optional[str] = Field(default=None, description="Manufacturer and model, written as manufacturer-model. (cameraModel)")
     in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
     research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to; none, it is free for any.")
@@ -304,10 +305,26 @@ class Camera(BaseModel):
     _research_project = field_validator("research_project")(lambda cls, v: _tidy(v))
     _status_note = field_validator("status_note")(lambda cls, v: _tidy(v))
 
+    @model_validator(mode="before")
+    @classmethod
+    def _label_from_id(cls, data):
+        """A camera kept before it had a label is called by its id."""
+        if isinstance(data, dict) and not str(data.get("label") or "").strip() and str(data.get("camera_id") or "").strip():
+            return {**data, "label": data["camera_id"]}
+        return data
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if not value:
+            raise ValueError("A camera needs a label.")
+        return value
+
     @field_validator("camera_id")
     @classmethod
-    def _camera_id(cls, value: str) -> str:
-        return " ".join(value.split())
+    def _camera_id(cls, value: Optional[str]) -> Optional[str]:
+        return _tidy(value)
 
     @field_validator("camera_model")
     @classmethod
@@ -352,7 +369,7 @@ class FieldworkSettings(BaseModel):
     @field_validator("cameras")
     @classmethod
     def _unique_cameras(cls, cameras: list[Camera]) -> list[Camera]:
-        return _unique(cameras, "camera_id", "research_project")
+        return _unique(cameras, "label", "research_project")
 
 
 class Settings(BaseModel):

@@ -20,6 +20,9 @@ export const COVERAGE_AREAS: string[] = [
   'Lower Oder Valley National Park',
 ]
 
+/** The capacities of SD card most used in the field — suggestions for the capacity of a card; any other can be typed. */
+export const SD_CARD_CAPACITIES: string[] = ['16 GB', '32 GB', '64 GB', '128 GB', '256 GB', '512 GB']
+
 /** The makes of SD card most used in the field — suggestions for the brand of a card; any other can be typed. */
 export const SD_CARD_BRANDS: string[] = [
   'SanDisk', 'Kingston', 'Samsung', 'Lexar', 'Transcend', 'PNY', 'Toshiba', 'Verbatim', 'Silicon Power', 'ADATA', 'Integral', 'Delkin',

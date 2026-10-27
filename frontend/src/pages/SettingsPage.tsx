@@ -8,7 +8,7 @@ import { defaultResearchProject } from '../defaultResearchProject'
 import { NO_CREDENTIALS } from './ImportDeploymentPage'
 import EpicollectMapping from '../components/EpicollectMapping'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
-import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS } from '../entities'
+import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS, SD_CARD_CAPACITIES } from '../entities'
 import ReportsList from '../components/ReportsList'
 import { isValidTimezone } from '../deploymentValidation'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
@@ -1583,12 +1583,14 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
   /** How many visits match — not known until they are read. */
   const countVisits = (match: (v: StoredVisit, project: string) => boolean) => (visits ? visits.filter((x) => match(x.visit, x.project)).length : undefined)
   const same = (a: string | null | undefined, b: string) => (a ?? '').trim().toLowerCase() === b.trim().toLowerCase()
+  // A visit keeps the serial number of its camera, or its label when it has none.
+  const usesCamera = (visitCamera: string | null | undefined, c: Camera) => same(visitCamera, c.camera_id || c.label)
   const inProject = (project: string) => owner === null || project.toLowerCase() === owner.toLowerCase()
   const TAB_INTRO: Record<EntityTab, string> = {
     projects: 'The research projects the field work belongs to. Each one keeps its own locations, cameras and SD cards.',
     trappers: 'The people who go to the field — one can be in several research projects. When a visit is registered, they are the ones to pick as who went.',
     locations: 'The places where cameras are set up. Each research project has its own locations, cameras and SD cards.',
-    cameras: "The camera traps, named as Camtrap DP names them. The camera id, its serial number, names each one, so no two of a project have the same.",
+    cameras: 'The camera traps. Each one is called by its label, so no two of a project have the same; its serial number is kept when it is known.',
     sdcards: 'The SD cards used to collect images. Each research project keeps its own.',
   }
   const tabs: { id: EntityTab; label: string }[] = [
@@ -1658,7 +1660,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
           fields={[
             { key: 'label', label: 'Label', placeholder: 'e.g. SD-014', hint: 'The number or the label written on the card.', section: 'Which card is it?' },
             { key: 'brand', label: 'Brand', kind: 'suggest', suggestions: SD_CARD_BRANDS, placeholder: 'e.g. SanDisk', hint: 'Who makes it. The usual ones are suggested, but any other can be typed.' },
-            { key: 'capacity', label: 'Capacity', placeholder: 'e.g. 64 GB', half: true },
+            { key: 'capacity', label: 'Capacity', kind: 'suggest', suggestions: SD_CARD_CAPACITIES, placeholder: 'e.g. 64 GB', hint: 'What is written on the card. The usual ones are suggested, but any other can be typed.' },
             { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the card was put into production.', section: 'When did it start?' },
             ...statusFields<SdCard>(GEAR_STATUSES, true, GEAR_HINTS),
           ]}
@@ -1670,14 +1672,15 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
           heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />} onDetail={setDetail} styled
           items={cameras.filter((c) => belongs(c.research_project))}
           onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
-          blank={{ camera_id: '', camera_model: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
-          badges={unusualStatus} subtitle={(c) => c.camera_model ?? ''}
-          meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && same(v.camera_id, c.camera_id)))}
-          canDelete={(c) => countVisits((v, p) => inProject(p) && same(v.camera_id, c.camera_id)) === 0}
+          blank={{ label: '', camera_id: null, camera_model: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
+          badges={unusualStatus} subtitle={(c) => [c.camera_model, c.camera_id].filter(Boolean).join(' · ')}
+          meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)))}
+          canDelete={(c) => countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)) === 0}
           footnote="A camera that already has visits can't be deleted; mark it as retired instead and it stops being offered for new visits."
-          empty="No camera yet." searchLabel="Search by serial number or model"
+          empty="No camera yet." searchLabel="Search by label, serial number or model"
           fields={[
-            { key: 'camera_id', label: 'Camera id', placeholder: 'e.g. P800HG08192031', hint: "The camera's serial number. No two cameras in a project have the same.", section: 'Which camera is it?' },
+            { key: 'label', label: 'Label', placeholder: 'e.g. CAM-014', hint: 'What the camera is called in the field. No two cameras in a project have the same.', section: 'Which camera is it?' },
+            { key: 'camera_id', label: 'Camera id', placeholder: 'e.g. P800HG08192031', hint: "The camera's serial number, if it is known." },
             { key: 'camera_model', label: 'Camera model', placeholder: 'e.g. Reconyx-PC800', hint: 'Manufacturer and model, written as manufacturer-model.' },
             { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the camera was put into production.', section: 'When did it start?' },
             ...statusFields<Camera>(GEAR_STATUSES, true, GEAR_HINTS),

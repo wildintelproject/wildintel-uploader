@@ -259,6 +259,9 @@ interface Props {
 }
 
 /** Register the visits to the camera traps, in steps — the first asks where they come from. */
+/** What a visit keeps of its camera: its serial number, or its label when it has none. */
+const cameraKey = (c: Camera) => c.camera_id || c.label
+
 export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = false, onImportImages }: Props) {
   const [source, setSource] = useState<VisitSource | null>(null)
   const [visit, setVisit] = useState<Visit>(EMPTY_VISIT)
@@ -292,7 +295,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // ...and only those still in use: a retired, lost, stolen or broken one is not offered, unless the visit already has it.
   const inUse = (status: string | undefined) => !status || status === 'active'
   const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (inUse(c.status) || c.label === visit.sd))
-  const cameras = allCameras.filter((c) => ofProject(c.research_project) && (inUse(c.status) || c.camera_id === visit.details.camera_id))
+  const cameras = allCameras.filter((c) => ofProject(c.research_project) && (inUse(c.status) || cameraKey(c) === visit.details.camera_id))
   // From a CSV file: its text, what reading it gave, and what was kept of it.
   const [csvName, setCsvName] = useState<string | null>(null)
   const [csvText, setCsvText] = useState('')
@@ -440,9 +443,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   }
 
   /** The camera of the visit is one of the settings: its id and its model go with the visit. */
-  function pickCamera(id: string) {
-    const camera = cameras.find((c) => c.camera_id === id)
-    setVisit((v) => ({ ...v, details: { ...v.details, camera_id: camera?.camera_id ?? null, camera_model: camera?.camera_model ?? null } }))
+  function pickCamera(label: string) {
+    const camera = cameras.find((c) => c.label === label)
+    setVisit((v) => ({ ...v, details: { ...v.details, camera_id: camera ? cameraKey(camera) : null, camera_model: camera?.camera_model ?? null } }))
   }
 
   function setDetail<K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) {
@@ -664,8 +667,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       <CamtrapDpTag />
                     </div>
                     <Combobox
-                      id="visit-camera" options={cameras.map((c) => ({ value: c.camera_id, label: c.camera_model ? `${c.camera_id} — ${c.camera_model}` : c.camera_id }))}
-                      value={visit.details.camera_id ?? ''} onChange={pickCamera} disabled={asked.camera === 'off'} invalid={asked.camera === 'required' && !visit.details.camera_id}
+                      id="visit-camera" options={cameras.map((c) => ({ value: c.label, label: c.camera_model ? `${c.label} — ${c.camera_model}` : c.label }))}
+                      value={cameras.find((c) => cameraKey(c) === visit.details.camera_id)?.label ?? ''} onChange={pickCamera} disabled={asked.camera === 'off'} invalid={asked.camera === 'required' && !visit.details.camera_id}
                       placeholder={cameras.length === 0 ? 'No cameras yet' : 'Select a camera…'} clearLabel="Clear camera"
                     />
                     {(conflicts.camera || shown('camera')) && <p role={conflicts.camera ? 'alert' : undefined} className="text-xs text-red-600 dark:text-red-400 mt-1">{conflicts.camera ?? shown('camera')}</p>}
