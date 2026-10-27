@@ -1,13 +1,29 @@
-import OptionCards from '../components/OptionCards'
-import type { Option } from '../components/OptionCards'
+import type { ReactNode } from 'react'
 import type { Task } from '../types'
 
-const TASK_OPTIONS: Option<Task>[] = [
-  { value: 'visits', emoji: '📝', title: 'Register visits', description: 'Record the visits to the camera traps — who went, when, to which site and what was done — from which the deployments are worked out.', available: true },
-  { value: 'deployment', emoji: '📷', title: 'Import deployment', description: 'Organize a folder of camera-trap images locally, then register the deployment in Trapper.', available: true },
-  { value: 'session', emoji: '🗂️', title: 'Import session', description: 'A folder with one subfolder per deployment: the revision, the checks and the preprocessing are common, the location and dates are asked for each.', available: true },
-  { value: 'upload', emoji: '☁️', title: 'Upload deployment to Trapper', description: 'Pick a collection kept locally and send a deployment to Trapper — creating its location and the deployment there if they are missing.', available: true },
+const ICONS: Record<string, ReactNode> = {
+  visits: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />,
+  deployment: <><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></>,
+  session: <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />,
+  upload: <><path d="M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 4 14.9" /><path d="M12 12v9M8 16l4-4 4 4" /></>,
+  utils: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
+}
+
+const TASKS: { value: Task; icon: string; title: string; description: string }[] = [
+  { value: 'visits', icon: 'visits', title: 'Register visits', description: 'Record the visits to the camera traps: who went, when, to which site and what was done. The deployments are worked out from them.' },
+  { value: 'deployment', icon: 'deployment', title: 'Import deployment', description: 'Organize a folder of camera-trap images on this computer, then register the deployment in Trapper.' },
+  { value: 'session', icon: 'session', title: 'Import session', description: 'Several deployments from one folder, with one subfolder each. The visit, the checks and the image preparation are shared; the location and dates are asked for each.' },
+  { value: 'upload', icon: 'upload', title: 'Upload deployment to Trapper', description: 'Pick a collection kept on this computer and send a deployment to Trapper. Its location and the deployment are created there if they are missing.' },
 ]
+
+const Icon = ({ name, size = 18 }: { name: string; size?: number }) => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{ICONS[name]}</svg>
+)
+const Arrow = () => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+)
+
+const card = 'rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 transition-colors hover:border-blue-500 dark:hover:border-blue-500 cursor-pointer'
 
 interface Props {
   onChoose: (task: Task) => void
@@ -18,14 +34,25 @@ export default function MenuPage({ onChoose }: Props) {
     <div className="mx-auto max-w-[900px] px-4 py-8">
       <h1 className="text-2xl font-bold mb-1">What do you want to do?</h1>
       <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">Choose one of the following.</p>
-      <OptionCards options={TASK_OPTIONS} selected={null} onChoose={onChoose} />
-      <button
-        type="button" onClick={() => onChoose('utils')}
-        className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-      >
-        <span className="text-lg">🧰</span>
-        <strong>Utils</strong>
-        <span className="text-zinc-500 dark:text-zinc-400">— repair local deployments, sync local collections</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {TASKS.map((t) => (
+          <button key={t.value} type="button" onClick={() => onChoose(t.value)} className={`${card} flex flex-col items-stretch gap-3 p-5 text-left`}>
+            <span className="flex items-center justify-between">
+              <span className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"><Icon name={t.icon} /></span>
+              <span className="text-zinc-500 dark:text-zinc-400"><Arrow /></span>
+            </span>
+            <strong className="text-base text-zinc-900 dark:text-zinc-100">{t.title}</strong>
+            <span className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{t.description}</span>
+          </button>
+        ))}
+      </div>
+      <button type="button" onClick={() => onChoose('utils')} className={`${card} mt-4 w-full flex items-center gap-4 px-5 py-4 text-left`}>
+        <span className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 shrink-0"><Icon name="utils" /></span>
+        <span className="flex-1 min-w-0">
+          <strong className="block text-sm text-zinc-900 dark:text-zinc-100">Utils</strong>
+          <span className="block text-xs text-zinc-500 dark:text-zinc-400">Fix dates, repair local deployments, sync local collections.</span>
+        </span>
+        <span className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-sm font-medium text-zinc-800 dark:text-zinc-200 shrink-0">Open utilities <Arrow /></span>
       </button>
     </div>
   )

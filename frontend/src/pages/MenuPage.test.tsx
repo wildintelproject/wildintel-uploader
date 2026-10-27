@@ -34,7 +34,7 @@ describe('MenuPage', () => {
 
     const uploadButton = screen.getByRole('button', { name: /upload deployment to trapper/i })
     expect(uploadButton).toBeEnabled()
-    expect(screen.getByText(/creating its location and the deployment there if they are missing/i)).toBeInTheDocument()
+    expect(screen.getByText(/its location and the deployment are created there if they are missing/i)).toBeInTheDocument()
 
     await userEvent.click(uploadButton)
     expect(onChoose).toHaveBeenCalledWith('upload')
