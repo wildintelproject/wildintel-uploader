@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
+import { defaultResearchProject } from '../defaultResearchProject'
 import Combobox from '../components/Combobox'
 import BackButton from '../components/BackButton'
 import { SmallSpinner, btnOutline, btnPrimary, visitKey, visitLabel } from './ImportDeploymentPage'
@@ -104,7 +105,15 @@ export default function TimeFixPage({ initial, onBack }: {
   const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
 
   useEffect(() => {
-    api.listResearchProjects().then(({ results }) => setProjects(results)).catch((e) => setError(message(e, 'Could not read the collections folder.')))
+    api.listResearchProjects().then(async ({ results }) => {
+      setProjects(results)
+      // Opened with no research project: the default of the general settings comes filled in.
+      if (initial?.researchProjectId) return
+      const wanted = await defaultResearchProject()
+      const found = results.find((p) => p.acronym.toLowerCase() === wanted.toLowerCase())
+      if (wanted && found) void chooseProject(found.acronym)
+    }).catch((e) => setError(message(e, 'Could not read the collections folder.')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

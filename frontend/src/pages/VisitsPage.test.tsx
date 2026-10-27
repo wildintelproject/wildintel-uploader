@@ -404,6 +404,27 @@ describe('VisitsPage', () => {
     expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['CT', 'CF'])
   })
 
+  it('does not offer the cameras, the SD cards and the trappers that are no longer in use', async () => {
+    const card = (label: string, status: 'active' | 'lost') => ({ label, brand: null, capacity: null, in_service: null, research_project: null, status })
+    const camera = (camera_id: string, status: 'active' | 'stolen') => ({ camera_id, camera_model: null, in_service: null, research_project: null, status })
+    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: {
+      trappers: [{ name: 'Ana Pérez', affiliation: null, status: 'active' }, { name: 'Luis', affiliation: null, status: 'inactive' }],
+      sd_cards: [card('T1', 'active'), card('T2', 'lost')], cameras: [camera('CT', 'active'), camera('CS', 'stolen')],
+    } })
+    await chooseByHand()
+    await pickWhere()
+    await pickWhen()
+    await pickAction('Installation')
+    await openSection('SD card')
+    await openSection('Camera')
+
+    await userEvent.click(screen.getByLabelText('SD card left in the camera'))
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['T1'])
+    await userEvent.click(screen.getByRole('option', { name: 'T1' }))
+    await userEvent.click(screen.getByLabelText('Camera id'))
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['CT'])
+  })
+
   it('will not keep a camera put up while it is installed elsewhere, nor a card left while it is in another camera, and says so as soon as they are picked', async () => {
     const elsewhere = toStored({ ...BLANK, session: 'R0001', when: '2026-06-10T09:00:00', site: 'TATR_0002', actions: ['Installation'], sd: 'A13', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: 'X1' } })
     mockedApi.listVisits.mockResolvedValue({ results: [elsewhere] })

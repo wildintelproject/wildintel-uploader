@@ -289,8 +289,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const [allCameras, setCameras] = useState<Camera[]>([])
   // Only those of the research project — or of none, which any may use.
   const ofProject = (rp: string | null) => !rp || !project || rp.toLowerCase() === project.acronym.toLowerCase()
-  const sdCards = allSdCards.filter((c) => ofProject(c.research_project))
-  const cameras = allCameras.filter((c) => ofProject(c.research_project))
+  // ...and only those still in use: a retired, lost, stolen or broken one is not offered, unless the visit already has it.
+  const inUse = (status: string | undefined) => !status || status === 'active'
+  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (inUse(c.status) || c.label === visit.sd))
+  const cameras = allCameras.filter((c) => ofProject(c.research_project) && (inUse(c.status) || c.camera_id === visit.details.camera_id))
   // From a CSV file: its text, what reading it gave, and what was kept of it.
   const [csvName, setCsvName] = useState<string | null>(null)
   const [csvText, setCsvText] = useState('')
@@ -316,7 +318,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     api.getSettings()
       .then((settings) => {
         if (cancelled) return
-        setTrappers((settings.FIELDWORK?.trappers ?? []).map((t) => t.name))
+        setTrappers((settings.FIELDWORK?.trappers ?? []).filter((t) => !t.status || t.status === 'active').map((t) => t.name))
         setSdCards(settings.FIELDWORK?.sd_cards ?? [])
         setCameras(settings.FIELDWORK?.cameras ?? [])
       })

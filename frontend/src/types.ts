@@ -496,7 +496,7 @@ export interface ConfigInfo {
 
 export interface AppSettings {
   /** workers: how many images are validated or preprocessed at once; cpu_count: the CPUs this machine has (read-only). */
-  GENERAL: { log_level: LogLevel; workers: number; cpu_count: number; log_file: string; log_level_override: string | null }
+  GENERAL: { log_level: LogLevel; workers: number; cpu_count: number; log_file: string; log_level_override: string | null; default_research_project?: string | null }
   TRAPPER: { base_url: string | null; user_name: string | null; has_password: boolean; max_zip_mb: number }
   /** mapping: the ref of the Epicollect5 input that gives each field of a deployment (deployment field → ref). */
   EPICOLLECT5: { enabled: boolean; unmapped_to_comments: boolean; project_slug: string | null; client_id: string | null; has_secret: boolean; mapping: Record<string, string> }
@@ -516,7 +516,7 @@ export interface AppSettings {
 
 /** What the settings page saves. A blank password keeps the saved one. */
 export interface AppSettingsUpdate {
-  GENERAL: { log_level: LogLevel; workers: number }
+  GENERAL: { log_level: LogLevel; workers: number; default_research_project: string | null }
   TRAPPER: { base_url: string | null; user_name: string | null; user_password: string; max_zip_mb: number }
   EPICOLLECT5: { enabled: boolean; unmapped_to_comments: boolean; project_slug: string | null; client_id: string | null; client_secret: string; mapping: Record<string, string> }
   DATA: { dir: string | null; collections_dir: string | null; reports_dir: string | null; packages_dir: string | null }
@@ -533,6 +533,13 @@ export interface FieldworkSettings {
   cameras: Camera[]
 }
 
+/** Whether a camera or an SD card can still be used; only an active one is offered for a visit. */
+export type CameraStatus = 'active' | 'retired' | 'stolen' | 'lost' | 'broken'
+export type SdCardStatus = 'active' | 'retired' | 'lost' | 'broken'
+export type TrapperStatus = 'active' | 'inactive'
+export type LocationStatus = 'active' | 'retired' | 'planned'
+export type ResearchProjectStatus = 'planned' | 'active' | 'finished'
+
 /** One of the SD cards: what it is called (its number, or the label on it), who makes it, what it holds and the day it was put into production. */
 export interface SdCard {
   label: string
@@ -542,6 +549,10 @@ export interface SdCard {
   in_service: string | null
   /** The acronym of the research project it belongs to; none, it is free for any. */
   research_project: string | null
+  status?: SdCardStatus
+  /** YYYY-MM-DD — the day it stopped being active. */
+  status_date?: string | null
+  status_note?: string | null
 }
 
 /** One of the camera traps, named as Camtrap DP names it. */
@@ -552,12 +563,19 @@ export interface Camera {
   in_service: string | null
   /** The acronym of the research project it belongs to; none, it is free for any. */
   research_project: string | null
+  status?: CameraStatus
+  /** YYYY-MM-DD — the day it stopped being active. */
+  status_date?: string | null
+  status_note?: string | null
 }
 
 /** One of the people who go to the field, as wildintel-publisher keeps an author. */
 export interface Trapper {
   name: string
   affiliation: string | null
+  status?: TrapperStatus
+  /** Set when the trapper was taken from Trapper: it can only be seen here. */
+  trapper_pk?: number | null
 }
 
 /** A research project entered by hand — the fields of Trapper's own "Add
@@ -575,6 +593,7 @@ export interface ResearchProjectDraft {
   abstract: string
   methods: string
   description: string
+  status?: ResearchProjectStatus
 }
 
 export const EMPTY_RESEARCH_PROJECT: ResearchProjectDraft = {
@@ -601,6 +620,10 @@ export interface LocalLocation {
   longitude: number | null
   coordinate_uncertainty: number | null
   trapper_pk: number | null
+  status?: LocationStatus
+  /** YYYY-MM-DD */
+  status_date?: string | null
+  status_note?: string | null
 }
 
 /** A visit to a camera trap kept in a research project's visits.json (see the backend's VisitRecord): the visit's own fields, and

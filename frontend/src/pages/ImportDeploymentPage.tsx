@@ -6,6 +6,7 @@ import type { TrapperAccount } from '../components/TrapperAccountNotice'
 import { Fragment, createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
+import { defaultResearchProject } from '../defaultResearchProject'
 import type { TrapperCredentials } from '../api'
 import CheckboxList from '../components/CheckboxList'
 import Combobox from '../components/Combobox'
@@ -1307,6 +1308,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const [origin, setOrigin] = useState({ researchProject: '', locationId: '', locationName: '', timezone: '' })
   const [localProjects, setLocalProjects] = useState<LocalResearchProject[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState('')
+  const defaultProjectApplied = useRef(false)
   const [addingProject, setAddingProject] = useState(false)
   const [projectSource, setProjectSource] = useState<OriginSource | null>(null)
   // The new research project's form, in Trapper's own "Add research project" fields.
@@ -2038,9 +2040,19 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     if (stepKey !== 'origin') return
     let cancelled = false
     api.listResearchProjects()
-      .then(({ results }) => { if (!cancelled) setLocalProjects(results) })
+      .then(async ({ results }) => {
+        if (cancelled) return
+        setLocalProjects(results)
+        // With none picked (and no visit to take it from), the default research project of the general settings comes filled in — once.
+        if (selectedProjectId || closedVisit || resumeSession || defaultProjectApplied.current) return
+        defaultProjectApplied.current = true
+        const wanted = await defaultResearchProject()
+        const found = wanted ? results.find((p) => p.acronym.toLowerCase() === wanted.toLowerCase()) : undefined
+        if (found && !cancelled) selectProject(found)
+      })
       .catch((e) => { if (!cancelled) setOriginError(e instanceof Error ? e.message : 'Could not read the collections folder.') })
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepKey])
 
   // ...and the locations of the one picked.

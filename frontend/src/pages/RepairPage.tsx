@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { defaultResearchProject } from '../defaultResearchProject'
 import Combobox from '../components/Combobox'
 import { Mark, mark } from '../components/Notice'
 import BackButton from '../components/BackButton'
@@ -66,7 +67,14 @@ export default function RepairPage({ onBack }: { onBack?: () => void } = {}) {
   const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
 
   useEffect(() => {
-    api.listResearchProjects().then(({ results }) => setProjects(results)).catch((e) => setError(message(e, 'Could not read the collections folder.')))
+    api.listResearchProjects().then(async ({ results }) => {
+      setProjects(results)
+      // The default research project of the general settings comes filled in.
+      const wanted = await defaultResearchProject()
+      const found = results.find((p) => p.acronym.toLowerCase() === wanted.toLowerCase())
+      if (wanted && found) void chooseProject(found.acronym)
+    }).catch((e) => setError(message(e, 'Could not read the collections folder.')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const collection = collections.find((c) => c.name === collectionName)

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
 import CheckboxList from '../components/CheckboxList'
 import Combobox from '../components/Combobox'
 import { download, itemsToCsv, readItems } from '../csvFile'
+import { defaultResearchProject } from '../defaultResearchProject'
 import { NO_CREDENTIALS } from './ImportDeploymentPage'
 import EpicollectMapping from '../components/EpicollectMapping'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
@@ -11,7 +12,7 @@ import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS } from '../entities'
 import ReportsList from '../components/ReportsList'
 import { isValidTimezone } from '../deploymentValidation'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
-import type { Location, ResearchProject } from '../types'
+import type { Location, LocationStatus, ResearchProject, ResearchProjectStatus } from '../types'
 import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, ImageCheck, Camera, LocalLocation, LocalResearchProject, LogLevel, SdCard, SimilarityMethod, Trapper, UpdateCheck } from '../types'
 
 const hintClass = 'text-xs text-zinc-500 dark:text-zinc-400'
@@ -31,13 +32,21 @@ type Limits = { min: number; max: number; decimal?: boolean }
 
 // ── Icons (24×24, stroke — lucide's shapes) ─────────────────────────────
 
-function Icon({ children }: { children: ReactNode }) {
+function Icon({ children, size = 20 }: { children: ReactNode; size?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {children}
     </svg>
   )
 }
+
+const PencilIcon = () => (<Icon size={16}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></Icon>)
+const TrashIcon = () => (<Icon size={16}><path d="M3 6h18" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></Icon>)
+const EyeIcon = () => (<Icon size={16}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></Icon>)
+const LockIcon = () => (<Icon size={12}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Icon>)
+const SearchIcon = () => (<Icon size={16}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></Icon>)
+const ChevronDownIcon = () => (<Icon size={14}><path d="M6 9l6 6 6-6" /></Icon>)
+const PlusIcon = () => (<Icon size={16}><path d="M12 5v14M5 12h14" /></Icon>)
 
 const CameraIcon = () => (
   <Icon>
@@ -70,13 +79,6 @@ const ImageIcon = () => (
     <path d="m21 15-5-5L5 21" />
   </Icon>
 )
-const ReportIcon = () => (
-  <Icon>
-    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-    <path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" />
-  </Icon>
-)
 const SdCardIcon = () => (
   <Icon>
     <path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
@@ -89,10 +91,11 @@ const PinIcon = () => (
     <circle cx="12" cy="10" r="3" />
   </Icon>
 )
-const UserIcon = () => (
+const ReportIcon = () => (
   <Icon>
-    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" />
   </Icon>
 )
 const UsersIcon = () => (
@@ -139,6 +142,8 @@ const BackIcon = () => (
 interface Draft {
   logLevel: LogLevel
   workers: string
+  /** The acronym of the research project that comes filled in; blank for none. */
+  defaultResearchProject: string
   dataDir: string
   collectionsDir: string
   reportsDir: string
@@ -180,6 +185,9 @@ interface Draft {
 /** A location of the settings as it is edited: every field a text, as it is typed. */
 interface LocationDraft {
   location_id: string
+  status: string | null
+  status_date: string | null
+  status_note: string | null
   name: string | null
   latitude: string | null
   longitude: string | null
@@ -201,6 +209,7 @@ function toDraft(s: AppSettings): Draft {
   return {
     logLevel: s.GENERAL.log_level,
     workers: String(s.GENERAL.workers),
+    defaultResearchProject: s.GENERAL.default_research_project ?? '',
     dataDir: s.DATA.dir,
     collectionsDir: s.DATA.collections_dir ?? '',
     reportsDir: s.DATA.reports_dir ?? '',
@@ -265,7 +274,7 @@ function sectionValid(d: Draft, id: SectionId): boolean {
 function toUpdate(d: Draft): AppSettingsUpdate | null {
   if (!SECTIONS.every((s) => sectionValid(d, s.id))) return null
   return {
-    GENERAL: { log_level: d.logLevel, workers: Number(d.workers) },
+    GENERAL: { log_level: d.logLevel, workers: Number(d.workers), default_research_project: d.defaultResearchProject.trim() || null },
     TRAPPER: { base_url: d.trapperUrl.trim() || null, user_name: d.trapperUser.trim() || null, user_password: d.trapperPassword, max_zip_mb: Number(d.maxZipMb) },
     EPICOLLECT5: { enabled: d.epicollectEnabled, unmapped_to_comments: d.epicollectUnmappedToComments, project_slug: d.epicollectSlug.trim() || null, client_id: d.epicollectClientId.trim() || null, client_secret: d.epicollectClientSecret, mapping: d.epicollectMapping },
     DATA: { dir: d.dataDir.trim() || null, collections_dir: d.collectionsDir.trim() || null, reports_dir: d.reportsDir.trim() || null, packages_dir: d.packagesDir.trim() || null },
@@ -521,28 +530,267 @@ function DialogShell({ label, title, onClose, children }: { label: string; title
   )
 }
 
-/** One entry of a card list: icon tile, name and what is under it, and the gear that edits it. */
-function ItemCard({ icon, title, subtitle, editLabel, onEdit }: { icon: ReactNode; title: string; subtitle: string; editLabel: string; onEdit: () => void }) {
+const ChevronLeftIcon = () => (<Icon size={14}><path d="M15 18l-6-6 6-6" /></Icon>)
+
+/** Creating or editing an entity: a page of its own, in place of its list — with the way back over it, its fields, and Cancel and Save at the foot. */
+function FormPage({ region, backLabel, onBack, title, badges = [], children, onCancel, onSave, saveLabel = 'Save changes', saveDisabled = false, onRemove, removeLabel, readOnly = false, notice }: {
+  region: string; backLabel: string; onBack: () => void; title: string; badges?: BadgeSpec[]; children: ReactNode
+  onCancel: () => void; onSave: () => void; saveLabel?: string; saveDisabled?: boolean
+  /** Without it the entity cannot be removed from here. */
+  onRemove?: () => void; removeLabel?: string
+  /** Only to be seen: the fields are locked, and there is nothing to save or remove. */
+  readOnly?: boolean
+  /** What is said over the fields — that it comes from Trapper, say. */
+  notice?: ReactNode
+}) {
   return (
-    <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800">
-      <span className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300" aria-hidden="true">{icon}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-base truncate">{title}</p>
-        <p className={`${hintClass} truncate`}>{subtitle}</p>
+    <section aria-label={region} className="max-w-xl mx-auto space-y-5">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"><ChevronLeftIcon />{backLabel}</button>
+      <div className="flex flex-wrap items-center gap-3">
+        <h4 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{title}</h4>
+        {badges.map((b) => <Badge key={b.text} {...b} />)}
       </div>
-      <button type="button" className={iconBtn} aria-label={editLabel} title="Edit" onClick={onEdit}><GearIcon /></button>
+      {notice}
+      <fieldset disabled={readOnly} className="space-y-4 border-0 p-0 m-0 min-w-0">{children}</fieldset>
+      <div className="flex items-center justify-between gap-2 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+        {onRemove && !readOnly ? <button type="button" className={btnDanger} onClick={onRemove}>{removeLabel}</button> : <span />}
+        <div className="flex items-center gap-2">
+          <button type="button" className={btnOutline} onClick={onCancel}>{readOnly ? 'Close' : 'Cancel'}</button>
+          {!readOnly && <button type="button" className={btnPrimary} disabled={saveDisabled} onClick={onSave}>{saveLabel}</button>}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+type Tone = 'green' | 'amber' | 'red' | 'blue' | 'zinc'
+interface BadgeSpec { text: string; tone: Tone; lock?: boolean; hint?: string }
+const TONES: Record<Tone, string> = {
+  green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  red: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  zinc: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300',
+}
+const STATUS_TONES: Record<string, Tone> = { active: 'green', planned: 'amber', finished: 'zinc', inactive: 'zinc', retired: 'zinc', stolen: 'red', lost: 'red', broken: 'red' }
+/** The badge of a status — what day it began and why are in its tooltip. */
+const statusBadge = (status: string | null | undefined, date?: string | null, note?: string | null): BadgeSpec => ({
+  text: STATUS_LABELS[status ?? 'active'] ?? String(status), tone: STATUS_TONES[status ?? 'active'] ?? 'zinc',
+  hint: [date && `since ${date}`, note].filter(Boolean).join(' — ') || undefined,
+})
+/** Where a research project or a location came from: Trapper's are read-only here. */
+const originBadge = (trapperPk: number | null | undefined): BadgeSpec => (trapperPk != null ? { text: 'From Trapper', tone: 'blue', lock: true } : { text: 'Created here', tone: 'zinc' })
+
+function Badge({ text, tone, lock, hint }: BadgeSpec) {
+  return (
+    <span title={hint} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${TONES[tone]}`}>{lock && <LockIcon />}{text}</span>
+  )
+}
+
+/** One entry of a list of entities: its id, its badges, what it is and what it holds, and the buttons that view or edit it, or delete it. */
+function ItemCard({ icon, plain = false, dim = false, title, badges = [], subtitle, meta, editLabel, onEdit, readOnly = false, onDelete, deleteLabel }: {
+  title: string; badges?: BadgeSpec[]; subtitle?: string; meta?: string; editLabel: string; onEdit: () => void
+  /** One that can only be seen: its button says View. */
+  readOnly?: boolean
+  /** The tile at its left that says what kind of entity it is. */
+  icon?: ReactNode
+  /** A name that is not an id: written as text, not as code. */
+  plain?: boolean
+  /** One that is no longer in use: its tile is dimmed. */
+  dim?: boolean
+  onDelete?: () => void; deleteLabel?: string
+}) {
+  return (
+    <div className="flex items-center gap-4 px-4 py-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60">
+      {icon && <span className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 ${dim ? 'opacity-50' : ''}`} aria-hidden="true">{icon}</span>}
+      <div className="flex-1 min-w-0 space-y-0.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className={`${plain ? '' : 'font-mono '}text-base font-semibold truncate`}>{title}</p>
+          {badges.map((b) => <Badge key={b.text} {...b} />)}
+        </div>
+        {subtitle && <p className="text-sm text-zinc-700 dark:text-zinc-300 truncate">{subtitle}</p>}
+        {meta && <p className={`${hintClass} truncate`}>{meta}</p>}
+      </div>
+      <button type="button" className={`${btnOutline} gap-2`} aria-label={readOnly ? `View ${title}` : editLabel} onClick={onEdit}>
+        {readOnly ? <EyeIcon /> : <PencilIcon />}{readOnly ? 'View' : 'Edit'}
+      </button>
+      {onDelete && (
+        <button type="button" aria-label={deleteLabel ?? `Delete ${title}`} title="Delete" onClick={onDelete}
+                className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors">
+          <TrashIcon />
+        </button>
+      )}
     </div>
   )
+}
+
+/** The line over a list of entities: its name and how many there are, and to import from Trapper, from or to a CSV file (under More), or add one. */
+function EntityHeader({ heading, count, noun, onFile, onExport, exportDisabled, onTrapper, onAdd, addDisabled }: {
+  heading: string; count: number; noun: string; onFile: (file: File | undefined) => void; onExport: () => void; exportDisabled: boolean
+  /** Without it there is no button to import from Trapper. */
+  onTrapper?: () => void; onAdd: () => void; addDisabled?: boolean
+}) {
+  const [menu, setMenu] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h4 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">{heading} <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400 align-middle">{count}</span></h4>
+      <div className="flex flex-wrap items-center gap-2">
+        {onTrapper && <button type="button" className={btnOutline} onClick={onTrapper} disabled={addDisabled}>Import from Trapper</button>}
+        <div className="relative">
+          <button type="button" className={`${btnOutline} gap-2`} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)} onBlur={() => setTimeout(() => setMenu(false), 150)}>
+            More<ChevronDownIcon />
+          </button>
+          {menu && (
+            <div role="menu" className="absolute right-0 z-20 mt-1 min-w-40 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg py-1">
+              <button type="button" role="menuitem" disabled={addDisabled} className="block w-full text-left px-4 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40"
+                      onMouseDown={(e) => e.preventDefault()} onClick={() => { input.current?.click(); setMenu(false) }}>Import CSV</button>
+              <button type="button" role="menuitem" disabled={exportDisabled} className="block w-full text-left px-4 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40"
+                      onMouseDown={(e) => e.preventDefault()} onClick={() => { onExport(); setMenu(false) }}>Export CSV</button>
+            </div>
+          )}
+          <input ref={input} type="file" accept=".csv,text/csv" className="sr-only" aria-label={`Import ${heading} from a CSV file`} disabled={addDisabled} tabIndex={-1}
+                 onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = '' }} />
+        </div>
+        <button type="button" className={`${btnPrimary} inline-flex items-center gap-2`} aria-label={`Add ${noun}`} onClick={onAdd} disabled={addDisabled}><PlusIcon />New {noun}</button>
+      </div>
+    </div>
+  )
+}
+
+/** A status picked from cards, each with what it means. */
+function StatusChoice({ options, value, onChange }: { options: { value: string; label: string; hint: string }[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <span id="status-choice" className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">Status</span>
+      <div role="radiogroup" aria-labelledby="status-choice" className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {options.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)}
+                  className={`text-left rounded-xl px-4 py-3 border transition-colors ${value === o.value ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+            <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">{o.label}</span>
+            <span className={`block ${hintClass}`}>{o.hint}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const PROJECT_STATUSES = [
+  { value: 'planned', label: 'Planned', hint: 'Not started yet.' },
+  { value: 'active', label: 'Active', hint: 'Work is under way.' },
+  { value: 'finished', label: 'Finished', hint: 'No more fieldwork.' },
+]
+const fieldBox = 'block w-full rounded-xl px-4 py-3 bg-zinc-100 dark:bg-zinc-800 border border-transparent focus:border-blue-500 text-base text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none transition-colors disabled:opacity-60'
+
+/** A field of a form under its label, which says whether it is required, with what to write under it. */
+function LabelledField({ label, required, hint, error, htmlFor, children }: { label: string; required?: boolean; hint?: string; error?: string | null; htmlFor?: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={htmlFor} className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        {label} <span className="ml-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">{required ? 'Required' : 'Optional'}</span>
+      </label>
+      {children}
+      {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : hint && <p className={hintClass}>{hint}</p>}
+    </div>
+  )
+}
+
+/** Adding or editing a research project: its acronym, name and description, its keywords as tags, and its status as a choice of three. */
+function ProjectForm({ item, others, isNew, onChange, onClose, onDone, doneLabel, onRemove }: {
+  item: ProjectDraft; others: string[]; isNew: boolean; onChange: (patch: Partial<ProjectDraft>) => void; onClose: () => void; onDone: () => void; doneLabel: string; onRemove?: () => void
+}) {
+  const [word, setWord] = useState('')
+  const keywords = (item.keywords ?? '').split(',').map((k) => k.trim()).filter(Boolean)
+  const setKeywords = (list: string[]) => onChange({ keywords: list.length ? list.join(', ') : null })
+  const addWord = () => {
+    const w = word.trim()
+    if (w && !keywords.some((k) => k.toLowerCase() === w.toLowerCase())) setKeywords([...keywords, w])
+    setWord('')
+  }
+  const acronym = item.acronym.trim()
+  const acronymError = isNew ? (PROJECT_FIELDS[0].validate!(acronym) ?? (others.some((o) => o.toLowerCase() === acronym.toLowerCase()) ? `${acronym} is already in the list.` : null)) : null
+  const nameError = (item.name ?? '').trim() ? null : 'A name is required.'
+  const status = item.status ?? 'active'
+  return (
+    <FormPage
+      region="Research project" backLabel="Research projects" onBack={onClose} title={isNew ? 'New research project' : `Edit ${acronym}`}
+      onCancel={onClose} onSave={onDone} saveLabel={doneLabel} saveDisabled={!!acronymError || !!nameError} onRemove={onRemove} removeLabel="Remove research project"
+    >
+      <LabelledField label="Acronym" required htmlFor="rp-acronym" hint="3 to 10 characters: letters, numbers, _ . or -. It is also the name of the project’s folder." error={acronymError && acronym ? acronymError : null}>
+        <input id="rp-acronym" aria-label="Acronym" className={fieldBox} value={item.acronym} disabled={!isNew} placeholder="e.g. DONA" autoComplete="off" onChange={(e) => onChange({ acronym: e.target.value })} />
+      </LabelledField>
+      <LabelledField label="Name" required htmlFor="rp-name">
+        <input id="rp-name" aria-label="Name" className={fieldBox} value={item.name ?? ''} autoComplete="off" onChange={(e) => onChange({ name: e.target.value })} />
+      </LabelledField>
+      <LabelledField label="Description" htmlFor="rp-description">
+        <textarea id="rp-description" aria-label="Description" rows={3} className={`${fieldBox} resize-y`} value={item.description ?? ''} onChange={(e) => onChange({ description: e.target.value || null })} />
+      </LabelledField>
+      <LabelledField label="Keywords" htmlFor="rp-keyword" hint="Press Enter or Add after each one.">
+        {keywords.length > 0 && (
+          <ul className="flex flex-wrap gap-2" aria-label="Keywords">
+            {keywords.map((k) => (
+              <li key={k} className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full text-sm bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100">
+                {k}
+                <button type="button" aria-label={`Remove ${k}`} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => setKeywords(keywords.filter((x) => x !== k))}>×</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex items-center gap-2">
+          <input id="rp-keyword" aria-label="New keyword" className={fieldBox} value={word} placeholder="e.g. camera traps" autoComplete="off" onChange={(e) => setWord(e.target.value)}
+                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addWord() } }} />
+          <button type="button" aria-label="Add keyword" className={`${btnOutline} h-12 shrink-0`} onClick={addWord}>Add</button>
+        </div>
+      </LabelledField>
+      <StatusChoice options={PROJECT_STATUSES} value={status} onChange={(v) => onChange({ status: v })} />
+    </FormPage>
+  )
+}
+
+/** What a research project or a location taken from Trapper says over its page: it can only be seen here. */
+function TrapperNotice({ noun, href }: { noun: string; href?: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200">
+      <div className="flex items-start gap-3 min-w-0">
+        <span className="mt-0.5 shrink-0"><LockIcon /></span>
+        <div className="min-w-0">
+          <p className="font-semibold">This {noun} comes from Trapper</p>
+          <p className="text-sm opacity-90">It can’t be edited here. Change it in Trapper, then import it again.</p>
+        </div>
+      </div>
+      {href && <a href={href} target="_blank" rel="noreferrer" className={btnOutline}>Open in Trapper</a>}
+    </div>
+  )
+}
+
+/** A text that filters the list under it. */
+function SearchBox({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex items-center gap-2 px-4 h-11 mb-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-zinc-500">
+      <SearchIcon />
+      <input type="search" aria-label={label} placeholder={label} value={value} onChange={(e) => onChange(e.target.value)}
+             className="flex-1 bg-transparent outline-none text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500" />
+    </div>
+  )
+}
+
+/** Whether a search finds an entity: every word of it is somewhere in what the entity says. */
+const matches = (search: string, ...texts: (string | null | undefined)[]) => {
+  const hay = texts.join(' ').toLowerCase()
+  return search.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w))
 }
 
 /** A field of an item of a card list: the first of them names the item — it is required, and no two items have the same. */
 interface ItemField<T> {
   key: keyof T & string; label: string; placeholder?: string; hint?: string
   /** A text (the default), a day, or a text that suggests values — as a research project is picked from a list, but any other can be typed. */
-  kind?: 'text' | 'date' | 'suggest' | 'bool'
+  kind?: 'text' | 'date' | 'suggest' | 'bool' | 'select'
   /** What is wrong with a value, if anything: it is said under the field, and the item cannot be done with until it is put right. */
   validate?: (value: string) => string | null
   suggestions?: string[]
+  /** What a 'select' offers, the first being what a new item starts with. */
+  options?: { value: string; label: string; hint?: string }[]
 }
 
 /** A field of an item as the text it is — nothing when it is left blank. */
@@ -588,15 +836,24 @@ function DateBox({ label, value, onChange }: { label: string; value: string; onC
   )
 }
 
-function ItemDialog<T extends object>({ noun, fields, item, others, onChange, onRemove, onClose, onDone = onClose, doneLabel = 'Done', lockFirst = false }: {
-  noun: string; fields: ItemField<T>[]; item: T; others: T[]; onChange: (patch: Partial<T>) => void; onClose: () => void
+function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isNew, onChange, onRemove, onClose, onDone, doneLabel = 'Save changes', lockFirst = false, badges, readOnly = false, notice, extraRows = [], styled = false, sectionTitle }: {
+  noun: string; backLabel: string; fields: ItemField<T>[]; item: T; others: T[]; isNew: boolean; onChange: (patch: Partial<T>) => void; onClose: () => void
   /** Without it the item cannot be removed from here. */
   onRemove?: () => void
-  /** What Done does, when it is not just closing the window — as when the item is kept as it is done with. */
-  onDone?: () => void
+  onDone: () => void
   doneLabel?: string
   /** What names the item cannot be changed. */
   lockFirst?: boolean
+  badges?: BadgeSpec[]
+  /** One that can only be seen — as what comes from Trapper. */
+  readOnly?: boolean
+  notice?: ReactNode
+  /** Fields under their labels that say whether they are required, and a status picked from cards. */
+  styled?: boolean
+  /** With it the fields are kept in a card of their own under this title, and the status in another. */
+  sectionTitle?: string
+  /** Rows a read-only view says after the fields: what it is that cannot be a field, such as what belongs to it. */
+  extraRows?: { label: string; value: string }[]
 }) {
   const [first] = fields
   const name = textOf(item, first.key).trim()
@@ -605,8 +862,41 @@ function ItemDialog<T extends object>({ noun, fields, item, others, onChange, on
   const invalid = fields.some((f, i) => !!fieldError(f, i))
   const Noun = noun[0].toUpperCase() + noun.slice(1)
   return (
-    <DialogShell label={Noun} title={name || `New ${noun}`} onClose={onClose}>
-      {fields.map((f, i) => (
+    <FormPage
+      region={Noun} backLabel={backLabel} onBack={onClose} title={isNew ? `New ${noun}` : readOnly ? name : `Edit ${name}`} badges={badges} readOnly={readOnly} notice={notice}
+      onCancel={onClose} onSave={onDone} saveLabel={doneLabel} saveDisabled={invalid} onRemove={onRemove} removeLabel={styled ? `Delete ${noun}` : `Remove ${noun}`}
+    >
+      {readOnly ? (
+        <dl className="rounded-xl border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800">
+          {[...fields.filter((f, i) => i > 0 && f.key !== 'status').map((f) => {
+            const v = textOf(item, f.key)
+            return { label: f.label, value: f.kind === 'select' ? (f.options?.find((o) => o.value === v)?.label ?? v) : f.kind === 'bool' ? (v ? 'Yes' : 'No') : v, empty: f.kind === 'bool' ? '' : 'None' }
+          }), ...extraRows.map((x) => ({ ...x, empty: '' }))].map((row) => (
+            <div key={row.label} className="grid grid-cols-[10rem_1fr] gap-4 px-5 py-3 text-sm">
+              <dt className="text-zinc-500 dark:text-zinc-400">{row.label}</dt>
+              <dd className={row.value ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 dark:text-zinc-400'}>{row.value || row.empty}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : styled ? (() => {
+        const change = (f: ItemField<T>, i: number) => (v: string) => onChange({ [f.key]: i === 0 ? v : (v || null) } as Partial<T>)
+        const choice = fields.findIndex((f) => f.kind === 'select')
+        const inputs = fields.map((f, i) => (f.kind === 'select' ? null : (
+          <LabelledField key={f.key} label={f.label} required={i === 0 || !!f.validate} hint={f.hint} error={fieldError(f, i)} htmlFor={`item-${f.key}`}>
+            <input id={`item-${f.key}`} aria-label={f.label} className={fieldBox} value={textOf(item, f.key)} placeholder={f.placeholder} autoComplete="off" disabled={lockFirst && i === 0} onChange={(e) => change(f, i)(e.target.value)} />
+          </LabelledField>
+        )))
+        const status = choice >= 0 && (
+          <StatusChoice options={(fields[choice].options ?? []).map((o) => ({ ...o, hint: o.hint ?? '' }))} value={textOf(item, fields[choice].key) || fields[choice].options?.[0]?.value || ''} onChange={change(fields[choice], choice)} />
+        )
+        const card = 'rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-5 space-y-4'
+        return sectionTitle ? (
+          <>
+            <div className={card}><h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{sectionTitle}</h5>{inputs}</div>
+            {status && <div className={card}>{status}</div>}
+          </>
+        ) : <>{inputs}{status}</>
+      })() : fields.map((f, i) => (
         <div key={f.key}>
           {(() => {
             const change = (v: string) => onChange({ [f.key]: i === 0 ? v : (v || null) } as Partial<T>)
@@ -616,6 +906,7 @@ function ItemDialog<T extends object>({ noun, fields, item, others, onChange, on
                   {f.label}
                 </label>
               )
+              : f.kind === 'select' ? <SelectBox label={f.label} value={textOf(item, f.key) || f.options?.[0]?.value || ''} onChange={change} options={f.options ?? []} />
               : f.kind === 'date' ? <DateBox label={f.label} value={textOf(item, f.key)} onChange={change} />
               : f.kind === 'suggest' ? <SuggestBox label={f.label} value={textOf(item, f.key)} onChange={change} suggestions={f.suggestions ?? []} placeholder={f.placeholder} />
               : <TextBox label={f.label} value={textOf(item, f.key)} placeholder={f.placeholder} error={fieldError(f, i)} onChange={change} disabled={lockFirst && i === 0} />
@@ -623,16 +914,12 @@ function ItemDialog<T extends object>({ noun, fields, item, others, onChange, on
           {f.hint && <p className={`${hintClass} px-1 mt-1`}>{f.hint}</p>}
         </div>
       ))}
-      <div className="flex items-center justify-between pt-3 border-t border-zinc-200 dark:border-zinc-800">
-        {onRemove ? <button type="button" className={btnDanger} onClick={onRemove}>Remove {noun}</button> : <span />}
-        <button type="button" className={btnPrimary} disabled={invalid} onClick={onDone}>{doneLabel}</button>
-      </div>
-    </DialogShell>
+    </FormPage>
   )
 }
 
-/** A list kept in the settings as the Authors of wildintel-publisher are: cards with a + to add one and a gear to edit it. */
-function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, fields, subtitle, empty, icon, fileName }: {
+/** A list kept in the settings: a card for each, with the way to edit it or delete it, and to add one. Adding or editing is a page of its own, kept with Done. */
+function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, fields, subtitle, empty, fileName, badges, onDetail, icon, styled, sectionTitle, plain, dim, meta, readOnly, notice, footnote }: {
   heading: string; noun: string; items: T[]; onChange: (v: T[]) => void
   /** What an item is when it is added, before it is edited. */
   blank: T
@@ -640,18 +927,36 @@ function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, 
   /** What goes under the name on the card. */
   subtitle: (item: T) => string
   empty: string
-  icon: ReactNode
   /** The name of the file the list is exported to, without the extension. */
   fileName: string
+  /** The tile at the left of each card. */
+  icon?: ReactNode | ((item: T) => ReactNode)
+  /** Names written as text, not as code. */
+  plain?: boolean
+  /** Whether an item is no longer in use. */
+  dim?: (item: T) => boolean
+  /** What goes under the subtitle, small. */
+  meta?: (item: T) => string | undefined
+  /** An item that can only be seen: its button says View, it cannot be deleted. */
+  readOnly?: (item: T) => boolean
+  /** What its page says over the fields. */
+  notice?: (item: T) => ReactNode
+  /** A line of explanation under the list. */
+  footnote?: ReactNode
+  /** Its form is the one with the fields under their labels and the status as cards. */
+  styled?: boolean
+  sectionTitle?: string
+  /** What the card says of an item besides its name — its status, say. */
+  badges?: (item: T) => BadgeSpec[]
+  /** Told whether a page of an item is open, which takes the place of the list and of what is over it. */
+  onDetail?: (open: boolean) => void
 }) {
-  const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const editing = editingIndex !== null ? items[editingIndex] ?? null : null
+  // The item being added (index null) or edited, as it is changed: it is kept with Done and dropped with Cancel.
+  const [editing, setEditing] = useState<{ index: number | null; item: T } | null>(null)
   const key = fields[0].key
-
-  function add() {
-    onChange([...items, blank])
-    setEditingIndex(items.length)
-  }
+  const [search, setSearch] = useState('')
+  useEffect(() => { onDetail?.(editing !== null) }, [editing !== null]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onDetail?.(false), []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // What reading a CSV file gave: its items join the list (one with the same name replaces that of the list), and what was left out is said.
   const [imported, setImported] = useState<{ added: number; updated: number; problems: string[] } | null>(null)
@@ -670,20 +975,28 @@ function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, 
     setImported({ added, updated, problems })
   }
 
+  if (editing) {
+    const done = () => {
+      onChange(editing.index === null ? [...items, editing.item] : items.map((it, i) => (i === editing.index ? editing.item : it)))
+      setEditing(null)
+    }
+    return (
+      <ItemForm
+        noun={noun} backLabel={heading} fields={fields} item={editing.item} others={items.filter((_, i) => i !== editing.index)} isNew={editing.index === null}
+        onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))}
+        onRemove={editing.index === null ? undefined : () => { onChange(items.filter((_, i) => i !== editing.index)); setEditing(null) }}
+        onClose={() => setEditing(null)} onDone={done} doneLabel={styled ? (editing.index === null ? 'Add' : 'Save changes') : 'Done'} badges={badges?.(editing.item)} styled={styled} sectionTitle={sectionTitle} readOnly={readOnly?.(editing.item)} notice={notice?.(editing.item)}
+      />
+    )
+  }
+
+  const shown = items.map((item, index) => ({ item, index })).filter(({ item }) => matches(search, textOf(item, key), subtitle(item)))
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-base text-zinc-800 dark:text-zinc-200">{heading}</span>
-        <div className="flex items-center gap-2">
-          <label className={`${btnOutline} cursor-pointer`}>
-            Import CSV
-            <input type="file" accept=".csv,text/csv" className="sr-only" aria-label={`Import ${heading} from a CSV file`}
-                   onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = '' }} />
-          </label>
-          <button type="button" className={btnOutline} disabled={items.length === 0} onClick={() => download(`${fileName}.csv`, itemsToCsv(items, fields))}>Export CSV</button>
-          <button type="button" className={`${iconBtn} text-xl`} aria-label={`Add ${noun}`} title={`Add ${noun}`} onClick={add}>+</button>
-        </div>
-      </div>
+      <EntityHeader
+        heading={heading} count={items.length} noun={noun} onFile={(f) => void importFile(f)} exportDisabled={items.length === 0}
+        onExport={() => download(`${fileName}.csv`, itemsToCsv(items, fields))} onAdd={() => setEditing({ index: null, item: blank })}
+      />
       {imported && (
         <div role="status" className="mb-3 text-sm">
           <p className="text-emerald-700 dark:text-emerald-400">
@@ -692,23 +1005,37 @@ function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, 
           {imported.problems.length > 0 && <ul className="list-disc pl-5 text-amber-700 dark:text-amber-400">{imported.problems.map((p) => <li key={p}>{p}</li>)}</ul>}
         </div>
       )}
+      <SearchBox label={`Search ${heading.toLowerCase()}`} value={search} onChange={setSearch} />
       <div className="space-y-3">
         {items.length === 0 && <p className={hintClass}>{empty}</p>}
-        {items.map((item, i) => (
-          <ItemCard key={i} icon={icon} title={textOf(item, key)} subtitle={subtitle(item)} editLabel={`Edit ${textOf(item, key)}`} onEdit={() => setEditingIndex(i)} />
+        {items.length > 0 && shown.length === 0 && <p className={hintClass}>Nothing matches “{search}”.</p>}
+        {shown.map(({ item, index }) => (
+          <ItemCard
+            key={index} icon={typeof icon === 'function' ? icon(item) : icon} plain={plain} dim={dim?.(item)} title={textOf(item, key)} badges={badges?.(item)} subtitle={subtitle(item)} meta={meta?.(item)} readOnly={readOnly?.(item)} editLabel={`Edit ${textOf(item, key)}`} onEdit={() => setEditing({ index, item })}
+            onDelete={readOnly?.(item) ? undefined : () => onChange(items.filter((_, i) => i !== index))} deleteLabel={`Delete ${textOf(item, key)}`}
+          />
         ))}
       </div>
-      {editing && editingIndex !== null && (
-        <ItemDialog
-          noun={noun} fields={fields} item={editing} others={items.filter((_, i) => i !== editingIndex)}
-          onChange={(patch) => onChange(items.map((it, i) => (i === editingIndex ? { ...it, ...patch } : it)))}
-          onRemove={() => { onChange(items.filter((_, i) => i !== editingIndex)); setEditingIndex(null) }}
-          onClose={() => setEditingIndex(null)}
-        />
-      )}
+      {footnote && <p className={`${hintClass} mt-4 max-w-prose`}>{footnote}</p>}
     </div>
   )
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Active', inactive: 'Inactive', retired: 'Retired', stolen: 'Stolen', lost: 'Lost', broken: 'Broken', planned: 'Planned', finished: 'Finished',
+}
+const STATUS_HINTS: Record<string, string> = {
+  active: 'In use.', inactive: 'Not going to the field.', retired: 'No longer used.', stolen: 'Taken away.', lost: 'Can not be found.', broken: 'Does not work.', planned: 'Not started yet.', finished: 'No more fieldwork.',
+}
+const statusOptions = (...values: string[]) => values.map((value) => ({ value, label: STATUS_LABELS[value], hint: STATUS_HINTS[value] }))
+/** The status of an item, then — for what can stop being used — the day it did and why. */
+const statusFields = <T extends object>(values: string[], withDetails: boolean, hints: Record<string, string> = {}): ItemField<T>[] => [
+  { key: 'status' as keyof T & string, label: 'Status', kind: 'select', options: statusOptions(...values).map((o) => ({ ...o, hint: hints[o.value] ?? o.hint })), hint: 'Only an active one is offered when a visit is registered.' },
+  ...(withDetails ? [
+    { key: 'status_date' as keyof T & string, label: 'Status since', kind: 'date' as const, hint: 'The day it stopped being active.' },
+    { key: 'status_note' as keyof T & string, label: 'Status note', placeholder: 'e.g. stolen in the visit R0004' },
+  ] : []),
+]
 
 const numberRange = (min: number, max: number) => (v: string) => (v === '' || (Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max) ? null : `A number from ${min} to ${max}.`)
 
@@ -721,54 +1048,36 @@ const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
   { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty (m)', placeholder: 'e.g. 100', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
   { key: 'timezone', label: 'Timezone (IANA)', placeholder: 'e.g. Europe/Madrid', hint: "The location's own — every deployment there is read in it.", validate: (v) => (v === '' || isValidTimezone(v) ? null : 'Not a known IANA timezone (e.g. Europe/Madrid).') },
   { key: 'ignore_dst', label: 'Its cameras ignore summer time (DST)', kind: 'bool' },
+  ...statusFields<LocationDraft>(['active', 'retired', 'planned'], true),
 ]
 
 /** What a research project is when it is added by hand, or read from a CSV file: its acronym and name, and the fields free text. */
-interface ProjectDraft { acronym: string; name: string | null; description: string | null; keywords: string | null }
-const BLANK_PROJECT: ProjectDraft = { acronym: '', name: null, description: null, keywords: null }
+interface ProjectDraft { acronym: string; name: string | null; description: string | null; keywords: string | null; status: string | null }
+const BLANK_PROJECT: ProjectDraft = { acronym: '', name: null, description: null, keywords: null, status: 'active' }
 const PROJECT_FIELDS: ItemField<ProjectDraft>[] = [
   { key: 'acronym', label: 'Acronym', placeholder: 'e.g. DONA', hint: 'From 3 to 10 letters, digits, _, . or -; it names the research project’s folder.',
     validate: (v) => (/^[0-9A-Za-z][0-9A-Za-z_.-]{2,9}$/.test(v) ? null : 'From 3 to 10 letters, digits, _, . or -.') },
   { key: 'name', label: 'Name', validate: (v) => (v ? null : 'A name is required.') },
   { key: 'description', label: 'Description' },
   { key: 'keywords', label: 'Keywords' },
+  ...statusFields<ProjectDraft>(['active', 'planned', 'finished'], false),
 ]
 
 const locationDraft = (l: LocalLocation): LocationDraft => ({
   location_id: l.location_id, name: l.name, latitude: text(l.latitude), longitude: text(l.longitude),
   coordinate_uncertainty: text(l.coordinate_uncertainty), timezone: l.timezone, ignore_dst: l.ignore_dst ? 'yes' : null,
+  status: l.status ?? 'active', status_date: l.status_date ?? null, status_note: l.status_note ?? null,
 })
-const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: null, ignore_dst: null }
+const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: null, ignore_dst: null, status: 'active', status_date: null, status_note: null }
 const numberOrNull = (t: string | null) => (t === null ? null : Number(t))
 /** The fields of a location as they are kept — the numbers as numbers. */
 const locationFields = (d: LocationDraft) => ({
   name: d.name, latitude: numberOrNull(d.latitude), longitude: numberOrNull(d.longitude), coordinate_uncertainty: numberOrNull(d.coordinate_uncertainty),
   timezone: d.timezone, ignore_dst: d.ignore_dst ? true : null,
+  status: (d.status ?? 'active') as LocationStatus, status_date: d.status_date, status_note: d.status_note,
 })
 
 const NOT_ASSIGNED = '__none__'
-
-/** The line over a list that is kept as it is changed: its name, and to import from a CSV file, export to one, import from Trapper, or add. */
-function ListHeader({ heading, noun, onFile, onExport, exportDisabled, onTrapper, onAdd, addDisabled }: {
-  heading: string; noun: string; onFile: (file: File | undefined) => void; onExport: () => void; exportDisabled: boolean
-  onTrapper: () => void; onAdd: () => void; addDisabled?: boolean
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-      <span className="text-base text-zinc-800 dark:text-zinc-200">{heading}</span>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className={`${btnOutline} cursor-pointer`}>
-          Import CSV
-          <input type="file" accept=".csv,text/csv" className="sr-only" aria-label={`Import ${heading} from a CSV file`} disabled={addDisabled}
-                 onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = '' }} />
-        </label>
-        <button type="button" className={btnOutline} onClick={onTrapper} disabled={addDisabled}>Import from Trapper</button>
-        <button type="button" className={btnOutline} disabled={exportDisabled} onClick={onExport}>Export CSV</button>
-        <button type="button" className={`${iconBtn} text-xl`} aria-label={`Add ${noun}`} title={`Add ${noun}`} onClick={onAdd} disabled={addDisabled}>+</button>
-      </div>
-    </div>
-  )
-}
 
 /** What importing gave — and what was left out. */
 function ImportResult({ message, problems }: { message: string; problems: string[] }) {
@@ -834,19 +1143,56 @@ function TrapperPanel<T>({ noun, load, keyOf, labelOf, onAdd, onClose }: {
 }
 
 /** The research projects of the collections folder: listed, added by hand, read from a CSV file or taken from Trapper. They are kept as they are added. */
-function ProjectsTab({ projects, onChanged }: { projects: LocalResearchProject[]; onChanged: () => void }) {
+function ProjectsTab({ projects, onChanged, onDetail, owned }: {
+  projects: LocalResearchProject[]; onChanged: () => void; onDetail?: (open: boolean) => void
+  /** How many cameras and SD cards each research project has. */
+  owned?: (acronym: string) => { cameras: number; sdCards: number }
+}) {
   const [adding, setAdding] = useState<ProjectDraft | null>(null)
+  // The one being edited, and the one about to be deleted (it is asked first: its locations and visits go with it).
+  const [editing, setEditing] = useState<ProjectDraft | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [trapper, setTrapper] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ message: string; problems: string[] } | null>(null)
+  const [search, setSearch] = useState('')
+  // For a project taken from Trapper, which can only be seen: where Trapper is, and how many locations it has.
+  const [seen, setSeen] = useState<{ base: string | null; locations: number | null }>({ base: null, locations: null })
+  const viewing = editing ? projects.find((p) => p.acronym === editing.acronym && p.trapper_pk != null) : undefined
+  useEffect(() => {
+    if (!viewing) return
+    setSeen({ base: null, locations: null })
+    Promise.resolve().then(() => api.getSettings()).then((s) => setSeen((x) => ({ ...x, base: s?.TRAPPER?.base_url ?? null }))).catch(() => {})
+    Promise.resolve().then(() => api.listLocalLocations(viewing.acronym)).then(({ results }) => setSeen((x) => ({ ...x, locations: results.length }))).catch(() => {})
+  }, [viewing?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
+  const formOpen = adding !== null || editing !== null
+  useEffect(() => { onDetail?.(formOpen) }, [formOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onDetail?.(false), []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const keep = (p: ProjectDraft, trapperPk: number | null = null) =>
-    api.saveResearchProject({ ...EMPTY_RESEARCH_PROJECT, acronym: p.acronym.trim(), name: (p.name ?? '').trim(), description: p.description ?? '', keywords: p.keywords ?? '', trapper_pk: trapperPk })
+    api.saveResearchProject({ ...EMPTY_RESEARCH_PROJECT, acronym: p.acronym.trim(), name: (p.name ?? '').trim(), description: p.description ?? '', keywords: p.keywords ?? '', status: (p.status ?? 'active') as ResearchProjectStatus, trapper_pk: trapperPk })
 
   async function addByHand() {
     if (!adding) return
     setError(null)
     try { await keep(adding); setAdding(null); onChanged() } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the research project.') }
+  }
+
+  async function saveEdit() {
+    if (!editing) return
+    setError(null)
+    try {
+      await api.updateResearchProject(editing.acronym, {
+        name: (editing.name ?? '').trim(), description: editing.description ?? '', keywords: editing.keywords ?? '', status: (editing.status ?? 'active') as ResearchProjectStatus,
+      })
+      setEditing(null); onChanged()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the research project.') }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return
+    setError(null)
+    try { await api.deleteResearchProject(deleting); setDeleting(null); onChanged() } catch (e) { setDeleting(null); setError(e instanceof Error ? e.message : 'Could not delete the research project.') }
   }
 
   async function importFile(file: File | undefined) {
@@ -865,15 +1211,47 @@ function ProjectsTab({ projects, onChanged }: { projects: LocalResearchProject[]
     if (added) onChanged()
   }
 
+  const editingProject = editing ? projects.find((p) => p.acronym === editing.acronym) : undefined
+  if (adding || editing) {
+    return (
+      <div className="space-y-3">
+        {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {adding ? (
+          <ProjectForm
+            item={adding} others={projects.map((p) => p.acronym)} isNew doneLabel="Add"
+            onChange={(patch) => setAdding((a) => (a ? { ...a, ...patch } : a))} onClose={() => { setAdding(null); setError(null) }} onDone={() => void addByHand()}
+          />
+        ) : editing && editingProject?.trapper_pk == null ? (
+          <ProjectForm
+            item={editing} others={[]} isNew={false} doneLabel="Save changes"
+            onChange={(patch) => setEditing((e) => (e ? { ...e, ...patch } : e))} onClose={() => { setEditing(null); setError(null) }} onDone={() => void saveEdit()}
+            onRemove={() => { setDeleting(editing.acronym); setEditing(null) }}
+          />
+        ) : editing && (
+          <ItemForm<ProjectDraft>
+            noun="research project" backLabel="Research projects" fields={PROJECT_FIELDS} item={editing} others={[]} isNew={false} lockFirst
+            badges={[statusBadge(editing.status), originBadge(editingProject?.trapper_pk)]} readOnly={editingProject?.trapper_pk != null}
+            notice={editingProject?.trapper_pk != null ? <TrapperNotice noun="project" href={seen.base ? `${seen.base.replace(/\/+$/, '')}/research/project/detail/${editingProject.trapper_pk}/` : undefined} /> : undefined}
+            extraRows={editingProject?.trapper_pk != null ? [{ label: 'Belongs to it', value: [seen.locations != null && `${seen.locations} location${seen.locations === 1 ? '' : 's'}`, owned && `${owned(editingProject.acronym).cameras} cameras`, owned && `${owned(editingProject.acronym).sdCards} SD cards`].filter(Boolean).join(' · ') }] : []}
+            onChange={(patch) => setEditing((e) => (e ? { ...e, ...patch } : e))} onClose={() => { setEditing(null); setError(null) }} onDone={() => void saveEdit()} doneLabel="Save"
+            onRemove={() => { setDeleting(editing.acronym); setEditing(null) }}
+          />
+        )}
+      </div>
+    )
+  }
+
+  const shown = projects.filter((p) => matches(search, p.acronym, p.name))
   return (
     <div>
-      <ListHeader
-        heading="Research projects" noun="research project" onFile={(f) => void importFile(f)} exportDisabled={projects.length === 0} onTrapper={() => setTrapper(true)}
-        onExport={() => download('research_projects.csv', itemsToCsv(projects.map((p) => ({ acronym: p.acronym, name: p.name, description: p.description, keywords: p.keywords })), PROJECT_FIELDS))}
+      <EntityHeader
+        heading="Research projects" count={projects.length} noun="research project" onFile={(f) => void importFile(f)} exportDisabled={projects.length === 0} onTrapper={() => setTrapper(true)}
+        onExport={() => download('research_projects.csv', itemsToCsv(projects.map((p) => ({ acronym: p.acronym, name: p.name, description: p.description, keywords: p.keywords, status: p.status ?? 'active' })), PROJECT_FIELDS))}
         onAdd={() => setAdding({ ...BLANK_PROJECT })}
       />
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {result && <ImportResult message={result.message} problems={result.problems} />}
+      <SearchBox label="Search research projects" value={search} onChange={setSearch} />
       {trapper && (
         <TrapperPanel<ResearchProject>
           noun="research project" onClose={() => setTrapper(false)} keyOf={(p) => String(p.pk)} labelOf={(p) => (p.acronym ? `${p.acronym} — ${p.name}` : p.name)}
@@ -895,32 +1273,37 @@ function ProjectsTab({ projects, onChanged }: { projects: LocalResearchProject[]
       )}
       <div className="space-y-3">
         {projects.length === 0 && <p className={hintClass}>No research project yet — add the first one, or take them from Trapper.</p>}
-        {projects.map((p) => (
-          <div key={p.acronym} className="flex items-center gap-4 px-4 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800">
-            <div className="flex-1 min-w-0">
-              <p className="text-base truncate">{p.acronym}</p>
-              <p className={`${hintClass} truncate`}>{[p.name, p.trapper_pk != null && 'from Trapper'].filter(Boolean).join(' · ')}</p>
-            </div>
-          </div>
+        {projects.length > 0 && shown.length === 0 && <p className={hintClass}>Nothing matches “{search}”.</p>}
+        {shown.map((p) => (
+          <ItemCard key={p.acronym} icon={<ReportIcon />} title={p.acronym} badges={[statusBadge(p.status), originBadge(p.trapper_pk)]} subtitle={p.name} readOnly={p.trapper_pk != null}
+                    editLabel={`Edit ${p.acronym}`} onEdit={() => setEditing({ acronym: p.acronym, name: p.name, description: p.description || null, keywords: p.keywords || null, status: p.status ?? 'active' })} />
         ))}
       </div>
-      {adding && (
-        <ItemDialog<ProjectDraft>
-          noun="research project" fields={PROJECT_FIELDS} item={adding} others={projects.map((p) => ({ ...BLANK_PROJECT, acronym: p.acronym }))}
-          onChange={(patch) => setAdding((a) => (a ? { ...a, ...patch } : a))} onClose={() => setAdding(null)} onDone={() => void addByHand()} doneLabel="Add"
-        />
+      {deleting && (
+        <DialogShell label="Delete research project" title={`Delete ${deleting}?`} onClose={() => setDeleting(null)}>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            Its locations and its visits are deleted with it. A research project that still holds collections, deployments or images is not deleted — they have to go first.
+          </p>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <button type="button" className={btnOutline} onClick={() => setDeleting(null)}>Cancel</button>
+            <button type="button" className={btnDanger} onClick={() => void confirmDelete()}>Delete {deleting}</button>
+          </div>
+        </DialogShell>
       )}
     </div>
   )
 }
 
 /** The locations of one research project, kept in its folder of the collections folder: listed, added, edited, read from a CSV file or taken from Trapper. */
-function LocationsTab({ project }: { project: LocalResearchProject }) {
+function LocationsTab({ project, onDetail }: { project: LocalResearchProject; onDetail?: (open: boolean) => void }) {
   const [locations, setLocations] = useState<LocalLocation[]>([])
   const [editing, setEditing] = useState<{ item: LocationDraft; isNew: boolean } | null>(null)
   const [trapper, setTrapper] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ message: string; problems: string[] } | null>(null)
+  const [search, setSearch] = useState('')
+  useEffect(() => { onDetail?.(editing !== null) }, [editing !== null]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onDetail?.(false), []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = () => { Promise.resolve().then(() => api.listLocalLocations(project.acronym)).then(({ results }) => setLocations(results)).catch((e) => setError(e instanceof Error ? e.message : 'Could not read the locations.')) }
   useEffect(() => { setLocations([]); setError(null); setResult(null); setTrapper(false); load() }, [project.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -955,15 +1338,32 @@ function LocationsTab({ project }: { project: LocalResearchProject }) {
 
   const subtitle = (l: LocationDraft) => [l.name, l.latitude && l.longitude && `${l.latitude}, ${l.longitude}`, l.timezone].filter(Boolean).join(' · ') || 'No details'
 
+  if (editing) {
+    const stored = editing.isNew ? undefined : locations.find((l) => l.location_id === editing.item.location_id)
+    return (
+      <div className="space-y-3">
+        {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        <ItemForm<LocationDraft>
+          noun="location" backLabel={`Locations of ${project.acronym}`} fields={LOCATION_FIELDS} item={editing.item} others={editing.isNew ? locations.map(locationDraft) : []} isNew={editing.isNew} lockFirst={!editing.isNew}
+          badges={editing.isNew ? undefined : [statusBadge(editing.item.status, editing.item.status_date, editing.item.status_note), originBadge(stored?.trapper_pk)]} readOnly={stored?.trapper_pk != null}
+          notice={stored?.trapper_pk != null ? <TrapperNotice noun="location" /> : undefined}
+          onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))} onClose={() => { setEditing(null); setError(null) }} onDone={() => void done()} doneLabel={editing.isNew ? 'Add' : 'Save'}
+        />
+      </div>
+    )
+  }
+
+  const shown = locations.filter((l) => matches(search, l.location_id, subtitle(locationDraft(l))))
   return (
     <div>
-      <ListHeader
-        heading={`Locations of ${project.acronym}`} noun="location" onFile={(f) => void importFile(f)} exportDisabled={locations.length === 0} onTrapper={() => setTrapper(true)}
+      <EntityHeader
+        heading={`Locations of ${project.acronym}`} count={locations.length} noun="location" onFile={(f) => void importFile(f)} exportDisabled={locations.length === 0} onTrapper={() => setTrapper(true)}
         onExport={() => download(`${project.acronym}_locations.csv`, itemsToCsv(locations.map(locationDraft), LOCATION_FIELDS))}
         onAdd={() => setEditing({ item: { ...BLANK_LOCATION }, isNew: true })}
       />
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {result && <ImportResult message={result.message} problems={result.problems} />}
+      <SearchBox label="Search locations" value={search} onChange={setSearch} />
       {trapper && (
         <TrapperPanel<Location>
           noun="location" onClose={() => setTrapper(false)} keyOf={(l) => String(l.pk)} labelOf={(l) => `${l.location_id}${l.name ? ` — ${l.name}` : ''}`}
@@ -989,19 +1389,20 @@ function LocationsTab({ project }: { project: LocalResearchProject }) {
       )}
       <div className="space-y-3">
         {locations.length === 0 && <p className={hintClass}>{project.acronym} has no locations yet.</p>}
-        {locations.map((l) => (
-          <ItemCard key={l.location_id} icon={<PinIcon />} title={l.location_id} subtitle={subtitle(locationDraft(l))} editLabel={`Edit ${l.location_id}`}
+        {locations.length > 0 && shown.length === 0 && <p className={hintClass}>Nothing matches “{search}”.</p>}
+        {shown.map((l) => (
+          <ItemCard key={l.location_id} icon={<PinIcon />} title={l.location_id} badges={[statusBadge(l.status, l.status_date, l.status_note), originBadge(l.trapper_pk)]} subtitle={subtitle(locationDraft(l))} readOnly={l.trapper_pk != null} editLabel={`Edit ${l.location_id}`}
                     onEdit={() => setEditing({ item: locationDraft(l), isNew: false })} />
         ))}
       </div>
-      {editing && (
-        <ItemDialog<LocationDraft>
-          noun="location" fields={LOCATION_FIELDS} item={editing.item} others={editing.isNew ? locations.map(locationDraft) : []} lockFirst={!editing.isNew}
-          onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))} onClose={() => setEditing(null)} onDone={() => void done()} doneLabel={editing.isNew ? 'Add' : 'Save'}
-        />
-      )}
     </div>
   )
+}
+
+/** The letters in the tile of a person: the first of the first and of the last name. */
+const initialsOf = (name: string) => {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  return (words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? '?').slice(0, 2)).toUpperCase()
 }
 
 /** Research projects, trappers, locations, cameras and SD cards: a settings screen of their own. The trappers are the project's own people
@@ -1013,12 +1414,39 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
   initialProject?: string
 }) {
   const [tab, setTab] = useState<EntityTab>(initialTab)
+  // A form open in place of a list takes the place of what is over it too.
+  const [detail, setDetail] = useState(false)
+  // How many visits each trapper went on, over all the research projects — read when the trappers are shown.
+  const [visitCounts, setVisitCounts] = useState<Record<string, number> | null>(null)
   const [projects, setProjects] = useState<LocalResearchProject[]>([])
   const [projectId, setProjectId] = useState(initialProject ?? '')
-  const loadProjects = () => { Promise.resolve().then(() => api.listResearchProjects()).then(({ results }) => setProjects(results)).catch(() => {}) }
+  // Opened on no research project in particular, the default one of the general settings is the one shown.
+  const defaultApplied = useRef(false)
+  const loadProjects = () => {
+    Promise.resolve().then(() => api.listResearchProjects()).then(async ({ results }) => {
+      setProjects(results)
+      if (initialProject || defaultApplied.current) return
+      defaultApplied.current = true
+      const wanted = await defaultResearchProject()
+      const found = results.find((p) => p.acronym.toLowerCase() === wanted.toLowerCase())
+      if (wanted && found) setProjectId((current) => current || found.acronym)
+    }).catch(() => {})
+  }
   useEffect(loadProjects, [])
 
   const project = projects.find((p) => p.acronym === projectId)
+  useEffect(() => {
+    if (tab !== 'trappers' || detail) return
+    let cancelled = false
+    Promise.all(projects.map((p) => Promise.resolve().then(() => api.listVisits(p.acronym)).then((r) => r.results).catch(() => [])))
+      .then((all) => {
+        if (cancelled) return
+        const counts: Record<string, number> = {}
+        for (const v of all.flat()) for (const n of (v.trappers ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)) counts[n] = (counts[n] ?? 0) + 1
+        setVisitCounts(counts)
+      })
+    return () => { cancelled = true }
+  }, [tab, detail, projects])
   const tabs: { id: EntityTab; label: string }[] = [
     { id: 'projects', label: 'Research projects' }, { id: 'trappers', label: 'Trappers' }, { id: 'locations', label: 'Locations' },
     { id: 'cameras', label: 'Cameras' }, { id: 'sdcards', label: 'SD cards' },
@@ -1028,19 +1456,19 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
 
   return (
     <div className="py-5 space-y-5">
-      <p className={`${hintClass} leading-relaxed max-w-prose`}>
+      {!detail && <p className={`${hintClass} leading-relaxed max-w-prose`}>
         The research projects, the people who go to the field, and what belongs to each project: its locations, its cameras and its SD cards.
-      </p>
-      <div role="tablist" aria-label="Entities" className="flex flex-wrap gap-2">
+      </p>}
+      {!detail && <div role="tablist" aria-label="Entities" className="flex flex-wrap gap-2">
         {tabs.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
                   className={`px-4 py-2 rounded-xl text-sm transition-colors ${tab === t.id ? 'bg-blue-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}>
             {t.label}
           </button>
         ))}
-      </div>
+      </div>}
 
-      {(tab === 'locations' || tab === 'cameras' || tab === 'sdcards') && (
+      {!detail && (tab === 'locations' || tab === 'cameras' || tab === 'sdcards') && (
         <div className="max-w-md">
           <label className={`${hintClass} block mb-1`} htmlFor="entities-project">Research project</label>
           <Combobox
@@ -1051,28 +1479,37 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
         </div>
       )}
 
-      {tab === 'projects' && <ProjectsTab projects={projects} onChanged={loadProjects} />}
+      {tab === 'projects' && <ProjectsTab projects={projects} onChanged={loadProjects} onDetail={setDetail}
+        owned={(a) => ({ cameras: cameras.filter((c) => (c.research_project ?? '').toLowerCase() === a.toLowerCase()).length, sdCards: sdCards.filter((c) => (c.research_project ?? '').toLowerCase() === a.toLowerCase()).length })} />}
 
       {tab === 'trappers' && (
         <>
           <p className={`${hintClass} leading-relaxed max-w-prose`}>The people who go to the field — one can be in several research projects. When a visit is registered, they are the ones to pick as who went.</p>
           <ItemsEditor<Trapper>
-            heading="Trappers" noun="trapper" fileName="trappers" icon={<UserIcon />} items={trappers} onChange={onTrappers}
-            blank={{ name: 'New trapper', affiliation: null }} subtitle={(t) => t.affiliation || 'No affiliation'}
+            heading="Trappers" noun="trapper" fileName="trappers" styled sectionTitle="Who is it?" plain onDetail={setDetail} items={trappers} onChange={onTrappers}
+            icon={(t) => initialsOf(t.name)} dim={(t) => t.status === 'inactive'} readOnly={(t) => t.trapper_pk != null}
+            notice={(t) => (t.trapper_pk != null ? <TrapperNotice noun="trapper" /> : undefined)}
+            blank={{ name: 'New trapper', affiliation: null, status: 'active' }}
+            badges={(t) => [...(t.status === 'inactive' ? [statusBadge(t.status)] : []), ...(t.trapper_pk != null ? [originBadge(t.trapper_pk)] : [])]}
+            subtitle={(t) => t.affiliation || ''}
+            meta={(t) => (visitCounts ? ((n) => (n ? `${n} visit${n === 1 ? '' : 's'}` : 'No visits yet'))(visitCounts[t.name.trim().toLowerCase()] ?? 0) : undefined)}
+            footnote="Trappers that come from Trapper are read-only here. Change them in Trapper and import them again. If someone no longer goes to the field, mark them as inactive instead of deleting them."
             empty="No trapper yet — a visit will have none to pick as who went."
-            fields={[{ key: 'name', label: 'Name' }, { key: 'affiliation', label: 'Affiliation', placeholder: 'e.g. University of Huelva', hint: 'Where the trapper works — free text.' }]}
+            fields={[{ key: 'name', label: 'Full name' }, { key: 'affiliation', label: 'Affiliation', placeholder: 'e.g. University of Huelva', hint: 'Where the trapper works. Free text.' },
+              ...statusFields<Trapper>(['active', 'inactive'], false, { active: 'Offered when a visit is registered.', inactive: 'Not offered when a visit is registered. Past visits keep their name.' })]}
           />
         </>
       )}
 
-      {tab === 'locations' && (project ? <LocationsTab project={project} /> : <p className={hintClass}>Pick a research project to see its locations.</p>)}
+      {tab === 'locations' && (project ? <LocationsTab project={project} onDetail={setDetail} /> : <p className={hintClass}>Pick a research project to see its locations.</p>)}
 
       {tab === 'sdcards' && (!projectId ? <p className={hintClass}>Pick a research project to see its SD cards.</p> : (
         <ItemsEditor<SdCard>
-          heading={`SD cards${owner ? ` of ${owner}` : ' of no project'}`} noun="SD card" fileName={`${owner ?? 'unassigned'}_sd_cards`} icon={<SdCardIcon />}
+          heading={`SD cards${owner ? ` of ${owner}` : ' of no project'}`} noun="SD card" fileName={`${owner ?? 'unassigned'}_sd_cards`} icon={<SdCardIcon />} onDetail={setDetail}
           items={sdCards.filter((c) => belongs(c.research_project))}
           onChange={(v) => onSdCards([...sdCards.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
-          blank={{ label: 'New SD card', brand: null, capacity: null, in_service: null, research_project: owner }}
+          blank={{ label: 'New SD card', brand: null, capacity: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
+          badges={(c) => [statusBadge(c.status, c.status_date, c.status_note)]}
           subtitle={(c) => [c.brand, c.capacity, c.in_service && `in production since ${c.in_service}`].filter(Boolean).join(' · ') || 'No details'}
           empty="No SD card yet."
           fields={[
@@ -1080,6 +1517,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
             { key: 'brand', label: 'Brand', kind: 'suggest', suggestions: SD_CARD_BRANDS, placeholder: 'Pick a make, or type any', hint: 'Who makes it — the usual ones are suggested, but any other can be typed.' },
             { key: 'capacity', label: 'Capacity', placeholder: 'e.g. 64 GB' },
             { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the card was put into production.' },
+            ...statusFields<SdCard>(['active', 'retired', 'lost', 'broken'], true),
           ]}
         />
       ))}
@@ -1088,14 +1526,16 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
         <>
           <p className={`${hintClass} leading-relaxed max-w-prose`}>The camera traps, named as Camtrap DP names them. The camera id — its serial number — names each one, so no two of a project have the same.</p>
           <ItemsEditor<Camera>
-            heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />}
+            heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />} onDetail={setDetail}
             items={cameras.filter((c) => belongs(c.research_project))}
             onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
-            blank={{ camera_id: 'New camera', camera_model: null, in_service: null, research_project: owner }}
+            blank={{ camera_id: 'New camera', camera_model: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
+            badges={(c) => [statusBadge(c.status, c.status_date, c.status_note)]}
             subtitle={(c) => [c.camera_model, c.in_service && `in production since ${c.in_service}`].filter(Boolean).join(' · ') || 'No details'}
             empty="No camera yet."
             fields={[{ key: 'camera_id', label: 'Camera id', placeholder: 'e.g. P800HG08192031', hint: "The camera's serial number." }, { key: 'camera_model', label: 'Camera model', placeholder: 'e.g. Reconyx-PC800', hint: 'Manufacturer and model, written as manufacturer-model.' },
-              { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the camera was put into production.' }]}
+              { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the camera was put into production.' },
+              ...statusFields<Camera>(['active', 'retired', 'stolen', 'lost', 'broken'], true)]}
           />
         </>
       ))}
@@ -1317,6 +1757,12 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
   const [conn, setConn] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; message?: string }>({ kind: 'idle' })
   const [epiConn, setEpiConn] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; message?: string }>({ kind: 'idle' })
   const [browsing, setBrowsing] = useState(false)
+  // The research projects the default one is picked from.
+  const [projectChoices, setProjectChoices] = useState<LocalResearchProject[]>([])
+  useEffect(() => {
+    if (section !== 'general') return
+    Promise.resolve().then(() => api.listResearchProjects()).then(({ results }) => setProjectChoices(results)).catch(() => {})
+  }, [section])
 
   // Also called after switching config, which discards whatever wasn't saved.
   function reloadSettings() {
@@ -1512,6 +1958,17 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
                 </Row>
               )
             })}
+            <Row
+              label="Default research project"
+              description="The research project that comes filled in wherever one is asked for — when a visit is registered, a deployment imported, dates fixed… It can still be changed there."
+            >
+              <label className="sr-only" htmlFor="default-research-project">Default research project</label>
+              <Combobox
+                id="default-research-project" value={draft.defaultResearchProject} onChange={(v) => set('defaultResearchProject', v)}
+                options={projectChoices.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))}
+                placeholder={projectChoices.length === 0 ? 'No research projects yet' : 'None — pick one each time'} clearLabel="Clear the default research project"
+              />
+            </Row>
             <Row
               label="Parallel work"
               description="How many images are validated or preprocessed at once. More workers use more CPUs and finish sooner, up to what the machine has."

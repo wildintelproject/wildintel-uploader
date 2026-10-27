@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TimeFixPage, { offsetText, secondsBetween } from './TimeFixPage'
 import { api } from '../api'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
-import type { Timeline } from '../types'
+import type { ClosedVisit, Timeline } from '../types'
 
 vi.mock('../api', () => ({
   api: { listResearchProjects: vi.fn(), closedVisits: vi.fn(), browseFolder: vi.fn(), timefixTimeline: vi.fn(), timefixShift: vi.fn(), timefixRemove: vi.fn() },

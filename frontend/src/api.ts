@@ -140,6 +140,14 @@ export const api = {
   saveResearchProject: (project: LocalResearchProject) =>
     post<LocalResearchProject>('/api/deployment-import/research-projects/save', project),
 
+  // Changes a kept research project: the fields given are the ones that change (its acronym names it, and can't).
+  updateResearchProject: (acronym: string, changes: Partial<Omit<LocalResearchProject, 'acronym' | 'trapper_pk'>>) =>
+    post<LocalResearchProject>('/api/deployment-import/research-projects/update', { acronym, ...changes }),
+
+  // Deletes a research project with its locations and visits; refused when it holds collections.
+  deleteResearchProject: (acronym: string) =>
+    post<{ deleted: string }>('/api/deployment-import/research-projects/delete', { research_project_id: acronym }),
+
   listLocalLocations: (researchProjectId: string) =>
     post<{ results: LocalLocation[] }>('/api/deployment-import/locations/list', { research_project_id: researchProjectId }),
 
@@ -188,7 +196,7 @@ export const api = {
     post<LocalLocation>('/api/deployment-import/locations/save', { research_project_id: researchProjectId, location }),
 
   // Changes a kept location: the fields given are the ones that change (null clears one).
-  updateLocalLocation: (researchProjectId: string, locationId: string, changes: Partial<Pick<LocalLocation, 'name' | 'latitude' | 'longitude' | 'coordinate_uncertainty' | 'timezone' | 'ignore_dst'>>) =>
+  updateLocalLocation: (researchProjectId: string, locationId: string, changes: Partial<Pick<LocalLocation, 'name' | 'latitude' | 'longitude' | 'coordinate_uncertainty' | 'timezone' | 'ignore_dst' | 'status' | 'status_date' | 'status_note'>>) =>
     post<LocalLocation>('/api/deployment-import/locations/update', { research_project_id: researchProjectId, location_id: locationId, ...changes }),
 
   collectionPath: (researchProjectId: string, deploymentId: string) =>

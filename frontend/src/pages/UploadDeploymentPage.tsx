@@ -2,6 +2,7 @@ import BackButton from '../components/BackButton'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
+import { defaultResearchProject } from '../defaultResearchProject'
 import Combobox from '../components/Combobox'
 import { FilesReady, PreparingFiles, btnPrimary as primaryButton, formatBytes } from '../components/PrepareFiles'
 import type { PrepareItem } from '../components/PrepareFiles'
@@ -121,7 +122,14 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
 
   useEffect(() => {
     if (initial) chooseProject(initial.researchProjectId, initial.collection)
-    api.listResearchProjects().then(({ results }) => setProjects(results)).catch((e) => setLoadError(e instanceof Error ? e.message : 'Could not read the collections folder.'))
+    api.listResearchProjects().then(async ({ results }) => {
+      setProjects(results)
+      // Opened with no research project: the default of the general settings comes filled in.
+      if (initial) return
+      const wanted = await defaultResearchProject()
+      const found = results.find((p) => p.acronym.toLowerCase() === wanted.toLowerCase())
+      if (wanted && found) chooseProject(found.acronym)
+    }).catch((e) => setLoadError(e instanceof Error ? e.message : 'Could not read the collections folder.'))
     api.trapperGetConfig().then(setTrapper).catch(() => setTrapper(null))
   }, [])
 

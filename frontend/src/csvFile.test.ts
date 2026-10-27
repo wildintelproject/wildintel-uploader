@@ -36,6 +36,18 @@ describe('readItems', () => {
   })
 })
 
+describe('readItems with a field to pick from', () => {
+  const PICK = [...FIELDS, { key: 'status' as const, label: 'Status', kind: 'select', options: [{ value: 'active' }, { value: 'stolen' }] }]
+  const BLANK_PICK = { ...BLANK, status: 'active' } as typeof BLANK & { status: string | null }
+
+  it('takes one of the options whatever its case, a blank as what a new item has, and says any other', () => {
+    const { items, problems } = readItems('label,status\nA1,STOLEN\nA2,\nA3,gone\n', PICK, BLANK_PICK, 'camera')
+
+    expect(items.map((i) => i.status)).toEqual(['stolen', 'active', 'active'])
+    expect(problems).toEqual(['Row 4: status “gone” is none of active, stolen; left as active.'])
+  })
+})
+
 describe('itemsToCsv', () => {
   it('has a column per field, headed by its key', () => {
     expect(itemsToCsv([{ label: 'A12', brand: null, in_service: '2025-03-01' }], FIELDS)).toBe('label,brand,in_service\r\nA12,,2025-03-01\r\n')

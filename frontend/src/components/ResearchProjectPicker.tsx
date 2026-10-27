@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { defaultResearchProject } from '../defaultResearchProject'
 import TrapperAccountNotice, { trapperAccountReady } from './TrapperAccountNotice'
 import type { TrapperAccount, TrapperConnection } from './TrapperAccountNotice'
 import CheckboxList from './CheckboxList'
@@ -44,7 +45,15 @@ export default function ResearchProjectPicker({ value, onSelect, onError }: Prop
   useEffect(() => {
     let cancelled = false
     api.listResearchProjects()
-      .then(({ results }) => { if (!cancelled) setProjects(results) })
+      .then(async ({ results }) => {
+        if (cancelled) return
+        setProjects(results)
+        // With none picked, the one the general settings say comes filled in (it can be changed).
+        if (value) return
+        const wanted = await defaultResearchProject()
+        const found = wanted ? results.find((p) => p.acronym.toLowerCase() === wanted.toLowerCase()) : undefined
+        if (found && !cancelled) onSelect(found)
+      })
       .catch((e) => { if (!cancelled) setErrorMessage(e instanceof Error ? e.message : 'Could not read the collections folder.') })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps

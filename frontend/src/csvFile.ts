@@ -53,7 +53,7 @@ export interface ItemsRead<T> { items: T[]; problems: string[] }
 /** The items of a CSV text: the columns are found by the key or the label of a field (whatever the case, the spaces or the underscores).
  * A blank is none (null), a day must be YYYY-MM-DD, a yes/no is read as yes (yes, true, 1) or none, a value a field finds wrong is left blank and said, and a row without the first field — the one that names the item — is left out and said. */
 export function readItems<T extends object>(
-  text: string, fields: { key: keyof T & string; label: string; kind?: string; validate?: (value: string) => string | null }[], blank: T, noun: string,
+  text: string, fields: { key: keyof T & string; label: string; kind?: string; options?: { value: string }[]; validate?: (value: string) => string | null }[], blank: T, noun: string,
 ): ItemsRead<T> {
   const [header, ...rows] = parseCsv(text)
   if (!header) return { items: [], problems: ['The file is empty.'] }
@@ -67,6 +67,12 @@ export function readItems<T extends object>(
       const value = columns[j] >= 0 ? (row[columns[j]] ?? '').trim() : ''
       item[f.key] = j === 0 ? value : value || null
       if (f.kind === 'bool') item[f.key] = /^(yes|true|1|y|si|sí)$/i.test(value) ? 'yes' : null
+      if (f.kind === 'select') {
+        // A blank is what a new item starts with; another value has to be one of the options (whatever its case).
+        const chosen = f.options?.find((o) => o.value === value.toLowerCase())
+        item[f.key] = chosen ? chosen.value : (blank as Record<string, unknown>)[f.key] ?? null
+        if (value && !chosen) problems.push(`Row ${i + 2}: ${f.label.toLowerCase()} “${value}” is none of ${f.options?.map((o) => o.value).join(', ')}; left as ${String(item[f.key])}.`)
+      }
       const wrong = j > 0 ? f.validate?.(value) : null
       if (wrong) {
         item[f.key] = null

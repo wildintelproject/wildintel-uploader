@@ -9,7 +9,7 @@ import type { Camera, SdCard } from '../types'
 
 vi.mock('../api', () => ({
   api: {
-    listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), updateLocalLocation: vi.fn(), trapperResearchProjects: vi.fn(), trapperLocations: vi.fn(),
+    listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), updateResearchProject: vi.fn(), deleteResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), updateLocalLocation: vi.fn(), trapperResearchProjects: vi.fn(), trapperLocations: vi.fn(),
     getSettings: vi.fn(), saveSettings: vi.fn(), clearLog: vi.fn(), browseFolder: vi.fn(), trapperTestConnection: vi.fn(), epicollectTestConnection: vi.fn(),
     checkVersion: vi.fn(), checkForUpdate: vi.fn(), listReports: vi.fn(), deleteReport: vi.fn(), getReport: vi.fn(), reportUrl: (id: string, format: string) => `/api/reports/${id}/download?format=${format}`, configs: vi.fn(), addConfig: vi.fn(), activateConfig: vi.fn(), openConfigFolder: vi.fn(),
   },
@@ -137,7 +137,7 @@ describe('SettingsPage', () => {
       expect(screen.getByText(/each image scanned and copied/i)).toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL).toEqual({ log_level: 'DEBUG', workers: 4 })
+      expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL).toEqual({ log_level: 'DEBUG', workers: 4, default_research_project: null })
     })
 
     it('says when the environment overrides the log level', async () => {
@@ -761,7 +761,7 @@ describe('SettingsPage', () => {
 
     expect(mockedApi.saveSettings).toHaveBeenCalledTimes(1)
     const update = mockedApi.saveSettings.mock.calls[0][0]
-    expect(update.GENERAL).toEqual({ log_level: 'WARNING', workers: 4 })
+    expect(update.GENERAL).toEqual({ log_level: 'WARNING', workers: 4, default_research_project: null })
     expect(update.TRAPPER.base_url).toBe('https://other.example.org')
     expect(update.VALIDATION.duplicates).toBe(false)
     expect(update.POSTVALIDATION.camera).toBe(false)
@@ -784,8 +784,8 @@ describe('SettingsPage', () => {
   })
 
   describe('Trappers', () => {
-    const ANA = { name: 'Ana Pérez', affiliation: 'University of Huelva' }
-    const LUIS = { name: 'Luis', affiliation: null }
+    const ANA = { name: 'Ana Pérez', affiliation: 'University of Huelva', status: 'active' as const }
+    const LUIS = { name: 'Luis', affiliation: null, status: 'active' as const }
 
     async function open(trappers: { name: string; affiliation: string | null }[] = []) {
       mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers } })
@@ -800,7 +800,7 @@ describe('SettingsPage', () => {
       expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
       expect(screen.getByText('University of Huelva')).toBeInTheDocument()
       expect(screen.getByText('Luis')).toBeInTheDocument()
-      expect(screen.getByText('No affiliation')).toBeInTheDocument()
+      expect(screen.queryByText('No affiliation')).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Edit Ana Pérez' })).toBeInTheDocument()
     })
 
@@ -814,15 +814,15 @@ describe('SettingsPage', () => {
       await open([ANA])
 
       await userEvent.click(screen.getByRole('button', { name: 'Add trapper' }))
-      const dialog = within(screen.getByRole('dialog', { name: 'Trapper' }))
-      await userEvent.clear(dialog.getByLabelText('Name'))
-      await userEvent.type(dialog.getByLabelText('Name'), 'Luis Gómez')
+      const dialog = within(screen.getByRole('region', { name: 'Trapper' }))
+      await userEvent.clear(dialog.getByLabelText('Full name'))
+      await userEvent.type(dialog.getByLabelText('Full name'), 'Luis Gómez')
       await userEvent.type(dialog.getByLabelText('Affiliation'), 'CSIC')
-      await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([ANA, { name: 'Luis Gómez', affiliation: 'CSIC' }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([ANA, { name: 'Luis Gómez', affiliation: 'CSIC', status: 'active' }])
     })
 
     it('imports trappers from a CSV file — the new ones are added, one with the same name is updated — and saves them with the rest', async () => {
@@ -832,10 +832,25 @@ describe('SettingsPage', () => {
       await userEvent.upload(screen.getByLabelText('Import Trappers from a CSV file'), file)
 
       expect(await screen.findByRole('status')).toHaveTextContent('1 added, 1 updated from the file')
-      expect(screen.getByRole('status')).toHaveTextContent('Row 4: no name')
+      expect(screen.getByRole('status')).toHaveTextContent('Row 4: no full name')
       expect(screen.getByText('CSIC')).toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([{ name: 'ana pérez', affiliation: 'CSIC' }, { name: 'Luis', affiliation: null }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([{ name: 'ana pérez', affiliation: 'CSIC', status: 'active' }, { name: 'Luis', affiliation: null, status: 'active' }])
+    })
+
+    it('gives a trapper a status picked from cards, with Required and Optional on its fields', async () => {
+      await open([LUIS])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
+      const page = within(screen.getByRole('region', { name: 'Trapper' }))
+      expect(page.getByText('Required')).toBeInTheDocument()
+      expect(page.getByText('Optional')).toBeInTheDocument()
+      expect(page.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
+      await userEvent.click(page.getByRole('radio', { name: /Inactive/ }))
+      await userEvent.click(page.getByRole('button', { name: 'Save changes' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([expect.objectContaining({ name: 'Luis', status: 'inactive' })])
     })
 
     it('exports the trappers to a CSV file, and has nothing to export when there are none', async () => {
@@ -844,27 +859,29 @@ describe('SettingsPage', () => {
       URL.revokeObjectURL = vi.fn()
       await open([ANA, LUIS])
 
-      await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+      await userEvent.click(screen.getByRole('button', { name: 'More' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Export CSV' }))
 
-      expect(await created[0].text()).toBe('name,affiliation\r\nAna Pérez,University of Huelva\r\nLuis,\r\n')
+      expect(await created[0].text()).toBe('name,affiliation,status\r\nAna Pérez,University of Huelva,active\r\nLuis,,active\r\n')
     })
 
     it('has nothing to export when there are no trappers', async () => {
       await open()
 
-      expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled()
+      await userEvent.click(screen.getByRole('button', { name: 'More' }))
+      expect(screen.getByRole('menuitem', { name: 'Export CSV' })).toBeDisabled()
     })
 
     it('edits a trapper with its gear, and removes it from the window', async () => {
       await open([ANA, LUIS])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
-      await userEvent.type(within(screen.getByRole('dialog', { name: 'Trapper' })).getByLabelText('Affiliation'), 'IOP PAS')
-      await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+      await userEvent.type(within(screen.getByRole('region', { name: 'Trapper' })).getByLabelText('Affiliation'), 'IOP PAS')
+      await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
       expect(screen.getByText('IOP PAS')).toBeInTheDocument()
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit Ana Pérez' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Remove trapper' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete trapper' }))
       expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
@@ -873,14 +890,14 @@ describe('SettingsPage', () => {
       await open([ANA, LUIS])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
-      const name = screen.getByLabelText('Name')
+      const name = screen.getByLabelText('Full name')
       await userEvent.clear(name)
-      expect(screen.getByText('A name is required.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+      expect(screen.getByText('A full name is required.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
 
       await userEvent.type(name, 'ana pérez')
       expect(screen.getByText('ana pérez is already in the list.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
     })
   })
 
@@ -914,7 +931,7 @@ describe('SettingsPage', () => {
       await open()
 
       await userEvent.click(screen.getByRole('button', { name: 'Add SD card' }))
-      const dialog = within(screen.getByRole('dialog', { name: 'SD card' }))
+      const dialog = within(screen.getByRole('region', { name: 'SD card' }))
       await userEvent.clear(dialog.getByLabelText('Label'))
       await userEvent.type(dialog.getByLabelText('Label'), 'C7')
       await userEvent.click(dialog.getByLabelText('Brand'))
@@ -924,7 +941,7 @@ describe('SettingsPage', () => {
       await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: '2026-05-20', research_project: 'DONA' }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: '2026-05-20', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
     })
 
     it('suggests the brands as they are typed, and keeps any other that is typed', async () => {
@@ -933,11 +950,11 @@ describe('SettingsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
       const brand = screen.getByLabelText('Brand')
       await userEvent.type(brand, 'san')
-      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['SanDisk'])
+      expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['SanDisk'])
 
       await userEvent.clear(brand)
       await userEvent.type(brand, 'Acme Storage')
-      expect(screen.queryByRole('option')).not.toBeInTheDocument()
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Done' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -979,7 +996,7 @@ describe('SettingsPage', () => {
       expect(screen.getByText('No camera yet.')).toBeInTheDocument()
 
       await userEvent.click(screen.getByRole('button', { name: 'Add camera' }))
-      const dialog = within(screen.getByRole('dialog', { name: 'Camera' }))
+      const dialog = within(screen.getByRole('region', { name: 'Camera' }))
       await userEvent.clear(dialog.getByLabelText('Camera id'))
       await userEvent.type(dialog.getByLabelText('Camera id'), 'P800HG08192031')
       await userEvent.type(dialog.getByLabelText('Camera model'), 'Reconyx-PC800')
@@ -987,7 +1004,26 @@ describe('SettingsPage', () => {
       await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA' }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
+    })
+
+    it('gives a camera a status, the day it began and why — and says it on its card', async () => {
+      await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
+      const dialog = within(screen.getByRole('region', { name: 'Camera' }))
+      expect(dialog.getByLabelText('Status')).toHaveValue('active')
+      expect(within(dialog.getByLabelText('Status')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Active', 'Retired', 'Stolen', 'Lost', 'Broken'])
+      await userEvent.selectOptions(dialog.getByLabelText('Status'), 'stolen')
+      fireEvent.change(dialog.getByLabelText('Status since'), { target: { value: '2026-05-02' } })
+      await userEvent.type(dialog.getByLabelText('Status note'), 'taken from the tree')
+      await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
+
+      expect(screen.getByText('Stolen')).toHaveAttribute('title', 'since 2026-05-02 — taken from the tree')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([
+        { camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'stolen', status_date: '2026-05-02', status_note: 'taken from the tree' },
+      ])
     })
 
     it('removes a camera from its window', async () => {
@@ -1167,7 +1203,8 @@ describe('SettingsPage — Entities', () => {
       await open('Research projects')
 
       expect(await screen.findByText('DONA')).toBeInTheDocument()
-      expect(screen.getByText('Doñana · from Trapper')).toBeInTheDocument()
+      expect(screen.getByText('Doñana')).toBeInTheDocument()
+      expect(screen.getByText('From Trapper')).toBeInTheDocument()
     })
 
     it('adds one by hand — kept at once, not with Save — and refuses an acronym that is not one', async () => {
@@ -1175,7 +1212,7 @@ describe('SettingsPage — Entities', () => {
       await open('Research projects')
 
       await userEvent.click(screen.getByRole('button', { name: 'Add research project' }))
-      const dialog = within(screen.getByRole('dialog', { name: 'Research project' }))
+      const dialog = within(screen.getByRole('region', { name: 'Research project' }))
       await userEvent.type(dialog.getByLabelText('Acronym'), 'T!')
       expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
       await userEvent.clear(dialog.getByLabelText('Acronym'))
@@ -1185,6 +1222,69 @@ describe('SettingsPage — Entities', () => {
 
       await waitFor(() => expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ acronym: 'TATR', name: 'Tatra', trapper_pk: null })))
       expect(mockedApi.saveSettings).not.toHaveBeenCalled()
+    })
+
+    it('only shows one taken from Trapper: no fields to change, a notice, and what belongs to it', async () => {
+      await open('Research projects')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'View DONA' }))
+
+      const page = within(screen.getByRole('region', { name: 'Research project' }))
+      expect(page.getByText('This project comes from Trapper')).toBeInTheDocument()
+      expect(page.queryByLabelText('Name')).not.toBeInTheDocument()
+      expect(page.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+      expect(page.queryByRole('button', { name: 'Remove research project' })).not.toBeInTheDocument()
+      expect(page.getByText('Doñana')).toBeInTheDocument()
+      expect(page.getByText('Belongs to it')).toBeInTheDocument()
+      await userEvent.click(page.getByRole('button', { name: 'Close' }))
+      expect(screen.getByRole('button', { name: 'View DONA' })).toBeInTheDocument()
+    })
+
+    it('edits one with its gear — its status too, but not its acronym — and keeps it at once', async () => {
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...DONA, trapper_pk: null }] })
+      mockedApi.updateResearchProject.mockResolvedValue({ ...DONA, status: 'finished' })
+      await open('Research projects')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA' }))
+      const dialog = within(screen.getByRole('region', { name: 'Research project' }))
+      expect(dialog.getByLabelText('Acronym')).toBeDisabled()
+      expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual(['PlannedNot started yet.', 'ActiveWork is under way.', 'FinishedNo more fieldwork.'])
+      expect(dialog.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
+      await userEvent.clear(dialog.getByLabelText('Name'))
+      await userEvent.type(dialog.getByLabelText('Name'), 'Doñana NP')
+      await userEvent.type(dialog.getByLabelText('Description'), 'Spring 2024')
+      await userEvent.type(dialog.getByPlaceholderText('e.g. camera traps'), 'doñana{Enter}')
+      await userEvent.type(dialog.getByPlaceholderText('e.g. camera traps'), 'camera traps')
+      await userEvent.click(dialog.getByRole('button', { name: 'Add keyword' }))
+      expect(dialog.getByRole('button', { name: 'Remove doñana' })).toBeInTheDocument()
+      await userEvent.click(dialog.getByRole('radio', { name: /Finished/ }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => expect(mockedApi.updateResearchProject).toHaveBeenCalledWith('DONA', { name: 'Doñana NP', description: 'Spring 2024', keywords: 'doñana, camera traps', status: 'finished' }))
+      expect(mockedApi.saveSettings).not.toHaveBeenCalled()
+    })
+
+    it('deletes one after asking — and says why when it can not be', async () => {
+      mockedApi.deleteResearchProject.mockRejectedValueOnce(new Error("The research project 'DONA' still holds R0001: it can't be deleted until those are removed."))
+      mockedApi.deleteResearchProject.mockResolvedValueOnce({ deleted: 'DONA' })
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...DONA, trapper_pk: null }] })
+      await open('Research projects')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Remove research project' }))
+      expect(mockedApi.deleteResearchProject).not.toHaveBeenCalled() // it is asked first
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(mockedApi.deleteResearchProject).not.toHaveBeenCalled()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit DONA' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Remove research project' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete DONA' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('still holds R0001')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit DONA' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Remove research project' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete DONA' }))
+      await waitFor(() => expect(mockedApi.deleteResearchProject).toHaveBeenCalledTimes(2))
     })
 
     it('reads them from a CSV file, leaving out those that are there already and those that are not research projects', async () => {
@@ -1248,7 +1348,7 @@ describe('SettingsPage — Entities', () => {
       await openLocations([])
 
       await userEvent.click(screen.getByRole('button', { name: 'Add location' }))
-      const dialog = within(screen.getByRole('dialog', { name: 'Location' }))
+      const dialog = within(screen.getByRole('region', { name: 'Location' }))
       await userEvent.type(dialog.getByLabelText('Location id'), 'DONA_02')
       await userEvent.type(dialog.getByLabelText('Latitude'), '95')
       expect(dialog.getByText('A number from -90 to 90.')).toBeInTheDocument()
@@ -1264,7 +1364,7 @@ describe('SettingsPage — Entities', () => {
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
 
       await waitFor(() => expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
-        location_id: 'DONA_02', name: null, latitude: 37.01, longitude: -6.44, coordinate_uncertainty: null, timezone: 'Europe/Madrid', ignore_dst: true, trapper_pk: null,
+        location_id: 'DONA_02', name: null, latitude: 37.01, longitude: -6.44, coordinate_uncertainty: null, timezone: 'Europe/Madrid', ignore_dst: true, trapper_pk: null, status: 'active', status_date: null, status_note: null,
       }))
     })
 
@@ -1273,7 +1373,7 @@ describe('SettingsPage — Entities', () => {
       await openLocations()
 
       await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
-      const dialog = within(screen.getByRole('dialog', { name: 'Location' }))
+      const dialog = within(screen.getByRole('region', { name: 'Location' }))
       expect(dialog.getByLabelText('Location id')).toBeDisabled()
       await userEvent.clear(dialog.getByLabelText('Location name'))
       await userEvent.type(dialog.getByLabelText('Location name'), 'Ridge top')
@@ -1335,7 +1435,7 @@ describe('SettingsPage — Entities', () => {
     expect(screen.getByText('A1')).toBeInTheDocument()
     expect(screen.queryByText('B1')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Add SD card' }))
-    await userEvent.type(within(screen.getByRole('dialog', { name: 'SD card' })).getByLabelText('Label'), '2')
+    await userEvent.type(within(screen.getByRole('region', { name: 'SD card' })).getByLabelText('Label'), '2')
     await userEvent.click(screen.getByRole('button', { name: 'Done' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
