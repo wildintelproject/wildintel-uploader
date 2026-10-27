@@ -197,3 +197,20 @@ def test_the_workers_are_saved_with_the_settings(tmp_path: Path):
 
     assert config.load_settings(config_file).GENERAL.workers == 6
     assert config.workers(config.load_settings(config_file)) == 6
+
+
+def test_saving_settings_at_the_same_time_never_leaves_a_broken_file(tmp_path):
+    """Two saves at once, each with a different amount of fieldwork, leave one of them whole — and nothing else in the folder."""
+    import threading
+
+    config_file = tmp_path / "settings.toml"
+    small = config.Settings()
+    big = config.Settings.model_validate({"FIELDWORK": {"sd_cards": [{"label": f"C{i}", "brand": "SanDisk"} for i in range(300)]}})
+    threads = [threading.Thread(target=config.save_settings, args=(s, config_file)) for s in (small, big) * 10]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(config.load_settings(config_file).FIELDWORK.sd_cards) in (0, 300)
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.toml"]

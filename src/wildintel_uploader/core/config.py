@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import tempfile
 from pathlib import Path
 from datetime import date
 from typing import Literal, Optional
@@ -483,7 +484,15 @@ def load_settings(config_file: Optional[Path] = None) -> Settings:
 def save_settings(settings: Settings, config_file: Optional[Path] = None) -> None:
     config_file = config_file or active_config_file()
     config_file.parent.mkdir(parents=True, exist_ok=True)
-    loaders.toml_loader.write(str(config_file), settings.model_dump(mode="json", exclude_none=True), merge=False)
+    # Written to a file of its own and put in place at once: two saves at the same time (or a read in the middle of one) never leave a
+    # half-written settings file, which the app could not read again.
+    fd, tmp = tempfile.mkstemp(dir=config_file.parent, prefix=f".{config_file.name}.", suffix=".tmp")
+    os.close(fd)
+    try:
+        loaders.toml_loader.write(tmp, settings.model_dump(mode="json", exclude_none=True), merge=False)
+        os.replace(tmp, config_file)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
 
 
 def workers(settings: Settings | None = None) -> int:
