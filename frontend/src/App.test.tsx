@@ -31,7 +31,7 @@ beforeEach(() => {
   mockedApi.listSessions.mockResolvedValue([])
 })
 
-const getStarted = async () => userEvent.click(await screen.findByRole('button', { name: 'Get Started' }))
+const getStarted = async () => userEvent.click(await screen.findByRole('button', { name: /get started/i }))
 const title = () => screen.findByRole('button', { name: /WildINTEL Uploader\s*v0\.1\.0/ })
 
 describe('App', () => {
@@ -43,7 +43,7 @@ describe('App', () => {
 
     await userEvent.click(await title())
 
-    expect(await screen.findByRole('button', { name: 'Get Started' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /get started/i })).toBeInTheDocument()
     expect(screen.queryByText(/Upload page/)).not.toBeInTheDocument()
     expect(screen.queryByText('What do you want to do?')).not.toBeInTheDocument()
   })
@@ -61,7 +61,7 @@ describe('App', () => {
     render(<App />)
     await userEvent.click(await title()) // the sessions are offered first when the app starts
 
-    expect(await screen.findByRole('button', { name: 'Get Started' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /get started/i })).toBeInTheDocument()
     await getStarted()
     expect(await screen.findByRole('heading', { name: 'Unfinished run' })).toBeInTheDocument()
   })
