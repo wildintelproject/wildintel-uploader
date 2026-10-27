@@ -26,11 +26,12 @@ import {
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
 
-type StepKey = 'images' | 'origin' | 'checks' | 'prepare'
+type StepKey = 'origin' | 'images' | 'dates' | 'checks' | 'prepare'
 
 const STEPS: { key: StepKey; label: string }[] = [
+  { key: 'origin', label: 'Origin' },
   { key: 'images', label: 'Images' },
-  { key: 'origin', label: 'Origin and details' },
+  { key: 'dates', label: 'Dates and details' },
   { key: 'checks', label: 'Check details' },
   { key: 'prepare', label: 'Prepare and save' },
 ]
@@ -186,7 +187,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   }
   const chosen = candidates.filter((d) => freeOfErrors(d.name))
   // The deployments' details are asked for once the research project is picked and the details sub-step is open.
-  const detailsActive = stepKey === 'origin' && Boolean(projectId) && locationsReady
+  const detailsActive = stepKey === 'dates' && Boolean(projectId) && locationsReady
 
   useEffect(() => {
     if (stepKey !== 'images' && stepKey !== 'checks' && stepKey !== 'prepare') return
@@ -450,7 +451,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   // Whether the settings turn Epicollect5 on — read again when they are closed, as they may have changed.
   useEffect(() => {
-    if (stepKey !== 'origin' || settingsOpen) return
+    if (stepKey !== 'dates' || settingsOpen) return
     let cancelled = false
     api.getSettings()
       .then((s) => { if (!cancelled) setEpicollectOn(s.EPICOLLECT5.enabled) })
@@ -703,8 +704,9 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   const imagesChecked = candidates.some((d) => validations[d.name])
   const canContinue: Record<StepKey, boolean> = {
+    origin: Boolean(projectId),
     images: chosen.length > 0 && !validating,
-    origin: detailsActive && detailsReady && !savingDetails,
+    dates: detailsActive && detailsReady && !savingDetails,
     checks: requiredDeploymentChecksOk && !checking,
     prepare: false,
   }
@@ -769,6 +771,26 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           </div>
         ))}
       </div>
+
+      {/* ── Step: where it comes from — the research project ── */}
+      {stepKey === 'origin' && (
+        <div>
+          <StepHeading>Origin</StepHeading>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+            Say which research project the session belongs to. Next you pick the folder with the deployments.
+          </p>
+          <div className="border-t border-zinc-200 dark:border-zinc-700" />
+          <WizardStep n={1} title="Which research project?" status="open" canEdit={false} onEdit={() => {}}
+                      description="The research project is the same for the whole session. Research projects are kept in the collections folder.">
+            <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />
+            {originError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{originError}</p>}
+            <div className="flex justify-between items-center mt-4">
+              {onBack ? <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button> : <div />}
+              <button type="button" aria-label="Continue to the images" className={btnPrimary} disabled={!canContinue.origin} onClick={() => setStep((s) => s + 1)}>Continue<span aria-hidden="true"> →</span></button>
+            </div>
+          </WizardStep>
+        </div>
+      )}
 
       {/* ── Step: the images — the session folder, the checks, the results ── */}
       {stepKey === 'images' && (() => {
@@ -857,8 +879,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                 )}
               </div>
             )}
-            <div className="flex justify-between items-center mt-4">
-              {onBack ? <button type="button" className={btnOutline} disabled={scanning} onClick={onBack}><span aria-hidden="true">← </span>Back</button> : <div />}
+            <div className="flex justify-end items-center mt-4">
               <button type="button" aria-label="Continue to the checks" className={btnPrimary} disabled={!scan || scanning || candidates.length === 0} onClick={() => openImagesStep(2)}>Continue<span aria-hidden="true"> →</span></button>
             </div>
           </WizardStep>
@@ -920,8 +941,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
         )
       })()}
 
-      {/* ── Step: where they were taken, and the details of each deployment ── */}
-      {stepKey === 'origin' && (() => {
+      {/* ── Step: where they were taken, the dates and the details of each deployment ── */}
+      {stepKey === 'dates' && (() => {
         const whenOpen = originOpen === 2 && Boolean(projectId)
         const moreOpen = originOpen === 3 && Boolean(projectId)
         const originStatus = (n: number): 'open' | 'done' | 'locked' => {
@@ -937,15 +958,14 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
             <span className={`${chip} font-mono`}>{sessionName}</span>
           </div>
 
-          <StepHeading>Origin and details</StepHeading>
+          <StepHeading>Dates and details</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Say which research project the session belongs to and where each deployment was taken, then fill in their dates and what you know about the cameras and sites.
+            Say where each deployment was taken, then fill in their dates and what you know about the cameras and sites.
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
           <WizardStep n={1} title="Where were they taken?" status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
-                      description="The research project is the same for the whole session. Pick its location for each deployment, from the project's locations."
+                      description="Pick the location of each deployment, from the locations of the research project."
                       summary={project && <>{project.acronym} · {withLocation === chosen.length ? 'every folder has a location' : `${withLocation} of ${plural(chosen.length, 'folder has', 'folders have')} a location`}</>}>
-            <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />
             {originError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{originError}</p>}
           {projectId && locationsReady && (
             <div className="mt-6">
@@ -1519,11 +1539,15 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       {/* Navigation */}
       <div className="flex justify-between items-end mt-10">
         {stepKey === 'origin' ? (
+          <div />  // its own Back and Continue are in the step
+        ) : stepKey === 'dates' ? (
           originOpen === 3 && !importing ? <button type="button" className={btnOutline} onClick={() => setOriginOpen(2)}><span aria-hidden="true">← </span>Back</button> : <div />  // the other two have their own
-        ) : step > 0 && !importing ? (
-          <button type="button" className={btnOutline} onClick={() => setStep((s) => s - 1)} disabled={allDone}><span aria-hidden="true">← </span>Back</button>
+        ) : stepKey === 'images' && imagesOpen === 2 ? (
+          <div />  // its own Back is in the step
         ) : stepKey === 'images' && imagesOpen === 3 ? (
           <button type="button" className={btnOutline} disabled={validating} onClick={() => setImagesOpen(2)}><span aria-hidden="true">← </span>Back</button>
+        ) : step > 0 && !importing ? (
+          <button type="button" className={btnOutline} onClick={() => setStep((s) => s - 1)} disabled={allDone}><span aria-hidden="true">← </span>Back</button>
         ) : <div />}
 
         {stepKey === 'images' && (
@@ -1532,7 +1556,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
             <button type="button" className={btnPrimary} disabled={!canContinue.images} onClick={() => setStep((s) => s + 1)}>{imagesChecked && chosen.length > 0 ? `Continue with ${plural(chosen.length, 'folder', 'folders')}` : 'Continue'}<span aria-hidden="true"> →</span></button>
           </div>
         )}
-        {stepKey === 'origin' && (
+        {stepKey === 'dates' && (
           <div className="flex flex-col items-end gap-1 max-w-md">
             {detailsError && <p className="text-xs text-red-600 dark:text-red-400 text-right">{detailsError}</p>}
             {detailsActive && originOpen >= 2 && !detailsReady && (() => {
@@ -1540,7 +1564,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
               const onlyDates = incomplete.length > 0 && incomplete.every((d) => Object.keys(errorsOf(d.name)).every((k) => k === 'start_date' || k === 'end_date') && !duplicated(d.name))
               return <p className="text-xs text-amber-600 dark:text-amber-400">{!revisionValid ? 'Enter the revision number.' : `${plural(incomplete.length, 'deployment needs', 'deployments need')} ${onlyDates ? 'dates' : 'details'}.`}</p>
             })()}
-            <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!canContinue.origin} onClick={handleContinueFromDetails}>
+            <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!canContinue.dates} onClick={handleContinueFromDetails}>
               {savingDetails && <SmallSpinner />}{savingDetails ? 'Saving…' : <>Continue<span aria-hidden="true"> →</span></>}
             </button>
           </div>

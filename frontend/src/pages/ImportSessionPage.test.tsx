@@ -76,7 +76,9 @@ let pageProps: ComponentProps<typeof ImportSessionPage> = {}
 
 async function scanSession() {
   render(<ImportSessionPage {...pageProps} />)
-  await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
+  await pickProject() // the origin comes first
+  await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Browse…' }))
   await screen.findByDisplayValue('/s')
   await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
   await screen.findByRole('checkbox', { name: 'DONA_01' })
@@ -115,8 +117,7 @@ const assignLocations = async () => userEvent.click(await screen.findByRole('but
 
 async function toOrigin() {
   await scanSession()
-  await next() // images → origin
-  await pickProject()
+  await next() // images → dates, where the locations of the folders are
   await assignLocations()
 }
 
@@ -176,7 +177,9 @@ describe('ImportSessionPage', () => {
   it('shows why a folder cannot be scanned', async () => {
     mockedApi.scanSession.mockRejectedValue(new Error('This folder has no subfolders'))
     render(<ImportSessionPage />)
-    await userEvent.type(screen.getByLabelText('Folder path'), '/empty')
+    await pickProject()
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+    await userEvent.type(await screen.findByLabelText('Folder path'), '/empty')
     await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
 
     expect(await screen.findByText(/no subfolders/)).toBeInTheDocument()
@@ -194,7 +197,6 @@ describe('ImportSessionPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('1 folder fails a check set to Must pass')
     expect(screen.getByRole('button', { name: /DONA_02/ })).toHaveTextContent('left out')
     await userEvent.click(screen.getByRole('button', { name: 'Continue with 1 folder' }))
-    await pickProject()
     await toDetailsSubstep()
     expect(await screen.findByRole('group', { name: 'Dates of DONA_01' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'DONA_02' })).not.toBeInTheDocument()
@@ -230,7 +232,6 @@ describe('ImportSessionPage', () => {
 
     expect(screen.getByRole('button', { name: 'Continue with 1 folder' })).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: 'Continue with 1 folder' }))
-    await pickProject()
     await toDetailsSubstep()
     expect(screen.queryByRole('button', { name: 'DONA_02' })).not.toBeInTheDocument()
   })
@@ -249,8 +250,7 @@ describe('ImportSessionPage', () => {
 
   describe('the research project', () => {
     async function openOrigin() {
-      await scanSession()
-      await next()
+      render(<ImportSessionPage {...pageProps} />)
       await screen.findByLabelText('Research project')
     }
 
@@ -261,9 +261,9 @@ describe('ImportSessionPage', () => {
 
       expect(screen.queryByRole('option', { name: 'DONA — Doñana' })).not.toBeInTheDocument()
       await userEvent.click(screen.getByRole('option', { name: 'TATR — Tatra' }))
-      expect(screen.getByRole('button', { name: /Continue to the details/ })).toBeEnabled()
+      expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()
       await userEvent.click(screen.getByRole('button', { name: 'Clear research project' }))
-      expect(screen.getByRole('button', { name: /Continue to the details/ })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
     })
 
     it('says there is none yet, and offers to add the first one', async () => {
@@ -289,7 +289,7 @@ describe('ImportSessionPage', () => {
 
       await waitFor(() => expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ name: 'Doñana', acronym: 'DONA', event_interval: 120, trapper_pk: null })))
       expect(await screen.findByLabelText('Research project')).toHaveValue('DONA — Doñana')
-      expect(screen.getByRole('button', { name: /Continue to the details/ })).toBeEnabled()
+      expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()
     })
 
     it('adds the ones ticked in Trapper, and picks the first', async () => {
@@ -309,13 +309,12 @@ describe('ImportSessionPage', () => {
     })
   })
 
-  it('needs a research project before the details', async () => {
-    await scanSession()
-    await next()
+  it('needs a research project before the folder: the origin is the first step', async () => {
+    render(<ImportSessionPage />)
     await screen.findByLabelText('Research project')
 
-    expect(screen.getByRole('button', { name: /Continue to the details/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
+    expect(screen.queryByLabelText('Folder path')).not.toBeInTheDocument()
   })
 
   it('shows what the scan warns about — a missing timestamp log, folders without a row — as warnings', async () => {
@@ -504,12 +503,13 @@ describe('ImportSessionPage', () => {
     })
     const toDeducedDetails = async () => {
       render(<ImportSessionPage {...pageProps} />)
-      await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
+      await pickProject()
+      await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+      await userEvent.click(await screen.findByRole('button', { name: 'Browse…' }))
       await screen.findByDisplayValue('/s')
       await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
       await screen.findByRole('checkbox', { name: 'SITE_A' })
-      await next() // images → origin
-      await pickProject()
+      await next() // images → dates
       await assignLocations()
       await toDetailsSubstep()
     }
@@ -537,7 +537,7 @@ describe('ImportSessionPage', () => {
   })
 
   describe('where were they taken', () => {
-    const toLocations = async () => { await scanSession(); await next(); await pickProject() }
+    const toLocations = async () => { await scanSession(); await next() }
 
     it('offers the locations the folders are named after, and assigns them only when asked', async () => {
       await toLocations()
