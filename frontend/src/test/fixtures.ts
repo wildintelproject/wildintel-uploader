@@ -90,7 +90,7 @@ export const APP_SETTINGS: AppSettings = {
   VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },
   POSTVALIDATION: {
     deployment_id: true, collection_prefix: true, collection_name: true, location: true, time_range: true, camera: true,
-    image_count: true, sequence_count: true, sequence_length: true, tolerance_hours: 1,
+    image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true, tolerance_hours: 1,
     sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
     image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
   },

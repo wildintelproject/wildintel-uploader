@@ -984,3 +984,23 @@ def test_a_research_project_is_deleted_with_its_locations_unless_it_holds_collec
     assert kept.status_code == 409 and "R0001" in kept.json()["detail"]
     assert gone.status_code == 200 and again.status_code == 404
     assert [p["acronym"] for p in listed] == ["TATR"] and (tmp_path / "TATR" / "R0001").is_dir() and not (tmp_path / "DONA").exists()
+
+
+def test_validate_deployment_takes_the_visit_for_the_card_and_the_photos(tmp_path: Path):
+    _make_jpeg(tmp_path / "IMG_0001.jpg", "2024:09:04 12:00:00")
+    payload = {
+        "path": str(tmp_path),
+        "deployment": {
+            "deployment_id": "R0003-DONA_01", "start_date": "2024-09-04T10:00:00+02:00", "end_date": "2024-09-10T10:00:00+02:00",
+            "latitude": 37.0, "longitude": -6.5,
+        },
+        "checks": ["sd_card", "photo_count"],
+        "visit": {"left_session": "R0002", "left_sd": "7B", "collected_session": "R0003", "counted_photos": 1900, "sd_card": "1B"},
+    }
+
+    response = _client().post("/api/deployment-import/validate-deployment", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sd_card"]["ok"] is False and "left 7B" in body["sd_card"]["message"]
+    assert body["photo_count"]["ok"] is False and "1,899 photos missing" in body["photo_count"]["message"]

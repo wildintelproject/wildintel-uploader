@@ -206,6 +206,7 @@ function toDraft(s: AppSettings): Draft {
     deployment_id: post.deployment_id, collection_prefix: post.collection_prefix, collection_name: post.collection_name,
     location: post.location, time_range: post.time_range, camera: post.camera,
     image_count: post.image_count, sequence_count: post.sequence_count, sequence_length: post.sequence_length,
+    sd_card: post.sd_card, photo_count: post.photo_count,
   }
   return {
     logLevel: s.GENERAL.log_level,
@@ -533,6 +534,8 @@ const DEPLOYMENT_CHECKS: { key: DeploymentCheck; label: string; hint: string }[]
   { key: 'image_count', label: 'Number of images is like the previous revisions', hint: 'Compared with the earlier revisions of the same location — a camera that fired nonstop, or died early.' },
   { key: 'sequence_count', label: 'Number of sequences is like the previous revisions', hint: 'How many sequences there are, with a sequence as defined in its settings.' },
   { key: 'sequence_length', label: 'Length of the sequences is like the previous revisions', hint: 'How many images a sequence has, on average.' },
+  { key: 'sd_card', label: 'The SD card is the one the visit left', hint: 'The card the images come from is the one the visit of the deployment left in the camera. Only for a deployment of a visit.' },
+  { key: 'photo_count', label: 'The photos are those the visit counted', hint: 'The folder has as many photos as the visit counted on the card when it collected it. Only for a deployment of a visit.' },
 ]
 
 const SIMILARITY_METHODS: { value: SimilarityMethod; label: string }[] = [

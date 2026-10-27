@@ -89,7 +89,7 @@ class BrowseFolderRequest(BaseModel):
 ImageCheck = Literal["corrupted", "sequence", "structure", "camera", "exif", "duplicates"]
 DeploymentCheck = Literal[
     "deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera",
-    "image_count", "sequence_count", "sequence_length",
+    "image_count", "sequence_count", "sequence_length", "sd_card", "photo_count",
 ]
 
 
@@ -205,6 +205,16 @@ class StatisticsParams(BaseModel):
     sequence_length_tolerance: float = Field(default=50.0, ge=0, le=1000)
 
 
+class VisitCheckInfo(BaseModel):
+    """What the visit the deployment is of says, for the checks against it: the card it left, and the photos counted when it was collected."""
+
+    left_session: Optional[str] = None  # the visit that left the camera
+    left_sd: Optional[str] = None  # the card it left in it
+    collected_session: Optional[str] = None  # the visit that collected the card
+    counted_photos: Optional[int] = Field(default=None, ge=0)  # the photos it counted on the card
+    sd_card: Optional[str] = None  # the card the images are said to come from
+
+
 class ValidateDeploymentRequest(BaseModel):
     """Checks a scanned folder's images against a deployment's own declared
     fields — run once the deployment (new or existing) is known."""
@@ -224,6 +234,8 @@ class ValidateDeploymentRequest(BaseModel):
     # The research project whose collections hold the previous revisions of the location.
     research_project_id: Optional[str] = None
     statistics: StatisticsParams = Field(default_factory=StatisticsParams)
+    # The visit the deployment is of, for the checks of the card and of the photos (none: they have nothing to compare with).
+    visit: Optional[VisitCheckInfo] = None
 
 
 class CheckCollectionRequest(BaseModel):

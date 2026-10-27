@@ -452,7 +452,7 @@ describe('SettingsPage', () => {
   describe('Postvalidation', () => {
     const CHECKS = [
       /Deployment id format/, /starts with its collection/, /^Collection name/, /location is the one chosen/, /Image dates fit the deployment/, /Camera consistency/,
-      /Number of images is like the previous revisions/, /Number of sequences is like the previous revisions/, /Length of the sequences is like the previous revisions/,
+      /Number of images is like the previous revisions/, /Number of sequences is like the previous revisions/, /Length of the sequences is like the previous revisions/, /The SD card is the one the visit left/, /The photos are those the visit counted/,
     ]
     const open = async () => {
       render(<SettingsPage onClose={vi.fn()} />)
@@ -463,7 +463,7 @@ describe('SettingsPage', () => {
     it('has one entry per check, each with a switch, all on by default', async () => {
       await open()
 
-      expect(screen.getAllByRole('switch')).toHaveLength(9)
+      expect(screen.getAllByRole('switch')).toHaveLength(11)
       for (const label of CHECKS) expect(screen.getByRole('switch', { name: label })).toBeChecked()
     })
 
@@ -508,7 +508,7 @@ describe('SettingsPage', () => {
 
       expect(mockedApi.saveSettings.mock.calls[0][0].POSTVALIDATION).toEqual({
         deployment_id: true, collection_prefix: true, collection_name: true, location: false, time_range: true, camera: true,
-        image_count: true, sequence_count: true, sequence_length: true, tolerance_hours: 2.5,
+        image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true, tolerance_hours: 2.5,
         sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
         image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
       })

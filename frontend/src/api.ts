@@ -3,7 +3,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm,
+  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm,
 } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
@@ -219,12 +219,15 @@ export const api = {
       collectionName?: string | null; expectedLocationId?: string | null; toleranceHours?: number
       /** Whose collections hold the previous revisions of the location, for the statistical checks. */
       researchProjectId?: string | null; statistics?: StatisticsParams
+      /** The visit the deployment is of, for the checks of the card and of the photos. */
+      visit?: VisitCheckInfo | null
     } = {},
   ) =>
     post<DeploymentCheckResult>('/api/deployment-import/validate-deployment', {
       path, deployment, checks: checks ?? null, collection_name: options.collectionName ?? null,
       expected_location_id: options.expectedLocationId ?? null, tolerance_hours: options.toleranceHours ?? 1,
       research_project_id: options.researchProjectId ?? null, ...(options.statistics ? { statistics: options.statistics } : {}),
+      visit: options.visit ?? null,
     }),
 
   // Puts the deployment's start and end in its collection's <collection>_FileTimestampLog.csv — before the postvalidation.

@@ -519,6 +519,8 @@ export const DEPLOYMENT_CHECK_OPTIONS: { value: DeploymentCheck; label: string }
   { value: 'image_count', label: 'Number of images is like the previous revisions' },
   { value: 'sequence_count', label: 'Number of sequences is like the previous revisions' },
   { value: 'sequence_length', label: 'Length of the sequences is like the previous revisions' },
+  { value: 'sd_card', label: 'The SD card is the one the visit left' },
+  { value: 'photo_count', label: 'The photos are those the visit counted' },
 ]
 
 /** How the postvalidation names each check, and what it says it does. */
@@ -532,6 +534,8 @@ export const DEPLOYMENT_CHECK_DISPLAY: Record<DeploymentCheck, { label: string; 
   image_count: { label: 'Number of images is like the previous revisions', description: () => 'The number of images is close to that of the previous revisions.' },
   sequence_count: { label: 'Number of sequences is like the previous revisions', description: () => 'The number of sequences is close to that of the previous revisions.' },
   sequence_length: { label: 'Length of the sequences is like the previous revisions', description: () => 'The length of the sequences is close to that of the previous revisions.' },
+  sd_card: { label: 'The SD card is the one the visit left', description: () => 'The card you said the images come from is the one the visit left in the camera.' },
+  photo_count: { label: 'The photos are those the visit counted', description: () => 'The folder has the number of photos the visit counted on the card when it collected it.' },
 }
 
 export const STATISTIC_CHECKS: StatisticCheck[] = ['image_count', 'sequence_count', 'sequence_length']
@@ -561,7 +565,7 @@ export const DEFAULT_CHECK_SETTINGS: WizardSettings = {
   VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },
   POSTVALIDATION: {
     deployment_id: true, collection_prefix: true, collection_name: true, location: true, time_range: true, camera: true,
-    image_count: true, sequence_count: true, sequence_length: true, tolerance_hours: DEFAULT_TOLERANCE_HOURS,
+    image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true, tolerance_hours: DEFAULT_TOLERANCE_HOURS,
     sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
     image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
   },
@@ -1177,7 +1181,7 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
 export function DeploymentCheckReport({ result, toleranceHours }: { result: DeploymentCheckResult; toleranceHours: string }) {
   return (
     <div className="mt-4 text-sm space-y-1 mb-2">
-      {(['deployment_id', 'collection_name', 'collection_prefix', 'location'] as const).map((key) => {
+      {(['deployment_id', 'collection_name', 'collection_prefix', 'location', 'sd_card', 'photo_count'] as const).map((key) => {
         const check = result[key]
         return check === undefined ? null : (
           <p key={key} className={check.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
@@ -1444,7 +1448,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
 
   // What is shown — and so run — is what the settings turn on.
   const shownImageChecks = IMAGE_CHECK_OPTIONS.filter((o) => checkSettings.VALIDATION[o.value])
-  const shownDeploymentChecks = DEPLOYMENT_CHECK_OPTIONS.filter((o) => checkSettings.POSTVALIDATION[o.value])
+  // The checks against the visit are only there when the deployment is of one.
+  const shownDeploymentChecks = DEPLOYMENT_CHECK_OPTIONS.filter((o) => checkSettings.POSTVALIDATION[o.value] && (linkedVisit || (o.value !== 'sd_card' && o.value !== 'photo_count')))
   const runnableImageChecks = shownImageChecks.map((o) => o.value).filter((c) => imageChecks.has(c))
   const runnableDeploymentChecks = shownDeploymentChecks.map((o) => o.value).filter((c) => deploymentChecks.has(c))
 
@@ -1875,6 +1880,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
         toleranceHours: Number(toleranceHours),
         researchProjectId: researchProjectId || null,
         statistics: statistics ?? undefined,
+        visit: linkedVisit ? {
+          left_session: linkedVisit.visit.session, left_sd: linkedVisit.visit.sd ?? null,
+          collected_session: linkedVisit.end.session, counted_photos: linkedVisit.end.num_photos ?? null, sd_card: sdCard || null,
+        } : null,
       }))
     } catch (e) {
       setDeploymentCheckError(e instanceof Error ? e.message : 'Could not check the deployment.')
@@ -1887,7 +1896,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const toleranceHours = String(checkSettings.POSTVALIDATION.tolerance_hours)
   const statistics = statParamsValid(statParamsOf(checkSettings.POSTVALIDATION))
   const requiredDeploymentChecksOk = [...requiredDeploymentChecks]
-    .filter((c) => checkSettings.POSTVALIDATION[c])
+    .filter((c) => checkSettings.POSTVALIDATION[c] && shownDeploymentChecks.some((o) => o.value === c))
     .every((c) => deploymentCheckPassed(c, deploymentCheck) === true)
 
   // Camtrap DP's own rules for the deployment's fields (required ones,
@@ -2805,32 +2814,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
             Choose how strict each check should be.
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
-
-          {linkedVisit && (
-            <div className="mt-4 space-y-2" role="group" aria-label="Checks against the visit">
-              <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Against the visit</p>
-              {(() => {
-                const left = linkedVisit.visit.sd
-                const counted = linkedVisit.end.num_photos
-                const photos = scan?.image_count ?? null
-                const plural = (n: number) => `${n.toLocaleString('en-US')} ${n === 1 ? 'photo' : 'photos'}`
-                return (
-                  <>
-                    {!sdCard || !left
-                      ? <Notice kind="info">{!sdCard ? 'No SD card was said for these images' : `The visit ${linkedVisit.visit.session} does not say which card it left`}, so the card cannot be checked.</Notice>
-                      : sdCard.trim().toLowerCase() === left.trim().toLowerCase()
-                        ? <Notice kind="success">The SD card is <strong>{sdCard}</strong>, the one the visit {linkedVisit.visit.session} left in the camera.</Notice>
-                        : <Notice kind="warning" role="alert">You said the images come from the card <strong>{sdCard}</strong>, but the visit {linkedVisit.visit.session} left <strong>{left}</strong> in the camera.</Notice>}
-                    {counted == null || photos == null
-                      ? <Notice kind="info">{counted == null ? `The visit ${linkedVisit.end.session} did not count the photos on the card` : 'The folder was not counted'}, so the number of photos cannot be checked.</Notice>
-                      : counted === photos
-                        ? <Notice kind="success">The folder has <strong>{plural(photos)}</strong>, as the visit {linkedVisit.end.session} counted.</Notice>
-                        : <Notice kind="warning" role="alert">The visit {linkedVisit.end.session} counted <strong>{plural(counted)}</strong> on the card, and the folder has <strong>{plural(photos)}</strong> — {plural(Math.abs(counted - photos))} {counted > photos ? 'missing' : 'more'}.</Notice>}
-                  </>
-                )
-              })()}
-            </div>
-          )}
 
           <WizardStep n={1} title="Choose the checks" status={checksOpen === 1 ? 'open' : 'done'} canEdit={!checkingDeployment} onEdit={() => setChecksOpen(1)}
                       description="Choose how strict each check should be: skip it, warn about what it finds, or make it a must."

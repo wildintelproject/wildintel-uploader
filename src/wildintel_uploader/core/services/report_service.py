@@ -37,6 +37,7 @@ LABELS = {
     "camera": "Camera", "exif": "Required EXIF fields", "duplicates": "Duplicate images",
     "deployment_id": "Deployment id format", "collection_prefix": "Deployment id starts with its collection",
     "collection_name": "Collection name", "location": "The id's location is the one chosen", "time_range": "Image dates fit the deployment",
+    "sd_card": "The SD card is the visit's", "photo_count": "Number of photos is the visit's",
     "image_count": "Number of images", "sequence_count": "Number of sequences", "sequence_length": "Length of the sequences",
     "preprocessing": "Preprocessing",
     "metadata_files": "Metadata files", "camera_match": "The camera is the deployment's",
@@ -149,7 +150,7 @@ def postvalidation_report(result: dict, deployment_id: str, source: Path, parame
     images = images_of(source)
     b = _Builder("postvalidation", f"Postvalidation of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters=parameters or {})
     b.checked = result.get("checked_count", len(images))
-    for check in ("deployment_id", "collection_prefix", "collection_name", "location", "image_count", "sequence_count", "sequence_length"):
+    for check in ("deployment_id", "collection_prefix", "collection_name", "location", "sd_card", "photo_count", "image_count", "sequence_count", "sequence_length"):
         item = result.get(check)
         if isinstance(item, dict):
             b.deployment(check, bool(item.get("ok")) or bool(item.get("skipped")), item.get("message", ""))

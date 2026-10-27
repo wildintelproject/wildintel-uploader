@@ -550,6 +550,8 @@ def _parse_iso(value: str | None) -> datetime | None:
 # that need what the wizard knows of the deployment. None (the default) means
 # all of them.
 DEPLOYMENT_CHECKS = frozenset({"deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera"})
+# ...and those against the visit the deployment is of — they only make sense in the wizard, where that visit is known (a seal or a repair has none).
+VISIT_CHECKS = frozenset({"sd_card", "photo_count"})
 
 # wildintel-tools' own naming rules (see its check_collections): a deployment
 # is "R0033-DONA_01[_suffix]" and lives in a collection "R0033[_suffix]".
@@ -576,10 +578,38 @@ def _collection_of(deployment_id: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _sd_card_check(visit: dict | None) -> dict:
+    """The card the images are said to come from against the one the visit left in the camera."""
+    if not visit:
+        return _ok("No visit was chosen, so the card cannot be checked.")
+    said, left, session = (visit.get("sd_card") or "").strip(), (visit.get("left_sd") or "").strip(), visit.get("left_session") or "the visit"
+    if not said:
+        return _ok("No SD card was said for these images, so the card cannot be checked.")
+    if not left:
+        return _ok(f"The visit {session} does not say which card it left, so the card cannot be checked.")
+    if said.lower() == left.lower():
+        return _ok(f"The SD card is {said}, the one the visit {session} left in the camera.")
+    return _problem(f"You said the images come from the card {said}, but the visit {session} left {left} in the camera.")
+
+
+def _photo_count_check(visit: dict | None, found: int) -> dict:
+    """The photos in the folder against those the visit counted on the card when it collected it."""
+    if not visit:
+        return _ok("No visit was chosen, so the number of photos cannot be checked.")
+    counted, session = visit.get("counted_photos"), visit.get("collected_session") or "the visit"
+    if counted is None:
+        return _ok(f"The visit {session} did not count the photos on the card, so the number of photos cannot be checked.")
+    photos = lambda n: f"{n:,} {'photo' if n == 1 else 'photos'}"  # noqa: E731
+    if counted == found:
+        return _ok(f"The folder has {photos(found)}, as the visit {session} counted.")
+    gap = abs(counted - found)
+    return _problem(f"The visit {session} counted {photos(counted)} on the card, and the folder has {photos(found)} — {photos(gap)} {'missing' if found < counted else 'more'}.")
+
+
 def validate_deployment_consistency(
     source_dir: Path, deployment: DeploymentFields, checks: frozenset[str] | None = None, *,
     collection_name: str | None = None, expected_location_id: str | None = None,
-    tolerance_hours: float = DEFAULT_TOLERANCE_HOURS,
+    tolerance_hours: float = DEFAULT_TOLERANCE_HOURS, visit: dict | None = None,
 ) -> dict:
     """The postvalidation: checks a deployment — what the wizard now knows of
     it — and its scanned images against wildintel-tools' own rules. Only
@@ -601,6 +631,10 @@ def validate_deployment_consistency(
         tolerance. Each item has the file, its date, which rule ("first",
         "last", "between") and the range it should have fallen in.
       - tolerance_hours: what was used.
+    Against the visit the deployment is of (`visit`: left_session, left_sd, collected_session, counted_photos and sd_card — the card
+    the images are said to come from), each giving {"ok", "message"}; what the visit or the user did not say can't be checked, and passes:
+      - sd_card: the card said is the one the visit left in the camera.
+      - photo_count: the folder has the photos the visit counted on the card.
     And, unchanged:
       - camera_mismatches: images whose EXIF camera model differs from the
         deployment's declared camera_model (skipped if it isn't set).
@@ -614,7 +648,7 @@ def validate_deployment_consistency(
         raise DeploymentImportError(f"Not a folder: {source_dir}")
     if tolerance_hours < 0:
         raise DeploymentImportError("The tolerance can't be negative.")
-    checks = DEPLOYMENT_CHECKS if checks is None else (checks & DEPLOYMENT_CHECKS)
+    checks = (DEPLOYMENT_CHECKS | VISIT_CHECKS) if checks is None else (checks & (DEPLOYMENT_CHECKS | VISIT_CHECKS))
 
     images = [p for p in source_dir.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS]
     result: dict = {"checked_count": len(images)}
@@ -656,6 +690,12 @@ def validate_deployment_consistency(
             result["location"] = _ok(f"The deployment id's location is {expected_location_id}, the one chosen.")
         else:
             result["location"] = _problem(f"The deployment id's location is '{tail}', but the location chosen is {expected_location_id}.")
+
+    if "sd_card" in checks:
+        result["sd_card"] = _sd_card_check(visit)
+
+    if "photo_count" in checks:
+        result["photo_count"] = _photo_count_check(visit, len(images))
 
     if "time_range" in checks:
         result["tolerance_hours"] = tolerance_hours

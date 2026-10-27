@@ -1042,3 +1042,50 @@ def test_exiftool_path_falls_back_to_the_path_when_nothing_is_bundled(tmp_path: 
     monkeypatch.setattr(camera_info.shutil, "which", lambda _name: "/usr/bin/exiftool")
 
     assert camera_info.exiftool_path() == "/usr/bin/exiftool"
+
+
+# ── the checks against the visit the deployment is of ────────────────────────
+
+def _against(visit, tmp_path: Path, images: int = 2, checks=frozenset({"sd_card", "photo_count"})):
+    for i in range(images):
+        _make_jpeg(tmp_path / f"IMG_{i}.jpg", taken="2024:09:04 10:00:00")
+    return svc.validate_deployment_consistency(tmp_path, _deployment(), checks, visit=visit)
+
+
+def test_the_card_and_the_photos_are_those_the_visit_says(tmp_path: Path):
+    visit = {"left_session": "R0001", "left_sd": "A13", "collected_session": "R0002", "counted_photos": 2, "sd_card": "a13"}
+
+    result = _against(visit, tmp_path)
+
+    assert result["sd_card"] == {"ok": True, "message": "The SD card is a13, the one the visit R0001 left in the camera."}
+    assert result["photo_count"] == {"ok": True, "message": "The folder has 2 photos, as the visit R0002 counted."}
+
+
+def test_another_card_and_missing_photos_fail(tmp_path: Path):
+    visit = {"left_session": "R0001", "left_sd": "A13", "collected_session": "R0002", "counted_photos": 1900, "sd_card": "B2"}
+
+    result = _against(visit, tmp_path)
+
+    assert result["sd_card"] == {"ok": False, "message": "You said the images come from the card B2, but the visit R0001 left A13 in the camera."}
+    assert result["photo_count"] == {"ok": False, "message": "The visit R0002 counted 1,900 photos on the card, and the folder has 2 photos — 1,898 photos missing."}
+
+
+def test_more_photos_than_counted_say_so(tmp_path: Path):
+    result = _against({"collected_session": "R0002", "counted_photos": 1}, tmp_path)
+
+    assert result["photo_count"]["ok"] is False and result["photo_count"]["message"].endswith("— 1 photo more.")
+
+
+def test_what_nobody_said_cannot_be_checked_and_passes(tmp_path: Path):
+    nothing = _against(None, tmp_path)
+    no_card = _against({"left_sd": "A13", "left_session": "R0001"}, tmp_path)
+    no_count = _against({"collected_session": "R0002"}, tmp_path)
+
+    assert nothing["sd_card"]["ok"] and nothing["photo_count"]["ok"]
+    assert no_card["sd_card"]["message"] == "No SD card was said for these images, so the card cannot be checked."
+    assert no_count["photo_count"]["message"] == "The visit R0002 did not count the photos on the card, so the number of photos cannot be checked."
+    assert all(r["ok"] for r in (no_card["sd_card"], no_count["photo_count"]))
+
+
+def test_the_checks_of_the_seal_do_not_include_those_against_the_visit():
+    assert not svc.VISIT_CHECKS & svc.DEPLOYMENT_CHECKS

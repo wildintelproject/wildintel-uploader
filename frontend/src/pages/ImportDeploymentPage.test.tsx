@@ -502,7 +502,6 @@ describe('ImportDeploymentPage', () => {
           await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
           await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
           await screen.findByText('Check the details', { selector: 'h4' })
-          return within(screen.getByRole('group', { name: 'Checks against the visit' }))
         }
 
         it('offers, with the research project, the cards of that project and those with none', async () => {
@@ -523,28 +522,47 @@ describe('ImportDeploymentPage', () => {
           expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['A13 — SanDisk 64 GB', 'B2'])
         })
 
-        it('is satisfied when the card is the one the visit left and the folder has the photos it counted', async () => {
-          const checks = await toTheChecks('A13', 12)
+        const STRICT_CARD = 'How strict: The SD card is the one the visit left'
+        const STRICT_PHOTOS = 'How strict: The photos are those the visit counted'
 
-          expect(checks.getByText('The SD card is', { exact: false })).toHaveTextContent('The SD card is A13, the one the visit R0001 left in the camera.')
-          expect(checks.getByText('The folder has', { exact: false })).toHaveTextContent('The folder has 12 photos, as the visit R0002 counted.')
+        it('adds two checks to the details of a deployment of a visit: the card and the number of photos, as strict as the others', async () => {
+          await toTheChecks('A13', 12)
+
+          expect(screen.getByRole('radiogroup', { name: STRICT_CARD })).toBeInTheDocument()
+          expect(screen.getByRole('radiogroup', { name: STRICT_PHOTOS })).toBeInTheDocument()
+          await chooseStrictness('The SD card is the one the visit left', 'Must pass')
+          expect(strictness('The SD card is the one the visit left', 'Must pass')).toBeChecked()
         })
 
-        it('warns of a card that is not the one the visit left, and of photos that are missing', async () => {
-          const checks = await toTheChecks('B2', 300)
+        it('runs them with what the visit says and the card that was said for the images', async () => {
+          mockedApi.validateDeployment.mockResolvedValue({ checked_count: 12, sd_card: { ok: true, message: 'x' }, photo_count: { ok: false, message: 'y' } })
+          await toTheChecks('B2', 300)
 
-          expect(checks.getAllByRole('alert')).toHaveLength(2)
-          const [card, photos] = checks.getAllByRole('alert')
-          expect(card).toHaveTextContent('You said the images come from the card B2, but the visit R0001 left A13 in the camera.')
-          expect(photos).toHaveTextContent('The visit R0002 counted 300 photos on the card, and the folder has 12 photos — 288 photos missing.')
+          await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
+
+          await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
+            expect.anything(), expect.anything(), expect.arrayContaining(['sd_card', 'photo_count']),
+            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 300, sd_card: 'B2' } }),
+          ))
         })
 
-        it('says it cannot check what it was not told', async () => {
-          const checks = await toTheChecks(null, null)
+        it('sends what was not said as nothing, for the checks to say they cannot check it', async () => {
+          mockedApi.validateDeployment.mockResolvedValue({ checked_count: 12 })
+          await toTheChecks(null, null)
 
-          expect(checks.getByText(/No SD card was said for these images, so the card cannot be checked/)).toBeInTheDocument()
-          expect(checks.getByText(/The visit R0002 did not count the photos on the card, so the number of photos cannot be checked/)).toBeInTheDocument()
+          await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
+
+          await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
+            expect.anything(), expect.anything(), expect.anything(),
+            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: null, sd_card: null } }),
+          ))
         })
+      })
+
+      it('has no checks against a visit when the deployment is not of one', async () => {
+        await goToPostvalidation('1')
+
+        expect(screen.queryByRole('radiogroup', { name: /the visit left|the visit counted/ })).not.toBeInTheDocument()
       })
 
       it('asks for the location as it always did when the project has no closed visit without a deployment', async () => {
@@ -1512,6 +1530,7 @@ describe('ImportDeploymentPage', () => {
         {
           collectionName: null, expectedLocationId: 'DONA_01', toleranceHours: 1, // the collection is the one the id names
           researchProjectId: 'DONA', // whose collections hold the previous revisions
+          visit: null, // not of a visit
           statistics: {
             sequence_gap_seconds: 60, min_revisions: 2, method: 'median',
             image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,

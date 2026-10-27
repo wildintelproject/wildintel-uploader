@@ -176,6 +176,8 @@ class PostvalidationSettings(BaseModel):
     image_count: bool = Field(default=True, description="The number of images is like the previous revisions'. (POSTVALIDATION.image_count)")
     sequence_count: bool = Field(default=True, description="The number of sequences is like the previous revisions'. (POSTVALIDATION.sequence_count)")
     sequence_length: bool = Field(default=True, description="The length of the sequences is like the previous revisions'. (POSTVALIDATION.sequence_length)")
+    sd_card: bool = Field(default=True, description="The SD card is the one the visit left in the camera. (POSTVALIDATION.sd_card)")
+    photo_count: bool = Field(default=True, description="The folder has the number of photos the visit counted on the card. (POSTVALIDATION.photo_count)")
     sequence_gap_seconds: float = Field(
         default=60.0, gt=0, le=86400,
         description="What a sequence is: a new one starts when the gap to the previous image is at least this many seconds. (POSTVALIDATION.sequence_gap_seconds)",

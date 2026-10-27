@@ -43,7 +43,7 @@ def test_the_validation_checks_are_all_shown_by_default():
     assert all(checks.values())
     assert set(checks) == {
         "deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera",
-        "image_count", "sequence_count", "sequence_length",
+        "image_count", "sequence_count", "sequence_length", "sd_card", "photo_count",
     }
 
 

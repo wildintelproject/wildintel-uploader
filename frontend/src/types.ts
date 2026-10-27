@@ -164,7 +164,7 @@ export interface CameraMismatch {
  * core.services.deployment_import_service.DEPLOYMENT_CHECKS. */
 export type DeploymentCheck =
   | 'deployment_id' | 'collection_prefix' | 'collection_name' | 'location' | 'time_range' | 'camera'
-  | 'image_count' | 'sequence_count' | 'sequence_length'
+  | 'image_count' | 'sequence_count' | 'sequence_length' | 'sd_card' | 'photo_count'
 
 /** The statistical checks — each compares this revision with the location's previous ones. */
 export type StatisticCheck = 'image_count' | 'sequence_count' | 'sequence_length'
@@ -209,12 +209,25 @@ export interface TimestampLogResult {
   collection: string
 }
 
+/** What the visit a deployment is of says, for the checks against it: the card it left, and the photos counted when it was collected. */
+export interface VisitCheckInfo {
+  left_session: string | null
+  left_sd: string | null
+  collected_session: string | null
+  counted_photos: number | null
+  /** The card the images are said to come from. */
+  sd_card: string | null
+}
+
 export interface DeploymentCheckResult {
   checked_count: number
   deployment_id?: NameCheck
   collection_prefix?: NameCheck
   collection_name?: NameCheck
   location?: NameCheck
+  /** Against the visit the deployment is of: the card, and the photos counted on it. */
+  sd_card?: NameCheck
+  photo_count?: NameCheck
   image_count?: StatisticResult
   sequence_count?: StatisticResult
   sequence_length?: StatisticResult

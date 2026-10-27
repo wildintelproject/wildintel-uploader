@@ -271,6 +271,7 @@ def validate_deployment(req: ValidateDeploymentRequest) -> dict:
         result = deployment_import_service.validate_deployment_consistency(
             source, req.deployment, checks, collection_name=req.collection_name,
             expected_location_id=req.expected_location_id, tolerance_hours=req.tolerance_hours,
+            visit=req.visit.model_dump() if req.visit else None,
         )
         # The statistical checks compare this revision with the location's previous ones.
         wanted = frozenset(statistics_service.STATISTIC_CHECKS) if checks is None else checks & frozenset(statistics_service.STATISTIC_CHECKS)
