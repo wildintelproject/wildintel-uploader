@@ -763,15 +763,26 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
           </WizardStep>
 
           <WizardStep
-            n={3} title="Choose the CSV file" status={!project ? 'locked' : csvResult || csvColumns ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
+            n={3} title="Choose the spreadsheet file" status={!project ? 'locked' : csvResult || csvColumns ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
             description={source === 'epicollect'
-              ? 'The Epicollect download of the field trip: its columns are found by their names (1_Responsable, 2_Collection, 4_Location, 5_Camera, 6_Action, 7_Status_of_the_came… and created_at), whatever the case or the number in front, and so are those of the Doñana form. The time of a visit is when its entry was created, put in the timezone of the location.'
-              : 'Any CSV file with a row per visit. Next, you say which column gives each field of a visit.'}
+              ? <>The Epicollect download of the field trip. Its columns are found by their names ({['1_Responsable', '2_Collection', '4_Location', '5_Camera', '6_Action', '7_Status_of_the_camera', 'created_at'].map((c, i, all) => (
+                <span key={c}><code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-xs font-mono">{c}</code>{i < all.length - 2 ? ', ' : i === all.length - 2 ? ', and ' : ''}</span>
+              ))}), whatever the case or the number in front. So are those of the Doñana form. The time of a visit is when its entry was created, put in the timezone of the location.</>
+              : 'Any spreadsheet file with a row per visit. Next, you say which column gives each field of a visit.'}
             summary={csvName}
           >
-            <label htmlFor="visits-csv" className={labelClass}>CSV file</label>
-            <input id="visits-csv" type="file" accept=".csv,text/csv" className={inputClass} onChange={(e) => void readCsv(e.target.files?.[0])} />
-            <p className={hintClass}>A visit without a session gets the next one of its site; one already kept (same site, day and time) is left as it is.</p>
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
+              <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Spreadsheet file</h5>
+              <div className="flex items-center gap-4 flex-wrap">
+                <label htmlFor="visits-csv" className="inline-flex items-center gap-2 px-5 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+                  Choose file
+                </label>
+                <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">{csvName ?? 'No file chosen'}</span>
+                <input id="visits-csv" aria-label="CSV file" type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => void readCsv(e.target.files?.[0])} />
+              </div>
+              <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (same site, day and time) is left as it is.</p>
+            </div>
             {csvError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{csvError}</p>}
           </WizardStep>
 
