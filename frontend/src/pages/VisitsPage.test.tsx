@@ -73,13 +73,13 @@ async function typePhotos(count = '1620') {
 }
 
 describe('VisitsPage', () => {
-  it('first asks where the visits come from, with by hand, Wildintel Epicollect and a CSV file', () => {
+  it('first asks where the visits come from, with by hand, Wildintel Epicollect and a spreadsheet file', () => {
     render(<VisitsPage onBack={vi.fn()} />)
 
     expect(screen.getByText('Where do the visits come from?')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /by hand/i })).toBeEnabled()
     expect(screen.getByRole('button', { name: /from wildintel epicollect/i })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /from a csv file/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /from a spreadsheet file/i })).toBeEnabled()
   })
 
   it('marks the step done with the source chosen, and lets it be changed', async () => {
@@ -739,7 +739,7 @@ describe('VisitsPage from a CSV file', () => {
   }
   const MAPPING = { location_id: 'Lugar', date: 'Dia', time: 'Hora', actions: 'Tarea', num_photos: 'Fotos' }
 
-  async function start(option = /from a csv file/i) {
+  async function start(option = /from a spreadsheet file/i) {
     mockedApi.visitsCsvColumns.mockResolvedValue(COLUMNS)
     render(<VisitsPage onBack={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: option }))
@@ -787,7 +787,7 @@ describe('VisitsPage from a CSV file', () => {
   it('says why a file cannot be read, and offers nothing to map', async () => {
     mockedApi.visitsCsvColumns.mockRejectedValue(new Error('The file is empty.'))
     render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from a csv file/i }))
+    await userEvent.click(screen.getByRole('button', { name: /from a spreadsheet file/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)

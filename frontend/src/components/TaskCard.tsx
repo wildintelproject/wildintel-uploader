@@ -12,9 +12,9 @@ export const ArrowIcon = ({ back = false }: { back?: boolean }) => (
 )
 
 /** A task to choose, in a card of its own: its icon and an arrow on top, then its title and what it does. */
-export default function TaskCard({ icon, title, description, onClick }: { icon: ReactNode; title: string; description: string; onClick: () => void }) {
+export default function TaskCard({ icon, title, description, onClick, selected = false }: { icon: ReactNode; title: string; description: string; onClick: () => void; selected?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className={`${taskCard} flex flex-col items-stretch gap-3 p-5 text-left`}>
+    <button type="button" onClick={onClick} aria-pressed={selected} className={`${taskCard} ${selected ? '!border-blue-500 !bg-blue-50 dark:!bg-blue-950/30' : ''} flex flex-col items-stretch gap-3 p-5 text-left`}>
       <span className="flex items-center justify-between">
         <span className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"><LineIcon>{icon}</LineIcon></span>
         <span className="text-zinc-500 dark:text-zinc-400"><ArrowIcon /></span>

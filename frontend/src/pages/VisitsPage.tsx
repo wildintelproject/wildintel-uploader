@@ -3,8 +3,8 @@ import { api } from '../api'
 import BackButton from '../components/BackButton'
 import Combobox from '../components/Combobox'
 import LocationPicker from '../components/LocationPicker'
-import OptionCards from '../components/OptionCards'
-import type { Option } from '../components/OptionCards'
+import type { ReactNode } from 'react'
+import TaskCard from '../components/TaskCard'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import Notice from '../components/Notice'
 import WizardStep from '../components/WizardStep'
@@ -16,10 +16,10 @@ import type { Camera, DeploymentFields, LocalLocation, LocalResearchProject, SdC
 
 export type VisitSource = 'manual' | 'epicollect' | 'csv'
 
-const SOURCE_OPTIONS: Option<VisitSource>[] = [
-  { value: 'manual', emoji: '✍️', title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.', available: true },
-  { value: 'epicollect', emoji: '📱', title: 'From Wildintel Epicollect', description: 'Read the visits of a field trip from the Epicollect download.', available: true },
-  { value: 'csv', emoji: '📄', title: 'From a CSV file', description: 'Any CSV: say which column gives each field of a visit.', available: true },
+const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
+  { value: 'manual', icon: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />, title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.' },
+  { value: 'epicollect', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'From Wildintel Epicollect', description: 'Read the visits of a field trip from the Epicollect download.' },
+  { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'From a spreadsheet file', description: 'Any spreadsheet: say which column gives each field of a visit.' },
 ]
 
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
@@ -511,7 +511,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         description="Enter them by hand, or read them from a file."
         summary={chosen?.title}
       >
-        <OptionCards options={SOURCE_OPTIONS} selected={source} onChoose={setSource} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {SOURCE_OPTIONS.map((o) => <TaskCard key={o.value} icon={o.icon} title={o.title} description={o.description} selected={source === o.value} onClick={() => setSource(o.value)} />)}
+        </div>
       </WizardStep>
 
       {source === 'manual' && (
