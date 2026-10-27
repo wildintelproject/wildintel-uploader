@@ -36,7 +36,7 @@ describe('EpicollectMapping', () => {
   it('lists every field of a deployment by group, each with the inputs of the form that can fill it', async () => {
     render(<Host />)
 
-    expect(await screen.findByText(/5 inputs to choose from/)).toBeInTheDocument()
+    expect(await screen.findByText(/5 questions to choose from/)).toBeInTheDocument()
     for (const group of ['Where', 'When', 'Camera', 'Site', 'Grouping and notes']) expect(screen.getByRole('region', { name: group })).toBeInTheDocument()
     const dateOptions = Array.from(field('Start date').options).map((o) => o.textContent)
     expect(screen.getAllByText(/\d+ of \d+ matched/).length).toBeGreaterThan(1) // each group says how many of its fields are matched
@@ -44,17 +44,17 @@ describe('EpicollectMapping', () => {
     const heightOptions = Array.from(field('Camera height (m)').options).map((o) => o.textContent)
     expect(heightOptions).toContain('Height · whole number')
     expect(heightOptions).not.toContain('Start date · date')
-    expect(screen.getByText('0 of 26 fields mapped. What is not mapped is filled in by hand, as now.')).toBeInTheDocument()
+    expect(screen.getByText('0 of 26 fields matched')).toBeInTheDocument()
   })
 
   it('maps a field to an input, and clears it', async () => {
     const onChange = vi.fn()
     render(<Host onChange={onChange} />)
-    await screen.findByText(/5 inputs/)
+    await screen.findByText(/5 questions/)
 
     await userEvent.selectOptions(field('Start date'), 'f_start')
     expect(onChange).toHaveBeenLastCalledWith({ start_date: 'f_start' })
-    expect(screen.getByText(/1 of 26 fields mapped/)).toBeInTheDocument()
+    expect(screen.getByText(/1 of 26 fields matched/)).toBeInTheDocument()
 
     await userEvent.selectOptions(field('Start date'), '')
     expect(onChange).toHaveBeenLastCalledWith({})
@@ -63,13 +63,13 @@ describe('EpicollectMapping', () => {
   it('suggests a mapping from the names of the inputs, and clears it all', async () => {
     const onChange = vi.fn()
     render(<Host onChange={onChange} />)
-    await screen.findByText(/5 inputs/)
+    await screen.findByText(/5 questions/)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Suggest a mapping' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Match by name' }))
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ start_date: 'f_start', end_date: 'f_end', camera_model: 'f_model', location_id: 'f_loc' }))
     expect(field('Start date').value).toBe('f_start')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear all' }))
     expect(onChange).toHaveBeenLastCalledWith({})
   })
 
@@ -91,7 +91,7 @@ describe('EpicollectMapping', () => {
 
     expect(screen.getByText(/There is no Epicollect5 project saved yet/)).toBeInTheDocument()
     expect(api.epicollectForm).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Suggest a mapping' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Match by name' })).toBeDisabled()
   })
 
   it('says why the form could not be read, and reads it again on request', async () => {
@@ -100,7 +100,7 @@ describe('EpicollectMapping', () => {
 
     expect(await screen.findByText('Could not reach Epicollect5: no route')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Reload the form' }))
-    await waitFor(() => expect(screen.getByText(/5 inputs to choose from/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/5 questions to choose from/)).toBeInTheDocument())
     expect(screen.queryByText(/no route/)).not.toBeInTheDocument()
   })
 

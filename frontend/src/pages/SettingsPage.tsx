@@ -1760,6 +1760,22 @@ const LINK_ICONS: Record<string, ReactNode> = {
 }
 
 /** The app, its version and the places to go for help: the update check on the left, the links on the right. */
+/** A setting that is turned on or off, in a card of its own: what it does is said under its title. */
+function ToggleCard({ title, description, checked, onChange }: { title: string; description: ReactNode; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5">
+      <div className="min-w-0">
+        <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</p>
+        <p className={`${hintClass} mt-1 leading-relaxed max-w-prose`}>{description}</p>
+      </div>
+      <button type="button" role="switch" aria-checked={checked} aria-label={title} onClick={() => onChange(!checked)}
+              className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}>
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : ''}`} />
+      </button>
+    </div>
+  )
+}
+
 /** A card of settings of its own, with its title and what it is for. */
 function GroupCard({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
   return (
@@ -1941,6 +1957,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
   const [conn, setConn] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; message?: string }>({ kind: 'idle' })
   // A saved password is shown as kept, and only asked for again when it is to be replaced.
   const [changingPassword, setChangingPassword] = useState(false)
+  const [changingSecret, setChangingSecret] = useState(false)
   const [epiConn, setEpiConn] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; message?: string }>({ kind: 'idle' })
   const [browsing, setBrowsing] = useState(false)
   // The research projects the default one is picked from.
@@ -2021,6 +2038,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
       setSaved(result)
       setDraft(toDraft(result))
       setChangingPassword(false)
+      setChangingSecret(false)
       setStatus({ kind: 'saved' })
     } catch (e) {
       setStatus({ kind: 'error', message: e instanceof Error ? e.message : 'Could not save the settings.' })
@@ -2262,42 +2280,55 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
         )}
 
         {draft && saved && section === 'epicollect' && (
-          <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
-            <Row label="Use Epicollect5" description="Offers to fill in the dates, camera, site and notes of a deployment from its entry in the Epicollect5 project. Turned off, nothing is read from Epicollect5.">
-              <CheckOption label="Import deployment information from Epicollect5" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)} />
-            </Row>
-            <Row label="Project" description="The Epicollect5 project the deployment information is imported from: the name in its URL, five.epicollect.net/project/<slug>.">
-              <TextBox label="Slug" value={draft.epicollectSlug} onChange={(v) => set('epicollectSlug', v)} placeholder="my-camera-trap-project" mono />
-            </Row>
-            <Row
-              label="API client"
-              description={<>
-                {saved.EPICOLLECT5.has_secret ? 'Only private projects need it. A secret is saved — leave it blank to keep it.' : 'Only private projects need it. No secret saved yet.'}
-                {' '}Create the client app at <a href="https://developers.epicollect.net" target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">developers.epicollect.net</a>.
-              </>}
-            >
-              <TextBox label="Client id" value={draft.epicollectClientId} onChange={(v) => set('epicollectClientId', v)} mono />
-              <TextBox label="Client secret" type="password" value={draft.epicollectClientSecret} onChange={(v) => set('epicollectClientSecret', v)} />
-              <div className="flex flex-wrap items-center gap-3">
-                <button type="button" className={btnSoft} disabled={!draft.epicollectSlug.trim() || epiConn.kind === 'testing'} onClick={handleTestEpicollect}>
-                  {epiConn.kind === 'testing' ? 'Testing…' : 'Test connection'}
-                </button>
-                {epiConn.kind === 'ok' && <span className="text-sm text-emerald-700 dark:text-emerald-400">{epiConn.message}</span>}
-                {epiConn.kind === 'error' && <span className="text-sm text-red-600 dark:text-red-400">{epiConn.message}</span>}
-              </div>
-            </Row>
-            <Row label="Unmapped answers" description="An entry may answer inputs of the form that no field of a deployment is related to.">
-              <CheckOption label="Add them to the comments" checked={draft.epicollectUnmappedToComments} onChange={(v) => set('epicollectUnmappedToComments', v)}
-                           hint="Each one goes in as a line, “question: answer”, after the comments the entry gives. Photos are left out." />
-            </Row>
-            <div className="py-5">
-              <h3 className="text-sm font-medium mb-3">Mapping</h3>
-              <EpicollectMapping
-                mapping={draft.epicollectMapping} onChange={(m) => set('epicollectMapping', m)}
-                projectSaved={Boolean(saved.EPICOLLECT5.project_slug)}
-                unsavedProject={draft.epicollectSlug.trim() !== (saved.EPICOLLECT5.project_slug ?? '') || draft.epicollectClientId.trim() !== (saved.EPICOLLECT5.client_id ?? '') || draft.epicollectClientSecret !== ''}
-              />
-            </div>
+          <div className="space-y-5 pt-5">
+            <ToggleCard title="Import deployment information from Epicollect5" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)}
+                        description="Offers to fill in the dates, camera, site and notes of a deployment from its entry in your Epicollect5 project. Turned off, nothing is read from Epicollect5." />
+            <SettingsCard>
+              <CardBlock title="Project" description="The Epicollect5 project the information is imported from.">
+                <PlainField label="Project name in its web address" hint={`It is the last part of the project's address: five.epicollect.net/project/${draft.epicollectSlug.trim() || 'my-project'}`}>
+                  <input aria-label="Project name in its web address" className={`${fieldBox} font-mono text-sm`} value={draft.epicollectSlug} placeholder="my-camera-trap-project" autoComplete="off" onChange={(e) => set('epicollectSlug', e.target.value)} />
+                </PlainField>
+              </CardBlock>
+              <CardBlock
+                title="Access"
+                description={<>Only private projects need it. Create the access at <a href="https://developers.epicollect.net" target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">developers.epicollect.net</a> and paste its id and secret here.</>}
+              >
+                <PlainField label="Client id">
+                  <input aria-label="Client id" className={`${fieldBox} font-mono text-sm`} value={draft.epicollectClientId} autoComplete="off" onChange={(e) => set('epicollectClientId', e.target.value)} />
+                </PlainField>
+                <PlainField label="Client secret" hint={saved.EPICOLLECT5.has_secret ? (changingSecret ? 'Leave it blank to keep the saved secret.' : 'The saved secret is kept private. Press Change to replace it.') : 'No secret saved yet.'}>
+                  {saved.EPICOLLECT5.has_secret && !changingSecret ? (
+                    <div className="flex items-center gap-3">
+                      <div className={`${fieldBox} flex items-center justify-between`} aria-label="Saved secret">
+                        <span aria-hidden="true" className="tracking-widest text-zinc-500">••••••••</span>
+                        <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Saved</span>
+                      </div>
+                      <button type="button" className={`${btnOutline} h-12 shrink-0`} onClick={() => setChangingSecret(true)}>Change</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <input aria-label="Client secret" type="password" className={fieldBox} value={draft.epicollectClientSecret} autoComplete="new-password" onChange={(e) => set('epicollectClientSecret', e.target.value)} />
+                      {saved.EPICOLLECT5.has_secret && <button type="button" className={`${btnOutline} h-12 shrink-0`} onClick={() => { set('epicollectClientSecret', ''); setChangingSecret(false) }}>Keep it</button>}
+                    </div>
+                  )}
+                </PlainField>
+                <div className="flex flex-wrap items-center gap-4">
+                  <button type="button" className={`${btnOutline} gap-2`} disabled={!draft.epicollectSlug.trim() || epiConn.kind === 'testing'} onClick={handleTestEpicollect}>
+                    {epiConn.kind === 'testing' ? <span className="animate-spin inline-flex" aria-hidden="true"><Icon size={16}><path d="M21 12a9 9 0 1 1-6.2-8.55" /></Icon></span> : <Icon size={16}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></Icon>}
+                    {epiConn.kind === 'testing' ? 'Testing…' : 'Test connection'}
+                  </button>
+                  {epiConn.kind === 'ok' && <span role="status" className="inline-flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400"><Icon size={16}><circle cx="12" cy="12" r="10" /><path d="M8 12l3 3 5-6" /></Icon>{epiConn.message}</span>}
+                  {epiConn.kind === 'error' && <span role="alert" className="inline-flex items-center gap-2 text-sm text-red-600 dark:text-red-400"><Icon size={16}><circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" /></Icon>{epiConn.message}</span>}
+                </div>
+              </CardBlock>
+            </SettingsCard>
+            <ToggleCard title="Add answers with no place to go to the comments" checked={draft.epicollectUnmappedToComments} onChange={(v) => set('epicollectUnmappedToComments', v)}
+                        description="An entry may answer questions that no field of a deployment is matched to. Each one is added as a line, “question: answer”, after the comments of the entry. Photos are left out." />
+            <EpicollectMapping
+              mapping={draft.epicollectMapping} onChange={(m) => set('epicollectMapping', m)}
+              projectSaved={Boolean(saved.EPICOLLECT5.project_slug)}
+              unsavedProject={draft.epicollectSlug.trim() !== (saved.EPICOLLECT5.project_slug ?? '') || draft.epicollectClientId.trim() !== (saved.EPICOLLECT5.client_id ?? '') || draft.epicollectClientSecret !== ''}
+            />
           </div>
         )}
 

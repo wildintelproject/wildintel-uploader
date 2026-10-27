@@ -252,7 +252,7 @@ describe('SettingsPage', () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await section('Epicollect5')
-      await userEvent.type(screen.getByLabelText('Slug'), 'donana')
+      await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
       expect(mockedApi.epicollectTestConnection).toHaveBeenCalledWith({ project_slug: 'donana', client_id: '', client_secret: '' })
@@ -266,7 +266,7 @@ describe('SettingsPage', () => {
       await section('Epicollect5')
       expect(screen.getByRole('button', { name: 'Test connection' })).toBeDisabled()
 
-      await userEvent.type(screen.getByLabelText('Slug'), 'donana')
+      await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
       expect(await screen.findByText('Epicollect5 refused the client id and secret.')).toBeInTheDocument()
     })
@@ -354,10 +354,10 @@ describe('SettingsPage', () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await section('Epicollect5')
-      const use = screen.getByLabelText('Import deployment information from Epicollect5')
-      const unmapped = screen.getByLabelText(/^Add them to the comments/)
-      expect(use).not.toBeChecked()
-      expect(unmapped).not.toBeChecked()
+      const use = screen.getByRole('switch', { name: 'Import deployment information from Epicollect5' })
+      const unmapped = screen.getByRole('switch', { name: /^Add answers with no place to go/ })
+      expect(use).toHaveAttribute('aria-checked', 'false')
+      expect(unmapped).toHaveAttribute('aria-checked', 'false')
 
       await userEvent.click(use)
       await userEvent.click(unmapped)

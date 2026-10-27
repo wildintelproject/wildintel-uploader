@@ -32,6 +32,7 @@ export default function EpicollectMapping({ mapping, onChange, projectSaved, uns
   const [form, setForm] = useState<EpicollectForm | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [onlyUnmatched, setOnlyUnmatched] = useState(false)
 
   async function load() {
     setLoading(true); setError(null)
@@ -66,21 +67,32 @@ export default function EpicollectMapping({ mapping, onChange, projectSaved, uns
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="text-sm text-zinc-600 dark:text-zinc-400 max-w-prose leading-relaxed">
-          <p>
-            For each field of a deployment, choose the input of your Epicollect5 form that gives it. {form
-              ? <>The form is <strong>{form.project.name || form.project.slug}</strong>: {inputs.length} {inputs.length === 1 ? 'input' : 'inputs'} to choose from.</>
-              : 'The inputs are read from the project saved in the Epicollect5 section.'}
+      <section aria-label="Match the form to a deployment" className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-4">
+        <div>
+          <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Match the form to a deployment</h5>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed max-w-prose">
+            For each field of a deployment, choose the question of your form that fills it.{' '}
+            {form
+              ? <>Your form has {inputs.length} {inputs.length === 1 ? 'question' : 'questions'} to choose from.</>
+              : 'The questions are read from the project saved in the Epicollect5 section.'}
           </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{mappedCount} of {ALL_MAPPED_FIELDS.length} fields mapped. What is not mapped is filled in by hand, as now.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className={btnSoft} disabled={inputs.length === 0} onClick={() => onChange(suggestMapping(inputs, mapping))}>Suggest a mapping</button>
-          <button type="button" className={btnSoft} disabled={mappedCount === 0} onClick={() => onChange({})}>Clear</button>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-4 flex-wrap text-xs text-zinc-600 dark:text-zinc-400">
+            <span>{mappedCount} of {ALL_MAPPED_FIELDS.length} fields matched</span>
+            <span>What is not matched is filled in by hand, as now.</span>
+          </div>
+          <div role="progressbar" aria-label="Fields matched" aria-valuemin={0} aria-valuemax={ALL_MAPPED_FIELDS.length} aria-valuenow={mappedCount} className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+            <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${(mappedCount / ALL_MAPPED_FIELDS.length) * 100}%` }} />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={btnSoft} disabled={inputs.length === 0} onClick={() => onChange(suggestMapping(inputs, mapping))}>Match by name</button>
+          <button type="button" className={btnSoft} disabled={mappedCount === 0} onClick={() => onChange({})}>Clear all</button>
           <button type="button" className={btnSoft} disabled={!projectSaved || loading} onClick={() => void load()}>{loading ? 'Reading…' : 'Reload the form'}</button>
+          <button type="button" aria-pressed={onlyUnmatched} className={`${btnSoft} ${onlyUnmatched ? 'ring-2 ring-blue-500' : ''}`} onClick={() => setOnlyUnmatched((v) => !v)}>Only fields not matched</button>
         </div>
-      </div>
+      </section>
 
       {!projectSaved && (
         <Notice kind="warning" role="status">There is no Epicollect5 project saved yet: set its slug in the Epicollect5 section and save, and its form is read here.</Notice>
@@ -90,7 +102,7 @@ export default function EpicollectMapping({ mapping, onChange, projectSaved, uns
       )}
       {error && <Notice kind="error" role="alert">{error}</Notice>}
 
-      {DEPLOYMENT_FIELD_GROUPS.map((group) => (
+      {DEPLOYMENT_FIELD_GROUPS.filter((group) => !onlyUnmatched || group.fields.some((f) => !mapping[f.key])).map((group) => (
         <section key={group.id} aria-label={group.label} className="rounded-xl border border-zinc-200 dark:border-zinc-800">
           {(() => {
             const matched = group.fields.filter((f) => mapping[f.key]).length
@@ -102,7 +114,7 @@ export default function EpicollectMapping({ mapping, onChange, projectSaved, uns
             )
           })()}
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {group.fields.map((field) => {
+            {group.fields.filter((f) => !onlyUnmatched || !mapping[f.key]).map((field) => {
               const ref = mapping[field.key] ?? ''
               const current = byRef.get(ref)
               const stale = Boolean(ref) && form !== null && !current

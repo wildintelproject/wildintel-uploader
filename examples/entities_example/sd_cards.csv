@@ -1,194 +1,194 @@
-label,brand,capacity,in_service
-1,SanDisk,64 GB,2024-05-29
-1B,Transcend,32 GB,2023-08-17
-2,Transcend,128 GB,2025-03-13
-2B,Transcend,128 GB,2025-02-08
-3,Transcend,128 GB,2023-09-03
-3B,SanDisk,32 GB,2023-04-24
-4,Samsung,32 GB,2024-04-05
-4B,SanDisk,128 GB,2024-11-26
-5,Samsung,64 GB,2024-02-11
-5B,Samsung,64 GB,2024-01-01
-6B,Lexar,32 GB,2025-01-10
-6BB,Samsung,32 GB,2024-07-24
-7B,Transcend,64 GB,2023-10-22
-7BB,Lexar,64 GB,2025-06-16
-8,PNY,64 GB,2023-01-26
-8B,PNY,64 GB,2024-01-08
-9,Lexar,128 GB,2023-04-03
-9B,Lexar,128 GB,2025-06-07
-10,SanDisk,128 GB,2024-06-02
-10B,Transcend,128 GB,2024-02-12
-10BB,Transcend,64 GB,2025-05-14
-11,Lexar,128 GB,2024-06-09
-11B,Transcend,32 GB,2024-08-12
-12,Kingston,64 GB,2025-04-17
-12B,SanDisk,32 GB,2025-01-04
-13,Transcend,128 GB,2024-04-26
-13B,Kingston,128 GB,2023-08-23
-14B,SanDisk,128 GB,2024-11-21
-14BB,Lexar,64 GB,2024-07-27
-16,Lexar,64 GB,2024-07-15
-16B,PNY,128 GB,2025-04-04
-16BB,Lexar,128 GB,2023-07-27
-17,Samsung,64 GB,2023-01-10
-17B,SanDisk,64 GB,2024-11-02
-17BB,Transcend,128 GB,2025-04-02
-18,Transcend,128 GB,2024-01-04
-18B,Kingston,64 GB,2024-12-10
-18BB,Lexar,128 GB,2024-06-07
-19,Lexar,128 GB,2024-07-25
-19B,PNY,32 GB,2025-05-01
-19BB,Samsung,64 GB,2024-04-13
-20,SanDisk,128 GB,2024-12-06
-20B,PNY,64 GB,2024-04-08
-21,Kingston,128 GB,2025-05-12
-21B,PNY,128 GB,2023-03-07
-21BB,PNY,64 GB,2024-05-25
-22,Samsung,32 GB,2023-07-19
-22B,PNY,128 GB,2023-05-30
-22BB,Lexar,32 GB,2023-04-05
-23B,SanDisk,128 GB,2024-08-17
-23BB,Transcend,32 GB,2024-09-16
-24,Kingston,64 GB,2023-05-04
-24B,Transcend,32 GB,2025-02-08
-25,Transcend,64 GB,2024-11-15
-25B,PNY,64 GB,2023-06-08
-25BB,SanDisk,64 GB,2024-11-11
-26B,Transcend,128 GB,2024-12-07
-26BB,PNY,64 GB,2024-07-12
-27,Kingston,128 GB,2024-08-25
-27B,Kingston,64 GB,2023-03-28
-28,Lexar,64 GB,2023-05-19
-28B,Transcend,64 GB,2024-06-03
-29,Lexar,128 GB,2025-04-07
-29B,Kingston,64 GB,2024-01-21
-30,SanDisk,32 GB,2024-02-03
-30B,SanDisk,32 GB,2025-05-03
-31,Samsung,64 GB,2025-02-27
-31B,SanDisk,32 GB,2024-06-06
-31BB,Lexar,64 GB,2024-11-30
-32,Samsung,128 GB,2023-11-30
-32B,SanDisk,128 GB,2024-04-22
-33,Transcend,64 GB,2023-06-07
-33B,Transcend,64 GB,2024-03-20
-34,Transcend,64 GB,2024-04-14
-34B,Transcend,64 GB,2024-11-25
-35,PNY,32 GB,2024-07-14
-35B,Lexar,32 GB,2023-07-20
-36,PNY,64 GB,2023-02-16
-36B,PNY,32 GB,2024-04-07
-38,PNY,64 GB,2024-05-10
-38B,PNY,32 GB,2023-05-13
-39,PNY,64 GB,2025-03-15
-39B,Transcend,64 GB,2023-06-14
-39BB,PNY,64 GB,2024-02-04
-41,Samsung,128 GB,2024-06-29
-41B,Lexar,32 GB,2024-01-28
-41BB,Samsung,64 GB,2023-12-19
-42,Kingston,64 GB,2024-04-20
-42B,Lexar,128 GB,2023-10-22
-42BB,Lexar,64 GB,2023-11-30
-43,Transcend,128 GB,2024-03-31
-43B,SanDisk,64 GB,2025-04-15
-44,SanDisk,64 GB,2023-08-25
-44B,SanDisk,32 GB,2025-06-18
-45,Lexar,64 GB,2024-02-22
-45B,Transcend,64 GB,2023-01-28
-46,Samsung,64 GB,2023-12-27
-46B,Transcend,64 GB,2023-04-23
-47,Transcend,64 GB,2024-07-23
-47B,Transcend,64 GB,2024-08-06
-48,Samsung,64 GB,2024-11-17
-48B,Transcend,64 GB,2023-04-14
-49,Samsung,32 GB,2024-03-22
-49B,Kingston,32 GB,2024-12-01
-50,SanDisk,64 GB,2025-01-09
-50B,Kingston,32 GB,2024-06-02
-51,Samsung,64 GB,2024-08-25
-51B,SanDisk,64 GB,2023-11-19
-52,Kingston,64 GB,2023-09-20
-52B,SanDisk,32 GB,2024-02-26
-53,Samsung,128 GB,2023-01-16
-53B,SanDisk,32 GB,2023-08-29
-54,SanDisk,64 GB,2023-05-06
-54B,SanDisk,64 GB,2023-11-19
-55,Lexar,32 GB,2024-02-18
-55B,Samsung,64 GB,2024-08-31
-55BB,Lexar,128 GB,2024-11-23
-56,SanDisk,64 GB,2025-05-31
-56B,Transcend,64 GB,2024-02-03
-57,Samsung,64 GB,2023-03-01
-57B,PNY,128 GB,2025-06-18
-59,SanDisk,64 GB,2024-12-12
-59B,Samsung,64 GB,2025-01-14
-60,SanDisk,64 GB,2025-02-25
-60B,Lexar,64 GB,2024-08-22
-61,SanDisk,64 GB,2023-07-22
-61B,Transcend,32 GB,2025-01-08
-62,SanDisk,64 GB,2024-09-25
-62B,SanDisk,32 GB,2023-02-08
-63,Kingston,64 GB,2024-09-03
-63B,PNY,64 GB,2023-01-30
-64,Lexar,64 GB,2023-12-31
-64B,Lexar,128 GB,2024-01-22
-65,Kingston,128 GB,2024-11-09
-65B,Kingston,64 GB,2023-07-07
-66,Transcend,32 GB,2024-11-08
-66B,PNY,128 GB,2023-09-19
-67,Kingston,64 GB,2023-01-24
-67B,SanDisk,64 GB,2024-07-08
-68,Lexar,128 GB,2023-09-28
-68B,Samsung,64 GB,2024-10-03
-69,Transcend,32 GB,2025-05-09
-69B,Kingston,32 GB,2024-10-27
-70,Transcend,64 GB,2023-12-15
-70B,PNY,64 GB,2023-02-27
-71,PNY,32 GB,2024-10-04
-71B,Kingston,128 GB,2023-03-01
-72,Kingston,64 GB,2025-02-02
-72B,Lexar,64 GB,2025-03-20
-73,Kingston,64 GB,2023-12-18
-73B,Kingston,64 GB,2024-01-03
-74,Lexar,128 GB,2024-07-15
-74B,Lexar,64 GB,2023-07-12
-75,Kingston,128 GB,2023-06-07
-75B,Lexar,32 GB,2023-12-29
-76,Transcend,128 GB,2025-03-25
-76B,SanDisk,64 GB,2023-03-28
-77,Samsung,64 GB,2024-07-13
-77B,PNY,64 GB,2023-05-22
-79,PNY,32 GB,2023-01-19
-79B,Transcend,64 GB,2025-05-20
-80,PNY,64 GB,2024-08-09
-80B,SanDisk,128 GB,2024-01-25
-81,Transcend,64 GB,2024-06-04
-81B,SanDisk,32 GB,2023-05-26
-82,PNY,128 GB,2023-12-08
-82B,Transcend,64 GB,2023-11-14
-83,SanDisk,64 GB,2023-06-16
-83B,Samsung,64 GB,2024-07-08
-84,Samsung,64 GB,2023-05-18
-84B,Lexar,64 GB,2025-02-03
-85,PNY,32 GB,2025-05-17
-85B,Transcend,128 GB,2024-03-08
-86,Samsung,64 GB,2025-01-09
-86B,Transcend,32 GB,2023-07-03
-87,Samsung,64 GB,2023-06-17
-87B,SanDisk,32 GB,2024-06-11
-88,PNY,32 GB,2025-05-12
-88B,Samsung,32 GB,2024-01-12
-89,Samsung,64 GB,2024-06-28
-89B,Kingston,64 GB,2023-05-10
-90,SanDisk,64 GB,2024-05-11
-90B,SanDisk,32 GB,2024-01-26
-91,Samsung,64 GB,2024-10-25
-91B,SanDisk,64 GB,2024-04-30
-92,Lexar,32 GB,2024-07-22
-92B,Transcend,64 GB,2025-04-28
-93,Samsung,128 GB,2024-08-22
-93B,Samsung,32 GB,2023-03-12
-94,SanDisk,128 GB,2025-03-07
-94B,Samsung,64 GB,2025-02-10
-95,PNY,64 GB,2023-06-22
-693,Samsung,128 GB,2024-06-02
+label,brand,capacity,in_service,status,status_date,status_note
+1,SanDisk,64 GB,2024-05-29,active,,
+1B,Transcend,32 GB,2023-08-17,active,,
+2,Transcend,128 GB,2025-03-13,active,,
+2B,Transcend,128 GB,2025-02-08,active,,
+3,Transcend,128 GB,2023-09-03,retired,2025-06-05,replaced by a newer one
+3B,SanDisk,32 GB,2023-04-24,active,,
+4,Samsung,32 GB,2024-04-05,active,,
+4B,SanDisk,128 GB,2024-11-26,active,,
+5,Samsung,64 GB,2024-02-11,active,,
+5B,Samsung,64 GB,2024-01-01,broken,2025-02-23,does not switch on
+6B,Lexar,32 GB,2025-01-10,active,,
+6BB,Samsung,32 GB,2024-07-24,active,,
+7B,Transcend,64 GB,2023-10-22,active,,
+7BB,Lexar,64 GB,2025-06-16,active,,
+8,PNY,64 GB,2023-01-26,stolen,2024-08-16,taken from the site
+8B,PNY,64 GB,2024-01-08,active,,
+9,Lexar,128 GB,2023-04-03,active,,
+9B,Lexar,128 GB,2025-06-07,active,,
+10,SanDisk,128 GB,2024-06-02,active,,
+10B,Transcend,128 GB,2024-02-12,lost,2024-03-01,not found in the last visit
+10BB,Transcend,64 GB,2025-05-14,active,,
+11,Lexar,128 GB,2024-06-09,active,,
+11B,Transcend,32 GB,2024-08-12,active,,
+12,Kingston,64 GB,2025-04-17,active,,
+12B,SanDisk,32 GB,2025-01-04,lost,2025-07-10,not found in the last visit
+13,Transcend,128 GB,2024-04-26,active,,
+13B,Kingston,128 GB,2023-08-23,active,,
+14B,SanDisk,128 GB,2024-11-21,active,,
+14BB,Lexar,64 GB,2024-07-27,active,,
+16,Lexar,64 GB,2024-07-15,retired,2025-06-13,replaced by a newer one
+16B,PNY,128 GB,2025-04-04,active,,
+16BB,Lexar,128 GB,2023-07-27,active,,
+17,Samsung,64 GB,2023-01-10,active,,
+17B,SanDisk,64 GB,2024-11-02,active,,
+17BB,Transcend,128 GB,2025-04-02,stolen,2025-07-31,taken from the site
+18,Transcend,128 GB,2024-01-04,active,,
+18B,Kingston,64 GB,2024-12-10,active,,
+18BB,Lexar,128 GB,2024-06-07,active,,
+19,Lexar,128 GB,2024-07-25,active,,
+19B,PNY,32 GB,2025-05-01,stolen,2025-07-04,taken from the site
+19BB,Samsung,64 GB,2024-04-13,active,,
+20,SanDisk,128 GB,2024-12-06,active,,
+20B,PNY,64 GB,2024-04-08,active,,
+21,Kingston,128 GB,2025-05-12,active,,
+21B,PNY,128 GB,2023-03-07,retired,2024-12-10,replaced by a newer one
+21BB,PNY,64 GB,2024-05-25,active,,
+22,Samsung,32 GB,2023-07-19,active,,
+22B,PNY,128 GB,2023-05-30,active,,
+22BB,Lexar,32 GB,2023-04-05,active,,
+23B,SanDisk,128 GB,2024-08-17,stolen,2025-02-13,taken from the site
+23BB,Transcend,32 GB,2024-09-16,active,,
+24,Kingston,64 GB,2023-05-04,active,,
+24B,Transcend,32 GB,2025-02-08,active,,
+25,Transcend,64 GB,2024-11-15,active,,
+25B,PNY,64 GB,2023-06-08,lost,2024-06-14,not found in the last visit
+25BB,SanDisk,64 GB,2024-11-11,active,,
+26B,Transcend,128 GB,2024-12-07,active,,
+26BB,PNY,64 GB,2024-07-12,active,,
+27,Kingston,128 GB,2024-08-25,active,,
+27B,Kingston,64 GB,2023-03-28,stolen,2024-05-04,taken from the site
+28,Lexar,64 GB,2023-05-19,active,,
+28B,Transcend,64 GB,2024-06-03,active,,
+29,Lexar,128 GB,2025-04-07,active,,
+29B,Kingston,64 GB,2024-01-21,active,,
+30,SanDisk,32 GB,2024-02-03,retired,2025-11-05,replaced by a newer one
+30B,SanDisk,32 GB,2025-05-03,active,,
+31,Samsung,64 GB,2025-02-27,active,,
+31B,SanDisk,32 GB,2024-06-06,active,,
+31BB,Lexar,64 GB,2024-11-30,active,,
+32,Samsung,128 GB,2023-11-30,retired,2025-07-17,replaced by a newer one
+32B,SanDisk,128 GB,2024-04-22,active,,
+33,Transcend,64 GB,2023-06-07,active,,
+33B,Transcend,64 GB,2024-03-20,active,,
+34,Transcend,64 GB,2024-04-14,active,,
+34B,Transcend,64 GB,2024-11-25,stolen,2025-03-25,taken from the site
+35,PNY,32 GB,2024-07-14,active,,
+35B,Lexar,32 GB,2023-07-20,active,,
+36,PNY,64 GB,2023-02-16,active,,
+36B,PNY,32 GB,2024-04-07,active,,
+38,PNY,64 GB,2024-05-10,lost,2024-11-13,not found in the last visit
+38B,PNY,32 GB,2023-05-13,active,,
+39,PNY,64 GB,2025-03-15,active,,
+39B,Transcend,64 GB,2023-06-14,active,,
+39BB,PNY,64 GB,2024-02-04,active,,
+41,Samsung,128 GB,2024-06-29,broken,2024-12-03,does not switch on
+41B,Lexar,32 GB,2024-01-28,active,,
+41BB,Samsung,64 GB,2023-12-19,active,,
+42,Kingston,64 GB,2024-04-20,active,,
+42B,Lexar,128 GB,2023-10-22,active,,
+42BB,Lexar,64 GB,2023-11-30,retired,2025-08-20,replaced by a newer one
+43,Transcend,128 GB,2024-03-31,active,,
+43B,SanDisk,64 GB,2025-04-15,active,,
+44,SanDisk,64 GB,2023-08-25,active,,
+44B,SanDisk,32 GB,2025-06-18,active,,
+45,Lexar,64 GB,2024-02-22,retired,2025-08-02,replaced by a newer one
+45B,Transcend,64 GB,2023-01-28,active,,
+46,Samsung,64 GB,2023-12-27,active,,
+46B,Transcend,64 GB,2023-04-23,active,,
+47,Transcend,64 GB,2024-07-23,active,,
+47B,Transcend,64 GB,2024-08-06,broken,2024-12-04,does not switch on
+48,Samsung,64 GB,2024-11-17,active,,
+48B,Transcend,64 GB,2023-04-14,active,,
+49,Samsung,32 GB,2024-03-22,active,,
+49B,Kingston,32 GB,2024-12-01,active,,
+50,SanDisk,64 GB,2025-01-09,lost,2025-05-10,not found in the last visit
+50B,Kingston,32 GB,2024-06-02,active,,
+51,Samsung,64 GB,2024-08-25,active,,
+51B,SanDisk,64 GB,2023-11-19,active,,
+52,Kingston,64 GB,2023-09-20,active,,
+52B,SanDisk,32 GB,2024-02-26,stolen,2025-07-21,taken from the site
+53,Samsung,128 GB,2023-01-16,active,,
+53B,SanDisk,32 GB,2023-08-29,active,,
+54,SanDisk,64 GB,2023-05-06,active,,
+54B,SanDisk,64 GB,2023-11-19,active,,
+55,Lexar,32 GB,2024-02-18,retired,2025-08-18,replaced by a newer one
+55B,Samsung,64 GB,2024-08-31,active,,
+55BB,Lexar,128 GB,2024-11-23,active,,
+56,SanDisk,64 GB,2025-05-31,active,,
+56B,Transcend,64 GB,2024-02-03,active,,
+57,Samsung,64 GB,2023-03-01,lost,2024-03-21,not found in the last visit
+57B,PNY,128 GB,2025-06-18,active,,
+59,SanDisk,64 GB,2024-12-12,active,,
+59B,Samsung,64 GB,2025-01-14,active,,
+60,SanDisk,64 GB,2025-02-25,active,,
+60B,Lexar,64 GB,2024-08-22,retired,2024-12-20,replaced by a newer one
+61,SanDisk,64 GB,2023-07-22,active,,
+61B,Transcend,32 GB,2025-01-08,active,,
+62,SanDisk,64 GB,2024-09-25,active,,
+62B,SanDisk,32 GB,2023-02-08,active,,
+63,Kingston,64 GB,2024-09-03,lost,2025-01-01,not found in the last visit
+63B,PNY,64 GB,2023-01-30,active,,
+64,Lexar,64 GB,2023-12-31,active,,
+64B,Lexar,128 GB,2024-01-22,active,,
+65,Kingston,128 GB,2024-11-09,active,,
+65B,Kingston,64 GB,2023-07-07,lost,2025-03-18,not found in the last visit
+66,Transcend,32 GB,2024-11-08,active,,
+66B,PNY,128 GB,2023-09-19,active,,
+67,Kingston,64 GB,2023-01-24,active,,
+67B,SanDisk,64 GB,2024-07-08,active,,
+68,Lexar,128 GB,2023-09-28,retired,2024-02-06,replaced by a newer one
+68B,Samsung,64 GB,2024-10-03,active,,
+69,Transcend,32 GB,2025-05-09,active,,
+69B,Kingston,32 GB,2024-10-27,active,,
+70,Transcend,64 GB,2023-12-15,active,,
+70B,PNY,64 GB,2023-02-27,stolen,2024-06-08,taken from the site
+71,PNY,32 GB,2024-10-04,active,,
+71B,Kingston,128 GB,2023-03-01,active,,
+72,Kingston,64 GB,2025-02-02,active,,
+72B,Lexar,64 GB,2025-03-20,active,,
+73,Kingston,64 GB,2023-12-18,stolen,2025-10-07,taken from the site
+73B,Kingston,64 GB,2024-01-03,active,,
+74,Lexar,128 GB,2024-07-15,active,,
+74B,Lexar,64 GB,2023-07-12,active,,
+75,Kingston,128 GB,2023-06-07,active,,
+75B,Lexar,32 GB,2023-12-29,retired,2025-07-14,replaced by a newer one
+76,Transcend,128 GB,2025-03-25,active,,
+76B,SanDisk,64 GB,2023-03-28,active,,
+77,Samsung,64 GB,2024-07-13,active,,
+77B,PNY,64 GB,2023-05-22,active,,
+79,PNY,32 GB,2023-01-19,broken,2024-07-09,does not switch on
+79B,Transcend,64 GB,2025-05-20,active,,
+80,PNY,64 GB,2024-08-09,active,,
+80B,SanDisk,128 GB,2024-01-25,active,,
+81,Transcend,64 GB,2024-06-04,active,,
+81B,SanDisk,32 GB,2023-05-26,stolen,2024-08-09,taken from the site
+82,PNY,128 GB,2023-12-08,active,,
+82B,Transcend,64 GB,2023-11-14,active,,
+83,SanDisk,64 GB,2023-06-16,active,,
+83B,Samsung,64 GB,2024-07-08,active,,
+84,Samsung,64 GB,2023-05-18,broken,2025-03-22,does not switch on
+84B,Lexar,64 GB,2025-02-03,active,,
+85,PNY,32 GB,2025-05-17,active,,
+85B,Transcend,128 GB,2024-03-08,active,,
+86,Samsung,64 GB,2025-01-09,active,,
+86B,Transcend,32 GB,2023-07-03,broken,2024-02-09,does not switch on
+87,Samsung,64 GB,2023-06-17,active,,
+87B,SanDisk,32 GB,2024-06-11,active,,
+88,PNY,32 GB,2025-05-12,active,,
+88B,Samsung,32 GB,2024-01-12,active,,
+89,Samsung,64 GB,2024-06-28,retired,2025-07-21,replaced by a newer one
+89B,Kingston,64 GB,2023-05-10,active,,
+90,SanDisk,64 GB,2024-05-11,active,,
+90B,SanDisk,32 GB,2024-01-26,active,,
+91,Samsung,64 GB,2024-10-25,active,,
+91B,SanDisk,64 GB,2024-04-30,lost,2025-05-28,not found in the last visit
+92,Lexar,32 GB,2024-07-22,active,,
+92B,Transcend,64 GB,2025-04-28,active,,
+93,Samsung,128 GB,2024-08-22,active,,
+93B,Samsung,32 GB,2023-03-12,active,,
+94,SanDisk,128 GB,2025-03-07,retired,2025-07-05,replaced by a newer one
+94B,Samsung,64 GB,2025-02-10,active,,
+95,PNY,64 GB,2023-06-22,active,,
+693,Samsung,128 GB,2024-06-02,active,,

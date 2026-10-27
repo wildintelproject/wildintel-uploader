@@ -1,73 +1,73 @@
-location_id,name,latitude,longitude,coordinate_uncertainty,timezone,ignore_dst
-WICP_0006_B,WICP site 6 (second camera),37.009299,-6.478872,4,UTC,true
-WICP_0007_B,WICP site 7 (second camera),36.834688,-6.373544,5,UTC,true
-WICP_0008,WICP site 8,37.030307,-6.529974,4,UTC,true
-WICP_0009,WICP site 9,36.859603,-6.383235,4,UTC,true
-WICP_0010_B,WICP site 10 (second camera),37.043969,-6.447613,4,UTC,true
-WICP_0011,WICP site 11,36.870618,-6.395525,4,UTC,true
-WICP_0012,WICP site 12,36.93965,-6.44677,4,UTC,true
-WICP_0013,WICP site 13,36.926445,-6.428857,4,UTC,true
-WICP_0014_B,WICP site 14 (second camera),36.889499,-6.397412,4,UTC,true
-WICP_0016_B,WICP site 16 (second camera),36.930806,-6.459368,4,UTC,true
-WICP_0017_B,WICP site 17 (second camera),36.983373,-6.477123,4,UTC,true
-WICP_0018_B,WICP site 18 (second camera),37.128653,-6.412444,4,UTC,true
-WICP_0019_B,WICP site 19 (second camera),37.048087,-6.484005,4,UTC,true
-WICP_0020,WICP site 20,37.060662,-6.512889,4,UTC,true
-WICP_0021,WICP site 21,36.962463,-6.445049,4,UTC,true
-WICP_0021_B,WICP site 21 (second camera),36.962472,-6.445029,4,UTC,true
-WICP_0022_B,WICP site 22 (second camera),37.018028,-6.542838,4,UTC,true
-WICP_0023_B,WICP site 23 (second camera),37.071567,-6.48917,4,UTC,true
-WICP_0024,WICP site 24,37.008358,-6.458993,4,UTC,true
-WICP_0025_B,WICP site 25 (second camera),37.043762,-6.53762,4,UTC,true
-WICP_0026_B,WICP site 26 (second camera),37.083294,-6.457936,4,UTC,true
-WICP_0027,WICP site 27,36.998179,-6.530398,4,UTC,true
-WICP_0028,WICP site 28,37.02783,-6.446022,4,UTC,true
-WICP_0029,WICP site 29,37.039594,-6.464061,4,UTC,true
-WICP_0030,WICP site 30,37.061085,-6.4457,4,UTC,true
-WICP_0031_B,WICP site 31 (second camera),37.033225,-6.498178,4,UTC,true
-WICP_0032,WICP site 32,37.01517,-6.52289,4,UTC,true
-WICP_0033,WICP site 33,36.817657,-6.365246,5,UTC,true
-WICP_0034,WICP site 34,37.110406,-6.442074,4,UTC,true
-WICP_0035,WICP site 35,36.987839,-6.453659,4,UTC,true
-WICP_0036,WICP site 36,37.067936,-6.465853,4,UTC,true
-WICP_0038,WICP site 38,37.093441,-6.470664,4,UTC,true
-WICP_0039,WICP site 39,36.998518,-6.501711,4,UTC,true
-WICP_0039_B,WICP site 39 (second camera),36.998515,-6.50176,4,UTC,true
-WICP_0041_B,WICP site 41 (second camera),36.84533,-6.405191,4,UTC,true
-WICP_0042_B,WICP site 42 (second camera),36.909054,-6.410805,4,UTC,true
-WICP_0043,WICP site 43,36.966955,-6.467139,4,UTC,true
-WICP_0044,WICP site 44,37.089,-6.490144,4,UTC,true
-WICP_0045,WICP site 45,37.097479,-6.496086,4,UTC,true
-WICP_0046,WICP site 46,37.071203,-6.452043,4,UTC,true
-WICP_0047,WICP site 47,37.053917,-6.465741,4,UTC,true
-WICP_0048,WICP site 48,37.043004,-6.515057,4,UTC,true
-WICP_0049,WICP site 49,36.824806,-6.396542,4,UTC,true
-WICP_0050,WICP site 50,36.810905,-6.381097,4,UTC,true
-WICP_0051,WICP site 51,36.798906,-6.369275,4,UTC,true
-WICP_0052,WICP site 52,36.847095,-6.380678,4,UTC,true
-WICP_0053,WICP site 53,36.910283,-6.39027,4,UTC,true
-WICP_0054,WICP site 54,36.922766,-6.409994,4,UTC,true
-WICP_0055,WICP site 55,36.877449,-6.428116,4,UTC,true
-WICP_0056,WICP site 56,37.135471,-6.429564,4,UTC,true
-WICP_0057,WICP site 57,37.132269,-6.447333,4,UTC,true
-WICP_0058,WICP site 58,36.98692,-6.507658,6,UTC,true
-WICP_0059,WICP site 59,36.987408,-6.490246,4,UTC,true
-WICP_0060,WICP site 60,37.012409,-6.502394,4,UTC,true
-WICP_0061,WICP site 61,37.02485,-6.470675,4,UTC,true
-WICP_0062,WICP site 62,36.894709,-6.438247,4,UTC,true
-WICP_0063,WICP site 63,36.972561,-6.483808,4,UTC,true
-WICP_0064,WICP site 64,36.94387,-6.434456,4,UTC,true
-WICP_0065,WICP site 65,36.948384,-6.464235,4,UTC,true
-WICP_0066,WICP site 66,36.975947,-6.43785,4,UTC,true
-WICP_0067,WICP site 67,36.9957,-6.471165,4,UTC,true
-WICP_0068,WICP site 68,37.010467,-6.44205,4,UTC,true
-WICP_0069,WICP site 69,37.13278,-6.51755,4,UTC,true
-WICP_0070,WICP site 70,36.924358,-6.410586,5,UTC,true
-WICP_0071,WICP site 71,36.989483,-6.506171,4,UTC,true
-WICP_0072,WICP site 72,36.810252,-6.380816,5,UTC,true
-WICP_0072_B,WICP site 72 (second camera),36.982383,-6.505864,10,UTC,true
-WICP_0073,WICP site 73,36.845393,-6.405148,8,UTC,true
-WICP_0074,WICP site 74,37.043417,-6.51512,3,UTC,true
-WICP_0075,WICP site 75,37.044214,-6.448189,4,UTC,true
-WICP_0076,WICP site 76,36.799569,-6.369331,6,UTC,true
-WICP_0854,WICP site 854,37.093501,-6.470627,7,UTC,true
+location_id,name,latitude,longitude,coordinate_uncertainty,timezone,ignore_dst,status,status_date,status_note
+WICP_0006_B,WICP site 6 (second camera),37.009299,-6.478872,4,UTC,true,active,,
+WICP_0007_B,WICP site 7 (second camera),36.834688,-6.373544,5,UTC,true,active,,
+WICP_0008,WICP site 8,37.030307,-6.529974,4,UTC,true,active,,
+WICP_0009,WICP site 9,36.859603,-6.383235,4,UTC,true,active,,
+WICP_0010_B,WICP site 10 (second camera),37.043969,-6.447613,4,UTC,true,active,,
+WICP_0011,WICP site 11,36.870618,-6.395525,4,UTC,true,active,,
+WICP_0012,WICP site 12,36.93965,-6.44677,4,UTC,true,active,,
+WICP_0013,WICP site 13,36.926445,-6.428857,4,UTC,true,active,,
+WICP_0014_B,WICP site 14 (second camera),36.889499,-6.397412,4,UTC,true,retired,2025-10-15,site abandoned
+WICP_0016_B,WICP site 16 (second camera),36.930806,-6.459368,4,UTC,true,active,,
+WICP_0017_B,WICP site 17 (second camera),36.983373,-6.477123,4,UTC,true,active,,
+WICP_0018_B,WICP site 18 (second camera),37.128653,-6.412444,4,UTC,true,active,,
+WICP_0019_B,WICP site 19 (second camera),37.048087,-6.484005,4,UTC,true,planned,,not set up yet
+WICP_0020,WICP site 20,37.060662,-6.512889,4,UTC,true,active,,
+WICP_0021,WICP site 21,36.962463,-6.445049,4,UTC,true,active,,
+WICP_0021_B,WICP site 21 (second camera),36.962472,-6.445029,4,UTC,true,active,,
+WICP_0022_B,WICP site 22 (second camera),37.018028,-6.542838,4,UTC,true,active,,
+WICP_0023_B,WICP site 23 (second camera),37.071567,-6.48917,4,UTC,true,retired,2025-07-15,site abandoned
+WICP_0024,WICP site 24,37.008358,-6.458993,4,UTC,true,active,,
+WICP_0025_B,WICP site 25 (second camera),37.043762,-6.53762,4,UTC,true,active,,
+WICP_0026_B,WICP site 26 (second camera),37.083294,-6.457936,4,UTC,true,active,,
+WICP_0027,WICP site 27,36.998179,-6.530398,4,UTC,true,active,,
+WICP_0028,WICP site 28,37.02783,-6.446022,4,UTC,true,active,,
+WICP_0029,WICP site 29,37.039594,-6.464061,4,UTC,true,active,,
+WICP_0030,WICP site 30,37.061085,-6.4457,4,UTC,true,active,,
+WICP_0031_B,WICP site 31 (second camera),37.033225,-6.498178,4,UTC,true,planned,,not set up yet
+WICP_0032,WICP site 32,37.01517,-6.52289,4,UTC,true,retired,2025-04-15,site abandoned
+WICP_0033,WICP site 33,36.817657,-6.365246,5,UTC,true,active,,
+WICP_0034,WICP site 34,37.110406,-6.442074,4,UTC,true,active,,
+WICP_0035,WICP site 35,36.987839,-6.453659,4,UTC,true,active,,
+WICP_0036,WICP site 36,37.067936,-6.465853,4,UTC,true,active,,
+WICP_0038,WICP site 38,37.093441,-6.470664,4,UTC,true,active,,
+WICP_0039,WICP site 39,36.998518,-6.501711,4,UTC,true,active,,
+WICP_0039_B,WICP site 39 (second camera),36.998515,-6.50176,4,UTC,true,active,,
+WICP_0041_B,WICP site 41 (second camera),36.84533,-6.405191,4,UTC,true,active,,
+WICP_0042_B,WICP site 42 (second camera),36.909054,-6.410805,4,UTC,true,retired,2025-01-15,site abandoned
+WICP_0043,WICP site 43,36.966955,-6.467139,4,UTC,true,active,,
+WICP_0044,WICP site 44,37.089,-6.490144,4,UTC,true,active,,
+WICP_0045,WICP site 45,37.097479,-6.496086,4,UTC,true,planned,,not set up yet
+WICP_0046,WICP site 46,37.071203,-6.452043,4,UTC,true,active,,
+WICP_0047,WICP site 47,37.053917,-6.465741,4,UTC,true,active,,
+WICP_0048,WICP site 48,37.043004,-6.515057,4,UTC,true,active,,
+WICP_0049,WICP site 49,36.824806,-6.396542,4,UTC,true,active,,
+WICP_0050,WICP site 50,36.810905,-6.381097,4,UTC,true,active,,
+WICP_0051,WICP site 51,36.798906,-6.369275,4,UTC,true,retired,2025-10-15,site abandoned
+WICP_0052,WICP site 52,36.847095,-6.380678,4,UTC,true,active,,
+WICP_0053,WICP site 53,36.910283,-6.39027,4,UTC,true,active,,
+WICP_0054,WICP site 54,36.922766,-6.409994,4,UTC,true,active,,
+WICP_0055,WICP site 55,36.877449,-6.428116,4,UTC,true,active,,
+WICP_0056,WICP site 56,37.135471,-6.429564,4,UTC,true,active,,
+WICP_0057,WICP site 57,37.132269,-6.447333,4,UTC,true,active,,
+WICP_0058,WICP site 58,36.98692,-6.507658,6,UTC,true,planned,,not set up yet
+WICP_0059,WICP site 59,36.987408,-6.490246,4,UTC,true,active,,
+WICP_0060,WICP site 60,37.012409,-6.502394,4,UTC,true,retired,2025-07-15,site abandoned
+WICP_0061,WICP site 61,37.02485,-6.470675,4,UTC,true,active,,
+WICP_0062,WICP site 62,36.894709,-6.438247,4,UTC,true,active,,
+WICP_0063,WICP site 63,36.972561,-6.483808,4,UTC,true,active,,
+WICP_0064,WICP site 64,36.94387,-6.434456,4,UTC,true,active,,
+WICP_0065,WICP site 65,36.948384,-6.464235,4,UTC,true,active,,
+WICP_0066,WICP site 66,36.975947,-6.43785,4,UTC,true,active,,
+WICP_0067,WICP site 67,36.9957,-6.471165,4,UTC,true,active,,
+WICP_0068,WICP site 68,37.010467,-6.44205,4,UTC,true,active,,
+WICP_0069,WICP site 69,37.13278,-6.51755,4,UTC,true,retired,2025-04-15,site abandoned
+WICP_0070,WICP site 70,36.924358,-6.410586,5,UTC,true,active,,
+WICP_0071,WICP site 71,36.989483,-6.506171,4,UTC,true,planned,,not set up yet
+WICP_0072,WICP site 72,36.810252,-6.380816,5,UTC,true,active,,
+WICP_0072_B,WICP site 72 (second camera),36.982383,-6.505864,10,UTC,true,active,,
+WICP_0073,WICP site 73,36.845393,-6.405148,8,UTC,true,active,,
+WICP_0074,WICP site 74,37.043417,-6.51512,3,UTC,true,active,,
+WICP_0075,WICP site 75,37.044214,-6.448189,4,UTC,true,active,,
+WICP_0076,WICP site 76,36.799569,-6.369331,6,UTC,true,active,,
+WICP_0854,WICP site 854,37.093501,-6.470627,7,UTC,true,retired,2025-01-15,site abandoned
