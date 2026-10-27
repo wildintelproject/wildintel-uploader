@@ -544,7 +544,7 @@ function FormPage({ region, backLabel, onBack, title, badges = [], children, onC
   notice?: ReactNode
 }) {
   return (
-    <section aria-label={region} className="max-w-xl mx-auto space-y-5">
+    <section aria-label={region} className="max-w-xl space-y-5">
       <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"><ChevronLeftIcon />{backLabel}</button>
       <div className="flex flex-wrap items-center gap-3">
         <h4 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{title}</h4>
@@ -1459,7 +1459,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
   const owner = projectId === NOT_ASSIGNED ? null : project?.acronym ?? null
 
   return (
-    <div className="py-5 space-y-5">
+    <div className={`${detail ? 'pb-5' : 'py-5'} space-y-5`}>
       {!detail && <p className={`${hintClass} leading-relaxed max-w-prose`}>
         The research projects, the people who go to the field, and what belongs to each project: its locations, its cameras and its SD cards.
       </p>}
