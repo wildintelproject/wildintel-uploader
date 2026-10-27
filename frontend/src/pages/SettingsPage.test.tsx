@@ -9,7 +9,7 @@ import type { Camera, SdCard } from '../types'
 
 vi.mock('../api', () => ({
   api: {
-    listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), updateResearchProject: vi.fn(), deleteResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), updateLocalLocation: vi.fn(), trapperResearchProjects: vi.fn(), trapperLocations: vi.fn(),
+    listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), updateResearchProject: vi.fn(), deleteResearchProject: vi.fn(), listLocalLocations: vi.fn(), listVisits: vi.fn(), deleteLocalLocation: vi.fn(), saveLocalLocation: vi.fn(), updateLocalLocation: vi.fn(), trapperResearchProjects: vi.fn(), trapperLocations: vi.fn(),
     getSettings: vi.fn(), saveSettings: vi.fn(), clearLog: vi.fn(), browseFolder: vi.fn(), trapperTestConnection: vi.fn(), epicollectTestConnection: vi.fn(),
     checkVersion: vi.fn(), checkForUpdate: vi.fn(), listReports: vi.fn(), deleteReport: vi.fn(), getReport: vi.fn(), reportUrl: (id: string, format: string) => `/api/reports/${id}/download?format=${format}`, configs: vi.fn(), addConfig: vi.fn(), activateConfig: vi.fn(), openConfigFolder: vi.fn(),
   },
@@ -54,10 +54,11 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page')
 
     await section('Trapper')
-    expect(screen.getByLabelText('URL')).toHaveValue('https://trapper.example.org')
+    expect(screen.getByLabelText('Web address')).toHaveValue('https://trapper.example.org')
     expect(screen.getByLabelText('Username')).toHaveValue('alice')
-    expect(screen.getByLabelText('Password')).toHaveValue('')
-    expect(screen.getByText(/a password is saved — leave it blank to keep it/i)).toBeInTheDocument()
+    expect(screen.getByText('Saved')).toBeInTheDocument() // a saved password is shown as kept, never its value
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
+    expect(screen.getByText(/the saved password is kept private/i)).toBeInTheDocument()
     expect(screen.queryByLabelText('Level')).not.toBeInTheDocument()
 
     await section('Validation')
@@ -183,7 +184,7 @@ describe('SettingsPage', () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await section('Trapper')
-      const field = screen.getByLabelText('Largest zip')
+      const field = screen.getByLabelText('Largest package')
       expect(field).toHaveValue('500')
 
       await userEvent.clear(field)
@@ -201,12 +202,14 @@ describe('SettingsPage', () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await section('Trapper')
+      await userEvent.click(screen.getByRole('button', { name: 'Change' }))
       await userEvent.type(screen.getByLabelText('Password'), 'new-secret')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].TRAPPER.user_password).toBe('new-secret')
       await screen.findByText('Settings saved.')
-      expect(screen.getByLabelText('Password')).toHaveValue('')
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
+      expect(screen.getByText('Saved')).toBeInTheDocument()
     })
 
     it('says there is no password saved yet', async () => {
@@ -228,7 +231,8 @@ describe('SettingsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
       expect(mockedApi.trapperTestConnection).toHaveBeenCalledWith({ url: 'https://trapper.example.org', username: 'alice', password: '' })
-      expect(await screen.findByText('Connected — 3 research project(s) available.')).toBeInTheDocument()
+      expect(await screen.findByText('Connected as alice. 3 research projects available.')).toBeInTheDocument()
+      expect(screen.getByText('Connected')).toBeInTheDocument() // beside the title too
     })
 
     it('says why the connection failed', async () => {
@@ -751,8 +755,8 @@ describe('SettingsPage', () => {
     await screen.findByLabelText('Level')
     await userEvent.selectOptions(screen.getByLabelText('Level'), 'WARNING')
     await section('Trapper')
-    await userEvent.clear(screen.getByLabelText('URL'))
-    await userEvent.type(screen.getByLabelText('URL'), 'https://other.example.org')
+    await userEvent.clear(screen.getByLabelText('Web address'))
+    await userEvent.type(screen.getByLabelText('Web address'), 'https://other.example.org')
     await section('Validation')
     await userEvent.click(screen.getByRole('switch', { name: /Duplicate images/ }))
     await section('Postvalidation')
@@ -862,8 +866,10 @@ describe('SettingsPage', () => {
       expect(screen.queryByRole('heading', { name: 'Entities' })).not.toBeInTheDocument()
       expect(screen.queryByText(/The people who go to the field/)).not.toBeInTheDocument()
 
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument() // the one of the settings waits until the form is closed
       await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       expect(screen.getByRole('heading', { name: 'Entities' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
     })
 
     it('exports the trappers to a CSV file, and has nothing to export when there are none', async () => {
@@ -930,8 +936,8 @@ describe('SettingsPage', () => {
       await open([A12, B3])
 
       expect(screen.getByText('A12')).toBeInTheDocument()
-      expect(screen.getByText('SanDisk · 64 GB · in production since 2026-03-01')).toBeInTheDocument()
-      expect(screen.getByText('No details')).toBeInTheDocument()
+      expect(screen.getByText('SanDisk · 64 GB')).toBeInTheDocument()
+      expect(await screen.findByText('In production since 1 Mar 2026 · No visits yet')).toBeInTheDocument()
     })
 
     it('says when there are none yet', async () => {
@@ -947,28 +953,24 @@ describe('SettingsPage', () => {
       const dialog = within(screen.getByRole('region', { name: 'SD card' }))
       await userEvent.clear(dialog.getByLabelText('Label'))
       await userEvent.type(dialog.getByLabelText('Label'), 'C7')
-      await userEvent.click(dialog.getByLabelText('Brand'))
-      await userEvent.click(await dialog.findByRole('option', { name: 'Kingston' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Kingston' }))
       await userEvent.type(dialog.getByLabelText('Capacity'), '128 GB')
       fireEvent.change(dialog.getByLabelText('In production since'), { target: { value: '2026-05-20' } })
-      await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: '2026-05-20', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
     })
 
-    it('suggests the brands as they are typed, and keeps any other that is typed', async () => {
+    it('offers the usual brands to pick, and keeps any other that is typed', async () => {
       await open([B3])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
       const brand = screen.getByLabelText('Brand')
-      await userEvent.type(brand, 'san')
-      expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['SanDisk'])
+      expect(within(screen.getByLabelText('Brand suggestions')).getAllByRole('button').map((o) => o.textContent)).toContain('SanDisk')
 
-      await userEvent.clear(brand)
       await userEvent.type(brand, 'Acme Storage')
-      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-      await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ ...B3, brand: 'Acme Storage' }])
@@ -981,7 +983,7 @@ describe('SettingsPage', () => {
       const label = screen.getByLabelText('Label')
       await userEvent.clear(label)
       expect(screen.getByText('A label is required.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
 
       await userEvent.type(label, 'a12')
       expect(screen.getByText('a12 is already in the list.')).toBeInTheDocument()
@@ -1000,8 +1002,8 @@ describe('SettingsPage', () => {
     it('lists the cameras with their model, and says when there are none', async () => {
       await open([{ camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA' }, { camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
 
-      expect(screen.getByText('Reconyx-PC800 · in production since 2025-11-12')).toBeInTheDocument()
-      expect(screen.getByText('No details')).toBeInTheDocument()
+      expect(screen.getByText('Reconyx-PC800')).toBeInTheDocument()
+      expect(await screen.findByText('In production since 12 Nov 2025 · No visits yet')).toBeInTheDocument()
     })
 
     it('adds a camera by its id and model, and saves it', async () => {
@@ -1014,7 +1016,7 @@ describe('SettingsPage', () => {
       await userEvent.type(dialog.getByLabelText('Camera id'), 'P800HG08192031')
       await userEvent.type(dialog.getByLabelText('Camera model'), 'Reconyx-PC800')
       fireEvent.change(dialog.getByLabelText('In production since'), { target: { value: '2025-11-12' } })
-      await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
@@ -1025,25 +1027,42 @@ describe('SettingsPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
       const dialog = within(screen.getByRole('region', { name: 'Camera' }))
-      expect(dialog.getByLabelText('Status')).toHaveValue('active')
-      expect(within(dialog.getByLabelText('Status')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Active', 'Retired', 'Stolen', 'Lost', 'Broken'])
-      await userEvent.selectOptions(dialog.getByLabelText('Status'), 'stolen')
+      expect(dialog.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
+      expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual([
+        'ActiveOffered when a visit is registered.', 'LostNot offered. Past visits keep it.', 'StolenNot offered. Past visits keep it.', 'BrokenNot offered until it is repaired.', 'RetiredTaken out of use for good.',
+      ])
+      expect(dialog.queryByLabelText('Status since')).not.toBeInTheDocument() // asked once it is not active
+      await userEvent.click(dialog.getByRole('radio', { name: /Stolen/ }))
       fireEvent.change(dialog.getByLabelText('Status since'), { target: { value: '2026-05-02' } })
       await userEvent.type(dialog.getByLabelText('Status note'), 'taken from the tree')
-      await userEvent.click(dialog.getByRole('button', { name: 'Done' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
 
       expect(screen.getByText('Stolen')).toHaveAttribute('title', 'since 2026-05-02 — taken from the tree')
+      expect(screen.getByText(/Stolen since 2 May 2026/)).toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([
         { camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'stolen', status_date: '2026-05-02', status_note: 'taken from the tree' },
       ])
     })
 
-    it('removes a camera from its window', async () => {
+    it('says how many visits a camera was used in, and does not let one that was used be deleted', async () => {
+      const visit = (camera_id: string) => ({ project: 'DONA', camera_id })
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [DONA] })
+      mockedApi.listVisits.mockResolvedValue({ results: [visit('X1'), visit('x1')] } as never)
+      await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }, { camera_id: 'X2', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      expect(await screen.findByText('Used in 2 visits')).toBeInTheDocument()
+      expect(screen.getByText('No visits yet')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Delete X1' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Delete X2' })).toBeEnabled()
+      mockedApi.listVisits.mockReset()
+    })
+
+    it('deletes a camera from its page', async () => {
       await open([{ camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Remove camera' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete camera' }))
 
       expect(screen.queryByText('X1')).not.toBeInTheDocument()
     })
@@ -1055,11 +1074,11 @@ describe('SettingsPage', () => {
       const id = screen.getByLabelText('Camera id')
       await userEvent.clear(id)
       expect(screen.getByText('A camera id is required.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
 
       await userEvent.type(id, 'x1')
       expect(screen.getByText('x1 is already in the list.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
     })
   })
 
@@ -1352,7 +1371,8 @@ describe('SettingsPage — Entities', () => {
       await openLocations()
 
       expect(await screen.findByText('DONA_01')).toBeInTheDocument()
-      expect(screen.getByText('Ridge · 37.1, -6.4 · Europe/Madrid')).toBeInTheDocument()
+      expect(screen.getByText('Ridge')).toBeInTheDocument()
+      expect(await screen.findByText('37.1, -6.4 · Europe/Madrid · No visits yet')).toBeInTheDocument()
       expect(mockedApi.listLocalLocations).toHaveBeenCalledWith('DONA')
     })
 
@@ -1369,16 +1389,32 @@ describe('SettingsPage — Entities', () => {
       await userEvent.clear(dialog.getByLabelText('Latitude'))
       await userEvent.type(dialog.getByLabelText('Latitude'), '37.01')
       await userEvent.type(dialog.getByLabelText('Longitude'), '-6.44')
-      await userEvent.type(dialog.getByLabelText('Timezone (IANA)'), 'Mars/Base')
+      await userEvent.type(dialog.getByLabelText('Time zone'), 'Mars/Base')
       expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
-      await userEvent.clear(dialog.getByLabelText('Timezone (IANA)'))
-      await userEvent.type(dialog.getByLabelText('Timezone (IANA)'), 'Europe/Madrid')
-      await userEvent.click(dialog.getByLabelText('Its cameras ignore summer time (DST)'))
+      await userEvent.clear(dialog.getByLabelText('Time zone'))
+      await userEvent.type(dialog.getByLabelText('Time zone'), 'Europe/Madrid')
+      await userEvent.click(dialog.getByLabelText('The cameras here ignore summer time'))
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
 
       await waitFor(() => expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
         location_id: 'DONA_02', name: null, latitude: 37.01, longitude: -6.44, coordinate_uncertainty: null, timezone: 'Europe/Madrid', ignore_dst: true, trapper_pk: null, status: 'active', status_date: null, status_note: null,
       }))
+    })
+
+    it('deletes one after asking, from its page — and says why when it can not be', async () => {
+      mockedApi.deleteLocalLocation.mockRejectedValueOnce(new Error("The location 'DONA_01' still has 1 visit: it can't be deleted — mark it as retired instead."))
+      mockedApi.deleteLocalLocation.mockResolvedValueOnce({ deleted: 'DONA_01' })
+      await openLocations()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete location' }))
+      expect(mockedApi.deleteLocalLocation).not.toHaveBeenCalled() // it is asked first
+      await userEvent.click(screen.getByRole('button', { name: 'Delete DONA_01' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('still has 1 visit')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Delete location' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete DONA_01' }))
+      await waitFor(() => expect(mockedApi.deleteLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01'))
     })
 
     it('edits one — but not its id — and keeps it at once', async () => {
@@ -1388,9 +1424,9 @@ describe('SettingsPage — Entities', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
       const dialog = within(screen.getByRole('region', { name: 'Location' }))
       expect(dialog.getByLabelText('Location id')).toBeDisabled()
-      await userEvent.clear(dialog.getByLabelText('Location name'))
-      await userEvent.type(dialog.getByLabelText('Location name'), 'Ridge top')
-      await userEvent.click(dialog.getByRole('button', { name: 'Save' }))
+      await userEvent.clear(dialog.getByLabelText('Name'))
+      await userEvent.type(dialog.getByLabelText('Name'), 'Ridge top')
+      await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
 
       await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01', expect.objectContaining({ name: 'Ridge top', latitude: 37.1, timezone: 'Europe/Madrid' })))
     })
@@ -1449,10 +1485,10 @@ describe('SettingsPage — Entities', () => {
     expect(screen.queryByText('B1')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Add SD card' }))
     await userEvent.type(within(screen.getByRole('region', { name: 'SD card' })).getByLabelText('Label'), '2')
-    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards.map((c) => [c.label, c.research_project])).toEqual([['B1', 'TATR'], ['F1', null], ['A1', 'DONA'], ['New SD card2', 'DONA']])
+    expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards.map((c) => [c.label, c.research_project])).toEqual([['B1', 'TATR'], ['F1', null], ['A1', 'DONA'], ['2', 'DONA']])
   })
 
   it('shows the cards of no project under their own choice', async () => {

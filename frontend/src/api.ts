@@ -196,6 +196,9 @@ export const api = {
     post<LocalLocation>('/api/deployment-import/locations/save', { research_project_id: researchProjectId, location }),
 
   // Changes a kept location: the fields given are the ones that change (null clears one).
+  /** Deletes a location of a research project — refused while visits were made to it, or when it comes from Trapper. */
+  deleteLocalLocation: (researchProjectId: string, locationId: string) =>
+    post<{ deleted: string }>('/api/deployment-import/locations/delete', { research_project_id: researchProjectId, location_id: locationId }),
   updateLocalLocation: (researchProjectId: string, locationId: string, changes: Partial<Pick<LocalLocation, 'name' | 'latitude' | 'longitude' | 'coordinate_uncertainty' | 'timezone' | 'ignore_dst' | 'status' | 'status_date' | 'status_note'>>) =>
     post<LocalLocation>('/api/deployment-import/locations/update', { research_project_id: researchProjectId, location_id: locationId, ...changes }),
 

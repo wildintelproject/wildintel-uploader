@@ -535,7 +535,7 @@ export interface FieldworkSettings {
 
 /** Whether a camera or an SD card can still be used; only an active one is offered for a visit. */
 export type CameraStatus = 'active' | 'retired' | 'stolen' | 'lost' | 'broken'
-export type SdCardStatus = 'active' | 'retired' | 'lost' | 'broken'
+export type SdCardStatus = 'active' | 'retired' | 'stolen' | 'lost' | 'broken'
 export type TrapperStatus = 'active' | 'inactive'
 export type LocationStatus = 'active' | 'retired' | 'planned'
 export type ResearchProjectStatus = 'planned' | 'active' | 'finished'
