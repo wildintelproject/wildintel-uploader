@@ -12,10 +12,9 @@ const ICONS: Record<string, ReactNode> = {
 }
 
 const TASKS = [
-  { icon: 'visits', title: 'Register visits', description: 'Record who visited each camera trap, when and what was done. The deployments are worked out from the visits.' },
-  { icon: 'deployment', title: 'Import deployment', description: 'Organize a folder of images on this computer and register the deployment in Trapper.' },
-  { icon: 'session', title: 'Import session', description: 'Several deployments from one folder, with one subfolder each. The checks and image preparation are shared.' },
-  { icon: 'upload', title: 'Upload deployment to Trapper', description: 'Send a deployment kept on this computer to Trapper. Its location and the deployment are created there if missing.' },
+  { icon: 'visits', title: 'Register visits', description: 'Record who visited each camera trap, when and what was done.' },
+  { icon: 'deployment', title: 'Import deployments', description: 'Organize a folder of images on this computer, one deployment or several at once.' },
+  { icon: 'upload', title: 'Upload to Trapper', description: 'Send a deployment kept on this computer to Trapper.' },
 ]
 
 /** Where the app stands: the Trapper it is connected to and the research project that comes filled in. */
@@ -40,27 +39,24 @@ export default function WelcomePage({ onStart }: Props) {
     <div className="mx-auto max-w-[900px] px-4 py-10 flex flex-col items-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
       <div className="mb-1 text-4xl">📤</div>
       <h1 className="text-2xl font-bold mb-2 text-center">WildINTEL Uploader</h1>
-      <p className="text-zinc-500 dark:text-zinc-400 mb-8 text-lg text-center max-w-prose">
+      <p className="text-zinc-500 dark:text-zinc-400 mb-8 text-base text-center max-w-[480px]">
         Bring camera-trap images from a memory card into the WildINTEL project, organized and registered in Trapper.
       </p>
-      <ul className="grid sm:grid-cols-2 gap-4 w-full list-none p-0 m-0">
+      <ul className="w-full max-w-[460px] list-none p-0 m-0 space-y-4 text-left">
         {TASKS.map((t) => (
-          <li key={t.title} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-5 py-5">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 shrink-0">
-                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{ICONS[t.icon]}</svg>
-              </span>
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 m-0">{t.title}</h2>
-            </div>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed m-0">{t.description}</p>
+          <li key={t.title} className="flex items-start gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+            <span className="mt-0.5 shrink-0 text-blue-600 dark:text-blue-300">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{ICONS[t.icon]}</svg>
+            </span>
+            <span><strong className="font-semibold text-zinc-900 dark:text-zinc-100">{t.title}</strong> — {t.description}</span>
           </li>
         ))}
       </ul>
       <button type="button" className="mt-8 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-base flex items-center gap-2" onClick={onStart}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
         Get started
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       {(host || project) && (
         <p role="status" className="mt-6 inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 px-4 py-1.5 text-xs text-zinc-600 dark:text-zinc-400">

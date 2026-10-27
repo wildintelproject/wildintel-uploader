@@ -14,12 +14,12 @@ beforeEach(() => {
 })
 
 describe('WelcomePage', () => {
-  it('says what the app does, with a card for each task, and starts the flow', async () => {
+  it('says what the app does, with a line for each task, and starts the flow', async () => {
     const onStart = vi.fn()
     render(<WelcomePage onStart={onStart} />)
 
-    expect(screen.getByText(/organize a folder of images on this computer and register the deployment in trapper/i)).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Upload deployment to Trapper' })).toBeInTheDocument()
+    expect(screen.getByText(/organize a folder of images on this computer, one deployment or several at once/i)).toBeInTheDocument()
+    expect(screen.getByText('Upload to Trapper')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /get started/i }))
     expect(onStart).toHaveBeenCalled()
