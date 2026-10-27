@@ -1117,9 +1117,9 @@ describe('SettingsPage', () => {
       await section('Config')
 
       expect(await screen.findByText('Default config')).toBeInTheDocument()
-      expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+      expect(screen.getByText('In use')).toBeInTheDocument()
       expect(screen.getByLabelText('b file location')).toHaveTextContent('/configs/b.toml')
-      expect(screen.queryByRole('button', { name: 'Activate Default config' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Use Default config' })).not.toBeInTheDocument()
     })
 
     it('switches to another config and shows its settings', async () => {
@@ -1128,7 +1128,7 @@ describe('SettingsPage', () => {
       await waitFor(() => expect(mockedApi.getSettings).toHaveBeenCalledTimes(1))
       await section('Config')
       mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, TRAPPER: { ...APP_SETTINGS.TRAPPER, user_name: 'bob@b.org' } })
-      await userEvent.click(await screen.findByRole('button', { name: 'Activate b' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'Use b' }))
 
       await waitFor(() => expect(mockedApi.activateConfig).toHaveBeenCalledWith('b'))
       await waitFor(() => expect(mockedApi.getSettings).toHaveBeenCalledTimes(2)) // the settings are read again
@@ -1141,7 +1141,7 @@ describe('SettingsPage', () => {
       mockedApi.addConfig.mockResolvedValue([DEFAULT, B, created])
       render(<SettingsPage onClose={() => {}} />)
       await section('Config')
-      await userEvent.click(await screen.findByRole('button', { name: 'Add config' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'New config' }))
       expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
       await userEvent.type(screen.getByLabelText('Config name'), 'Project C')
       await userEvent.click(screen.getByRole('button', { name: 'Create' }))
@@ -1156,7 +1156,7 @@ describe('SettingsPage', () => {
       mockedApi.addConfig.mockRejectedValue(new Error('A config needs a name with at least one letter or digit.'))
       render(<SettingsPage onClose={() => {}} />)
       await section('Config')
-      await userEvent.click(await screen.findByRole('button', { name: 'Add config' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'New config' }))
       await userEvent.type(screen.getByLabelText('Config name'), '!!')
       await userEvent.click(screen.getByRole('button', { name: 'Create' }))
 

@@ -9,6 +9,7 @@ import { NO_CREDENTIALS } from './ImportDeploymentPage'
 import EpicollectMapping from '../components/EpicollectMapping'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
 import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS, SD_CARD_CAPACITIES } from '../entities'
+import Notice from '../components/Notice'
 import ReportsList from '../components/ReportsList'
 import { isValidTimezone } from '../deploymentValidation'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
@@ -1890,28 +1891,30 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
   }
 
   return (
-    <div className="space-y-4">
-      <p className={`${hintClass} leading-relaxed`}>
-        Each config is a settings file; the active one is what the app reads and saves — the folder the images are kept in,
-        the Trapper account, the checks and the preprocessing. A new one starts from the default values. Keep in mind these
-        files hold your passwords as plain text.
+    <div className="space-y-5 pt-3">
+      <p className={`${hintClass} leading-relaxed max-w-prose`}>
+        A config is a saved set of all your settings: the folders, the Trapper account, the checks and the preparation of images.
+        The active one is what the app reads and saves. You can keep several, for example one per Trapper account, and switch between them.
       </p>
-      <div className="flex items-center justify-between">
-        <span className="text-base text-zinc-800 dark:text-zinc-200">Config</span>
-        <button type="button" className={`${iconBtn} text-xl`} aria-label="Add config" title="Add a config with the default values" onClick={() => setAdding({ name: '' })}>+</button>
+      <Notice kind="warning">These files keep your passwords as plain text. Don't share a config file with anyone, and don't upload it anywhere.</Notice>
+      <div className="flex items-center justify-between gap-4">
+        <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Your configs <span className="ml-1 text-sm font-normal text-zinc-500 dark:text-zinc-400">{configs?.length ?? 0}</span></h5>
+        <button type="button" className={`${btnPrimary} inline-flex items-center gap-2`} aria-label="New config" onClick={() => setAdding({ name: '' })}>
+          <span aria-hidden="true" className="text-lg leading-none">+</span> New config
+        </button>
       </div>
       <div className="space-y-3">
         {configs?.map((c, i) => (
-          <div key={c.id} className={`flex items-center gap-4 px-4 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 border ${c.active ? 'border-blue-500' : 'border-transparent'}`}>
-            <span className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-700 text-sm font-semibold shrink-0" aria-hidden="true">#{i + 1}</span>
+          <div key={c.id} className={`flex items-center gap-4 px-5 py-4 rounded-2xl border ${c.active ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60'}`}>
+            <span className={`w-10 h-10 flex items-center justify-center rounded-full text-sm font-semibold shrink-0 ${c.active ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-700'}`} aria-hidden="true">#{i + 1}</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-base truncate">{c.name}</p>
-                {c.active && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-600 text-white">ACTIVE</span>}
+                <p className="text-base font-semibold truncate">{c.name}</p>
+                {c.active && <span className="text-xs px-2 py-0.5 rounded-md font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">In use</span>}
               </div>
               <p className={`${hintClass} font-mono break-all`} aria-label={`${c.name} file location`}>{c.path}</p>
             </div>
-            {!c.active && <button type="button" className={btnSoft} aria-label={`Activate ${c.name}`} onClick={() => activate(c.id)}>Activate</button>}
+            {!c.active && <button type="button" className={btnOutline} aria-label={`Use ${c.name}`} onClick={() => activate(c.id)}>Use this one</button>}
             <button type="button" className={iconBtn} aria-label={`Open ${c.name} folder`} title="Open the folder containing the config file"
                     onClick={() => api.openConfigFolder(c.id).catch((e) => fail(e, 'Could not open the folder.'))}>
               <FolderIcon />
@@ -1923,6 +1926,7 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
           </div>
         ))}
       </div>
+      <p className={hintClass}>The default config can't be deleted. To delete the one in use, switch to another first. Switching takes effect straight away.</p>
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAdding(null)}>
           <div role="dialog" aria-modal="true" aria-label="New config"
@@ -2437,7 +2441,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
           <ConfigsEditor onSwitched={reloadSettings} onError={(message) => setStatus({ kind: 'error', message })} />
         )}
 
-        {section !== 'reports' && !(section === 'entities' && entityDetail) && (
+        {section !== 'reports' && section !== 'config' && !(section === 'entities' && entityDetail) && (
         <div className="flex items-center justify-end gap-4 pt-5 mt-2 border-t border-zinc-200 dark:border-zinc-800">
           {status.kind === 'error' && <p className="text-sm text-red-600 dark:text-red-400 mr-auto">{status.message}</p>}
           {status.kind === 'saved' && <p className="text-sm text-emerald-700 dark:text-emerald-400 mr-auto">Settings saved.</p>}
