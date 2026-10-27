@@ -2316,6 +2316,15 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
             ) : sourceDir ? (
               <button type="button" className={btnOutline} onClick={() => handleScan()}>Scan</button>
             ) : null}
+            {scan && selectedProjectId && (
+              <FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project. Optional: it is checked against the card the visit says was left in the camera.`}>
+                <label className="sr-only" htmlFor="images-sd-card">SD card</label>
+                <Combobox
+                  id="images-sd-card" options={projectSdCards.map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
+                  value={sdCard} onChange={setSdCard} placeholder={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet` : 'Select the SD card the images come from…'} clearLabel="Clear SD card"
+                />
+              </FormCard>
+            )}
             <div className="flex justify-end items-center mt-4">
               <button type="button" aria-label="Continue to the checks" className={btnPrimary} disabled={!scan || scanning} onClick={() => openImagesStep(2)}>Continue<span aria-hidden="true"> →</span></button>
             </div>
@@ -2644,16 +2653,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                   </div>
                 </div>
               )}
-            </FormCard>
-          )}
-
-          {selectedProjectId && !addingProject && (
-            <FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project. Optional: it is checked against the card the visit says was left in the camera.`}>
-              <label className="sr-only" htmlFor="origin-sd-card">SD card</label>
-              <Combobox
-                id="origin-sd-card" options={projectSdCards.map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
-                value={sdCard} onChange={setSdCard} placeholder={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet` : 'Select the SD card the images come from…'} clearLabel="Clear SD card"
-              />
             </FormCard>
           )}
 

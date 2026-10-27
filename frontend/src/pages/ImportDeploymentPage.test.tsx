@@ -487,13 +487,17 @@ describe('ImportDeploymentPage', () => {
           await goToOriginStep()
           await userEvent.click(await screen.findByLabelText('Research project'))
           await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-          if (card) {
-            await userEvent.click(await screen.findByLabelText('SD card'))
-            await userEvent.click(await screen.findByRole('option', { name: new RegExp(`^${card}`) }))
-          }
           await userEvent.click(await screen.findByLabelText('Closed visit'))
           await userEvent.click(await screen.findByRole('option', { name: /R0001/ }))
-          await continueToDates()
+          await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+          await scanTheFolder()
+          if (card) {
+            await userEvent.click(await screen.findByLabelText('SD card')) // asked once the folder is chosen
+            await userEvent.click(await screen.findByRole('option', { name: new RegExp(`^${card}`) }))
+          }
+          await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
+          await screen.findByText('Choose the checks')
+          await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
           await screen.findByText('When was it collected?')
           await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
           await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
@@ -506,9 +510,14 @@ describe('ImportDeploymentPage', () => {
           storedProjects = [DONA_PROJECT]
           storedLocations = { DONA: [DONA_01] }
           await goToOriginStep()
-          expect(screen.queryByLabelText('SD card')).not.toBeInTheDocument()
           await userEvent.click(await screen.findByLabelText('Research project'))
           await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+          expect(screen.queryByLabelText('SD card')).not.toBeInTheDocument() // not in the origin: it is asked after the folder
+          await userEvent.click(await screen.findByLabelText('Location'))
+          await userEvent.click(await screen.findByRole('option', { name: 'DONA_01 — Doñana site 1' }))
+          await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+          expect(screen.queryByLabelText('SD card')).not.toBeInTheDocument() // nor before the folder is chosen
+          await scanTheFolder()
 
           await userEvent.click(await screen.findByLabelText('SD card'))
           expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['A13 — SanDisk 64 GB', 'B2'])
