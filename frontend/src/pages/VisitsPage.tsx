@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import BackButton from '../components/BackButton'
 import Combobox from '../components/Combobox'
@@ -368,25 +368,30 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // Another way to read the visits starts again from the file.
   useEffect(() => { forgetCsv(); setCsvName(null) }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const csvReading = useRef(0)
   function forgetCsv() {
+    csvReading.current++ // what an older file is still being answered is left out
     setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({})
   }
 
   async function readCsv(file: File | undefined) {
     forgetCsv()
+    const reading = ++csvReading.current
     if (!file || !project) { setCsvName(null); return }
     setCsvName(file.name)
     try {
       const text = await file.text()
+      if (reading !== csvReading.current) return
       setCsvText(text)
       if (source === 'csv') {
         const found = await api.visitsCsvColumns(text)
-        setCsvColumns(found); setCsvMapping(found.mapping)
+        if (reading === csvReading.current) { setCsvColumns(found); setCsvMapping(found.mapping) }
       } else {
-        setCsvResult(await api.importVisitsCsv(project.acronym, text, false, csvFormat))
+        const result = await api.importVisitsCsv(project.acronym, text, false, csvFormat)
+        if (reading === csvReading.current) setCsvResult(result)
       }
     } catch (e) {
-      setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
+      if (reading === csvReading.current) setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
     }
   }
 
@@ -779,7 +784,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   Choose file
                 </label>
                 <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">{csvName ?? 'No file chosen'}</span>
-                <input id="visits-csv" aria-label="CSV file" type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => void readCsv(e.target.files?.[0])} />
+                <input id="visits-csv" aria-label="CSV file" type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; void readCsv(file) }} />
               </div>
               <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (same site, day and time) is left as it is.</p>
             </div>

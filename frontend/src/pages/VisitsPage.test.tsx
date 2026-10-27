@@ -822,6 +822,23 @@ describe('VisitsPage from a CSV file', () => {
     await waitFor(() => expect(screen.queryByText(/You can create the locations/)).not.toBeInTheDocument())
   })
 
+  it('forgets what the file before said when another is chosen — even one with the same name, edited', async () => {
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [], problems: [{ row: 2, message: "The site 'X' is not a location of the research project." }], skipped: 0, ignored: 0, saved: null })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    const input = screen.getByLabelText('CSV file') as HTMLInputElement
+    await userEvent.upload(input, file)
+    expect(await screen.findByRole('list', { name: 'Rows with a problem' })).toBeInTheDocument()
+    expect(input.value).toBe('') // so that the same file, once edited, can be chosen again
+
+    await userEvent.upload(input, new File(['edited'], 'visits.csv', { type: 'text/csv' }))
+    expect(await screen.findByText(/to add/)).toHaveTextContent('1 visit to add')
+    expect(screen.queryByRole('list', { name: 'Rows with a problem' })).not.toBeInTheDocument()
+  })
+
   it('reads a Wildintel Epicollect download without asking for any column', async () => {
     mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit()], problems: [], skipped: 0, ignored: 3, saved: null })
     render(<VisitsPage onBack={vi.fn()} />)
