@@ -1108,9 +1108,10 @@ describe('an import session of visits', () => {
     await toTheFolders()
     await next() // images → dates
 
-    expect(await screen.findByLabelText('Location of DONA_01')).toHaveValue('DONA_01')
-    await toDetailsSubstep()
+    // the locations are the visits': nothing is asked of where they were taken, and the step starts at the dates
     expect(await screen.findByLabelText('What revision number are you importing?')).toHaveValue(2)
+    expect(screen.queryByText('Where were they taken?')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Location of DONA_01')).not.toBeInTheDocument()
     expect(screen.getByText(/Taken from the session of the visits you chose/)).toBeInTheDocument()
     expect(await screen.findByRole('radio', { name: /Visits of the field work/ })).toBeChecked()
     await toMoreDetailsSubstep()
@@ -1129,7 +1130,6 @@ describe('an import session of visits', () => {
     await toTheFolders()
     await userEvent.selectOptions(screen.getByLabelText('SD card of DONA_01'), 'B2')
     await next()
-    await toDetailsSubstep()
     await screen.findByLabelText('What revision number are you importing?')
     await toMoreDetailsSubstep()
     await next() // dates → checks

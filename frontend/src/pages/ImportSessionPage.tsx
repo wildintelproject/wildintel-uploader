@@ -204,6 +204,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   const visitOf = (name: string): ClosedVisit | undefined => pickedList.find((c) => visitKey(c) === folderVisit[name])
   const projectSdCards = sdCards.filter((c) => !c.research_project || c.research_project.toLowerCase() === projectId.toLowerCase())
   // The deployments' details are asked for once the research project is picked and the details sub-step is open.
+  // With visits, each folder's location is the visit's: nothing is asked of where they were taken, and the step starts at the dates.
+  useEffect(() => {
+    if (stepKey === 'dates' && visitsMode && originOpen === 1) { setOriginOpen(2); setOriginReached((r) => Math.max(r, 2)) }
+  }, [stepKey, visitsMode, originOpen])
   const detailsActive = stepKey === 'dates' && Boolean(projectId) && locationsReady
 
   useEffect(() => {
@@ -1153,9 +1157,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
           <StepHeading>Dates and details</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Say where each deployment was taken, then fill in their dates and what you know about the cameras and sites.
+            {visitsMode ? 'Their locations are those of the visits. Fill in their dates and what you know about the cameras and sites.' : 'Say where each deployment was taken, then fill in their dates and what you know about the cameras and sites.'}
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
+          {!visitsMode && (
           <WizardStep n={1} title="Where were they taken?" status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
                       description="Pick the location of each deployment, from the locations of the research project."
                       summary={project && <>{project.acronym} · {withLocation === chosen.length ? 'every folder has a location' : `${withLocation} of ${plural(chosen.length, 'folder has', 'folders have')} a location`}</>}>
@@ -1296,8 +1301,9 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
               <button type="button" className={btnPrimary} disabled={!projectId} onClick={() => { setOriginOpen(2); setOriginReached(2) }}>Continue to the details<span aria-hidden="true"> →</span></button>
             </div>
           </WizardStep>
+          )}
 
-          <WizardStep n={2} title="When was it collected?" status={originStatus(2)} canEdit onEdit={() => setOriginOpen(2)}
+          <WizardStep n={visitsMode ? 1 : 2} title="When was it collected?" status={originStatus(2)} canEdit onEdit={() => setOriginOpen(2)}
                       description="The revision number, and the period of each deployment."
                       summary={revisionValid && <>Revision {revisionName}<br />{deploymentsCount}</>}>
           {guessingLeft > 0 && <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Reading the dates and the cameras from the images… ({guessingLeft} deployment(s) left)</p>}
@@ -1433,13 +1439,13 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           </FormCard>
           {detailsError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{detailsError}</p>}
           <div className="flex justify-between items-center mt-4">
-            <button type="button" className={btnOutline} onClick={() => setOriginOpen(1)}><span aria-hidden="true">← </span>Back</button>
+            <button type="button" className={btnOutline} onClick={() => (visitsMode ? setStep((s) => s - 1) : setOriginOpen(1))}><span aria-hidden="true">← </span>Back</button>
             <button type="button" aria-label="Continue to more details" className={btnPrimary} disabled={!detailsReady}
                     onClick={() => { setOriginOpen(3); setOriginReached(3) }}>Continue<span aria-hidden="true"> →</span></button>
           </div>
           </WizardStep>
 
-          <WizardStep n={3} title="More details" status={originStatus(3)} canEdit onEdit={() => { setOriginOpen(3); setOriginReached(3) }}
+          <WizardStep n={visitsMode ? 2 : 3} title="More details" status={originStatus(3)} canEdit onEdit={() => { setOriginOpen(3); setOriginReached(3) }}
                       description="Everything here is optional. For each deployment, fill in what you know of its camera and its site now — you can add the rest later."
                       summary={`${chosen.filter((d) => moreFilledOf(d.name) > 0).length} of ${plural(chosen.length, 'deployment', 'deployments')} with details`}>
           {(() => {
