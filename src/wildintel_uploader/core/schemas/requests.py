@@ -351,6 +351,8 @@ class VisitRecord(BaseModel):
     session: str = Field(pattern=r"^R\d+$")
     date: date_type
     time: time_type
+    # The instant of the visit, ISO 8601 in UTC with a Z — what is kept; the day and the time above are the wall clock of its location. Worked out when it is left out.
+    when: Optional[str] = None
     # A visit may do several things: a camera revised and another put up, a card changed and the camera taken away…
     actions: list[Literal["Installation", "Revision", "Desinstallation", "Stolen"]] = Field(min_length=1)
     trappers: Optional[str] = None

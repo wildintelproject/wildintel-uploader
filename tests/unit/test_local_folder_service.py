@@ -199,3 +199,55 @@ def test_the_visits_to_one_location_are_found_ignoring_case(tmp_path: Path):
 def test_a_visit_cannot_be_registered_to_a_research_project_that_is_not_kept(tmp_path: Path):
     with pytest.raises(svc.LocalFolderError, match="isn't in the collections folder"):
         svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01"})
+
+
+# ── the time of a visit: kept as an instant, told as the wall clock of its location ─────────────────────────────
+
+def _location(root: Path, location_id: str = "DONA_01", **over) -> None:
+    svc.write_location(root, "DONA", {"location_id": location_id, "name": location_id, **over})
+
+
+def _visit_on_disk(root: Path) -> list[dict]:
+    return json.loads((root / "DONA" / svc.VISITS_FILE).read_text(encoding="utf-8"))
+
+
+def test_a_visit_is_kept_as_an_instant_in_iso_8601_utc_and_told_with_the_wall_clock_of_its_location(tmp_path: Path):
+    _project(tmp_path)
+    _location(tmp_path, "DONA_01")                                                      # UTC, following summer time: the default
+    _location(tmp_path, "DONA_02", timezone="Europe/Madrid", ignore_dst=False)           # +02:00 in September
+    _location(tmp_path, "DONA_03", timezone="Europe/Madrid", ignore_dst=True)            # +01:00 all the year
+
+    for site in ("DONA_01", "DONA_02", "DONA_03"):
+        told = svc.write_visit(tmp_path, "DONA", {"location_id": site, "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"]})
+        assert (told["date"], told["time"]) == ("2024-09-04", "13:10:00")               # what was typed is what is told
+
+    on_disk = _visit_on_disk(tmp_path)
+    assert [v["when"] for v in on_disk] == ["2024-09-04T13:10:00Z", "2024-09-04T11:10:00Z", "2024-09-04T12:10:00Z"]
+    assert all("date" not in v and "time" not in v for v in on_disk)                     # the instant is what is kept
+    assert [(v["date"], v["time"]) for v in svc.list_visits(tmp_path, "DONA")] == [("2024-09-04", "13:10:00")] * 3
+
+
+def test_visits_kept_with_a_day_and_a_time_are_moved_to_instants_when_read(tmp_path: Path):
+    _project(tmp_path)
+    _location(tmp_path, "DONA_01", timezone="Europe/Madrid")
+    (tmp_path / "DONA" / svc.VISITS_FILE).write_text(json.dumps([
+        {"location_id": "DONA_01", "session": "R0001", "date": "2024-01-15", "time": "09:00:00", "actions": ["Installation"]},   # +01:00 in winter
+        {"location_id": "DONA_01", "session": "R0002", "date": "2024-07-15", "time": "09:00:00", "actions": ["Revision"]},       # +02:00 in summer
+    ]), encoding="utf-8")
+
+    told = svc.list_visits(tmp_path, "DONA")
+
+    assert [(v["date"], v["time"]) for v in told] == [("2024-01-15", "09:00:00"), ("2024-07-15", "09:00:00")]
+    assert [v["when"] for v in _visit_on_disk(tmp_path)] == ["2024-01-15T08:00:00Z", "2024-07-15T07:00:00Z"]   # written back as instants
+    assert svc.list_visits(tmp_path, "DONA") == told                                                              # and the same when read again
+
+
+def test_a_visit_is_linked_by_the_day_and_the_time_it_is_told_with(tmp_path: Path):
+    _project(tmp_path)
+    _location(tmp_path, "DONA_01", timezone="Europe/Madrid")
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"]})
+
+    linked = svc.link_visit(tmp_path, "DONA", "dona_01", "2024-09-04", "13:10:00", "R0001-DONA_01")
+
+    assert linked["deployment_id"] == "R0001-DONA_01" and linked["when"] == "2024-09-04T11:10:00Z"
+    assert _visit_on_disk(tmp_path)[0]["deployment_id"] == "R0001-DONA_01"

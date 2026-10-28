@@ -17,6 +17,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from wildintel_uploader.core.services import visit_time
+
 logger = logging.getLogger(__name__)
 
 COLLECTION_METADATA_FILE = "collection.json"
@@ -287,15 +289,60 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
     return {"deleted": removed["location_id"]}
 
 
+def _raw_visits(root: Path, research_project_id: str) -> list[dict]:
+    visits = _read_json(project_dir(root, research_project_id) / VISITS_FILE)
+    return [v for v in visits if isinstance(v, dict)] if isinstance(visits, list) else []
+
+
+def _write_raw_visits(root: Path, research_project_id: str, visits: list[dict]) -> None:
+    (project_dir(root, research_project_id) / VISITS_FILE).write_text(json.dumps(visits, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _location_of(locations: list[dict], location_id) -> dict | None:
+    return next((l for l in locations if str(l.get("location_id", "")).lower() == str(location_id or "").lower()), None)
+
+
+def _kept(visit: dict, locations: list[dict]) -> dict:
+    """A visit as it is kept: the instant, ISO 8601 in UTC with a Z (`when`), and not the day and the time of the wall clock of its location."""
+    if visit.get("when"):
+        return {k: v for k, v in visit.items() if k not in ("date", "time")}
+    if not (visit.get("date") and visit.get("time")):
+        return dict(visit)  # no time to keep
+    out = {k: v for k, v in visit.items() if k not in ("date", "time")}
+    out["when"] = visit_time.to_when(visit["date"], visit["time"], _location_of(locations, visit.get("location_id")))
+    return out
+
+
+def _told(visit: dict, locations: list[dict]) -> dict:
+    """A visit as it is told: with the day and the time of the wall clock of its location, from its instant, beside it."""
+    if not visit.get("when"):
+        return dict(visit)
+    date, time = visit_time.to_wall(visit["when"], _location_of(locations, visit.get("location_id")))
+    return {**visit, "date": date, "time": time}
+
+
 def list_visits(root: Path, research_project_id: str, location_id: str | None = None) -> list[dict]:
     """The visits kept for a research project, in the order they were registered — those to one location (found ignoring
     case) when it is given. Empty until one is registered.
 
+    A visit is kept as an instant, `when` (ISO 8601, UTC, with a Z), and told with the day (`date`) and the time (`time`) of the wall clock of its
+    location, in the timezone the location says. A file kept with a day and a time only (an earlier version) is moved to instants when it is read —
+    in the timezone its locations say, and written back so — and the visits come the same.
+
     Raises:
         LocalFolderError: the research project id can't be a folder name.
     """
-    visits = _read_json(project_dir(root, research_project_id) / VISITS_FILE)
-    visits = [v for v in visits if isinstance(v, dict)] if isinstance(visits, list) else []
+    raw = _raw_visits(root, research_project_id)
+    locations = list_locations(root, research_project_id)
+    kept = []
+    for visit in raw:
+        try:
+            kept.append(_kept(visit, locations))
+        except (KeyError, ValueError, TypeError):
+            kept.append(visit)  # not a visit it can read the time of: left as it is
+    if kept != raw and raw:
+        _write_raw_visits(root, research_project_id, kept)
+    visits = [_told(v, locations) for v in kept]
     if location_id is None:
         return visits
     return [v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower()]
@@ -308,18 +355,15 @@ def require_research_project(root: Path, research_project_id: str) -> None:
 
 
 def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
-    """Registers a visit to a research project that's already kept here.
+    """Registers a visit to a research project that's already kept here — given with the day and the time of the wall clock of its location,
+    kept as an instant (see list_visits) and returned told.
 
     Raises:
         LocalFolderError: the research project isn't there.
     """
-    folder = project_dir(root, research_project_id)
-    if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
-        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
-    visits = list_visits(root, research_project_id)
-    visits.append(visit)
-    (folder / VISITS_FILE).write_text(json.dumps(visits, indent=2, ensure_ascii=False), encoding="utf-8")
-    return visit
+    write_visits(root, research_project_id, [visit])
+    locations = list_locations(root, research_project_id)
+    return _told(_kept(visit, locations), locations)
 
 
 def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
@@ -328,11 +372,11 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
     Raises:
         LocalFolderError: the research project isn't there.
     """
-    folder = project_dir(root, research_project_id)
-    if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
-        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    require_research_project(root, research_project_id)
     if new:
-        (folder / VISITS_FILE).write_text(json.dumps(list_visits(root, research_project_id) + new, indent=2, ensure_ascii=False), encoding="utf-8")
+        locations = list_locations(root, research_project_id)
+        list_visits(root, research_project_id)  # an earlier file is moved to instants first
+        _write_raw_visits(root, research_project_id, _raw_visits(root, research_project_id) + [_kept(v, locations) for v in new])
     return len(new)
 
 
@@ -377,13 +421,16 @@ def link_visit(root: Path, research_project_id: str, location_id: str, date: str
     Raises:
         LocalFolderError: the visit isn't in the research project.
     """
-    visits = list_visits(root, research_project_id)
-    visit = next((v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower() and v.get("date") == date and v.get("time") == time), None)
+    list_visits(root, research_project_id)  # an earlier file is moved to instants first
+    raw = _raw_visits(root, research_project_id)
+    locations = list_locations(root, research_project_id)
+    visit = next((v for v in raw if str(v.get("location_id", "")).lower() == location_id.lower()
+                  and (_told(v, locations).get("date"), _told(v, locations).get("time")) == (date, time)), None)
     if visit is None:
         raise LocalFolderError(f"There is no visit to {location_id} on {date} at {time} in {research_project_id}.")
     visit["deployment_id"] = deployment_id
-    (project_dir(root, research_project_id) / VISITS_FILE).write_text(json.dumps(visits, indent=2, ensure_ascii=False), encoding="utf-8")
-    return visit
+    _write_raw_visits(root, research_project_id, raw)
+    return _told(visit, locations)
 
 
 def location_time(root: Path, research_project_id: str, location_id: str | None) -> dict:

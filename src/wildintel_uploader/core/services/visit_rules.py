@@ -31,7 +31,8 @@ def _same(a, b) -> bool:
 
 
 def _stamp(v: dict) -> str:
-    return f"{v.get('date')}T{v.get('time')}"
+    """When a visit was, to order visits: its instant (`when`, ISO 8601 UTC) — the wall clock of its location only when it has none."""
+    return v.get("when") or f"{v.get('date')}T{v.get('time')}"
 
 
 def _seconds(v: dict) -> float:

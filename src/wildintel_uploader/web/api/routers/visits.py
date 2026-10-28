@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, SaveVisitRequest, VisitsCsvColumnsRequest
-from wildintel_uploader.core.services import local_folder_service, visit_rules, visits_csv
+from wildintel_uploader.core.services import local_folder_service, visit_rules, visit_time, visits_csv
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
 
@@ -28,8 +28,11 @@ def save_visit(req: SaveVisitRequest) -> dict:
     try:
         local_folder_service.require_research_project(root, req.research_project_id)
         visit = req.visit.model_dump(mode="json")
-        reasons = visit_rules.refusals(
-            visit, local_folder_service.list_visits(root, req.research_project_id), local_folder_service.list_locations(root, req.research_project_id))
+        locations = local_folder_service.list_locations(root, req.research_project_id)
+        # the rules compare instants: the day and the time are the wall clock of the location
+        location = next((l for l in locations if str(l.get("location_id", "")).lower() == visit["location_id"].lower()), None)
+        visit["when"] = visit_time.to_when(visit["date"], visit["time"], location)
+        reasons = visit_rules.refusals(visit, local_folder_service.list_visits(root, req.research_project_id), locations)
         if reasons:
             raise HTTPException(422, " ".join(reasons))
         return local_folder_service.write_visit(root, req.research_project_id, visit)

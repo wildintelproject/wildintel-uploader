@@ -663,6 +663,8 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
   date: string
   /** HH:MM:SS */
   time: string
+  /** The instant of the visit: ISO 8601, UTC, with a Z (2024-09-04T11:10:00Z) — what is kept; the day and the time above are the wall clock of its location. */
+  when?: string
   /** What was done at the visit — one or more. */
   actions: ('Installation' | 'Revision' | 'Desinstallation' | 'Stolen')[]
   /** Who went on the visit. */

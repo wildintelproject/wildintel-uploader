@@ -13,6 +13,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   download or from any CSV, kept in the research project's `visits.json`. The Camera section comes before the SD card, and what the visit before
   said fills in the Camera, Site and Grouping sections. Entities (research projects, locations, trappers, SD cards and cameras) have their own
   tab in Settings, with CSV import; `examples/` has example CSVs of all of them.
+- **The time of a visit is kept as an instant**: `when`, ISO 8601 in UTC with a Z (`2024-09-04T11:10:00Z`), in the research project's `visits.json`. The day (`date`) and the
+  time (`time`) the forms and the tables show are the wall clock of the visit's location, in the timezone the location says; the API gives both. A `visits.json` kept with a day and
+  a time only is moved to instants when it is read (in the timezone its locations say) and written back. A new location is UTC, following summer time, unless it says otherwise.
 - **The rules of a visit live in the backend** (`visit_rules`), for the form and for a CSV: by hand a visit is refused (`422`) when its site is not a location of the research project, it is already kept,
   it lacks what its actions ask (the camera, the card left, the photos collected) or its camera or card are not where it says. A CSV is treated as the field records are: the visits are kept and
   questioned — `warnings` for what is odd (a camera or a card at two sites or in the wrong place, two Revisions in a session, a visit not after the one before, a Revision with 0 photos, an Installation

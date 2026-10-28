@@ -13,12 +13,11 @@ import csv
 import datetime as dt
 import io
 import re
-from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
 from wildintel_uploader.core.schemas.requests import VisitRecord
-from wildintel_uploader.core.services import visit_rules
+from wildintel_uploader.core.services import visit_rules, visit_time
 
 # What each column of an Epicollect download may be called — compared without case, spaces, dashes, underscores or a number in front.
 EPICOLLECT_COLUMNS: dict[str, tuple[str, ...]] = {
@@ -159,16 +158,7 @@ def _rows(text: str, fmt: str, mapping: dict[str, str] | None) -> tuple[dict[str
 
 def _local(created: dt.datetime, location: dict) -> dt.datetime:
     """The time of an entry — UTC — in the timezone of the location, with no summer time when the location ignores it; UTC when it has none."""
-    name = location.get("timezone")
-    if not name:
-        return created
-    zone = ZoneInfo(name)
-    utc = created.replace(tzinfo=dt.timezone.utc)
-    if location.get("ignore_dst"):
-        year = created.year
-        standard = min(dt.datetime(year, m, 1, tzinfo=zone).utcoffset() for m in (1, 7))
-        return (utc + standard).replace(tzinfo=None)
-    return utc.astimezone(zone).replace(tzinfo=None)
+    return visit_time.utc_to_local(created, location)
 
 
 def _when(row: dict[str, str], location: dict) -> tuple[str, str]:
@@ -291,6 +281,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             visit = {"location_id": location.get("location_id", site), "date": date, "time": time, "actions": actions, **data}
             visit.setdefault("session", "R0000")  # worked out below, when the order of the visits is known
             record = VisitRecord.model_validate(visit).model_dump(mode="json")
+            record["when"] = visit_time.to_when(record["date"], record["time"], location)
         except (ValueError, ValidationError) as exc:
             problem(n, _first(exc) if isinstance(exc, ValidationError) else str(exc))
             continue
