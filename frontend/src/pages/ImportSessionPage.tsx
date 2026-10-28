@@ -288,10 +288,12 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   }
 
   /** Ticks a visit of the session — all of one session, which is the revision: those of another are not offered then. */
-  function toggleVisit(c: ClosedVisit) {
-    const key = visitKey(c)
+  function toggleVisit(c: ClosedVisit) { tickVisits([c], !pickedVisits.has(visitKey(c))) }
+
+  /** Ticks, or unticks, several visits at once. */
+  function tickVisits(list: ClosedVisit[], ticked: boolean) {
     const next = new Set(pickedVisits)
-    if (next.has(key)) next.delete(key); else next.add(key)
+    for (const c of list) { if (ticked) next.add(visitKey(c)); else next.delete(visitKey(c)) }
     setPickedVisits(next)
     setDrafts({})
     const first = (closedVisits ?? []).find((v) => next.has(visitKey(v)))
@@ -921,7 +923,9 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
               const offered = (c: ClosedVisit) => !session || c.visit.session === session
               const needle = visitFilter.trim().toLowerCase()
               const shown = needle ? closedVisits.filter((c) => visitLabel(c).toLowerCase().includes(needle)) : closedVisits
-              const enabled = shown.filter(offered)
+              // "Select all" takes the visits of one session — the ticked one's, or else the first shown
+              const target = session ?? shown[0]?.visit.session
+              const enabled = shown.filter((c) => c.visit.session === target)
               const allTicked = enabled.length > 0 && enabled.every((c) => pickedVisits.has(visitKey(c)))
               return (
                 <FormCard title="Visits" description={`The visits to ${projectId} that left a camera and whose card has been collected, with no deployment yet. Tick the ones this session is of — all of one session, which is the revision. Each folder will be one of them: it says where and when it was taken.`}>
@@ -932,7 +936,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                         <tr>
                           <th scope="col" className="w-10 pl-4 py-2.5 text-left">
                             <input type="checkbox" aria-label="Select all the visits offered" checked={allTicked}
-                                   onChange={(e) => { for (const c of enabled) if (pickedVisits.has(visitKey(c)) !== e.target.checked) toggleVisit(c) }} />
+                                   onChange={(e) => tickVisits(enabled, e.target.checked)} />
                           </th>
                           <th scope="col" className="px-3 py-2.5 text-left">Visit</th>
                         </tr>

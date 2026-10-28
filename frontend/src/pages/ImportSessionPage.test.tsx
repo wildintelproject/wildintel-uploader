@@ -1049,6 +1049,20 @@ describe('an import session of visits', () => {
     expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()
   })
 
+  it('ticks all the visits offered at once, and unticks them', async () => {
+    render(<ImportSessionPage {...pageProps} />)
+    await pickProject()
+    await screen.findAllByRole('checkbox', { name: /collected on/ })
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select all the visits offered' }))
+    expect(visit(0)).toBeChecked()
+    expect(visit(1)).toBeChecked() // the ones of the session of the first, not of another (R0001)
+    expect(visit(2)).not.toBeChecked()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select all the visits offered' }))
+    expect(visit(0)).not.toBeChecked()
+    expect(visit(1)).not.toBeChecked()
+  })
+
   it('offers only the visits of one session once one is ticked: the session is the revision', async () => {
     render(<ImportSessionPage {...pageProps} />)
     await pickProject()
