@@ -1093,6 +1093,20 @@ describe('an import session of visits', () => {
     expect(cards).toEqual(['None said', 'A13 — SanDisk 64 GB', 'B2'])
   })
 
+  it('heads the list of folders with how many have a visit, and tells them apart and filters them by name', async () => {
+    await toTheFolders()
+    // the two folders that matched a visit by name have one; there is no more
+    expect(screen.getByText(/2 of 2 folders have a visit/)).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Folders with a visit' })).toHaveAttribute('aria-valuenow', '100')
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Missing 0' }))
+    expect(screen.queryByRole('checkbox', { name: 'DONA_01' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'All 2' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Filter the folders by name' }), 'DONA_02')
+    expect(screen.queryByRole('checkbox', { name: 'DONA_01' })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'DONA_02' })).toBeInTheDocument()
+  })
+
   it('cannot go on while a folder has no visit, and a visit is of one folder only', async () => {
     await toTheFolders()
 

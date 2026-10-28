@@ -172,6 +172,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   const sourcePicked = useRef(new Set<string>())
   const [fillMessage, setFillMessage] = useState<{ scope: 'one' | 'all'; text: string; undo?: { name: string; fields: DeploymentFields } } | null>(null)
   const [locFilter, setLocFilter] = useState('')
+  const [folderFilter, setFolderFilter] = useState('')
+  const [folderTab, setFolderTab] = useState<'all' | 'missing' | 'ready'>('all')
   const [locTab, setLocTab] = useState<'all' | 'missing' | 'ready'>('all')
   // The folders ticked in the table of locations: "Assign" then only touches those.
   const [locSelected, setLocSelected] = useState<Set<string>>(new Set())
@@ -1009,6 +1011,31 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                   </Notice>
                 )}
                 <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">{scan.deployments.length} subfolder(s) — tick the ones to import.</p>
+                {visitsMode && (() => {
+                  const ticked = scan.deployments.filter((d) => included.has(d.name))
+                  const withVisit = ticked.filter((d) => folderVisit[d.name]).length
+                  const percent = ticked.length === 0 ? 0 : Math.round((withVisit / ticked.length) * 100)
+                  return (
+                    <div className="mb-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 p-5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100" role="status">{withVisit} of {plural(ticked.length, 'folder', 'folders')} {withVisit === 1 && ticked.length === 1 ? 'has' : 'have'} a visit</p>
+                        <span className="text-sm text-zinc-500 dark:text-zinc-400">{percent}%</span>
+                      </div>
+                      <div role="progressbar" aria-label="Folders with a visit" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="mt-3 h-2 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                        <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${percent}%` }} />
+                      </div>
+                      <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+                        <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700" role="tablist" aria-label="Show the folders">
+                          {([['all', 'All', ticked.length], ['missing', 'Missing', ticked.length - withVisit], ['ready', 'Ready', withVisit]] as const).map(([id, label, n]) => (
+                            <button key={id} type="button" role="tab" aria-selected={folderTab === id} onClick={() => setFolderTab(id)}
+                                    className={`px-4 py-2.5 text-sm font-medium border-l first:border-l-0 border-zinc-300 dark:border-zinc-700 ${folderTab === id ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{label} {n}</button>
+                          ))}
+                        </div>
+                        <input aria-label="Filter the folders by name" className={`${inputClass} !w-56`} placeholder="Filter by name…" value={folderFilter} onChange={(e) => setFolderFilter(e.target.value)} />
+                      </div>
+                    </div>
+                  )
+                })()}
                 <table className="w-full text-sm border border-zinc-200 dark:border-zinc-700 rounded">
                   <thead className="bg-zinc-50 dark:bg-zinc-800/50 text-xs text-zinc-500 dark:text-zinc-400">
                     <tr>
@@ -1022,7 +1049,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                    {scan.deployments.map((d) => (
+                    {scan.deployments.filter((d) => !visitsMode || (d.name.toLowerCase().includes(folderFilter.trim().toLowerCase())
+                      && (folderTab === 'all' || (folderTab === 'ready') === Boolean(included.has(d.name) && folderVisit[d.name])))).map((d) => (
                       <tr key={d.name}>
                         <td className="px-3 py-2 text-center">
                           <input type="checkbox" aria-label={d.name} checked={included.has(d.name)} onChange={() => setIncluded((s) => toggled(s, d.name))} />
