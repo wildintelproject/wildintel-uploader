@@ -15,14 +15,14 @@ import { isValidTimezone, shownErrors, stampTimezone, validateDeployment } from 
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type {
-  DeploymentCheck, DeploymentCheckResult, DeploymentFields, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject,
-  PreprocessingOptions, PreviousDeployment, SessionScan, SessionScanDeployment, StatisticsParams, UploadTarget, ValidationResult,
+  ClosedVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject,
+  PreprocessingOptions, PreviousDeployment, SdCard, SessionScan, SessionScanDeployment, StatisticsParams, UploadTarget, ValidationResult,
 } from '../types'
 import {
   ALL_DEPLOYMENT_CHECKS, DEFAULT_CHECK_SETTINGS, DEPLOYMENT_CHECK_DISPLAY, DEPLOYMENT_CHECK_OPTIONS, DeploymentCheckReport, Field,
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
   DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
-  inputClass, labelClass, statParamsOf, statParamsValid, toggled,
+  inputClass, labelClass, statParamsOf, statParamsValid, toggled, fillFromVisit, visitKey, visitLabel,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
 
@@ -122,6 +122,14 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   const [project, setProject] = useState<LocalResearchProject | undefined>(undefined)
   const projectId = project?.acronym ?? ''
   const [localLocations, setLocalLocations] = useState<LocalLocation[]>([])
+  // The visits of the project that closed a deployment with none yet: the ones the session is of are picked in the origin, and each folder is linked to one.
+  const [closedVisits, setClosedVisits] = useState<ClosedVisit[] | null>(null)
+  const [pickedVisits, setPickedVisits] = useState<Set<string>>(new Set())
+  const [folderVisit, setFolderVisit] = useState<Record<string, string>>({})
+  // The SD card each folder's images come from, and the cards the settings keep.
+  const [folderSd, setFolderSd] = useState<Record<string, string>>({})
+  const [sdCards, setSdCards] = useState<SdCard[]>([])
+  const [revisionFromVisits, setRevisionFromVisits] = useState(false)
   const [originError, setOriginError] = useState<string | null>(null)
   // Whether the project's locations are read: the details of the deployments start from the location their folder is named after.
   const [locationsReady, setLocationsReady] = useState(false)
@@ -186,6 +194,11 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     return [...requiredImageChecks].filter((c) => checkSettings.VALIDATION[c]).every((c) => imageCheckPassed(c, outcome?.result ?? null) === true)
   }
   const chosen = candidates.filter((d) => freeOfErrors(d.name))
+  // With visits picked, the session is of them: each folder is a deployment of one, which tells where and when.
+  const pickedList = (closedVisits ?? []).filter((c) => pickedVisits.has(visitKey(c)))
+  const visitsMode = pickedList.length > 0
+  const visitOf = (name: string): ClosedVisit | undefined => pickedList.find((c) => visitKey(c) === folderVisit[name])
+  const projectSdCards = sdCards.filter((c) => !c.research_project || c.research_project.toLowerCase() === projectId.toLowerCase())
   // The deployments' details are asked for once the research project is picked and the details sub-step is open.
   const detailsActive = stepKey === 'dates' && Boolean(projectId) && locationsReady
 
@@ -196,6 +209,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       .then((s) => {
         if (cancelled) return
         setCheckSettings({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+        setSdCards(s.FIELDWORK?.sd_cards ?? [])
         if (!preprocessTouched.current) setPreprocessSteps(new Set((['rename', 'resize', 'metadata'] as const).filter((k) => s.PREPROCESSING[k])))
       })
       .catch(() => { /* the settings can't be read: every check stays shown */ })
@@ -219,28 +233,88 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     return () => { cancelled = true }
   }, [projectId])
 
+  // The project's visits that closed a deployment with none yet: when there are none (or they can't be read) the session is as it always was.
+  useEffect(() => {
+    setClosedVisits(null); setPickedVisits(new Set()); setFolderVisit({}); setFolderSd({}); setRevisionFromVisits(false)
+    if (!projectId) return
+    let cancelled = false
+    Promise.resolve().then(() => api.closedVisits(projectId))
+      .then(({ results }) => { if (!cancelled) setClosedVisits(results) })
+      .catch(() => { if (!cancelled) setClosedVisits([]) })
+    return () => { cancelled = true }
+  }, [projectId])
+
+  // Each folder takes the visit to the location its name says, while there is one left — it can be changed.
+  useEffect(() => {
+    if (!scan || pickedList.length === 0) { setFolderVisit({}); return }
+    setFolderVisit((current) => {
+      const next: Record<string, string> = {}
+      const used = new Set<string>()
+      for (const [name, key] of Object.entries(current)) {
+        if (pickedVisits.has(key) && !used.has(key) && scan.deployments.some((d) => d.name === name)) { next[name] = key; used.add(key) }
+      }
+      for (const d of scan.deployments) {
+        if (next[d.name]) continue
+        const free = pickedList.filter((c) => !used.has(visitKey(c)))
+        const location = matchLocation(d.name, free.map((c) => ({ location_id: c.visit.location_id }) as LocalLocation))
+        const found = location && free.find((c) => c.visit.location_id === location.location_id)
+        if (found) { next[d.name] = visitKey(found); used.add(visitKey(found)) }
+      }
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scan, pickedVisits, closedVisits])
+
+  /** Links a folder to a visit (or none): what its details were is worked out again from it. */
+  function linkFolder(name: string, key: string) {
+    setFolderVisit((current) => {
+      const next = { ...current }
+      for (const [other, k] of Object.entries(next)) if (k === key && other !== name) delete next[other] // a visit is of one deployment
+      if (key) next[name] = key; else delete next[name]
+      return next
+    })
+    setDrafts((all) => { const next = { ...all }; delete next[name]; return next })
+    sourcePicked.current.delete(name); guessRequested.current.delete(name)
+  }
+
+  /** Ticks a visit of the session — all of one session, which is the revision: those of another are not offered then. */
+  function toggleVisit(c: ClosedVisit) {
+    const key = visitKey(c)
+    const next = new Set(pickedVisits)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    setPickedVisits(next)
+    setDrafts({})
+    const first = (closedVisits ?? []).find((v) => next.has(visitKey(v)))
+    const session = Number(/\d+/.exec(first?.visit.session ?? '')?.[0])
+    if (first && session >= 1) { revisionTouched.current = true; setRevision(String(session)); setRevisionFromLog(null); setRevisionSuggested(false); setRevisionFromVisits(true) }
+    else setRevisionFromVisits(false)
+  }
+
   // The details of each deployment start from what the scan found and the location its folder is named after.
   useEffect(() => {
     if (!detailsActive || !scan) return
     setDrafts((current) => {
       const next = { ...current }
+      let added = false
       for (const d of scan.deployments.filter((x) => included.has(x.name))) {
         if (next[d.name]) continue
-        // The location is picked in the first sub-step (or assigned from the folder's name there): the dates wait for its timezone.
-        const timezone = ''
-        next[d.name] = {
-          timezone, ignoreDst: null,
-          fields: {
-            ...EMPTY_DEPLOYMENT_FIELDS,
-            // Only the dates a timestamp log gives are known by now: the rest are read from the images, below.
-            start_date: stampTimezone(d.start_date ?? '', timezone), end_date: d.end_date ? stampTimezone(d.end_date, timezone) : null,
-          },
+        added = true
+        // The location is picked in the first sub-step (or assigned from the folder's name there): the dates wait for its timezone — unless
+        // the folder is a visit's, which says where it was: its location, and what it tells of the camera and the site.
+        const cv = visitOf(d.name)
+        const location = cv ? localLocations.find((l) => l.location_id.toLowerCase() === cv.visit.location_id.toLowerCase()) : undefined
+        const timezone = location?.timezone ?? ''
+        const base: DeploymentFields = {
+          ...EMPTY_DEPLOYMENT_FIELDS, ...(location ? locationFields(location) : {}),
+          // Only the dates a timestamp log gives are known by now: the rest are read from the images, below.
+          start_date: stampTimezone(d.start_date ?? '', timezone), end_date: d.end_date ? stampTimezone(d.end_date, timezone) : null,
         }
+        next[d.name] = { timezone, ignoreDst: location?.ignore_dst ?? null, fields: cv ? fillFromVisit(base, cv.visit) : base }
       }
-      return next
+      return added ? next : current
     })
     setActiveName((name) => (name && included.has(name) ? name : [...included][0] ?? ''))
-  }, [detailsActive, scan, included, localLocations])
+  }, [detailsActive, scan, included, localLocations, drafts])
 
   // What each deployment's images say of it — its dates and camera — read once the details are asked for, one deployment at a time.
   useEffect(() => {
@@ -490,6 +564,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   /** The period a source gives a deployment — null when it has none (the manual one is whatever is typed). */
   function periodOf(d: SessionScanDeployment, source: DateSource, timezone: string): Period | null {
+    if (source === 'visit') {
+      const cv = visitOf(d.name)
+      return cv ? { start: stampTimezone(`${cv.visit.date}T${cv.visit.time}`, timezone), end: stampTimezone(`${cv.end.date}T${cv.end.time}`, timezone) } : null
+    }
     if (source === 'log') return d.from_timestamp_log && d.start_date ? { start: stampTimezone(d.start_date, timezone), end: d.end_date ? stampTimezone(d.end_date, timezone) : null } : null
     if (source === 'exif') { const g = guessed[d.name]; return g?.start_date ? { start: stampTimezone(g.start_date, timezone), end: g.end_date ? stampTimezone(g.end_date, timezone) : null } : null }
     if (source === 'epicollect') return entryPeriod(epicollectFound[d.name]?.fields, timezone)
@@ -514,7 +592,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     for (const d of chosen) {
       const entry = drafts[d.name]
       if (!entry || sourcePicked.current.has(d.name)) continue
-      const best = SOURCE_ORDER.find((s) => (s === 'manual' ? !looking : periodOf(d, s, entry.timezone) !== null))
+      const order: DateSource[] = visitOf(d.name) ? ['visit', ...SOURCE_ORDER] : SOURCE_ORDER
+      const best = order.find((s) => (s === 'manual' ? !looking : periodOf(d, s, entry.timezone) !== null))
       if (best && best !== dateSources[d.name]) changes[d.name] = { source: best, period: periodOf(d, best, entry.timezone) }
     }
     if (Object.keys(changes).length > 0) applyPeriod(changes)
@@ -524,7 +603,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   /** The sources of a deployment's dates, each showing what it found so they can be compared, and the period taken — typed when it is by hand. */
   function datePanel(d: SessionScanDeployment, entry: Entry, start: string | null, end: string | null, dateSource: DateSource | undefined) {
     const exif = periodOf(d, 'exif', entry.timezone), log = periodOf(d, 'log', entry.timezone), epi = periodOf(d, 'epicollect', entry.timezone)
+    const cv = visitOf(d.name)
     const options: SourceOption[] = [
+      ...(cv ? [{ source: 'visit' as const, title: 'Visits of the field work', period: periodOf(d, 'visit', entry.timezone),
+        hint: `From the visit ${cv.visit.session} (${cv.visit.date}), where the card was left, to ${cv.end.session} (${cv.end.date}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
       { source: 'exif', title: 'Camera data in the photos', period: exif,
         hint: `First and last photo of the deployment.${d.image_count > 0 && exif ? ` ${plural(d.image_count, 'photo', 'photos')}, read from their EXIF data.` : ''}` },
       { source: 'epicollect', title: 'Epicollect5 project', period: epi,
@@ -622,7 +704,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   // ── Postvalidation ──
 
-  const shownDeploymentChecks = DEPLOYMENT_CHECK_OPTIONS.filter((o) => checkSettings.POSTVALIDATION[o.value])
+  // The checks against the visit are only there when the session is of visits.
+  const shownDeploymentChecks = DEPLOYMENT_CHECK_OPTIONS.filter((o) => checkSettings.POSTVALIDATION[o.value] && (visitsMode || (o.value !== 'sd_card' && o.value !== 'photo_count')))
   const runnableDeploymentChecks = shownDeploymentChecks.map((o) => o.value).filter((c) => deploymentChecks.has(c))
   // The tolerance and what the statistical checks mean by a sequence and by similar come from the settings.
   const toleranceHours = String(checkSettings.POSTVALIDATION.tolerance_hours)
@@ -635,6 +718,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
         const result = await api.validateDeployment(d.path, fieldsOf(d.name), runnableDeploymentChecks, {
           collectionName: null, expectedLocationId: drafts[d.name].fields.location_id || null, toleranceHours: Number(toleranceHours),
           researchProjectId: projectId || null, statistics: statistics ?? undefined,
+          visit: visitOf(d.name) ? {
+            left_session: visitOf(d.name)!.visit.session, left_sd: visitOf(d.name)!.visit.sd ?? null,
+            collected_session: visitOf(d.name)!.end.session, counted_photos: visitOf(d.name)!.end.num_photos ?? null, sd_card: folderSd[d.name] || null,
+          } : null,
         })
         setChecks((c) => ({ ...c, [d.name]: { result } }))
       } catch (e) {
@@ -645,7 +732,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   }
 
   const requiredDeploymentChecksOk = [...requiredDeploymentChecks]
-    .filter((c) => checkSettings.POSTVALIDATION[c])
+    .filter((c) => checkSettings.POSTVALIDATION[c] && shownDeploymentChecks.some((o) => o.value === c))
     .every((c) => chosen.every((d) => deploymentCheckPassed(c, checks[d.name]?.result ?? null) === true))
 
   // ── Preprocessing & import ──
@@ -674,6 +761,9 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           convert_to_utc: preSettings.convert_to_utc,
         }
         await api.importLocal(d.path, planned.path, planned.exists ? null : planned.collection, deployment, options, onEvent)
+        // The visit this deployment is of is closed by it: it is not offered again.
+        const linked = visitOf(name)
+        if (linked) api.linkVisit(projectId, linked.visit, deployment.deployment_id).catch(() => {})
       } catch (e) {
         setRuns((r) => ({ ...r, [name]: { ...r[name], error: e instanceof Error ? e.message : 'The import failed.' } }))
       }
@@ -704,8 +794,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   const imagesChecked = candidates.some((d) => validations[d.name])
   const canContinue: Record<StepKey, boolean> = {
-    origin: Boolean(projectId),
-    images: chosen.length > 0 && !validating,
+    origin: Boolean(projectId) && closedVisits !== null && (closedVisits.length === 0 || visitsMode),
+    images: chosen.length > 0 && !validating && (!visitsMode || chosen.every((d) => folderVisit[d.name])),
     dates: detailsActive && detailsReady && !savingDetails,
     checks: requiredDeploymentChecksOk && !checking,
     prepare: false,
@@ -784,6 +874,40 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                       description="The research project is the same for the whole session. Research projects are kept in the collections folder.">
             <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />
             {originError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{originError}</p>}
+            {projectId && closedVisits !== null && closedVisits.length > 0 && (() => {
+              const session = pickedList[0]?.visit.session
+              const offered = (c: ClosedVisit) => !session || c.visit.session === session
+              const enabled = closedVisits.filter(offered)
+              const allTicked = enabled.length > 0 && enabled.every((c) => pickedVisits.has(visitKey(c)))
+              return (
+                <FormCard title="Visits" description={`The visits to ${projectId} that left a camera and whose card has been collected, with no deployment yet. Tick the ones this session is of — all of one session, which is the revision. Each folder will be one of them: it says where and when it was taken.`}>
+                  <div className="max-h-[22rem] overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <table className="w-full text-sm">
+                      <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400 sticky top-0">
+                        <tr>
+                          <th scope="col" className="w-10 pl-4 py-2.5 text-left">
+                            <input type="checkbox" aria-label="Select all the visits offered" checked={allTicked}
+                                   onChange={(e) => { for (const c of enabled) if (pickedVisits.has(visitKey(c)) !== e.target.checked) toggleVisit(c) }} />
+                          </th>
+                          <th scope="col" className="px-3 py-2.5 text-left">Visit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                        {closedVisits.map((c) => (
+                          <tr key={visitKey(c)} className={offered(c) ? '' : 'opacity-50'}>
+                            <td className="pl-4 py-2.5"><input type="checkbox" aria-label={visitLabel(c)} disabled={!offered(c)} checked={pickedVisits.has(visitKey(c))} onChange={() => toggleVisit(c)} /></td>
+                            <td className="px-3 py-2.5">{visitLabel(c)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2" role="status">
+                    {pickedList.length === 0 ? 'No visit ticked yet.' : `${plural(pickedList.length, 'visit', 'visits')} of the session ${session}.`}
+                  </p>
+                </FormCard>
+              )
+            })()}
             <div className="flex justify-between items-center mt-4">
               {onBack ? <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button> : <div />}
               <button type="button" aria-label="Continue to the images" className={btnPrimary} disabled={!canContinue.origin} onClick={() => setStep((s) => s + 1)}>Continue<span aria-hidden="true"> →</span></button>
@@ -845,6 +969,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                       <th scope="col" className="px-3 py-2 text-left">Subfolder</th>
                       <th scope="col" className="px-3 py-2 text-right">Images</th>
                       <th scope="col" className="px-3 py-2 text-left">Dates</th>
+                      {visitsMode && <th scope="col" className="px-3 py-2 text-left">Visit</th>}
+                      {visitsMode && <th scope="col" className="px-3 py-2 text-left">SD card</th>}
                       {scan.timestamp_log && <th scope="col" className="px-3 py-2 text-left">In the timestamp log</th>}
                     </tr>
                   </thead>
@@ -860,6 +986,28 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                         </td>
                         <td className="px-3 py-2 text-right">{d.image_count}</td>
                         <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">{d.from_timestamp_log ? `${d.start_date?.slice(0, 10) ?? '?'} → ${d.end_date?.slice(0, 10) ?? '?'}` : <span title="Read from the images when the details are asked for">—</span>}</td>
+                        {visitsMode && (
+                          <td className="px-3 py-2">
+                            {included.has(d.name) && (
+                              <select aria-label={`Visit of ${d.name}`} className={inputClass} value={folderVisit[d.name] ?? ''} onChange={(e) => linkFolder(d.name, e.target.value)}>
+                                <option value="">Choose a visit</option>
+                                {pickedList.filter((c) => !Object.entries(folderVisit).some(([other, k]) => other !== d.name && k === visitKey(c))).map((c) => (
+                                  <option key={visitKey(c)} value={visitKey(c)}>{`${c.visit.location_id} · ${c.visit.session} · ${c.visit.date}`}</option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                        )}
+                        {visitsMode && (
+                          <td className="px-3 py-2">
+                            {included.has(d.name) && (
+                              <select aria-label={`SD card of ${d.name}`} className={inputClass} value={folderSd[d.name] ?? ''} onChange={(e) => setFolderSd((cur) => ({ ...cur, [d.name]: e.target.value }))}>
+                                <option value="">None said</option>
+                                {projectSdCards.map((c) => <option key={c.label} value={c.label}>{[c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ')}</option>)}
+                              </select>
+                            )}
+                          </td>
+                        )}
                         {scan.timestamp_log && (
                           <td className="px-3 py-2">
                             {d.from_timestamp_log
@@ -871,6 +1019,12 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                     ))}
                   </tbody>
                 </table>
+                {visitsMode && (() => {
+                  const without = candidates.filter((d) => !folderVisit[d.name])
+                  return without.length === 0
+                    ? <Notice kind="success" role="status" className="mt-3">Every folder has its visit: {plural(candidates.length, 'deployment', 'deployments')} of the session {pickedList[0].visit.session}.</Notice>
+                    : <Notice kind="warning" role="alert" className="mt-3">{without.length === 1 ? 'A folder has' : `${without.length} folders have`} no visit yet — pick it above: <span className="font-mono">{without.slice(0, 5).map((d) => d.name).join(', ')}{without.length > 5 ? ', …' : ''}</span>. Or untick {without.length === 1 ? 'it' : 'them'} if {without.length === 1 ? 'it is' : 'they are'} not of this session.</Notice>
+                })()}
                 {scan.timestamp_log && (scan.timestamp_log.unmatched?.length ?? 0) > 0 && (
                   <Notice kind="warning" role="alert" className="mt-3">
                     {scan.timestamp_log.unmatched!.length === 1 ? 'An entry of the timestamp log has' : `${scan.timestamp_log.unmatched!.length} entries of the timestamp log have`} no folder:{' '}
@@ -880,7 +1034,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
               </div>
             )}
             <div className="flex justify-end items-center mt-4">
-              <button type="button" aria-label="Continue to the checks" className={btnPrimary} disabled={!scan || scanning || candidates.length === 0} onClick={() => openImagesStep(2)}>Continue<span aria-hidden="true"> →</span></button>
+              <button type="button" aria-label="Continue to the checks" className={btnPrimary} disabled={!scan || scanning || candidates.length === 0 || (visitsMode && candidates.some((d) => !folderVisit[d.name]))} onClick={() => openImagesStep(2)}>Continue<span aria-hidden="true"> →</span></button>
             </div>
           </WizardStep>
 
@@ -1111,16 +1265,16 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           <FormCard title="Which revision is this?" description="One revision number for the whole session. It gives every deployment its id.">
             <div className="flex items-end gap-2 max-w-xs">
               <button type="button" aria-label="Lower the revision number" className={`${btnOutline} !px-3`} disabled={!revisionValid || revisionNumber <= 1}
-                      onClick={() => { revisionTouched.current = true; setRevision(String(revisionNumber - 1)); setRevisionFromLog(null); setRevisionSuggested(false) }}>−</button>
+                      onClick={() => { revisionTouched.current = true; setRevision(String(revisionNumber - 1)); setRevisionFromLog(null); setRevisionSuggested(false); setRevisionFromVisits(false) }}>−</button>
               <div className="flex-1">
-                <Field label="What revision number are you importing?" required type="number" min={1} max={9999} step={1} placeholder="e.g. 3" value={revision} onChange={(v) => { revisionTouched.current = true; setRevision(v); setRevisionFromLog(null); setRevisionSuggested(false) }}
+                <Field label="What revision number are you importing?" required type="number" min={1} max={9999} step={1} placeholder="e.g. 3" value={revision} onChange={(v) => { revisionTouched.current = true; setRevision(v); setRevisionFromLog(null); setRevisionSuggested(false); setRevisionFromVisits(false) }}
                        error={revision.trim() !== '' && !revisionValid ? 'A whole number from 1 to 9999.' : undefined} />
               </div>
               <button type="button" aria-label="Raise the revision number" className={`${btnOutline} !px-3`} disabled={revisionValid && revisionNumber >= 9999}
-                      onClick={() => { revisionTouched.current = true; setRevision(String((revisionValid ? revisionNumber : 0) + 1)); setRevisionFromLog(null); setRevisionSuggested(false) }}>+</button>
+                      onClick={() => { revisionTouched.current = true; setRevision(String((revisionValid ? revisionNumber : 0) + 1)); setRevisionFromLog(null); setRevisionSuggested(false); setRevisionFromVisits(false) }}>+</button>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1.5">
-              {revisionFromLog && revisionValid ? `Taken from the deployment ids in ${revisionFromLog} — change it if it is not right.` : revisionSuggested && revisionValid ? 'Filled in as the next one expected for these locations — change it if it is not right.' : '1 for the first visit to these locations, 2 for the second, and so on.'}
+              {revisionFromVisits && revisionValid ? 'Taken from the session of the visits you chose — change it if it is not right.' : revisionFromLog && revisionValid ? `Taken from the deployment ids in ${revisionFromLog} — change it if it is not right.` : revisionSuggested && revisionValid ? 'Filled in as the next one expected for these locations — change it if it is not right.' : '1 for the first visit to these locations, 2 for the second, and so on.'}
             </p>
             {revisionValid && chosen.length > 0 && (
               <div className="mt-3 flex items-center gap-2 flex-wrap text-xs text-zinc-500 dark:text-zinc-400">

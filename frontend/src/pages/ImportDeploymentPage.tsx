@@ -13,7 +13,7 @@ import Combobox from '../components/Combobox'
 import OptionCards from '../components/OptionCards'
 import type { Option } from '../components/OptionCards'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
-import type { ClosedVisit, ClosedVisitTarget, SdCard } from '../types'
+import type { ClosedVisit, ClosedVisitTarget, SdCard, StoredVisit } from '../types'
 import { applyEntry, entryLabel, entryPeriod } from '../epicollectImport'
 import DateSourcePicker from '../components/DateSourcePicker'
 import TimeFixPage from './TimeFixPage'
@@ -479,6 +479,20 @@ export function rangeError(text: string, min: number, max: number, required: boo
 export type OriginSource = 'trapper' | 'manual'
 
 // A new location's form, its numbers as typed.
+/** What the visit that left the camera tells of the deployment: the camera, who set it up, and the details of the site — what the visit does not say stays as it was. */
+export function fillFromVisit(d: DeploymentFields, start: StoredVisit): DeploymentFields {
+  return {
+    ...d,
+    camera_id: start.camera_id ?? d.camera_id, camera_model: start.camera_model ?? d.camera_model,
+    setup_by: start.setup_by ?? start.trappers ?? d.setup_by,
+    camera_interval: start.camera_interval ?? d.camera_interval, camera_height: start.camera_height ?? d.camera_height, camera_depth: start.camera_depth ?? d.camera_depth,
+    camera_tilt: start.camera_tilt ?? d.camera_tilt, camera_heading: start.camera_heading ?? d.camera_heading, detection_distance: start.detection_distance ?? d.detection_distance,
+    timestamp_issues: start.timestamp_issues ?? d.timestamp_issues, bait_use: start.bait_use ?? d.bait_use,
+    feature_type: start.feature_type ?? d.feature_type, habitat: start.habitat ?? d.habitat, deployment_groups: start.deployment_groups ?? d.deployment_groups,
+    tags: start.tags?.length ? start.tags : d.tags,
+  }
+}
+
 /** A closed visit as an option: when it was, where, which session, what was done there, and when its card was collected — and how many photos it had. */
 export const visitKey = (c: ClosedVisit) => `${c.visit.location_id}|${c.visit.date}|${c.visit.time}`
 export const visitLabel = (c: ClosedVisit) =>
@@ -1740,16 +1754,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   /** What the visit that left the card knows of the camera and the site fills in the details: the camera, who set it up, how it was put up — not the
    * notes, which are of each visit. The visit that collected the card gives only where the period ends: the next deployment starts there. */
   function fillFromVisits({ visit: start }: ClosedVisit) {
-    setDeployment((d) => ({
-      ...d,
-      camera_id: start.camera_id ?? d.camera_id, camera_model: start.camera_model ?? d.camera_model,
-      setup_by: start.setup_by ?? start.trappers ?? d.setup_by,
-      camera_interval: start.camera_interval ?? d.camera_interval, camera_height: start.camera_height ?? d.camera_height, camera_depth: start.camera_depth ?? d.camera_depth,
-      camera_tilt: start.camera_tilt ?? d.camera_tilt, camera_heading: start.camera_heading ?? d.camera_heading, detection_distance: start.detection_distance ?? d.detection_distance,
-      timestamp_issues: start.timestamp_issues ?? d.timestamp_issues, bait_use: start.bait_use ?? d.bait_use,
-      feature_type: start.feature_type ?? d.feature_type, habitat: start.habitat ?? d.habitat, deployment_groups: start.deployment_groups ?? d.deployment_groups,
-      tags: start.tags?.length ? start.tags : d.tags,
-    }))
+    setDeployment((d) => fillFromVisit(d, start))
     setFilledFrom(`the visit ${start.session}`)
   }
 
