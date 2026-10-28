@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import WizardStep from '../components/WizardStep'
 import { formatDay } from '../dateFormat'
 import { api } from '../api'
-import { applyEntry, entryPeriod } from '../epicollectImport'
+import { applyEntry } from '../epicollectImport'
 import DateSourcePicker, { SOURCE_ORDER, against } from '../components/DateSourcePicker'
 import Notice, { BadgeIcon, Mark } from '../components/Notice'
 import type { DateSource, Period, SourceOption } from '../components/DateSourcePicker'
@@ -23,6 +23,7 @@ import {
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
   DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, statParamsOf, statParamsValid, toggled, fillFromVisit, visitKey, visitLabel,
+  FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
 
@@ -126,6 +127,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   const [closedVisits, setClosedVisits] = useState<ClosedVisit[] | null>(null)
   const [pickedVisits, setPickedVisits] = useState<Set<string>>(new Set())
   const [visitFilter, setVisitFilter] = useState('')
+  // Where each deployment of visits has its camera, site and notes from, once picked: the visit's (the field sheet) before that.
+  const [detailsPick, setDetailsPick] = useState<Record<string, 'visit' | 'previous' | 'manual'>>({})
   const [folderVisit, setFolderVisit] = useState<Record<string, string>>({})
   // The SD card each folder's images come from, and the cards the settings keep.
   const [folderSd, setFolderSd] = useState<Record<string, string>>({})
@@ -518,6 +521,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       }
       return next
     })
+    setDetailsPick((p) => ({ ...p, ...Object.fromEntries(found.map((n) => [n, 'previous' as const])) }))
     const before = names.length === 1 ? drafts[names[0]]?.fields : undefined
     setFillMessage({ scope, undo: found.length && before ? { name: names[0], fields: before } : undefined, text: names.length === 1
       ? (found.length ? `Filled in from ${previousFound[`${projectId}|${fieldsOf(names[0]).deployment_id}`]!.deployment_id}.` : 'There is no previous revision of this deployment to fill it in from.')
@@ -571,7 +575,6 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     }
     if (source === 'log') return d.from_timestamp_log && d.start_date ? { start: stampTimezone(d.start_date, timezone), end: d.end_date ? stampTimezone(d.end_date, timezone) : null } : null
     if (source === 'exif') { const g = guessed[d.name]; return g?.start_date ? { start: stampTimezone(g.start_date, timezone), end: g.end_date ? stampTimezone(g.end_date, timezone) : null } : null }
-    if (source === 'epicollect') return entryPeriod(epicollectFound[d.name]?.fields, timezone)
     return null
   }
 
@@ -584,11 +587,11 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     })
   }
 
-  // Each deployment takes the first source that has its dates: Epicollect5, the timestamp log, the images — and by hand if none does,
+  // Each deployment takes the first source that has its dates: the visits, the timestamp log, the images — and by hand if none does,
   // once they have all been looked at. Better ones found later replace the ones taken, unless one was picked.
   useEffect(() => {
     if (!detailsActive) return
-    const looking = guessingLeft > 0 || (epicollectOn && !epicollectDone)
+    const looking = guessingLeft > 0
     const changes: Record<string, { source: DateSource; period: Period | null }> = {}
     for (const d of chosen) {
       const entry = drafts[d.name]
@@ -599,7 +602,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     }
     if (Object.keys(changes).length > 0) applyPeriod(changes)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailsActive, drafts, guessed, guessingLeft, epicollectFound, epicollectOn, epicollectDone, scan])
+  }, [detailsActive, drafts, guessed, guessingLeft, scan])
 
   /** The sources of a deployment's dates, each showing what it found so they can be compared, and the period taken — typed when it is by hand. */
   function datePanel(d: SessionScanDeployment, entry: Entry, start: string | null, end: string | null, dateSource: DateSource | undefined) {
@@ -630,6 +633,18 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     applyPeriod({ [d.name]: { source, period: periodOf(d, source, drafts[d.name]?.timezone ?? '') } })
   }
 
+  /** The camera, site and notes of a deployment as one of its sources says them — what the source does not say is left empty; by hand keeps what is there. */
+  function pickDetails(name: string, source: 'visit' | 'previous' | 'manual') {
+    setDetailsPick((p) => ({ ...p, [name]: source }))
+    if (source === 'manual') return
+    const cv = visitOf(name)
+    const previous = previousFound[`${projectId}|${fieldsOf(name).deployment_id}`]?.deployment
+    updateEntry(name, (e) => {
+      const emptied = { ...e.fields, ...Object.fromEntries(FILLED_FROM_PREVIOUS.map((k) => [k, EMPTY_DEPLOYMENT_FIELDS[k]])) }
+      return { ...e, fields: source === 'visit' && cv ? fillFromVisit(emptied, cv.visit) : source === 'previous' && previous ? fillFromPreviousRevision(emptied, previous) : e.fields }
+    })
+  }
+
   /** Fills the camera, site and notes of the deployments that have an entry in Epicollect5 from it. */
   function importFromEpicollect() {
     const names = Object.keys(epicollectFound)
@@ -644,6 +659,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       return next
     })
     setFillMessage({ scope: 'all', text: `Filled in ${names.length} of ${chosen.length} from Epicollect5 — check the camera, site and notes in More details.` })
+    setDetailsPick((p) => ({ ...p, ...Object.fromEntries(names.map((n) => [n, 'manual' as const])) }))
     setEpicollectImported(true)
   }
 
@@ -805,6 +821,29 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   const deploymentsCount = plural(chosen.length, 'deployment', 'deployments')
   const imagesTotal = chosen.reduce((n, d) => n + d.image_count, 0)
   const revisionName = revisionValid ? `R${String(revisionNumber).padStart(4, '0')}` : ''
+  /** What has been settled so far, as chips that fill in with each step: the research project, the visits with their range, the photos and the cards, and — once the
+   * dates and details are set — the revision, the deployments and the dates they cover. */
+  function progressChips(upTo: 'images' | 'dates' | 'details') {
+    const chips: ReactNode[] = []
+    if (projectId) chips.push(<span key="rp" className={chip}>{projectId}</span>)
+    if (pickedList.length > 0) {
+      const from = pickedList.map((c) => c.visit.date).sort()[0], to = pickedList.map((c) => c.end.date).sort().reverse()[0]
+      chips.push(<span key="visits" className={chip}>{plural(pickedList.length, 'visit', 'visits')} · {from} → {to}</span>)
+    }
+    if (upTo !== 'images') {
+      chips.push(<span key="photos" className={chip}>{plural(imagesTotal, 'image', 'images')}</span>)
+      const cards = [...new Set(chosen.map((d) => folderSd[d.name]).filter(Boolean))]
+      if (cards.length > 0) chips.push(<span key="sd" className={chip}>{cards.length === 1 ? 'SD card' : 'SD cards'} <span className="font-mono">{cards.join(', ')}</span></span>)
+    }
+    if (upTo === 'details') {
+      if (revisionName) chips.push(<span key="rev" className={`${chip} font-mono`}>{revisionName}</span>)
+      chips.push(<span key="count" className={chip}>{deploymentsCount}</span>)
+      const starts = chosen.map((d) => drafts[d.name]?.fields.start_date).filter(Boolean) as string[]
+      const ends = chosen.map((d) => drafts[d.name]?.fields.end_date).filter(Boolean) as string[]
+      if (starts.length > 0) chips.push(<span key="dates" className={chip}>{formatDay([...starts].sort()[0], true)} → {ends.length > 0 ? formatDay([...ends].sort().reverse()[0], true) : '…'}</span>)
+    }
+    return chips.length > 0 ? <div className="flex flex-wrap gap-2 mb-6">{chips}</div> : null
+  }
   const strictnessLegend = (
     <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
       <strong className="font-semibold text-zinc-700 dark:text-zinc-300">Skip</strong> doesn't run the check · <strong className="font-semibold text-zinc-700 dark:text-zinc-300">Warn</strong> shows the problems but lets you continue · <strong className="font-semibold text-zinc-700 dark:text-zinc-300">Must pass</strong> blocks you until it passes.
@@ -935,6 +974,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                 const withProblems = candidates.filter((d) => validations[d.name]?.error || runnableImageChecks.some((c) => imageCheckPassed(c, validations[d.name]?.result ?? null) === false))
         return (
         <div>
+          {progressChips('images')}
           <StepHeading>Images</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
             Select the session&rsquo;s folder, choose which checks to run over the images of its deployments, and validate them before they go any further.
@@ -1109,11 +1149,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
         }
         return (
         <div>
-          <div className="flex flex-wrap gap-2 mb-6">
-            <span className={chip}>{deploymentsCount}</span>
-            <span className={chip}>{plural(imagesTotal, 'image', 'images')}</span>
-            <span className={`${chip} font-mono`}>{sessionName}</span>
-          </div>
+          {progressChips('dates')}
 
           <StepHeading>Dates and details</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
@@ -1363,7 +1399,6 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                 const source = !start || !dateSource ? null
                   : dateSource === 'log' ? `From ${scan?.timestamp_log?.name ?? 'the collection’s csv'}`
                   : dateSource === 'exif' ? 'From the images'
-                  : dateSource === 'epicollect' ? 'From Epicollect5'
                   : 'Entered by hand'
                 const datesOk = Boolean(start && end && !errors.start_date && !errors.end_date)
                 const clash = existingFolder(d.name) ? 'Already exists' : duplicated(d.name) ? 'Duplicate id' : null
@@ -1450,7 +1485,44 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                   {open && fields && entry && (
                     <div aria-label={`Details of ${d.name}`} role="group" className="mx-5 mb-4 rounded-lg bg-zinc-100 dark:bg-zinc-800 p-4">
                       <h5 className="sr-only">{fieldsOf(d.name).deployment_id || d.name}</h5>
-                      {(hasEarlierRevision(d.name) || fillMessage?.scope === 'one') && (
+                      {visitOf(d.name) && (() => {
+                        const cv = visitOf(d.name)!
+                        const given = fillFromVisit(EMPTY_DEPLOYMENT_FIELDS, cv.visit)
+                        const visitFound = detailsFound(given)
+                        const previous = previousFound[`${projectId}|${fieldsOf(d.name).deployment_id}`]
+                        const previousFound_ = detailsFound(previous ? fillFromPreviousRevision(EMPTY_DEPLOYMENT_FIELDS, previous.deployment) : EMPTY_DEPLOYMENT_FIELDS)
+                        const source = detailsPick[d.name] ?? 'visit'
+                        const options = [
+                          { source: 'visit' as const, title: 'What the field sheet says', found: visitFound, available: true,
+                            hint: `From the visit ${cv.visit.session} (${cv.visit.date}), as it was written in the field${visitFound.parts ? `: ${visitFound.parts}` : ''}. The visits (the field sheet) are not changed.` },
+                          { source: 'previous' as const, title: 'What the previous deployment says', found: previous ? previousFound_ : null, available: Boolean(previous),
+                            hint: previous ? `From ${previous.deployment_id}, the previous deployment at this location${previousFound_.parts ? `: ${previousFound_.parts}` : ''}. Dates are never copied.` : 'No earlier revision of this location is on file.' },
+                          { source: 'manual' as const, title: 'Fill in by hand', found: null, available: true, hint: 'Type them yourself, starting from the values the last source gave.' },
+                        ]
+                        return (
+                          <div role="radiogroup" aria-label={`Source of the details of ${d.name}`} className="mb-4 space-y-2">
+                            {options.map((o) => (
+                              <label key={o.source} className={`block rounded-xl border px-4 py-3 ${o.available ? 'cursor-pointer' : 'opacity-60'} ${source === o.source ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700'}`}>
+                                <span className="flex items-start gap-3">
+                                  <input type="radio" className="mt-1" name={`details-source-${d.name}`} aria-label={`${o.title} (${d.name})`} disabled={!o.available} checked={source === o.source} onChange={() => pickDetails(d.name, o.source)} />
+                                  <span className="flex-1 min-w-0">
+                                    <span className="flex items-center justify-between gap-3">
+                                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{o.title}</span>
+                                      {(o.found || !o.available) && (
+                                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${o.found && o.found.count > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>
+                                          {o.found && o.found.count > 0 ? `${o.found.count} ${o.found.count === 1 ? 'field' : 'fields'} found` : 'Nothing found'}
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{o.hint}</span>
+                                  </span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )
+                      })()}
+                      {!visitOf(d.name) && (hasEarlierRevision(d.name) || fillMessage?.scope === 'one') && (
                         <div className="mb-4 flex items-center gap-3 flex-wrap">
                           {hasEarlierRevision(d.name) && (
                             <button type="button" className={btnOutline} onClick={() => fillFromPrevious([d.name], 'one')}>Fill from the previous revision</button>
@@ -1458,7 +1530,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                           {fillMessage?.scope === 'one' && !fillMessage.undo && <span aria-live="polite" className="text-xs text-zinc-500 dark:text-zinc-400">{fillMessage.text}</span>}
                         </div>
                       )}
-                      {fillMessage?.scope === 'one' && fillMessage.undo?.name === d.name && (
+                      {!visitOf(d.name) && fillMessage?.scope === 'one' && fillMessage.undo?.name === d.name && (
                         <div role="status" className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-5 py-4 text-sm text-emerald-900 dark:text-emerald-100">
                           <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
                           <span className="flex-1"><strong className="font-semibold">{fillMessage.text}</strong> Change anything that&rsquo;s different this time.</span>
@@ -1467,7 +1539,9 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                         </div>
                       )}
 
-                      <MoreDetailsForm deployment={fields} errors={activeErrors_of(d.name)} onField={(key, value) => updateField(d.name, key, value)} />
+                      <LockedDetailsContext.Provider value={Boolean(visitOf(d.name)) && (detailsPick[d.name] ?? 'visit') !== 'manual'}>
+                        <MoreDetailsForm deployment={fields} errors={activeErrors_of(d.name)} onField={(key, value) => updateField(d.name, key, value)} />
+                      </LockedDetailsContext.Provider>
                     </div>
                   )}
                 </div>
@@ -1499,11 +1573,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
         )
         return (
         <div>
-          <div className="flex flex-wrap gap-2 mb-6">
-            <span className={chip}>{deploymentsCount}</span>
-            <span className={`${chip} font-mono`}>{projectId}</span>
-            {revisionName && <span className={`${chip} font-mono`}>{revisionName}</span>}
-          </div>
+          {progressChips('details')}
 
           <StepHeading>Check the details</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
@@ -1582,11 +1652,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
         const status1 = started ? 'done' : 'open'
         return (
           <div>
-            <div className="flex flex-wrap gap-2 mb-6">
-              <span className={chip}>{deploymentsCount}</span>
-              <span className={`${chip} font-mono`}>{projectId}</span>
-              {revisionName && <span className={`${chip} font-mono`}>{revisionName}</span>}
-            </div>
+            {progressChips('details')}
 
             <StepHeading>Prepare and save</StepHeading>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">

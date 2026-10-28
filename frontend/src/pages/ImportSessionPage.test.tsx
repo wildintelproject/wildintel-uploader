@@ -1116,6 +1116,13 @@ describe('an import session of visits', () => {
     await toMoreDetailsSubstep()
     await openMore('DONA_01', /^Camera/)
     expect(screen.getByLabelText('Camera model')).toHaveValue('Reconyx HC600')
+    // what the field sheet says is shown, not edited, until it is filled in by hand — which keeps the values
+    expect(screen.getByRole('radio', { name: 'What the field sheet says (DONA_01)' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'What the previous deployment says (DONA_01)' })).toBeDisabled()
+    expect(screen.getByLabelText('Camera model')).toBeDisabled()
+    await userEvent.click(screen.getByRole('radio', { name: 'Fill in by hand (DONA_01)' }))
+    expect(screen.getByLabelText('Camera model')).toBeEnabled()
+    expect(screen.getByLabelText('Camera model')).toHaveValue('Reconyx HC600')
   })
 
   it('adds the checks against the visit, runs them with what each visit says, and links the visits once they are imported', async () => {
