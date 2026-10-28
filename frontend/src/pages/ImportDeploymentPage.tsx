@@ -1610,6 +1610,29 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const shownProjectFieldErrors = shownProjectErrors(projectErrors)
   const selectedProject = localProjects.find((p) => p.acronym === selectedProjectId)
   const selectedLocation = localLocations.find((l) => l.location_id === selectedLocationId)
+  /** What has been settled so far, as chips that fill in with each step: the research project, the visit, the photos and the card, and — once the dates and details are
+   * set — the deployment, where and when it was, and what the camera and the site are. */
+  function progressChips(upTo: 'images' | 'dates' | 'details') {
+    const chip = 'rounded-full border border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300'
+    const mono = `${chip} font-mono`
+    const day = (iso: string | null | undefined, year: boolean) => (iso ? formatDay(iso, year) : '…')
+    const chips: ReactNode[] = []
+    if (selectedProjectId) chips.push(<span key="rp" className={chip}>{selectedProject?.acronym ?? selectedProjectId}</span>)
+    if (linkedVisit) chips.push(<span key="visit" className={chip}>Visit <span className="font-mono">{linkedVisit.visit.location_id}</span> · {linkedVisit.visit.date} → {linkedVisit.end.date}</span>)
+    if (upTo !== 'images') {
+      if (scan) chips.push(<span key="photos" className={chip}>{scan.image_count.toLocaleString('en-US')} {scan.image_count === 1 ? 'image' : 'images'}</span>)
+      if (sdCard) chips.push(<span key="sd" className={chip}>SD card <span className="font-mono">{sdCard}</span></span>)
+    }
+    if (upTo === 'details') {
+      const d = deployment
+      const sameYear = d.start_date.slice(0, 4) === (d.end_date ?? '').slice(0, 4)
+      if (d.deployment_id) chips.push(<span key="id" className={mono}>{d.deployment_id}</span>)
+      if (selectedLocation?.name) chips.push(<span key="loc" className={chip}>{selectedLocation.name}</span>)
+      if (d.start_date) chips.push(<span key="dates" className={chip}>{day(d.start_date, !sameYear)} → {day(d.end_date, true)}</span>)
+    }
+    return chips.length > 0 ? <div className="flex flex-wrap gap-2 mb-6">{chips}</div> : null
+  }
+
   // The deployment needs coordinates (Camtrap DP requires them) — they come with the location.
   const locationLacksCoordinates = Boolean(selectedLocation) && (selectedLocation!.latitude == null || selectedLocation!.longitude == null)
   const originReady = Boolean(selectedProjectId && origin.locationId.trim()) && !locationLacksCoordinates && !addingProject && !addingLocation
@@ -2332,6 +2355,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
               The images of the visit <strong>{closedVisit.visit.session}</strong> to <strong>{closedVisit.visit.location_id}</strong> ({closedVisit.researchProjectId}), whose card was collected: its research project and its visit are chosen for you.
             </Notice>
           )}
+          {progressChips('images')}
           <StepHeading>Images</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
             Select a folder with the camera-trap images, choose which checks to run, and validate the images before they go any further.
@@ -2471,8 +2495,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
 
       {/* ── Step: where and when the images were taken ── */}
       {(stepKey === 'origin' || stepKey === 'dates') && (() => {
-        const folderName = sourceDir.split(/[\\/]/).filter(Boolean).pop() ?? sourceDir
-        const chip = 'rounded-full border border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300'
         // The origin is the first step; the dates and the details are the third, whose own two parts are the 2nd and the 3rd.
         const part = stepKey === 'origin' ? 1 : Math.max(originOpen, 2)
         const whenOpen = part === 2 && originReady
@@ -2487,14 +2509,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
           deployment.tags.length || null].filter((v) => v != null && v !== '' && v !== false).length
         return (
         <div>
-          {stepKey === 'dates' && (
-            <div className="flex flex-wrap gap-2 mb-6">
-              {scan && <span className={chip}>{scan.image_count.toLocaleString('en-US')} {scan.image_count === 1 ? 'image' : 'images'}</span>}
-              <span className={`${chip} font-mono`}>{folderName}</span>
-              {selectedProject && selectedLocation && <span className={chip}>{selectedProject.acronym} · {selectedLocation.location_id}</span>}
-              {linkedVisit && <span className={chip}>Closed visit: {visitLabel(linkedVisit)}</span>}
-            </div>
-          )}
+          {stepKey === 'dates' && progressChips('dates')}
 
           <StepHeading>{stepKey === 'origin' ? 'Origin' : 'Dates and details'}</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
@@ -2881,19 +2896,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
 
       {/* ── Step: check the details ── */}
       {stepKey === 'checks' && (() => {
-        const chip = 'rounded-full border border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300'
-        const date = (iso: string | null | undefined, year: boolean) => (iso ? formatDay(iso, year) : '…')
-        const sameYear = deployment.start_date.slice(0, 4) === (deployment.end_date ?? '').slice(0, 4)
-        const location = localLocations.find((l) => l.location_id === deployment.location_id)
         const imageCount = scan ? `${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'image' : 'images'}` : ''
         return (
         <div>
-          <div className="flex flex-wrap gap-2 mb-6">
-            {imageCount && <span className={chip}>{imageCount}</span>}
-            <span className={`${chip} font-mono`}>{deployment.deployment_id}</span>
-            {location?.name && <span className={chip}>{location.name}</span>}
-            {deployment.start_date && <span className={chip}>{date(deployment.start_date, !sameYear)} → {date(deployment.end_date, true)}</span>}
-          </div>
+          {progressChips('details')}
 
           <StepHeading>Check the details</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
@@ -3001,8 +3007,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
         ]
         const doneRun = preprocessed?.type === 'done'
         const active = (r: (typeof rows)[number]) => r.always || (r.step !== undefined && effectivePreprocessSteps.has(r.step))
-        const chip = 'rounded-full border border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300'
-        const location = localLocations.find((l) => l.location_id === deployment.location_id)
         const missingMetadata = [!preSettings.owner && 'Owner', !preSettings.publisher && 'Publisher'].filter(Boolean) as string[]
         // The images go through copy, dates, rename and resize in one pass, then the metadata is written: the pass's steps share its progress out between them.
         const activeRows = rows.filter(active)
@@ -3021,11 +3025,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
         const prepStatus2 = importing ? 'running' : importError ? 'error' : destDir ? 'done' : resultsDone ? 'open' : 'locked'
         return (
           <div>
-            <div className="flex flex-wrap gap-2 mb-6">
-              {scan && <span className={chip}>{scan.image_count.toLocaleString('en-US')} {scan.image_count === 1 ? 'image' : 'images'}</span>}
-              <span className={`${chip} font-mono`}>{deployment.deployment_id}</span>
-              {location?.name && <span className={chip}>{location.name}</span>}
-            </div>
+            {progressChips('details')}
 
             <StepHeading>Prepare and save</StepHeading>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">

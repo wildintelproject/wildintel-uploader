@@ -409,7 +409,7 @@ describe('ImportDeploymentPage', () => {
         await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
         await continueToDates()
         await screen.findByText('When was it collected?')
-        expect(screen.getByText(/Closed visit: 2026-08-05 08:14:05/)).toBeInTheDocument()
+        expect(screen.getByText((_, el) => el?.textContent === 'Visit DONA_01 · 2026-08-05 → 2026-10-02')).toBeInTheDocument() // the research project and the visit, with its range
         expect(screen.getByLabelText('Revision')).toHaveValue(2)
       })
 
