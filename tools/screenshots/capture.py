@@ -122,7 +122,7 @@ def utils(page: Page) -> None:
 
 SETTINGS_SECTIONS = {
     "general": "General", "trapper": "Trapper", "epicollect": "Epicollect5", "validation": "Validation",
-    "postvalidation": "Postvalidation", "preprocessing": "Preprocessing", "config": "Config",
+    "postvalidation": "Postvalidation", "preprocessing": "Preprocessing", "entities": "Entities", "config": "Config",
 }
 
 
@@ -139,13 +139,43 @@ for _key, _label in SETTINGS_SECTIONS.items():
     _settings_shot(_key, _label)
 
 
+# ── Register visits ──────────────────────────────────────────────────────────
+
+@shot("visits")
+def visits(page: Page) -> None:
+    open_task(page, "Register visits")
+    expect(page.get_by_text("By hand", exact=True).first).to_be_visible()
+    save(page, "visits")
+
+
 # ── Import deployment ────────────────────────────────────────────────────────
 
 SOURCE = "/home/me/Pictures/R0003-DONA_01"
 
 
-def to_folder(page: Page) -> None:
+def to_origin(page: Page) -> None:
     open_task(page, "Import deployment")
+    expect(heading(page, "Origin")).to_be_visible()
+
+
+def pick_visit(page: Page) -> None:
+    """The research project and, among its closed visits, the one that left the camera of DONA_01."""
+    choose(page, "origin-research-project", "DONA")
+    choose(page, "origin-visit", "DONA_01 · R0003")
+    expect(button(page, "Continue to the images")).to_be_enabled()
+
+
+@shot("step-origin")
+def step_origin(page: Page) -> None:
+    to_origin(page)
+    pick_visit(page)
+    save(page, "step-origin")
+
+
+def to_folder(page: Page) -> None:
+    to_origin(page)
+    pick_visit(page)
+    button(page, "Continue to the images").click()
     expect(heading(page, "Select the folder")).to_be_visible()
 
 
@@ -153,6 +183,7 @@ def scan(page: Page) -> None:
     page.locator("#source-dir").fill(SOURCE)
     button(page, "Scan").click()
     expect(page.get_by_text("241 images found")).to_be_visible()
+    choose(page, "images-sd-card", "A13")
 
 
 @shot("step-folder")
@@ -191,27 +222,21 @@ def validation_failures(page: Page) -> None:
     save(page, "validation-failures", top=heading(page, "Results"), bottom=section)
 
 
-def to_origin(page: Page) -> None:
+def to_dates(page: Page) -> None:
     run_validation(page)
     button(page, "Continue").last.click()
-    expect(heading(page, "Where was it taken?")).to_be_visible()
+    expect(heading(page, "When was it collected?")).to_be_visible()
 
 
-@shot("step-origin")
-def step_origin(page: Page) -> None:
-    to_origin(page)
-    choose(page, "origin-research-project", "DONA")
-    choose(page, "origin-location", "DONA_01")
-    expect(button(page, "Continue to the dates")).to_be_enabled()
-    save(page, "step-origin")
+@shot("step-dates")
+def step_dates(page: Page) -> None:
+    to_dates(page)
+    expect(page.get_by_text("Dates from: Visits of the field work")).to_be_visible()
+    save(page, "step-dates")
 
 
 def to_details(page: Page) -> None:
-    to_origin(page)
-    choose(page, "origin-research-project", "DONA")
-    choose(page, "origin-location", "DONA_01")
-    button(page, "Continue to the dates").click()
-    expect(heading(page, "When was it collected?")).to_be_visible()
+    to_dates(page)
     button(page, "Continue to more details").click()
     expect(heading(page, "More details")).to_be_visible()
 
@@ -219,21 +244,8 @@ def to_details(page: Page) -> None:
 @shot("step-details")
 def step_details(page: Page) -> None:
     to_details(page)
-    save(page, "step-details")
-
-
-def to_dates(page: Page) -> None:
-    to_origin(page)
-    choose(page, "origin-research-project", "DONA")
-    choose(page, "origin-location", "DONA_01")
-    button(page, "Continue to the dates").click()
-    expect(heading(page, "When was it collected?")).to_be_visible()
-
-
-@shot("step-dates")
-def step_dates(page: Page) -> None:
-    to_dates(page)
-    save(page, "step-dates")
+    expect(page.get_by_text("Where do they come from?")).to_be_visible()
+    save(page, "step-details", top=heading(page, "More details"))
 
 
 def to_checks(page: Page) -> None:
@@ -287,25 +299,40 @@ def reports(page: Page) -> None:
 
 # ── Import session ───────────────────────────────────────────────────────────
 
-def to_session_dates(page: Page) -> None:
+def to_session_folders(page: Page) -> None:
+    """The session of the visits to DONA: ticked in the origin, then the folder with a subfolder each, linked to its visit by its name."""
     open_task(page, "Import session")
-    page.locator("input").first.fill("/home/me/Pictures/trip-2024-09")
+    expect(heading(page, "Origin")).to_be_visible()
+    choose(page, "origin-research-project", "DONA")
+    page.get_by_role("checkbox", name="Select all the visits offered").check()
+    button(page, "Continue to the images").click()
+    page.locator("#session-dir").fill("/home/me/Pictures/trip-2024-09")
     button(page, "Scan").click()
     expect(page.get_by_text("tick the ones to import")).to_be_visible()
+    expect(page.get_by_text("3 of 3 folders have a visit")).to_be_visible()
+
+
+@shot("session-folders")
+def session_folders(page: Page) -> None:
+    to_session_folders(page)
+    page.get_by_label("SD card of DONA_01").select_option("A13")
+    page.get_by_label("SD card of DONA_02").select_option("B2")
+    save(page, "session-folders", top=page.get_by_text("tick the ones to import"))
+
+
+def to_session_dates(page: Page) -> None:
+    to_session_folders(page)
     button(page, "Continue to the checks").click()
     button(page, "Run checks").click()
     expect(page.get_by_role("link", name="Download report")).to_be_visible()
     button(page, "Continue with 3 folders", exact=False).click()
-    choose(page, "origin-research-project", "DONA")
-    button(page, "Assign 3").click()
-    button(page, "Continue to the details").click()
     expect(heading(page, "When was it collected?")).to_be_visible()
 
 
 @shot("session-details")
 def session_details(page: Page) -> None:
     to_session_dates(page)
-    expect(page.get_by_text("Dates from: Epicollect5")).to_be_visible()
+    expect(page.get_by_text("Dates from: Visits of the field work")).to_be_visible()
     save(page, "session-details", top=heading(page, "When was it collected?"))
 
 
@@ -313,6 +340,7 @@ def session_details(page: Page) -> None:
 def session_dates_log(page: Page) -> None:
     to_session_dates(page)
     page.get_by_role("button", name="Open DONA_02").click()
+    page.get_by_role("radio", name="Timestamp log file").click()
     expect(page.get_by_text("Dates from: Timestamp log file")).to_be_visible()
     save(page, "session-dates-log", top=heading(page, "When was it collected?"))
 

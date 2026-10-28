@@ -25,6 +25,32 @@
 
   const CAMERA = { model: 'Reconyx HyperFire 2', id: 'P800HG08' }
 
+  // The field work: who goes, the SD cards and the cameras of the research project.
+  const FIELDWORK = {
+    trappers: [{ name: 'Ana Pérez', affiliation: 'EBD-CSIC', status: 'active' }, { name: 'M. Ruiz', affiliation: 'EBD-CSIC', status: 'active' }],
+    sd_cards: [
+      { label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: '2024-03-01', research_project: 'DONA', status: 'active' },
+      { label: 'B2', brand: 'Kingston', capacity: '32 GB', in_service: '2024-03-01', research_project: 'DONA', status: 'active' },
+      { label: 'C7', brand: 'SanDisk', capacity: '64 GB', in_service: '2024-04-12', research_project: 'DONA', status: 'active' },
+    ],
+    cameras: [
+      { label: 'CAM-01', camera_id: CAMERA.id, camera_model: CAMERA.model, in_service: '2024-03-01', research_project: 'DONA', status: 'active' },
+      { label: 'CAM-02', camera_id: 'P800HG11', camera_model: CAMERA.model, in_service: '2024-03-01', research_project: 'DONA', status: 'active' },
+    ],
+  }
+
+  // The visits to DONA: the one that left the camera of DONA_01 on 2024-09-04 (R0003) and the one that collected its card (R0004), and the ones of the other sites.
+  const visit = (location_id, session, date, time, actions, over = {}) => ({
+    location_id, session, date, time, actions, trappers: 'Ana Pérez', status: 'OK', card_batteries_ok: 'OK', num_photos: null, sd: null, date_time_ok: 'Yes',
+    latitude: null, longitude: null, camera_id: CAMERA.id, camera_model: CAMERA.model, ...over,
+  })
+  const VISIT_LEFT = visit('DONA_01', 'R0003', '2024-09-04', '12:55:00', ['Revision'], { sd: 'A13', setup_by: 'Ana Pérez', camera_height: 0.6, camera_tilt: 0, camera_heading: 180, camera_interval: 5, detection_distance: 12, habitat: 'Pine forest' })
+  const CLOSED_VISITS = [
+    { visit: VISIT_LEFT, end: visit('DONA_01', 'R0004', '2024-10-12', '07:30:00', ['Revision'], { sd: 'B2', num_photos: 241 }) },
+    { visit: visit('DONA_02', 'R0003', '2024-09-04', '14:00:00', ['Revision'], { sd: 'B2', camera_id: 'P800HG11' }), end: visit('DONA_02', 'R0004', '2024-10-12', '08:05:00', ['Revision'], { sd: 'C7', num_photos: 188, camera_id: 'P800HG11' }) },
+    { visit: visit('DONA_03', 'R0003', '2024-09-05', '09:20:00', ['Revision'], { sd: 'C7' }), end: visit('DONA_03', 'R0004', '2024-10-13', '08:15:00', ['Revision'], { sd: 'A13', num_photos: 305 }) },
+  ]
+
   // The scan only counts; the dates and the camera are read when the details are asked for.
   const SCAN = { file_count: 241, image_count: 241, warnings: [] }
   const GUESS = { start_date: '2024-09-04T13:10:00', end_date: '2024-10-12T07:02:41', camera_model: CAMERA.model, camera_id: CAMERA.id, warnings: [] }
@@ -109,6 +135,8 @@
     collection_prefix: { ok: true, message: 'The deployment id starts with its collection, R0003.' },
     collection_name: { ok: true, message: 'R0003 is a valid collection name.' },
     location: { ok: true, message: 'The id’s location, DONA_01, is the one chosen.' },
+    sd_card: { ok: true, message: 'The SD card, A13, is the one the visit R0003 left.' },
+    photo_count: { ok: true, message: '241 images — the visit R0004 counted 241 photos.' },
     image_count: statistic(241, 238, 119, 357, [[1, 224], [2, 252]], '241 images — like the previous revisions (median 238, ±50 %).'),
     sequence_count: statistic(62, 58, 29, 87, [[1, 55], [2, 61]], '62 sequences — like the previous revisions (median 58, ±50 %).'),
     sequence_length: statistic(3.9, 4.1, 2.1, 6.2, [[1, 4.1], [2, 4.1]], 'Sequences of 3.9 images on average — like the previous revisions (median 4.1, ±50 %).'),
@@ -119,7 +147,7 @@
   const POSTVALIDATION_REPORT_ID = '20261006-094700_postvalidation_R0003-DONA_01'
   const postvalidationReport = () => {
     const rows = [['deployment_id', 'Deployment id format'], ['collection_prefix', 'Deployment id starts with its collection'], ['collection_name', 'Collection name'],
-      ['location', 'Deployment id’s location'], ['time_range', 'Image dates fit the deployment'], ['camera', 'Camera consistency'],
+      ['location', 'Deployment id’s location'], ['sd_card', 'SD card against the visit'], ['photo_count', 'Photos against the visit'], ['time_range', 'Image dates fit the deployment'], ['camera', 'Camera consistency'],
       ['image_count', 'Number of images'], ['sequence_count', 'Number of sequences'], ['sequence_length', 'Length of the sequences']]
     const checks = {}
     rows.forEach(([c, label]) => { checks[c] = { label, scope: 'deployment', ok: 1, failed: 0 } })
@@ -175,12 +203,13 @@
     TRAPPER: { base_url: TRAPPER_URL, user_name: 'field.team@example.org', has_password: true, max_zip_mb: 500 },
     EPICOLLECT5: { enabled: true, unmapped_to_comments: true, project_slug: 'donana-cameras', client_id: null, has_secret: false,
       mapping: { location_id: 'l', location_name: 'n', revision: 'r', start_date: 'sd', start_time: 'st', camera_model: 'm' } },
+    FIELDWORK,
     DATA: { dir: DATA_DIR, collections_dir: null, reports_dir: null, packages_dir: null,
       default_collections_dir: `${DATA_DIR}/collections`, default_reports_dir: `${DATA_DIR}/reports`, default_packages_dir: `${DATA_DIR}/packages` },
     VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },
     POSTVALIDATION: {
       deployment_id: true, collection_prefix: true, collection_name: true, location: true, time_range: true, camera: true,
-      image_count: true, sequence_count: true, sequence_length: true,
+      image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true,
       tolerance_hours: 1, sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
       image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
     },
@@ -360,6 +389,9 @@
       'POST /api/deployment-import/check-collection': () => ({ exists: true, name: 'R0003' }),
       'POST /api/deployment-import/timestamp-log': () => ({ path: `${COLLECTIONS}/DONA/R0003/R0003_FileTimestampLog.csv`, action: 'added', rows: 1, collection: 'R0003' }),
       'POST /api/deployment-import/open-folder': () => ({ opened: '' }),
+      'POST /api/visits/closed': () => ({ results: CLOSED_VISITS }),
+      'POST /api/visits/link': () => ({ status: 'ok' }),
+      'POST /api/visits/list': () => ({ results: [...CLOSED_VISITS.flatMap((c) => [c.visit, c.end])] }),
       'POST /api/epicollect/entries': () => ({ results: [EPICOLLECT_ENTRY] }),
       'POST /api/epicollect/entries/batch': (body) => ({ results: Object.fromEntries(body.location_ids.map((id) => [id, id === 'DONA_01' ? EPICOLLECT_ENTRY : null])) }),
       'GET /api/epicollect/form': () => ({ project: { name: 'Doñana cameras', slug: 'donana-cameras' }, inputs: [

@@ -117,6 +117,8 @@ switch each step off.
 
 ### Entities
 
+![Settings › Entities](img/screenshots/settings-entities.png)
+
 The things the visits and the deployments refer to, one tab each: **Research projects**, **Locations**, **Trappers**, **SD cards** and **Cameras**.
 Each can be added one at a time, taken from Trapper (research projects and locations) or loaded from a CSV with **Import CSV** (there are
 examples in `examples/entities_example`, explained in `examples/CSV.md`). Locations, SD cards and cameras belong to a research project: pick it first.
@@ -192,7 +194,10 @@ folder was chosen. Passwords are never saved with a run.
 
 ## 5. Register visits
 
-Press **📋 Register visits**. A **visit** is one trip to a camera trap: when it was, which site, who went and what was
+Press **📋 Register visits**.
+
+![Register visits](img/screenshots/visits.png)
+ A **visit** is one trip to a camera trap: when it was, which site, who went and what was
 done. The visits of a research project are kept in its `visits.json`, and the deployments are worked out from them: a
 deployment goes from the visit that **left** a camera to the one that **collected** its card. Choose the research project and how
 the visits come in:
@@ -371,7 +376,7 @@ fields as Trapper's own deployment form. Each section is a card that says how ma
 
 With the field sheet or the previous deployment picked, the fields are shown **as that source says them, and cannot be edited**; pick *Fill in by hand* and they
 open for editing without losing the values. Picking a source again restores its values (what you changed by hand is lost). What a source does not say is left empty.
-When Epicollect5 [is turned on](#epicollect5) and has an entry, a notice in the origin also offers **Import from Epicollect5**, which fills the camera, the site and the notes
+When Epicollect5 [is turned on](#epicollect5) and has an entry, a notice under the revision also offers **Import from Epicollect5**, which fills the camera, the site and the notes
 from it (and leaves the form to be edited by hand); the location's own data are never taken from the entry.
 
 The form is validated as you type, in the browser and again in the server: dates in order, latitude and longitude in range, tilt between −90 and 90, heading between 0 and 360.
@@ -471,13 +476,13 @@ whoever edits the files on purpose could seal them again.
 
 ## 7. Import a session
 
-![Import session — when was each deployment collected](img/screenshots/session-details.png)
-
 Press **🗂️ Import session**. A **session** is a folder with **one subfolder per deployment** — the
 usual way a field trip's images come home. The revision, the checks and the preprocessing are the
 same for all; the location, dates and camera are asked for each deployment.
 
 The stages are those of [Import a deployment](#6-import-a-deployment), with the differences below.
+
+![Import session — the folders and their visits](img/screenshots/session-folders.png)
 
 1. **Origin** — the **research project** for the whole session and, if it has closed visits (see [Register visits](#5-register-visits)), the
    **Visits** to tick: the ones this session is of — **all of one session**, which is the revision (once one is ticked, the visits of other sessions are
