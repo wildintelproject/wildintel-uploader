@@ -125,6 +125,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   // The visits of the project that closed a deployment with none yet: the ones the session is of are picked in the origin, and each folder is linked to one.
   const [closedVisits, setClosedVisits] = useState<ClosedVisit[] | null>(null)
   const [pickedVisits, setPickedVisits] = useState<Set<string>>(new Set())
+  const [visitFilter, setVisitFilter] = useState('')
   const [folderVisit, setFolderVisit] = useState<Record<string, string>>({})
   // The SD card each folder's images come from, and the cards the settings keep.
   const [folderSd, setFolderSd] = useState<Record<string, string>>({})
@@ -877,10 +878,13 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
             {projectId && closedVisits !== null && closedVisits.length > 0 && (() => {
               const session = pickedList[0]?.visit.session
               const offered = (c: ClosedVisit) => !session || c.visit.session === session
-              const enabled = closedVisits.filter(offered)
+              const needle = visitFilter.trim().toLowerCase()
+              const shown = needle ? closedVisits.filter((c) => visitLabel(c).toLowerCase().includes(needle)) : closedVisits
+              const enabled = shown.filter(offered)
               const allTicked = enabled.length > 0 && enabled.every((c) => pickedVisits.has(visitKey(c)))
               return (
                 <FormCard title="Visits" description={`The visits to ${projectId} that left a camera and whose card has been collected, with no deployment yet. Tick the ones this session is of — all of one session, which is the revision. Each folder will be one of them: it says where and when it was taken.`}>
+                  <input aria-label="Search the visits" className={`${inputClass} !w-72 mb-3`} placeholder="Search by location, card, date…" value={visitFilter} onChange={(e) => setVisitFilter(e.target.value)} />
                   <div className="max-h-[22rem] overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
                     <table className="w-full text-sm">
                       <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400 sticky top-0">
@@ -893,7 +897,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                        {closedVisits.map((c) => (
+                        {shown.length === 0 && (
+                          <tr><td colSpan={2} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">No visit matches “{visitFilter}”.</td></tr>
+                        )}
+                        {shown.map((c) => (
                           <tr key={visitKey(c)} className={offered(c) ? '' : 'opacity-50'}>
                             <td className="pl-4 py-2.5"><input type="checkbox" aria-label={visitLabel(c)} disabled={!offered(c)} checked={pickedVisits.has(visitKey(c))} onChange={() => toggleVisit(c)} /></td>
                             <td className="px-3 py-2.5">{visitLabel(c)}</td>

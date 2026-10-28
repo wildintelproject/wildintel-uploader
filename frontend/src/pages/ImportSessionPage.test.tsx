@@ -1062,6 +1062,19 @@ describe('an import session of visits', () => {
     expect(visit(2)).toBeEnabled()
   })
 
+  it('searches the visits by what their line says', async () => {
+    render(<ImportSessionPage {...pageProps} />)
+    await pickProject()
+    await screen.findAllByRole('checkbox', { name: /collected on/ })
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search the visits' }), 'DONA_02')
+    expect(screen.getAllByRole('checkbox', { name: /collected on/ })).toHaveLength(1)
+    await userEvent.clear(screen.getByRole('textbox', { name: 'Search the visits' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search the visits' }), 'nothing like this')
+    expect(screen.queryByRole('checkbox', { name: /collected on/ })).not.toBeInTheDocument()
+    expect(screen.getByText(/No visit matches/)).toBeInTheDocument()
+  })
+
   it('asks no visit when the project has none to offer, and goes on as it always did', async () => {
     mockedApi.closedVisits.mockResolvedValue({ results: [] })
     render(<ImportSessionPage {...pageProps} />)
