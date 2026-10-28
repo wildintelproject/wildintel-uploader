@@ -462,8 +462,10 @@ describe('ImportDeploymentPage', () => {
         expect(screen.getByRole('radio', { name: /Visits of the field work/ })).toBeChecked()
         expect(screen.getByText(/From the visit R0001 \(2026-06-10\)/)).toHaveTextContent('the visits are not changed')
         await userEvent.click(screen.getByRole('button', { name: 'Continue to more details' }))
-        expect(await screen.findByRole('radio', { name: 'What the visit says' })).toBeChecked()
+        expect(await screen.findByRole('radio', { name: 'What the field sheet says' })).toBeChecked()
         expect(screen.getByText(/The visits \(the field sheet\) are not changed/)).toBeInTheDocument()
+        expect(screen.getByText('5 fields found')).toBeInTheDocument() // camera id and model, set up by, height, bait
+        expect(screen.getByText(/as it was written in the field: the camera, who set it up, mounting and site\./)).toBeInTheDocument()
         await openSection(/^Camera/); await openSection(/^Site/); await openSection(/^Grouping and notes/)
         expect(screen.getByLabelText('Camera id')).toHaveValue('P800')
         expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
@@ -475,7 +477,7 @@ describe('ImportDeploymentPage', () => {
         expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
         await userEvent.clear(screen.getByLabelText('Set up by'))
         await userEvent.type(screen.getByLabelText('Set up by'), 'Luis')
-        await userEvent.click(screen.getByRole('radio', { name: 'What the visit says' }))
+        await userEvent.click(screen.getByRole('radio', { name: 'What the field sheet says' }))
         expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez') // back to what the visit says
       })
 
@@ -2501,7 +2503,8 @@ describe('ImportDeploymentPage', () => {
       await openMoreDetails()
       await openSection(/^Site/)
 
-      expect(screen.getByRole('radio', { name: 'The previous deployment' })).toBeChecked()
+      expect(screen.getByRole('radio', { name: 'What the previous deployment says' })).toBeChecked()
+      expect(screen.getByText(/\d+ fields found/)).toBeInTheDocument()
       expect(screen.getByLabelText('Habitat')).toBeDisabled()
       await userEvent.click(screen.getByRole('radio', { name: 'Fill in by hand' }))
       expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')

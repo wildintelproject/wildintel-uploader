@@ -1277,6 +1277,25 @@ export function fillFromPreviousRevision(current: DeploymentFields, previous: De
   }
 }
 
+/** The groups of fields a deployment's details are made of, as a source can fill them in. */
+const DETAIL_GROUPS: { label: string; keys: (keyof DeploymentFields)[] }[] = [
+  { label: 'the camera', keys: ['camera_id', 'camera_model'] }, { label: 'who set it up', keys: ['setup_by'] },
+  { label: 'mounting', keys: ['camera_height', 'camera_depth', 'camera_tilt'] }, { label: 'direction', keys: ['camera_heading'] },
+  { label: 'detection', keys: ['camera_interval', 'detection_distance'] }, { label: 'site', keys: ['feature_type', 'habitat', 'bait_use', 'timestamp_issues'] },
+  { label: 'groups', keys: ['deployment_groups', 'tags'] }, { label: 'notes', keys: ['comments'] },
+]
+
+/** What a source gives of the details: how many fields have a value, and which parts of the form they are ("the camera, mounting and site"). */
+export function detailsFound(given: DeploymentFields): { count: number; parts: string } {
+  const has = (k: keyof DeploymentFields) => {
+    const v = given[k]
+    return Array.isArray(v) ? v.length > 0 : v !== null && v !== undefined && v !== '' && v !== EMPTY_DEPLOYMENT_FIELDS[k]
+  }
+  const groups = DETAIL_GROUPS.map((g) => ({ label: g.label, n: g.keys.filter(has).length })).filter((g) => g.n > 0)
+  const labels = groups.map((g) => g.label)
+  return { count: groups.reduce((n, g) => n + g.n, 0), parts: labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}` : (labels[0] ?? '') }
+}
+
 interface Props {
   /** A run left unfinished by an earlier visit (see ResumeSessionsPage) —
    * its source folder and scan are restored, and, if it had got as far as
@@ -2235,6 +2254,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   // The sources to pick the details from are shown when there are two to choose from, by hand included.
   const pickable = Boolean(linkedVisit || previousRevision)
   const detailsSource: 'visit' | 'previous' | 'manual' = detailsPick ?? (linkedVisit ? 'visit' : 'manual')
+  const visitFound = detailsFound(linkedVisit ? fillFromVisit(EMPTY_DEPLOYMENT_FIELDS, linkedVisit.visit) : EMPTY_DEPLOYMENT_FIELDS)
+  const previousFound = detailsFound(previousRevision ? fillFromPreviousRevision(EMPTY_DEPLOYMENT_FIELDS, previousRevision.deployment) : EMPTY_DEPLOYMENT_FIELDS)
 
   /** The camera, the site and the notes as a source says them: what the visit or the previous deployment do not say is left empty. */
   function pickDetailsSource(source: 'visit' | 'previous' | 'manual') {
@@ -2811,18 +2832,27 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                       description="Everything here is optional. Fill in what you know now — you can add the rest later."
                       summary={moreFilled > 0 ? `${moreFilled} ${moreFilled === 1 ? 'detail' : 'details'} filled in` : 'Nothing filled in yet'}>
             {pickable && (
-              <FormCard title="Where do they come from?" description="Pick one. The camera, the site and the notes show what the source says; to change them, fill them in by hand — they start as the source has them.">
+              <FormCard title="Where do they come from?" description="Pick one. Each option shows what it found, and you can change anything afterwards by filling them in by hand.">
                 <div role="radiogroup" aria-label="Source of the details" className="space-y-2">
                   {([
-                    ...(linkedVisit ? [{ source: 'visit' as const, title: 'What the visit says', hint: `The camera, who set it up and the site, as the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}) wrote them down. The visits (the field sheet) are not changed.` }] : []),
-                    ...(previousRevision ? [{ source: 'previous' as const, title: 'The previous deployment', hint: `${previousRevision.deployment_id} (revision ${previousRevision.revision}): its camera, site and notes. Dates are never copied.` }] : []),
-                    { source: 'manual' as const, title: 'Fill in by hand', hint: 'Type them yourself, starting from the values the last source gave.' },
+                    ...(linkedVisit ? [{ source: 'visit' as const, title: 'What the field sheet says', found: visitFound,
+                      hint: `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), as it was written in the field${visitFound.parts ? `: ${visitFound.parts}` : ''}. The visits (the field sheet) are not changed.` }] : []),
+                    ...(previousRevision ? [{ source: 'previous' as const, title: 'What the previous deployment says', found: previousFound,
+                      hint: `From ${previousRevision.deployment_id}, the previous deployment at this location${previousFound.parts ? `: ${previousFound.parts}` : ''}. Dates are never copied.` }] : []),
+                    { source: 'manual' as const, title: 'Fill in by hand', found: null, hint: 'Type them yourself, starting from the values the last source gave.' },
                   ]).map((o) => (
                     <label key={o.source} className={`block rounded-xl border px-4 py-3 cursor-pointer ${detailsSource === o.source ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700'}`}>
                       <span className="flex items-start gap-3">
                         <input type="radio" className="mt-1" name="details-source" aria-label={o.title} checked={detailsSource === o.source} onChange={() => pickDetailsSource(o.source)} />
                         <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">{o.title}</span>
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{o.title}</span>
+                            {o.found && (
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${o.found.count > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>
+                                {o.found.count > 0 ? `${o.found.count} ${o.found.count === 1 ? 'field' : 'fields'} found` : 'Nothing found'}
+                              </span>
+                            )}
+                          </span>
                           <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{o.hint}</span>
                         </span>
                       </span>
