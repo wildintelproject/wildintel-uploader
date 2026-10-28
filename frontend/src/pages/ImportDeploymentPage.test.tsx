@@ -2363,7 +2363,7 @@ describe('ImportDeploymentPage', () => {
       fields: { start_date: '2024-09-04', start_time: '13:10:00', end_date: '2024-10-12', end_time: '07:02:00', habitat: 'Pine forest', setup_by: 'Ana', comments: 'Near the pond', tags: ['forest'] },
     }
 
-    it('is looked for by the location and the revision, and fills in the period, the site and the notes', async () => {
+    it('is looked for by the location and the revision, and fills in the site and the notes, and is no source of the period', async () => {
       mockedApi.epicollectEntries.mockResolvedValue({ results: [ENTRY] })
       await goToNewDetailsStep()
       await userEvent.type(screen.getByLabelText('Revision'), '2')
@@ -2371,10 +2371,7 @@ describe('ImportDeploymentPage', () => {
 
       expect(await screen.findByText(/Filled in from “DONA_01 · sent 1 Oct 2026”/)).toBeInTheDocument()
       expect(mockedApi.epicollectEntries).toHaveBeenCalledWith('DONA_01', 2)
-      expect(screen.getByRole('radio', { name: 'Epicollect5' })).toBeChecked()
-      await manualEntry()
-      expect(screen.getByLabelText('Start')).toHaveValue('2024-09-04T13:10')
-      expect(screen.getByLabelText('End')).toHaveValue('2024-10-12T07:02')
+      expect(screen.queryByRole('radio', { name: 'Epicollect5' })).not.toBeInTheDocument()
       await openMoreDetails()
       await openSection(/^Site/)
       expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')

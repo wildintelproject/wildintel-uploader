@@ -603,17 +603,13 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   /** The sources of a deployment's dates, each showing what it found so they can be compared, and the period taken — typed when it is by hand. */
   function datePanel(d: SessionScanDeployment, entry: Entry, start: string | null, end: string | null, dateSource: DateSource | undefined) {
-    const exif = periodOf(d, 'exif', entry.timezone), log = periodOf(d, 'log', entry.timezone), epi = periodOf(d, 'epicollect', entry.timezone)
+    const exif = periodOf(d, 'exif', entry.timezone), log = periodOf(d, 'log', entry.timezone)
     const cv = visitOf(d.name)
     const options: SourceOption[] = [
       ...(cv ? [{ source: 'visit' as const, title: 'Visits of the field work', period: periodOf(d, 'visit', entry.timezone),
         hint: `From the visit ${cv.visit.session} (${cv.visit.date}), where the card was left, to ${cv.end.session} (${cv.end.date}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
       { source: 'exif', title: 'Camera data in the photos', period: exif,
         hint: `First and last photo of the deployment.${d.image_count > 0 && exif ? ` ${plural(d.image_count, 'photo', 'photos')}, read from their EXIF data.` : ''}` },
-      { source: 'epicollect', title: 'Epicollect5 project', period: epi,
-        hint: epi ? 'Entry of your Epicollect5 project for this location and revision.'
-          : !epicollectOn ? 'Epicollect5 is turned off in the settings.'
-          : `Nothing found for ${entry.fields.location_id ?? d.name}, revision ${revisionValid ? revisionNumber : '?'}.` },
       { source: 'log', title: 'Timestamp log file', period: log,
         hint: log ? ((exif && against(log, exif)) ?? 'Set-up and pick-up times written down in the file.') : `No row for ${d.name} in a timestamp log.` },
       { source: 'manual', title: 'Manual entry', period: null, hint: 'Type the start and the end yourself.' },

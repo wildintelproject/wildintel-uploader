@@ -694,7 +694,7 @@ describe('ImportSessionPage', () => {
       expect(screen.queryByText(/Epicollect5 has no entry/)).not.toBeInTheDocument()
     })
 
-    it('takes the dates from Epicollect5 before the timestamp log and the images, and lets the source be picked', async () => {
+    it('does not offer Epicollect5 as a source of the dates: the timestamp log comes before the images, and the source can be picked', async () => {
       on()
       mockedApi.scanSession.mockResolvedValue({
         ...SCAN,
@@ -705,13 +705,12 @@ describe('ImportSessionPage', () => {
       mockedApi.epicollectEntriesBatch.mockResolvedValue({ results: { DONA_01: { ...ENTRY, fields: dates }, DONA_02: null } })
       await toDetails()
 
-      expect(await screen.findByText('10 Jan 2025, 06:30')).toBeInTheDocument()
-      expect(screen.getByRole('radio', { name: 'Epicollect5' })).toBeChecked()
-      await userEvent.click(screen.getByRole('radio', { name: 'Timestamp log file' }))
+      expect(await screen.findByText('1 Sep 2024, 08:00')).toBeInTheDocument()
+      expect(screen.queryByRole('radio', { name: /Epicollect5/ })).not.toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: 'Timestamp log file' })).toBeChecked()
       expect(await screen.findByText('1 Sep 2024, 08:00')).toBeInTheDocument()
 
       await userEvent.click(screen.getByRole('button', { name: 'Open DONA_02' })) // nothing in Epicollect5 nor in a log for it
-      expect(screen.getByRole('radio', { name: /Epicollect5/ })).toBeDisabled()
       expect(screen.getByRole('radio', { name: /Timestamp log file/ })).toBeDisabled()
       expect(screen.getByRole('radio', { name: 'Camera metadata (EXIF)' })).toBeChecked()
     })

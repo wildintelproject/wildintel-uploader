@@ -2033,7 +2033,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   useEffect(() => {
     if (stepKey !== 'dates' || sourcePicked.current) return
     const looking = guessing || (epicollectOn && !epicollectDone)
-    const best = ([...(linkedVisit ? ['visit'] : []), 'epicollect', 'exif', 'manual'] as DateSource[]).find((src) => (src === 'manual' ? !looking : periodOf(src) !== null))
+    const best = ([...(linkedVisit ? ['visit'] : []), 'exif', 'manual'] as DateSource[]).find((src) => (src === 'manual' ? !looking : periodOf(src) !== null))
     if (best && best !== dateSource) takePeriod(best)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepKey, guess, guessing, epicollectEntry, epicollectOn, epicollectDone, timezone, linkedVisit])
@@ -2768,10 +2768,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                       hint: `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), where the card was left, to ${linkedVisit.end.session} (${linkedVisit.end.date}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
                     { source: 'exif', title: 'Camera data in the photos', period: periodOf('exif'),
                       hint: `First and last photo of the deployment.${scan && periodOf('exif') ? ` ${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'photo' : 'photos'}, read from their EXIF data.` : ''}` },
-                    { source: 'epicollect', title: 'Epicollect5 project', period: periodOf('epicollect'),
-                      hint: periodOf('epicollect') ? 'Entry of your Epicollect5 project for this location and revision.'
-                        : !epicollectOn ? 'Epicollect5 is turned off in the settings.'
-                        : `Nothing found for ${deployment.location_id}, revision ${revisionValid ? revisionNumber : '?'}.` },
                     { source: 'manual', title: 'Manual entry', period: null, hint: 'Type the start and the end yourself.' },
                   ] satisfies SourceOption[]}
                   manualForm={<DeploymentFormBody collapsible periodOnly deployment={deployment} timezone={timezone} errors={fieldErrors} onField={updateField} datesGuessed={false} />} />
