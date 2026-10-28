@@ -1437,6 +1437,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                 const source = !start || !dateSource ? null
                   : dateSource === 'log' ? `From ${scan?.timestamp_log?.name ?? 'the collection’s csv'}`
                   : dateSource === 'exif' ? 'From the images'
+                  : dateSource === 'visit' ? 'From the visits'
                   : 'Entered by hand'
                 const datesOk = Boolean(start && end && !errors.start_date && !errors.end_date)
                 const clash = existingFolder(d.name) ? 'Already exists' : duplicated(d.name) ? 'Duplicate id' : null

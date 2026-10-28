@@ -1142,6 +1142,7 @@ describe('an import session of visits', () => {
     expect(screen.queryByLabelText('Location of DONA_01')).not.toBeInTheDocument()
     expect(screen.getByText(/Taken from the session of the visits you chose/)).toBeInTheDocument()
     expect(await screen.findByRole('radio', { name: /Visits of the field work/ })).toBeChecked()
+    expect(screen.getAllByText(/From the visits/).length).toBeGreaterThan(0) // what each row says its dates come from
     await toMoreDetailsSubstep()
     await openMore('DONA_01', /^Camera/)
     expect(screen.getByLabelText('Camera model')).toHaveValue('Reconyx HC600')
