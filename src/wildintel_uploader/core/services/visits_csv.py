@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 
 from wildintel_uploader.core.schemas.requests import VisitRecord
+from wildintel_uploader.core.services import visit_rules
 
 # What each column of an Epicollect download may be called — compared without case, spaces, dashes, underscores or a number in front.
 EPICOLLECT_COLUMNS: dict[str, tuple[str, ...]] = {
@@ -210,8 +211,14 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     kept. A visit already kept — the same location, day and time — is left as it is, and counted as skipped. In an Epicollect download
     (it has created_at) the entries without a collection number or a site are those of old versions of the form: ignored, and counted.
 
-    Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "ignored": int} — the rows numbered as in the file, the header
-    being 1.
+    A site that is not a location is not a problem to throw the rows away for: it may be a site that is really new, or one misnamed in the field. Its
+    visits are held and the site comes back in "new_sites" with what tells the two apart (the coordinates of its first visit, the nearest location and
+    how far, the ids one character apart — see visit_rules.new_site), to add it as a location or to correct the file. What is odd in the visits that are
+    kept — what their actions ask and they lack, a camera or a card where it cannot be, two Revisions in a session… — comes back in "warnings": the
+    visits are kept as the field wrote them and questioned, as the field records are.
+
+    Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "ignored": int, "new_sites": [...], "warnings": [str]} — the rows
+    numbered as in the file, the header being 1.
 
     Raises:
         VisitsCsvError: the file is empty or lacks a required column.
@@ -224,6 +231,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     parsed: list[tuple[int, dict]] = []
     skipped = 0
     ignored = 0
+    held: dict[str, list[dict]] = {}  # the visits to sites that are not locations of the research project, by site
 
     def problem(n: int, message: str) -> None:
         problems.append({"row": n, "message": message})
@@ -234,9 +242,9 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             continue
         site = _site(row.get("location_id", ""), site_prefix) if fmt == "epicollect" else row.get("location_id", "")
         location = known.get(site.lower())
-        if location is None:
-            problem(n, f"The site '{site}' is not a location of the research project.")
-            continue
+        unknown = location is None
+        if unknown:
+            location = {}  # held with its site apart: the time is read as UTC, as nothing says better
         try:
             date, time = _when(row, location)
             actions = [ACTIONS.get(a.strip().lower()) for a in re.split(r"[+;/|&,]", row.get("actions", "")) if a.strip()]
@@ -280,11 +288,14 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                 if not m:
                     raise ValueError(f"'{data['session']}' is not a session (R0013, or its number).")
                 data["session"] = f"R{int(m.group(0)):04d}"
-            visit = {"location_id": location["location_id"], "date": date, "time": time, "actions": actions, **data}
+            visit = {"location_id": location.get("location_id", site), "date": date, "time": time, "actions": actions, **data}
             visit.setdefault("session", "R0000")  # worked out below, when the order of the visits is known
             record = VisitRecord.model_validate(visit).model_dump(mode="json")
         except (ValueError, ValidationError) as exc:
             problem(n, _first(exc) if isinstance(exc, ValidationError) else str(exc))
+            continue
+        if unknown:
+            held.setdefault(site, []).append(record)
             continue
         if (record["location_id"].lower(), record["date"], record["time"]) in already:
             skipped += 1
@@ -303,7 +314,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             record["session"] = f"R{count[loc] + 1:04d}"
         count[loc] += 1
         visits.append(record)
-    return {"visits": visits, "problems": problems, "skipped": skipped, "ignored": ignored}
+    new_sites = [visit_rules.new_site(site, records, locations) for site, records in sorted(held.items())]
+    return {"visits": visits, "problems": problems, "skipped": skipped, "ignored": ignored, "new_sites": new_sites, "warnings": visit_rules.history_warnings(visits, kept)}
 
 
 def _first(exc: ValidationError) -> str:

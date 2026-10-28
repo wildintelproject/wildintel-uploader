@@ -301,6 +301,12 @@ def list_visits(root: Path, research_project_id: str, location_id: str | None = 
     return [v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower()]
 
 
+def require_research_project(root: Path, research_project_id: str) -> None:
+    """Raises LocalFolderError when the research project isn't kept in the collections folder."""
+    if not (project_dir(root, research_project_id) / RESEARCH_PROJECT_METADATA_FILE).is_file():
+        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+
+
 def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
     """Registers a visit to a research project that's already kept here.
 

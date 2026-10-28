@@ -12,7 +12,7 @@ import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, Sw
 import { shownErrors, validateDeployment } from '../deploymentValidation'
 import { availabilityErrors } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
-import type { Camera, DeploymentFields, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
+import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
 export type VisitSource = 'manual' | 'epicollect' | 'csv'
 
@@ -404,8 +404,20 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
     }
   }
-  const missingLocations = csvResult?.problems.some((p) => p.message.includes('is not a location of the research project')) ?? false
+  const missingLocations = (csvResult?.new_sites.length ?? 0) > 0
   useEffect(() => { if (!settingsOpen && missingLocations) void recheckCsv() }, [settingsOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Keeps a new site of the file as a location of the research project, with the coordinates of its first visit, and reads the file again. */
+  async function addNewSite(site: NewSite) {
+    if (!project || site.latitude == null || site.longitude == null) return
+    setCsvError(null)
+    try {
+      await api.saveLocalLocation(project.acronym, { location_id: site.site, name: site.site, timezone: null, latitude: site.latitude, longitude: site.longitude, coordinate_uncertainty: null, trapper_pk: null })
+      await recheckCsv()
+    } catch (e) {
+      setCsvError(e instanceof Error ? e.message : `Could not add ${site.site} as a location.`)
+    }
+  }
 
   /** From another CSV file: reads the visits with the columns as they are mapped. */
   async function readMapped() {
@@ -843,9 +855,38 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     {csvResult.problems.map((p) => <li key={p.row}>Row {p.row}: {p.message}</li>)}
                   </ul>
                 )}
+                {csvResult.warnings.length > 0 && (
+                  <Notice kind="warning" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed" role="status">
+                    <div>
+                      <strong className="font-semibold">{csvResult.warnings.length === 1 ? 'One thing' : `${csvResult.warnings.length} things`} to check in the field data.</strong> The visits are kept as the field wrote them.
+                      <ul aria-label="What to check" className="mt-2 list-disc pl-6 space-y-1">{csvResult.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                    </div>
+                  </Notice>
+                )}
+                {csvResult.new_sites.length > 0 && (
+                  <div className="mt-4 space-y-3" role="group" aria-label="Sites that are not locations yet">
+                    <p className="text-base font-semibold">{csvResult.new_sites.length === 1 ? 'A site is' : `${csvResult.new_sites.length} sites are`} not a location of {project?.acronym}</p>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">Their visits are held. Check each one is really new and not a site misnamed in the field: if it is new, add it as a location; if not, correct its id in the file and read it again.</p>
+                    {csvResult.new_sites.map((s) => (
+                      <div key={s.site} className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-5 py-4 text-sm">
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div className="min-w-0">
+                            <p><span className="font-mono font-semibold">{s.site}</span> · {s.visits} {s.visits === 1 ? 'visit' : 'visits'}, the first on {s.date} ({s.actions.join(' + ')})</p>
+                            {s.similar.length > 0 && <p className="mt-1 text-amber-700 dark:text-amber-400">Its id is one character apart from <span className="font-mono">{s.similar.join(', ')}</span>: it may be a misprint.</p>}
+                            {s.nearest
+                              ? <p className="mt-1 text-zinc-600 dark:text-zinc-400">Its first visit was {s.nearest.distance_m < 1000 ? `${s.nearest.distance_m} m` : `${(s.nearest.distance_m / 1000).toFixed(1)} km`} from <span className="font-mono">{s.nearest.location_id}</span>{s.nearest.distance_m < 100 ? ' — so close that it may be the same site.' : '.'}</p>
+                              : <p className="mt-1 text-zinc-600 dark:text-zinc-400">{s.latitude == null ? 'The file has no coordinates for it.' : 'There is no location to compare it with.'}</p>}
+                          </div>
+                          <button type="button" className={btnOutline} disabled={s.latitude == null || s.longitude == null} title={s.latitude == null ? 'The file gives no coordinates for it: add the location in the settings' : undefined}
+                                  onClick={() => void addNewSite(s)}>Add {s.site} as a location</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {missingLocations && (
                   <Notice kind="info" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed">
-                    Some of the sites are not locations of {project?.acronym} yet. You can create the locations by hand, from a spreadsheet file or from Trapper. The file is checked again when you come back.
+                    You can also create the locations by hand, from a spreadsheet file or from Trapper. The file is checked again when you come back.
                     {onOpenSettings && project && (
                       <div className="mt-4">
                         <button type="button" className="px-6 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 bg-white/5 text-base font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" onClick={() => onOpenSettings('locations', project.acronym)}>Go to the locations of {project.acronym}</button>

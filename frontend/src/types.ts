@@ -713,6 +713,27 @@ export interface VisitsCsvResult {
   /** Entries of old versions of the Epicollect form (no collection number or site), left out. */
   ignored: number
   saved: number | null
+  /** The sites of the file that are not locations of the research project, with what tells a new site from a misnamed one; their visits are held. */
+  new_sites: NewSite[]
+  /** What is odd in the visits — their camera or card, what their actions ask, two Revisions in a session… — said, not refused. */
+  warnings: string[]
+}
+
+/** A site of a file that is not a location of the research project yet: new, or misnamed in the field. */
+export interface NewSite {
+  site: string
+  session: string | null
+  actions: string[]
+  date: string
+  time: string
+  /** The coordinates of its first visit, when the file has them. */
+  latitude: number | null
+  longitude: number | null
+  visits: number
+  /** The location of the project nearest to those coordinates, and how far it is. */
+  nearest: { location_id: string; distance_m: number } | null
+  /** The locations whose id is one character apart from the site's. */
+  similar: string[]
 }
 
 // ── Uploading a deployment to Trapper ───────────────────────────────────

@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, SaveVisitRequest, VisitsCsvColumnsRequest
-from wildintel_uploader.core.services import local_folder_service, visits_csv
+from wildintel_uploader.core.services import local_folder_service, visit_rules, visits_csv
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
 
@@ -22,9 +22,17 @@ def list_visits(req: ListVisitsRequest) -> dict:
 
 @router.post("/save")
 def save_visit(req: SaveVisitRequest) -> dict:
-    """Registers a visit to a research project already kept in the collections folder."""
+    """Registers a visit to a research project already kept in the collections folder — if it follows the rules of a visit (see services.visit_rules): its
+    site is a location of the project, it is not kept already, it has what its actions ask and its camera and card are where it says."""
+    root = config.collections_dir()
     try:
-        return local_folder_service.write_visit(config.collections_dir(), req.research_project_id, req.visit.model_dump(mode="json"))
+        local_folder_service.require_research_project(root, req.research_project_id)
+        visit = req.visit.model_dump(mode="json")
+        reasons = visit_rules.refusals(
+            visit, local_folder_service.list_visits(root, req.research_project_id), local_folder_service.list_locations(root, req.research_project_id))
+        if reasons:
+            raise HTTPException(422, " ".join(reasons))
+        return local_folder_service.write_visit(root, req.research_project_id, visit)
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
 

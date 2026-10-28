@@ -208,9 +208,20 @@ the visits come in:
 | **From Wildintel Epicollect** | Reads the visits of a field trip from the Epicollect download (a CSV). The time is the `created_at` of the entry, put in the timezone of the location. |
 | **From a spreadsheet file** | Any CSV: the page shows its columns and you say which one gives each field of a visit. |
 
-When a file is read, the visits that were found are listed, with the rows that have problems (*the site is not a location of the project*,
-*the card is not in the settings*…) and why; the ones that are fine can be kept. The sites have to be **locations** of the research project, and the
-cameras and SD cards the ones of [Settings › Entities](#entities).
+When a file is read, the visits that were found are listed and the ones that are fine can be kept; the rows that cannot be read (*a date that is not a date*,
+*actions that are not Installation, Revision, Desinstallation or Stolen*…) are listed with why. The file is treated as the field records are: what the field wrote is
+**kept and questioned, not thrown away**:
+
+- **Sites that are not locations.** A site of the file that is not a location of the research project may be a site that is really new or one misnamed in the field. Its visits
+  are held, and the site is shown with what tells the two apart: **how far** its first visit was from the nearest location, and the locations whose id is **one character apart**
+  from its own (*it may be a misprint*). If it is new, **Add … as a location** keeps it with the coordinates of its first visit and reads the file again; if it is a misprint, correct
+  the id in the file and read it again.
+- **What to check in the field data.** A camera or an SD card at two sites in one session or in a place it cannot be (a camera installed at another site, a card still in another camera),
+  what a visit's actions ask and it lacks (the photos of a Revision, the card of an Installation), two Revisions or two Installations of a site in one session, a visit that is not
+  after the one before, a Revision with no photos, and an Installation while the card left before was never collected. They are listed, and the visits are kept as they are.
+
+The same rules protect the form: **by hand**, a visit is refused — by the server, whatever page sends it — if its site is not a location of the project, it is already kept (same site, day and time),
+it lacks what its actions ask, or its camera or card are not where it says.
 
 **By hand**, a visit is a form with these parts:
 

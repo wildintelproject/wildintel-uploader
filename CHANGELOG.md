@@ -13,6 +13,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   download or from any CSV, kept in the research project's `visits.json`. The Camera section comes before the SD card, and what the visit before
   said fills in the Camera, Site and Grouping sections. Entities (research projects, locations, trappers, SD cards and cameras) have their own
   tab in Settings, with CSV import; `examples/` has example CSVs of all of them.
+- **The rules of a visit live in the backend** (`visit_rules`), for the form and for a CSV: by hand a visit is refused (`422`) when its site is not a location of the research project, it is already kept,
+  it lacks what its actions ask (the camera, the card left, the photos collected) or its camera or card are not where it says. A CSV is treated as the field records are: the visits are kept and
+  questioned — `warnings` for what is odd (a camera or a card at two sites or in the wrong place, two Revisions in a session, a visit not after the one before, a Revision with 0 photos, an Installation
+  with the card of the visit before not collected) and `new_sites` for a site that is not a location, with the distance to the nearest one and the ids one character apart, so a new site is told
+  from a misnamed one; the page offers to add it as a location.
 - **Import deployment** is a wizard of five stages — origin → images → dates and details → check details → prepare and save —, and can be *of a visit*:
   the **Closed visit** (one with a collected card and no deployment yet) gives the location, the revision, the camera, the site and the period. The SD card is asked in
   the images stage. The chips above each stage fill in as it goes (research project, visit with its range, photos and card, then id, location and dates).
