@@ -462,12 +462,21 @@ describe('ImportDeploymentPage', () => {
         expect(screen.getByRole('radio', { name: /Visits of the field work/ })).toBeChecked()
         expect(screen.getByText(/From the visit R0001 \(2026-06-10\)/)).toHaveTextContent('the visits are not changed')
         await userEvent.click(screen.getByRole('button', { name: 'Continue to more details' }))
-        expect(await screen.findByText(/Filled in from the visit R0001/)).toBeInTheDocument()
-        expect(screen.getByText(/the visits \(the field sheet\) are not changed/)).toBeInTheDocument() // what is changed here stays in the deployment
+        expect(await screen.findByRole('radio', { name: 'What the visit says' })).toBeChecked()
+        expect(screen.getByText(/The visits \(the field sheet\) are not changed/)).toBeInTheDocument()
         await openSection(/^Camera/); await openSection(/^Site/); await openSection(/^Grouping and notes/)
         expect(screen.getByLabelText('Camera id')).toHaveValue('P800')
         expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
         expect(screen.getByLabelText('Comments')).toHaveValue('') // the notes are each visit's own
+        // what the visit says is shown, not edited — until it is filled in by hand, which keeps the values
+        expect(screen.getByLabelText('Set up by')).toBeDisabled()
+        await userEvent.click(screen.getByRole('radio', { name: 'Fill in by hand' }))
+        expect(screen.getByLabelText('Set up by')).toBeEnabled()
+        expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
+        await userEvent.clear(screen.getByLabelText('Set up by'))
+        await userEvent.type(screen.getByLabelText('Set up by'), 'Luis')
+        await userEvent.click(screen.getByRole('radio', { name: 'What the visit says' }))
+        expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez') // back to what the visit says
       })
 
       describe('the SD card and the number of photos, against what the visits say', () => {
@@ -2481,6 +2490,22 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getByText('forest')).toBeInTheDocument()
       await openSection(/^Camera/)
       expect(screen.getByLabelText('Height above the ground (m)')).toHaveValue(1.2)
+    })
+
+    it('shows the details of the previous deployment as such, and lets them be changed once filled in by hand', async () => {
+      mockedApi.previousDeployments.mockResolvedValue({ results: { 'R0002-DONA_01': PREVIOUS } })
+      await goToNewDetailsStep()
+      await userEvent.type(screen.getByLabelText('Revision'), '2')
+      await userEvent.click(await screen.findByRole('button', { name: 'Copy from revision 1' }))
+      await manualEntry()
+      await openMoreDetails()
+      await openSection(/^Site/)
+
+      expect(screen.getByRole('radio', { name: 'The previous deployment' })).toBeChecked()
+      expect(screen.getByLabelText('Habitat')).toBeDisabled()
+      await userEvent.click(screen.getByRole('radio', { name: 'Fill in by hand' }))
+      expect(screen.getByLabelText('Habitat')).toHaveValue('Pine forest')
+      expect(screen.getByLabelText('Habitat')).toBeEnabled()
     })
 
     it('does not offer it when there is no earlier revision', async () => {

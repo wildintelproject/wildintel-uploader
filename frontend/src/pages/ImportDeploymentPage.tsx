@@ -774,8 +774,12 @@ function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, sugg
 }
 
 /** A section of the details — shut until it is opened, with how much of it is filled in on its header: "3 of 7". */
+/** True while the details are shown as they were taken from a source, not to be edited: the fields of every card in it are disabled. */
+export const LockedDetailsContext = createContext(false)
+
 export function SectionCard({ title, icon, filled, total, summary, optional = false, children }: { title: string; icon: ReactNode; filled: number; total: number; summary?: string; optional?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const locked = useContext(LockedDetailsContext)
   return (
     <section className="rounded-lg border border-zinc-200 dark:border-zinc-700 mb-3" aria-label={title}>
       <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-4 py-3 text-left">
@@ -787,7 +791,7 @@ export function SectionCard({ title, icon, filled, total, summary, optional = fa
         <span className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${filled > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'}`}>{filled} of {total} filled</span>
         <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 fill-none stroke-current text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
       </button>
-      {open && <div className="px-4 pb-4">{children}</div>}
+      {open && <div className="px-4 pb-4"><fieldset disabled={locked} className="contents">{children}</fieldset></div>}
     </section>
   )
 }
@@ -1363,6 +1367,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   // The closest earlier revision of this deployment, if one was kept — to offer filling the form in from it.
   const [previousRevision, setPreviousRevision] = useState<PreviousDeployment | null>(null)
   const [filledFrom, setFilledFrom] = useState<string | null>(null)
+  // Where the camera, site and notes come from — the visit, the previous deployment or the user — once one is picked; the visit before that, if there is one.
+  const [detailsPick, setDetailsPick] = useState<'visit' | 'previous' | 'manual' | null>(null)
   // The SD card the images come from, as the user says it: the cards of the settings are offered. It is checked against the visit's.
   const [sdCards, setSdCards] = useState<SdCard[]>([])
   const [sdCard, setSdCard] = useState('')
@@ -2048,6 +2054,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     setEpicollectImported(true); setEpicollectMissing(null)
     setDeployment((d) => ({ ...applyEntry(d, entry.fields, timezone), start_date: d.start_date, end_date: d.end_date }))
     setFilledFrom(`the Epicollect5 entry “${entryLabel(entry)}”`)
+    setDetailsPick('manual')
     setEpicollectMessage({ kind: 'info', text: `Filled in from “${entryLabel(entry)}” — check the camera, site and notes in More details.` })
   }
 
@@ -2055,6 +2062,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     if (!previousRevision) return
     setDeployment((d) => fillFromPreviousRevision(d, previousRevision.deployment))
     setFilledFrom(previousRevision.deployment_id)
+    setDetailsPick('previous')
   }
 
   // The research projects kept in the collections folder — read each time the origin step is shown.
@@ -2224,6 +2232,24 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   }
 
   /** Takes back what was copied from the previous revision: the optional details start empty again. */
+  // The sources to pick the details from are shown when there are two to choose from, by hand included.
+  const pickable = Boolean(linkedVisit || previousRevision)
+  const detailsSource: 'visit' | 'previous' | 'manual' = detailsPick ?? (linkedVisit ? 'visit' : 'manual')
+
+  /** The camera, the site and the notes as a source says them: what the visit or the previous deployment do not say is left empty. */
+  function pickDetailsSource(source: 'visit' | 'previous' | 'manual') {
+    setDetailsPick(source)
+    if (source === 'manual') return
+    const emptied = (d: DeploymentFields): DeploymentFields => ({ ...d, ...Object.fromEntries(FILLED_FROM_PREVIOUS.map((k) => [k, EMPTY_DEPLOYMENT_FIELDS[k]])) })
+    if (source === 'visit' && linkedVisit) {
+      setDeployment((d) => fillFromVisit(emptied(d), linkedVisit.visit))
+      setFilledFrom(`the visit ${linkedVisit.visit.session}`)
+    } else if (source === 'previous' && previousRevision) {
+      setDeployment((d) => fillFromPreviousRevision(emptied(d), previousRevision.deployment))
+      setFilledFrom(previousRevision.deployment_id)
+    }
+  }
+
   function handleStartEmpty() {
     setDeployment((d) => ({ ...d, ...Object.fromEntries(FILLED_FROM_PREVIOUS.map((k) => [k, EMPTY_DEPLOYMENT_FIELDS[k]])) }))
     setFilledFrom(null)
@@ -2784,14 +2810,37 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
           <WizardStep n={3} title="More details" status={originStatus(3)} canEdit onEdit={() => { setOriginOpen(3); setOriginReached(3) }}
                       description="Everything here is optional. Fill in what you know now — you can add the rest later."
                       summary={moreFilled > 0 ? `${moreFilled} ${moreFilled === 1 ? 'detail' : 'details'} filled in` : 'Nothing filled in yet'}>
-            {filledFrom && (
+            {pickable && (
+              <FormCard title="Where do they come from?" description="Pick one. The camera, the site and the notes show what the source says; to change them, fill them in by hand — they start as the source has them.">
+                <div role="radiogroup" aria-label="Source of the details" className="space-y-2">
+                  {([
+                    ...(linkedVisit ? [{ source: 'visit' as const, title: 'What the visit says', hint: `The camera, who set it up and the site, as the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}) wrote them down. The visits (the field sheet) are not changed.` }] : []),
+                    ...(previousRevision ? [{ source: 'previous' as const, title: 'The previous deployment', hint: `${previousRevision.deployment_id} (revision ${previousRevision.revision}): its camera, site and notes. Dates are never copied.` }] : []),
+                    { source: 'manual' as const, title: 'Fill in by hand', hint: 'Type them yourself, starting from the values the last source gave.' },
+                  ]).map((o) => (
+                    <label key={o.source} className={`block rounded-xl border px-4 py-3 cursor-pointer ${detailsSource === o.source ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700'}`}>
+                      <span className="flex items-start gap-3">
+                        <input type="radio" className="mt-1" name="details-source" aria-label={o.title} checked={detailsSource === o.source} onChange={() => pickDetailsSource(o.source)} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">{o.title}</span>
+                          <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{o.hint}</span>
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </FormCard>
+            )}
+            {filledFrom && !pickable && (
               <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-5 py-4 text-sm text-emerald-900 dark:text-emerald-100">
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
                 <span className="flex-1"><strong className="font-semibold">Filled in from {filledFrom}.</strong> Change anything that&rsquo;s different this time.{linkedVisit && filledFrom?.startsWith('the visit') && <> What you change stays in the deployment: the visits (the field sheet) are not changed.</>}</span>
                 <button type="button" className="rounded-lg border border-emerald-400 dark:border-emerald-800 px-4 py-2 text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/40" onClick={handleStartEmpty}>Start empty</button>
               </div>
             )}
-            <MoreDetailsForm deployment={deployment} errors={fieldErrors} onField={updateField} />
+            <LockedDetailsContext.Provider value={pickable && detailsSource !== 'manual'}>
+              <MoreDetailsForm deployment={deployment} errors={fieldErrors} onField={updateField} />
+            </LockedDetailsContext.Provider>
           </WizardStep>
           )}
         </div>
