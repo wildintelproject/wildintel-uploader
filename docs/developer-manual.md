@@ -380,10 +380,11 @@ the current task and shows one page.
 |---|---|
 | `WelcomePage`, `MenuPage` | The first screen and the task menu (`OptionCards`; a task with `available: false` is *coming soon*). |
 | `ResumeSessionsPage` | The unfinished runs, shown before the menu when there are any. |
-| `ImportDeploymentPage` | The wizard of four stages (images, origin and dates, check details, prepare and save), each with steps of its own (`WizardStep`). The biggest file: its step components and the forms. |
-| `ImportSessionPage` | The same stages for a folder of deployments. Reuses the wizard's pieces, exported from `ImportDeploymentPage`. |
+| `ImportDeploymentPage` | The wizard of five stages (origin, images, dates and details, check details, prepare and save), each with steps of its own (`WizardStep`). The biggest file: its step components and the forms. It also exports what the session page reuses: `fillFromVisit`, `fillFromPreviousRevision`, `detailsFound` and `LockedDetailsContext` (the details shown as a source says them, until they are filled in by hand). |
+| `ImportSessionPage` | The same stages for a folder of deployments; with closed visits ticked in the origin, each folder is linked to a visit and the location, details and dates come from it. Reuses the wizard's pieces, exported from `ImportDeploymentPage`. |
 | `UploadDeploymentPage` | Steps: what to upload (research project → collection → deployments), what to do (mode), then the upload, with a card per deployment. |
-| `UtilsPage` | The menu's *Utils* button: a list of maintenance tasks, each shown in place of the list once chosen — `RepairPage` and `SyncCollectionsPage`. |
+| `VisitsPage` | *Register visits*: the visits of a research project, by hand, from the Epicollect download or from a CSV. Stored in the project's `visits.json`; `POST /api/visits/closed` lists the closed visits that have no deployment yet and `POST /api/visits/link` links one to the deployment it gave. |
+| `UtilsPage` | The menu's *Utils* button: a list of maintenance tasks, each shown in place of the list once chosen — `TimeFixPage`, `RepairPage` and `SyncCollectionsPage`. |
 | `RepairPage` | Research project → collection → state of each deployment, and what each repair did. |
 | `SyncCollectionsPage` | Classification project → collection → deployments, and a live log. |
 | `SettingsPage` | Shown *over* the rest, which stays mounted but hidden, so a run in progress isn't lost. |

@@ -9,6 +9,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - **Release**: a macOS `.dmg` for Intel Macs (`macos-x86_64`), beside the Apple Silicon one (`macos-arm64`).
+- **Register visits** (new task): the visits to the camera traps — who went, when, to which site and what was done — by hand, from the Epicollect
+  download or from any CSV, kept in the research project's `visits.json`. The Camera section comes before the SD card, and what the visit before
+  said fills in the Camera, Site and Grouping sections. Entities (research projects, locations, trappers, SD cards and cameras) have their own
+  tab in Settings, with CSV import; `examples/` has example CSVs of all of them.
+- **Import deployment** is a wizard of five stages — origin → images → dates and details → check details → prepare and save —, and can be *of a visit*:
+  the **Closed visit** (one with a collected card and no deployment yet) gives the location, the revision, the camera, the site and the period. The SD card is asked in
+  the images stage. The chips above each stage fill in as it goes (research project, visit with its range, photos and card, then id, location and dates).
+  - Two postvalidation checks against the visit, as strict as the others and turned on or off in Settings › Postvalidation (`sd_card`, `photo_count`): the card is
+    the one the visit left, and the photos are those the visit counted. They pass, with a note, when the visit says nothing.
+  - *Dates*: a new source, **Visits of the field work**, picked first. **Epicollect5 is no longer a source of the dates** (it still fills the camera, the site and the notes).
+  - *More details*: **where do they come from** — what the field sheet says, what the previous deployment says (each with how many fields it found), or by hand. The first two are shown
+    as they say and cannot be edited until *Fill in by hand* is picked, which keeps their values. The visits are never changed by what is edited.
+  - Importing links the visit to the deployment it gave (`POST /api/visits/link`).
+- **Import session of visits**: tick the visits of one session in the origin (the session is the revision), choose the folder of subfolders, link each folder to its visit
+  (by the name, editable) with its SD card, and go on as in a single deployment — with the list of folders headed by *N of M have a visit*, a progress bar, All / Missing / Ready
+  and a filter. The locations are the visits', so *Where were they taken?* is left out. Without closed visits it works as before.
+- **Check and fix dates and times** (Utils): compares the images of a folder with the period of the visit and shifts a run of images or removes the ones that cannot be trusted; every fix is written down.
+- The app uses DM Sans for the text and DM Mono for identifiers, paths, raw dates and codes (Google Fonts).
 - **Import deployment**: organize a folder of camera-trap images into the local collections folder
   (`<Documents>/wildintel-uploader/collections/<research project>/<R000N>/<deployment id>`), in a wizard of four
   stages: images → origin and dates → check details → prepare and save.

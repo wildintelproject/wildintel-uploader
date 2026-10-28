@@ -13,11 +13,12 @@ first. Part of what the web app does can also be done from a terminal: see the
 2. [Settings](#2-settings)
 3. [The task menu](#3-the-task-menu)
 4. [Unfinished runs](#4-unfinished-runs)
-5. [Import a deployment](#5-import-a-deployment)
-6. [Import a session](#6-import-a-session)
-7. [Upload a deployment to Trapper](#7-upload-a-deployment-to-trapper)
-8. [Utils: sync and repair](#8-utils)
-9. [Troubleshooting](#9-troubleshooting)
+5. [Register visits](#5-register-visits)
+6. [Import a deployment](#6-import-a-deployment)
+7. [Import a session](#7-import-a-session)
+8. [Upload a deployment to Trapper](#8-upload-a-deployment-to-trapper)
+9. [Utils: sync, repair and fix dates](#9-utils)
+10. [Troubleshooting](#10-troubleshooting)
 
 ---
 
@@ -62,30 +63,30 @@ The server's **URL**, and the **username** (its email — Trapper's import form 
 that) and **password** of your account. **Test connection** reports the research projects it can
 see. The password is saved in `settings.toml` but never sent back to your browser.
 
-**Upload packages — Largest package** is the size, in MB, of the packages an [upload](#7-upload-a-deployment-to-trapper) makes: the
+**Upload packages — Largest package** is the size, in MB, of the packages an [upload](#8-upload-a-deployment-to-trapper) makes: the
 images of each deployment are uploaded in packages of this size at most (500 by default, up to 5000).
 
 ### Epicollect5
 
 ![Settings › Epicollect5](img/screenshots/settings-epicollect.png)
 
-The Epicollect5 project the deployments' information will be imported from (see [When was it collected?](#stage-2-origin-and-dates)): its **slug**, the
+The Epicollect5 project the deployments' information will be imported from (see [Dates and details](#stage-3-dates-and-details)): its **slug**, the
 name in its URL (`five.epicollect.net/project/<slug>`), and, only if the project is private, the **client id** and **secret** of
 its API client, which you create at <https://developers.epicollect.net>. **Test connection** reads the project with what is typed — saved or not — and says its name and how many inputs
-it has; a blank secret is the saved one. The **Import deployment information from Epicollect5** switch turns the use of Epicollect5 on or off — it is off until you turn it on, and while it is off nothing is read from Epicollect5. **Add them to the comments** sends what an entry answers in the inputs that are not mapped to any field to the comments of the deployment, a line each (*question: answer*; photos are left out). Below, the **Mapping** relates each field of a deployment to an input of the project's form. Epicollect5 has no input for a date and a time together, so the day and the time of the start and of the end are mapped apart, along with the revision.
+it has; a blank secret is the saved one. The **Import deployment information from Epicollect5** switch turns the use of Epicollect5 on or off — it is off until you turn it on, and while it is off nothing is read from Epicollect5. **Add them to the comments** sends what an entry answers in the inputs that are not mapped to any field to the comments of the deployment, a line each (*question: answer*; photos are left out). Below, the **Mapping** relates each field of a deployment to an input of the project's form. Epicollect5 has no input for a date and a time together, so the day and the time of the start and of the end are mapped apart, along with the revision. What an entry gives fills the camera, the site and the notes of a deployment; it is **no longer a source of its dates** — those come from the visits, the timestamp log or the photos.
 
 ### Validation
 
 ![Settings › Validation](img/screenshots/settings-validation.png)
 
-Which of the [folder checks](#stage-1-images) the wizard shows. Each is an entry with a switch;
+Which of the [folder checks](#stage-2-images) the wizard shows. Each is an entry with a switch;
 turn off the ones you never want to see. They are all on by default.
 
 ### Postvalidation
 
 ![Settings › Postvalidation](img/screenshots/settings-postvalidation.png)
 
-Which of the [postvalidation checks](#stage-3-check-details) the wizard shows, and what the ones
+Which of the [postvalidation checks](#stage-4-check-details) the wizard shows, and what the ones
 that take a value mean:
 
 | Setting | Default | |
@@ -95,6 +96,7 @@ that take a value mean:
 | Compared with | median | What this revision is compared to: the **median** or **mean** of the earlier ones, the **last** one, or the **range** they span. |
 | Previous revisions needed | 2 | With fewer, the statistical checks are skipped. |
 | Number of images / sequences / length of sequences | 50 % each | How different a value can be and still count as similar. |
+| SD card / Photo count | on | The two checks of a deployment [of a visit](#stage-4-check-details): that the card is the one the visit left and that the photos are those it counted. |
 
 ### Preprocessing
 
@@ -112,6 +114,14 @@ switch each step off.
   attribution) or **CC BY-NC** (with attribution, not for commercial purposes), the default. What is
   written into each image is the license's URL, shown beside each name.
 - **Dates** — **Ignore summer time**, and **Convert the dates to UTC**.
+
+### Entities
+
+The things the visits and the deployments refer to, one tab each: **Research projects**, **Locations**, **Trappers**, **SD cards** and **Cameras**.
+Each can be added one at a time, taken from Trapper (research projects and locations) or loaded from a CSV with **Import CSV** (there are
+examples in `examples/entities_example`, explained in `examples/CSV.md`). Locations, SD cards and cameras belong to a research project: pick it first.
+A camera or a card can be *active* or not; the visits only offer the ones in use. A location can be deleted unless it has visits or comes from Trapper,
+and an SD card can be marked as stolen. Press **Save** to keep what you changed.
 
 ### Reports
 
@@ -154,14 +164,15 @@ Once it is configured, the menu is where you choose what you want to do:
 
 | Task | What it's for |
 |---|---|
+| 📋 **Register visits** | Record the visits to the camera traps — who went, when, to which site and what was done. The deployments are worked out from them. |
 | 📷 **Import deployment** | Check one folder of images and organize it in the collections folder. |
 | 🗂️ **Import session** | The same for a folder holding several deployments, one subfolder each. |
 | ☁️ **Upload deployment to Trapper** | Send deployments already kept locally to Trapper. |
-| 🧰 **Utils** | Maintenance of the local collections: *Sync local collections* brings the collections folder up to date with what Trapper already has, and *Repair local deployments* checks which deployments are still valid and writes the metadata files of the others again from their folders. |
+| 🧰 **Utils** | *Check and fix dates and times* compares the dates of a folder's images with the period of the visit, when the camera clock went wrong, and shifts or removes the ones that cannot be trusted (every fix is written down). Maintenance of the local collections: *Sync local collections* brings the collections folder up to date with what Trapper already has, and *Repair local deployments* checks which deployments are still valid and writes the metadata files of the others again from their folders. |
 
 ![The task menu](img/screenshots/menu.png)
 
-The usual order is **Import** (or **Import session**) first, then **Upload**. *Sync* is for when
+The usual order is **Register visits** first, then **Import** (or **Import session**) — which take the location, the camera and the dates from the visits — and then **Upload**. *Sync* is for when
 Trapper already holds deployments that this computer's collections folder doesn't know about (**Utils › Sync**).
 
 The title in the top bar takes you back to the welcome screen at any time; **? Help** opens this
@@ -179,25 +190,79 @@ folder was chosen. Passwords are never saved with a run.
 
 ![Unfinished runs](img/screenshots/unfinished-runs.png)
 
-## 5. Import a deployment
+## 5. Register visits
+
+Press **📋 Register visits**. A **visit** is one trip to a camera trap: when it was, which site, who went and what was
+done. The visits of a research project are kept in its `visits.json`, and the deployments are worked out from them: a
+deployment goes from the visit that **left** a camera to the one that **collected** its card. Choose the research project and how
+the visits come in:
+
+| Source | What it does |
+|---|---|
+| **By hand** | You fill in each visit yourself. |
+| **From Wildintel Epicollect** | Reads the visits of a field trip from the Epicollect download (a CSV). The time is the `created_at` of the entry, put in the timezone of the location. |
+| **From a spreadsheet file** | Any CSV: the page shows its columns and you say which one gives each field of a visit. |
+
+When a file is read, the visits that were found are listed, with the rows that have problems (*the site is not a location of the project*,
+*the card is not in the settings*…) and why; the ones that are fine can be kept. The sites have to be **locations** of the research project, and the
+cameras and SD cards the ones of [Settings › Entities](#entities).
+
+**By hand**, a visit is a form with these parts:
+
+1. **Actions** — one or several of *Installation* (a camera is put up and a card left), *Revision* (the card is collected and another left),
+   *Desinstallation* (the camera is taken away with its card) and *Stolen*. The rest of the form depends on what is chosen: what the actions do not
+   ask is left out. When the camera was already visited, **the Camera, Site and Grouping sections come filled in from the last visit** (not its notes).
+2. **Camera** — the camera (picked from the active ones of the project, or added from here) and how it is placed and set: height or depth, tilt,
+   heading, delay, detection distance, its status, whether the batteries and the clock were right. **It comes before the SD card**.
+3. **SD card** — the card left in the camera, how many photos the card collected, and whether it was full. It says which card was in the camera
+   according to the visit before.
+4. **Site** and **Grouping and notes**, as in the details of a deployment.
+
+Each field is marked *required* or *optional* according to the actions.
+
+## 6. Import a deployment
 
 Press **📷 Import deployment**. This option is meant to import the set of images that come from a **single camera**: one
 folder, one deployment. For a folder with the images of several cameras, one subfolder each, use
-[**Import session**](#6-import-a-session).
+[**Import session**](#7-import-a-session).
 
-It is a wizard of four stages — the bar at the top shows where you are, and a
+It is a wizard of five stages — the bar at the top shows where you are, and a
 stage can have steps of its own, which open one after the other. Each stage is **done** (a tick and a
 summary, with a pencil to go back and change it), **open** or **locked** until the ones before it are
 done. **Back** and **Continue** move between them.
 
 | Stage | What it asks |
 |---|---|
-| 1. **Images** | Which folder, which checks, and how the images did. |
-| 2. **Origin and dates** | Where and when the images were taken, and what you know of the camera and the site. |
-| 3. **Check details** | The deployment's names and dates, and that the images fit them. |
-| 4. **Prepare and save** | The preprocessing, and saving the deployment in the collection. |
+| 1. **Origin** | The research project and the visit (or the location) the images are of. |
+| 2. **Images** | Which folder, which SD card, which checks, and how the images did. |
+| 3. **Dates and details** | The revision, the period, and what you know of the camera and the site. |
+| 4. **Check details** | The deployment's names and dates, the images against them, and against the visit. |
+| 5. **Prepare and save** | The preprocessing, and saving the deployment in the collection. |
 
-### Stage 1 — Images
+The bar of chips above each stage fills in as you go: the research project, the visit with its range of dates, the number of images and the card, and,
+at the end, the id the deployment will have, its location and its dates.
+
+### Stage 1 — Origin
+
+![Stage 1 — Origin](img/screenshots/step-origin.png)
+
+The **research project** the images belong to, and where they were taken. They are kept in the collections folder; pick one already there, or add a new one:
+
+- **By hand** — the project's name and acronym (which names its folder); a location's id, name,
+  latitude, longitude, coordinate uncertainty, **timezone** and whether its cameras ignore summer
+  time.
+- **From Trapper** — pick the project, or its locations, from your Trapper account and they are
+  copied here, with their coordinates and timezone. The app connects by itself with the account
+  saved in the settings — it never asks for the credentials again; if there isn't one, it says so.
+
+**The closed visit.** Once the research project is chosen, the **Closed visit** lists the visits to it that left a camera and whose card has been
+[collected](#5-register-visits), and that have **no deployment yet** (a visit that already has one is not offered). Picking one gives the deployment
+its **location**, its **revision** (the session of the visit) and, later, the camera, the site and the period: the deployment is *of that visit*. If you do
+not pick a visit, you pick the **location** yourself and everything else is asked by hand. A project with no closed visits goes on without one.
+
+If you start from a visit — from [Register visits](#5-register-visits) — the project and the visit are already chosen.
+
+### Stage 2 — Images
 
 In this stage you tell the app **which images** you are importing and find out, before anything else is done, **whether they
 are in good shape**. You choose the folder with the images of the camera and the app counts what is in it; then you
@@ -207,13 +272,16 @@ ones have problems, so you can fix them before going on. **Nothing is copied or 
 
 ![Stage 1 — Images, select the folder](img/screenshots/step-folder.png)
 
-The stage has three steps:
+The stage has three steps (the first one also asks the SD card):
 
 **1. Select the folder.** Press **Browse…** and choose the folder with the deployment's images (or type its path), then
 **Scan**. The scan only **counts**: how many files there are and how many of them are images (by
 their extension) — *241 images found* — with a warning if the folder is empty or has no
 images. It doesn't open them, which is why it is instant however many there are: reading the
 images is what the next steps are for. Copy the images off the camera's memory card first; don't point the app at the card.
+
+Once the folder is scanned, the app asks the **SD card** the images come from, among the cards of the research project (**Select an SD card…**; optional). If the deployment is
+of a visit, the card is checked against the one the visit left — see [Check details](#stage-4-check-details).
 
 **2. Choose the checks.** Checks over the images alone, before anything is known about the deployment:
 
@@ -248,81 +316,43 @@ Reading the camera's model and id uses ExifTool, because the serial number of a 
 in the manufacturer's own metadata. Without it the app falls back to the standard EXIF tags,
 which are less complete — it says which it used.
 
-### Stage 2 — Origin and dates
+### Stage 3 — Dates and details
 
-In this stage you tell the app **where and when** the images were taken, and what you know of the camera and the site. You say
-which research project and which location they come from — the location brings its coordinates and its timezone —, then the
-revision and the period the camera was recording, which the app looks for in several sources and lets you compare before
-you pick one. Finally you can add, if you know them, the details of the camera and of the site. With this the deployment gets
-its id (`R0003-DONA_01`) and its details. **Only the dates are required: the rest can be completed later.**
+![Stage 3 — When was it collected?](img/screenshots/step-dates.png)
 
-The stage has three steps:
+Here you tell the app **when** the images were taken and what you know of the camera and the site. With this the deployment gets its id
+(`R0003-DONA_01`) and its details. **Only the dates are required: the rest can be completed later.** The stage has two steps.
 
-**1. Where was it taken?**
+**1. When was it collected?**
 
-![Stage 2 — Where was it taken?](img/screenshots/step-origin.png)
+First, the **revision**. If the deployment is of a visit it is the session of the visit; otherwise it starts as the next one expected for the location
+— one more than the highest kept — and says so; change it if needed, and the **deployment id** is built (`R0003-DONA_01`). If an earlier revision of this
+deployment is kept, a notice offers to **copy from it** its camera, site and notes — the dates are never copied. If the deployment **already exists** in the
+collections folder you are told, and the import would be refused as it would mix two sets of images: choose another revision or location, or move that
+folder away.
 
-The **research project** and the **location** the images come from. They are
-kept in the collections folder; pick one already there, or add a new one:
-
-- **By hand** — the project's name and acronym (which names its folder); a location's id, name,
-  latitude, longitude, coordinate uncertainty, **timezone** and whether its cameras ignore summer
-  time.
-- **From Trapper** — pick the project, or its locations, from your Trapper account and they are
-  copied here, with their coordinates and timezone. The app connects by itself with the account
-  saved in the settings — it never asks for the credentials again; if there isn't one, it says so.
-
-**2. When was it collected?**
-
-![Stage 2 — When was it collected?](img/screenshots/step-dates.png)
-
-First, the **revision**. It starts as the next one expected for that location — one more than the highest kept — and says
-so; change it if needed, and the **deployment id** is built (`R0003-DONA_01`). If an earlier revision of this deployment is
-kept, a notice offers to **copy from it** its camera, site and notes — the dates are never copied. If the deployment
-**already exists** in the collections folder you are told, and the import would be refused as it would mix two sets of
-images: choose another revision or location, or move that folder away.
-
-Then the **period**: when the camera started and stopped recording, as the clock of the location's timezone (the one
-said above, which is never asked for again). The dates are not typed from scratch — the app looks for them in several
-**sources**, and shows **what each one found** side by side so you can compare them and **pick one**:
+Then the **period**: when the camera started and stopped recording, as the clock of the location's timezone. The dates are not typed from scratch — the app looks for
+them in several **sources**, and shows **what each one found** so you can compare them and **pick one**:
 
 | Source | Where the dates come from |
 |---|---|
-| **Epicollect5 project** | The entry of your Epicollect5 form for this location and this revision (each row of the form is one deployment). Only if Epicollect5 is [turned on](#epicollect5) in the settings. |
+| **Visits of the field work** | Only if the deployment is of a visit: from the visit where the card was left to the one where it was collected, in the timezone of the location. You can change the dates here; **the visits (the field sheet) are not changed**. |
 | **Camera data in the photos** | The first and the last photo of the folder: the earliest and the latest capture date in their EXIF data. |
 | **Manual entry** | You type the start and the end yourself. It is the only one that lets you edit them. |
 
-Each option says **Found** — with the start and end it found — or **Nothing found**, and why (*Epicollect5 is turned off
-in the settings*, *Nothing found for DONA_01, revision 3*). Below them, **Recording period** shows the dates taken, which
-source they are **from**, and the **duration**.
-
-The app picks for you the first source that has dates, in this order: **Epicollect5, then the photos**; by hand only when
-neither has found anything. Photos are read and Epicollect5 is asked in the background, so a better source that turns up a moment
-later replaces the one taken — until you pick one yourself, which is then left as it is.
-
-!!! note "How an Epicollect5 entry gives its dates"
-    Epicollect5 has no question for a date and a time together, so the form asks the **day** and the **time** apart (mapped
-    in [Settings › Epicollect5](#epicollect5)). A day with no time takes the time the photos gave on that same day, or else
-    the whole day: from its first second (00:00:00) for the start, to its last (23:59:59) for the end. If there are several
-    entries for the location and the revision, the newest one is used. The entry is read with the client saved in the
-    settings, so Epicollect5 may refuse for a while if it limits the requests.
-
-When Epicollect5 has an entry, a notice also offers **Import from Epicollect5**, which fills the **camera, the site and the
-notes** from it (the dates follow the source you picked). The location's own data — its id, name and coordinates — are never
-taken from the entry, and the camera model and id only complete what the photos didn't give. Answers that no field is mapped to can go to
-the comments (see the [settings](#epicollect5)).
+Each option says **Found** — with the start and end it found — or **Nothing found**. Below them, **Recording period** shows the dates taken, which source they are
+**from**, and the **duration**. The app picks for you the first source that has dates: **the visits, then the photos**; by hand only when neither has found anything. A better
+source that turns up later replaces the one taken — until you pick one yourself.
 
 If the deployment's collection has a `<COLLECTION>_FileTimestampLog.csv` (the file wildintel-tools asks for), going on from *More details*
-**adds the deployment's row to that file**. A log that is already there is
-used for the dates in an [*Import session*](#6-import-a-session).
+**adds the deployment's row to that file**. A log that is already there is used for the dates in an [*Import session*](#7-import-a-session).
 
-**3. More details.**
+**2. More details.**
 
-![Stage 2 — More details](img/screenshots/step-details.png)
+![Stage 3 — More details](img/screenshots/step-details.png)
 
-Everything here is optional, and can be completed later in Trapper. The form follows
-[Camtrap DP](https://camtrap-dp.tdwg.org)'s deployment table — the same fields as Trapper's own deployment form. Each
-section is a card that says how many of its fields are filled in; open it to fill it in.
+Everything here is optional, and can be completed later in Trapper. The form follows [Camtrap DP](https://camtrap-dp.tdwg.org)'s deployment table — the same
+fields as Trapper's own deployment form. Each section is a card that says how many of its fields are filled in; open it to fill it in.
 
 | Section | Fields |
 |---|---|
@@ -330,14 +360,25 @@ section is a card that says how many of its fields are filled in; open it to fil
 | **Site** | Feature type (road, trail, burrow, water source…), habitat, set up by, bait used, timestamp issues. |
 | **Grouping and notes** | Deployment groups, tags, comments. |
 
-The form is validated as you type, in the browser and again in the server: dates in order,
-latitude and longitude in range, tilt between −90 and 90, heading between 0 and 360.
+**Where do they come from?** When the deployment is of a visit, or an earlier revision is kept, a card asks which source gives these details — each option says
+**how many fields it found** and which parts of the form they are:
 
-When you continue, the deployment is added to the collection's timestamp log.
+| Source | What it gives |
+|---|---|
+| **What the field sheet says** | What the visit wrote down in the field: the camera, who set it up, the placement, the site. The visits are not changed. |
+| **What the previous deployment says** | The camera, the site and the notes of the previous revision of the location (never its dates). Not available — *Nothing found* — when there is none. |
+| **Fill in by hand** | You type them, **starting from the values the last source gave**. |
 
-### Stage 3 — Check details
+With the field sheet or the previous deployment picked, the fields are shown **as that source says them, and cannot be edited**; pick *Fill in by hand* and they
+open for editing without losing the values. Picking a source again restores its values (what you changed by hand is lost). What a source does not say is left empty.
+When Epicollect5 [is turned on](#epicollect5) and has an entry, a notice in the origin also offers **Import from Epicollect5**, which fills the camera, the site and the notes
+from it (and leaves the form to be edited by hand); the location's own data are never taken from the entry.
 
-![Stage 3 — Check results](img/screenshots/step-checks.png)
+The form is validated as you type, in the browser and again in the server: dates in order, latitude and longitude in range, tilt between −90 and 90, heading between 0 and 360.
+
+### Stage 4 — Check details
+
+![Stage 4 — Check results](img/screenshots/step-checks.png)
 
 Now that you know when, how and where the images were taken, new checks are run: the deployment's names and dates, and the images against it:
 
@@ -346,14 +387,16 @@ Now that you know when, how and where the images were taken, new checks are run:
 | Deployment id format | `R0033-DONA_01`. |
 | Deployment id starts with its collection | `R0033-…` belongs to `R0033`. |
 | Collection name | `R0033`. |
-| The id's location is the one chosen | The location in the id is the one from stage 2. |
+| The id's location is the one chosen | The location in the id is the one from stage 1. |
 | Image dates fit the deployment | The first image at the start, the last at the end, within the tolerance. |
 | Camera consistency | The camera in the images is the one in the details. |
 | Number of images | Like the previous revisions of the location. |
 | Number of sequences | Like the previous revisions of the location. |
 | Length of the sequences | Like the previous revisions of the location. |
+| The SD card is the one the visit left | Only for a deployment of a visit: the card said in stage 2 is the one the visit left in the camera. A card nobody said passes, with a note. |
+| The photos are those the visit counted | Only for a deployment of a visit: the number of images is the number of photos the visit that collected the card counted. A visit that counted none passes, with a note. |
 
-The last three are **statistical**: a location is visited again and again, so what earlier
+The three on the number of images, the number of sequences and their length are **statistical**: a location is visited again and again, so what earlier
 revisions looked like says what this one should — about as many photos, about as many sequences,
 as long. A camera that fired non-stop, or died early, stands out, and is worth a look *before* it
 is uploaded. They need at least the *previous revisions needed* of the settings, or they are
@@ -370,9 +413,9 @@ It has the same two steps as the images' checks: **choose how strict** each one 
 **Run checks**, and read the **results** — when it was run, the figures, the table, and, opened from a check, the images that
 failed it (*Out of range*, *Other camera*) as thumbnails. The [report](#reports) downloads.
 
-### Stage 4 — Prepare and save
+### Stage 5 — Prepare and save
 
-![Stage 4 — Preprocessing steps](img/screenshots/step-preprocessing.png)
+![Stage 5 — Preprocessing steps](img/screenshots/step-preprocessing.png)
 
 **1. Preprocessing steps.** Choose what to do to the images; the table says what each step does. Press **Start preparing**.
 
@@ -400,7 +443,7 @@ images as thumbnails. The [report](#reports) says what was done to each image. *
 
 **3. Save to your collection.**
 
-![Stage 4 — Saved](img/screenshots/step-import.png)
+![Stage 5 — Saved](img/screenshots/step-import.png)
 
 The images are ready, so this step **consolidates** the deployment: press **Save deployment** and its
 `deployment.json` is written and the deployment is **sealed**. From then on it can't be modified — the app notices if an image
@@ -409,7 +452,7 @@ or its details change — and it can be uploaded.
 A good save says where the deployment was kept, and offers:
 
 - **Open folder** in the file explorer.
-- **Upload to Trapper** — straight to [the upload page](#7-upload-a-deployment-to-trapper) with the
+- **Upload to Trapper** — straight to [the upload page](#8-upload-a-deployment-to-trapper) with the
   research project and the collection already chosen.
 - **Start over**.
 
@@ -417,7 +460,7 @@ A good save says where the deployment was kept, and offers:
 
 | File | Content |
 |---|---|
-| `deployment.json` | The details of stage 2. |
+| `deployment.json` | The details of stage 3. |
 | `images.json` | Per image: its name (and the original, if renamed), when it was taken — the camera's wall clock and the instant —, the camera, size and pixels, and hashes. It lets later checks, and the statistics of the next revisions, work without opening the images again. |
 | `preprocessing.json` | What was done to each image, with its hashes: `source_hash` of the original, `hash` of the image kept, `final_hash` of the file with its metadata. |
 | `seal.json` | Which validation and postvalidation checks the deployment and each image passed, and the hash of everything. |
@@ -426,7 +469,7 @@ The **seal** protects against changes by mistake: if an image or `deployment.jso
 after the import, the seal no longer matches, and the app can tell. It is not a signature —
 whoever edits the files on purpose could seal them again.
 
-## 6. Import a session
+## 7. Import a session
 
 ![Import session — when was each deployment collected](img/screenshots/session-details.png)
 
@@ -434,24 +477,31 @@ Press **🗂️ Import session**. A **session** is a folder with **one subfolder
 usual way a field trip's images come home. The revision, the checks and the preprocessing are the
 same for all; the location, dates and camera are asked for each deployment.
 
-The four stages are those of [Import a deployment](#5-import-a-deployment), with the differences below.
+The stages are those of [Import a deployment](#6-import-a-deployment), with the differences below.
 
-1. **Images** — *Session folder*: choose the folder and **Scan**; its subfolders are listed, each with its images
-   and warnings, and you tick the ones to import. Then *Choose the checks* and *Results*: the checks run over every
-   chosen deployment, and the result is shown **by folder** or **by check** (with *Only folders with problems*). **Leave them
-   out** drops the folders that failed from the session; **Continue with N folders** goes on.
-2. **Origin and details** — *Where were they taken?*: one research project for the whole session, and a location for each
-   deployment (the ones whose folder name matches a location of the project are suggested, and **Assign** takes them all at once).
-   No two deployments can share one. *When was it collected?*: first the **revision**, common to the session, which names
-   all the deployments (`R0003-DONA_01`, `R0003-DONA_02`…) and is taken from the log's ids when it has them; the
-   previous-revision and Epicollect5 notices are the same as in a single deployment. Then the **list** of deployments, each with
-   its period and **where it comes from** (*From Epicollect5*, *From R0003_FileTimestampLog.csv*, *From the images*,
-   *Entered by hand*), how many are complete (*"12 of 40 deployments complete"*), a *filter by name* and *Only the incomplete ones*.
-   *More details*: the camera and the site of each, with **Fill in from the previous revision** for the ones that have one.
+1. **Origin** — the **research project** for the whole session and, if it has closed visits (see [Register visits](#5-register-visits)), the
+   **Visits** to tick: the ones this session is of — **all of one session**, which is the revision (once one is ticked, the visits of other sessions are
+   disabled). The list has a **search** (by site, card, date…). Without closed visits, the session goes on as it always did, asking a location for each folder.
+2. **Images** — *Session folder*: choose the folder and **Scan**; its subfolders are listed, each with its images and warnings, and you tick the ones to import.
+   With visits, each folder is **linked to a visit** — a folder named after a site takes the visit of that site by itself; change it if it is not right — and
+   says its **SD card** (optional). A header above the list says how many of the ticked folders have a visit, with a progress bar, the tabs *All*, *Missing* and
+   *Ready* and a filter by name; a folder with no visit has to be linked or unticked before going on, and a visit is of one folder only.
+   Then *Choose the checks* and *Results*: the checks run over every chosen deployment, by folder or by check (with *Only folders with problems*).
+   **Leave them out** drops the folders that failed from the session; **Continue with N folders** goes on.
+3. **Dates and details** — with visits, the **locations are the visits'**: nothing is asked of where they were taken and the stage starts at *When was it collected?*.
+   Without visits, *Where were they taken?* asks the location of each deployment (the ones whose folder name matches a location are suggested, and **Assign** takes
+   them all at once; no two deployments can share one).
+   *When was it collected?*: first the **revision**, common to the session, which names all the deployments (`R0003-DONA_01`, `R0003-DONA_02`…); it is the session of the
+   visits, or is taken from the log's ids. Then the **list** of deployments, each with its period and **where it comes from**
+   (*From the visits*, *From R0003_FileTimestampLog.csv*, *From the images*, *Entered by hand*), how many are complete (*"12 of 40 deployments complete"*), a *filter by name* and
+   *Only the incomplete ones*. *More details*: the camera and the site of each; for a deployment of a visit, the same
+   [source card](#stage-3-dates-and-details) as in a single deployment — the field sheet, the previous deployment or by hand — for each one.
+4. **Check details** — the deployments' checks, by folder or by check; for deployments of visits they include the two checks against the visit (the card and the number of photos).
+5. **Prepare and save** — one list of preprocessing steps for all, then each deployment in turn, with its own result.
+   If some fail, **Import the N left** resumes with the ones that are still pending. Saving seals each of them, and **links each visit to the deployment it gave**.
 
-3. **Check details** — the deployments' checks, for each deployment, by folder or by check.
-4. **Prepare and save** — one list of preprocessing steps for all, then each deployment in turn, with its own result.
-   If some fail, **Import the N left** resumes with the ones that are still pending. Saving seals each of them.
+The chips above each stage fill in as you go: the research project, the visits with their range of dates, the images and the cards, and, at the end, the revision, the
+deployments and the dates they cover.
 
 When it ends, **Upload to Trapper** goes to the upload page with the collection chosen.
 
@@ -464,14 +514,14 @@ single deployment, and pick one. There are four, and a session adds the **timest
 
 | Source | Where the dates come from |
 |---|---|
-| **Epicollect5 project** | The entry for that deployment's location and the revision. One request looks up all the deployments at once. |
+| **Visits of the field work** | When the deployment is of a visit: from the visit where the card was left to the one where it was collected. You can change the dates; the visits are not changed. |
 | **Timestamp log file** | The row of that deployment in the `<COLLECTION>_FileTimestampLog.csv` found in the session folder — the file wildintel-tools asks for beside a collection's deployments —, with the set-up and pick-up times someone wrote down. The row is found by the folder's name or by the id the log gives (`R0003-DONA_02`). |
 | **Camera data in the photos** | The first and the last photo of that deployment's folder. They are read in the background, a folder after another, so a row may say *Reading the images…* for a moment. |
 | **Manual entry** | You type the start and the end. |
 
-Each deployment takes **the first source that has its dates, in this order: Epicollect5, the timestamp log, the photos** — by
+Each deployment takes **the first source that has its dates, in this order: the visits, the timestamp log, the photos** — by
 hand only if none does — and a better one found later replaces it, unless you picked one yourself for that deployment. So in a
-session some deployments may come from Epicollect5, others from the log and others from the photos, each row saying which.
+session some deployments may come from the visits, others from the log and others from the photos, each row saying which.
 A notice above the list says how many of the deployments the log gave dates to.
 
 ![A deployment whose dates come from the timestamp log](img/screenshots/session-dates-log.png)
@@ -480,7 +530,7 @@ The log's option compares itself with the photos — *Starts 32 min before the f
 quick way to notice a log row that doesn't fit its images, which is also reported when a row or a folder matches no deployment. When
 a deployment shows *Dates needed* or *To fix*, open it and pick another source or type the dates.
 
-## 7. Upload a deployment to Trapper
+## 8. Upload a deployment to Trapper
 
 ![Upload — what to upload](img/screenshots/upload.png)
 
@@ -546,7 +596,7 @@ someone else, the reason says who owns it. The page shows the date of the run an
 The zips and yamls are written under `<data folder>/packages/<research project>/`. A deployment
 that was uploaded gets an `upload.json`, which is what the list uses to say so.
 
-## 8. Utils
+## 9. Utils
 
 Press **🧰 Utils**, under the task cards of the menu. It holds the maintenance tasks of the local collections; pick one,
 and **Back** returns to the list.
@@ -631,7 +681,7 @@ number once), the size (not wider than the width of the settings), the XMP metad
 still the ones that were preprocessed. What the preprocessing *did* — the resizing, the renaming — can't be checked beyond that:
 the originals are gone.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 **"Backend not reachable — is the server running?"**
 :   The red bar at the top. The window that started the app was closed, or it crashed. Start the app
