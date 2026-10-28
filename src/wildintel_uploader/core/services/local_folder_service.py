@@ -254,15 +254,23 @@ def write_location(root: Path, research_project_id: str, location: dict) -> dict
 
 
 def update_location(root: Path, research_project_id: str, location_id: str, changes: dict) -> dict:
-    """Changes a kept location's fields (found ignoring case) — only the keys in changes, the rest stay.
+    """Changes a kept location's fields (found ignoring case) — only the keys in changes, the rest stay. Its timezone, and whether its cameras ignore
+    summer time, are fixed when it is created: every instant kept for it (a visit's `when`) was worked out with them, so they say the same or are refused.
 
     Raises:
-        LocalFolderError: the research project or the location isn't there.
+        LocalFolderError: the research project or the location isn't there, or the timezone (or the summer-time setting) is changed.
     """
     locations = list_locations(root, research_project_id)
     index = next((i for i, l in enumerate(locations) if l.get("location_id", "").lower() == location_id.lower()), None)
     if index is None:
         raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
+    now = {"timezone": locations[index].get("timezone") or visit_time.DEFAULT_TIMEZONE, "ignore_dst": bool(locations[index].get("ignore_dst"))}
+    for key, label in (("timezone", "timezone"), ("ignore_dst", "summer-time setting")):
+        if key in changes:
+            wanted = (changes[key] or visit_time.DEFAULT_TIMEZONE) if key == "timezone" else bool(changes[key])
+            if wanted != now[key]:
+                raise LocalFolderError(f"The {label} of a location can't be changed once it is created: {location_id} is {now[key]}.")
+            changes = {k: v for k, v in changes.items() if k != key}
     locations[index] = {**locations[index], **changes}
     (project_dir(root, research_project_id) / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
     return locations[index]

@@ -13,6 +13,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   download or from any CSV, kept in the research project's `visits.json`. The Camera section comes before the SD card, and what the visit before
   said fills in the Camera, Site and Grouping sections. Entities (research projects, locations, trappers, SD cards and cameras) have their own
   tab in Settings, with CSV import; `examples/` has example CSVs of all of them.
+- **A location's timezone (and its summer-time setting) cannot be changed once it is created**: the instants kept for it were worked out with them. The server refuses a different one (`409`), and the form of a location shows them disabled.
 - **The time of a visit is kept as an instant**: `when`, ISO 8601 in UTC with a Z (`2024-09-04T11:10:00Z`), in the research project's `visits.json`. The day (`date`) and the
   time (`time`) the forms and the tables show are the wall clock of the visit's location, in the timezone the location says; the API gives both. A `visits.json` kept with a day and
   a time only is moved to instants when it is read (in the timezone its locations say) and written back. A new location is UTC, following summer time, unless it says otherwise.

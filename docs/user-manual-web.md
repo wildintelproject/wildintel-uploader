@@ -122,7 +122,7 @@ switch each step off.
 The things the visits and the deployments refer to, one tab each: **Research projects**, **Locations**, **Trappers**, **SD cards** and **Cameras**.
 Each can be added one at a time, taken from Trapper (research projects and locations) or loaded from a CSV with **Import CSV** (there are
 examples in `examples/entities_example`, explained in `examples/CSV.md`). Locations, SD cards and cameras belong to a research project: pick it first.
-A camera or a card can be *active* or not; the visits only offer the ones in use. A location can be deleted unless it has visits or comes from Trapper,
+A location's **time zone** (UTC unless you say another) and whether its cameras ignore summer time are chosen when it is created and **cannot be changed afterwards**: the instant of every visit to it was worked out with them. A camera or a card can be *active* or not; the visits only offer the ones in use. A location can be deleted unless it has visits or comes from Trapper,
 and an SD card can be marked as stolen. Press **Save** to keep what you changed.
 
 ### Reports

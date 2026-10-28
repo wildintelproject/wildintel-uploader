@@ -1425,11 +1425,15 @@ describe('SettingsPage — Entities', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
       const dialog = within(screen.getByRole('region', { name: 'Location' }))
       expect(dialog.getByLabelText('Location id')).toBeDisabled()
+      expect(dialog.getByLabelText('Time zone')).toBeDisabled() // set when the location was created
+      expect(dialog.getByRole('switch', { name: 'The cameras here ignore summer time' })).toBeDisabled()
       await userEvent.clear(dialog.getByLabelText('Name'))
       await userEvent.type(dialog.getByLabelText('Name'), 'Ridge top')
       await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
 
-      await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01', expect.objectContaining({ name: 'Ridge top', latitude: 37.1, timezone: 'Europe/Madrid' })))
+      await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01', expect.objectContaining({ name: 'Ridge top', latitude: 37.1 })))
+      expect(mockedApi.updateLocalLocation.mock.calls[0][2]).not.toHaveProperty('timezone') // fixed when the location was created
+      expect(mockedApi.updateLocalLocation.mock.calls[0][2]).not.toHaveProperty('ignore_dst')
     })
 
     it('reads them from a CSV file: new ones are added, one that is there is updated, a wrong value is left blank', async () => {

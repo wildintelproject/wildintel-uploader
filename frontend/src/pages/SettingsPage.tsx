@@ -827,6 +827,8 @@ interface ItemField<T> {
   section?: string; sectionHint?: string
   /** In a styled form: it shares its line with the next one that also is half. */
   half?: boolean
+  /** It is set when the item is created and cannot be changed afterwards: its box is shown, but disabled, when the item is edited. */
+  fixed?: boolean
   /** In a styled form: what its number is measured in, said at the end of the box. */
   unit?: string
   /** What a 'select' offers, the first being what a new item starts with. */
@@ -931,8 +933,8 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
             return (
               <div key={f.key} className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3">
                 <div><p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{f.label}</p>{f.hint && <p className={hintClass}>{f.hint}</p>}</div>
-                <button type="button" role="switch" aria-checked={value !== ''} aria-label={f.label} onClick={() => change(f, i)(value ? '' : 'yes')}
-                        className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${value ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}>
+                <button type="button" role="switch" aria-checked={value !== ''} aria-label={f.label} disabled={Boolean(f.fixed) && !isNew} onClick={() => change(f, i)(value ? '' : 'yes')}
+                        className={`relative w-11 h-6 shrink-0 rounded-full transition-colors disabled:opacity-50 ${value ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : ''}`} />
                 </button>
               </div>
@@ -942,7 +944,7 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
             return label(<input id={`item-${f.key}`} type="date" aria-label={f.label} className={`${fieldBox} sm:max-w-60 [color-scheme:light] dark:[color-scheme:dark]`} value={value} onChange={(e) => change(f, i)(e.target.value)} />)
           }
           const input = (
-            <input id={`item-${f.key}`} aria-label={f.label} className={`${fieldBox} ${f.unit ? 'pr-20' : ''}`} value={value} placeholder={f.placeholder} autoComplete="off" disabled={lockFirst && i === 0}
+            <input id={`item-${f.key}`} aria-label={f.label} className={`${fieldBox} ${f.unit ? 'pr-20' : ''}`} value={value} placeholder={f.placeholder} autoComplete="off" disabled={(lockFirst && i === 0) || (Boolean(f.fixed) && !isNew)}
                    onChange={(e) => change(f, i)(e.target.value)} />
           )
           return label(
@@ -998,14 +1000,14 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
             const change = (v: string) => onChange({ [f.key]: i === 0 ? v : (v || null) } as Partial<T>)
             return f.kind === 'bool' ? (
                 <label className="flex items-center gap-3 px-1 py-2 text-sm text-zinc-800 dark:text-zinc-200 cursor-pointer">
-                  <input type="checkbox" checked={textOf(item, f.key) !== ''} onChange={(e) => change(e.target.checked ? 'yes' : '')} />
+                  <input type="checkbox" checked={textOf(item, f.key) !== ''} disabled={Boolean(f.fixed) && !isNew} onChange={(e) => change(e.target.checked ? 'yes' : '')} />
                   {f.label}
                 </label>
               )
               : f.kind === 'select' ? <SelectBox label={f.label} value={textOf(item, f.key) || f.options?.[0]?.value || ''} onChange={change} options={f.options ?? []} />
               : f.kind === 'date' ? <DateBox label={f.label} value={textOf(item, f.key)} onChange={change} />
               : f.kind === 'suggest' ? <SuggestBox label={f.label} value={textOf(item, f.key)} onChange={change} suggestions={f.suggestions ?? []} placeholder={f.placeholder} />
-              : <TextBox label={f.label} value={textOf(item, f.key)} placeholder={f.placeholder} error={fieldError(f, i)} onChange={change} disabled={lockFirst && i === 0} />
+              : <TextBox label={f.label} value={textOf(item, f.key)} placeholder={f.placeholder} error={fieldError(f, i)} onChange={change} disabled={(lockFirst && i === 0) || (Boolean(f.fixed) && !isNew)} />
           })()}
           {f.hint && <p className={`${hintClass} px-1 mt-1`}>{f.hint}</p>}
         </div>
@@ -1148,8 +1150,8 @@ const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
   { key: 'latitude', label: 'Latitude', placeholder: 'e.g. 37.0123', half: true, section: 'Where is it?', sectionHint: 'Decimal degrees (WGS84), like 37.0123 and -6.4412.', validate: numberRange(-90, 90) },
   { key: 'longitude', label: 'Longitude', placeholder: 'e.g. -6.4412', half: true, validate: numberRange(-180, 180) },
   { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty', placeholder: 'e.g. 100', unit: 'metres', half: true, hint: 'How far off the position could be.', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
-  { key: 'timezone', label: 'Time zone', placeholder: 'e.g. Europe/Madrid', section: 'Time', hint: "The location's own time zone. Every deployment here is read in it.", validate: (v) => (v === '' || isValidTimezone(v) ? null : 'Not a known IANA time zone (e.g. Europe/Madrid).') },
-  { key: 'ignore_dst', label: 'The cameras here ignore summer time', kind: 'bool', hint: 'Turn it on if their clocks stay the same all year.' },
+  { key: 'timezone', label: 'Time zone', placeholder: 'e.g. Europe/Madrid', section: 'Time', fixed: true, hint: "The location's own time zone: UTC unless you say another. Every visit and deployment here is read in it, so it cannot be changed once the location is created.", validate: (v) => (v === '' || isValidTimezone(v) ? null : 'Not a known IANA time zone (e.g. Europe/Madrid).') },
+  { key: 'ignore_dst', label: 'The cameras here ignore summer time', kind: 'bool', fixed: true, hint: 'Turn it on if their clocks stay the same all year. Like the time zone, it cannot be changed once the location is created.' },
   ...statusFields<LocationDraft>(['active', 'planned', 'retired'], true, { active: 'Offered when a visit is registered.', planned: 'Not set up yet.', retired: 'Taken out of use for good.' }),
 ]
 
@@ -1172,6 +1174,8 @@ const locationDraft = (l: LocalLocation): LocationDraft => ({
 })
 const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: 'UTC', ignore_dst: null, status: 'active', status_date: null, status_note: null }
 const numberOrNull = (t: string | null) => (t === null ? null : Number(t))
+/** What can change of a location kept: its time zone and its summer-time setting are fixed when it is created, so they are not sent. */
+const locationChanges = ({ timezone, ignore_dst, ...rest }: ReturnType<typeof locationFields>) => { void timezone; void ignore_dst; return rest }
 /** The fields of a location as they are kept — the numbers as numbers. */
 const locationFields = (d: LocationDraft) => ({
   name: d.name, latitude: numberOrNull(d.latitude), longitude: numberOrNull(d.longitude), coordinate_uncertainty: numberOrNull(d.coordinate_uncertainty),
@@ -1419,7 +1423,7 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
     setError(null)
     try {
       if (editing.isNew) await keep(editing.item)
-      else await api.updateLocalLocation(project.acronym, editing.item.location_id, locationFields(editing.item))
+      else await api.updateLocalLocation(project.acronym, editing.item.location_id, locationChanges(locationFields(editing.item)))
       setEditing(null); load()
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the location.') }
   }
@@ -1438,7 +1442,7 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
     let updated = 0
     for (const item of items) {
       try {
-        if (there(item.location_id)) { await api.updateLocalLocation(project.acronym, there(item.location_id)!.location_id, locationFields(item)); updated++ } else { await keep(item); added++ }
+        if (there(item.location_id)) { await api.updateLocalLocation(project.acronym, there(item.location_id)!.location_id, locationChanges(locationFields(item))); updated++ } else { await keep(item); added++ }
       } catch (e) { problems.push(`${item.location_id}: ${e instanceof Error ? e.message : 'could not be saved.'}`) }
     }
     setResult({ message: `${added} added, ${updated} updated in ${project.acronym}.`, problems })

@@ -108,15 +108,15 @@ def save_location(req: SaveLocationRequest) -> dict:
 
 @router.post("/locations/update")
 def update_location(req: UpdateLocationRequest) -> dict:
-    """Changes a kept location — its name, where it is, its timezone and/or its summer-time setting (the last two belong to the location,
-    not to a deployment). The fields left out stay as they are; 404 if the location isn't there."""
+    """Changes a kept location — its name, where it is, its status. Its timezone and its summer-time setting belong to the location and are fixed
+    when it is created: asking for a different one is a 409. The fields left out stay as they are; 404 if the location isn't there."""
     changes = req.model_dump(include={"name", "latitude", "longitude", "coordinate_uncertainty", "timezone", "ignore_dst", "status", "status_date", "status_note"}, exclude_unset=True)
     if changes.get("status") is None:
         changes.pop("status", None)
     try:
         return local_folder_service.update_location(config.collections_dir(), req.research_project_id, req.location_id, changes)
     except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(404 if "isn't in" in str(exc) else 400, str(exc)) from exc
+        raise HTTPException(404 if "isn't in" in str(exc) else 409 if "can't be changed" in str(exc) else 400, str(exc)) from exc
 
 
 @router.post("/locations/delete")

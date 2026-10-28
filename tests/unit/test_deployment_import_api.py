@@ -370,18 +370,21 @@ def test_a_research_project_starts_with_no_locations_and_gets_them_added(tmp_pat
     assert location["latitude"] is None and location["longitude"] is None  # not known yet
 
 
-def test_a_locations_timezone_and_summer_time_can_be_changed_and_belong_to_it(tmp_path: Path):
+def test_a_locations_timezone_and_summer_time_are_fixed_when_it_is_created(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "UTC"}})
-        only_dst = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "dona_01", "ignore_dst": False})
-        both = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "timezone": "Europe/Madrid", "ignore_dst": True})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "Europe/Madrid", "ignore_dst": False}})
+        update = lambda **changes: _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "dona_01", **changes})  # noqa: E731
+        zone = update(timezone="UTC")
+        summer = update(ignore_dst=True)
+        same = update(timezone="Europe/Madrid", ignore_dst=False, name="Site 1")     # saying the same is not changing it
         listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
 
-    assert only_dst.status_code == 200 and (only_dst.json()["timezone"], only_dst.json()["ignore_dst"]) == ("UTC", False)  # the timezone was left alone
-    assert both.status_code == 200
+    assert zone.status_code == 409 and "timezone of a location can't be changed" in zone.json()["detail"]
+    assert summer.status_code == 409 and "summer-time setting" in summer.json()["detail"]
+    assert same.status_code == 200
     [location] = listed
-    assert (location["name"], location["timezone"], location["ignore_dst"]) == ("Site", "Europe/Madrid", True)
+    assert (location["name"], location["timezone"], location["ignore_dst"]) == ("Site 1", "Europe/Madrid", False)
 
 
 def test_a_location_can_be_renamed_moved_and_cleared_of_what_is_not_known_any_more(tmp_path: Path):
