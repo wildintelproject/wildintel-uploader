@@ -1170,7 +1170,7 @@ const locationDraft = (l: LocalLocation): LocationDraft => ({
   coordinate_uncertainty: text(l.coordinate_uncertainty), timezone: l.timezone, ignore_dst: l.ignore_dst ? 'yes' : null,
   status: l.status ?? 'active', status_date: l.status_date ?? null, status_note: l.status_note ?? null,
 })
-const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: null, ignore_dst: null, status: 'active', status_date: null, status_note: null }
+const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: 'UTC', ignore_dst: null, status: 'active', status_date: null, status_note: null }
 const numberOrNull = (t: string | null) => (t === null ? null : Number(t))
 /** The fields of a location as they are kept — the numbers as numbers. */
 const locationFields = (d: LocationDraft) => ({

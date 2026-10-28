@@ -282,15 +282,19 @@ class UpdateResearchProjectRequest(ResearchProjectRecord):
     description: Optional[str] = Field(default=None, max_length=2000)  # type: ignore[assignment]
 
 
+DEFAULT_TIMEZONE = "UTC"
+
+
 class LocationRecord(BaseModel):
     """A location of a research project kept in the collections folder."""
 
     location_id: str = Field(min_length=1, max_length=100)
     name: Optional[str] = None
-    # IANA timezone, when known, and whether its cameras ignore summer time. Both belong to the location — never to a
-    # deployment: every deployment there uses them, and Trapper only accepts a package that declares the same.
-    timezone: Optional[str] = None
-    ignore_dst: Optional[bool] = None
+    # IANA timezone and whether its cameras ignore summer time. Both belong to the location — never to a deployment: every deployment there uses them,
+    # and Trapper only accepts a package that declares the same. A location is UTC, with summer time followed, unless it says otherwise: the cameras'
+    # clocks are taken as UTC, and the time of a field visit is read in the timezone of its location.
+    timezone: Optional[str] = DEFAULT_TIMEZONE
+    ignore_dst: Optional[bool] = False
     # Where it is — WGS84 decimal degrees, as in Camtrap DP's deployments table.
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
@@ -301,11 +305,21 @@ class LocationRecord(BaseModel):
     status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     status_note: Optional[str] = None
 
+    @field_validator("ignore_dst", mode="before")
+    @classmethod
+    def _dst_unknown_is_followed(cls, value):
+        return False if value is None else value
+
+    @field_validator("timezone", mode="before")
+    @classmethod
+    def _unset_timezone_is_the_default(cls, value):
+        return value or DEFAULT_TIMEZONE
+
     @field_validator("timezone")
     @classmethod
     def _known_timezone(cls, value: Optional[str]) -> Optional[str]:
         if not value:
-            return None
+            return DEFAULT_TIMEZONE
         try:
             ZoneInfo(value)
         except (ZoneInfoNotFoundError, ValueError) as exc:

@@ -266,7 +266,8 @@ The **research project** the images belong to, and where they were taken. They a
 
 - **By hand** — the project's name and acronym (which names its folder); a location's id, name,
   latitude, longitude, coordinate uncertainty, **timezone** and whether its cameras ignore summer
-  time.
+  time. A new location is **UTC, following summer time**, unless you say otherwise: the cameras' clocks are taken as UTC, and
+  the time of a field visit is read in the timezone of its location.
 - **From Trapper** — pick the project, or its locations, from your Trapper account and they are
   copied here, with their coordinates and timezone. The app connects by itself with the account
   saved in the settings — it never asks for the credentials again; if there isn't one, it says so.

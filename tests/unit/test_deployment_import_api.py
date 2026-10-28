@@ -454,14 +454,15 @@ def test_a_location_needs_its_research_project_to_be_there(tmp_path: Path):
     assert "isn't in the collections folder" in response.json()["detail"]
 
 
-def test_a_location_timezone_must_be_a_known_one_and_a_blank_one_is_none(tmp_path: Path):
+def test_a_location_timezone_must_be_a_known_one_and_a_blank_one_is_utc_following_summer_time(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         bad = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_01", "timezone": "Mars/Olympus"}})
         blank = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_02", "timezone": ""}})
 
     assert bad.status_code == 422
-    assert blank.status_code == 200 and blank.json()["timezone"] is None
+    # a location says nothing of its clock: its cameras are taken as UTC, with summer time followed (as the field records assume)
+    assert blank.status_code == 200 and (blank.json()["timezone"], blank.json()["ignore_dst"]) == ("UTC", False)
 
 
 def test_locations_of_a_research_project_id_that_is_not_a_folder_name_are_refused(tmp_path: Path):

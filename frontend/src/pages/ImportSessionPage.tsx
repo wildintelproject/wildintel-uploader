@@ -53,7 +53,7 @@ interface Outcome<T> { result?: T; error?: string }
 
 interface ImportRun { events: ImportEvent[]; done: boolean; error?: string; destDir?: string }
 
-const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', ignore_dst: true, latitude: '', longitude: '' }
+const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: 'UTC', ignore_dst: false, latitude: '', longitude: '' }
 
 /** The location a subfolder is named after — "DONA_01" for the folder "DONA_01", "R0003-DONA_01" or "dona_01 (2)" —
  * when there is exactly one such. */

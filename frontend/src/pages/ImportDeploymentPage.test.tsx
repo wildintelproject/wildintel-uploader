@@ -224,6 +224,8 @@ async function addLocationByHand(locationId = 'DONA_01', name = 'Doñana site 1'
   await userEvent.type(screen.getByLabelText('Location name (optional)'), name)
   await userEvent.type(screen.getByLabelText('Latitude'), '37.0')
   await userEvent.type(screen.getByLabelText('Longitude'), '-6.5')
+  // a new location starts as UTC, following summer time: another timezone replaces it, and a blank one leaves none
+  await userEvent.clear(screen.getByLabelText('Timezone (IANA)'))
   if (timezone) await userEvent.type(screen.getByLabelText('Timezone (IANA)'), timezone)
   await userEvent.click(screen.getByRole('button', { name: 'Save location' }))
   await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
@@ -832,7 +834,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Save location' }))
 
         expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
-          location_id: 'DONA_02', name: null, timezone: null, ignore_dst: true, latitude: 37.1, longitude: -6.4, coordinate_uncertainty: 100, trapper_pk: null,
+          location_id: 'DONA_02', name: null, timezone: 'UTC', ignore_dst: false, latitude: 37.1, longitude: -6.4, coordinate_uncertainty: 100, trapper_pk: null,
         })
         await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled()) // picked
         expect(screen.getByLabelText('Location')).toHaveValue('DONA_02')
@@ -858,6 +860,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(screen.getByRole('button', { name: /add a new location/i }))
         await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
         await userEvent.type(screen.getByLabelText('Location id'), 'DONA_02')
+        await userEvent.clear(screen.getByLabelText('Timezone (IANA)'))
         await userEvent.type(screen.getByLabelText('Timezone (IANA)'), 'Mars/Olympus')
 
         expect(screen.getByText('Not a known IANA timezone (e.g. Europe/Madrid).')).toBeInTheDocument()
@@ -1923,7 +1926,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
 
-      expect(screen.getByText(/as the camera.s local time in/)).toHaveTextContent('Europe/Madrid, ignoring summer time, converted to UTC')
+      expect(screen.getByText(/as the camera.s local time in/)).toHaveTextContent('Europe/Madrid, converted to UTC') // a new location follows summer time
 
     })
 
@@ -2560,7 +2563,7 @@ describe('ImportDeploymentPage', () => {
       expect(screen.queryByLabelText('Timezone (IANA)')).not.toBeInTheDocument()
       expect(screen.queryByRole('checkbox', { name: /ignore summer time/ })).not.toBeInTheDocument()
       expect(screen.getByText(/Tell us when the images of/)).toBeInTheDocument()
-      expect(screen.getByText(/which has no daylight saving time/)).toBeInTheDocument()
+      expect(screen.getByText(/which follows daylight saving time/)).toBeInTheDocument()
       for (const bold of ['DONA_01', 'Europe/Madrid']) expect(screen.getAllByText(bold).some((el) => el.tagName === 'STRONG')).toBe(true)
     })
 

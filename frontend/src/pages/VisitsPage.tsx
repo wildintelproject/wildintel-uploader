@@ -412,7 +412,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     if (!project || site.latitude == null || site.longitude == null) return
     setCsvError(null)
     try {
-      await api.saveLocalLocation(project.acronym, { location_id: site.site, name: site.site, timezone: null, latitude: site.latitude, longitude: site.longitude, coordinate_uncertainty: null, trapper_pk: null })
+      await api.saveLocalLocation(project.acronym, { location_id: site.site, name: site.site, timezone: 'UTC', ignore_dst: false, latitude: site.latitude, longitude: site.longitude, coordinate_uncertainty: null, trapper_pk: null })
       await recheckCsv()
     } catch (e) {
       setCsvError(e instanceof Error ? e.message : `Could not add ${site.site} as a location.`)

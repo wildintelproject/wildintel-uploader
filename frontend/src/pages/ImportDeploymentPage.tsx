@@ -504,7 +504,7 @@ export const visitKey = (c: ClosedVisit) => `${c.visit.location_id}|${c.visit.da
 export const visitLabel = (c: ClosedVisit) =>
   `${c.visit.date} ${c.visit.time} · ${c.visit.location_id} · ${c.visit.session} · ${c.visit.actions.join(' + ')}${c.visit.sd ? ` · card ${c.visit.sd}` : ''} · collected on ${c.end.date}${c.end.num_photos != null ? ` (${c.end.num_photos} photos)` : ''}`
 
-export const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: '', ignore_dst: true, latitude: '', longitude: '', coordinate_uncertainty: '' }
+export const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: 'UTC', ignore_dst: false, latitude: '', longitude: '', coordinate_uncertainty: '' }
 
 export const ORIGIN_SOURCE_OPTIONS: Option<OriginSource>[] = [
   { value: 'trapper', emoji: '🪤', title: 'From Trapper', description: 'Connect to Trapper and pick one — its fields fill in the form.', available: true },
