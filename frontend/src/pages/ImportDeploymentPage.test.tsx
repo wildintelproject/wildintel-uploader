@@ -464,6 +464,8 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Continue to more details' }))
         expect(await screen.findByRole('radio', { name: 'What the field sheet says' })).toBeChecked()
         expect(screen.getByText(/The visits \(the field sheet\) are not changed/)).toBeInTheDocument()
+        expect(screen.getByRole('radio', { name: 'What the previous deployment says' })).toBeDisabled() // none on file
+        expect(screen.getByText(/No earlier revision of DONA_01 is on file/)).toBeInTheDocument()
         expect(screen.getByText('5 fields found')).toBeInTheDocument() // camera id and model, set up by, height, bait
         expect(screen.getByText(/as it was written in the field: the camera, who set it up, mounting and site\./)).toBeInTheDocument()
         await openSection(/^Camera/); await openSection(/^Site/); await openSection(/^Grouping and notes/)

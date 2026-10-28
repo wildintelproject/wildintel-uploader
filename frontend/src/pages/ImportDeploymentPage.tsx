@@ -2835,21 +2835,23 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
               <FormCard title="Where do they come from?" description="Pick one. Each option shows what it found, and you can change anything afterwards by filling them in by hand.">
                 <div role="radiogroup" aria-label="Source of the details" className="space-y-2">
                   {([
-                    ...(linkedVisit ? [{ source: 'visit' as const, title: 'What the field sheet says', found: visitFound,
-                      hint: `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), as it was written in the field${visitFound.parts ? `: ${visitFound.parts}` : ''}. The visits (the field sheet) are not changed.` }] : []),
-                    ...(previousRevision ? [{ source: 'previous' as const, title: 'What the previous deployment says', found: previousFound,
-                      hint: `From ${previousRevision.deployment_id}, the previous deployment at this location${previousFound.parts ? `: ${previousFound.parts}` : ''}. Dates are never copied.` }] : []),
-                    { source: 'manual' as const, title: 'Fill in by hand', found: null, hint: 'Type them yourself, starting from the values the last source gave.' },
+                    { source: 'visit' as const, title: 'What the field sheet says', found: linkedVisit ? visitFound : null, available: Boolean(linkedVisit),
+                      hint: linkedVisit ? `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), as it was written in the field${visitFound.parts ? `: ${visitFound.parts}` : ''}. The visits (the field sheet) are not changed.`
+                        : 'No visit is linked to this deployment: choose a closed visit in the origin.' },
+                    { source: 'previous' as const, title: 'What the previous deployment says', found: previousRevision ? previousFound : null, available: Boolean(previousRevision),
+                      hint: previousRevision ? `From ${previousRevision.deployment_id}, the previous deployment at this location${previousFound.parts ? `: ${previousFound.parts}` : ''}. Dates are never copied.`
+                        : `No earlier revision of ${deployment.location_id || 'this location'} is on file.` },
+                    { source: 'manual' as const, title: 'Fill in by hand', found: null, available: true, hint: 'Type them yourself, starting from the values the last source gave.' },
                   ]).map((o) => (
-                    <label key={o.source} className={`block rounded-xl border px-4 py-3 cursor-pointer ${detailsSource === o.source ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700'}`}>
+                    <label key={o.source} className={`block rounded-xl border px-4 py-3 ${o.available ? 'cursor-pointer' : 'opacity-60'} ${detailsSource === o.source ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700'}`}>
                       <span className="flex items-start gap-3">
-                        <input type="radio" className="mt-1" name="details-source" aria-label={o.title} checked={detailsSource === o.source} onChange={() => pickDetailsSource(o.source)} />
+                        <input type="radio" className="mt-1" name="details-source" aria-label={o.title} disabled={!o.available} checked={detailsSource === o.source} onChange={() => pickDetailsSource(o.source)} />
                         <span className="flex-1 min-w-0">
                           <span className="flex items-center justify-between gap-3">
                             <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{o.title}</span>
-                            {o.found && (
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${o.found.count > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>
-                                {o.found.count > 0 ? `${o.found.count} ${o.found.count === 1 ? 'field' : 'fields'} found` : 'Nothing found'}
+                            {(o.found || !o.available) && (
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${o.found && o.found.count > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>
+                                {o.found && o.found.count > 0 ? `${o.found.count} ${o.found.count === 1 ? 'field' : 'fields'} found` : 'Nothing found'}
                               </span>
                             )}
                           </span>
