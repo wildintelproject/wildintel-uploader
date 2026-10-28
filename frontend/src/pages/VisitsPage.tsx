@@ -631,6 +631,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 )}
               </FormCard>
 
+              <MoreDetailsForm deployment={visit.details} errors={moreErrors} onField={setDetail} camtrapTags
+                afterCamera={(
               <SectionCard
                 title="SD card" icon={SD_ICON} total={sdValues.length} filled={sdValues.filter((v) => v.trim()).length}
                 summary={[on(asked.sdLeft) && visit.sd.trim() && `left ${visit.sd.trim()}`, on(asked.photos) && visit.numPhotos.trim() && `${visit.numPhotos.trim()} photos`, on(asked.card) && `card ${visit.card === 'Full' ? 'full' : 'OK'}`].filter(Boolean).join(' · ')}
@@ -664,8 +666,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   <SwitchRow label="Card OK" hint="Off if the card was full." checked={visit.card === 'OK'} disabled={asked.card === 'off'} onChange={(on) => set('card', on ? 'OK' : 'Full')} />
                 </div>
               </SectionCard>
-
-              <MoreDetailsForm deployment={visit.details} errors={moreErrors} onField={setDetail} camtrapTags
+                )}
                 cameraPicker={(
                   <div>
                     <div className="flex items-baseline gap-2 mb-1.5">

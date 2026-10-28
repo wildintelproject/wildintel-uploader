@@ -828,13 +828,15 @@ function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, 
 const TILTS: { label: string; degrees: number }[] = [{ label: 'Down −90°', degrees: -90 }, { label: 'Level 0°', degrees: 0 }, { label: 'Up 90°', degrees: 90 }]
 
 /** The optional details of a deployment — its camera, its site, its groups, tags and comments — as three cards, every field in view. */
-export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraPicker, camtrapTags = false }: {
+export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraPicker, afterCamera, camtrapTags = false }: {
   deployment: DeploymentFields; errors: ReturnType<typeof shownErrors>
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
   /** More fields for the Camera card, of the page that uses the form: how many there are, how many are filled in, and the fields themselves. */
   cameraExtra?: { total: number; filled: number; children: ReactNode }
   /** What stands in the Camera card for the camera model and the camera id: a page that keeps its cameras asks for one of them instead. */
   cameraPicker?: ReactNode
+  /** A card of the page that comes right after the Camera card. */
+  afterCamera?: ReactNode
   /** Tags each field of the form as one of Camtrap DP's — for a page that asks for fields that are not, beside them. */
   camtrapTags?: boolean
 }) {
@@ -917,6 +919,9 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
           </>
         )}
       </SectionCard>
+
+      {/* what the page puts here is its own, not Camtrap DP's */}
+      {afterCamera && <CamtrapDpContext.Provider value={false}>{afterCamera}</CamtrapDpContext.Provider>}
 
       <SectionCard title="Site" icon={site.icon} total={5} summary={siteSummary} filled={count([deployment.feature_type, deployment.habitat, deployment.setup_by, deployment.bait_use, deployment.timestamp_issues])}>
         <p className="flex items-baseline gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">What is the camera aimed at?<CamtrapDpTag /></p>
