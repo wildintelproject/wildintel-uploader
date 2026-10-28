@@ -68,6 +68,48 @@ def collection_code(deployment_id: str) -> str:
     return match.group(1)
 
 
+def _utc(iso: str | None) -> str:
+    """An ISO date-time as UTC with a Z — a time with no designator is already UTC. Empty when there is none."""
+    if not iso:
+        return ""
+    when = datetime.fromisoformat(iso)
+    if when.tzinfo is not None:
+        when = when.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    return when.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _cell(value) -> str:
+    """A field of the fieldwork log as written: Camtrap DP's true/false for a yes/no, a list's values apart by " | "."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return " | ".join(str(v) for v in value)
+    return str(getattr(value, "value", value))
+
+
+def fieldwork_log_row(deployment: DeploymentFields, visits: dict | None = None) -> dict:
+    """A deployment's row of the collection's FieldworkLog: its fields as Camtrap DP names them, in UTC, and — when it is of
+    visits — their sessions and actions, the card and the photos counted. `visits` is the FieldworkVisits of the request, as a dict."""
+    visits = visits or {}
+    d = deployment
+    return {
+        "deploymentID": d.deployment_id, "locationID": d.location_id or "",
+        "deploymentStart": _utc(d.start_date), "deploymentEnd": _utc(d.end_date),
+        "setupBy": _cell(d.setup_by), "cameraID": _cell(d.camera_id), "cameraModel": _cell(d.camera_model),
+        "cameraDelay": _cell(d.camera_interval), "cameraHeight": _cell(d.camera_height), "cameraDepth": _cell(d.camera_depth),
+        "cameraTilt": _cell(d.camera_tilt), "cameraHeading": _cell(d.camera_heading), "detectionDistance": _cell(d.detection_distance),
+        "timestampIssues": _cell(d.timestamp_issues), "baitUse": _cell(d.bait_use), "featureType": _cell(d.feature_type),
+        "habitat": _cell(d.habitat), "deploymentGroups": _cell(d.deployment_groups), "deploymentTags": _cell(d.tags),
+        "deploymentComments": _cell(d.comments), "status": "closed" if d.end_date else "open",
+        "collection": d.deployment_id.split("-", 1)[0], "cardSD": _cell(visits.get("sd_card") or visits.get("left_sd")),
+        "photosCounted": _cell(visits.get("counted_photos")),
+        "startSession": _cell(visits.get("left_session")), "startAction": _cell(visits.get("left_action")),
+        "endSession": _cell(visits.get("collected_session")), "endAction": _cell(visits.get("collected_action")),
+    }
+
+
 def default_collection_dir(research_project_id: str, deployment_id: str) -> Path:
     """Where a deployment's collection lives locally by default:
     <collections folder>/<research project id>/<R0003>. Every collection is

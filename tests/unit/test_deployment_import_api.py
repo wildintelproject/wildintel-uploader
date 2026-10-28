@@ -641,9 +641,40 @@ def test_timestamp_log_writes_the_deployments_row_in_its_collection(tmp_path: Pa
 
     log = tmp_path / "DONA" / "R0003" / "R0003_FileTimestampLog.csv"
     assert response.status_code == 200
-    assert response.json() == {"path": str(log), "action": "added", "rows": 1, "collection": "R0003"}
+    fieldwork = tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv"
+    assert response.json() == {"path": str(log), "action": "added", "rows": 1, "collection": "R0003",
+                               "fieldwork_log": {"path": str(fieldwork), "action": "added", "rows": 1}}
     # The camera's wall-clock time: the designators (+02:00, +01:00) are dropped, not converted.
     assert log.read_text(encoding="utf-8-sig").splitlines()[1] == "r0003-dona_0007_b,2024:09:04,13:10:00,2024:11:04,14:28:00"
+
+
+def test_timestamp_log_writes_the_deployments_row_in_the_fieldwork_log_too_in_utc(tmp_path: Path):
+    payload = _log_payload(setup_by="Ana", camera_id="P800", camera_height=1.2, bait_use=True, tags=["forest", "pine"], comments="Near the pond")
+    payload["visits"] = {"left_session": "R0003", "left_action": "Revision", "collected_session": "R0004", "collected_action": "Revision",
+                         "counted_photos": 241, "sd_card": "A13", "left_sd": "B2"}
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/timestamp-log", json=payload)
+
+    lines = (tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv").read_text(encoding="utf-8-sig").splitlines()
+    header, row = lines[0].split(","), dict(zip(lines[0].split(","), next(__import__("csv").reader([lines[1]]))))
+    assert header[:6] == ["deploymentID", "locationID", "deploymentStart", "deploymentEnd", "setupBy", "cameraID"]
+    assert row["deploymentID"] == "R0003-DONA_0007_B"
+    assert (row["deploymentStart"], row["deploymentEnd"]) == ("2024-09-04T11:10:00Z", "2024-11-04T13:28:00Z")  # the designators, converted to UTC
+    assert (row["setupBy"], row["cameraID"], row["cameraHeight"], row["baitUse"]) == ("Ana", "P800", "1.2", "true")
+    assert (row["deploymentTags"], row["deploymentComments"], row["status"], row["collection"]) == ("forest | pine", "Near the pond", "closed", "R0003")
+    assert (row["cardSD"], row["photosCounted"]) == ("A13", "241")
+    assert (row["startSession"], row["startAction"], row["endSession"], row["endAction"]) == ("R0003", "Revision", "R0004", "Revision")
+
+
+def test_the_fieldwork_log_keeps_the_other_deployments_rows_and_replaces_its_own(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_01"))
+        _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_02"))
+        again = _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_01", habitat="Pine forest"))
+
+    log = tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv"
+    assert again.json()["fieldwork_log"]["action"] == "updated" and again.json()["fieldwork_log"]["rows"] == 2
+    assert "Pine forest" in log.read_text(encoding="utf-8-sig") and log.read_text(encoding="utf-8-sig").count("R0003-DONA_0") == 2
 
 
 def test_timestamp_log_says_updated_then_unchanged(tmp_path: Path):

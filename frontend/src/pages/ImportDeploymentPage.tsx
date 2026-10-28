@@ -13,7 +13,7 @@ import Combobox from '../components/Combobox'
 import OptionCards from '../components/OptionCards'
 import type { Option } from '../components/OptionCards'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
-import type { ClosedVisit, ClosedVisitTarget, SdCard, StoredVisit } from '../types'
+import type { ClosedVisit, ClosedVisitTarget, FieldworkVisits, SdCard, StoredVisit } from '../types'
 import { applyEntry, entryLabel, entryPeriod } from '../epicollectImport'
 import DateSourcePicker from '../components/DateSourcePicker'
 import TimeFixPage from './TimeFixPage'
@@ -492,6 +492,12 @@ export function fillFromVisit(d: DeploymentFields, start: StoredVisit): Deployme
     tags: start.tags?.length ? start.tags : d.tags,
   }
 }
+
+/** What a closed visit says of the deployment it gave, for the collection's FieldworkLog. */
+export const fieldworkVisits = (c: ClosedVisit, sdCard: string): FieldworkVisits => ({
+  left_session: c.visit.session, left_action: c.visit.actions.join(' + '), left_sd: c.visit.sd ?? null,
+  collected_session: c.end.session, collected_action: c.end.actions.join(' + '), counted_photos: c.end.num_photos ?? null, sd_card: sdCard || null,
+})
 
 /** A closed visit as an option: when it was, where, which session, what was done there, and when its card was collected — and how many photos it had. */
 export const visitKey = (c: ClosedVisit) => `${c.visit.location_id}|${c.visit.date}|${c.visit.time}`
@@ -2170,8 +2176,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
       try { await api.saveDetails(taskId, deployment) } catch { /* best-effort */ }
     }
     try {
-      // The collection's FileTimestampLog — wildintel-tools' file, one row per deployment — before the postvalidation.
-      await api.writeTimestampLog(researchProjectId, deployment)
+      // The collection's FileTimestampLog — wildintel-tools' file, one row per deployment — and its FieldworkLog, before the postvalidation.
+      await (linkedVisit ? api.writeTimestampLog(researchProjectId, deployment, fieldworkVisits(linkedVisit, sdCard)) : api.writeTimestampLog(researchProjectId, deployment))
     } catch (e) {
       setTimestampLogError(e instanceof Error ? e.message : 'Could not write the collection\'s timestamp log.')
       setSavingDetails(false)

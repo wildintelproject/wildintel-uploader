@@ -219,6 +219,18 @@ export interface VisitCheckInfo {
   sd_card: string | null
 }
 
+/** What the visits a deployment is of say of it, for the collection's FieldworkLog: the one that left the camera and the one that collected its card. */
+export interface FieldworkVisits {
+  left_session: string | null
+  left_action: string | null
+  left_sd: string | null
+  collected_session: string | null
+  collected_action: string | null
+  counted_photos: number | null
+  /** The card the images are said to come from. */
+  sd_card: string | null
+}
+
 export interface DeploymentCheckResult {
   checked_count: number
   deployment_id?: NameCheck

@@ -3,8 +3,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm,
-} from './types'
+  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
 async function errorMessage(r: Response): Promise<string> {
@@ -230,9 +229,10 @@ export const api = {
       visit: options.visit ?? null,
     }),
 
-  // Puts the deployment's start and end in its collection's <collection>_FileTimestampLog.csv — before the postvalidation.
-  writeTimestampLog: (researchProjectId: string, deployment: DeploymentFields) =>
-    post<TimestampLogResult>('/api/deployment-import/timestamp-log', { research_project_id: researchProjectId, deployment }),
+  // Puts the deployment's start and end in its collection's <collection>_FileTimestampLog.csv — before the postvalidation — and its
+  // row in the <collection>_FieldworkLog.csv, with what the visits it is of say of it.
+  writeTimestampLog: (researchProjectId: string, deployment: DeploymentFields, visits?: FieldworkVisits) =>
+    post<TimestampLogResult>('/api/deployment-import/timestamp-log', { research_project_id: researchProjectId, deployment, visits: visits ?? null }),
 
   importDeployment: (
     creds: TrapperCredentials, researchProjectPk: number, classificationProjectPk: number | null,

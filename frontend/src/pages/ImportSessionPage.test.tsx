@@ -1178,6 +1178,20 @@ describe('an import session of visits', () => {
     expect(mockedApi.linkVisit).toHaveBeenCalledWith('DONA', CLOSED[1].visit, 'R0002-DONA_02')
   })
 
+  it('writes each deployment of the session into the collection\'s logs with what its visit says of it', async () => {
+    await toTheFolders()
+    await userEvent.selectOptions(screen.getByLabelText('SD card of DONA_01'), 'B2')
+    await next()
+    await screen.findByLabelText('What revision number are you importing?')
+    await toMoreDetailsSubstep()
+    await next() // dates → checks
+
+    await waitFor(() => expect(mockedApi.writeTimestampLog).toHaveBeenCalledTimes(2))
+    expect(mockedApi.writeTimestampLog.mock.calls[0][2]).toEqual({
+      left_session: 'R0002', left_action: 'Revision', left_sd: 'A13', collected_session: 'R0003', collected_action: 'Revision', counted_photos: 10, sd_card: 'B2',
+    })
+  })
+
   it('has no checks against the visits when the session is not of visits', async () => {
     mockedApi.closedVisits.mockResolvedValue({ results: [] })
     await toOrigin()

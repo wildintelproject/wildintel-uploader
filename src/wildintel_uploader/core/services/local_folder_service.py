@@ -482,3 +482,77 @@ def upsert_timestamp_log(collection_dir: Path, deployment_id: str, start: dateti
             writer.writeheader()
             writer.writerows(rows)
     return {"path": str(path), "action": action, "rows": len(rows)}
+
+
+# ── The collection's fieldwork log ──────────────────────────────────────────
+#
+# <collection>/<collection>_FieldworkLog.csv, beside the timestamp log: one row per deployment with its fields named as Camtrap DP
+# names them, what the visits say of it (the sessions and the actions of the visit that left the camera and of the one that
+# collected its card), the SD card and the photos counted on it. Times are UTC, with a Z.
+
+FIELDWORK_LOG_SUFFIX = "_FieldworkLog.csv"
+FIELDWORK_LOG_FIELDS = [
+    "deploymentID", "locationID", "deploymentStart", "deploymentEnd", "setupBy", "cameraID",
+    "cameraModel", "cameraDelay", "cameraHeight", "cameraDepth", "cameraTilt", "cameraHeading", "detectionDistance",
+    "timestampIssues", "baitUse", "featureType", "habitat", "deploymentGroups", "deploymentTags",
+    "deploymentComments", "status", "collection", "cardSD", "photosCounted", "startSession", "startAction", "endSession", "endAction",
+]
+
+
+def fieldwork_log_path(collection_dir: Path) -> Path:
+    """<collection>/<collection>_FieldworkLog.csv."""
+    return collection_dir / f"{collection_dir.name}{FIELDWORK_LOG_SUFFIX}"
+
+
+def read_fieldwork_log(path: Path) -> list[dict]:
+    """The rows of a fieldwork log — none if there isn't one yet.
+
+    Raises:
+        LocalFolderError: it exists but can't be read as one (no header, or no deploymentID column).
+    """
+    if not path.is_file():
+        return []
+    try:
+        with path.open(newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            if not reader.fieldnames:
+                raise LocalFolderError(f"{path.name} has no header row.")
+            if "deploymentID" not in reader.fieldnames:
+                raise LocalFolderError(f"{path.name} is missing the column: deploymentID.")
+            return [{name: (row.get(name) or "").strip() for name in FIELDWORK_LOG_FIELDS} for row in reader if (row.get("deploymentID") or "").strip()]
+    except (OSError, UnicodeDecodeError, csv.Error) as exc:
+        raise LocalFolderError(f"Could not read {path.name}: {exc}") from exc
+
+
+def upsert_fieldwork_log(collection_dir: Path, row: dict) -> dict:
+    """Puts a deployment's row in its collection's fieldwork log, creating the collection folder and the log if need be. Its own row
+    (compared ignoring case) is replaced and the others stay; a field the row does not give is written empty.
+
+    Returns {"path", "action": "added" | "updated" | "unchanged", "rows"}.
+
+    Raises:
+        LocalFolderError: the log that's there can't be read — it is left as it is — or the row has no deploymentID.
+    """
+    deployment_id = str(row.get("deploymentID") or "").strip()
+    if not deployment_id:
+        raise LocalFolderError("A row of the fieldwork log needs its deploymentID.")
+    path = fieldwork_log_path(collection_dir)
+    rows = read_fieldwork_log(path)
+    new_row = {name: str(row.get(name) if row.get(name) is not None else "") for name in FIELDWORK_LOG_FIELDS}
+    index = next((i for i, r in enumerate(rows) if r["deploymentID"].upper() == deployment_id.upper()), None)
+    if index is None:
+        rows.append(new_row)
+        action = "added"
+    elif rows[index] == new_row:
+        action = "unchanged"
+    else:
+        rows[index] = new_row
+        action = "updated"
+    if not collection_dir.is_dir():
+        write_collection_metadata(collection_dir, collection_dir.name)
+    if action != "unchanged" or not path.is_file():
+        with path.open("w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(f, fieldnames=FIELDWORK_LOG_FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+    return {"path": str(path), "action": action, "rows": len(rows)}

@@ -23,7 +23,7 @@ import {
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
   DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, statParamsOf, statParamsValid, toggled, fillFromVisit, visitKey, visitLabel,
-  FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound,
+  FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound, fieldworkVisits,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
 
@@ -708,11 +708,14 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     }
   }
 
-  /** Each deployment's row goes into its collection's FileTimestampLog before the postvalidation. */
+  /** Each deployment's row goes into its collection's FileTimestampLog and FieldworkLog before the postvalidation. */
   async function handleContinueFromDetails() {
     setSavingDetails(true); setDetailsError(null)
     try {
-      for (const d of chosen) await api.writeTimestampLog(projectId, fieldsOf(d.name))
+      for (const d of chosen) {
+        const linked = visitOf(d.name)
+        await (linked ? api.writeTimestampLog(projectId, fieldsOf(d.name), fieldworkVisits(linked, folderSd[d.name] ?? '')) : api.writeTimestampLog(projectId, fieldsOf(d.name)))
+      }
     } catch (e) {
       setDetailsError(e instanceof Error ? e.message : "Could not write the collection's timestamp log.")
       setSavingDetails(false)

@@ -442,11 +442,26 @@ class UpdateLocationRequest(LocalLocationsRequest):
         return value
 
 
+class FieldworkVisits(BaseModel):
+    """What the visits a deployment is of say of it, for the FieldworkLog: the one that left the camera and the one that collected its card."""
+
+    left_session: str | None = None
+    left_action: str | None = None
+    collected_session: str | None = None
+    collected_action: str | None = None
+    counted_photos: int | None = None
+    #: The card the images are said to come from; the card the visit left when none is said.
+    sd_card: str | None = None
+    left_sd: str | None = None
+
+
 class TimestampLogRequest(BaseModel):
-    """Put a deployment's start and end in its collection's FileTimestampLog."""
+    """Put a deployment's start and end in its collection's FileTimestampLog — and its row in the FieldworkLog."""
 
     research_project_id: str = Field(min_length=1)
     deployment: DeploymentFields
+    #: The visits the deployment is of, when it is of some.
+    visits: FieldworkVisits | None = None
 
 
 class CollectionPathRequest(BaseModel):

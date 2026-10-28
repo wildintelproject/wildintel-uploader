@@ -138,8 +138,9 @@ def exiftool() -> dict:
 @router.post("/timestamp-log")
 def timestamp_log(req: TimestampLogRequest) -> dict:
     """Puts the deployment's start and end in its collection's <collection>_FileTimestampLog.csv —
-    wildintel-tools' file, one row per deployment — before the postvalidation. The collection is
-    the one the deployment id names, in the research project's folder."""
+    wildintel-tools' file, one row per deployment — before the postvalidation, and its row in the
+    <collection>_FieldworkLog.csv beside it: its fields as Camtrap DP names them, in UTC, and what the
+    visits it is of say of it. The collection is the one the deployment id names, in the research project's folder."""
     try:
         collection = deployment_import_service.default_collection_dir(req.research_project_id, req.deployment.deployment_id)
         if local_folder_service.is_synced(collection / req.deployment.deployment_id):
@@ -147,7 +148,10 @@ def timestamp_log(req: TimestampLogRequest) -> dict:
         # The camera's wall-clock time: what the images' EXIF holds, whatever the designator says.
         start = datetime.fromisoformat(req.deployment.start_date).replace(tzinfo=None)
         end = datetime.fromisoformat(req.deployment.end_date).replace(tzinfo=None)
-        return {**local_folder_service.upsert_timestamp_log(collection, req.deployment.deployment_id, start, end), "collection": collection.name}
+        result = local_folder_service.upsert_timestamp_log(collection, req.deployment.deployment_id, start, end)
+        fieldwork = local_folder_service.upsert_fieldwork_log(
+            collection, deployment_import_service.fieldwork_log_row(req.deployment, req.visits.model_dump() if req.visits else None))
+        return {**result, "collection": collection.name, "fieldwork_log": fieldwork}
     except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
         raise HTTPException(400, str(exc)) from exc
 

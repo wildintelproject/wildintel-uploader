@@ -541,6 +541,10 @@ describe('ImportDeploymentPage', () => {
         it('adds two checks to the details of a deployment of a visit: the card and the number of photos, as strict as the others', async () => {
           await toTheChecks('A13', 12)
 
+          // the collection's FieldworkLog gets what the visits say of the deployment
+          expect(mockedApi.writeTimestampLog).toHaveBeenCalledWith('DONA', expect.anything(), expect.objectContaining({
+            left_session: 'R0001', left_action: 'Installation', left_sd: 'A13', collected_session: 'R0002', collected_action: 'Revision', counted_photos: 12, sd_card: 'A13',
+          }))
           expect(screen.getByRole('radiogroup', { name: STRICT_CARD })).toBeInTheDocument()
           expect(screen.getByRole('radiogroup', { name: STRICT_PHOTOS })).toBeInTheDocument()
           await chooseStrictness('The SD card is the one the visit left', 'Must pass')
