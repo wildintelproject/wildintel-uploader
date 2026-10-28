@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* DM Sans for all the text, DM Mono only for identifiers, paths, raw dates and codes (the `font-mono` class). Both come from Google Fonts (index.html). */
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 /* Class-based dark mode: add .dark to <html> */
 @custom-variant dark (&:where(.dark, .dark *));
 
