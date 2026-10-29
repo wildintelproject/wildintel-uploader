@@ -242,12 +242,15 @@ def new_site(site: str, visits: list[dict], known: list[dict]) -> dict:
 
 def refusals(visit: dict, kept: list[dict], locations: list[dict]) -> list[str]:
     """Why a visit made by hand cannot be kept: its site is not a location of the research project, it is already kept (the same site, day and time),
-    it lacks what its actions ask, or its camera or card are not where it says. Empty when it can be kept."""
+    it is the first to its site and not an Installation, it lacks what its actions ask, or its camera or card are not where it says. Empty when it can be kept."""
     reasons = []
     if not any(_same(l.get("location_id"), visit["location_id"]) for l in locations):
         reasons.append(f"The site '{visit['location_id']}' is not a location of the research project.")
     if any(_same(v["location_id"], visit["location_id"]) and v.get("date") == visit["date"] and v.get("time") == visit["time"] for v in kept):
         reasons.append(f"There is already a visit to {visit['location_id']} on {visit['date']} at {visit['time']}.")
+    # The first visit to a site puts the camera up: nothing else can be done where no camera is known to be.
+    if not any(_same(v["location_id"], visit["location_id"]) and _stamp(v) < _stamp(visit) for v in kept) and list(visit.get("actions") or []) != ["Installation"]:
+        reasons.append(f"The first visit to {visit['location_id']} can only be an Installation.")
     reasons += required_errors(visit).values()
     reasons += availability_errors(kept, visit).values()
     return reasons

@@ -409,7 +409,7 @@ def test_updating_a_location_that_is_not_there_is_a_404_and_a_bad_timezone_a_422
 
 
 def test_a_location_is_deleted_unless_it_has_visits_or_comes_from_trapper(tmp_path: Path):
-    visit = {"location_id": "DONA_02", "session": "R0001", "date": "2026-10-02", "time": "08:14:05", "actions": ["Revision"], "camera_id": "12", "num_photos": 10}
+    visit = {"location_id": "DONA_02", "session": "R0001", "date": "2026-10-02", "time": "08:14:05", "actions": ["Installation"], "camera_id": "12", "sd": "A13"}
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         for location in ({"location_id": "DONA_01"}, {"location_id": "DONA_02"}, {"location_id": "DONA_03", "trapper_pk": 7}):

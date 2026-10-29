@@ -171,12 +171,13 @@ export function sessionName(text: string): string | null {
 
 type ErrorKey = Exclude<keyof Visit, 'details'> | 'camera'
 
-/** What is wrong with a visit, by field — nothing when it can be added. */
-export function visitErrors(v: Visit): Partial<Record<ErrorKey, string>> {
+/** What is wrong with a visit, by field — nothing when it can be added. The first visit to a site (`first`) can only be an Installation. */
+export function visitErrors(v: Visit, first = false): Partial<Record<ErrorKey, string>> {
   const errors: Partial<Record<ErrorKey, string>> = {}
   if (!v.when) errors.when = 'Required.'
   if (!v.site.trim()) errors.site = 'Required.'
   if (v.actions.length === 0) errors.actions = 'Choose at least one.'
+  else if (first && (v.actions.length !== 1 || v.actions[0] !== 'Installation')) errors.actions = 'The first visit to a site can only be an Installation.'
   const asked = fieldsFor(v.actions)
   if (asked.photos !== 'off') {
     if (!v.numPhotos.trim()) { if (asked.photos === 'required') errors.numPhotos = 'Required.' }
@@ -324,7 +325,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     const known = allCameras.find((c) => cameraKey(c).toLowerCase() === siteCamera.camera.toLowerCase() || c.label.toLowerCase() === siteCamera.camera.toLowerCase())
     setVisit((v) => ({ ...v, details: { ...v.details, camera_id: known ? cameraKey(known) : siteCamera.camera, camera_model: known?.camera_model ?? v.details.camera_model } }))
   }, [ofTheSiteCamera, siteCamera?.camera, visit.details.camera_id]) // eslint-disable-line react-hooks/exhaustive-deps
-  const errors = { ...visitErrors(visit), ...conflicts }
+  const errors = { ...visitErrors(visit, kept?.length === 0), ...conflicts }
   const moreErrors = detailsErrors(visit.details)
   const shown = (field: ErrorKey) => (tried ? errors[field] : undefined)
   // What the visit needs and does not have yet is in red from the start, not only once adding it was tried.
@@ -687,9 +688,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     {shown('actions') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('actions')}</p>}
                   </fieldset>
                 </div>
-                {kept && kept.length === 0 && visit.actions.length > 0 && !visit.actions.includes('Installation') && (
-                  <p role="status" className="mt-3 text-xs text-amber-600 dark:text-amber-400">
-                    This is the first visit to {visit.site}, and the first one is usually an Installation: no camera is known to be there yet.
+                {kept && kept.length === 0 && (
+                  <p role="status" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                    This is the first visit to {visit.site}: it can only be an Installation, as no camera is known to be there yet.
                   </p>
                 )}
               </FormCard>

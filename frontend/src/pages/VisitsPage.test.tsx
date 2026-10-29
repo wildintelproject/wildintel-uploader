@@ -72,6 +72,8 @@ async function typePhotos(count = '1620') {
   await userEvent.type(screen.getByLabelText('Photos on the card collected'), count)
 }
 
+const installedBefore = () => mockedApi.listVisits.mockResolvedValue({ results: [toStored({ ...BLANK, session: 'R0001', when: '2026-01-10T09:00:00', site: 'TATR_0001', actions: ['Installation'] })] })
+
 describe('VisitsPage', () => {
   it('first asks where the visits come from, with by hand, Wildintel Epicollect and a spreadsheet file', () => {
     render(<VisitsPage onBack={vi.fn()} />)
@@ -210,6 +212,7 @@ describe('VisitsPage', () => {
   })
 
   it('answers what is yes or no with a switch, on when all is well, and saves what is off as the code of the datasheet', async () => {
+    installedBefore()
     await chooseByHand()
     await pickWhere()
     await pickWhen()
@@ -314,6 +317,7 @@ describe('VisitsPage', () => {
     })
 
     it('for several actions asks as strongly as any of them, and keeps them all', async () => {
+      installedBefore()
       await start()
       await pickAction('Revision')
       await pickAction('Installation')
@@ -334,17 +338,14 @@ describe('VisitsPage', () => {
       expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Installation', 'Revision'], num_photos: 1620, sd: 'B2' })
     })
 
-    it('warns that the first visit to a location is usually an Installation', async () => {
+    it('says that the first visit to a location can only be an Installation', async () => {
       await start()
 
-      await pickAction('Installation')
-      expect(screen.queryByRole('status')).not.toBeInTheDocument()
-      await pickAction('Installation')
-      await pickAction('Revision')
       expect(screen.getByRole('status')).toHaveTextContent('first visit to TATR_0001')
     })
 
     it('keeps only what the action asks, whatever was typed before it was changed', async () => {
+      installedBefore()
       await start()
       await pickAction('Revision')
       await typePhotos()
@@ -564,6 +565,7 @@ describe('VisitsPage', () => {
   })
 
   it('keeps nothing and says why when the visit cannot be saved', async () => {
+    installedBefore()
     mockedApi.saveVisit.mockRejectedValue(new Error('The research project is not there.'))
     await chooseByHand()
     await pickWhere()
@@ -952,6 +954,12 @@ describe('visitErrors', () => {
 
   it('has nothing to say of a complete visit', () => {
     expect(visitErrors(ok)).toEqual({})
+  })
+
+  it('refuses any action but an Installation for the first visit to a site', () => {
+    expect(visitErrors(ok, true)).toEqual({ actions: 'The first visit to a site can only be an Installation.' })
+    expect(visitErrors({ ...ok, actions: ['Installation', 'Revision'] }, true).actions).toBeDefined()
+    expect(visitErrors({ ...ok, actions: ['Installation'], sd: 'A13' }, true)).toEqual({})
   })
 
   it('wants a whole number of photos', () => {

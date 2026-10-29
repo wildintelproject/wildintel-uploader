@@ -28,24 +28,33 @@ def _project() -> None:
         _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"DONA_0{n}", "name": f"Site {n}", "timezone": "UTC", "latitude": 37.0 + n / 100, "longitude": -6.5}})
 
 
+def _installed() -> None:
+    """The first visit of the sites the tests visit: it can only be an Installation."""
+    for n in (1, 2, 3):
+        install = {**VISIT, "location_id": f"DONA_0{n}", "session": "R0012", "date": "2026-01-10", "actions": ["Installation"], "num_photos": None, "sd": f"S{n}", "camera_id": "12" if n == 1 else f"C{n}"}
+        assert _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": install}).status_code == 200
+
+
 def test_visits_are_registered_and_listed_with_those_to_one_location_apart(tmp_path: Path):
     with _in(tmp_path):
         _project()
         empty = _client().post("/api/visits/list", json={"research_project_id": "DONA"})
+        _installed()
         saved = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": VISIT})
-        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "location_id": "DONA_02"}})
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "location_id": "DONA_02", "camera_id": "C2"}})
         everything = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
         one = _client().post("/api/visits/list", json={"research_project_id": "DONA", "location_id": "dona_01"}).json()["results"]
 
     assert empty.json() == {"results": []}
     assert saved.status_code == 200 and saved.json()["date"] == "2026-10-02" and saved.json()["time"] == "08:14:05"
-    assert len(everything) == 2
-    assert [v["location_id"] for v in one] == ["DONA_01"]
+    assert len(everything) == 5
+    assert [v["location_id"] for v in one] == ["DONA_01", "DONA_01"]
 
 
 def test_how_the_card_and_the_batteries_were_is_one_of_the_codes_of_the_datasheet(tmp_path: Path):
     with _in(tmp_path):
         _project()
+        _installed()
         for hour, code in enumerate(("OK", "CarFull", "SinPilas", "CarFullSinPilas")):
             visit = {**VISIT, "time": f"0{hour}:00:00", "card_batteries_ok": code}
             assert _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit}).status_code == 200
@@ -69,6 +78,7 @@ def test_a_visit_that_is_not_one_is_refused(tmp_path: Path):
 def test_a_visit_can_do_several_things_each_kept_once(tmp_path: Path):
     with _in(tmp_path):
         _project()
+        _installed()
         saved = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "actions": ["Revision", "Desinstallation", "Revision"]}})
 
     assert saved.status_code == 200 and saved.json()["actions"] == ["Revision", "Desinstallation"]
@@ -78,6 +88,7 @@ def test_the_optional_details_of_a_deployment_are_kept_with_the_visit(tmp_path: 
     details = {"camera_model": "Reconyx-PC800", "camera_height": 1.2, "camera_tilt": -90, "bait_use": True, "feature_type": "trailHiking", "tags": ["forest edge"]}
     with _in(tmp_path):
         _project()
+        _installed()
         saved = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, **details}})
         both = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "camera_height": 1.2, "camera_depth": 4.8}})
         bad_feature = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "feature_type": "moon"}})
@@ -323,6 +334,7 @@ def _save(visit: dict):
 def test_a_visit_by_hand_has_to_be_of_a_location_of_the_project_and_not_be_kept_already(tmp_path: Path):
     with _in(tmp_path):
         _project()
+        _installed()
         elsewhere = _save({**VISIT, "location_id": "NOWHERE"})
         first = _save(VISIT)
         again = _save(VISIT)
@@ -330,6 +342,18 @@ def test_a_visit_by_hand_has_to_be_of_a_location_of_the_project_and_not_be_kept_
     assert elsewhere.status_code == 422 and "not a location of the research project" in elsewhere.json()["detail"]
     assert first.status_code == 200
     assert again.status_code == 422 and "already a visit to DONA_01" in again.json()["detail"]
+
+
+def test_the_first_visit_to_a_site_can_only_be_an_installation(tmp_path: Path):
+    with _in(tmp_path):
+        _project()
+        revision = _save(VISIT)
+        both = _save({**VISIT, "actions": ["Installation", "Revision"], "sd": "A13"})
+        installation = _save({**VISIT, "actions": ["Installation"], "sd": "A13", "num_photos": None})
+        later = _save({**VISIT, "date": "2026-10-05"})
+
+    assert revision.status_code == both.status_code == 422 and "first visit to DONA_01 can only be an Installation" in revision.json()["detail"]
+    assert installation.status_code == later.status_code == 200
 
 
 def test_a_visit_by_hand_lacks_nothing_its_actions_ask(tmp_path: Path):
