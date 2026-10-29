@@ -7,6 +7,7 @@ import type { ReactNode } from 'react'
 import TaskCard, { PageHeader } from '../components/TaskCard'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
+import ChoiceCards from '../components/ChoiceCards'
 import Notice from '../components/Notice'
 import WizardStep from '../components/WizardStep'
 import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, SwitchRow, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
@@ -26,6 +27,17 @@ const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; desc
 
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
 const SD_ICON = <><path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" /><path d="M8 6v3M11 6v3M14 7v2" /></>
+
+/** The icons of the answers of By hand 2, drawn as line icons. */
+const CAMERA_PATHS = {
+  eye: <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
+  alert: <><path d="M12 3l10 18H2z" /><path d="M12 10v4M12 17.5v.01" /></>,
+  anchor: <><circle cx="12" cy="5" r="2" /><path d="M12 7v14M5 12H2a10 10 0 0 0 20 0h-3M8 11h8" /></>,
+  replace: <><path d="M20 11a8 8 0 0 0-14-4L4 9M4 4v5h5M4 13a8 8 0 0 0 14 4l2-2M20 20v-5h-5" /></>,
+  archive: <><path d="M3 4h18v4H3zM5 8v12h14V8M10 12h4" /></>,
+  plus: <path d="M12 5v14M5 12h14" />,
+  ban: <><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>,
+}
 
 /** What was done at the visit — the values the field records read. */
 const ACTIONS = ['Installation', 'Revision', 'Desinstallation', 'Stolen']
@@ -355,6 +367,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     : seeCamera === 'stolen' ? (afterTheft === 'replace' ? ['Stolen', 'Installation'] : ['Stolen'])
     : []
   const guidedKey = guidedActions?.join('+')
+  // A camera taken away with no other put up, or stolen with none put up, gives the location up: it is retired — for good — with the reason.
+  const retiring = guided && !noCamera && ((seeCamera === 'yes' && afterRevision === 'remove') || (seeCamera === 'stolen' && afterTheft === 'retire'))
   // What a theft takes: the camera at the site, and the card that was left in it — which are marked as not available when the visit is kept.
   const theft = guided && !noCamera && seeCamera === 'stolen' && siteCamera ? siteCamera.camera : null
   const stolenCamera = theft ? (allCameras.find((c) => cameraKey(c).toLowerCase() === theft.toLowerCase() || c.label.toLowerCase() === theft.toLowerCase())?.label ?? theft) : null
@@ -375,6 +389,13 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     })
   }, [guidedKey]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setSeeCamera(null); setAfterRevision('stay'); setAfterTheft(null) }, [visit.site])
+  const retireFields = (
+    <div className="max-w-md pt-1">
+      <label htmlFor="retire-reason" className={labelClass}>Why is it retired?</label>
+      <input id="retire-reason" className={inputClass} value={retireReason} onChange={(e) => setRetireReason(e.target.value)} />
+      <p className={hintClass}>{visit.site} will be kept as a retired location, with this reason, from the day of the visit. A retired location is retired for good: it never goes back to active, and it can no longer be changed.</p>
+    </div>
+  )
   const errors = { ...visitErrors(visit, kept?.length === 0), ...conflicts }
   const moreErrors = detailsErrors(visit.details)
   const shown = (field: ErrorKey) => (tried ? errors[field] : undefined)
@@ -618,7 +639,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       }
     }
     // The location is retired — with the reason — when the visit says the camera was stolen and the site is not kept.
-    if (guided && seeCamera === 'stolen' && afterTheft === 'retire') {
+    if (retiring) {
       try {
         await api.updateLocalLocation(project.acronym, complete.site, { status: 'retired', status_date: complete.when.slice(0, 10), status_note: retireReason.trim() || null })
       } catch (e) {
@@ -739,43 +760,46 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   )}
                 </div>
               )}
-              <FormCard title="The visit">
+              <FormCard title={guided ? undefined : 'The visit'}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {guided ? (
                     <fieldset className="sm:col-span-2" aria-describedby="visit-actions-hint">
                       <legend className={labelClass}>Do you see the camera?</legend>
                       {noCamera ? (
-                        <label className="inline-flex items-center gap-2 text-sm"><input type="radio" name="see-camera" checked readOnly />Of course not, I am going to install it</label>
+                        <ChoiceCards<'install'> label="Do you see the camera?" value="install" onChange={() => undefined}
+                          choices={[{ value: 'install', label: 'Of course not, I am going to install it', description: `No camera is known at ${visit.site}`, icon: CAMERA_PATHS.plus }]} />
                       ) : (
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="see-camera" checked={seeCamera === 'yes'} onChange={() => setSeeCamera('yes')} />Yes, I see it</label>
-                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="see-camera" checked={seeCamera === 'stolen'} onChange={() => setSeeCamera('stolen')} />No, it was stolen</label>
-                        </div>
+                        <ChoiceCards<'yes' | 'stolen'> label="Do you see the camera?" value={seeCamera} onChange={setSeeCamera}
+                          choices={[
+                            { value: 'yes', label: 'Yes, I see it', description: 'The camera is there', icon: CAMERA_PATHS.eye },
+                            { value: 'stolen', label: 'No, it was stolen', description: 'The camera is gone', icon: CAMERA_PATHS.alert, tone: 'red' },
+                          ]} />
                       )}
                       {!noCamera && seeCamera === 'yes' && (
-                        <div className="mt-4 ml-6 space-y-2" role="group" aria-label="What do you do with the camera?">
-                          <p className="text-sm font-medium">What do you do with the camera?</p>
-                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-revision" checked={afterRevision === 'stay'} onChange={() => setAfterRevision('stay')} />Leave it where it is</label>
-                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-revision" checked={afterRevision === 'replace'} onChange={() => setAfterRevision('replace')} />Replace it with another</label>
-                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-revision" checked={afterRevision === 'remove'} onChange={() => setAfterRevision('remove')} />Take it away, without another</label>
+                        <div className="reveal mt-5 space-y-3" role="group" aria-label="What do you do with the camera?">
+                          <p className="text-sm font-semibold">What do you do with the camera?</p>
+                          <ChoiceCards<'stay' | 'replace' | 'remove'> label="What do you do with the camera?" size="compact" value={afterRevision} onChange={setAfterRevision}
+                            choices={[
+                              { value: 'stay', label: 'Leave it where it is', icon: CAMERA_PATHS.anchor },
+                              { value: 'replace', label: 'Replace it with another', icon: CAMERA_PATHS.replace },
+                              { value: 'remove', label: 'Take it away, and retire the location', icon: CAMERA_PATHS.archive },
+                            ]} />
+                          {afterRevision === 'remove' && retireFields}
                         </div>
                       )}
                       {!noCamera && seeCamera === 'stolen' && (
-                        <div className="mt-4 ml-6 space-y-2" role="group" aria-label="What now?">
-                          <p className="text-sm font-medium">What now?</p>
-                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-theft" checked={afterTheft === 'replace'} onChange={() => setAfterTheft('replace')} />Install a new camera</label>
-                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-theft" checked={afterTheft === 'retire'} onChange={() => setAfterTheft('retire')} />Retire the location</label>
-                          {afterTheft === 'retire' && (
-                            <div className="max-w-md pt-1">
-                              <label htmlFor="retire-reason" className={labelClass}>Why is it retired?</label>
-                              <input id="retire-reason" className={inputClass} value={retireReason} onChange={(e) => setRetireReason(e.target.value)} />
-                              <p className={hintClass}>{visit.site} will be kept as a retired location, with this reason, from the day of the visit.</p>
-                            </div>
-                          )}
+                        <div className="reveal mt-5 space-y-3" role="group" aria-label="What now?">
+                          <p className="text-sm font-semibold">What now?</p>
+                          <ChoiceCards<'replace' | 'retire'> label="What now?" size="compact" value={afterTheft} onChange={setAfterTheft}
+                            choices={[
+                              { value: 'replace', label: 'Install a new camera', icon: CAMERA_PATHS.plus, tone: 'red' },
+                              { value: 'retire', label: 'Retire the location', icon: CAMERA_PATHS.ban, tone: 'red' },
+                            ]} />
+                          {afterTheft === 'retire' && retireFields}
                           {tried && !afterTheft && <p className="text-xs text-red-600 dark:text-red-400">Say what is done after the theft.</p>}
                         </div>
                       )}
-                      <p id="visit-actions-hint" className={hintClass}>
+                      <p id="visit-actions-hint" className="mt-5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800/60 px-4 py-3 text-xs sm:text-sm text-zinc-600 dark:text-zinc-300">
                         {visit.actions.length === 0 ? 'Answer the question: the rest of the form depends on it.' : <>The visit is kept as <strong>{actionsText(visit.actions)}</strong>. {visit.actions.map((a) => ACTION_HINTS[a]).join(' ')}</>}
                       </p>
                       {shown('actions') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">Say whether you see the camera.</p>}

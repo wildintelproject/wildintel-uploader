@@ -1078,7 +1078,7 @@ describe('By hand 2: do you see the camera?', () => {
     expect(hint()).toHaveTextContent('The visit is kept as Revision')
     await userEvent.click(screen.getByRole('radio', { name: 'Replace it with another' }))
     expect(hint()).toHaveTextContent('Revision + Installation')
-    await userEvent.click(screen.getByRole('radio', { name: 'Take it away, without another' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Take it away, and retire the location' }))
     expect(hint()).toHaveTextContent('Revision + Desinstallation')
 
     await userEvent.click(screen.getByRole('radio', { name: 'No, it was stolen' }))
@@ -1128,7 +1128,7 @@ describe('By hand 2: do you see the camera?', () => {
     await openSection('Camera')
     expect(screen.getByRole('switch', { name: 'Calibration done' })).toHaveAttribute('aria-checked', 'false')
     await userEvent.click(screen.getByRole('switch', { name: 'Calibration done' }))
-    await userEvent.click(screen.getByRole('radio', { name: 'Take it away, without another' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Take it away, and retire the location' }))
     expect(screen.queryByRole('switch', { name: 'Calibration done' })).not.toBeInTheDocument() // nothing is left: no calibration
     await userEvent.click(screen.getByRole('radio', { name: 'Leave it where it is' }))
     expect(screen.getByRole('switch', { name: 'Calibration done' })).toBeInTheDocument()
@@ -1156,6 +1156,36 @@ describe('By hand 2: do you see the camera?', () => {
     expect(within(status).getAllByRole('option').map((o) => o.textContent).filter(Boolean)).toEqual(expect.arrayContaining(['OK', 'Altered', 'Knocked down', 'Damaged']))
     await userEvent.selectOptions(status, 'Damaged')
     expect(status).toHaveValue('Damaged')
+  })
+
+  it('retires the location, for good, when the camera is taken away and no other is put up', async () => {
+    withCamera()
+    mockedApi.saveVisit.mockResolvedValue({} as never)
+    mockedApi.updateLocalLocation.mockResolvedValue({} as never)
+    await start()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Yes, I see it' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Take it away, and retire the location' }))
+    expect(document.body).toHaveTextContent('A retired location is retired for good: it never goes back to active')
+    await userEvent.clear(screen.getByLabelText('Why is it retired?'))
+    await userEvent.type(screen.getByLabelText('Why is it retired?'), 'No cameras left')
+    await openSection('SD card'); await openSection('Camera')
+    await userEvent.type(screen.getByLabelText('Photos on the card collected'), '24')
+    await userEvent.click(screen.getByRole('button', { name: 'Add visit' }))
+
+    await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('TATR', 'TATR_0001', { status: 'retired', status_date: '2026-10-02', status_note: 'No cameras left' }))
+    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Revision', 'Desinstallation'] })
+  })
+
+  it('does not offer a retired location', async () => {
+    mockedApi.listLocalLocations.mockResolvedValue({ results: [location('TATR_0001', { name: 'Ridge', latitude: 49.2, longitude: 20.1 }), location('TATR_0002', { status: 'retired' })] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /by hand 2/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.click(await screen.findByLabelText('Location'))
+
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['TATR_0001 — Ridge'])
   })
 })
 

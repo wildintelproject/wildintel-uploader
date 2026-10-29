@@ -199,7 +199,7 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
         <>
           <label className={labelClass} htmlFor="origin-location">Location</label>
           <Combobox
-            id="origin-location" options={locations.map((l) => ({ value: l.location_id, label: label(l) }))}
+            id="origin-location" options={locations.filter((l) => l.status !== 'retired').map((l) => ({ value: l.location_id, label: label(l) }))}
             value={value} onChange={(id) => onSelect(locations.find((l) => l.location_id === id))}
             placeholder={locations.length === 0 ? 'No locations yet' : 'Select a location…'}
             clearLabel="Clear location"

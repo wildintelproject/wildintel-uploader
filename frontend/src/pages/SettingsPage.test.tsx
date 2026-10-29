@@ -1062,7 +1062,7 @@ describe('SettingsPage', () => {
       const dialog = within(screen.getByRole('region', { name: 'Camera' }))
       expect(dialog.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
       expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual([
-        'ActiveOffered when a visit is registered.', 'LostNot offered. Past visits keep it.', 'StolenNot offered. Past visits keep it.', 'BrokenNot offered until it is repaired.', 'RetiredTaken out of use for good.',
+        'ActiveOffered when a visit is registered.', 'LostNot offered. Past visits keep it.', 'StolenNot offered. Past visits keep it.', 'BrokenNot offered until it is repaired.', 'RetiredTaken out of use for good: it never goes back to active.',
       ])
       expect(dialog.queryByLabelText('Status since')).not.toBeInTheDocument() // asked once it is not active
       await userEvent.click(dialog.getByRole('radio', { name: /Stolen/ }))

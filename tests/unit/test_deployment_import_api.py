@@ -1054,3 +1054,17 @@ def test_log_entry_gives_what_the_collections_logs_say_of_a_deployment(tmp_path:
     assert body["timestamps"] == {"start": "2024-09-04T13:10:00", "end": "2024-11-04T14:28:00"}
     assert body["fieldwork"]["details"] == {"setup_by": "Ana", "camera_id": "P800", "camera_height": 1.2, "bait_use": True, "tags": ["forest", "pine"]}
     assert other.json()["timestamps"] is None and other.json()["fieldwork"] is None
+
+
+def test_a_retired_location_never_goes_back_to_active_or_planned(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01"}})
+        retired = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "retired", "status_note": "Repeated thefts"})
+        back = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "active"})
+        planned = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "planned"})
+        renamed = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "retired", "status_note": "Stolen twice"})
+
+    assert retired.status_code == 200
+    assert back.status_code == planned.status_code == 409 and "retired for good" in back.json()["detail"]
+    assert renamed.status_code == 200 and renamed.json()["status_note"] == "Stolen twice"  # what says why may be said better; the status stays

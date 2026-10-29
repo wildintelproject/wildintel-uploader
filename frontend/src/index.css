@@ -28,3 +28,7 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* A question that shows up under the answer that asks it. */
+@keyframes reveal { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.reveal { animation: reveal 0.3s ease-out; }

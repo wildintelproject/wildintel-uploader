@@ -259,13 +259,17 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
     """Changes a kept location's fields (found ignoring case) — only the keys in changes, the rest stay. Its timezone, and whether its cameras ignore
     summer time, are fixed when it is created: every instant kept for it (a visit's `when`) was worked out with them, so they say the same or are refused.
 
+    A retired location is retired for good: it never goes back to active or to planned.
+
     Raises:
-        LocalFolderError: the research project or the location isn't there, or the timezone (or the summer-time setting) is changed.
+        LocalFolderError: the research project or the location isn't there, the timezone (or the summer-time setting) is changed, or a retired location is given another status.
     """
     locations = list_locations(root, research_project_id)
     index = next((i for i, l in enumerate(locations) if l.get("location_id", "").lower() == location_id.lower()), None)
     if index is None:
         raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
+    if locations[index].get("status") == "retired" and changes.get("status", "retired") != "retired":
+        raise LocalFolderError(f"The status of a location can't be changed once it is retired: {location_id} is retired for good.")
     now = {"timezone": locations[index].get("timezone") or visit_time.DEFAULT_TIMEZONE, "ignore_dst": bool(locations[index].get("ignore_dst"))}
     for key, label in (("timezone", "timezone"), ("ignore_dst", "summer-time setting")):
         if key in changes:

@@ -114,12 +114,12 @@ export function DateTimeField({ label, value, onChange, hint, required, error }:
 }
 
 /** A titled group of related fields. */
-export function FormCard({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+export function FormCard({ title, description, children }: { title?: string; description?: string; children: ReactNode }) {
   return (
     <section className="mb-5 p-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40">
-      <h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h5>
+      {title && <h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h5>}
       {description && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{description}</p>}
-      <div className="mt-4">{children}</div>
+      <div className={title || description ? 'mt-4' : ''}>{children}</div>
     </section>
   )
 }

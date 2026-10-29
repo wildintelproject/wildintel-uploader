@@ -1172,7 +1172,7 @@ const statusFields = <T extends object>(values: string[], withDetails: boolean, 
 ]
 
 const GEAR_STATUSES = ['active', 'lost', 'stolen', 'broken', 'retired']
-const GEAR_HINTS = { active: 'Offered when a visit is registered.', lost: 'Not offered. Past visits keep it.', stolen: 'Not offered. Past visits keep it.', broken: 'Not offered until it is repaired.', retired: 'Taken out of use for good.' }
+const GEAR_HINTS = { active: 'Offered when a visit is registered.', lost: 'Not offered. Past visits keep it.', stolen: 'Not offered. Past visits keep it.', broken: 'Not offered until it is repaired.', retired: 'Taken out of use for good: it never goes back to active.' }
 
 const numberRange = (min: number, max: number) => (v: string) => (v === '' || (Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max) ? null : `A number from ${min} to ${max}.`)
 
@@ -1185,7 +1185,7 @@ const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
   { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty', placeholder: 'e.g. 100', unit: 'metres', half: true, hint: 'How far off the position could be.', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
   { key: 'timezone', label: 'Time zone', placeholder: 'e.g. Europe/Madrid', section: 'Time', fixed: true, hint: "The location's own time zone: UTC unless you say another. Every visit and deployment here is read in it, so it cannot be changed once the location is created.", validate: (v) => (v === '' || isValidTimezone(v) ? null : 'Not a known IANA time zone (e.g. Europe/Madrid).') },
   { key: 'ignore_dst', label: 'The cameras here ignore summer time', kind: 'bool', fixed: true, hint: 'Turn it on if their clocks stay the same all year. Like the time zone, it cannot be changed once the location is created.' },
-  ...statusFields<LocationDraft>(['active', 'planned', 'retired'], true, { active: 'Offered when a visit is registered.', planned: 'Not set up yet.', retired: 'Taken out of use for good.' }),
+  ...statusFields<LocationDraft>(['active', 'planned', 'retired'], true, { active: 'Offered when a visit is registered.', planned: 'Not set up yet.', retired: 'Taken out of use for good: it never goes back to active.' }),
 ]
 
 /** What a research project is when it is added by hand, or read from a CSV file: its acronym and name, and the fields free text. */
@@ -1501,8 +1501,8 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <ItemForm<LocationDraft>
           noun="location" styled qr={editing.isNew ? undefined : qrPayload('location', project.acronym, editing.item.location_id)} backLabel={`Locations of ${project.acronym}`} fields={LOCATION_FIELDS} item={editing.item} others={editing.isNew ? locations.map(locationDraft) : []} isNew={editing.isNew} lockFirst={!editing.isNew}
-          badges={editing.isNew ? undefined : [...unusualStatus(editing.item), ...(stored?.trapper_pk != null ? [originBadge(stored.trapper_pk)] : [])]} readOnly={stored?.trapper_pk != null}
-          notice={stored?.trapper_pk != null ? <TrapperNotice noun="location" /> : undefined}
+          badges={editing.isNew ? undefined : [...unusualStatus(editing.item), ...(stored?.trapper_pk != null ? [originBadge(stored.trapper_pk)] : [])]} readOnly={stored?.trapper_pk != null || stored?.status === 'retired'}
+          notice={stored?.trapper_pk != null ? <TrapperNotice noun="location" /> : stored?.status === 'retired' ? <Notice kind="info">This location is retired for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined}
           onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))} onClose={() => { setEditing(null); setError(null) }} onDone={() => void done()} doneLabel={editing.isNew ? 'Add' : 'Save changes'}
           onRemove={editing.isNew ? undefined : () => setDeleting(editing.item.location_id)}
         />
@@ -1549,7 +1549,7 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
         {locations.length === 0 && <p className={hintClass}>{project.acronym} has no locations yet.</p>}
         {locations.length > 0 && shown.length === 0 && <p className={hintClass}>Nothing matches “{search}”.</p>}
         {shown.map((l) => (
-          <ItemCard key={l.location_id} icon={<PinIcon />} title={l.location_id} badges={[...unusualStatus(l), ...(l.trapper_pk != null ? [originBadge(l.trapper_pk)] : [])]} subtitle={l.name ?? ''} meta={meta(locationDraft(l))} readOnly={l.trapper_pk != null} editLabel={`Edit ${l.location_id}`}
+          <ItemCard key={l.location_id} icon={<PinIcon />} title={l.location_id} badges={[...unusualStatus(l), ...(l.trapper_pk != null ? [originBadge(l.trapper_pk)] : [])]} subtitle={l.name ?? ''} meta={meta(locationDraft(l))} readOnly={l.trapper_pk != null || l.status === 'retired'} editLabel={`Edit ${l.location_id}`}
                     onEdit={() => setEditing({ item: locationDraft(l), isNew: false })}
                     onDelete={l.trapper_pk != null ? undefined : () => setDeleting(l.location_id)} deleteDisabled={used?.(l.location_id) ? used(l.location_id)! > 0 : false} />
         ))}
@@ -1694,7 +1694,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
           items={sdCards.filter((c) => belongs(c.research_project))}
           onChange={(v) => onSdCards([...sdCards.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
           blank={{ label: '', brand: null, capacity: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
-          badges={unusualStatus} subtitle={(c) => [c.brand, c.capacity].filter(Boolean).join(' · ')}
+          badges={unusualStatus} readOnly={(c) => c.status === 'retired'} notice={(c) => (c.status === 'retired' ? <Notice kind="info">This one is retired for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.brand, c.capacity].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && same(v.sd, c.label)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && same(v.sd, c.label)) === 0}
           footnote="An SD card that already has visits can't be deleted; mark it as retired instead and it stops being offered for new visits."
@@ -1715,7 +1715,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
           items={cameras.filter((c) => belongs(c.research_project))}
           onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
           blank={{ label: '', camera_id: null, camera_model: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
-          badges={unusualStatus} subtitle={(c) => [c.camera_model, c.camera_id].filter(Boolean).join(' · ')}
+          badges={unusualStatus} readOnly={(c) => c.status === 'retired'} notice={(c) => (c.status === 'retired' ? <Notice kind="info">This one is retired for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.camera_model, c.camera_id].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)) === 0}
           footnote="A camera that already has visits can't be deleted; mark it as retired instead and it stops being offered for new visits."

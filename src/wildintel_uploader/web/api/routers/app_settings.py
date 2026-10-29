@@ -94,8 +94,20 @@ def save_settings(new: config.Settings) -> dict:
             if not getattr(section, field):
                 setattr(section, field, None)
     root = _root(new)
+    model = {"cameras": config.Camera, "sd_cards": config.SdCard}
     for kind in ("cameras", "sd_cards"):
         items = getattr(new.FIELDWORK, kind)
+        # A retired camera or SD card is retired for good: what is kept of it is not changed.
+        for project in {i.research_project for i in items if i.research_project}:
+            try:
+                kept = local_folder_service.list_field_items(root, project, kind)
+            except local_folder_service.LocalFolderError:
+                continue
+            retired = {str(k.get("label") or "").strip().lower(): model[kind].model_validate(k).model_dump(mode="json") for k in kept if k.get("status") == "retired"}
+            for item in items:
+                before = retired.get(item.label.strip().lower()) if item.research_project == project else None
+                if before is not None and item.model_dump(mode="json") != before:
+                    raise HTTPException(422, f"{'The camera' if kind == 'cameras' else 'The SD card'} {item.label} is retired for good: it can no longer be changed.")
         free = [i for i in items if not i.research_project]
         if free:
             raise HTTPException(422, f"{'A camera' if kind == 'cameras' else 'An SD card'} belongs to a research project: choose one for {free[0].label}.")
@@ -141,7 +153,7 @@ class FieldItemStatusRequest(BaseModel):
 @router.post("/field-item-status")
 def set_field_item_status(req: FieldItemStatusRequest) -> dict:
     """Marks a camera or an SD card of a research project as no longer available (stolen, lost…) — what a visit that finds a camera stolen says of it and of its card.
-    Nothing happens, and `updated` is false, when the research project does not keep one called that."""
+    Nothing happens, and `updated` is false, when the research project does not keep one called that — or when it is retired, which is for good and is never changed."""
     root = _root(config.load_settings())
     try:
         items = local_folder_service.list_field_items(root, req.research_project_id, req.kind)
@@ -151,7 +163,7 @@ def set_field_item_status(req: FieldItemStatusRequest) -> dict:
     updated = False
     for item in items:
         names = {str(item.get("label") or "").strip().lower()} | ({str(item.get("camera_id") or "").strip().lower()} if req.kind == "cameras" else set())
-        if wanted and wanted in names:
+        if wanted and wanted in names and item.get("status") != "retired":
             item["status"], item["status_date"], item["status_note"] = req.status, req.status_date, req.status_note
             updated = True
     if updated:
