@@ -251,7 +251,7 @@ When a file is read, the visits that were found are listed and the ones that are
   after the one before, a Revision with no photos, and an Installation while the card left before was never collected. They are listed, and the visits are kept as they are.
 
 The same rules protect the form: **by hand**, a visit is refused — by the server, whatever page sends it — if its site is not a location of the project, it is already kept (same site, day and time),
-it lacks what its actions ask, or its camera or card are not where it says (a Revision, a Desinstallation or a Stolen camera is of the camera that is at the site: to change the camera, add an Installation to the visit).
+it lacks what its actions ask, or its camera or card are not where it says (a Revision, a Desinstallation or a Stolen camera is of the camera that is at the site: to change the camera, add an Installation to the visit — the form comes with the camera of the site chosen and offers no other until you do).
 
 **By hand**, a visit is a form with these parts:
 

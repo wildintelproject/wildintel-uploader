@@ -276,6 +276,24 @@ describe('VisitsPage', () => {
       expect(screen.getByText('Card collected: A13 (left on 2026-10-02).')).toBeInTheDocument()
     })
 
+    it('for a Revision comes with the camera that is at the site, and offers no other unless the visit also installs one', async () => {
+      const left = toStored({ ...BLANK, session: 'R0001', when: '2026-06-10T09:00:00', site: 'TATR_0001', actions: ['Installation'], sd: 'A13', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: 'P800HG08192031' } })
+      mockedApi.listVisits.mockResolvedValue({ results: [left] })
+      await start()
+      await pickAction('Revision')
+      await openSection('Camera')
+
+      expect(screen.getByLabelText('Camera id')).toHaveValue('P800HG08192031 — Reconyx-PC800') // chosen for the visit
+      expect(screen.getByText(/The camera at TATR_0001 since 2026-06-10\. To use another, add an Installation to the visit\./)).toBeInTheDocument()
+      await userEvent.click(screen.getByLabelText('Camera id'))
+      expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['P800HG08192031 — Reconyx-PC800']) // no other offered
+      await userEvent.keyboard('{Escape}')
+
+      await userEvent.click(screen.getByLabelText('Installation'))
+      await userEvent.click(screen.getByLabelText('Camera id'))
+      expect(within(screen.getByRole('listbox')).getAllByRole('option').length).toBeGreaterThan(1) // the visit also installs: another camera can be the new one
+    })
+
     it('for a Desinstallation collects the card and leaves none', async () => {
       await start()
       await pickAction('Desinstallation')

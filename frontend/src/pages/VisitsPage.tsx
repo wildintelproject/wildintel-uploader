@@ -10,7 +10,7 @@ import Notice from '../components/Notice'
 import WizardStep from '../components/WizardStep'
 import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, SwitchRow, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
 import { shownErrors, validateDeployment } from '../deploymentValidation'
-import { availabilityErrors } from '../visitAvailability'
+import { availabilityErrors, cameraAtSite } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, FieldLogsResult, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
@@ -312,6 +312,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const chosen = SOURCE_OPTIONS.find((o) => o.value === source)
   // A camera put up while it is somewhere else, or a card left while it is in another camera, cannot be kept — said as soon as it is chosen.
   const conflicts = allVisits ? availabilityErrors(allVisits, visit) : {}
+  // A Revision, a Desinstallation or a stolen camera is of the camera that is at the site: it comes chosen, and no other is offered unless the visit also installs one.
+  const siteCamera = allVisits && visit.site.trim() ? cameraAtSite(allVisits, visit.site.trim(), visit.when || '9999-12-31T23:59:59') : null
+  const ofTheSiteCamera = Boolean(siteCamera) && !visit.actions.includes('Installation') && visit.actions.some((x) => ['Revision', 'Desinstallation', 'Stolen'].includes(x))
+  useEffect(() => {
+    if (!ofTheSiteCamera || !siteCamera || visit.details.camera_id) return
+    const known = allCameras.find((c) => cameraKey(c).toLowerCase() === siteCamera.camera.toLowerCase() || c.label.toLowerCase() === siteCamera.camera.toLowerCase())
+    setVisit((v) => ({ ...v, details: { ...v.details, camera_id: known ? cameraKey(known) : siteCamera.camera, camera_model: known?.camera_model ?? v.details.camera_model } }))
+  }, [ofTheSiteCamera, siteCamera?.camera, visit.details.camera_id]) // eslint-disable-line react-hooks/exhaustive-deps
   const errors = { ...visitErrors(visit), ...conflicts }
   const moreErrors = detailsErrors(visit.details)
   const shown = (field: ErrorKey) => (tried ? errors[field] : undefined)
@@ -748,11 +756,12 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       <CamtrapDpTag />
                     </div>
                     <Combobox
-                      id="visit-camera" options={cameras.map((c) => ({ value: c.label, label: c.camera_model ? `${c.label} — ${c.camera_model}` : c.label }))}
+                      id="visit-camera" options={cameras.filter((c) => !ofTheSiteCamera || cameraKey(c).toLowerCase() === siteCamera!.camera.toLowerCase() || c.label.toLowerCase() === siteCamera!.camera.toLowerCase()).map((c) => ({ value: c.label, label: c.camera_model ? `${c.label} — ${c.camera_model}` : c.label }))}
                       value={cameras.find((c) => cameraKey(c) === visit.details.camera_id)?.label ?? ''} onChange={pickCamera} disabled={asked.camera === 'off'} invalid={asked.camera === 'required' && !visit.details.camera_id}
                       placeholder={cameras.length === 0 ? 'No cameras yet' : 'Select a camera…'} clearLabel="Clear camera"
                     />
                     {(conflicts.camera || shown('camera')) && <p role={conflicts.camera ? 'alert' : undefined} className="text-xs text-red-600 dark:text-red-400 mt-1">{conflicts.camera ?? shown('camera')}</p>}
+                    {ofTheSiteCamera && siteCamera && <p className={hintClass}>The camera at {visit.site.trim()} since {siteCamera.date}. To use another, add an Installation to the visit.</p>}
                     {visit.details.camera_model && <p className={hintClass}>Model: {visit.details.camera_model}</p>}
                     {cameras.length === 0 && <p className={hintClass}>The settings have no cameras yet.</p>}
                     {onOpenSettings && (
