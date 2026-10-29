@@ -742,7 +742,7 @@ def test_the_visit_book_says_which_deployments_are_on_trapper_uploaded_from_here
     assert book[("DONA_01", "R0004")]["on_trapper"] is False                                                          # no deployment of its own yet
 
 
-def test_the_uploads_say_which_deployments_went_where_and_when(tmp_path: Path):
+def test_the_uploads_say_which_created_deployments_went_where_and_when(tmp_path: Path):
     import json
     with _in(tmp_path):
         _field_visits()
@@ -751,14 +751,16 @@ def test_the_uploads_say_which_deployments_went_where_and_when(tmp_path: Path):
         sent = tmp_path / "DONA" / "R0003" / "R0003-DONA_01"
         sent.mkdir(parents=True)
         (sent / "upload.json").write_text(json.dumps({"uploaded_at": "2024-10-20T10:00:00+00:00", "parts": 2, "location_created": True, "deployment_created": True}), encoding="utf-8")
-        kept = tmp_path / "DONA" / "R0003" / "R0003-DONA_02"          # imported here and not sent anywhere: no upload
+        kept = tmp_path / "DONA" / "R0003" / "R0003-DONA_02"          # created here and not sent anywhere
         kept.mkdir(parents=True)
         body = _client().post("/api/visits/uploads", json={"research_project_id": "DONA"}).json()
-        uploads, revisions = body["results"], body["revisions"]
 
-    assert [(u["deployment_id"], u["destination"], u["kind"], u["uploaded_at"], u["parts"], u["location_created"], u["deployment_created"]) for u in uploads] == [
-        ("R0003-DONA_01", "trapper", "uploaded", "2024-10-20T10:00:00+00:00", 2, True, True)]
-    assert revisions == ["R0004", "R0003"]  # every revision the deployments have, also the one with no upload: the dashboard is looked at by revision
+    created = {d["deployment_id"]: d for d in body["deployments"]}
+    assert set(created) == {"R0003-DONA_01", "R0003-DONA_02"}                                  # the created ones only: the others have no images yet
+    assert [(u["destination"], u["kind"], u["uploaded_at"], u["parts"], u["location_created"], u["deployment_created"]) for u in created["R0003-DONA_01"]["uploads"]] == [
+        ("trapper", "uploaded", "2024-10-20T10:00:00+00:00", 2, True, True)]
+    assert created["R0003-DONA_02"]["uploads"] == []                                           # created, not uploaded
+    assert body["revisions"] == ["R0004", "R0003"]  # every revision the deployments have, also the one with nothing created: the dashboard is looked at by revision
 
 
 def test_the_deployments_say_whether_their_images_are_stored_and_whether_they_are_on_trapper(tmp_path: Path):

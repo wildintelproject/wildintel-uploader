@@ -3,7 +3,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, UploadRecord } from './types'
+  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, UploadedDeployment } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
 async function errorMessage(r: Response): Promise<string> {
@@ -165,8 +165,8 @@ export const api = {
   visitBook: (researchProjectId: string) => post<{ results: BookVisit[] }>('/api/visits/book', { research_project_id: researchProjectId }),
   /** The deployments the visits of a research project say, closed and open, by collection and site. */
   fieldDeployments: (researchProjectId: string) => post<{ results: FieldDeployment[] }>('/api/visits/deployments', { research_project_id: researchProjectId }),
-  /** The uploads of the deployments of a research project — one for each deployment that went to a platform, newest first. */
-  uploads: (researchProjectId: string) => post<{ results: UploadRecord[]; revisions?: string[] }>('/api/visits/uploads', { research_project_id: researchProjectId }),
+  /** The created deployments of a research project, each with the platforms it was uploaded to and when — and the revisions there are. */
+  uploads: (researchProjectId: string) => post<{ deployments: UploadedDeployment[]; revisions?: string[] }>('/api/visits/uploads', { research_project_id: researchProjectId }),
   linkVisit: (researchProjectId: string, visit: StoredVisit, deploymentId: string) =>
     post<StoredVisit>('/api/visits/link', { research_project_id: researchProjectId, location_id: visit.location_id, date: visit.date, time: visit.time, deployment_id: deploymentId }),
 

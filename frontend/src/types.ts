@@ -792,16 +792,23 @@ export interface FieldDeployment {
 }
 
 /** One upload of a deployment: the platform it was sent to (`destination`), when, and what it did there. A deployment that came from the platform (`synced`) was not sent from here, so it has no day. */
-export interface UploadRecord {
-  deployment_id: string
-  collection: string
-  site: string
+export interface UploadEntry {
   destination: string
   kind: 'uploaded' | 'synced'
   uploaded_at: string | null
   parts: number | null
   location_created: boolean | null
   deployment_created: boolean | null
+}
+
+/** A deployment that is created — its images are stored here — with its uploads: one for each platform it was sent to, none when it was not sent anywhere. */
+export interface UploadedDeployment {
+  deployment_id: string
+  collection: string
+  site: string
+  start: string
+  end: string | null
+  uploads: UploadEntry[]
 }
 
 /** What writing the logs of the collections did: for each, how many deployments are closed and how many open, and the files written. */

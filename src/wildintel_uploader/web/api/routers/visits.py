@@ -163,9 +163,9 @@ def deployments(req: ListVisitsRequest) -> dict:
 
 @router.post("/uploads")
 def uploads(req: ListVisitsRequest) -> dict:
-    """The uploads of the deployments of a research project — one for each deployment that went somewhere, newest first: which `destination` (the platform it was sent to:
-    only "trapper" for now, the rest of the fields say what that upload did), when, and how. A deployment that came from Trapper (synced) is there too, as `kind` "synced",
-    with no day: it was not sent from here."""
+    """The deployments of a research project that are created — their images are stored here — each with its `uploads`: one for each platform it was sent to (only "trapper"
+    for now), with the day, and what it did. A deployment that came from Trapper (synced) has its upload as `kind` "synced", with no day: it was not sent from here. A
+    deployment not sent anywhere has none. Also the `revisions` the deployments have, newest first — with or without uploads: the dashboard is looked at by revision."""
     try:
         root = config.collections_dir()
         local_folder_service.require_research_project(root, req.research_project_id)
@@ -180,15 +180,15 @@ def uploads(req: ListVisitsRequest) -> dict:
         folder = root / req.research_project_id / imported.split("-", 1)[0] / imported
         upload = local_folder_service._read_json(folder / trapper_upload_service.UPLOAD_LOG_FILE)
         sent = isinstance(upload, dict) and upload.get("uploaded_at")
-        if not sent and not local_folder_service.is_synced(folder):
-            continue
-        results.append({
-            "deployment_id": imported, "collection": d["collection"], "site": d["site"], "destination": "trapper", "kind": "uploaded" if sent else "synced",
-            "uploaded_at": upload.get("uploaded_at") if sent else None, "parts": upload.get("parts") if sent else None,
-            "location_created": bool(upload.get("location_created")) if sent else None, "deployment_created": bool(upload.get("deployment_created")) if sent else None,
-        })
-    # every revision the deployments have, with or without uploads: the dashboard is looked at by revision
-    return {"results": sorted(results, key=lambda u: (u["uploaded_at"] or "", u["deployment_id"]), reverse=True), "revisions": sorted({d["collection"] for d in found}, reverse=True)}
+        sends = []
+        if sent:
+            sends.append({"destination": "trapper", "kind": "uploaded", "uploaded_at": upload.get("uploaded_at"), "parts": upload.get("parts"),
+                          "location_created": bool(upload.get("location_created")), "deployment_created": bool(upload.get("deployment_created"))})
+        elif local_folder_service.is_synced(folder):
+            sends.append({"destination": "trapper", "kind": "synced", "uploaded_at": None, "parts": None, "location_created": None, "deployment_created": None})
+        results.append({"deployment_id": imported, "collection": d["collection"], "site": d["site"], "start": d["start"], "end": d["end"], "uploads": sends})
+    return {"deployments": sorted(results, key=lambda r: (r["collection"], r["site"].lower()), reverse=True),
+            "revisions": sorted({d["collection"] for d in found}, reverse=True)}
 
 
 @router.post("/field-logs")
