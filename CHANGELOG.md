@@ -38,7 +38,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   time (`time`) the forms and the tables show are the wall clock of the visit's location, in the timezone the location says; the API gives both. A `visits.json` kept with a day and
   a time only is moved to instants when it is read (in the timezone its locations say) and written back. A new location is UTC, following summer time, unless it says otherwise.
 - **The rules of a visit live in the backend** (`visit_rules`), for the form and for a CSV: by hand a visit is refused (`422`) when its site is not a location of the research project, it is already kept,
-  it lacks what its actions ask (the camera, the card left, the photos collected) or its camera or card are not where it says. A CSV is treated as the field records are: the visits are kept and
+  it lacks what its actions ask (the camera, the card left, the photos collected) or its camera or card are not where it says — a Revision, a Desinstallation or a Stolen camera is of the camera that is at the site, unless the visit also installs another. A CSV is treated as the field records are: the visits are kept and
   questioned — `warnings` for what is odd (a camera or a card at two sites or in the wrong place, two Revisions in a session, a visit not after the one before, a Revision with 0 photos, an Installation
   with the card of the visit before not collected) and `new_sites` for a site that is not a location, with the distance to the nearest one and the ids one character apart, so a new site is told
   from a misnamed one; the page offers to add it as a location.

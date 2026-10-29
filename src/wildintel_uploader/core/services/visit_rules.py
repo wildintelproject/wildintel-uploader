@@ -86,6 +86,17 @@ def camera_at(visits: list[dict], camera: str, when: str) -> dict | None:
     return at
 
 
+def camera_at_site(visits: list[dict], site: str, when: str) -> dict | None:
+    """The camera that is put up at a site on a given moment — None when none is known: nothing was installed there, or it was taken away or stolen."""
+    at = None
+    for v in sorted((v for v in visits if _stamp(v) < when and _same(v.get("location_id"), site)), key=_stamp):
+        if _takes_away(v):
+            at = None
+        elif {"Installation", "Revision"} & set(v.get("actions") or []) and v.get("camera_id"):
+            at = {"camera": v["camera_id"], "date": v["date"]}
+    return at
+
+
 def card_at(visits: list[dict], label: str, when: str) -> dict | None:
     """The site whose camera holds a card on a given moment — None when it is in none: never left, or collected."""
     in_site: dict[str, dict] = {}
@@ -109,6 +120,12 @@ def availability_errors(kept: list[dict], visit: dict) -> dict[str, str]:
     collects = revises or "Desinstallation" in actions or "Stolen" in actions
 
     camera = visit.get("camera_id")
+    # A visit that does not put a camera up — a Revision, a Desinstallation, a Stolen camera — is of the camera that is at the site.
+    if camera and not installs and (collects or revises):
+        there = camera_at_site(kept, site, when)
+        if there and not _same(there["camera"], camera):
+            what = " + ".join(x for x in actions if x in ACTIONS)
+            errors["camera"] = f"The camera at {site} is {there['camera']} (since {there['date']}): a {what} is of that camera. If it was replaced, add an Installation to the visit."
     if installs and camera:
         there = camera_at(kept, camera, when)
         # A visit that also revises may find the camera in the very site it puts it up at.

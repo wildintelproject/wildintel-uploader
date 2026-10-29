@@ -74,3 +74,14 @@ describe('availabilityErrors', () => {
     expect(availabilityErrors(KEPT, visit({ camera: 'C3', when: '2026-08-01T09:00:00' })).camera).toMatch(/installed at DONA_03/)
   })
 })
+
+describe('a Revision is of the camera that is at the site', () => {
+  it('says the camera at the site when a Revision names another, unless the visit also installs one', () => {
+    const revision = (camera: string, actions: string[] = ['Revision']) => availabilityErrors(KEPT, visit({ site: 'DONA_01', actions, camera }))
+    expect(revision('C9').camera).toBe('The camera at DONA_01 is C1 (since 2026-08-01): a Revision is of that camera. If it was replaced, add an Installation to the visit.')
+    expect(revision('c1').camera).toBeUndefined()                         // the camera that is there, whatever its case
+    expect(revision('C9', ['Revision', 'Installation']).camera).toBeUndefined() // replaced: the visit says so
+    expect(availabilityErrors(KEPT, visit({ site: 'DONA_01', actions: ['Desinstallation'], camera: 'C9' })).camera).toContain('is of that camera')
+    expect(availabilityErrors(KEPT, visit({ site: 'DONA_03', actions: ['Revision'], camera: 'C9', when: '2026-12-01T09:00:00' })).camera).toBeUndefined() // no camera there: nothing to compare
+  })
+})

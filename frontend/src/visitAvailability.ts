@@ -30,6 +30,17 @@ export function cameraAt(visits: StoredVisit[], cameraId: string, when: string):
   return at
 }
 
+/** The camera that is put up at a site on a given moment — null when none is known: nothing was installed there, or it was taken away or stolen. */
+export function cameraAtSite(visits: StoredVisit[], site: string, when: string): { camera: string; date: string } | null {
+  let at: { camera: string; date: string } | null = null
+  for (const v of before(visits, when)) {
+    if (!same(v.location_id, site)) continue
+    if (takesAway(v)) at = null
+    else if ((v.actions.includes('Installation') || v.actions.includes('Revision')) && v.camera_id) at = { camera: v.camera_id, date: v.date }
+  }
+  return at
+}
+
 /** The site whose camera holds a card on a given moment — null when it is in none: never left, or collected. */
 export function cardAt(visits: StoredVisit[], label: string, when: string): Whereabouts | null {
   const inSite = new Map<string, { label: string; date: string; site: string }>()
@@ -53,6 +64,13 @@ export function availabilityErrors(kept: StoredVisit[], visit: Visit): { camera?
   const collects = revises || visit.actions.includes('Desinstallation') || visit.actions.includes('Stolen')
 
   const camera = visit.details.camera_id
+  // A visit that does not put a camera up — a Revision, a Desinstallation, a Stolen camera — is of the camera that is at the site.
+  if (camera && !installs && collects) {
+    const there = cameraAtSite(kept, site, when)
+    if (there && !same(there.camera, camera)) {
+      errors.camera = `The camera at ${site} is ${there.camera} (since ${there.date}): a ${visit.actions.join(' + ')} is of that camera. If it was replaced, add an Installation to the visit.`
+    }
+  }
   if (installs && camera) {
     const there = cameraAt(kept, camera, when)
     // A visit that also revises may find the camera in the very site it puts it up at.

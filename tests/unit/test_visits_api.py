@@ -618,3 +618,17 @@ def test_the_seconds_are_cut_from_the_logs_unless_they_are_kept_and_an_import_le
         assert stamp.endswith(expected), (keep, stamp)
     report = Path(body["report"])
     assert report.parent == root / "DONA" and report.name.startswith("visits_import_") and "Visits kept to DONA: 2" in report.read_text(encoding="utf-8")
+
+
+def test_a_revision_is_of_the_camera_that_is_at_the_site_unless_the_visit_also_installs_another(tmp_path: Path):
+    install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0003"}
+    with _in(tmp_path):
+        _project()
+        _save(install)
+        other = _save({**VISIT, "actions": ["Revision"], "camera_id": "P999", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0004"})
+        same = _save({**VISIT, "actions": ["Revision"], "camera_id": "p800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0004"})
+        swapped = _save({**VISIT, "actions": ["Revision", "Installation"], "camera_id": "P999", "num_photos": 10, "sd": "C7", "date": "2024-11-12", "session": "R0005"})
+
+    assert other.status_code == 422 and "The camera at DONA_01 is P800" in other.json()["detail"] and "add an Installation" in other.json()["detail"]
+    assert same.status_code == 200                                  # the camera that is there, whatever its case
+    assert swapped.status_code == 200                               # the camera was replaced: the visit says so
