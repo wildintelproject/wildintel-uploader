@@ -14,7 +14,7 @@ first. Part of what the web app does can also be done from a terminal: see the
 3. [The task menu](#3-the-task-menu)
 4. [Unfinished runs](#4-unfinished-runs)
 5. [Manage visits](#5-manage-visits)
-6. [Import a deployment](#6-import-a-deployment)
+6. [Manage deployments](#6-manage-deployments)
 7. [Import a session](#7-import-a-session)
 8. [Upload a deployment to Trapper](#8-upload-a-deployment-to-trapper)
 9. [Utils: sync, repair and fix dates](#9-utils)
@@ -177,7 +177,7 @@ Once it is configured, the menu is where you choose what you want to do:
 | Task | What it's for |
 |---|---|
 | 📋 **Manage visits** | **Register visits** to the camera traps — who went, when, to which site and what was done — or **show the visit book**. The deployments are worked out from the visits. |
-| 📷 **Import deployment** | Check one folder of images and organize it in the collections folder. |
+| 📷 **Manage deployments** | **Import deployment** — check one folder of images and organize it in the collections folder — or **show the status of the deployments**. |
 | 🗂️ **Import session** | The same for a folder holding several deployments, one subfolder each. |
 | ☁️ **Upload deployment to Trapper** | Send deployments already kept locally to Trapper. |
 | 🧰 **Utils** | *Check and fix dates and times* compares the dates of a folder's images with the period of the visit, when the camera clock went wrong, and shifts or removes the ones that cannot be trusted (every fix is written down). Maintenance of the local collections: *Sync local collections* brings the collections folder up to date with what Trapper already has, and *Repair local deployments* checks which deployments are still valid and writes the metadata files of the others again from their folders. |
@@ -215,12 +215,7 @@ The book is of the **default research project** (the one set in Settings › Gen
 Besides the visits made, the book has a row — status **Not done**, with no day, no actions and no buttons — for each location of the research project (but the retired ones) that has no visit in a session the visits have: if the project has 60 locations, each session has 60 rows. The list is paged, ten rows at a time, can be filtered by text, by **revision** and by status — above the list, a square for each **revision** (one visit to every site: *All revisions*, *R0003*, *R0002*… each with *N of M done*) narrows everything to the one picked, and five **squares** above the list count the rows (*All the visits*, *Not done*, *Open*, *Closed* and *No deployment yet*: closed, ready to create) and pressing one shows only those; a bar and *N of M visits done* sum it up —, and **sorted by a column** — press its name, and again to turn it round (the rows not made always go last).
 
 A visit is one row: its **Session**, **Where** (the site), **When**, the **Actions**, its **Status** — *Closed* once a later visit collected the card it left, *Open* while that camera is still out, nothing for a visit that left no camera —
-and **Images stored**: a **tick** once the deployment is created and its images imported, with a **Deployment details** link that opens the *Deployments* tab on that deployment; a **Create deployment** button on a *closed* visit that has none yet — it opens [Import deployment](#6-import-a-deployment) with the research project and that visit already chosen —; and a grey crossed circle on an *open* visit, whose card has not been collected. **On Trapper** says whether that deployment is on Trapper — a tick when it was uploaded from here (the day is in its tooltip) or synced from there, a grey crossed circle when not. **View** (the eye button, as in the entities) opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
-The **Deployments** tab is a book too: a square for each **revision** (*All revisions*, *R0003*… with how many deployments each has), the **status squares** of the one picked — *Deployments of R0003*, *Closed* (the camera was collected and the images are stored), *Camera still out*
-and *Not on Trapper yet* (closed, with the images stored, ready to upload) — and a table with the deployment, where, its status, its period, its card and photos, and whether it is on Trapper. The **Deployment details** link of a visit opens this tab on that deployment.
-
-![The deployments of the visit book](img/screenshots/visit-book-deployments.png)
-
+and **Images stored**: a **tick** once the deployment is created and its images imported, with a **Deployment details** link that opens [Show deployments status](#show-deployments-status) on that deployment; a **Create deployment** button on a *closed* visit that has none yet — it opens [Import deployment](#import-a-deployment) with the research project and that visit already chosen —; and a grey crossed circle on an *open* visit, whose card has not been collected. **On Trapper** says whether that deployment is on Trapper — a tick when it was uploaded from here (the day is in its tooltip) or synced from there, a grey crossed circle when not. **View** (the eye button, as in the entities) opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
 ### Register visits
 
 Press **Register visits**.
@@ -276,15 +271,25 @@ Each field is marked *required* or *optional* according to the actions.
 
 **The deployments the visits say, and the logs of the collections.** Each site's visits, in order, give a deployment for every pair where the first **left a camera** (an Installation or a Revision)
 and the second **collected its card**: it goes from the one to the other and is *closed*. It belongs to the collection **the session of the visit that collected it names, minus one** — R0013
-collects the deployments of R0012 — and that is the revision [Import deployment](#6-import-a-deployment) gives it. A camera that was left and has not been collected is *open*: it will belong to
+collects the deployments of R0012 — and that is the revision [Import deployment](#import-a-deployment) gives it. A camera that was left and has not been collected is *open*: it will belong to
 the collection that the visit that collects it names. When a visit is registered — by hand or from a file — the **folder of each collection it changes is made**, with its `collection.json`, and so are its logs — they are written automatically, with no button for it, in the folder of each collection, its `<R000N>_FileTimestampLog.csv` (the
 closed deployments' start and end, as the cameras' wall clock) and its `<R000N>_FieldworkLog.csv` (every deployment, closed or open, with its fields as Camtrap DP names them, in UTC, in the order of the
-[`FieldworkLog` columns](#6-import-a-deployment)). When the visit that left a camera and the one that collected it say different things of a field, both are kept: a text as `Setup: … | Retrieval: …`
+[`FieldworkLog` columns](#import-a-deployment)). When the visit that left a camera and the one that collected it say different things of a field, both are kept: a text as `Setup: … | Retrieval: …`
 (who set it up, the habitat), the tags and groups of both together, and a number, a yes/no or a feature type as the setup says it with the retrieval's value noted in the comments.
 
-## 6. Import a deployment
+## 6. Manage deployments
 
-Press **📷 Import deployment**. This option is meant to import the set of images that come from a **single camera**: one
+### Show deployments status
+
+Press **📷 Manage deployments**, then **Show deployments status**. It is of the **default research project**, and it is a book: a square for each **revision** (*All revisions*, *R0003*… with how many deployments each has), the **status squares** of the one picked — *Deployments of R0003*, *Closed* (the camera was collected and the images are stored), *Camera still out*
+and *Not on Trapper yet* (closed, with the images stored, ready to upload) — and a table with the deployment, where, its status, its period, its card and photos, and whether it is on Trapper. The **Deployment details** link of a visit of the visit book opens it on that deployment.
+
+![The status of the deployments](img/screenshots/deployments-status.png)
+
+
+### Import a deployment
+
+Press **📷 Manage deployments**, then **Import deployment**. This option is meant to import the set of images that come from a **single camera**: one
 folder, one deployment. For a folder with the images of several cameras, one subfolder each, use
 [**Import session**](#7-import-a-session).
 
@@ -538,7 +543,7 @@ Press **🗂️ Import session**. A **session** is a folder with **one subfolder
 usual way a field trip's images come home. The revision, the checks and the preprocessing are the
 same for all; the location, dates and camera are asked for each deployment.
 
-The stages are those of [Import a deployment](#6-import-a-deployment), with the differences below.
+The stages are those of [Import a deployment](#import-a-deployment), with the differences below.
 
 ![Import session — the folders and their visits](img/screenshots/session-folders.png)
 

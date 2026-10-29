@@ -157,13 +157,12 @@ def visit_book(page: Page) -> None:
     save(page, "visit-book")
 
 
-@shot("visit-book-deployments")
-def visit_book_deployments(page: Page) -> None:
-    open_task(page, "Manage visits")
-    page.locator("button", has=page.locator("strong", has_text=re.compile("^Show the visit book$"))).click()
-    page.get_by_role("tab", name=re.compile("^Deployments")).click()
+@shot("deployments-status")
+def deployments_status(page: Page) -> None:
+    open_task(page, "Manage deployments")
+    page.locator("button", has=page.locator("strong", has_text=re.compile("^Show deployments status$"))).click()
     expect(page.get_by_role("table", name="Deployments")).to_be_visible()
-    save(page, "visit-book-deployments")
+    save(page, "deployments-status")
 
 
 # ── Import deployment ────────────────────────────────────────────────────────
@@ -172,7 +171,8 @@ SOURCE = "/home/me/Pictures/R0003-DONA_01"
 
 
 def to_origin(page: Page) -> None:
-    open_task(page, "Import deployment")
+    open_task(page, "Manage deployments")
+    page.locator("button", has=page.locator("strong", has_text=re.compile("^Import deployment$"))).click()
     expect(heading(page, "Origin")).to_be_visible()
 
 

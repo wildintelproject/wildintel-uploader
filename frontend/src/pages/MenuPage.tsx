@@ -12,7 +12,7 @@ const ICONS: Record<string, ReactNode> = {
 
 const TASKS: { value: Task; icon: string; title: string; description: string }[] = [
   { value: 'visits', icon: 'visits', title: 'Manage visits', description: 'Register the visits to the camera traps — who went, when, to which site and what was done — or look at the visit book. The deployments are worked out from the visits.' },
-  { value: 'deployment', icon: 'deployment', title: 'Import deployment', description: 'Organize a folder of camera-trap images on this computer, then register the deployment in Trapper.' },
+  { value: 'deployment', icon: 'deployment', title: 'Manage deployments', description: 'Import a folder of camera-trap images as a deployment, or see the status of the deployments: which are closed, which still have the camera out and which are on Trapper.' },
   { value: 'session', icon: 'session', title: 'Import session', description: 'Several deployments from one folder, with one subfolder each. The visit, the checks and the image preparation are shared; the location and dates are asked for each.' },
   { value: 'upload', icon: 'upload', title: 'Upload deployment to Trapper', description: 'Pick a collection kept on this computer and send a deployment to Trapper. Its location and the deployment are created there if they are missing.' },
 ]

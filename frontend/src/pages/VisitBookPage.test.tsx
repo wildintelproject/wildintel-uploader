@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
 import VisitBookPage from './VisitBookPage'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), fieldDeployments: vi.fn(), getSettings: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), getSettings: vi.fn() } }))
 const mockedApi = vi.mocked(api)
 
 const visit = (over: object) => ({
@@ -21,10 +21,6 @@ beforeEach(() => {
     visit({ deployment: 'R0003-TATR_0001', deployment_status: 'closed' }),
     visit({ date: '2024-10-12', session: 'R0004', actions: ['Revision'], num_photos: 241, sd: 'B2', deployment: 'R0004-TATR_0001', deployment_status: 'open', comments: 'pilas cambiadas' }),
     visit({ location_id: 'TATR_0002', trappers: 'Luis', camera_id: 'P900', deployment: 'R0003-TATR_0002', deployment_status: 'closed', deployment_id: 'R0003-TATR_0002', on_trapper: true, uploaded_at: '2024-10-20T10:00:00+00:00' }),
-  ] })
-  mockedApi.fieldDeployments.mockResolvedValue({ results: [
-    { deployment_id: 'R0003-TATR_0001', collection: 'R0003', site: 'TATR_0001', status: 'closed', start: '2024-09-04T09:00:00Z', end: '2024-10-12T09:00:00Z', setup_by: 'Ana', camera_id: 'P800', card: 'A13', photos_counted: 241, start_session: 'R0003', end_session: 'R0004' },
-    { deployment_id: 'R0003-TATR_0002', collection: 'R0003', site: 'TATR_0002', status: 'open', start: '2024-09-05T09:00:00Z', end: null, setup_by: null, camera_id: 'P900', card: 'C7', photos_counted: null, start_session: 'R0003', end_session: null },
   ] })
 })
 
@@ -209,18 +205,14 @@ describe('VisitBookPage', () => {
     expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Installation', 'Closed', 'Create deployment'])
   })
 
-  it('has the tabs first, and links the tick of the images stored to the details of the deployment', async () => {
-    await pickProject()
-    const tabs = await screen.findByRole('tablist', { name: 'Show' })
-    // the tabs come before the revisions and the status squares
-    expect(tabs.compareDocumentPosition(screen.getByRole('region', { name: 'Revision' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(tabs.compareDocumentPosition(screen.getByRole('region', { name: 'Visits by status' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  it('links the tick of the images stored to the status of the deployment', async () => {
+    const onShowDeployment = vi.fn()
+    render(<VisitBookPage onBack={vi.fn()} onShowDeployment={onShowDeployment} />)
+    await screen.findByRole('table', { name: 'Visits' })
 
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument() // the deployments are on Manage deployments, not here
     await userEvent.click(screen.getByRole('button', { name: 'Details of the deployment R0003-TATR_0002' }))
-    expect(screen.getByRole('tab', { name: /Deployments/ })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.queryByRole('table', { name: 'Visits' })).not.toBeInTheDocument()  // the visits are on their tab
-    const row = within(screen.getByRole('region', { name: 'Deployments the visits say' })).getByText('R0003-TATR_0002').closest('tr')!
-    expect(row).toHaveAttribute('aria-current', 'true')                                     // the deployment of the link, highlighted
+    expect(onShowDeployment).toHaveBeenCalledWith('R0003-TATR_0002')
   })
 
   it('shows the details of a visit, and creates the deployment of a closed visit that has none yet', async () => {
@@ -238,38 +230,5 @@ describe('VisitBookPage', () => {
     expect(screen.getAllByRole('button', { name: /Create the deployment of the visit/ })).toHaveLength(1)
     await userEvent.click(screen.getByRole('button', { name: 'Create the deployment of the visit R0003 to TATR_0001' }))
     expect(onImportImages).toHaveBeenCalledWith({ researchProjectId: 'TATR', visit: expect.objectContaining({ session: 'R0003', location_id: 'TATR_0001' }) })
-  })
-
-  it('has the deployments as a book: a square for each revision, the status squares of the one picked, and a table', async () => {
-    mockedApi.fieldDeployments.mockResolvedValue({ results: [
-      { deployment_id: 'R0003-TATR_0001', collection: 'R0003', site: 'TATR_0001', status: 'closed', start: '2024-09-04T09:00:00Z', end: '2024-10-12T09:30:00Z', setup_by: 'Ana', camera_id: 'P800', card: 'A13', photos_counted: 241, start_session: 'R0003', end_session: 'R0004', images_stored: true, on_trapper: true, uploaded_at: '2024-10-20T10:00:00+00:00' },
-      { deployment_id: 'R0003-TATR_0002', collection: 'R0003', site: 'TATR_0002', status: 'closed', start: '2024-09-05T09:00:00Z', end: '2024-10-12T10:00:00Z', setup_by: null, camera_id: 'P900', card: 'C7', photos_counted: 10, start_session: 'R0003', end_session: 'R0004', images_stored: true, on_trapper: false },
-      { deployment_id: 'R0003-TATR_0003', collection: 'R0003', site: 'TATR_0003', status: 'closed', start: '2024-09-05T09:00:00Z', end: '2024-10-12T10:00:00Z', setup_by: null, camera_id: 'P901', card: 'C8', photos_counted: 12, start_session: 'R0003', end_session: 'R0004', images_stored: false, on_trapper: false },
-      { deployment_id: 'R0004-TATR_0001', collection: 'R0004', site: 'TATR_0001', status: 'open', start: '2024-10-12T09:30:00Z', end: null, setup_by: null, camera_id: 'P800', card: 'B2', photos_counted: null, start_session: 'R0004', end_session: null, images_stored: false, on_trapper: false },
-    ] })
-    await pickProject()
-    await userEvent.click(await screen.findByRole('tab', { name: /Deployments/ }))
-
-    const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
-    const revisions = within(region).getByRole('region', { name: 'Revision' })
-    expect(within(revisions).getAllByRole('button').map((b) => b.textContent)).toEqual(['All revisions4 deployments', 'R00041 deployment', 'R00033 deployments'])
-    const squares = within(region).getByRole('region', { name: 'Deployments by status' })
-    const square = (name: RegExp) => within(squares).getByRole('button', { name })
-    expect(square(/^All the deployments/)).toHaveTextContent('4')
-    expect(square(/^Closed/)).toHaveTextContent('2')                  // collected, and the images stored
-    expect(square(/^Camera still out/)).toHaveTextContent('1')
-    expect(square(/^Not on Trapper yet/)).toHaveTextContent('1')      // closed, stored, not uploaded
-
-    await userEvent.click(within(revisions).getByRole('button', { name: /^R0003/ }))
-    expect(within(region).getByRole('heading', { name: 'Revision R0003: deployments by status' })).toBeInTheDocument()
-    expect(square(/^Deployments of R0003/)).toHaveTextContent('3')
-    const table = within(region).getByRole('table', { name: 'Deployments' })
-    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Deployment', 'Where', 'Status', 'Period', 'Card and photos', 'On Trapper'])
-    const first = within(table).getAllByRole('row')[1]
-    expect(within(first).getAllByRole('cell').map((c) => c.textContent).slice(0, 5)).toEqual(['R0003-TATR_0001', 'TATR_0001', 'Closed', '4 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'Card A13 · 241 photos'])
-    expect(within(first).getByRole('img', { name: 'On Trapper' })).toHaveAttribute('title', 'Uploaded to Trapper on 2024-10-20')
-
-    await userEvent.click(square(/^Not on Trapper yet/))
-    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0003-TATR_0002'])
   })
 })

@@ -69,6 +69,7 @@ describe('App', () => {
   it('takes a finished import to the upload page, on the collection it went into', async () => {
     render(<App />)
     await getStarted()
+    await userEvent.click(await screen.findByRole('button', { name: /manage deployments/i }))
     await userEvent.click(await screen.findByRole('button', { name: /import deployment/i }))
     await userEvent.click(await screen.findByRole('button', { name: 'finish the import' }))
 
@@ -78,6 +79,7 @@ describe('App', () => {
   it('opens the upload page empty when it is chosen from the menu, whatever was imported before', async () => {
     render(<App />)
     await getStarted()
+    await userEvent.click(await screen.findByRole('button', { name: /manage deployments/i }))
     await userEvent.click(await screen.findByRole('button', { name: /import deployment/i }))
     await userEvent.click(await screen.findByRole('button', { name: 'finish the import' }))
     await userEvent.click(await title())

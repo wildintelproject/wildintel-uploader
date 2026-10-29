@@ -1,9 +1,8 @@
 import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api'
 import { pageNumbers } from '../components/CheckFailures'
-import FieldDeployments from '../components/FieldDeployments'
-import { defaultResearchProject } from '../defaultResearchProject'
-import type { BookVisit, ClosedVisitTarget, FieldDeployment, LocalResearchProject } from '../types'
+import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
+import type { BookVisit, ClosedVisitTarget } from '../types'
 import { btnOutline, btnPrimary, inputClass } from './ImportDeploymentPage'
 
 interface Props {
@@ -14,6 +13,8 @@ interface Props {
   onOpenSettings?: (section?: 'general') => void
   /** Whether the settings are open: the default research project is read again when they are closed, as it may have been changed. */
   settingsOpen?: boolean
+  /** Goes to the status of the deployments, on one of them: the link of the tick of the images stored. */
+  onShowDeployment?: (deploymentId: string) => void
 }
 
 /** The fields of a visit the details show, in this order, when it has them. */
@@ -26,8 +27,6 @@ const DETAILS: [keyof BookVisit, string][] = [
 ]
 
 const shownValue = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') : Array.isArray(v) ? v.join(', ') : String(v))
-
-type View = 'visits' | 'deployments'
 
 /** The columns the book can be sorted by. */
 type SortKey = 'session' | 'where' | 'when' | 'status' | 'actions' | 'stored' | 'trapper'
@@ -54,52 +53,28 @@ const matches = (v: BookVisit, f: StatusFilter) => !f || (f === 'not_done' ? v.n
 const PER_PAGE = 10
 
 /** The visit book of a research project: the visits kept to it, and the deployments they say — closed, and the ones whose camera is still out — with the logs of their collections. */
-export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, settingsOpen }: Props) {
+export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, settingsOpen, onShowDeployment }: Props) {
   // The book is of the research project the general settings say is the default: the one that is active.
-  const [project, setProject] = useState<LocalResearchProject | undefined>(undefined)
-  const [defaultAcronym, setDefaultAcronym] = useState<string | null>(null)
-  const [view, setView] = useState<View>('visits')
+  const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
   const [visits, setVisits] = useState<BookVisit[] | null>(null)
   const [opened, setOpened] = useState<string | null>(null)
-  const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [filter, setFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
   // A revision is one visit to every site: the book can be of one of them, or of all.
   const [revision, setRevision] = useState('')
-  // The deployment the Deployments tab shows highlighted: the one a visit's link goes to.
-  const [focusDeployment, setFocusDeployment] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest session first.
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const error = projectError ?? loadError
 
   useEffect(() => {
-    if (settingsOpen) return
-    let cancelled = false
-    void (async () => {
-      const acronym = await defaultResearchProject()
-      if (cancelled) return
-      setDefaultAcronym(acronym)
-      try {
-        const { results } = await api.listResearchProjects()
-        if (!cancelled) setProject(results.find((p) => p.acronym.toLowerCase() === acronym.toLowerCase()))
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Could not read the research projects.')
-      }
-    })()
-    return () => { cancelled = true }
-  }, [settingsOpen])
-
-  useEffect(() => {
-    setVisits(null); setDeployments(null); setError(null); setPage(1); setOpened(null); setRevision('')
+    setVisits(null); setLoadError(null); setPage(1); setOpened(null); setRevision('')
     if (!project) return
     let cancelled = false
     api.visitBook(project.acronym)
       .then(({ results }) => { if (!cancelled) setVisits(results) })
-      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Could not read the visits.') })
-    api.fieldDeployments(project.acronym)
-      .then(({ results }) => { if (!cancelled) setDeployments(results) })
-      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Could not read the deployments.') })
+      .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not read the visits.') })
     return () => { cancelled = true }
   }, [project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -137,36 +112,15 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8">
       <h4 className="text-lg font-semibold mb-1">Visit book</h4>
-      <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">The visits kept to a research project, and the deployments they say.</p>
+      <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">The visits kept to a research project.</p>
 
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 px-6 py-5 mb-5">
-        <h5 className="text-base font-semibold mb-2">Research project</h5>
-        {project ? (
-          <p className="text-base"><span className="font-mono font-semibold">{project.acronym}</span> — {project.name}</p>
-        ) : defaultAcronym === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the settings…</p>
-          : defaultAcronym ? <p className="text-sm text-amber-700 dark:text-amber-400">The default research project, <span className="font-mono">{defaultAcronym}</span>, is not in the collections folder.</p>
-          : <p className="text-sm text-amber-700 dark:text-amber-400">No default research project is set.</p>}
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-          The book is of the default research project.{' '}
-          {onOpenSettings
-            ? <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => onOpenSettings('general')}>Change it in the settings</button>
-            : 'Change it in Settings › General.'}
-        </p>
-      </div>
+      <DefaultResearchProject project={project} defaultAcronym={defaultAcronym} of="The book" onOpenSettings={onOpenSettings} />
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       {project && (
         <>
-          <div className="mb-5">
-            <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700" role="tablist" aria-label="Show">
-              {([['visits', 'Visits', visits?.filter((v) => !v.not_done).length], ['deployments', 'Deployments', deployments?.length]] as const).map(([id, label, n]) => (
-                <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
-                        className={`px-4 py-2.5 text-sm font-medium border-l first:border-l-0 border-zinc-300 dark:border-zinc-700 ${view === id ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{label}{n !== undefined ? ` ${n}` : ''}</button>
-              ))}
-            </div>
-          </div>
-          {view === 'visits' && visits !== null && revisions.length > 0 && (
+          {visits !== null && revisions.length > 0 && (
             <section aria-label="Revision" className="mb-6">
               <h5 className="text-lg font-semibold mb-1">Revision</h5>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see what is planned and what is done.</p>
@@ -181,7 +135,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
               </div>
             </section>
           )}
-          {view === 'visits' && visits !== null && (
+          {visits !== null && (
             <section aria-label="Visits by status" className="mb-5">
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                 <h5 className="text-lg font-semibold">{revision ? `Revision ${revision}: visits by status` : 'Visits by status'}</h5>
@@ -206,11 +160,11 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
             </section>
           )}
 
-          {view === 'visits' && <div className="mb-3 flex justify-end">
+          {<div className="mb-3 flex justify-end">
             <input aria-label="Filter the visits" className={`${inputClass} !w-64`} placeholder="Site, session, camera, card, who, deployment…" value={filter} onChange={(e) => { setFilter(e.target.value); setPage(1); setOpened(null) }} />
           </div>}
 
-          {view === 'visits' && (
+          {(
             visits === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the visits…</p> : (
               <>
               <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
@@ -250,7 +204,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                   <span role="img" aria-label="Images stored" className="inline-flex text-emerald-600 dark:text-emerald-400">
                                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
                                   </span>
-                                  <button type="button" className="text-xs text-blue-600 dark:text-blue-400 hover:underline" aria-label={`Details of the deployment ${v.deployment_id}`} onClick={() => { setFocusDeployment(v.deployment_id!); setView('deployments') }}>Deployment details</button>
+                                  <button type="button" className="text-xs text-blue-600 dark:text-blue-400 hover:underline" aria-label={`Details of the deployment ${v.deployment_id}`} onClick={() => onShowDeployment?.(v.deployment_id!)}>Deployment details</button>
                                 </span>
                               ) : v.deployment_status === 'closed' && onImportImages ? (
                                 <button type="button" className={`${btnPrimary} !px-2.5 !py-1 !text-xs whitespace-nowrap`} aria-label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })}>Create deployment</button>
@@ -310,12 +264,6 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
               )}
               </>
             )
-          )}
-
-          {view === 'deployments' && (
-            <>
-              {deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} highlight={focusDeployment ?? undefined} />}
-            </>
           )}
         </>
       )}
