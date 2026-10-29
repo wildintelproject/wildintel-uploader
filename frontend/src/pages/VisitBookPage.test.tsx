@@ -106,6 +106,33 @@ describe('VisitBookPage', () => {
     expect(screen.queryByRole('navigation', { name: 'Pages' })).not.toBeInTheDocument() // one page: nothing to page
   })
 
+  it('sorts by a column, and turns it round when it is pressed again — the rows not made always last', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ location_id: 'TATR_0002', session: 'R0001', date: '2024-09-05', actions: ['Installation'] }),
+      visit({ location_id: 'TATR_0001', session: 'R0001', date: '2024-09-07', actions: ['Revision'], deployment_status: 'open' }),
+      visit({ location_id: 'TATR_0003', session: 'R0001', date: '', time: '', actions: [], not_done: true, camera_id: null, sd: null, trappers: null }),
+      visit({ location_id: 'TATR_0004', session: 'R0001', date: '2024-09-06', actions: ['Revision'], deployment_status: 'closed', deployment: 'R0001-TATR_0004', deployment_id: 'R0001-TATR_0004' }),
+    ] })
+    await pickProject()
+    const table = await screen.findByRole('table', { name: 'Visits' })
+    const where = () => within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)
+
+    await userEvent.click(within(table).getByRole('button', { name: 'Where' }))
+    expect(where()).toEqual(['TATR_0001', 'TATR_0002', 'TATR_0003', 'TATR_0004'])
+    expect(within(table).getByRole('columnheader', { name: /Where/ })).toHaveAttribute('aria-sort', 'ascending')
+    await userEvent.click(within(table).getByRole('button', { name: 'Where' }))
+    expect(where()).toEqual(['TATR_0004', 'TATR_0003', 'TATR_0002', 'TATR_0001'])
+    expect(within(table).getByRole('columnheader', { name: /Where/ })).toHaveAttribute('aria-sort', 'descending')
+
+    await userEvent.click(within(table).getByRole('button', { name: 'When' }))
+    expect(where()).toEqual(['TATR_0002', 'TATR_0004', 'TATR_0001', 'TATR_0003']) // oldest first, the one not made last
+    await userEvent.click(within(table).getByRole('button', { name: 'When' }))
+    expect(where()).toEqual(['TATR_0001', 'TATR_0004', 'TATR_0002', 'TATR_0003']) // newest first, the one not made still last
+
+    await userEvent.click(within(table).getByRole('button', { name: 'Status' }))
+    expect(where().slice(0, 2)).toEqual(['TATR_0004', 'TATR_0001']) // closed, then open
+  })
+
   it('has the session first, then where and when, the status of the visit (closed or open), the actions and whether its images are stored (a tick, or the button to create the deployment)', async () => {
     await pickProject()
 

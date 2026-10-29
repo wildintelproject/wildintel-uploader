@@ -29,6 +29,22 @@ const shownValue = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') 
 
 type View = 'visits' | 'deployments'
 
+/** The columns the book can be sorted by. */
+type SortKey = 'session' | 'where' | 'when' | 'status' | 'actions' | 'stored'
+const COLUMNS: [SortKey, string][] = [['session', 'Session'], ['where', 'Where'], ['when', 'When'], ['status', 'Status'], ['actions', 'Actions'], ['stored', 'Images stored']]
+
+/** What a row says in a column, to sort by it: the rows not made go last whatever the direction (they have no day, no actions…). */
+function sortValue(v: BookVisit, key: SortKey): string | number {
+  switch (key) {
+    case 'session': return v.session
+    case 'where': return v.location_id.toLowerCase()
+    case 'when': return `${v.date}T${v.time}`
+    case 'status': return v.not_done ? 2 : v.deployment_status === 'closed' ? 0 : v.deployment_status === 'open' ? 1 : 3
+    case 'actions': return v.actions.join(' + ').toLowerCase()
+    case 'stored': return v.deployment_id ? 0 : v.deployment_status === 'closed' ? 1 : 2 // stored, to create, not stored
+  }
+}
+
 /** How many visits a page of the book has. */
 const PER_PAGE = 10
 
@@ -44,6 +60,8 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const [filter, setFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | 'closed' | 'open' | 'not_done'>('')
   const [page, setPage] = useState(1)
+  // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest session first.
+  const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -80,8 +98,15 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const shown = (visits ?? [])
     .filter((v) => !statusFilter || (statusFilter === 'not_done' ? v.not_done : v.deployment_status === statusFilter))
     .filter((v) => !needle || `${v.location_id} ${v.session} ${v.camera_id ?? ''} ${v.sd ?? ''} ${v.trappers ?? ''} ${v.actions.join(' ')} ${v.deployment_id ?? ''} ${v.deployment_status ?? ''} ${v.not_done ? 'not done' : ''}`.toLowerCase().includes(needle))
-    // the latest session first; within it the visits made, the newest first, then the ones not made, by site
-    .sort((a, b) => b.session.localeCompare(a.session) || Number(a.not_done) - Number(b.not_done) || (a.not_done ? a.location_id.localeCompare(b.location_id) : `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`)))
+    // by the column chosen — the rows not made last —, else the latest session first, within it the visits made newest first and then the ones not made, by site
+    .sort((a, b) => {
+      const byDefault = () => b.session.localeCompare(a.session) || Number(a.not_done) - Number(b.not_done) || (a.not_done ? a.location_id.localeCompare(b.location_id) : `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))
+      if (!sort) return byDefault()
+      if (a.not_done !== b.not_done && ['when', 'actions', 'stored'].includes(sort.key)) return Number(a.not_done) - Number(b.not_done)
+      const x = sortValue(a, sort.key), y = sortValue(b, sort.key)
+      const order = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))
+      return (sort.descending ? -order : order) || byDefault()
+    })
   const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE))
   const current = Math.min(page, pages)
   const onPage = shown.slice((current - 1) * PER_PAGE, current * PER_PAGE)
@@ -129,7 +154,16 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
               <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
                 <table className="w-full text-sm" aria-label="Visits">
                   <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
-                    <tr>{['Session', 'Where', 'When', 'Status', 'Actions', 'Images stored', ''].map((h, i) => <th key={i} scope="col" className="px-3 py-2.5 text-left font-medium">{h || <span className="sr-only">What to do</span>}</th>)}</tr>
+                    <tr>
+                      {COLUMNS.map(([key, label]) => (
+                        <th key={key} scope="col" aria-sort={sort?.key === key ? (sort.descending ? 'descending' : 'ascending') : 'none'} className="px-3 py-2.5 text-left font-medium">
+                          <button type="button" className="inline-flex items-center gap-1 font-medium hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => { setSort(sort?.key === key ? { key, descending: !sort.descending } : { key, descending: false }); setPage(1); setOpened(null) }}>
+                            {label}<span aria-hidden="true" className="text-[10px]">{sort?.key === key ? (sort.descending ? '▼' : '▲') : ''}</span>
+                          </button>
+                        </th>
+                      ))}
+                      <th scope="col" className="px-3 py-2.5"><span className="sr-only">What to do</span></th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
                     {onPage.map((v) => {
