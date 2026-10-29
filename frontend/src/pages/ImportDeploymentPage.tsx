@@ -2774,9 +2774,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                         : <>Tell us when the images of <strong>{deployment.location_id}</strong> were collected. Times are in <strong>{timezone}</strong>, which {ignoreDst ? 'has no daylight saving time' : 'follows daylight saving time'}.</>}
                       summary={deployment.start_date && <>{deployment.deployment_id}<br />{deployment.start_date.slice(0, 10)} → {deployment.end_date?.slice(0, 10) ?? '…'}</>}>
             {guessing && <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">Reading the dates and the camera from the images…</p>}
-              <FormCard title="Which revision is this?">
+              <FormCard title={linkedVisit ? 'The deployment' : 'Which revision is this?'}>
                 <div className="flex items-end gap-6 flex-wrap">
-                  <div>
+                  {!linkedVisit && <div>
                     <div className="flex items-baseline gap-3 mb-1.5">
                       <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="field-revision">Revision</label>
                       <span className="text-xs text-blue-600 dark:text-blue-400">Required</span>
@@ -2792,7 +2792,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                               className="w-12 text-lg text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40"
                               onClick={() => handleRevisionChange(String((revisionValid ? Number(revision) : 0) + 1))}>+</button>
                     </div>
-                  </div>
+                  </div>}
                   <div>
                     <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1.5" htmlFor="field-deployment-id">Deployment Id</label>
                     <input id="field-deployment-id" readOnly value={deployment.deployment_id} placeholder="Filled in from the revision"
@@ -2801,7 +2801,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                 </div>
                 {revision.trim() !== '' && !revisionValid && <p className="text-xs text-red-600 dark:text-red-400 mt-2">Must be a whole number between 1 and 9999.</p>}
                 {fieldErrors.deployment_id && <p className="text-xs text-red-600 dark:text-red-400 mt-2">{fieldErrors.deployment_id}</p>}
-                <p className={hintClass}>1 for the first visit to this location, 2 for the second, and so on.{revisionHint ? ` ${revisionHint}` : ''}</p>
+                <p className={hintClass}>{linkedVisit ? 'The revision is the one of the visit you chose: it gives the deployment its id.' : `1 for the first visit to this location, 2 for the second, and so on.${revisionHint ? ` ${revisionHint}` : ''}`}</p>
                 {previousRevision && (
                   <div className="mt-4 flex items-center gap-4 flex-wrap rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/50 px-5 py-4 text-sm text-blue-900 dark:text-blue-100">
                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current text-blue-600 dark:text-blue-300" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>

@@ -1343,8 +1343,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                       description="The revision number, and the period of each deployment."
                       summary={revisionValid && <>Revision {revisionName}<br />{deploymentsCount}</>}>
           {guessingLeft > 0 && <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Reading the dates and the cameras from the images… ({guessingLeft} deployment(s) left)</p>}
-          <FormCard title="Which revision is this?" description="One revision number for the whole session. It gives every deployment its id.">
-            <div className="flex items-end gap-2 max-w-xs">
+          <FormCard title={visitsMode ? 'The deployments' : 'Which revision is this?'} description={visitsMode ? 'The revision is the one of the visits you chose: they give every deployment its id.' : 'One revision number for the whole session. It gives every deployment its id.'}>
+            {!visitsMode && <div className="flex items-end gap-2 max-w-xs">
               <button type="button" aria-label="Lower the revision number" className={`${btnOutline} !px-3`} disabled={!revisionValid || revisionNumber <= 1}
                       onClick={() => { revisionTouched.current = true; setRevision(String(revisionNumber - 1)); setRevisionFromLog(null); setRevisionSuggested(false); setRevisionFromVisits(false) }}>−</button>
               <div className="flex-1">
@@ -1353,10 +1353,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
               </div>
               <button type="button" aria-label="Raise the revision number" className={`${btnOutline} !px-3`} disabled={revisionValid && revisionNumber >= 9999}
                       onClick={() => { revisionTouched.current = true; setRevision(String((revisionValid ? revisionNumber : 0) + 1)); setRevisionFromLog(null); setRevisionSuggested(false); setRevisionFromVisits(false) }}>+</button>
-            </div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1.5">
+            </div>}
+            {!visitsMode && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1.5">
               {revisionFromVisits && revisionValid ? 'Taken from the session of the visits you chose — change it if it is not right.' : revisionFromLog && revisionValid ? `Taken from the deployment ids in ${revisionFromLog} — change it if it is not right.` : revisionSuggested && revisionValid ? 'Filled in as the next one expected for these locations — change it if it is not right.' : '1 for the first visit to these locations, 2 for the second, and so on.'}
-            </p>
+            </p>}
             {revisionValid && chosen.length > 0 && (
               <div className="mt-3 flex items-center gap-2 flex-wrap text-xs text-zinc-500 dark:text-zinc-400">
                 <span>Deployment ids</span>

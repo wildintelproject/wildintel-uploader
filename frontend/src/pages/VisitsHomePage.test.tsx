@@ -11,7 +11,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockedApi.trapperGetConfig.mockRejectedValue(new Error('no account in this test'))
   mockedApi.listResearchProjects.mockResolvedValue({ results: [] } as never)
-  mockedApi.getSettings.mockResolvedValue({ FIELDWORK: { trappers: [], sd_cards: [], cameras: [] } } as never)
+  mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: null }, FIELDWORK: { trappers: [], sd_cards: [], cameras: [] } } as never)
   mockedApi.listLocalLocations.mockResolvedValue({ results: [] })
   mockedApi.closedVisits.mockResolvedValue({ results: [] })
   mockedApi.listVisits.mockResolvedValue({ results: [] })

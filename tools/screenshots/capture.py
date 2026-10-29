@@ -153,7 +153,6 @@ def visits(page: Page) -> None:
 def visit_book(page: Page) -> None:
     open_task(page, "Manage visits")
     page.locator("button", has=page.locator("strong", has_text=re.compile("^Show the visit book$"))).click()
-    choose(page, "origin-research-project", "DONA")
     expect(page.get_by_role("table", name="Visits")).to_be_visible()
     save(page, "visit-book")
 

@@ -155,11 +155,12 @@ def field_logs(req: FieldLogsRequest) -> dict:
 @router.post("/book")
 def visit_book(req: ListVisitsRequest) -> dict:
     """The visit book of a research project: its visits, each with the deployment it started and whether that is closed (a later visit collected its card) or
-    open (the camera is still out)."""
+    open (the camera is still out) — and a row for each location that was not visited in a session the visits have (`not_done`)."""
     try:
         root = config.collections_dir()
         local_folder_service.require_research_project(root, req.research_project_id)
         visits = local_folder_service.list_visits(root, req.research_project_id, req.location_id)
-        return {"results": visit_deployments.visit_book(visits, config.load_settings().FIELDLOG.keep_seconds)}
+        locations = local_folder_service.list_locations(root, req.research_project_id) if req.location_id is None else None
+        return {"results": visit_deployments.visit_book(visits, config.load_settings().FIELDLOG.keep_seconds, locations)}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc

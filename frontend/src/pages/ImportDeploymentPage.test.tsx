@@ -412,7 +412,8 @@ describe('ImportDeploymentPage', () => {
         await continueToDates()
         await screen.findByText('When was it collected?')
         expect(screen.getByText((_, el) => el?.textContent === 'Visit DONA_01 · 2026-08-05 → 2026-10-02')).toBeInTheDocument() // the research project and the visit, with its range
-        expect(screen.getByLabelText('Revision')).toHaveValue(2)
+        expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
+        expect(screen.getByLabelText('Deployment Id')).toHaveValue('R0002-DONA_01')
       })
 
       it('records on the visit the deployment it closed, once the deployment is saved', async () => {
@@ -443,7 +444,8 @@ describe('ImportDeploymentPage', () => {
         expect((screen.getByLabelText('Closed visit') as HTMLInputElement).value).toMatch(/R0001/)
         await continueToDates()
         await screen.findByText('When was it collected?')
-        expect(screen.getByLabelText('Revision')).toHaveValue(1)
+        expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
+        expect(screen.getByLabelText('Deployment Id')).toHaveValue('R0001-DONA_01')
       })
 
       it('fills in the revision, the period and the details from the two visits, and says where they come from', async () => {
@@ -462,7 +464,8 @@ describe('ImportDeploymentPage', () => {
         await continueToDates()
         await screen.findByText('When was it collected?')
 
-        expect(screen.getByLabelText('Revision')).toHaveValue(1)
+        expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
+        expect(screen.getByLabelText('Deployment Id')).toHaveValue('R0001-DONA_01')
         expect(screen.getByRole('radio', { name: /Visits of the field work/ })).toBeChecked()
         expect(screen.getByText(/From the visit R0001 \(2026-06-10\)/)).toHaveTextContent('the visits are not changed')
         await userEvent.click(screen.getByRole('button', { name: 'Continue to more details' }))

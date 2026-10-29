@@ -4,18 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
 import VisitBookPage from './VisitBookPage'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), fieldDeployments: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), fieldDeployments: vi.fn(), getSettings: vi.fn() } }))
 const mockedApi = vi.mocked(api)
 
 const visit = (over: object) => ({
   location_id: 'TATR_0001', session: 'R0003', date: '2024-09-04', time: '09:00:00', actions: ['Installation'], trappers: 'Ana', status: null, card_batteries_ok: null, num_photos: null,
-  sd: 'A13', date_time_ok: null, latitude: null, longitude: null, camera_id: 'P800', camera_model: null, deployment: null, deployment_status: null, ...over,
+  sd: 'A13', date_time_ok: null, latitude: null, longitude: null, camera_id: 'P800', camera_model: null, deployment: null, deployment_status: null, not_done: false, ...over,
 }) as never
 
 beforeEach(() => {
   vi.clearAllMocks()
   mockedApi.trapperGetConfig.mockRejectedValue(new Error('no account in this test'))
   mockedApi.listResearchProjects.mockResolvedValue({ results: [{ name: 'Tatra', acronym: 'TATR' }] } as never)
+  mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'TATR' } } as never)
   mockedApi.visitBook.mockResolvedValue({ results: [
     visit({ deployment: 'R0003-TATR_0001', deployment_status: 'closed' }),
     visit({ date: '2024-10-12', session: 'R0004', actions: ['Revision'], num_photos: 241, sd: 'B2', deployment: 'R0004-TATR_0001', deployment_status: 'open', comments: 'pilas cambiadas' }),
@@ -27,10 +28,10 @@ beforeEach(() => {
   ] })
 })
 
+// The book is of the default research project: nothing to pick.
 async function pickProject() {
   render(<VisitBookPage onBack={vi.fn()} onImportImages={vi.fn()} />)
-  await userEvent.click(await screen.findByLabelText('Research project'))
-  await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+  await screen.findByText('Tatra', { exact: false })
 }
 
 describe('VisitBookPage', () => {
@@ -44,6 +45,65 @@ describe('VisitBookPage', () => {
     await userEvent.type(screen.getByLabelText('Filter the visits'), 'luis')
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
     expect(mockedApi.visitBook).toHaveBeenCalledWith('TATR')
+  })
+
+  it('is of the default research project, says so, and links to the settings where it is changed', async () => {
+    const onOpenSettings = vi.fn()
+    render(<VisitBookPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
+
+    expect(await screen.findByText(/Tatra/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Research project')).not.toBeInTheDocument() // no picker: the book is of the default one
+    await userEvent.click(screen.getByRole('button', { name: 'Change it in the settings' }))
+    expect(onOpenSettings).toHaveBeenCalledWith('general')
+    expect(mockedApi.visitBook).toHaveBeenCalledWith('TATR')
+  })
+
+  it('says when there is no default research project, or it is not in the collections folder', async () => {
+    mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: null } } as never)
+    const { unmount } = render(<VisitBookPage onBack={vi.fn()} onOpenSettings={vi.fn()} />)
+    expect(await screen.findByText('No default research project is set.')).toBeInTheDocument()
+    expect(mockedApi.visitBook).not.toHaveBeenCalled()
+    unmount()
+
+    mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'GONE' } } as never)
+    render(<VisitBookPage onBack={vi.fn()} onOpenSettings={vi.fn()} />)
+    expect(await screen.findByText(/is not in the collections folder/)).toBeInTheDocument()
+  })
+
+  it('has a row for each location not visited in a session, as Not done, with no buttons', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'closed' }),
+      visit({ location_id: 'TATR_0002', session: 'R0001', date: '', time: '', actions: [], sd: null, camera_id: null, trappers: null, not_done: true, when: null }),
+    ] })
+    await pickProject()
+
+    const table = await screen.findByRole('table', { name: 'Visits' })
+    const [done, notDone] = within(table).getAllByRole('row').slice(1)
+    expect(within(notDone).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', 'Not done', ''])
+    expect(within(notDone).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(done).getByRole('button', { name: /Details of the visit/ })).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('Filter by status'), 'not_done')
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
+  })
+
+  it('pages the visits, ten at a time, and goes back to the first page when the filter changes', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: Array.from({ length: 23 }, (_, n) => visit({ session: `R${String(n + 1).padStart(4, '0')}`, date: `2024-09-${String(n + 1).padStart(2, '0')}`, location_id: n === 22 ? 'TATR_0099' : 'TATR_0001' })) })
+    await pickProject()
+
+    const table = await screen.findByRole('table', { name: 'Visits' })
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(10)
+    expect(screen.getByRole('status')).toHaveTextContent('Visits 1–10 of 23')
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Page 3' }))
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(3)
+    expect(screen.getByRole('status')).toHaveTextContent('Visits 21–23 of 23')
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Previous page' }))
+    expect(screen.getByRole('button', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page')
+
+    await userEvent.type(screen.getByLabelText('Filter the visits'), '0099')
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
+    expect(screen.queryByRole('navigation', { name: 'Pages' })).not.toBeInTheDocument() // one page: nothing to page
   })
 
   it('has the session first, then where and when, the status of the visit (closed or open), the actions and whether its images are stored (a tick, or the button to create the deployment)', async () => {
@@ -63,8 +123,6 @@ describe('VisitBookPage', () => {
   it('shows the details of a visit, and creates the deployment of a closed visit that has none yet', async () => {
     const onImportImages = vi.fn()
     render(<VisitBookPage onBack={vi.fn()} onImportImages={onImportImages} />)
-    await userEvent.click(await screen.findByLabelText('Research project'))
-    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await screen.findByRole('table', { name: 'Visits' })
 
     await userEvent.click(screen.getByRole('button', { name: 'Details of the visit R0004 to TATR_0001' }))

@@ -176,14 +176,26 @@ def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
     return sorted(out, key=lambda d: (d["collection"], d["site"].lower()))
 
 
-def visit_book(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
+def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[dict] | None = None) -> list[dict]:
     """The visits as the visit book shows them, each with the deployment it started — `deployment` (its id) and `deployment_status` ("closed" once a later visit collected
-    its card, "open" while the camera it left is still out) — and neither for a visit that left no camera."""
+    its card, "open" while the camera it left is still out) — and neither for a visit that left no camera.
+
+    With the `locations` of the research project, the book also has a row — `not_done` — for each location that has no visit in a session the visits have: a trip is
+    made to every location, so the one that was not visited says so, with no day, no time and no actions. The retired locations are left out."""
     started = {id(d["start_visit"]): d for d in deployments(visits, keep_seconds)}
     out = []
     for v in visits:
         d = started.get(id(v))
-        out.append({**v, "deployment": d["deployment_id"] if d else None, "deployment_status": d["status"] if d else None})
+        out.append({**v, "deployment": d["deployment_id"] if d else None, "deployment_status": d["status"] if d else None, "not_done": False})
+    if locations:
+        visited = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in visits}
+        sessions = sorted({str(v["session"]).upper() for v in visits if v.get("session")})
+        for session in sessions:
+            for location in locations:
+                site = str(location.get("location_id", ""))
+                if not site or location.get("status") == "retired" or (session, site.lower()) in visited:
+                    continue
+                out.append({"location_id": site, "session": session, "date": "", "time": "", "when": None, "actions": [], "deployment": None, "deployment_status": None, "not_done": True})
     return out
 
 

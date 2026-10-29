@@ -1137,10 +1137,11 @@ describe('an import session of visits', () => {
     await next() // images → dates
 
     // the locations are the visits': nothing is asked of where they were taken, and the step starts at the dates
-    expect(await screen.findByLabelText('What revision number are you importing?')).toHaveValue(2)
+    expect(await screen.findByText(/The revision is the one of the visits you chose/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('What revision number are you importing?')).not.toBeInTheDocument() // the visits give it: it is not asked
+    expect(screen.getAllByText('R0002-DONA_01').length).toBeGreaterThan(0) // the id the revision gives the deployment
     expect(screen.queryByText('Where were they taken?')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Location of DONA_01')).not.toBeInTheDocument()
-    expect(screen.getByText(/Taken from the session of the visits you chose/)).toBeInTheDocument()
     expect(await screen.findByRole('radio', { name: /Visits of the field work/ })).toBeChecked()
     expect(screen.getAllByText(/From the visits/).length).toBeGreaterThan(0) // what each row says its dates come from
     await toMoreDetailsSubstep()
@@ -1159,7 +1160,7 @@ describe('an import session of visits', () => {
     await toTheFolders()
     await userEvent.selectOptions(screen.getByLabelText('SD card of DONA_01'), 'B2')
     await next()
-    await screen.findByLabelText('What revision number are you importing?')
+    await screen.findByText(/The revision is the one of the visits you chose/)
     await toMoreDetailsSubstep()
     await next() // dates → checks
     expect(await screen.findByRole('radiogroup', { name: 'How strict: The SD card is the one the visit left' })).toBeInTheDocument()
@@ -1182,7 +1183,7 @@ describe('an import session of visits', () => {
     await toTheFolders()
     await userEvent.selectOptions(screen.getByLabelText('SD card of DONA_01'), 'B2')
     await next()
-    await screen.findByLabelText('What revision number are you importing?')
+    await screen.findByText(/The revision is the one of the visits you chose/)
     await toMoreDetailsSubstep()
     await next() // dates → checks
 

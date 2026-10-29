@@ -748,6 +748,8 @@ export interface VisitsCsvResult {
 export interface BookVisit extends StoredVisit {
   deployment: string | null
   deployment_status: 'closed' | 'open' | null
+  /** A row for a location that has no visit in a session the visits have: the visit was not made — it has no day, no time and no actions. */
+  not_done: boolean
 }
 
 /** A deployment the visits of a research project say: closed (a visit left the camera and a later one collected its card) or still open (the camera is out). */

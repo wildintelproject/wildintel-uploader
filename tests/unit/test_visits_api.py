@@ -643,3 +643,15 @@ def test_the_visit_book_gives_each_visit_the_deployment_it_started_closed_or_ope
     assert (by[("DONA_01", "R0003")]["deployment"], by[("DONA_01", "R0003")]["deployment_status"]) == ("R0003-DONA_01", "closed")
     assert (by[("DONA_01", "R0004")]["deployment"], by[("DONA_01", "R0004")]["deployment_status"]) == ("R0004-DONA_01", "open")   # it left a card again: still out
     assert (by[("DONA_02", "R0003")]["deployment"], by[("DONA_02", "R0003")]["deployment_status"]) == ("R0003-DONA_02", "open")
+
+
+def test_the_visit_book_has_a_row_for_each_location_that_was_not_visited_in_a_session(tmp_path: Path):
+    with _in(tmp_path):
+        _field_visits()   # DONA_01 and DONA_02 are visited in R0003, DONA_01 alone in R0004; the project has DONA_01, DONA_02 and DONA_03
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_04", "status": "retired"}})
+        book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
+
+    not_done = sorted((v["session"], v["location_id"]) for v in book if v["not_done"])
+    assert not_done == [("R0003", "DONA_03"), ("R0004", "DONA_02"), ("R0004", "DONA_03")]       # DONA_04 is retired: left out
+    assert all(v["actions"] == [] and v["date"] == "" for v in book if v["not_done"])
+    assert sum(1 for v in book if not v["not_done"]) == 3                                           # the visits are the ones made

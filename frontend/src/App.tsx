@@ -31,9 +31,9 @@ export default function App() {
   // hidden) — so a run in progress isn't lost.
   const [settingsOpen, setSettingsOpen] = useState(false)
   // The section the settings open on, when something sends the user to one in particular.
-  const [settingsSection, setSettingsSection] = useState<'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations' | undefined>(undefined)
+  const [settingsSection, setSettingsSection] = useState<'general' | 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations' | undefined>(undefined)
   const [settingsProject, setSettingsProject] = useState<string | undefined>(undefined)
-  function openSettings(section?: 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations', researchProjectId?: string) { setSettingsSection(section); setSettingsProject(researchProjectId); setSettingsOpen(true) }
+  function openSettings(section?: 'general' | 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations', researchProjectId?: string) { setSettingsSection(section); setSettingsProject(researchProjectId); setSettingsOpen(true) }
   // Back on the welcome screen by the title: it is shown ahead of anything else until "Get Started" is pressed again.
   const [home, setHome] = useState(false)
   // Where the upload page starts from, when it is reached from a finished import.
