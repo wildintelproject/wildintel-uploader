@@ -280,7 +280,7 @@ closed deployments' start and end, as the cameras' wall clock) and its `<R000N>_
 
 ### Show deployments status
 
-Press **📷 Manage deployments**, then **Show deployments status**. It is of the **default research project**, and it is a book: a square for each **revision** (*All revisions*, *R0003*… with how many deployments each has), the **status squares** of the one picked — *Deployments of R0003*, *Closed* (the camera was collected and the images are stored), *Camera still out*
+Press **📷 Manage deployments**, then **Show deployments status**. It is of the **default research project**, and it is a book: a square for each **revision** (*All revisions*, *R0003*… with how many deployments each has), the **status squares** of the one picked — *Deployments of R0003*, *Deployed* (the camera is still out), *Collected* (the camera is back, its images not imported yet), *Imported* (the images are stored)
 and *Not on Trapper yet* (closed, with the images stored, ready to upload) — and a table with the deployment, where, its status, its period, its card and photos, and whether it is on Trapper. The **Deployment details** link of a visit of the visit book opens it on that deployment.
 
 ![The status of the deployments](img/screenshots/deployments-status.png)

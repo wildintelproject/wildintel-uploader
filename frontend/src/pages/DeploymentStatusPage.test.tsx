@@ -44,8 +44,9 @@ describe('DeploymentStatusPage', () => {
     const squares = within(region).getByRole('region', { name: 'Deployments by status' })
     const square = (name: RegExp) => within(squares).getByRole('button', { name })
     expect(square(/^All the deployments/)).toHaveTextContent('4')
-    expect(square(/^Closed/)).toHaveTextContent('2')                  // collected, and the images stored
-    expect(square(/^Camera still out/)).toHaveTextContent('1')
+    expect(square(/^Deployed/)).toHaveTextContent('1')                // camera still out
+    expect(square(/^Collected/)).toHaveTextContent('1')               // camera back, images not imported
+    expect(square(/^Imported/)).toHaveTextContent('2')                // collected, and the images stored
     expect(square(/^Not on Trapper yet/)).toHaveTextContent('1')      // closed, stored, not uploaded
 
     await userEvent.click(within(revisions).getByRole('button', { name: /^R0003/ }))
@@ -53,7 +54,7 @@ describe('DeploymentStatusPage', () => {
     const table = within(region).getByRole('table', { name: 'Deployments' })
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Deployment', 'Where', 'Status', 'Period', 'Card and photos', 'On Trapper'])
     const first = within(table).getAllByRole('row')[1]
-    expect(within(first).getAllByRole('cell').map((c) => c.textContent).slice(0, 5)).toEqual(['R0003-TATR_0001', 'TATR_0001', 'Closed', '4 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'Card A13 · 241 photos'])
+    expect(within(first).getAllByRole('cell').map((c) => c.textContent).slice(0, 5)).toEqual(['R0003-TATR_0001', 'TATR_0001', 'Imported', '4 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'Card A13 · 241 photos'])
     expect(within(first).getByRole('img', { name: 'On Trapper' })).toHaveAttribute('title', 'Uploaded to Trapper on 2024-10-20')
 
     await userEvent.click(square(/^Not on Trapper yet/))

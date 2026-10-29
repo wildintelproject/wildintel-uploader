@@ -8,10 +8,15 @@ import RevisionSquares from './RevisionSquares'
 /** How many deployments a page has. */
 const PER_PAGE = 10
 
-/** The rows the status squares show: all of them, the closed ones with their images stored, the ones whose camera is still out, and the closed ones with images stored that are not on Trapper. */
-export type Filter = '' | 'closed' | 'open' | 'to_upload'
+/** The rows the status squares show: all of them; the ones whose camera is still out (deployed); the ones collected whose images are not imported yet; the ones with their images imported; and these not on Trapper. */
+export type Filter = '' | 'deployed' | 'collected' | 'imported' | 'to_upload'
 const matches = (d: FieldDeployment, f: Filter) =>
-  !f || (f === 'open' ? d.status === 'open' : f === 'closed' ? d.status === 'closed' && Boolean(d.images_stored) : d.status === 'closed' && Boolean(d.images_stored) && !d.on_trapper)
+  !f || (f === 'deployed' ? d.status === 'open'
+    : f === 'collected' ? d.status === 'closed' && !d.images_stored
+    : f === 'imported' ? d.status === 'closed' && Boolean(d.images_stored)
+    : d.status === 'closed' && Boolean(d.images_stored) && !d.on_trapper)
+/** The phase of a deployment: its camera out, collected, or its images imported. */
+const phase = (d: FieldDeployment) => d.status === 'open' ? 'Deployed' : d.images_stored ? 'Imported' : 'Collected'
 
 const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
@@ -43,9 +48,10 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
 
   const SQUARES: { filter: Filter; label: string; note: string; tone: string }[] = [
     { filter: '', label: revision ? `Deployments of ${revision}` : 'All the deployments', note: 'one per camera and site', tone: 'text-zinc-900 dark:text-zinc-100' },
-    { filter: 'closed', label: 'Closed', note: 'camera collected, images stored', tone: 'text-emerald-600 dark:text-emerald-400' },
-    { filter: 'open', label: 'Camera still out', note: 'waiting for the next visit', tone: 'text-amber-600 dark:text-amber-400' },
-    { filter: 'to_upload', label: 'Not on Trapper yet', note: 'closed, ready to upload', tone: 'text-blue-600 dark:text-blue-400' },
+    { filter: 'deployed', label: 'Deployed', note: 'camera still out', tone: 'text-amber-600 dark:text-amber-400' },
+    { filter: 'collected', label: 'Collected', note: 'camera back, images not imported', tone: 'text-violet-600 dark:text-violet-400' },
+    { filter: 'imported', label: 'Imported', note: 'images stored', tone: 'text-emerald-600 dark:text-emerald-400' },
+    { filter: 'to_upload', label: 'Not on Trapper yet', note: 'imported, ready to upload', tone: 'text-blue-600 dark:text-blue-400' },
   ]
   const square = 'rounded-xl border px-4 py-3 text-left transition-colors'
   const pressed = 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
@@ -68,7 +74,7 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
               <h5 className="text-lg font-semibold">{revision ? `Revision ${revision}: deployments by status` : 'Deployments by status'}</h5>
               <span className="text-xs text-zinc-500 dark:text-zinc-400">Pick a square to show only those deployments.</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               {SQUARES.map((s) => (
                 <button key={s.label} type="button" aria-pressed={filter === s.filter} onClick={() => { setFilter(filter === s.filter ? '' : s.filter); setPage(1) }} className={`${square} ${filter === s.filter ? pressed : idle}`}>
                   <span className="block text-xs font-semibold text-zinc-600 dark:text-zinc-300">{s.label}</span>
@@ -92,7 +98,7 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                     <td className="px-3 py-3 font-mono text-xs font-semibold">{d.deployment_id}</td>
                     <td className="px-3 py-3 font-mono text-xs">{d.site}</td>
                     <td className="px-3 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${d.status === 'closed' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>{d.status === 'closed' ? 'Closed' : 'Camera still out'}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${{ Deployed: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300', Collected: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300', Imported: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' }[phase(d)]}`}>{phase(d)}</span>
                     </td>
                     <td className="px-3 py-3 font-mono text-xs">{when(d.start)} → {d.end ? when(d.end) : '…'}</td>
                     <td className="px-3 py-3 text-xs text-zinc-600 dark:text-zinc-400">{[d.card && `Card ${d.card}`, d.photos_counted != null && `${d.photos_counted} photos`].filter(Boolean).join(' · ')}</td>
