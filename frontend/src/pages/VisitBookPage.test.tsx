@@ -82,8 +82,37 @@ describe('VisitBookPage', () => {
     expect(within(notDone).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', '', 'Not done'])
     expect(within(notDone).queryByRole('button')).not.toBeInTheDocument()
     expect(within(done).getByRole('button', { name: /View the visit/ })).toBeInTheDocument()
-    await userEvent.selectOptions(screen.getByLabelText('Filter by status'), 'not_done')
+    await userEvent.click(screen.getByRole('button', { name: /^Not done/ }))
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
+  })
+
+  it('counts the visits by status in squares that filter them, with how many are done', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'closed' }),
+      visit({ session: 'R0001', location_id: 'TATR_0002', deployment: 'R0001-TATR_0002', deployment_status: 'closed', deployment_id: 'R0001-TATR_0002' }),
+      visit({ session: 'R0002', deployment: 'R0002-TATR_0001', deployment_status: 'open' }),
+      visit({ session: 'R0002', location_id: 'TATR_0002', date: '', time: '', actions: [], not_done: true, sd: null, camera_id: null, trappers: null }),
+    ] })
+    await pickProject()
+    const squares = await screen.findByRole('region', { name: 'Visits by status' })
+    const square = (name: RegExp) => within(squares).getByRole('button', { name })
+
+    expect(square(/^All the visits/)).toHaveTextContent('4')
+    expect(square(/^Not done/)).toHaveTextContent('1')
+    expect(square(/^Open/)).toHaveTextContent('1')
+    expect(square(/^Closed/)).toHaveTextContent('2')
+    expect(square(/^No deployment yet/)).toHaveTextContent('1')            // closed, and no deployment created yet
+    expect(within(squares).getByRole('progressbar', { name: 'Visits done' })).toHaveAttribute('aria-valuenow', '3')
+    expect(within(squares).getByText('3 of 4 visits done (75%)')).toBeInTheDocument()
+
+    const table = screen.getByRole('table', { name: 'Visits' })
+    await userEvent.click(square(/^No deployment yet/))
+    expect(square(/^No deployment yet/)).toHaveAttribute('aria-pressed', 'true')
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
+    await userEvent.click(square(/^No deployment yet/))                      // pressed again: all
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(4)
+    await userEvent.click(square(/^Closed/))
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2)
   })
 
   it('pages the visits, ten at a time, and goes back to the first page when the filter changes', async () => {

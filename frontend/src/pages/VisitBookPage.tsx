@@ -46,6 +46,10 @@ function sortValue(v: BookVisit, key: SortKey): string | number {
   }
 }
 
+/** The rows the status squares show: all, the ones not made, the open ones, the closed ones, and the closed ones whose deployment is not created yet. */
+type StatusFilter = '' | 'not_done' | 'open' | 'closed' | 'to_create'
+const matches = (v: BookVisit, f: StatusFilter) => !f || (f === 'not_done' ? v.not_done : f === 'to_create' ? v.deployment_status === 'closed' && !v.deployment_id : v.deployment_status === f)
+
 /** How many visits a page of the book has. */
 const PER_PAGE = 10
 
@@ -59,7 +63,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const [opened, setOpened] = useState<string | null>(null)
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [filter, setFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'' | 'closed' | 'open' | 'not_done'>('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
   const [page, setPage] = useState(1)
   // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest session first.
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
@@ -95,9 +99,21 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
     return () => { cancelled = true }
   }, [project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // How many rows each status square has — over all the rows of the book, whatever the text filter says.
+  const rows = visits ?? []
+  const count = (f: StatusFilter) => rows.filter((v) => matches(v, f)).length
+  const made = rows.filter((v) => !v.not_done).length
+  const SQUARES: { filter: StatusFilter; label: string; note: string; tone: string }[] = [
+    { filter: '', label: 'All the visits', note: 'planned for this project', tone: 'text-zinc-900 dark:text-zinc-100' },
+    { filter: 'not_done', label: 'Not done', note: 'no visit yet', tone: 'text-zinc-500 dark:text-zinc-400' },
+    { filter: 'open', label: 'Open', note: 'camera visited, card not collected', tone: 'text-amber-600 dark:text-amber-400' },
+    { filter: 'closed', label: 'Closed', note: 'card collected', tone: 'text-emerald-600 dark:text-emerald-400' },
+    { filter: 'to_create', label: 'No deployment yet', note: 'closed, ready to create', tone: 'text-blue-600 dark:text-blue-400' },
+  ]
+
   const needle = filter.trim().toLowerCase()
   const shown = (visits ?? [])
-    .filter((v) => !statusFilter || (statusFilter === 'not_done' ? v.not_done : v.deployment_status === statusFilter))
+    .filter((v) => matches(v, statusFilter))
     .filter((v) => !needle || `${v.location_id} ${v.session} ${v.camera_id ?? ''} ${v.sd ?? ''} ${v.trappers ?? ''} ${v.actions.join(' ')} ${v.deployment_id ?? ''} ${v.deployment_status ?? ''} ${v.not_done ? 'not done' : ''}`.toLowerCase().includes(needle))
     // by the column chosen — the rows not made last —, else the latest session first, within it the visits made newest first and then the ones not made, by site
     .sort((a, b) => {
@@ -136,6 +152,30 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
 
       {project && (
         <>
+          {visits !== null && (
+            <section aria-label="Visits by status" className="mb-5">
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                <h5 className="text-base font-semibold">Visits by status</h5>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">Pick a square to show only those visits.</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                {SQUARES.map((s) => (
+                  <button key={s.label} type="button" aria-pressed={statusFilter === s.filter}
+                          onClick={() => { setStatusFilter(statusFilter === s.filter ? '' : s.filter); setPage(1); setOpened(null) }}
+                          className={`rounded-xl border px-4 py-3 text-left transition-colors ${statusFilter === s.filter ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}>
+                    <span className="block text-xs font-semibold text-zinc-600 dark:text-zinc-300">{s.label}</span>
+                    <span className={`block text-3xl font-semibold leading-tight ${s.tone}`}>{count(s.filter)}</span>
+                    <span className="block text-xs text-zinc-500 dark:text-zinc-400">{s.note}</span>
+                  </button>
+                ))}
+              </div>
+              <div role="progressbar" aria-label="Visits done" aria-valuemin={0} aria-valuemax={rows.length} aria-valuenow={made} className="mt-3 flex h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                <div className="bg-emerald-500" style={{ width: `${rows.length ? (count('closed') / rows.length) * 100 : 0}%` }} />
+                <div className="bg-amber-500" style={{ width: `${rows.length ? (count('open') / rows.length) * 100 : 0}%` }} />
+              </div>
+              <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">{made} of {rows.length} visits done ({rows.length ? Math.round((made / rows.length) * 100) : 0}%)</p>
+            </section>
+          )}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700" role="tablist" aria-label="Show">
               {([['visits', 'Visits', visits?.filter((v) => !v.not_done).length], ['deployments', 'Deployments', deployments?.length]] as const).map(([id, label, n]) => (
@@ -143,9 +183,6 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                         className={`px-4 py-2.5 text-sm font-medium border-l first:border-l-0 border-zinc-300 dark:border-zinc-700 ${view === id ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{label}{n !== undefined ? ` ${n}` : ''}</button>
               ))}
             </div>
-            {view === 'visits' && <select aria-label="Filter by status" className={`${inputClass} !w-40`} value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); setOpened(null) }}>
-              <option value="">All the visits</option><option value="closed">Closed</option><option value="open">Open</option><option value="not_done">Not done</option>
-            </select>}
             {view === 'visits' && <input aria-label="Filter the visits" className={`${inputClass} !w-64`} placeholder="Site, session, camera, card, who, deployment…" value={filter} onChange={(e) => { setFilter(e.target.value); setPage(1); setOpened(null) }} />}
           </div>
 
