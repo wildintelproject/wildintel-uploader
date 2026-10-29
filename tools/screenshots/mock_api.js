@@ -397,8 +397,8 @@
         { ...c.end, deployment: `${c.end.session}-${c.end.location_id}`, deployment_status: 'open' },
       ]).map((v) => ({ not_done: false, ...v })).concat([{ location_id: 'DONA_04', session: 'R0004', date: '', time: '', when: null, actions: [], deployment: null, deployment_status: null, not_done: true }]) }),
       'POST /api/visits/deployments': () => ({ results: [
-        { deployment_id: 'R0003-DONA_01', collection: 'R0003', site: 'DONA_01', status: 'closed', start: '2024-09-04T12:55:00Z', end: '2024-10-12T07:30:00Z', setup_by: 'Ana Pérez', camera_id: CAMERA.id, card: 'A13', photos_counted: 241, start_session: 'R0003', end_session: 'R0004' },
-        { deployment_id: 'R0003-DONA_02', collection: 'R0003', site: 'DONA_02', status: 'open', start: '2024-09-04T14:00:00Z', end: null, setup_by: 'Ana Pérez', camera_id: 'P800HG11', card: 'B2', photos_counted: null, start_session: 'R0003', end_session: null },
+        { deployment_id: 'R0003-DONA_01', collection: 'R0003', site: 'DONA_01', status: 'closed', start: '2024-09-04T12:55:00Z', end: '2024-10-12T07:30:00Z', setup_by: 'Ana Pérez', camera_id: CAMERA.id, card: 'A13', photos_counted: 241, start_session: 'R0003', end_session: 'R0004', images_stored: true, on_trapper: false },
+        { deployment_id: 'R0003-DONA_02', collection: 'R0003', site: 'DONA_02', status: 'open', start: '2024-09-04T14:00:00Z', end: null, setup_by: 'Ana Pérez', camera_id: 'P800HG11', card: 'B2', photos_counted: null, start_session: 'R0003', end_session: null, images_stored: false, on_trapper: false },
       ] }),
       'POST /api/epicollect/entries': () => ({ results: [EPICOLLECT_ENTRY] }),
       'POST /api/epicollect/entries/batch': (body) => ({ results: Object.fromEntries(body.location_ids.map((id) => [id, id === 'DONA_01' ? EPICOLLECT_ENTRY : null])) }),

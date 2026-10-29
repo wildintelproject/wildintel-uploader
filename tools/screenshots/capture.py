@@ -157,6 +157,15 @@ def visit_book(page: Page) -> None:
     save(page, "visit-book")
 
 
+@shot("visit-book-deployments")
+def visit_book_deployments(page: Page) -> None:
+    open_task(page, "Manage visits")
+    page.locator("button", has=page.locator("strong", has_text=re.compile("^Show the visit book$"))).click()
+    page.get_by_role("tab", name=re.compile("^Deployments")).click()
+    expect(page.get_by_role("table", name="Deployments")).to_be_visible()
+    save(page, "visit-book-deployments")
+
+
 # ── Import deployment ────────────────────────────────────────────────────────
 
 SOURCE = "/home/me/Pictures/R0003-DONA_01"

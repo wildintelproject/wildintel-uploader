@@ -216,6 +216,11 @@ Besides the visits made, the book has a row — status **Not done**, with no day
 
 A visit is one row: its **Session**, **Where** (the site), **When**, the **Actions**, its **Status** — *Closed* once a later visit collected the card it left, *Open* while that camera is still out, nothing for a visit that left no camera —
 and **Images stored**: a **tick** once the deployment is created and its images imported, with a **Deployment details** link that opens the *Deployments* tab on that deployment; a **Create deployment** button on a *closed* visit that has none yet — it opens [Import deployment](#6-import-a-deployment) with the research project and that visit already chosen —; and a grey crossed circle on an *open* visit, whose card has not been collected. **On Trapper** says whether that deployment is on Trapper — a tick when it was uploaded from here (the day is in its tooltip) or synced from there, a grey crossed circle when not. **View** (the eye button, as in the entities) opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
+The **Deployments** tab is a book too: a square for each **revision** (*All revisions*, *R0003*… with how many deployments each has), the **status squares** of the one picked — *Deployments of R0003*, *Closed* (the camera was collected and the images are stored), *Camera still out*
+and *Not on Trapper yet* (closed, with the images stored, ready to upload) — and a table with the deployment, where, its status, its period, its card and photos, and whether it is on Trapper. The **Deployment details** link of a visit opens this tab on that deployment.
+
+![The deployments of the visit book](img/screenshots/visit-book-deployments.png)
+
 ### Register visits
 
 Press **Register visits**.

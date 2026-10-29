@@ -770,6 +770,10 @@ export interface FieldDeployment {
   photos_counted: number | null
   start_session: string | null
   end_session: string | null
+  /** Whether the deployment was created and its images imported, and whether it is on Trapper (uploaded from here, or synced from there). */
+  images_stored?: boolean
+  uploaded_at?: string | null
+  on_trapper?: boolean
 }
 
 /** What writing the logs of the collections did: for each, how many deployments are closed and how many open, and the files written. */

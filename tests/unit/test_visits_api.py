@@ -671,3 +671,17 @@ def test_the_visit_book_says_which_deployments_are_on_trapper_uploaded_from_here
     assert (book[("DONA_01", "R0003")]["on_trapper"], book[("DONA_01", "R0003")]["uploaded_at"]) == (True, "2024-10-20T10:00:00+00:00")
     assert (book[("DONA_02", "R0003")]["on_trapper"], book[("DONA_02", "R0003")]["uploaded_at"]) == (False, None)   # imported here, not uploaded
     assert book[("DONA_01", "R0004")]["on_trapper"] is False                                                          # no deployment of its own yet
+
+
+def test_the_deployments_say_whether_their_images_are_stored_and_whether_they_are_on_trapper(tmp_path: Path):
+    import json
+    with _in(tmp_path):
+        _field_visits()
+        _client().post("/api/visits/link", json={"research_project_id": "DONA", "location_id": "DONA_01", "date": "2024-09-04", "time": "09:00:00", "deployment_id": "R0003-DONA_01"})
+        folder = tmp_path / "DONA" / "R0003" / "R0003-DONA_01"
+        folder.mkdir(parents=True)
+        (folder / "upload.json").write_text(json.dumps({"uploaded_at": "2024-10-20T10:00:00+00:00"}), encoding="utf-8")
+        found = {d["deployment_id"]: d for d in _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]}
+
+    assert (found["R0003-DONA_01"]["images_stored"], found["R0003-DONA_01"]["on_trapper"], found["R0003-DONA_01"]["uploaded_at"]) == (True, True, "2024-10-20T10:00:00+00:00")
+    assert (found["R0003-DONA_02"]["images_stored"], found["R0003-DONA_02"]["on_trapper"]) == (False, False)

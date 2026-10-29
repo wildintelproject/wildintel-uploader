@@ -149,7 +149,16 @@ def deployments(req: ListVisitsRequest) -> dict:
         found = visit_deployments.deployments(local_folder_service.list_visits(root, req.research_project_id, req.location_id), config.load_settings().FIELDLOG.keep_seconds)
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {"results": [{k: v for k, v in d.items() if k not in ("start_visit", "end_visit")} | {"start_session": d["start_visit"].get("session"), "end_session": (d["end_visit"] or {}).get("session")} for d in found]}
+    results = []
+    for d in found:
+        imported = d["start_visit"].get("deployment_id")
+        uploaded_at, on_trapper = _trapper_state(root, req.research_project_id, imported)
+        results.append({k: v for k, v in d.items() if k not in ("start_visit", "end_visit")} | {
+            "start_session": d["start_visit"].get("session"), "end_session": (d["end_visit"] or {}).get("session"),
+            # whether the deployment was created and its images imported (its visit says which deployment it gave), and whether it is on Trapper
+            "images_stored": bool(imported), "uploaded_at": uploaded_at, "on_trapper": on_trapper,
+        })
+    return {"results": results}
 
 
 @router.post("/field-logs")
