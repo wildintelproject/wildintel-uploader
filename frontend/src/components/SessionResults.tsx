@@ -149,20 +149,45 @@ export default function SessionResults({ folders, checks, running, banner, byChe
                 </button>
                 {open && (
                   <div className="px-4 pb-4">
-                    {f.error && <p className="text-sm text-red-600 dark:text-red-400">{f.error}</p>}
-                    {report && failed.map((c) => (
-                      <p key={c} className="text-sm text-amber-700 dark:text-amber-400 mb-1">
-                        <span className="font-medium">{report.checks[c].label}</span> — {report.entries.find((e) => e.check === c && e.status === 'failed')?.message ?? `${report.checks[c].failed} failed`}
-                      </p>
-                    ))}
-                    {report && !bad && <p className="text-sm text-zinc-600 dark:text-zinc-400">Every check passed.</p>}
-                    {!f.reportId && f.plain}
-                    {f.reportId && (
-                      <div className="mt-3 flex gap-2">
-                        {failed.length > 0 && <button type="button" className={btnOutline} onClick={() => setViewing({ name: f.name, check: failed[0] })}>View the images</button>}
-                        <a className={btnOutline} href={api.reportUrl(f.reportId, 'csv')} download>Download report</a>
-                      </div>
-                    )}
+                    {(() => {
+                      // a row for each error: a check it failed, or the reason it could not be checked
+                      const errors: { key: string; check: string | null; label: string; message: string; viewable: boolean }[] = [
+                        ...(f.error ? [{ key: 'error', check: null, label: 'Not checked', message: f.error, viewable: false }] : []),
+                        ...(report ? failed.map((c) => ({ key: c, check: c, label: report.checks[c].label, viewable: report.checks[c].scope !== 'deployment',
+                          message: report.entries.find((e) => e.check === c && e.status === 'failed')?.message ?? `${report.checks[c].failed} failed` })) : []),
+                      ]
+                      return (
+                        <>
+                          {errors.length > 0 && (
+                            <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                              <table className="w-full text-sm" aria-label={`Problems of ${f.name}`}>
+                                <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
+                                  <tr>{['Check', 'What went wrong', ''].map((h, i) => <th key={i} scope="col" className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                                  {errors.map((e) => (
+                                    <tr key={e.key} className="align-top">
+                                      <td className="px-3 py-2 font-medium text-amber-700 dark:text-amber-400">{e.label}</td>
+                                      <td className={`px-3 py-2 ${e.key === 'error' ? 'text-red-600 dark:text-red-400' : 'text-zinc-700 dark:text-zinc-300'}`}>{e.message}</td>
+                                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                                        {e.viewable && e.check && <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" aria-label={`View the images of ${e.label} in ${f.name}`} onClick={() => setViewing({ name: f.name, check: e.check! })}>View the images</button>}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                          {report && !bad && <p className="text-sm text-zinc-600 dark:text-zinc-400">Every check passed.</p>}
+                          {!f.reportId && f.plain}
+                          {f.reportId && (
+                            <div className="mt-3 flex gap-2">
+                              <a className={btnOutline} href={api.reportUrl(f.reportId, 'csv')} download>Download report</a>
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
                   </div>
                 )}
               </div>
