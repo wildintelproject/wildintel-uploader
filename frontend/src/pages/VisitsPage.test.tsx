@@ -7,7 +7,7 @@ import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
 import type { ClosedVisit, StoredVisit } from '../types'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn(), updateLocalLocation: vi.fn() } }))
 const mockedApi = vi.mocked(api, true)
 
 const location = (location_id: string, over: Record<string, unknown> = {}) => ({
@@ -1042,3 +1042,58 @@ describe('namesOf, addName and removeName', () => {
     expect(removeName('Ana, Luis', 'ana')).toBe('Luis')
   })
 })
+
+describe('By hand 2: do you see the camera?', () => {
+  const withCamera = () => mockedApi.listVisits.mockResolvedValue({ results: [toStored({ ...BLANK, session: 'R0001', when: '2026-01-10T09:00:00', site: 'TATR_0001', actions: ['Installation'], sd: 'A13', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: 'P800HG08192031' } })] })
+  async function start() {
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /by hand 2/i }))
+    await pickWhere()
+    await pickWhen()
+  }
+
+  it('asks nothing where no camera is known: the visit installs one', async () => {
+    await start()
+
+    const question = await screen.findByRole('group', { name: 'Do you see the camera?' })
+    expect(within(question).getAllByRole('radio')).toHaveLength(1)
+    expect(within(question).getByRole('radio', { name: /Of course not, I am going to install it/ })).toBeChecked()
+    expect(screen.getByText('Installation', { selector: 'strong' })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'Revision' })).not.toBeInTheDocument() // the actions are not asked as boxes
+  })
+
+  it('works the actions out from the answers when a camera is there', async () => {
+    withCamera()
+    await start()
+    const hint = () => screen.getByText(/The visit is kept as/).closest('p')!
+
+    expect(await screen.findByRole('radio', { name: 'Yes, I see it' })).not.toBeChecked()
+    await userEvent.click(screen.getByRole('radio', { name: 'Yes, I see it' }))
+    expect(hint()).toHaveTextContent('The visit is kept as Revision')
+    await userEvent.click(screen.getByRole('radio', { name: 'Replace it with another' }))
+    expect(hint()).toHaveTextContent('Installation + Revision')
+    await userEvent.click(screen.getByRole('radio', { name: 'Take it away, without another' }))
+    expect(hint()).toHaveTextContent('Revision + Desinstallation')
+
+    await userEvent.click(screen.getByRole('radio', { name: 'No, it was stolen' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Install a new camera' }))
+    expect(hint()).toHaveTextContent('Installation + Stolen')
+    await userEvent.click(screen.getByRole('radio', { name: 'Retire the location' }))
+    expect(hint()).toHaveTextContent('The visit is kept as Stolen')
+  })
+
+  it('retires the location, with the reason, when the camera was stolen and the site is given up', async () => {
+    withCamera()
+    mockedApi.saveVisit.mockResolvedValue({} as never)
+    mockedApi.updateLocalLocation.mockResolvedValue({} as never)
+    await start()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'No, it was stolen' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Retire the location' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Add visit' }))
+
+    await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('TATR', 'TATR_0001', { status: 'retired', status_date: '2026-10-02', status_note: 'Repeated thefts' }))
+    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Stolen'] })
+  })
+})
+

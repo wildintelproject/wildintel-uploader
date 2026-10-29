@@ -270,6 +270,11 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // By hand and By hand 2 ask the same, for now: the second is where the form of the field flow is made.
   const byHand = source === 'manual' || source === 'manual2'
   const [visit, setVisit] = useState<Visit>(EMPTY_VISIT)
+  // By hand 2 asks what the visit did as a question — do you see the camera? — and works the actions out from the answers.
+  const [seeCamera, setSeeCamera] = useState<'yes' | 'stolen' | null>(null)
+  const [afterRevision, setAfterRevision] = useState<'stay' | 'replace' | 'remove'>('stay')
+  const [afterTheft, setAfterTheft] = useState<'replace' | 'retire' | null>(null)
+  const [retireReason, setRetireReason] = useState('Repeated thefts')
   const [tried, setTried] = useState(false)
   const [visits, setVisits] = useState<Visit[]>([])
   // Where the visit was: a research project of the collections folder and one of its locations (the site of the visit).
@@ -328,6 +333,21 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     const known = allCameras.find((c) => cameraKey(c).toLowerCase() === siteCamera.camera.toLowerCase() || c.label.toLowerCase() === siteCamera.camera.toLowerCase())
     setVisit((v) => ({ ...v, details: { ...v.details, camera_id: known ? cameraKey(known) : siteCamera.camera, camera_model: known?.camera_model ?? v.details.camera_model } }))
   }, [ofTheSiteCamera, siteCamera?.camera, visit.details.camera_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Where no camera is known — a first visit, or after one was taken away or stolen — the visit can only install one, and nothing is asked.
+  const noCamera = Boolean(allVisits) && !siteCamera
+  const guided = source === 'manual2'
+  const guidedActions = !guided ? null
+    : noCamera ? ['Installation']
+    : seeCamera === 'yes' ? (afterRevision === 'replace' ? ['Revision', 'Installation'] : afterRevision === 'remove' ? ['Revision', 'Desinstallation'] : ['Revision'])
+    : seeCamera === 'stolen' ? (afterTheft === 'replace' ? ['Stolen', 'Installation'] : ['Stolen'])
+    : []
+  const guidedKey = guidedActions?.join('+')
+  useEffect(() => {
+    if (!guidedActions) return
+    const actions = ACTIONS.filter((a) => guidedActions.includes(a))
+    setVisit((v) => (v.actions.join('+') === actions.join('+') ? v : withoutWhatIsNotAsked({ ...v, actions })))
+  }, [guidedKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setSeeCamera(null); setAfterRevision('stay'); setAfterTheft(null) }, [visit.site])
   const errors = { ...visitErrors(visit, kept?.length === 0), ...conflicts }
   const moreErrors = detailsErrors(visit.details)
   const shown = (field: ErrorKey) => (tried ? errors[field] : undefined)
@@ -548,6 +568,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   async function add() {
     setTried(true)
     if (Object.keys(errors).length > 0 || Object.keys(moreErrors).length > 0 || !project || !kept) return
+    if (guided && seeCamera === 'stolen' && !afterTheft) return
     setSaveError(null)
     // The session is worked out from the visits kept to the location, as its coordinates come from the location.
     const complete: Visit = { ...visit, session: sessionOf(kept.length), site: visit.site.trim() }
@@ -556,6 +577,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Could not save the visit.')
       return
+    }
+    // The location is retired — with the reason — when the visit says the camera was stolen and the site is not kept.
+    if (guided && seeCamera === 'stolen' && afterTheft === 'retire') {
+      try {
+        await api.updateLocalLocation(project.acronym, complete.site, { status: 'retired', status_date: complete.when.slice(0, 10), status_note: retireReason.trim() || null })
+      } catch (e) {
+        setSaveError(e instanceof Error ? `The visit is kept, but the location could not be retired: ${e.message}` : 'The visit is kept, but the location could not be retired.')
+      }
     }
     setVisits((list) => [...list, complete])
     setJustAdded(true)
@@ -673,6 +702,46 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               )}
               <FormCard title="The visit">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {guided ? (
+                    <fieldset className="sm:col-span-2" aria-describedby="visit-actions-hint">
+                      <legend className={labelClass}>Do you see the camera?</legend>
+                      {noCamera ? (
+                        <label className="inline-flex items-center gap-2 text-sm"><input type="radio" name="see-camera" checked readOnly />Of course not, I am going to install it</label>
+                      ) : (
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="see-camera" checked={seeCamera === 'yes'} onChange={() => setSeeCamera('yes')} />Yes, I see it</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="see-camera" checked={seeCamera === 'stolen'} onChange={() => setSeeCamera('stolen')} />No, it was stolen</label>
+                        </div>
+                      )}
+                      {!noCamera && seeCamera === 'yes' && (
+                        <div className="mt-4 ml-6 space-y-2" role="group" aria-label="What do you do with the camera?">
+                          <p className="text-sm font-medium">What do you do with the camera?</p>
+                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-revision" checked={afterRevision === 'stay'} onChange={() => setAfterRevision('stay')} />Leave it where it is</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-revision" checked={afterRevision === 'replace'} onChange={() => setAfterRevision('replace')} />Replace it with another</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-revision" checked={afterRevision === 'remove'} onChange={() => setAfterRevision('remove')} />Take it away, without another</label>
+                        </div>
+                      )}
+                      {!noCamera && seeCamera === 'stolen' && (
+                        <div className="mt-4 ml-6 space-y-2" role="group" aria-label="What now?">
+                          <p className="text-sm font-medium">What now?</p>
+                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-theft" checked={afterTheft === 'replace'} onChange={() => setAfterTheft('replace')} />Install a new camera</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="radio" name="after-theft" checked={afterTheft === 'retire'} onChange={() => setAfterTheft('retire')} />Retire the location</label>
+                          {afterTheft === 'retire' && (
+                            <div className="max-w-md pt-1">
+                              <label htmlFor="retire-reason" className={labelClass}>Why is it retired?</label>
+                              <input id="retire-reason" className={inputClass} value={retireReason} onChange={(e) => setRetireReason(e.target.value)} />
+                              <p className={hintClass}>{visit.site} will be kept as a retired location, with this reason, from the day of the visit.</p>
+                            </div>
+                          )}
+                          {tried && !afterTheft && <p className="text-xs text-red-600 dark:text-red-400">Say what is done after the theft.</p>}
+                        </div>
+                      )}
+                      <p id="visit-actions-hint" className={hintClass}>
+                        {visit.actions.length === 0 ? 'Answer the question: the rest of the form depends on it.' : <>The visit is kept as <strong>{actionsText(visit.actions)}</strong>. {visit.actions.map((a) => ACTION_HINTS[a]).join(' ')}</>}
+                      </p>
+                      {shown('actions') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">Say whether you see the camera.</p>}
+                    </fieldset>
+                  ) : (
                   <fieldset className="sm:col-span-2" aria-describedby="visit-actions-hint">
                     <legend className={labelClass}>Actions</legend>
                     <div className="flex flex-wrap gap-x-5 gap-y-2">
@@ -691,6 +760,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     </p>
                     {shown('actions') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('actions')}</p>}
                   </fieldset>
+                  )}
                 </div>
                 {kept && kept.length === 0 && (
                   <p role="status" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
