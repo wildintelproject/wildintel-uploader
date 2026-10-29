@@ -115,6 +115,35 @@ describe('VisitBookPage', () => {
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2)
   })
 
+  it('has a square for each revision — one visit to every site — with how many are done, and the status squares follow the one picked', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'closed' }),
+      visit({ session: 'R0001', location_id: 'TATR_0002', date: '', time: '', actions: [], not_done: true, sd: null, camera_id: null, trappers: null }),
+      visit({ session: 'R0002', deployment: 'R0002-TATR_0001', deployment_status: 'open' }),
+      visit({ session: 'R0002', location_id: 'TATR_0002', date: '', time: '', actions: [], not_done: true, sd: null, camera_id: null, trappers: null }),
+      visit({ session: 'R0003', date: '', time: '', actions: [], not_done: true, sd: null, camera_id: null, trappers: null }),
+    ] })
+    await pickProject()
+    const revisions = await screen.findByRole('region', { name: 'Revision' })
+    const pick = (name: RegExp) => within(revisions).getByRole('button', { name })
+
+    expect(within(revisions).getAllByRole('button').map((b) => b.textContent)).toEqual(['All revisions2 of 5 done', 'R00030 of 1 done', 'R00021 of 2 done', 'R00011 of 2 done'])
+    expect(screen.getByRole('heading', { name: 'Visits by status' })).toBeInTheDocument()
+
+    await userEvent.click(pick(/^R0002/))
+    expect(pick(/^R0002/)).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('heading', { name: 'Revision R0002: visits by status' })).toBeInTheDocument()
+    const squares = screen.getByRole('region', { name: 'Visits by status' })
+    expect(within(squares).getByRole('button', { name: /^All the visits/ })).toHaveTextContent('2')    // the two rows of R0002
+    expect(within(squares).getByRole('button', { name: /^Open/ })).toHaveTextContent('1')
+    expect(within(squares).getByText('1 of 2 visits done (50%)')).toBeInTheDocument()
+    const table = screen.getByRole('table', { name: 'Visits' })
+    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0002', 'R0002'])
+
+    await userEvent.click(pick(/^All revisions/))
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(5)
+  })
+
   it('pages the visits, ten at a time, and goes back to the first page when the filter changes', async () => {
     mockedApi.visitBook.mockResolvedValue({ results: Array.from({ length: 23 }, (_, n) => visit({ session: `R${String(n + 1).padStart(4, '0')}`, date: `2024-09-${String(n + 1).padStart(2, '0')}`, location_id: n === 22 ? 'TATR_0099' : 'TATR_0001' })) })
     await pickProject()

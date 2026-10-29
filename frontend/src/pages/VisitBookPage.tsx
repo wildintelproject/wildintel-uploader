@@ -64,6 +64,8 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [filter, setFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
+  // A revision is one visit to every site: the book can be of one of them, or of all.
+  const [revision, setRevision] = useState('')
   const [page, setPage] = useState(1)
   // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest session first.
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
@@ -87,7 +89,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   }, [settingsOpen])
 
   useEffect(() => {
-    setVisits(null); setDeployments(null); setError(null); setPage(1); setOpened(null)
+    setVisits(null); setDeployments(null); setError(null); setPage(1); setOpened(null); setRevision('')
     if (!project) return
     let cancelled = false
     api.visitBook(project.acronym)
@@ -99,12 +101,14 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
     return () => { cancelled = true }
   }, [project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // How many rows each status square has — over all the rows of the book, whatever the text filter says.
-  const rows = visits ?? []
+  // How many rows each status square has — over the rows of the revision picked (all of them when none is), whatever the text filter says.
+  const everyRow = visits ?? []
+  const revisions = [...new Set(everyRow.map((v) => v.session))].sort((x, y) => y.localeCompare(x))
+  const rows = revision ? everyRow.filter((v) => v.session === revision) : everyRow
   const count = (f: StatusFilter) => rows.filter((v) => matches(v, f)).length
   const made = rows.filter((v) => !v.not_done).length
   const SQUARES: { filter: StatusFilter; label: string; note: string; tone: string }[] = [
-    { filter: '', label: 'All the visits', note: 'planned for this project', tone: 'text-zinc-900 dark:text-zinc-100' },
+    { filter: '', label: 'All the visits', note: revision ? 'planned for this revision' : 'planned for this project', tone: 'text-zinc-900 dark:text-zinc-100' },
     { filter: 'not_done', label: 'Not done', note: 'no visit yet', tone: 'text-zinc-500 dark:text-zinc-400' },
     { filter: 'open', label: 'Open', note: 'camera visited, card not collected', tone: 'text-amber-600 dark:text-amber-400' },
     { filter: 'closed', label: 'Closed', note: 'card collected', tone: 'text-emerald-600 dark:text-emerald-400' },
@@ -112,7 +116,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   ]
 
   const needle = filter.trim().toLowerCase()
-  const shown = (visits ?? [])
+  const shown = rows
     .filter((v) => matches(v, statusFilter))
     .filter((v) => !needle || `${v.location_id} ${v.session} ${v.camera_id ?? ''} ${v.sd ?? ''} ${v.trappers ?? ''} ${v.actions.join(' ')} ${v.deployment_id ?? ''} ${v.deployment_status ?? ''} ${v.not_done ? 'not done' : ''}`.toLowerCase().includes(needle))
     // by the column chosen — the rows not made last —, else the latest session first, within it the visits made newest first and then the ones not made, by site
@@ -152,10 +156,25 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
 
       {project && (
         <>
+          {visits !== null && revisions.length > 0 && (
+            <section aria-label="Revision" className="mb-6">
+              <h5 className="text-lg font-semibold mb-1">Revision</h5>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see what is planned and what is done.</p>
+              <div className="flex flex-wrap gap-3">
+                {[{ id: '', label: 'All revisions', of: everyRow }, ...revisions.map((r) => ({ id: r, label: r, of: everyRow.filter((v) => v.session === r) }))].map((r) => (
+                  <button key={r.label} type="button" aria-pressed={revision === r.id} onClick={() => { setRevision(r.id); setStatusFilter(''); setPage(1); setOpened(null) }}
+                          className={`rounded-xl border px-5 py-3 text-left transition-colors ${revision === r.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}>
+                    <span className="block font-mono text-lg font-semibold">{r.label}</span>
+                    <span className="block text-sm text-zinc-500 dark:text-zinc-400">{r.of.filter((v) => !v.not_done).length} of {r.of.length} done</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           {visits !== null && (
             <section aria-label="Visits by status" className="mb-5">
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                <h5 className="text-base font-semibold">Visits by status</h5>
+                <h5 className="text-lg font-semibold">{revision ? `Revision ${revision}: visits by status` : 'Visits by status'}</h5>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">Pick a square to show only those visits.</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
