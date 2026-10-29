@@ -710,8 +710,12 @@ export interface VisitsCsvColumns {
  * those already kept, and how many were kept when asked to. */
 export interface VisitsCsvResult {
   visits: StoredVisit[]
-  problems: { row: number; message: string }[]
+  problems: { row: number; message: string; /** The row is of the history of visits, not of the file. */ history?: boolean }[]
   skipped: number
+  /** How many of the visits come from the history, which are the first ones. */
+  history?: number
+  /** The folders and logs made of the collections the visits kept change — when they were kept. */
+  field_logs?: FieldLogsResult | null
   /** Entries of old versions of the Epicollect form (no collection number or site), left out. */
   ignored: number
   saved: number | null

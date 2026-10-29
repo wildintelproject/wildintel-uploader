@@ -302,6 +302,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const [csvResult, setCsvResult] = useState<VisitsCsvResult | null>(null)
   const [csvError, setCsvError] = useState<string | null>(null)
   const [csvSaved, setCsvSaved] = useState<number | null>(null)
+  // The history of visits (the fieldwork datasheet, an .xlsx, as base64) that completes the visits kept before the file's are applied.
+  const [historyName, setHistoryName] = useState<string | null>(null)
+  const [historyXlsx, setHistoryXlsx] = useState('')
   // From a CSV file: its columns, and the one that gives each field of a visit.
   const [csvColumns, setCsvColumns] = useState<VisitsCsvColumns | null>(null)
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
@@ -366,8 +369,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   }
 
   // Another way to read the visits starts again from the file.
-  useEffect(() => { forgetCsv(); setCsvName(null) }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { forgetCsv(); setCsvName(null); setHistoryName(null); setHistoryXlsx('') }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // What goes after the mapping of a call to read the file: the history, when there is one.
+  const withHistory = historyXlsx ? ([historyXlsx] as const) : ([] as const)
   const csvReading = useRef(0)
   function forgetCsv() {
     csvReading.current++ // what an older file is still being answered is left out
@@ -387,7 +392,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         const found = await api.visitsCsvColumns(text)
         if (reading === csvReading.current) { setCsvColumns(found); setCsvMapping(found.mapping) }
       } else {
-        const result = await api.importVisitsCsv(project.acronym, text, false, csvFormat)
+        const result = historyXlsx ? await api.importVisitsCsv(project.acronym, text, false, csvFormat, undefined, historyXlsx) : await api.importVisitsCsv(project.acronym, text, false, csvFormat)
         if (reading === csvReading.current) setCsvResult(result)
       }
     } catch (e) {
@@ -395,11 +400,28 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     }
   }
 
+  /** The history of visits: kept as base64, and the file read again with it when one is already chosen — the history goes before it. */
+  async function readHistory(file: File | undefined) {
+    if (!file) { setHistoryName(null); setHistoryXlsx(''); return }
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    let binary = ''
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+    const encoded = btoa(binary)
+    setHistoryName(file.name); setHistoryXlsx(encoded)
+    if (!project || !csvText) return
+    setCsvError(null)
+    try {
+      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, source === 'csv' ? 'mapped' : csvFormat, source === 'csv' ? csvMapping : undefined, encoded))
+    } catch (e) {
+      setCsvError(e instanceof Error ? e.message : 'Could not read the history.')
+    }
+  }
+
   /** Reads the file again with the same options — after the settings were open, where the missing locations may have been added. */
   async function recheckCsv() {
     if (!project || !csvText) return
     try {
-      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, source === 'csv' ? 'mapped' : csvFormat, source === 'csv' ? csvMapping : undefined))
+      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, source === 'csv' ? 'mapped' : csvFormat, source === 'csv' ? csvMapping : undefined, ...withHistory))
     } catch (e) {
       setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
     }
@@ -424,7 +446,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     if (!project) return
     setCsvError(null)
     try {
-      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, 'mapped', csvMapping))
+      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, 'mapped', csvMapping, ...withHistory))
     } catch (e) {
       setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
     }
@@ -434,8 +456,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     if (!project) return
     setCsvError(null)
     try {
-      const done = await api.importVisitsCsv(project.acronym, csvText, true, csvFormat, source === 'csv' ? csvMapping : undefined)
-      setCsvResult(done); setCsvSaved(done.saved)
+      const done = await api.importVisitsCsv(project.acronym, csvText, true, csvFormat, source === 'csv' ? csvMapping : undefined, ...withHistory)
+      setCsvResult(done); setCsvSaved(done.saved); setLogs(done.field_logs ?? null)
       void findClosed(done.visits)
     } catch (e) {
       setCsvError(e instanceof Error ? e.message : 'Could not save the visits.')
@@ -481,8 +503,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   /** The logs of the collections: the FileTimestampLog and the FieldworkLog worked out from the visits kept, closed deployments and the ones still open. */
   const logsCard = project && (
     <div className="mt-3" role="group" aria-label="Logs of the collections">
-      <Notice kind="info" action={<button type="button" className={btnOutline} onClick={() => void writeLogs()}>Write the logs of the collections</button>}>
-        The deployments the visits say go into each collection's <strong>FileTimestampLog</strong> (the closed ones) and <strong>FieldworkLog</strong> (every one, closed or still open).
+      <Notice kind="info" action={<button type="button" className={btnOutline} onClick={() => void writeLogs()}>Write the logs of all the collections again</button>}>
+        The folder of each collection the visits change is made with its <strong>FileTimestampLog</strong> (the closed deployments) and <strong>FieldworkLog</strong> (every one, closed or still out).
       </Notice>
       {logsError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{logsError}</p>}
       {logs && (
@@ -523,7 +545,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     // The session is worked out from the visits kept to the location, as its coordinates come from the location.
     const complete: Visit = { ...visit, session: sessionOf(kept.length), site: visit.site.trim() }
     try {
-      await api.saveVisit(project.acronym, toStored(complete))
+      const saved = await api.saveVisit(project.acronym, toStored(complete))
+      setLogs(saved.field_logs ?? null)
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Could not save the visit.')
       return
@@ -814,6 +837,19 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               : 'Any spreadsheet file with a row per visit. Next, you say which column gives each field of a visit.'}
             summary={csvName}
           >
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3 mb-4">
+              <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">History of visits <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">optional</span></h5>
+              <div className="flex items-center gap-4 flex-wrap">
+                <label htmlFor="visits-history" className="inline-flex items-center gap-2 px-5 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+                  Choose history
+                </label>
+                <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">{historyName ?? 'No history chosen'}</span>
+                {historyName && <button type="button" className={btnOutline} onClick={() => void readHistory(undefined)}>Remove</button>}
+                <input id="visits-history" aria-label="History of visits (.xlsx)" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; void readHistory(file) }} />
+              </div>
+              <p className={hintClass}>The fieldwork datasheet (an .xlsx workbook): its visits complete the ones kept first, and then those of the file are applied on top of both.</p>
+            </div>
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
               <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Spreadsheet file</h5>
               <div className="flex items-center gap-4 flex-wrap">
@@ -871,13 +907,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               <>
                 <p className="text-base">
                   <strong>{csvResult.visits.length}</strong> {csvResult.visits.length === 1 ? 'visit' : 'visits'} to add
+                  {(csvResult.history ?? 0) > 0 && <> ({csvResult.history} from the history)</>}
                   {csvResult.skipped > 0 && <> · {csvResult.skipped} already kept</>}
                   {csvResult.ignored > 0 && <> · {csvResult.ignored} {csvResult.ignored === 1 ? 'entry' : 'entries'} from an old version of the form, ignored</>}
                   {csvResult.problems.length > 0 && <> · <span className="text-red-600 dark:text-red-400">{csvResult.problems.length} {csvResult.problems.length === 1 ? 'row' : 'rows'} with a problem</span></>}
                 </p>
                 {csvResult.problems.length > 0 && (
                   <ul className="mt-4 mb-5 space-y-2 text-base text-red-600 dark:text-red-400 list-disc pl-6" aria-label="Rows with a problem">
-                    {csvResult.problems.map((p) => <li key={p.row}>Row {p.row}: {p.message}</li>)}
+                    {csvResult.problems.map((p) => <li key={`${p.history ? 'h' : 'f'}${p.row}`}>{p.history ? 'History row' : 'Row'} {p.row}: {p.message}</li>)}
                   </ul>
                 )}
                 {csvResult.warnings.length > 0 && (

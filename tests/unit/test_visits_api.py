@@ -445,3 +445,85 @@ def test_the_logs_of_the_collections_are_written_with_every_deployment_closed_or
     assert set(rows) == {"R0003-DONA_01", "R0003-DONA_02"}                                    # the open one too
     assert rows["R0003-DONA_01"]["status"] == "closed" and rows["R0003-DONA_01"]["cardSD"] == "A13" and rows["R0003-DONA_01"]["photosCounted"] == "241"
     assert rows["R0003-DONA_02"]["status"] == "open" and rows["R0003-DONA_02"]["deploymentEnd"] == ""
+
+
+# ── the folders and the logs made when a visit is registered ────────────────────────────────────────────────────
+
+def test_the_folder_of_a_collection_and_its_logs_are_made_when_a_visit_closes_a_deployment(tmp_path: Path):
+    install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "session": "R0003", "date": "2024-09-04", "time": "09:00:00"}
+    collect = {**VISIT, "actions": ["Revision"], "sd": "B2", "num_photos": 241, "session": "R0004", "date": "2024-10-12", "time": "09:00:00"}
+    with _in(tmp_path):
+        _project()
+        first = _save(install)
+        # a camera left and not collected yet is an open deployment of the collection being completed: its folder and its FieldworkLog are made at once
+        folder = tmp_path / "DONA" / "R0003"
+        assert first.status_code == 200 and (folder / "collection.json").is_file() and (folder / "R0003_FieldworkLog.csv").is_file()
+        assert not (folder / "R0003_FileTimestampLog.csv").exists()                  # nothing is closed yet
+        second = _save(collect)
+
+    assert second.json()["field_logs"]["collections"][0]["collection"] == "R0003"
+    assert (folder / "R0003_FileTimestampLog.csv").read_text(encoding="utf-8-sig").splitlines()[1] == "r0003-dona_01,2024:09:04,09:00:00,2024:10:12,09:00:00"
+    assert "closed" in (folder / "R0003_FieldworkLog.csv").read_text(encoding="utf-8-sig")
+
+
+def test_the_visits_of_a_csv_make_the_folders_and_the_logs_of_their_collections_when_they_are_kept(tmp_path: Path):
+    text = "location_id,date,time,actions,session,num_photos,sd,camera_id\nDONA_01,2024-09-04,09:00,Installation,R0003,,A13,P800\nDONA_01,2024-10-12,09:00,Revision,R0004,241,B2,P800\n"
+    shown = _import(tmp_path, text)
+    assert not (tmp_path / "DONA" / "R0003").exists()                               # only reading: nothing is made
+    kept = _import(tmp_path, text, save=True).json()
+
+    assert kept["saved"] == 2 and [c["collection"] for c in kept["field_logs"]["collections"]] == ["R0003", "R0004"]
+    assert (tmp_path / "DONA" / "R0003" / "R0003_FileTimestampLog.csv").is_file() and (tmp_path / "DONA" / "R0004" / "R0004_FieldworkLog.csv").is_file()
+    assert shown.status_code == 200
+
+
+# ── the history of visits: an .xlsx that completes the visits kept before a file's are applied ──────────────────
+
+def _workbook(rows: list[list]) -> str:
+    import base64
+    import io
+
+    import openpyxl
+    book = openpyxl.Workbook()
+    for row in rows:
+        book.active.append(row)
+    out = io.BytesIO()
+    book.save(out)
+    return base64.b64encode(out.getvalue()).decode()
+
+
+HISTORY = [
+    ["Trappers", "Session", "Date", "Time", "Site", "Camera", "Action", "NumPhotos", "SD"],
+    ["Ana", "R0003", "2024-09-04", "09:00:00", "DONA_01", "P800", "Installation", None, "A13"],
+]
+
+
+def test_a_history_completes_the_visits_kept_and_the_file_is_applied_on_top(tmp_path: Path):
+    csv_text = "location_id,date,time,actions,session,num_photos,sd,camera_id\nDONA_01,2024-10-12,09:00,Revision,R0004,241,B2,P800\n"
+    with _in(tmp_path):
+        _project()
+        mapping = _client().post("/api/visits/csv-columns", json={"csv": csv_text}).json()["mapping"]
+        body = {"research_project_id": "DONA", "csv": csv_text, "format": "mapped", "mapping": mapping, "history_xlsx": _workbook(HISTORY)}
+        shown = _client().post("/api/visits/import-csv", json=body).json()
+        kept = _client().post("/api/visits/import-csv", json={**body, "save": True}).json()
+        listed = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
+
+    assert shown["history"] == 1 and [v["session"] for v in shown["visits"]] == ["R0003", "R0004"]      # the history first, then the file's
+    assert kept["saved"] == 2 and [v["session"] for v in listed] == ["R0003", "R0004"]
+    # the Revision of the file collects the deployment the history left: no warning about a card still in the camera, and the log has it
+    assert not any("is in the camera at" in w for w in kept["warnings"])
+    assert "closed" in (tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv").read_text(encoding="utf-8-sig")
+
+
+def test_a_history_that_is_not_a_workbook_with_visits_is_refused(tmp_path: Path):
+    import base64
+    with _in(tmp_path):
+        _project()
+        csv_text = "location_id,date,time,actions\nDONA_01,2024-10-12,09:00,Installation\n"
+        mapping = _client().post("/api/visits/csv-columns", json={"csv": csv_text}).json()["mapping"]
+        base = {"research_project_id": "DONA", "csv": csv_text, "format": "mapped", "mapping": mapping}
+        not_xlsx = _client().post("/api/visits/import-csv", json={**base, "history_xlsx": base64.b64encode(b"a,b\n1,2\n").decode()})
+        no_visits = _client().post("/api/visits/import-csv", json={**base, "history_xlsx": _workbook([["name", "colour"], ["A", "red"]])})
+
+    assert not_xlsx.status_code == 400 and ".xlsx" in not_xlsx.json()["detail"]
+    assert no_visits.status_code == 400 and "history of visits" in no_visits.json()["detail"]

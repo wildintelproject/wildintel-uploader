@@ -18,6 +18,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the visit that collected it names, minus one, which is also the revision Import deployment and Import session give a visit's deployment. **Write the logs of the collections** (in Register visits) writes each
   collection's `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv`, with the details both visits give merged: `Setup: … | Retrieval: …` for a text, the tags and groups of both, the setup's number or yes/no with the
   retrieval's value noted in `deploymentComments`.
+- **Registering a visit makes the folders and the logs**: the folder of each collection the visit changes (with its `collection.json`) gets its `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv` at once — by hand or from a file —,
+  as importing the deployment or the collection did before (`field_logs` in the answer of `/api/visits/save` and `/api/visits/import-csv`).
+- **A history of visits for a CSV import** (`history_xlsx` in `/api/visits/import-csv`, `visits_xlsx.py`, new dependency `openpyxl`): the fieldwork datasheet, an `.xlsx`, completes the visits kept before the file's are applied on top of both.
 - **A location's timezone (and its summer-time setting) cannot be changed once it is created**: the instants kept for it were worked out with them. The server refuses a different one (`409`), and the form of a location shows them disabled.
 - **The time of a visit is kept as an instant**: `when`, ISO 8601 in UTC with a Z (`2024-09-04T11:10:00Z`), in the research project's `visits.json`. The day (`date`) and the
   time (`time`) the forms and the tables show are the wall clock of the visit's location, in the timezone the location says; the API gives both. A `visits.json` kept with a day and

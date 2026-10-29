@@ -429,6 +429,8 @@ class ImportVisitsCsvRequest(LocalLocationsRequest):
     # How the file is read: as an Epicollect download, or with the column of each field said in `mapping`.
     format: Literal["epicollect", "mapped"] = "mapped"
     mapping: Optional[dict[str, str]] = None
+    # The history of visits — the fieldwork datasheet, an .xlsx workbook, base64 — that completes the visits kept before the file's are applied.
+    history_xlsx: Optional[str] = None
 
 
 class VisitsCsvColumnsRequest(BaseModel):

@@ -208,6 +208,10 @@ the visits come in:
 | **From Wildintel Epicollect** | Reads the visits of a field trip from the Epicollect download (a CSV). The time is the `created_at` of the entry, put in the timezone of the location. |
 | **From a spreadsheet file** | Any CSV: the page shows its columns and you say which one gives each field of a visit. |
 
+A file can come with a **history of visits** (optional): the fieldwork datasheet, an `.xlsx` workbook whose first sheet has a Site and an Action column (Trappers, Session, Date, Time, Camera, NumPhotos, SD… or Tramperos, Sesion, Fecha, Hora…
+— found by their names, as in an Epicollect download). The history **completes the visits kept**, and then the file's are applied on top of both: sessions, what is already kept and what is odd are told with all of it in front. Its visits come first in the list, and its rows
+that cannot be read appear as *History row N*.
+
 When a file is read, the visits that were found are listed and the ones that are fine can be kept; the rows that cannot be read (*a date that is not a date*,
 *actions that are not Installation, Revision, Desinstallation or Stolen*…) are listed with why. The file is treated as the field records are: what the field wrote is
 **kept and questioned, not thrown away**:
@@ -239,7 +243,7 @@ Each field is marked *required* or *optional* according to the actions.
 **The deployments the visits say, and the logs of the collections.** Each site's visits, in order, give a deployment for every pair where the first **left a camera** (an Installation or a Revision)
 and the second **collected its card**: it goes from the one to the other and is *closed*. It belongs to the collection **the session of the visit that collected it names, minus one** — R0013
 collects the deployments of R0012 — and that is the revision [Import deployment](#6-import-a-deployment) gives it. A camera that was left and has not been collected is *open*: it will belong to
-the collection that the visit that collects it names. After adding visits, **Write the logs of the collections** writes, in the folder of each collection, its `<R000N>_FileTimestampLog.csv` (the
+the collection that the visit that collects it names. When a visit is registered — by hand or from a file — the **folder of each collection it changes is made**, with its `collection.json`, and so are its logs: **Write the logs of all the collections again** repeats it for all. They are written, in the folder of each collection, its `<R000N>_FileTimestampLog.csv` (the
 closed deployments' start and end, as the cameras' wall clock) and its `<R000N>_FieldworkLog.csv` (every deployment, closed or open, with its fields as Camtrap DP names them, in UTC, in the order of the
 [`FieldworkLog` columns](#6-import-a-deployment)). When the visit that left a camera and the one that collected it say different things of a field, both are kept: a text as `Setup: … | Retrieval: …`
 (who set it up, the habitat), the tags and groups of both together, and a number, a yes/no or a feature type as the setup says it with the retrieval's value noted in the comments.

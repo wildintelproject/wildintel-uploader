@@ -155,7 +155,7 @@ export const api = {
     post<{ results: StoredVisit[] }>('/api/visits/list', { research_project_id: researchProjectId, location_id: locationId ?? null }),
 
   saveVisit: (researchProjectId: string, visit: StoredVisit) =>
-    post<StoredVisit>('/api/visits/save', { research_project_id: researchProjectId, visit }),
+    post<StoredVisit & { field_logs?: FieldLogsResult }>('/api/visits/save', { research_project_id: researchProjectId, visit }),
 
   // The visits of a research project that closed a deployment — they collected the card — and have none linked yet.
   closedVisits: (researchProjectId: string) => post<{ results: ClosedVisit[] }>('/api/visits/closed', { research_project_id: researchProjectId }),
@@ -168,8 +168,9 @@ export const api = {
     post<StoredVisit>('/api/visits/link', { research_project_id: researchProjectId, location_id: visit.location_id, date: visit.date, time: visit.time, deployment_id: deploymentId }),
 
   // The visits of a CSV file for a research project: what can be kept and what is wrong with the rest — kept too when `save` is set.
-  importVisitsCsv: (researchProjectId: string, csv: string, save = false, format: VisitsCsvFormat = 'mapped', mapping?: Record<string, string>) =>
-    post<VisitsCsvResult>('/api/visits/import-csv', { research_project_id: researchProjectId, csv, save, format, mapping: mapping ?? null }),
+  /** Reads the visits of a CSV file — with, optionally, a history of visits (the fieldwork datasheet, an .xlsx, as base64) that completes the ones kept first. */
+  importVisitsCsv: (researchProjectId: string, csv: string, save = false, format: VisitsCsvFormat = 'mapped', mapping?: Record<string, string>, historyXlsx?: string) =>
+    post<VisitsCsvResult>('/api/visits/import-csv', { research_project_id: researchProjectId, csv, save, format, mapping: mapping ?? null, ...(historyXlsx ? { history_xlsx: historyXlsx } : {}) }),
 
   // The columns of a CSV file, a few of its rows, the fields of a visit it can give and the column that most likely gives each.
   visitsCsvColumns: (csv: string) => post<VisitsCsvColumns>('/api/visits/csv-columns', { csv }),

@@ -778,7 +778,7 @@ describe('VisitsPage from a CSV file', () => {
 
     // the deployments the visits say go into the logs of their collections
     mockedApi.writeFieldLogs.mockResolvedValue({ collections: [{ collection: 'R0003', closed: 1, open: 1, files: ['/c/TATR/R0003/R0003_FileTimestampLog.csv', '/c/TATR/R0003/R0003_FieldworkLog.csv'] }], warnings: [] })
-    await userEvent.click(screen.getByRole('button', { name: 'Write the logs of the collections' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Write the logs of all the collections again' }))
     expect(await screen.findByRole('list', { name: 'Logs written' })).toHaveTextContent('R0003: 1 closed, 1 open — R0003_FileTimestampLog.csv, R0003_FieldworkLog.csv')
     expect(mockedApi.writeFieldLogs).toHaveBeenCalledWith('TATR')
 
@@ -851,6 +851,36 @@ describe('VisitsPage from a CSV file', () => {
     expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0099', latitude: 49.1, longitude: 20.2 }))
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(2)) // the file is read again
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Add TATR_0099 as a location' })).not.toBeInTheDocument())
+  })
+
+  it('completes the visits kept with a history of visits (.xlsx) first, and applies the file on top of both', async () => {
+    mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit({ session: 'R0003' }), visit()], problems: [{ row: 5, message: "'x' is not a date.", history: true }], skipped: 0, ignored: 0, saved: null, history: 1, new_sites: [], warnings: [] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('History of visits (.xlsx)'), new File([new Uint8Array([80, 75, 3, 4])], 'history.xlsx'))
+    expect(await screen.findByText('history.xlsx')).toBeInTheDocument()
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+
+    // the history goes with the file, as base64
+    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.any(String), false, 'epicollect', undefined, 'UEsDBA=='))
+    expect(await screen.findByText(/to add/)).toHaveTextContent('2 visits to add (1 from the history)')
+    expect(screen.getByRole('list', { name: 'Rows with a problem' })).toHaveTextContent("History row 5: 'x' is not a date.")
+  })
+
+  it('shows the folders and logs made when the visits are kept', async () => {
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 1, new_sites: [], warnings: [],
+      field_logs: { collections: [{ collection: 'R0003', closed: 1, open: 0, files: ['/c/TATR/R0003/R0003_FileTimestampLog.csv', '/c/TATR/R0003/R0003_FieldworkLog.csv'] }], warnings: [] } })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await userEvent.click(await screen.findByRole('button', { name: 'Add 1 visit' }))
+
+    expect(await screen.findByRole('list', { name: 'Logs written' })).toHaveTextContent('R0003: 1 closed, 0 open — R0003_FileTimestampLog.csv, R0003_FieldworkLog.csv')
   })
 
   it('forgets what the file before said when another is chosen — even one with the same name, edited', async () => {

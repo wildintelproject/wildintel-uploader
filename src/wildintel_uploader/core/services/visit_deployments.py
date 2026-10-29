@@ -158,6 +158,17 @@ def _wall(when: str, location: dict | None) -> dt.datetime:
     return dt.datetime.fromisoformat(f"{date}T{time}")
 
 
+def collections_of(visits: list[dict], new: list[dict]) -> list[str]:
+    """The collections whose deployments have one of the visits `new` (found by their instant and site) among their two — the ones a new visit changes."""
+    keys = {(str(v.get("location_id", "")).lower(), v.get("when")) for v in new if v.get("when")}
+    found = set()
+    for d in deployments(visits):
+        for visit in (d["start_visit"], d["end_visit"]):
+            if visit and (str(visit.get("location_id", "")).lower(), visit.get("when")) in keys:
+                found.add(d["collection"])
+    return sorted(found)
+
+
 def write_collection_logs(root: Path, research_project_id: str, collections: list[str] | None = None) -> dict:
     """Writes the FileTimestampLog and the FieldworkLog of each collection the visits give deployments to (only the ones named, when `collections` is
     given). The FileTimestampLog is the camera's wall clock — the location's — and the FieldworkLog UTC; the row of a deployment already in them is replaced.
@@ -172,7 +183,7 @@ def write_collection_logs(root: Path, research_project_id: str, collections: lis
     locations = local_folder_service.list_locations(root, research_project_id)
     where = {str(l["location_id"]).lower(): l for l in locations}
     project = root / research_project_id
-    wanted = {c.upper() for c in collections} if collections else None
+    wanted = {c.upper() for c in collections} if collections is not None else None
     by_collection: dict[str, list[dict]] = {}
     for d in deployments(visits):
         if wanted is None or d["collection"] in wanted:
@@ -180,6 +191,7 @@ def write_collection_logs(root: Path, research_project_id: str, collections: lis
     result, warnings = [], []
     for collection, items in sorted(by_collection.items()):
         folder = project / collection
+        local_folder_service.write_collection_metadata(folder, collection)   # the collection's folder, with its collection.json
         files = []
         for d in items:
             location = where.get(d["site"].lower())
