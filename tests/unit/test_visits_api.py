@@ -655,3 +655,19 @@ def test_the_visit_book_has_a_row_for_each_location_that_was_not_visited_in_a_se
     assert not_done == [("R0003", "DONA_03"), ("R0004", "DONA_02"), ("R0004", "DONA_03")]       # DONA_04 is retired: left out
     assert all(v["actions"] == [] and v["date"] == "" for v in book if v["not_done"])
     assert sum(1 for v in book if not v["not_done"]) == 3                                           # the visits are the ones made
+
+
+def test_the_visit_book_says_which_deployments_are_on_trapper_uploaded_from_here_or_synced(tmp_path: Path):
+    import json
+    with _in(tmp_path):
+        _field_visits()
+        for site, deployment in (("DONA_01", "R0003-DONA_01"), ("DONA_02", "R0003-DONA_02")):
+            _client().post("/api/visits/link", json={"research_project_id": "DONA", "location_id": site, "date": "2024-09-04" if site == "DONA_01" else "2024-09-05", "time": "09:00:00" if site == "DONA_01" else "09:00:00", "deployment_id": deployment})
+        uploaded = tmp_path / "DONA" / "R0003" / "R0003-DONA_01"
+        uploaded.mkdir(parents=True)
+        (uploaded / "upload.json").write_text(json.dumps({"uploaded_at": "2024-10-20T10:00:00+00:00"}), encoding="utf-8")
+        book = {(v["location_id"], v["session"]): v for v in _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]}
+
+    assert (book[("DONA_01", "R0003")]["on_trapper"], book[("DONA_01", "R0003")]["uploaded_at"]) == (True, "2024-10-20T10:00:00+00:00")
+    assert (book[("DONA_02", "R0003")]["on_trapper"], book[("DONA_02", "R0003")]["uploaded_at"]) == (False, None)   # imported here, not uploaded
+    assert book[("DONA_01", "R0004")]["on_trapper"] is False                                                          # no deployment of its own yet

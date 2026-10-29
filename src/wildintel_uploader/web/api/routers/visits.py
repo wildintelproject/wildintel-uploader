@@ -8,9 +8,19 @@ from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, SaveVisitRequest, VisitsCsvColumnsRequest
-from wildintel_uploader.core.services import local_folder_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
+from wildintel_uploader.core.services import local_folder_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
+
+
+def _trapper_state(root, research_project_id: str, deployment_id: str | None) -> tuple[str | None, bool]:
+    """Whether the deployment a visit gave is on Trapper — it was uploaded from here (its upload.json says when) or it was synced from there — and when it was uploaded."""
+    if not deployment_id:
+        return None, False
+    folder = root / research_project_id / deployment_id.split("-", 1)[0] / deployment_id
+    upload = local_folder_service._read_json(folder / trapper_upload_service.UPLOAD_LOG_FILE)
+    uploaded_at = upload.get("uploaded_at") if isinstance(upload, dict) else None
+    return uploaded_at, bool(uploaded_at) or local_folder_service.is_synced(folder)
 
 
 def _write_logs(root, research_project_id: str, new: list[dict]) -> dict:
@@ -161,6 +171,9 @@ def visit_book(req: ListVisitsRequest) -> dict:
         local_folder_service.require_research_project(root, req.research_project_id)
         visits = local_folder_service.list_visits(root, req.research_project_id, req.location_id)
         locations = local_folder_service.list_locations(root, req.research_project_id) if req.location_id is None else None
-        return {"results": visit_deployments.visit_book(visits, config.load_settings().FIELDLOG.keep_seconds, locations)}
+        book = visit_deployments.visit_book(visits, config.load_settings().FIELDLOG.keep_seconds, locations)
+        for visit in book:
+            visit["uploaded_at"], visit["on_trapper"] = _trapper_state(root, req.research_project_id, visit.get("deployment_id"))
+        return {"results": book}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc

@@ -30,8 +30,8 @@ const shownValue = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') 
 type View = 'visits' | 'deployments'
 
 /** The columns the book can be sorted by. */
-type SortKey = 'session' | 'where' | 'when' | 'status' | 'actions' | 'stored'
-const COLUMNS: [SortKey, string][] = [['session', 'Session'], ['where', 'Where'], ['when', 'When'], ['status', 'Status'], ['actions', 'Actions'], ['stored', 'Images stored']]
+type SortKey = 'session' | 'where' | 'when' | 'status' | 'actions' | 'stored' | 'trapper'
+const COLUMNS: [SortKey, string][] = [['session', 'Session'], ['where', 'Where'], ['when', 'When'], ['actions', 'Actions'], ['status', 'Status'], ['stored', 'Images stored'], ['trapper', 'On Trapper']]
 
 /** What a row says in a column, to sort by it: the rows not made go last whatever the direction (they have no day, no actions…). */
 function sortValue(v: BookVisit, key: SortKey): string | number {
@@ -42,6 +42,7 @@ function sortValue(v: BookVisit, key: SortKey): string | number {
     case 'status': return v.not_done ? 2 : v.deployment_status === 'closed' ? 0 : v.deployment_status === 'open' ? 1 : 3
     case 'actions': return v.actions.join(' + ').toLowerCase()
     case 'stored': return v.deployment_id ? 0 : v.deployment_status === 'closed' ? 1 : 2 // stored, to create, not stored
+    case 'trapper': return v.on_trapper ? 0 : 1
   }
 }
 
@@ -102,7 +103,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
     .sort((a, b) => {
       const byDefault = () => b.session.localeCompare(a.session) || Number(a.not_done) - Number(b.not_done) || (a.not_done ? a.location_id.localeCompare(b.location_id) : `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))
       if (!sort) return byDefault()
-      if (a.not_done !== b.not_done && ['when', 'actions', 'stored'].includes(sort.key)) return Number(a.not_done) - Number(b.not_done)
+      if (a.not_done !== b.not_done && ['when', 'actions', 'stored', 'trapper'].includes(sort.key)) return Number(a.not_done) - Number(b.not_done)
       const x = sortValue(a, sort.key), y = sortValue(b, sort.key)
       const order = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))
       return (sort.descending ? -order : order) || byDefault()
@@ -174,6 +175,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                             <td className="px-3 py-2 font-mono">{v.session}</td>
                             <td className="px-3 py-2 font-mono">{v.location_id}</td>
                             <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.not_done ? <span className="font-sans text-zinc-400">—</span> : `${v.date} ${v.time.slice(0, 5)}`}</td>
+                            <td className="px-3 py-2">{v.actions.join(' + ')}</td>
                             <td className="px-3 py-2">
                               {v.not_done
                                 ? <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not done</span>
@@ -181,7 +183,6 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${v.deployment_status === 'closed' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>{v.deployment_status === 'closed' ? 'Closed' : 'Open'}</span>
                                 : <span className="text-zinc-400">—</span>}
                             </td>
-                            <td className="px-3 py-2">{v.actions.join(' + ')}</td>
                             <td className="px-3 py-2">
                               {v.not_done ? null : v.deployment_id ? (
                                 <span role="img" aria-label={`Images stored: ${v.deployment_id}`} title={v.deployment_id} className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
@@ -194,15 +195,28 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
                                 </span>}
                             </td>
+                            <td className="px-3 py-2">
+                              {v.not_done ? null : v.on_trapper ? (
+                                <span role="img" aria-label="On Trapper" title={v.uploaded_at ? `Uploaded to Trapper on ${v.uploaded_at.slice(0, 10)}` : 'On Trapper: synced from there'} className="inline-flex text-emerald-600 dark:text-emerald-400">
+                                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                                </span>
+                              ) : (
+                                <span role="img" aria-label="Not on Trapper" title="Not uploaded to Trapper" className="inline-flex text-zinc-400 dark:text-zinc-500">
+                                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
+                                </span>
+                              )}
+                            </td>
                             <td className="px-3 py-2 whitespace-nowrap">
                               {!v.not_done && <div className="flex flex-col gap-1.5 items-stretch">
-                                <button type="button" className={`${btnOutline} !px-2.5 !py-1 !text-xs`} aria-expanded={opened === key} aria-label={`Details of the visit ${v.session} to ${v.location_id}`} onClick={() => setOpened(opened === key ? null : key)}>Details</button>
+                                <button type="button" className={`${btnOutline} inline-flex items-center justify-center gap-2`} aria-expanded={opened === key} aria-label={`View the visit ${v.session} to ${v.location_id}`} onClick={() => setOpened(opened === key ? null : key)}>
+                                  <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" className="fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>View
+                                </button>
                               </div>}
                             </td>
                           </tr>
                           {opened === key && (
                             <tr>
-                              <td colSpan={7} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
+                              <td colSpan={8} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
                                 <dl aria-label={`Details of the visit ${v.session} to ${v.location_id}`} className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
                                   <div className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">Actions</dt><dd>{v.actions.join(' + ')}</dd></div>
                                   {DETAILS.filter(([k]) => { const value = v[k]; return value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0) })
@@ -214,7 +228,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                         </Fragment>
                       )
                     })}
-                    {shown.length === 0 && <tr><td colSpan={7} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{visits.length === 0 ? 'No visit has been registered to this research project yet.' : 'No visit matches.'}</td></tr>}
+                    {shown.length === 0 && <tr><td colSpan={8} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{visits.length === 0 ? 'No visit has been registered to this research project yet.' : 'No visit matches.'}</td></tr>}
                   </tbody>
                 </table>
               </div>

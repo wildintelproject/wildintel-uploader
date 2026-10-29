@@ -20,7 +20,7 @@ beforeEach(() => {
   mockedApi.visitBook.mockResolvedValue({ results: [
     visit({ deployment: 'R0003-TATR_0001', deployment_status: 'closed' }),
     visit({ date: '2024-10-12', session: 'R0004', actions: ['Revision'], num_photos: 241, sd: 'B2', deployment: 'R0004-TATR_0001', deployment_status: 'open', comments: 'pilas cambiadas' }),
-    visit({ location_id: 'TATR_0002', trappers: 'Luis', camera_id: 'P900', deployment: 'R0003-TATR_0002', deployment_status: 'closed', deployment_id: 'R0003-TATR_0002' }),
+    visit({ location_id: 'TATR_0002', trappers: 'Luis', camera_id: 'P900', deployment: 'R0003-TATR_0002', deployment_status: 'closed', deployment_id: 'R0003-TATR_0002', on_trapper: true, uploaded_at: '2024-10-20T10:00:00+00:00' }),
   ] })
   mockedApi.fieldDeployments.mockResolvedValue({ results: [
     { deployment_id: 'R0003-TATR_0001', collection: 'R0003', site: 'TATR_0001', status: 'closed', start: '2024-09-04T09:00:00Z', end: '2024-10-12T09:00:00Z', setup_by: 'Ana', camera_id: 'P800', card: 'A13', photos_counted: 241, start_session: 'R0003', end_session: 'R0004' },
@@ -79,9 +79,9 @@ describe('VisitBookPage', () => {
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     const [done, notDone] = within(table).getAllByRole('row').slice(1)
-    expect(within(notDone).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', 'Not done', ''])
+    expect(within(notDone).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', '', 'Not done'])
     expect(within(notDone).queryByRole('button')).not.toBeInTheDocument()
-    expect(within(done).getByRole('button', { name: /Details of the visit/ })).toBeInTheDocument()
+    expect(within(done).getByRole('button', { name: /View the visit/ })).toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText('Filter by status'), 'not_done')
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
   })
@@ -137,14 +137,18 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Status', 'Actions', 'Images stored'])
+    expect(within(table).getAllByRole('columnheader').slice(0, 7).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Actions', 'Status', 'Images stored', 'On Trapper'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'Revision', ''])
+    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Revision', 'Open', ''])
     // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not
     expect(within(table).getByRole('img', { name: 'Images stored: R0003-TATR_0002' })).toBeInTheDocument()
     expect(within(table).getAllByRole('img', { name: /^Images stored/ })).toHaveLength(1)
     expect(within(table).getAllByLabelText('Images not stored')).toHaveLength(1) // the open visit: nothing to store yet
-    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Closed', 'Installation', 'Create deployment'])
+    // and whether they were uploaded to Trapper
+    expect(within(table).getAllByRole('img', { name: 'On Trapper' })).toHaveLength(1)
+    expect(within(table).getByRole('img', { name: 'On Trapper' })).toHaveAttribute('title', 'Uploaded to Trapper on 2024-10-20')
+    expect(within(table).getAllByRole('img', { name: 'Not on Trapper' })).toHaveLength(2)
+    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Installation', 'Closed', 'Create deployment'])
   })
 
   it('shows the details of a visit, and creates the deployment of a closed visit that has none yet', async () => {
@@ -152,7 +156,7 @@ describe('VisitBookPage', () => {
     render(<VisitBookPage onBack={vi.fn()} onImportImages={onImportImages} />)
     await screen.findByRole('table', { name: 'Visits' })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Details of the visit R0004 to TATR_0001' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View the visit R0004 to TATR_0001' }))
     expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('pilas cambiadas')
     expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('P800') // the camera, the card and the photos are in the details
     expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('241')

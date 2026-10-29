@@ -748,6 +748,9 @@ export interface VisitsCsvResult {
 export interface BookVisit extends StoredVisit {
   deployment: string | null
   deployment_status: 'closed' | 'open' | null
+  /** When the deployment this visit gave was uploaded to Trapper from here (null when it was not), and whether it is on Trapper — uploaded from here or synced from there. */
+  uploaded_at?: string | null
+  on_trapper?: boolean
   /** A row for a location that has no visit in a session the visits have: the visit was not made — it has no day, no time and no actions. */
   not_done: boolean
 }
