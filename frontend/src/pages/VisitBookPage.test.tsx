@@ -52,7 +52,7 @@ describe('VisitBookPage', () => {
     const table = await screen.findByRole('table', { name: 'Visits' })
     expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Status', 'Actions', 'Images stored'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'Revision', '—'])
+    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'Revision', ''])
     // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not
     expect(within(table).getByRole('img', { name: 'Images stored: R0003-TATR_0002' })).toBeInTheDocument()
     expect(within(table).getAllByRole('img', { name: /^Images stored/ })).toHaveLength(1)

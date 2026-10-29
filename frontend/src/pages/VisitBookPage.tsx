@@ -114,7 +114,9 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
                                 </span>
                               ) : v.deployment_status === 'closed' && onImportImages ? (
                                 <button type="button" className={`${btnPrimary} !px-2.5 !py-1 !text-xs whitespace-nowrap`} aria-label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })}>Create deployment</button>
-                              ) : <span aria-label="Images not stored" className="text-zinc-400">—</span>}
+                              ) : <span role="img" aria-label="Images not stored" title="Not stored: the card has not been collected yet" className="inline-flex text-zinc-400 dark:text-zinc-500">
+                                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
+                                </span>}
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap">
                               <div className="flex flex-col gap-1.5 items-stretch">

@@ -214,7 +214,7 @@ Choose a research project and the book shows, in two tabs, the **visits** kept t
 **Write the logs of all the collections again**.
 
 A visit is one row: its **Session**, **Where** (the site), **When**, its **Status** — *Closed* once a later visit collected the card it left, *Open* while that camera is still out, nothing for a visit that left no camera — the **Actions**
-and **Images stored**: a **tick** (with the deployment's id) once the deployment is created and its images imported; a **Create deployment** button on a *closed* visit that has none yet — it opens [Import deployment](#6-import-a-deployment) with the research project and that visit already chosen —; and a dash on an *open* visit, whose card has not been collected. **Details** opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
+and **Images stored**: a **tick** (with the deployment's id) once the deployment is created and its images imported; a **Create deployment** button on a *closed* visit that has none yet — it opens [Import deployment](#6-import-a-deployment) with the research project and that visit already chosen —; and a grey crossed circle on an *open* visit, whose card has not been collected. **Details** opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
 ### Register visits
 
 Press **Register visits**.
