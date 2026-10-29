@@ -253,4 +253,14 @@ describe('VisitBookPage', () => {
     expect(await screen.findByLabelText('Details of the visit R0003 to TATR_0002', { selector: 'dl' })).toHaveTextContent('P900')
     expect(within(screen.getByRole('region', { name: 'Revision' })).getByRole('button', { name: /^R0003/ })).toHaveAttribute('aria-pressed', 'true')
   })
+
+  it('says that the photos of a visit are those of the card it collects — the one left before —, not of the card it leaves', async () => {
+    await pickProject()
+    const table = await screen.findByRole('table', { name: 'Visits' })
+    await userEvent.click(within(table).getByRole('button', { name: /View the visit R0004 to TATR_0001/ }))
+
+    const details = screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })
+    expect(details).toHaveTextContent('Photos counted on the card collected (A13)241')
+    expect(details).toHaveTextContent('SD card leftB2')
+  })
 })

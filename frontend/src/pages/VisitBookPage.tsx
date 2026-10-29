@@ -72,6 +72,12 @@ export interface VisitFocus { session: string; site: string }
 /** The order the book has when no column is chosen: the latest revision first, within it the visits made newest first and then the ones not made, by site. */
 const byDefault = (a: BookVisit, b: BookVisit) =>
   b.session.localeCompare(a.session) || Number(a.not_done) - Number(b.not_done) || (a.not_done ? a.location_id.localeCompare(b.location_id) : `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))
+/** The SD card a visit collects: the one the visit before it at the site left in the camera — not the one this visit leaves, which has no photos yet. */
+const collectedCard = (visits: BookVisit[], v: BookVisit): string | null => {
+  const at = (w: BookVisit) => w.when ?? `${w.date}T${w.time}`
+  const before = visits.filter((w) => !w.not_done && w.sd && w.location_id.toLowerCase() === v.location_id.toLowerCase() && at(w) < at(v) && w.actions.some((a) => a === 'Installation' || a === 'Revision'))
+  return before.sort((a, b) => at(b).localeCompare(at(a)))[0]?.sd ?? null
+}
 const keyOf = (v: BookVisit) => `${v.session}|${v.location_id}|${v.date}|${v.time}`
 
 /** How many visits a page of the book has. */
@@ -272,7 +278,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 <dl aria-label={`Details of the visit ${v.session} to ${v.location_id}`} className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
                                   <div className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">Actions</dt><dd>{v.actions.join(' + ')}</dd></div>
                                   {DETAILS.filter(([k]) => { const value = v[k]; return value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0) })
-                                    .map(([k, label]) => <div key={k} className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">{label}</dt><dd className="font-mono text-xs break-all self-center">{shownValue(v[k])}</dd></div>)}
+                                    .map(([k, label]) => <div key={k} className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">{k === 'num_photos' && collectedCard(everyRow, v) ? `Photos counted on the card collected (${collectedCard(everyRow, v)})` : label}</dt><dd className="font-mono text-xs break-all self-center">{shownValue(v[k])}</dd></div>)}
                                 </dl>
                               </td>
                             </tr>
