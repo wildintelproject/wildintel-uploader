@@ -539,3 +539,82 @@ def test_a_closed_visit_comes_with_what_its_two_visits_say_of_the_deployment_mix
     assert details["habitat"] == "Setup: Pine | Retrieval: Scrub" and details["tags"] == ["forest", "pine"]
     assert details["camera_height"] == 1.2 and details["bait_use"] is True                  # the setup's number
     assert details["comments"] == "Setup: new camera | Retrieval: pilas; cameraHeight 1.5 (setup 1.2)"
+
+
+# ── the settings of the field records, and what the engine of the field records also says ───────────────────────
+
+def _parse(text: str, kept=None, options=None, fmt="epicollect", sites=("DONA_01", "DONA_02", "DONA_03")):
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": s, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.4} for s in sites]
+    return visits_csv.parse_visits(text, locations, kept or [], "DONA_", fmt, None, options)
+
+
+EPI_HEADER = "created_at,1_Responsable,2_Collection,3_Date,4_Location,5_Camera,6_Action,9_Number_of_pictures,10_SD,14_Hour\n"
+
+
+def test_the_time_of_a_visit_is_when_its_entry_was_created_or_the_date_and_the_hour_typed(tmp_path: Path):
+    text = EPI_HEADER + "2024-09-04T11:10:00.000Z,Ana,R0003,2024-09-04,DONA_01,P800,Installation,,A13,12:30\n"
+
+    created = _parse(text)["visits"][0]
+    typed = _parse(text, options={"time_source": "hour"})["visits"][0]
+
+    assert (created["date"], created["time"], created["when"]) == ("2024-09-04", "11:10:00", "2024-09-04T11:10:00Z")
+    assert (typed["date"], typed["time"], typed["when"]) == ("2024-09-04", "12:30:00", "2024-09-04T12:30:00Z")   # the hour typed in the form
+
+
+def test_the_columns_of_a_form_named_otherwise_are_said_in_the_settings(tmp_path: Path):
+    text = "created_at,Quien,Viaje,Donde,Que,Camara\n2024-09-04T11:10:00.000Z,Ana,R0003,DONA_01,Installation,P800\n"
+    import pytest
+
+    from wildintel_uploader.core.services import visits_csv
+    with pytest.raises(visits_csv.VisitsCsvError, match="no column for: location_id, actions"):   # 'Donde' and 'Que' are not names it knows
+        _parse(text)
+    with_settings = _parse(text, options={"columns": {"trappers": "Quien", "session": "Viaje", "location_id": "Donde", "actions": "Que"}})
+
+    assert with_settings["problems"] == []
+    [visit] = with_settings["visits"]
+    assert (visit["location_id"], visit["session"], visit["trappers"], visit["actions"]) == ("DONA_01", "R0003", "Ana", ["Installation"])
+
+
+def test_the_date_typed_that_differs_from_the_day_of_the_entry_is_warned_of():
+    text = EPI_HEADER + "2024-09-04T23:50:00.000Z,Ana,R0003,2024-09-05,DONA_01,P800,Installation,,A13,12:30\n"
+
+    assert any("the date typed, 2024-09-05, differs from the day of the entry, 2024-09-04" in w for w in _parse(text)["warnings"])
+
+
+def test_the_session_numbers_that_jump_are_warned_of_and_the_sites_not_visited_are_told_as_notes():
+    kept = [{"location_id": "DONA_01", "session": "R0003", "when": "2024-09-04T09:00:00Z", "date": "2024-09-04", "time": "09:00:00", "actions": ["Installation"], "camera_id": "P800", "sd": "A13"},
+            {"location_id": "DONA_02", "session": "R0003", "when": "2024-09-04T10:00:00Z", "date": "2024-09-04", "time": "10:00:00", "actions": ["Installation"], "camera_id": "P900", "sd": "B2"}]
+    text = EPI_HEADER + "2024-11-05T09:00:00.000Z,Ana,R0005,2024-11-05,DONA_01,P800,Revision,50,C7,09:00\n"
+    result = _parse(text, kept=kept)
+
+    assert "Session numbers jump from R0003 to R0005." in result["warnings"]
+    text = EPI_HEADER + "2024-10-12T09:00:00.000Z,Ana,R0004,2024-10-12,DONA_01,P800,Revision,50,C7,09:00\n"
+    assert any(n.startswith("R0004: sites visited in R0003 and not on this trip, their cameras still out: DONA_02") for n in _parse(text, kept=kept)["notes"])
+
+
+def test_a_row_that_is_a_visit_kept_already_by_its_session_site_camera_and_actions_is_left_as_it_is():
+    kept = [{"location_id": "DONA_01", "session": "R0003", "when": "2024-09-04T09:00:00Z", "date": "2024-09-04", "time": "09:00:00", "actions": ["Installation"], "camera_id": "P800", "sd": "A13"}]
+    # the same visit, with the time of the entry instead of the one written in the datasheet
+    text = EPI_HEADER + "2024-09-04T09:07:00.000Z,Ana,R0003,2024-09-04,DONA_01,P800,Installation,,A13,12:30\n"
+    result = _parse(text, kept=kept)
+
+    assert result["visits"] == [] and result["skipped"] == 1
+
+
+def test_the_seconds_are_cut_from_the_logs_unless_they_are_kept_and_an_import_leaves_its_report(tmp_path: Path):
+    from unittest.mock import patch
+
+    from wildintel_uploader.core import config
+    text = ("location_id,date,time,actions,session,num_photos,sd,camera_id\nDONA_01,2024-09-04,09:00:41,Installation,R0003,,A13,P800\n"
+            "DONA_01,2024-10-12,09:05:17,Revision,R0004,241,B2,P800\n")
+    for keep, expected in ((False, "09:00:00,2024:10:12,09:05:00"), (True, "09:00:41,2024:10:12,09:05:17")):
+        root = tmp_path / str(keep)
+        root.mkdir()
+        settings = config.Settings.model_validate({"FIELDLOG": {"keep_seconds": keep}})
+        with patch("wildintel_uploader.web.api.routers.visits.config.load_settings", return_value=settings):
+            body = _import(root, text, save=True).json()
+        stamp = (root / "DONA" / "R0003" / "R0003_FileTimestampLog.csv").read_text(encoding="utf-8-sig").splitlines()[1]
+        assert stamp.endswith(expected), (keep, stamp)
+    report = Path(body["report"])
+    assert report.parent == root / "DONA" and report.name.startswith("visits_import_") and "Visits kept to DONA: 2" in report.read_text(encoding="utf-8")

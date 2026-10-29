@@ -537,6 +537,8 @@ export interface AppSettings {
   PREPROCESSING: PreprocessingSettings
   /** trappers: the people who go to the field — suggested as who went when a visit is registered. */
   FIELDWORK: FieldworkSettings
+  /** How the visits of a field trip are read from the file of the field app, and what is written of them. */
+  FIELDLOG: FieldlogSettings
 }
 
 /** What the settings page saves. A blank password keeps the saved one. */
@@ -549,6 +551,17 @@ export interface AppSettingsUpdate {
   POSTVALIDATION: PostvalidationSettings
   PREPROCESSING: PreprocessingSettings
   FIELDWORK: FieldworkSettings
+  FIELDLOG: FieldlogSettings
+}
+
+/** How the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them. */
+export interface FieldlogSettings {
+  /** When a visit happened: when its entry was created (UTC), or the date and the hour typed in the form. */
+  time_source: 'created_at' | 'hour'
+  /** Keep the seconds of the start and the end of the deployments written in the logs; off, they are cut to the minute. */
+  keep_seconds: boolean
+  /** The column of the file that gives each field of a visit, for forms whose questions are named otherwise. */
+  columns: Record<string, string>
 }
 
 /** The people, the SD cards and the cameras of the field work, kept in the settings. */
@@ -716,6 +729,10 @@ export interface VisitsCsvResult {
   skipped: number
   /** How many of the visits come from the history, which are the first ones. */
   history?: number
+  /** What is worth knowing of the visits, without being wrong (the sites of the trip before not visited on this one…). */
+  notes?: string[]
+  /** The report of the import, a text file beside the visits of the research project — when they were kept. */
+  report?: string | null
   /** The folders and logs made of the collections the visits kept change — when they were kept. */
   field_logs?: FieldLogsResult | null
   /** Entries of old versions of the Epicollect form (no collection number or site), left out. */
@@ -725,6 +742,23 @@ export interface VisitsCsvResult {
   new_sites: NewSite[]
   /** What is odd in the visits — their camera or card, what their actions ask, two Revisions in a session… — said, not refused. */
   warnings: string[]
+}
+
+/** A deployment the visits of a research project say: closed (a visit left the camera and a later one collected its card) or still open (the camera is out). */
+export interface FieldDeployment {
+  deployment_id: string
+  collection: string
+  site: string
+  status: 'closed' | 'open'
+  /** ISO 8601, UTC, with a Z. */
+  start: string
+  end: string | null
+  setup_by: string | null
+  camera_id: string | null
+  card: string | null
+  photos_counted: number | null
+  start_session: string | null
+  end_session: string | null
 }
 
 /** What writing the logs of the collections did: for each, how many deployments are closed and how many open, and the files written. */

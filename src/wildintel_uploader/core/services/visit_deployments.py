@@ -132,27 +132,29 @@ def _comments(start: dict, end: dict | None, retrieval_notes: list[str]) -> str:
     return " | ".join(parts)
 
 
-def _utc(when: str | None) -> str:
+def _utc(when: str | None, keep_seconds: bool = True) -> str:
+    """An instant as ISO 8601 UTC with a Z — cut to the minute unless the seconds are kept."""
     if not when:
         return ""
-    return when if when.endswith("Z") else when.replace("+00:00", "Z")
+    when = when if when.endswith("Z") else when.replace("+00:00", "Z")
+    return when if keep_seconds else re.sub(r":\d{2}Z$", ":00Z", when)
 
 
-def _deployment(collection: int, start: dict, end: dict | None) -> dict:
+def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bool = True) -> dict:
     """A deployment from the visit that left the camera and, once it is collected, the one that collected it."""
     fields, notes = _fields(start, end)
     # who set it up: the one the visit that left it says (else who went); who collected it: who went on the visit that did
     return {
         "deployment_id": f"{collection_name(collection)}-{start['location_id']}", "collection": collection_name(collection), "site": start["location_id"],
-        "status": "closed" if end else "open", "start": _utc(start.get("when")), "end": _utc(end.get("when")) if end else None,
+        "status": "closed" if end else "open", "start": _utc(start.get("when"), keep_seconds), "end": _utc(end.get("when"), keep_seconds) if end else None,
         "setup_by": _both(start.get("setup_by") or start.get("trappers"), (end or {}).get("trappers")), "camera_id": _text(start.get("camera_id")), "card": _text(start.get("sd")),
         "photos_counted": end.get("num_photos") if end else None, "comments": _comments(start, end, notes), "fields": fields,
         "start_visit": start, "end_visit": end,
     }
 
 
-def deployments(visits: list[dict]) -> list[dict]:
-    """Every deployment the visits say, closed and open, by collection and site."""
+def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
+    """Every deployment the visits say, closed and open, by collection and site — their start and end cut to the minute unless the seconds are kept."""
     by_site: dict[str, list[dict]] = {}
     for v in visits:
         if v.get("when") and not _not_revised(v):
@@ -165,12 +167,12 @@ def deployments(visits: list[dict]) -> list[dict]:
             number = session_number(later.get("session"))
             if number is None or not _leaves_camera(earlier) or not local_folder_service.closes_collection(later):
                 continue
-            out.append(_deployment(number - 1, earlier, later))
+            out.append(_deployment(number - 1, earlier, later, keep_seconds))
         last = group[-1]
         number = session_number(last.get("session"))
         if _leaves_camera(last) and not {"Desinstallation", "Stolen"} & set(last.get("actions") or []) and number is not None:
             # still out there: the collection the visit that collects it will name — the one being completed when it was left before the last trip
-            out.append(_deployment(last_session - 1 if number < last_session else last_session, last, None))
+            out.append(_deployment(last_session - 1 if number < last_session else last_session, last, None, keep_seconds))
     return sorted(out, key=lambda d: (d["collection"], d["site"].lower()))
 
 
@@ -179,18 +181,18 @@ def _wall(when: str, location: dict | None) -> dt.datetime:
     return dt.datetime.fromisoformat(f"{date}T{time}")
 
 
-def collections_of(visits: list[dict], new: list[dict]) -> list[str]:
+def collections_of(visits: list[dict], new: list[dict], keep_seconds: bool = True) -> list[str]:
     """The collections whose deployments have one of the visits `new` (found by their instant and site) among their two — the ones a new visit changes."""
     keys = {(str(v.get("location_id", "")).lower(), v.get("when")) for v in new if v.get("when")}
     found = set()
-    for d in deployments(visits):
+    for d in deployments(visits, keep_seconds):
         for visit in (d["start_visit"], d["end_visit"]):
             if visit and (str(visit.get("location_id", "")).lower(), visit.get("when")) in keys:
                 found.add(d["collection"])
     return sorted(found)
 
 
-def write_collection_logs(root: Path, research_project_id: str, collections: list[str] | None = None) -> dict:
+def write_collection_logs(root: Path, research_project_id: str, collections: list[str] | None = None, keep_seconds: bool = True) -> dict:
     """Writes the FileTimestampLog and the FieldworkLog of each collection the visits give deployments to (only the ones named, when `collections` is
     given). The FileTimestampLog is the camera's wall clock — the location's — and the FieldworkLog UTC; the row of a deployment already in them is replaced.
 
@@ -206,7 +208,7 @@ def write_collection_logs(root: Path, research_project_id: str, collections: lis
     project = root / research_project_id
     wanted = {c.upper() for c in collections} if collections is not None else None
     by_collection: dict[str, list[dict]] = {}
-    for d in deployments(visits):
+    for d in deployments(visits, keep_seconds):
         if wanted is None or d["collection"] in wanted:
             by_collection.setdefault(d["collection"], []).append(d)
     result, warnings = [], []

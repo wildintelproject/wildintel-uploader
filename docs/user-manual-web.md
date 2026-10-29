@@ -66,6 +66,16 @@ see. The password is saved in `settings.toml` but never sent back to your browse
 **Upload packages — Largest package** is the size, in MB, of the packages an [upload](#8-upload-a-deployment-to-trapper) makes: the
 images of each deployment are uploaded in packages of this size at most (500 by default, up to 5000).
 
+### Field records
+
+How the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them:
+
+- **The time of a visit** — *when its entry was created* (`created_at`, UTC; the default) or *the date and the hour typed in the form*. The hour typed is the wall clock of the visit's location, and is used when the row has
+  a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.
+- **Keep the seconds in the logs** — the start and the end of the deployments written in the `FileTimestampLog` and the `FieldworkLog`. Off by default: they are cut to the minute.
+- **Columns** — the file is read by the names its questions usually have (`1_Responsable`, `4_Location`, `6_Action`, and the Camtrap DP fields by their names). For a form that names them otherwise, write the name of the column
+  that gives each field of a visit; blank, the usual names.
+
 ### Epicollect5
 
 ![Settings › Epicollect5](img/screenshots/settings-epicollect.png)
@@ -211,6 +221,11 @@ the visits come in:
 A file can come with a **history of visits** (optional): the fieldwork datasheet, an `.xlsx` workbook whose first sheet has a Site and an Action column (Trappers, Session, Date, Time, Camera, NumPhotos, SD… or Tramperos, Sesion, Fecha, Hora…
 — found by their names, as in an Epicollect download). The history **completes the visits kept**, and then the file's are applied on top of both: sessions, what is already kept and what is odd are told with all of it in front. Its visits come first in the list, and its rows
 that cannot be read appear as *History row N*.
+
+Besides the visits and the rows with problems, reading a file says what is **worth knowing** without being wrong — the sites visited on the trip before and not on this one (their cameras are still out and
+their deployments stay open), visits where nothing was collected (*Not revised*), visits with no photo count —, and warns of a **jump in the session numbers** and of a row whose **session, site, camera and actions** are those of a
+visit already kept (it is that visit, left as it is). When the visits are kept, **a report** of the import is written beside them (`visits_import_<day>_<time>.txt`), and **Show the deployments** lists, by collection, the deployments the
+visits say: the closed ones and the ones whose camera is still out.
 
 When a file is read, the visits that were found are listed and the ones that are fine can be kept; the rows that cannot be read (*a date that is not a date*,
 *actions that are not Installation, Revision, Desinstallation or Stolen*…) are listed with why. The file is treated as the field records are: what the field wrote is

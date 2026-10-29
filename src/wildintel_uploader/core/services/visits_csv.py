@@ -23,7 +23,7 @@ from wildintel_uploader.core.services import visit_rules, visit_time
 EPICOLLECT_COLUMNS: dict[str, tuple[str, ...]] = {
     "location_id": ("site", "location", "locationid", "sitio"),
     "date": ("date", "fecha"),
-    "time": ("time", "hora"),
+    "time": ("time", "hora", "hour"),
     "when": ("datetime", "when", "fechahora"),
     "actions": ("actions", "action", "accion"),
     "trappers": ("trappers", "trapper", "who", "tramperos", "responsable"),
@@ -120,12 +120,14 @@ def _table(text: str) -> list[list[str]]:
     return table
 
 
-def _fields(header: list[str], fmt: str, mapping: dict[str, str] | None) -> list[str | None]:
-    """The field of a visit each column of the header gives — nothing for a column that is not used."""
+def _fields(header: list[str], fmt: str, mapping: dict[str, str] | None, columns: dict[str, str] | None = None) -> list[str | None]:
+    """The field of a visit each column of the header gives — nothing for a column that is not used. In an Epicollect download the columns are found by the
+    names they usually have, and `columns` ({field: the column's name}) says the ones a form names otherwise."""
     if fmt == "mapped":
         by_column = {column: field for field, column in (mapping or {}).items() if column}
         return [by_column.get(cell) for cell in header]
     by_name = {alias: field for field, aliases in EPICOLLECT_COLUMNS.items() for alias in aliases}
+    by_name |= {_key(name): field for field, name in (columns or {}).items() if name and field in EPICOLLECT_COLUMNS}   # what is said wins over what is guessed
     return [by_name.get(_key(cell)) for cell in header]
 
 
@@ -142,10 +144,10 @@ def suggest_mapping(text: str) -> dict:
     return {"columns": header, "sample": table[1:4], "mapping": mapping}
 
 
-def _rows(text: str, fmt: str, mapping: dict[str, str] | None) -> tuple[dict[str, str], list[dict[str, str]]]:
+def _rows(text: str, fmt: str, mapping: dict[str, str] | None, columns: dict[str, str] | None = None) -> tuple[dict[str, str], list[dict[str, str]]]:
     """The file's columns, as the visit's fields they are, and its rows keyed by those fields."""
     table = _table(text)
-    fields = _fields(table[0], fmt, mapping)
+    fields = _fields(table[0], fmt, mapping, columns)
     present = {f for f in fields if f}
     missing = [f for f in REQUIRED if f not in present]
     if not present & {"created_at", "when"} and not {"date", "time"} <= present:
@@ -161,9 +163,10 @@ def _local(created: dt.datetime, location: dict) -> dt.datetime:
     return visit_time.utc_to_local(created, location)
 
 
-def _when(row: dict[str, str], location: dict) -> tuple[str, str]:
-    """The day and the time of a visit: when its entry was created (created_at, UTC, as Epicollect writes it), else its date and time."""
-    if "created_at" in row:
+def _when(row: dict[str, str], location: dict, time_source: str = "created_at") -> tuple[str, str]:
+    """The day and the time of a visit: when its entry was created (created_at, UTC, as Epicollect writes it), else its date and time — or, when `time_source`
+    is "hour", the date and the hour typed in the form (the wall clock of its location) when the row has them, else the time its entry was created."""
+    if "created_at" in row and not (time_source == "hour" and "date" in row and "time" in row):
         try:
             created = dt.datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
         except ValueError as exc:
@@ -192,7 +195,8 @@ def _site(text: str, prefix: str) -> str:
     return f"{prefix}{int(m.group(1)):04d}{'_B' if m.group(2) else ''}" if m else text
 
 
-def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix: str = "", fmt: str = "mapped", mapping: dict[str, str] | None = None) -> dict:
+def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix: str = "", fmt: str = "mapped", mapping: dict[str, str] | None = None,
+                 options: dict | None = None) -> dict:
     """The visits in the CSV `text` that can be kept, and what is wrong with the rest.
 
     `fmt` is how the file is read: "epicollect" or "mapped" (with `mapping`, {field: column}) — see the top of the module.
@@ -207,13 +211,20 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     kept — what their actions ask and they lack, a camera or a card where it cannot be, two Revisions in a session… — comes back in "warnings": the
     visits are kept as the field wrote them and questioned, as the field records are.
 
-    Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "ignored": int, "new_sites": [...], "warnings": [str]} — the rows
-    numbered as in the file, the header being 1.
+    `options` are the settings of the field records: "time_source" ("created_at", or "hour" to read the date and the hour typed) and "columns" ({field: the name
+    of the column that gives it} for an Epicollect form whose questions are named otherwise). A row whose session, site, camera and actions are those of a visit already
+    kept is that visit: left as it is, and counted as skipped.
+
+    Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "ignored": int, "new_sites": [...], "warnings": [str], "notes": [str]} — the rows
+    numbered as in the file, the header being 1. "notes" are what is worth knowing but not wrong: the sites of the trip before not visited on this one (their cameras
+    are still out), visits where nothing was collected, visits with no photo count.
 
     Raises:
         VisitsCsvError: the file is empty or lacks a required column.
     """
-    columns, rows = _rows(text, fmt, mapping)
+    options = options or {}
+    time_source = options.get("time_source") or "created_at"
+    columns, rows = _rows(text, fmt, mapping, options.get("columns"))
     epicollect = fmt == "epicollect" and "created_at" in columns
     known = {str(l.get("location_id", "")).lower(): l for l in locations}
     already = {(str(v.get("location_id", "")).lower(), v.get("date"), v.get("time")) for v in kept}
@@ -222,6 +233,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     skipped = 0
     ignored = 0
     held: dict[str, list[dict]] = {}  # the visits to sites that are not locations of the research project, by site
+    date_warnings: list[str] = []
+    same_visit = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower(), str(v.get("camera_id") or "").strip().lower(), tuple(v.get("actions") or [])) for v in kept if v.get("session")}
 
     def problem(n: int, message: str) -> None:
         problems.append({"row": n, "message": message})
@@ -236,7 +249,15 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         if unknown:
             location = {}  # held with its site apart: the time is read as UTC, as nothing says better
         try:
-            date, time = _when(row, location)
+            date, time = _when(row, location, time_source)
+            if fmt == "epicollect" and "created_at" in row and "date" in row and time_source != "hour":
+                try:
+                    created_day = _when({"created_at": row["created_at"]}, location)[0]
+                    typed_day = _when({"date": row["date"], "time": "00:00"}, location)[0]
+                    if created_day != typed_day:
+                        date_warnings.append(f"Row {n} ({site}): the date typed, {typed_day}, differs from the day of the entry, {created_day}; the time of the entry was used.")
+                except ValueError:
+                    pass
             actions = [ACTIONS.get(a.strip().lower()) for a in re.split(r"[+;/|&,]", row.get("actions", "")) if a.strip()]
             if not actions or None in actions:
                 raise ValueError(f"The actions '{row.get('actions', '')}' are not Installation, Revision, Desinstallation or Stolen.")
@@ -288,7 +309,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         if unknown:
             held.setdefault(site, []).append(record)
             continue
-        if (record["location_id"].lower(), record["date"], record["time"]) in already:
+        again = (str(record["session"]).upper(), record["location_id"].lower(), str(record.get("camera_id") or "").strip().lower(), tuple(record["actions"]))
+        if (record["location_id"].lower(), record["date"], record["time"]) in already or ("session" in row and again in same_visit):
             skipped += 1
             continue
         already.add((record["location_id"].lower(), record["date"], record["time"]))
@@ -306,10 +328,33 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         count[loc] += 1
         visits.append(record)
     new_sites = [visit_rules.new_site(site, records, locations) for site, records in sorted(held.items())]
-    return {"visits": visits, "problems": problems, "skipped": skipped, "ignored": ignored, "new_sites": new_sites, "warnings": visit_rules.history_warnings(visits, kept)}
+    warnings = [*date_warnings, *visit_rules.session_jump(visits, kept), *visit_rules.history_warnings(visits, kept)]
+    return {"visits": visits, "problems": problems, "skipped": skipped, "ignored": ignored, "new_sites": new_sites,
+            "warnings": list(dict.fromkeys(warnings)), "notes": visit_rules.history_notes(visits, kept)}
 
 
 def _first(exc: ValidationError) -> str:
     error = exc.errors()[0]
     where = ".".join(str(p) for p in error["loc"])
     return f"{where}: {error['msg']}" if where else error["msg"]
+
+
+def write_report(root, research_project_id: str, result: dict, saved: int) -> str | None:
+    """The report of an import of visits, beside the visits of the research project (`visits_import_<day>_<time>.txt`): how many were kept, and what was
+    wrong, odd or worth knowing. Returns its path — None when it could not be written."""
+    from pathlib import Path  # noqa: PLC0415
+    lines = [f"Visits kept to {research_project_id}: {saved} ({result.get('history', 0)} from the history)", f"Already kept: {result.get('skipped', 0)}"]
+    for p in result.get("problems", []):
+        lines.append(f"PROBLEM {'history ' if p.get('history') else ''}row {p['row']}: {p['message']}")
+    for s in result.get("new_sites", []):
+        lines.append(f"NEW SITE {s['site']}: {s['visits']} visit(s) held; nearest location {s['nearest']['location_id'] + ' at ' + str(s['nearest']['distance_m']) + ' m' if s['nearest'] else 'unknown'}"
+                     f"{'; one character apart from ' + ', '.join(s['similar']) if s['similar'] else ''}")
+    lines += [f"WARNING: {w}" for w in result.get("warnings", [])]
+    lines += result.get("notes", [])
+    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = Path(root) / research_project_id / f"visits_import_{stamp}.txt"
+    try:
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError:
+        return None
+    return str(path)

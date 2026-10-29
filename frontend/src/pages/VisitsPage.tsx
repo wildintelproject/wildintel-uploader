@@ -12,7 +12,7 @@ import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, Sw
 import { shownErrors, validateDeployment } from '../deploymentValidation'
 import { availabilityErrors } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
-import type { Camera, DeploymentFields, FieldLogsResult, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
+import type { Camera, DeploymentFields, FieldDeployment, FieldLogsResult, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
 export type VisitSource = 'manual' | 'epicollect' | 'csv'
 
@@ -495,6 +495,12 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // Each visit the ones just added closed: its card was collected, so its images can be imported — a card of its own, with the way in on the right.
   const [logs, setLogs] = useState<FieldLogsResult | null>(null)
   const [logsError, setLogsError] = useState<string | null>(null)
+  const [fieldDeployments, setFieldDeployments] = useState<FieldDeployment[] | null>(null)
+  async function showDeployments() {
+    if (!project) return
+    setLogsError(null)
+    try { setFieldDeployments((await api.fieldDeployments(project.acronym)).results) } catch (e) { setLogsError(e instanceof Error ? e.message : 'Could not read the deployments.') }
+  }
   async function writeLogs() {
     if (!project) return
     setLogsError(null)
@@ -506,7 +512,30 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       <Notice kind="info" action={<button type="button" className={btnOutline} onClick={() => void writeLogs()}>Write the logs of all the collections again</button>}>
         The folder of each collection the visits change is made with its <strong>FileTimestampLog</strong> (the closed deployments) and <strong>FieldworkLog</strong> (every one, closed or still out).
       </Notice>
+      <div className="mt-2"><button type="button" className={btnOutline} onClick={() => void showDeployments()}>Show the deployments</button></div>
       {logsError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{logsError}</p>}
+      {fieldDeployments && (
+        <div aria-label="Deployments the visits say" role="region" className="mt-3 space-y-3">
+          {fieldDeployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">No deployment yet: no visit has left a camera.</p>}
+          {[...new Set(fieldDeployments.map((d) => d.collection))].map((collection) => (
+            <div key={collection} className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-x-auto">
+              <p className="px-4 py-2 text-sm font-semibold bg-zinc-50 dark:bg-zinc-800"><span className="font-mono">{collection}</span> · {fieldDeployments.filter((d) => d.collection === collection && d.status === 'closed').length} closed · {fieldDeployments.filter((d) => d.collection === collection && d.status === 'open').length} still out</p>
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                  {fieldDeployments.filter((d) => d.collection === collection).map((d) => (
+                    <tr key={d.deployment_id}>
+                      <td className="px-4 py-2 font-mono">{d.deployment_id}</td>
+                      <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${d.status === 'closed' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>{d.status === 'closed' ? 'Closed' : 'Camera still out'}</span></td>
+                      <td className="px-3 py-2 font-mono text-xs">{d.start.slice(0, 16).replace('T', ' ')} → {d.end ? d.end.slice(0, 16).replace('T', ' ') : '…'}</td>
+                      <td className="px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">{d.card ? `card ${d.card}` : ''}{d.photos_counted != null ? ` · ${d.photos_counted} photos` : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
       {logs && (
         <ul aria-label="Logs written" className="mt-2 list-disc pl-6 text-sm space-y-1">
           {logs.collections.length === 0 && <li>No deployment yet: no visit has left a camera that another has collected, or is still out.</li>}
@@ -917,6 +946,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     {csvResult.problems.map((p) => <li key={`${p.history ? 'h' : 'f'}${p.row}`}>{p.history ? 'History row' : 'Row'} {p.row}: {p.message}</li>)}
                   </ul>
                 )}
+                {(csvResult.notes?.length ?? 0) > 0 && (
+                  <Notice kind="info" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed" role="status">
+                    <div>
+                      <strong className="font-semibold">Worth knowing.</strong>
+                      <ul aria-label="Notes on the visits" className="mt-2 list-disc pl-6 space-y-1">{csvResult.notes!.map((n) => <li key={n}>{n}</li>)}</ul>
+                    </div>
+                  </Notice>
+                )}
                 {csvResult.warnings.length > 0 && (
                   <Notice kind="warning" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed" role="status">
                     <div>
@@ -986,6 +1023,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   <>
                     <Notice kind="success" role="status" className="mt-4 !items-center !rounded-2xl !px-6 !py-5 !text-base">
                       <strong>{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added</strong> to {project?.acronym}. The deployments will be worked out from {csvSaved === 1 ? 'it' : 'them'}.
+                      {csvResult?.report && <> The report of the import: <span className="font-mono text-sm break-all">{csvResult.report}</span>.</>}
                     </Notice>
                     {closedLinks}
                     {logsCard}

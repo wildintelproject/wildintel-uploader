@@ -375,6 +375,23 @@ class FieldworkSettings(BaseModel):
         return _unique(cameras, "label", "research_project")
 
 
+class FieldlogSettings(BaseModel):
+    """Field records: how the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them
+    (see services.visits_csv and services.visit_deployments)."""
+
+    time_source: Literal["created_at", "hour"] = Field(
+        default="created_at",
+        description="When a visit happened: created_at, the time its entry was created (UTC); or hour, the date and the hour typed in the form (the wall clock of its location). (FIELDLOG.time_source)",
+    )
+    keep_seconds: bool = Field(
+        default=False, description="Keep the seconds of the visits in the deployments' start and end written in the logs; off, they are cut to the minute. (FIELDLOG.keep_seconds)",
+    )
+    columns: dict[str, str] = Field(
+        default_factory=dict,
+        description="The column of the field app's file that gives each field of a visit, for forms whose questions are named otherwise — blank, the names it knows. (FIELDLOG.columns)",
+    )
+
+
 class Settings(BaseModel):
     GENERAL: GeneralSettings = Field(default_factory=GeneralSettings)
     TRAPPER: TrapperSettings = Field(default_factory=TrapperSettings)
@@ -384,6 +401,7 @@ class Settings(BaseModel):
     POSTVALIDATION: PostvalidationSettings = Field(default_factory=PostvalidationSettings)
     PREPROCESSING: PreprocessingSettings = Field(default_factory=PreprocessingSettings)
     FIELDWORK: FieldworkSettings = Field(default_factory=FieldworkSettings)
+    FIELDLOG: FieldlogSettings = Field(default_factory=FieldlogSettings)
 
 
 class ConfigInfo(BaseModel):

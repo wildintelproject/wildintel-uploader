@@ -19,7 +19,8 @@ def _write_logs(root, research_project_id: str, new: list[dict]) -> dict:
     if not new:
         return {"collections": [], "warnings": []}
     visits = local_folder_service.list_visits(root, research_project_id)
-    return visit_deployments.write_collection_logs(root, research_project_id, visit_deployments.collections_of(visits, new))
+    keep = config.load_settings().FIELDLOG.keep_seconds
+    return visit_deployments.write_collection_logs(root, research_project_id, visit_deployments.collections_of(visits, new, keep), keep)
 
 
 @router.post("/list")
@@ -75,22 +76,26 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
                 history = visits_csv.parse_visits(text, locations, kept, prefix, "epicollect", None)
             except visits_csv.VisitsCsvError as exc:
                 raise HTTPException(400, f"The history of visits: {exc}") from exc
-        result = visits_csv.parse_visits(req.csv, locations, kept + (history["visits"] if history else []), prefix, req.format, req.mapping)
+        field_options = config.load_settings().FIELDLOG
+        result = visits_csv.parse_visits(req.csv, locations, kept + (history["visits"] if history else []), prefix, req.format, req.mapping,
+                                         {"time_source": field_options.time_source, "columns": field_options.columns})
         if history:
             seen = {s["site"].lower() for s in result["new_sites"]}
             result = {
                 **result, "visits": history["visits"] + result["visits"], "history": len(history["visits"]),
                 "problems": [{**p, "history": True} for p in history["problems"]] + result["problems"],
                 "new_sites": result["new_sites"] + [s for s in history["new_sites"] if s["site"].lower() not in seen],
-                "warnings": list(dict.fromkeys([*history["warnings"], *result["warnings"]])), "skipped": result["skipped"] + history["skipped"],
+                "warnings": list(dict.fromkeys([*history["warnings"], *result["warnings"]])), "notes": list(dict.fromkeys([*history["notes"], *result["notes"]])),
+                "skipped": result["skipped"] + history["skipped"],
             }
-        saved = field_logs = None
+        saved = field_logs = report = None
         if req.save:
             saved = local_folder_service.write_visits(root, req.research_project_id, result["visits"])
             field_logs = _write_logs(root, req.research_project_id, result["visits"])
+            report = visits_csv.write_report(root, req.research_project_id, result, saved)
     except (local_folder_service.LocalFolderError, visits_csv.VisitsCsvError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {**result, "saved": saved, "field_logs": field_logs}
+    return {**result, "saved": saved, "field_logs": field_logs, "report": report}
 
 
 @router.post("/csv-columns")
@@ -131,7 +136,7 @@ def deployments(req: ListVisitsRequest) -> dict:
     try:
         root = config.collections_dir()
         local_folder_service.require_research_project(root, req.research_project_id)
-        found = visit_deployments.deployments(local_folder_service.list_visits(root, req.research_project_id, req.location_id))
+        found = visit_deployments.deployments(local_folder_service.list_visits(root, req.research_project_id, req.location_id), config.load_settings().FIELDLOG.keep_seconds)
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"results": [{k: v for k, v in d.items() if k not in ("start_visit", "end_visit")} | {"start_session": d["start_visit"].get("session"), "end_session": (d["end_visit"] or {}).get("session")} for d in found]}
@@ -142,6 +147,6 @@ def field_logs(req: FieldLogsRequest) -> dict:
     """Writes, in the folder of each collection the visits give deployments to, its FileTimestampLog (the closed deployments' start and end) and its FieldworkLog
     (every deployment, closed or open, with its fields as Camtrap DP names them)."""
     try:
-        return visit_deployments.write_collection_logs(config.collections_dir(), req.research_project_id, req.collections)
+        return visit_deployments.write_collection_logs(config.collections_dir(), req.research_project_id, req.collections, config.load_settings().FIELDLOG.keep_seconds)
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc

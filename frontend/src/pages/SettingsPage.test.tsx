@@ -32,6 +32,7 @@ beforeEach(() => {
     POSTVALIDATION: update.POSTVALIDATION,
     PREPROCESSING: update.PREPROCESSING,
     FIELDWORK: update.FIELDWORK,
+    FIELDLOG: update.FIELDLOG,
   }))
 })
 
@@ -1505,5 +1506,27 @@ describe('SettingsPage — Entities', () => {
 
     expect(screen.getByText('F1')).toBeInTheDocument()
     expect(screen.queryByText('A1')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('SettingsPage — Field records', () => {
+  async function open() {
+    render(<SettingsPage onClose={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Field records' }))
+  }
+
+  it('says when a visit happened, whether the logs keep the seconds, and the columns of a form named otherwise — and saves them', async () => {
+    await open()
+
+    expect(screen.getByLabelText('The time of a visit is')).toHaveValue('created_at')
+    await userEvent.selectOptions(screen.getByLabelText('The time of a visit is'), 'hour')
+    await userEvent.click(screen.getByRole('switch', { name: 'Keep the seconds in the logs' }))
+    await userEvent.type(screen.getByLabelText('Column for Who went'), 'Quien')
+    await userEvent.type(screen.getByLabelText('Column for Habitat (Camtrap DP)'), '  Hábitat ')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockedApi.saveSettings).toHaveBeenCalled())
+    expect(mockedApi.saveSettings.mock.calls[0][0].FIELDLOG).toEqual({ time_source: 'hour', keep_seconds: true, columns: { trappers: 'Quien', habitat: 'Hábitat' } })
   })
 })

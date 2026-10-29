@@ -141,6 +141,10 @@ const BackIcon = () => (
 
 /** Every field as typed — the tolerance can be briefly empty or invalid. */
 interface Draft {
+  /** Field records: when a visit happened, the seconds of the logs, and the columns of the file of the field app. */
+  fieldlogTimeSource: 'created_at' | 'hour'
+  fieldlogKeepSeconds: boolean
+  fieldlogColumns: Record<string, string>
   logLevel: LogLevel
   workers: string
   /** The acronym of the research project that comes filled in; blank for none. */
@@ -209,6 +213,7 @@ function toDraft(s: AppSettings): Draft {
     sd_card: post.sd_card, photo_count: post.photo_count,
   }
   return {
+    fieldlogTimeSource: s.FIELDLOG.time_source, fieldlogKeepSeconds: s.FIELDLOG.keep_seconds, fieldlogColumns: { ...s.FIELDLOG.columns },
     logLevel: s.GENERAL.log_level,
     workers: String(s.GENERAL.workers),
     defaultResearchProject: s.GENERAL.default_research_project ?? '',
@@ -294,6 +299,10 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
     FIELDWORK: {
       trappers: d.trappers, sd_cards: d.sdCards, cameras: d.cameras,
     },
+    FIELDLOG: {
+      time_source: d.fieldlogTimeSource, keep_seconds: d.fieldlogKeepSeconds,
+      columns: Object.fromEntries(Object.entries(d.fieldlogColumns).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v)),
+    },
   }
 }
 
@@ -312,16 +321,28 @@ const FOLDERS: { draftKey: 'collectionsDir' | 'reportsDir' | 'packagesDir'; labe
     hint: 'Handy when the packages are big and the data folder is on a small disk.' },
 ]
 
-type SectionId = 'general' | 'trapper' | 'epicollect' | 'validation' | 'postvalidation' | 'preprocessing' | 'entities' | 'reports' | 'config'
+type SectionId = 'general' | 'trapper' | 'epicollect' | 'fieldlog' | 'validation' | 'postvalidation' | 'preprocessing' | 'entities' | 'reports' | 'config'
 
 /** The lists of the entities, each with its own tab. The sections of the settings that used to be one each open the entities on their tab. */
 type EntityTab = 'projects' | 'trappers' | 'locations' | 'cameras' | 'sdcards'
 const ENTITY_SECTIONS: Record<string, EntityTab> = { trappers: 'trappers', sdcards: 'sdcards', cameras: 'cameras', locations: 'locations' }
 
+/** The fields of a visit whose column of the field app's file can be said in the settings: the field, what it is, and the name it usually has. */
+const FIELDLOG_COLUMNS: [string, string, string][] = [
+  ['location_id', 'Site', '4_Location'], ['session', 'Session', '2_Collection'], ['actions', 'Action', '6_Action'], ['trappers', 'Who went', '1_Responsable'],
+  ['camera_id', 'Camera', '5_Camera'], ['status', 'Status of the camera', '7_Status_of_the_camera'], ['num_photos', 'Photos counted', '9_Number_of_pictures'],
+  ['sd', 'SD card', '10_SD'], ['comments', 'Notes', '12_Observation'], ['latitude', 'Latitude', 'lat_13_Coordenates'], ['longitude', 'Longitude', 'long_13_Coordenates'],
+  ['camera_model', 'Camera model (Camtrap DP)', 'cameraModel'], ['camera_interval', 'Camera delay (Camtrap DP)', 'cameraDelay'], ['camera_height', 'Camera height (Camtrap DP)', 'cameraHeight'],
+  ['camera_depth', 'Camera depth (Camtrap DP)', 'cameraDepth'], ['camera_tilt', 'Camera tilt (Camtrap DP)', 'cameraTilt'], ['camera_heading', 'Camera heading (Camtrap DP)', 'cameraHeading'],
+  ['detection_distance', 'Detection distance (Camtrap DP)', 'detectionDistance'], ['timestamp_issues', 'Timestamp issues (Camtrap DP)', 'timestampIssues'], ['bait_use', 'Bait use (Camtrap DP)', 'baitUse'],
+  ['feature_type', 'Feature type (Camtrap DP)', 'featureType'], ['habitat', 'Habitat (Camtrap DP)', 'habitat'], ['deployment_groups', 'Deployment groups (Camtrap DP)', 'deploymentGroups'], ['tags', 'Deployment tags (Camtrap DP)', 'deploymentTags'],
+]
+
 const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'general', label: 'General', icon: SlidersIcon },
   { id: 'trapper', label: 'Trapper', icon: CameraIcon },
   { id: 'epicollect', label: 'Epicollect5', icon: FileIcon },
+  { id: 'fieldlog', label: 'Field records', icon: ReportIcon },
   { id: 'validation', label: 'Validation', icon: CheckIcon },
   { id: 'postvalidation', label: 'Postvalidation', icon: ShieldIcon },
   { id: 'preprocessing', label: 'Preprocessing', icon: ImageIcon },
@@ -2288,6 +2309,30 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
               <div className="max-w-60"><PlainField label="Largest package"><NumberBox label="Largest package" value={draft.maxZipMb} limits={MAX_ZIP_MB} onChange={(v) => set('maxZipMb', v)} unit="MB" /></PlainField></div>
             </CardBlock>
           </SettingsCard>
+        )}
+
+        {draft && saved && section === 'fieldlog' && (
+          <div className="space-y-5 pt-5">
+            <SettingsCard>
+              <CardBlock title="When did a visit happen?" description="A visit is read from the file of the field app. Its time can be when its entry was created, or the date and the hour typed in the form.">
+                <SelectBox label="The time of a visit is" value={draft.fieldlogTimeSource} onChange={(v) => set('fieldlogTimeSource', v)}
+                           options={[{ value: 'created_at', label: 'When its entry was created (UTC)' }, { value: 'hour', label: 'The date and the hour typed in the form' }]} />
+                <p className={hintClass}>The hour typed is the wall clock of the visit's location; the time of the entry is UTC, and is put in the timezone of the location. A row without a date and an hour typed is read by the time of its entry.</p>
+              </CardBlock>
+            </SettingsCard>
+            <ToggleCard title="Keep the seconds in the logs" checked={draft.fieldlogKeepSeconds} onChange={(v) => set('fieldlogKeepSeconds', v)}
+                        description="The start and the end of the deployments written in the FileTimestampLog and the FieldworkLog. Turned off, they are cut to the minute." />
+            <SettingsCard>
+              <CardBlock title="Columns" description="The file of the field app is read by the names its questions usually have. For a form that names them otherwise, write here the name of the column that gives each field of a visit; blank, the usual names.">
+                {FIELDLOG_COLUMNS.map(([field, label, example]) => (
+                  <PlainField key={field} label={label}>
+                    <input aria-label={`Column for ${label}`} className={`${fieldBox} font-mono text-sm`} value={draft.fieldlogColumns[field] ?? ''} placeholder={example} autoComplete="off"
+                           onChange={(e) => set('fieldlogColumns', { ...draft.fieldlogColumns, [field]: e.target.value })} />
+                  </PlainField>
+                ))}
+              </CardBlock>
+            </SettingsCard>
+          </div>
         )}
 
         {draft && saved && section === 'epicollect' && (

@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the visit that collected it names, minus one, which is also the revision Import deployment and Import session give a visit's deployment. **Write the logs of the collections** (in Register visits) writes each
   collection's `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv`, with the details both visits give merged: `Setup: … | Retrieval: …` for a text, the tags and groups of both, the setup's number or yes/no with the
   retrieval's value noted in `deploymentComments`.
+- **Settings › Field records** (`FIELDLOG`): the time of a visit (when its entry was created, or the date and the hour typed), whether the logs keep the seconds (off: cut to the minute) and the column of the field app's file
+  that gives each field of a visit, for forms whose questions are named otherwise. Reading a file also warns of a typed date that differs from the day of the entry and of a jump in the session numbers, says as notes the sites of
+  the trip before not visited on this one, the visits where nothing was collected and those with no photo count, leaves a report (`visits_import_<day>_<time>.txt`) beside the visits, and treats a row with the session, site, camera and
+  actions of a visit already kept as that visit. **Show the deployments** (Register visits) lists the deployments the visits say, closed and still out.
 - **The form of a deployment of a visit starts from the same mix as the logs**: `/api/visits/closed` gives each closed visit its `details` — what the two visits say of the deployment, mixed as the FieldworkLog mixes them
   (`Setup: … | Retrieval: …`, the tags and groups of both, the setup's number, both visits' notes in the comments) — and *What the field sheet says* (Import deployment and Import session) fills the form with it.
 - **Registering a visit makes the folders and the logs**: the folder of each collection the visit changes (with its `collection.json`) gets its `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv` at once — by hand or from a file —,

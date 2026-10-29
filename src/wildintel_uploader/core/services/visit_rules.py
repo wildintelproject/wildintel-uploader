@@ -234,3 +234,40 @@ def refusals(visit: dict, kept: list[dict], locations: list[dict]) -> list[str]:
     reasons += required_errors(visit).values()
     reasons += availability_errors(kept, visit).values()
     return reasons
+
+
+def _session_number(session) -> int | None:
+    import re  # noqa: PLC0415
+    m = re.search(r"\d+", str(session or ""))
+    return int(m.group(0)) if m else None
+
+
+def session_jump(new: list[dict], kept: list[dict]) -> list[str]:
+    """A warning when the sessions of the visits of a file start after the one next to the last kept: a trip is missing."""
+    last = max((n for n in (_session_number(v.get("session")) for v in kept) if n is not None), default=None)
+    first = min((n for n in (_session_number(v.get("session")) for v in new) if n is not None), default=None)
+    if last is not None and first is not None and first > last + 1:
+        return [f"Session numbers jump from R{last:04d} to R{first:04d}."]
+    return []
+
+
+def history_notes(new: list[dict], kept: list[dict]) -> list[str]:
+    """What is worth knowing of the visits of a file, without being wrong: the sites visited on the trip before and not on this one — their cameras are still out,
+    their deployments stay open —, the visits where nothing was collected (status "Not revised") and the ones with no photo count."""
+    notes: list[str] = []
+    everything = [*kept, *new]
+    for session in sorted({n for n in (_session_number(v.get("session")) for v in new) if n is not None}):
+        here = {str(v["location_id"]).lower() for v in everything if _session_number(v.get("session")) == session}
+        before = {str(v["location_id"]) for v in everything if _session_number(v.get("session")) == session - 1}
+        missing = sorted(s for s in before if s.lower() not in here)
+        if missing:
+            notes.append(f"R{session:04d}: sites visited in R{session - 1:04d} and not on this trip, their cameras still out: {', '.join(missing)}.")
+        current = [v for v in new if _session_number(v.get("session")) == session]
+        skipped = sorted(v["location_id"] for v in current if str(v.get("status") or "").lower() in NOT_REVISED)
+        if skipped:
+            notes.append(f"R{session:04d}: {len(skipped)} visit(s) with status \"Not revised\", ignored (no card collected): {', '.join(skipped)}.")
+        nocount = sorted(v["location_id"] for v in current if {"Revision", "Desinstallation"} & set(v["actions"]) and v.get("num_photos") is None
+                         and str(v.get("status") or "").lower() not in NOT_REVISED)
+        if nocount:
+            notes.append(f"R{session:04d}: {len(nocount)} visit(s) without photo count (card full or count forgotten), counted as the end of the collection: {', '.join(nocount)}.")
+    return notes
