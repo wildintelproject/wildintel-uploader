@@ -27,6 +27,8 @@ IMAGES_FILE = "images.json"
 RESEARCH_PROJECT_METADATA_FILE = "research_project.json"
 LOCATIONS_FILE = "locations.json"
 VISITS_FILE = "visits.json"
+CAMERAS_FILE = "cameras.json"
+SD_CARDS_FILE = "sd_cards.json"
 
 # A research project's id (its acronym) names its folder in the collections folder.
 _PROJECT_ID = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_.-]*$")
@@ -295,6 +297,36 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
     removed = locations.pop(index)
     (project_dir(root, research_project_id) / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
     return {"deleted": removed["location_id"]}
+
+
+# ── The cameras and the SD cards of a research project ──────────────────────────────────────────────────────────
+#
+# <research project>/cameras.json and <research project>/sd_cards.json, beside its locations and its visits: they belong to the research project and travel
+# with its collections. (The trappers are people, not things of a project: they stay in the settings.)
+
+_FIELD_ITEM_FILES = {"cameras": CAMERAS_FILE, "sd_cards": SD_CARDS_FILE}
+
+
+def list_field_items(root: Path, research_project_id: str, kind: str) -> list[dict]:
+    """The cameras (`kind` "cameras") or the SD cards ("sd_cards") kept for a research project — each with its `research_project` set to it. Empty until one is kept."""
+    items = _read_json(project_dir(root, research_project_id) / _FIELD_ITEM_FILES[kind])
+    return [{**i, "research_project": research_project_id} for i in items if isinstance(i, dict)] if isinstance(items, list) else []
+
+
+def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict]) -> None:
+    """Keeps these cameras or SD cards as the research project's — the whole list, replacing what was kept.
+
+    Raises:
+        LocalFolderError: the research project isn't in the collections folder.
+    """
+    require_research_project(root, research_project_id)
+    clean = [{k: v for k, v in item.items() if k != "research_project"} for item in items]
+    (project_dir(root, research_project_id) / _FIELD_ITEM_FILES[kind]).write_text(json.dumps(clean, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+
+
+def list_all_field_items(root: Path, kind: str) -> list[dict]:
+    """The cameras or the SD cards of every research project kept in the collections folder, project after project."""
+    return [item for project in list_research_projects(root) for item in list_field_items(root, project["acronym"], kind)]
 
 
 def _raw_visits(root: Path, research_project_id: str) -> list[dict]:

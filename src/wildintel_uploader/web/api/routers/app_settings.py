@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core import logging_setup
-from wildintel_uploader.core.services import file_manager
+from wildintel_uploader.core.services import file_manager, local_folder_service
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -33,9 +33,49 @@ def _public(settings: config.Settings) -> dict:
     return data
 
 
+def _root(settings: config.Settings):
+    return config.collections_dir(settings)
+
+
+def _shown(settings: config.Settings) -> dict:
+    """The settings as the page has them: the cameras and the SD cards are those of the research projects, in their folders of the collections folder."""
+    root = _root(settings)
+    data = _public(settings)
+    for kind in ("cameras", "sd_cards"):
+        # what is still in the settings file belongs to a research project that is not in the collections folder (yet)
+        data["FIELDWORK"][kind] = [i.model_dump(mode="json") if hasattr(i, "model_dump") else i for i in local_folder_service.list_all_field_items(root, kind)] + data["FIELDWORK"][kind]
+    return data
+
+
+def _move_to_the_projects(settings: config.Settings) -> config.Settings:
+    """Cameras and SD cards kept in settings.toml (as they were before) go to the folder of their research project, as a file of its own: the ones that are a
+    research project's, to it; the ones that are free for any, to each of the research projects there are. What can't be moved yet (its project isn't in the
+    collections folder) stays. Does nothing once there is nothing left to move."""
+    fieldwork = settings.FIELDWORK
+    if not fieldwork.cameras and not fieldwork.sd_cards:
+        return settings
+    root = _root(settings)
+    projects = [p["acronym"] for p in local_folder_service.list_research_projects(root)]
+    leftovers: dict[str, list] = {"cameras": [], "sd_cards": []}
+    for kind in ("cameras", "sd_cards"):
+        label = {"cameras": "label", "sd_cards": "label"}[kind]
+        for project in projects:
+            mine = [i for i in getattr(fieldwork, kind) if (i.research_project or "").lower() in ("", project.lower())]
+            if not mine:
+                continue
+            kept = local_folder_service.list_field_items(root, project, kind)
+            have = {str(i.get(label, "")).lower() for i in kept}
+            added = [i.model_dump(mode="json") for i in mine if i.label.lower() not in have]
+            local_folder_service.write_field_items(root, project, kind, [*kept, *added])
+        leftovers[kind] = [i for i in getattr(fieldwork, kind) if (i.research_project or "") and (i.research_project or "").lower() not in {p.lower() for p in projects}]
+    fieldwork.cameras, fieldwork.sd_cards = leftovers["cameras"], leftovers["sd_cards"]
+    config.save_settings(settings)
+    return settings
+
+
 @router.get("")
 def get_settings() -> dict:
-    return _public(config.load_settings())
+    return _shown(_move_to_the_projects(config.load_settings()))
 
 
 @router.put("")
@@ -51,9 +91,23 @@ def save_settings(new: config.Settings) -> dict:
         for field in fields:
             if not getattr(section, field):
                 setattr(section, field, None)
+    root = _root(new)
+    for kind in ("cameras", "sd_cards"):
+        items = getattr(new.FIELDWORK, kind)
+        free = [i for i in items if not i.research_project]
+        if free:
+            raise HTTPException(422, f"{'A camera' if kind == 'cameras' else 'An SD card'} belongs to a research project: choose one for {free[0].label}.")
+        by_project: dict[str, list] = {}
+        for item in items:
+            by_project.setdefault(item.research_project, []).append(item.model_dump(mode="json"))
+        known = {p["acronym"] for p in local_folder_service.list_research_projects(root)}
+        # the list of each research project is replaced by what the page has — the ones it no longer lists are gone; a project that is not kept here keeps them in the settings
+        for project in known:
+            local_folder_service.write_field_items(root, project, kind, by_project.get(project, []))
+        setattr(new.FIELDWORK, kind, [i for i in items if i.research_project not in known])
     config.save_settings(new)
     logging_setup.apply_level(logging_setup.effective_level())
-    return _public(new)
+    return _shown(new)
 
 
 @router.get("/log")

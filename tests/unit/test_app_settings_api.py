@@ -1,5 +1,6 @@
 """/api/settings — the settings page's own endpoints: the password never goes
 back, blank fields keep what was saved, the log can be downloaded and cleared."""
+import json
 import logging
 from pathlib import Path
 from unittest.mock import patch
@@ -12,10 +13,14 @@ from wildintel_uploader.web.main import app
 
 
 @pytest.fixture(autouse=True)
-def fresh_settings_file():
-    """Every test starts from defaults, whatever an earlier one saved."""
+def fresh_settings_file(tmp_path: Path):
+    """Every test starts from defaults, whatever an earlier one saved — with a collections folder of its own that has two research projects."""
+    from wildintel_uploader.core.services import local_folder_service
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
-    yield
+    for acronym in ("DONA", "TATR"):
+        local_folder_service.write_research_project(tmp_path, {"name": acronym, "acronym": acronym})
+    with patch("wildintel_uploader.web.api.routers.app_settings._root", return_value=tmp_path):
+        yield
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
 
 
@@ -57,20 +62,21 @@ def test_the_trappers_start_empty_and_are_saved_clean():
 
 def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     saved = _put(FIELDWORK={
-        "sd_cards": [{"label": " A12 ", "brand": " SanDisk ", "capacity": " 64   GB ", "in_service": "2026-03-01"}, {"label": "a12"},
-                     {"label": "B3", "brand": "", "capacity": "", "in_service": ""}],
-        "cameras": [{"camera_id": "P800HG0819", "camera_model": " Reconyx-PC800 ", "in_service": "2025-11-12"}, {"camera_id": "p800hg0819"}, {"camera_id": "X1", "in_service": ""}],
+        "sd_cards": [{"label": " A12 ", "brand": " SanDisk ", "capacity": " 64   GB ", "in_service": "2026-03-01", "research_project": "DONA"}, {"label": "a12", "research_project": "DONA"},
+                     {"label": "B3", "brand": "", "capacity": "", "in_service": "", "research_project": "DONA"}],
+        "cameras": [{"camera_id": "P800HG0819", "camera_model": " Reconyx-PC800 ", "in_service": "2025-11-12", "research_project": "DONA"}, {"camera_id": "p800hg0819", "research_project": "DONA"},
+                    {"camera_id": "X1", "in_service": "", "research_project": "DONA"}],
     })
 
     assert saved["FIELDWORK"]["sd_cards"] == [
-        {"label": "A12", "brand": "SanDisk", "capacity": "64 GB", "in_service": "2026-03-01", "research_project": None, **ACTIVE},
-        {"label": "B3", "brand": None, "capacity": None, "in_service": None, "research_project": None, **ACTIVE},
+        {"label": "A12", "brand": "SanDisk", "capacity": "64 GB", "in_service": "2026-03-01", "research_project": "DONA", **ACTIVE},
+        {"label": "B3", "brand": None, "capacity": None, "in_service": None, "research_project": "DONA", **ACTIVE},
     ]
-    # kept in the settings file, and read back as it was
+    # kept in the folder of the research project, and read back as it was
     assert _client().get("/api/settings").json()["FIELDWORK"]["sd_cards"][0]["in_service"] == "2026-03-01"
     assert saved["FIELDWORK"]["cameras"] == [
-        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": None, **ACTIVE},
-        {"label": "X1", "camera_id": "X1", "camera_model": None, "in_service": None, "research_project": None, **ACTIVE},
+        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": "DONA", **ACTIVE},
+        {"label": "X1", "camera_id": "X1", "camera_model": None, "in_service": None, "research_project": "DONA", **ACTIVE},
     ]  # one kept before it had a label is called by its id
 
 
@@ -79,8 +85,8 @@ ACTIVE = {"status": "active", "status_date": None, "status_note": None}
 
 def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_only_the_known_ones_are_taken():
     saved = _put(FIELDWORK={
-        "cameras": [{"camera_id": "X1", "status": "stolen", "status_date": "2026-05-02", "status_note": "  taken from the tree "}],
-        "sd_cards": [{"label": "A1", "status": "lost", "status_date": ""}],
+        "cameras": [{"camera_id": "X1", "status": "stolen", "status_date": "2026-05-02", "status_note": "  taken from the tree ", "research_project": "DONA"}],
+        "sd_cards": [{"label": "A1", "status": "lost", "status_date": "", "research_project": "DONA"}],
         "trappers": [{"name": "Ana", "status": "inactive"}],
     })
 
@@ -97,18 +103,48 @@ def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_onl
         assert _client().put("/api/settings", json=body).status_code == 422
 
 
-def test_the_sd_cards_and_the_cameras_belong_to_a_research_project_and_are_listed_once_in_each():
+def test_the_sd_cards_and_the_cameras_belong_to_a_research_project_and_are_listed_once_in_each(tmp_path: Path):
     saved = _put(FIELDWORK={
-        "sd_cards": [{"label": "A1", "research_project": " DONA "}, {"label": "a1", "research_project": "dona"}, {"label": "A1", "research_project": "TATR"}, {"label": "A1"}],
-        "cameras": [{"camera_id": "X1", "research_project": "DONA"}, {"camera_id": "x1", "research_project": "DONA"}, {"camera_id": "X1", "research_project": ""}],
+        "sd_cards": [{"label": "A1", "research_project": " DONA "}, {"label": "a1", "research_project": "dona"}, {"label": "A1", "research_project": "TATR"}],
+        "cameras": [{"camera_id": "X1", "research_project": "DONA"}, {"camera_id": "x1", "research_project": "DONA"}],
     })
 
-    assert [(c["label"], c["research_project"]) for c in saved["FIELDWORK"]["sd_cards"]] == [("A1", "DONA"), ("A1", "TATR"), ("A1", None)]
-    assert [(c["camera_id"], c["research_project"]) for c in saved["FIELDWORK"]["cameras"]] == [("X1", "DONA"), ("X1", None)]
+    assert [(c["label"], c["research_project"]) for c in saved["FIELDWORK"]["sd_cards"]] == [("A1", "DONA"), ("A1", "TATR")]
+    assert [(c["camera_id"], c["research_project"]) for c in saved["FIELDWORK"]["cameras"]] == [("X1", "DONA")]
+    # each in the folder of its research project, as a file of its own — and not in the settings file
+    assert [c["label"] for c in json.loads((tmp_path / "DONA" / "sd_cards.json").read_text(encoding="utf-8"))] == ["A1"]
+    assert [c["label"] for c in json.loads((tmp_path / "TATR" / "sd_cards.json").read_text(encoding="utf-8"))] == ["A1"]
+    assert config.load_settings().FIELDWORK.sd_cards == [] and config.load_settings().FIELDWORK.cameras == []
+
+
+def test_a_camera_or_an_sd_card_without_a_research_project_is_refused():
+    for field, item in (("sd_cards", {"label": "A1"}), ("cameras", {"camera_id": "X1", "research_project": ""})):
+        body = config.Settings().model_dump(mode="json")
+        body["FIELDWORK"][field] = [item]
+        response = _client().put("/api/settings", json=body)
+        assert response.status_code == 422 and "belongs to a research project" in response.json()["detail"]
+
+
+def test_what_was_kept_in_the_settings_file_goes_to_the_research_projects_when_they_are_read(tmp_path: Path):
+    legacy = config.Settings.model_validate({"FIELDWORK": {
+        "sd_cards": [{"label": "A1", "research_project": "DONA"}, {"label": "Free"}, {"label": "B2", "research_project": "ELSEWHERE"}],
+        "cameras": [{"camera_id": "X1", "research_project": "TATR"}],
+    }})
+    config.save_settings(legacy)
+
+    shown = _client().get("/api/settings").json()["FIELDWORK"]
+
+    # a card of a research project goes to it; one that is free for any, to each; one of a project that is not here stays in the settings, and is shown
+    assert sorted((c["label"], c["research_project"]) for c in shown["sd_cards"]) == [("A1", "DONA"), ("B2", "ELSEWHERE"), ("Free", "DONA"), ("Free", "TATR")]
+    assert [c["label"] for c in json.loads((tmp_path / "DONA" / "sd_cards.json").read_text(encoding="utf-8"))] == ["A1", "Free"]
+    assert [c["camera_id"] for c in json.loads((tmp_path / "TATR" / "cameras.json").read_text(encoding="utf-8"))] == ["X1"]
+    left = config.load_settings().FIELDWORK
+    assert [c.label for c in left.sd_cards] == ["B2"] and left.cameras == []
 
 
 def test_a_camera_is_called_by_its_label_and_its_serial_number_is_optional():
-    saved = _put(FIELDWORK={"cameras": [{"label": " North  gate ", "camera_id": " "}, {"label": "north gate"}, {"label": "Ridge", "camera_id": "P800 1"}]})
+    saved = _put(FIELDWORK={"cameras": [{"label": " North  gate ", "camera_id": " ", "research_project": "DONA"}, {"label": "north gate", "research_project": "DONA"},
+                                        {"label": "Ridge", "camera_id": "P800 1", "research_project": "DONA"}]})
 
     assert [(c["label"], c["camera_id"]) for c in saved["FIELDWORK"]["cameras"]] == [("North gate", None), ("Ridge", "P800 1")]  # one label, once
 
