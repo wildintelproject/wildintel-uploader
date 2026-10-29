@@ -928,7 +928,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
       <PageHeader icon={MENU_ICONS.deployment} title={title}
-        description="Imports a folder of deployments — one subfolder each — into the local collections folder. The revision, the checks and the preprocessing are the same for all of them; the location, the dates and the camera are asked for each."
+        description="Imports a folder of deployments — one subfolder each — into their revision. The revision, the checks and the preprocessing are the same for all of them; the location, the dates and the camera are asked for each."
         parent="Manage deployments" onParent={onBack}
         aside={defaultProject !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={defaultProject} defaultAcronym={defaultAcronym} of="The import" onOpenSettings={onOpenSettings} /> : undefined} />
 

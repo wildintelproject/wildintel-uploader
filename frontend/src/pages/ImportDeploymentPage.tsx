@@ -2359,7 +2359,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
       <TimeFixPage initial={{ folder: sourceDir, researchProjectId: selectedProjectId, visit: linkedVisit?.visit }} onBack={() => setFixingDates(false)} />
     )}
     <div className={fixingDates ? 'hidden' : 'mx-auto max-w-[900px] px-4 py-8'}>
-      <PageHeader icon={MENU_ICONS.deployment} title="Import deployment" description="Organizes a folder of camera-trap images into a local collection. It doesn't upload them to Trapper yet."
+      <PageHeader icon={MENU_ICONS.deployment} title="Import deployment" description="Organizes a folder of camera-trap images into its revision."
         parent="Manage deployments" onParent={onBack}
         aside={defaultProject !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={defaultProject} defaultAcronym={defaultAcronym} of="This deployment" onOpenSettings={onOpenSettings} /> : undefined} />
 
