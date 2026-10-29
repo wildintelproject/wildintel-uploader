@@ -210,8 +210,7 @@ Press **📋 Manage visits**: it offers **Register visits** and **Show the visit
 
 ![The visit book](img/screenshots/visit-book.png)
 
-Choose a research project and the book shows, in two tabs, the **visits** kept to it — newest first, with a filter — and the **deployments** its visits say, by collection: the closed ones and the ones whose camera is still out, with
-**Write the logs of all the collections again**.
+Choose a research project and the book shows, in two tabs, the **visits** kept to it — newest first, with a filter — and the **deployments** its visits say, by collection: the closed ones and the ones whose camera is still out.
 
 A visit is one row: its **Session**, **Where** (the site), **When**, its **Status** — *Closed* once a later visit collected the card it left, *Open* while that camera is still out, nothing for a visit that left no camera — the **Actions**
 and **Images stored**: a **tick** (with the deployment's id) once the deployment is created and its images imported; a **Create deployment** button on a *closed* visit that has none yet — it opens [Import deployment](#6-import-a-deployment) with the research project and that visit already chosen —; and a grey crossed circle on an *open* visit, whose card has not been collected. **Details** opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
@@ -271,7 +270,7 @@ Each field is marked *required* or *optional* according to the actions.
 **The deployments the visits say, and the logs of the collections.** Each site's visits, in order, give a deployment for every pair where the first **left a camera** (an Installation or a Revision)
 and the second **collected its card**: it goes from the one to the other and is *closed*. It belongs to the collection **the session of the visit that collected it names, minus one** — R0013
 collects the deployments of R0012 — and that is the revision [Import deployment](#6-import-a-deployment) gives it. A camera that was left and has not been collected is *open*: it will belong to
-the collection that the visit that collects it names. When a visit is registered — by hand or from a file — the **folder of each collection it changes is made**, with its `collection.json`, and so are its logs: **Write the logs of all the collections again** repeats it for all. They are written, in the folder of each collection, its `<R000N>_FileTimestampLog.csv` (the
+the collection that the visit that collects it names. When a visit is registered — by hand or from a file — the **folder of each collection it changes is made**, with its `collection.json`, and so are its logs — they are written automatically, with no button for it, in the folder of each collection, its `<R000N>_FileTimestampLog.csv` (the
 closed deployments' start and end, as the cameras' wall clock) and its `<R000N>_FieldworkLog.csv` (every deployment, closed or open, with its fields as Camtrap DP names them, in UTC, in the order of the
 [`FieldworkLog` columns](#6-import-a-deployment)). When the visit that left a camera and the one that collected it say different things of a field, both are kept: a text as `Setup: … | Retrieval: …`
 (who set it up, the habitat), the tags and groups of both together, and a number, a yes/no or a feature type as the setup says it with the retrieval's value noted in the comments.

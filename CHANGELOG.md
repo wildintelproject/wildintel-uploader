@@ -15,12 +15,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tab in Settings, with CSV import; `examples/` has example CSVs of all of them.
 - **The deployments the visits say and the logs of their collections** (`/api/visits/deployments`, `/api/visits/field-logs`, as the field records of the first piece of the field workflow): each site's visits give
   a deployment for every pair of consecutive ones where the first left a camera and the second collected its card — *closed* — or for a camera still out — *open*. A deployment belongs to the collection the session of
-  the visit that collected it names, minus one, which is also the revision Import deployment and Import session give a visit's deployment. **Write the logs of the collections** (in Register visits) writes each
+  the visit that collected it names, minus one, which is also the revision Import deployment and Import session give a visit's deployment. The logs are written, with no button for it, when a visit is registered: each
   collection's `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv`, with the details both visits give merged: `Setup: … | Retrieval: …` for a text, the tags and groups of both, the setup's number or yes/no with the
   retrieval's value noted in `deploymentComments`.
 - **Locations from the file itself**: the sites of a file that are not locations come with the coordinates of their first visit, and **Add the N sites with coordinates as locations** keeps them all at once (the ones that look like a misprint are left for the user).
 - **Manage visits** is the task of the menu (it was *Register visits*): it offers **Register visits** and **Show the visit book** — the visits kept to a research project (newest first, with a filter and the deployment each closed) and, in a second tab, the
-  deployments they say (closed, and the ones whose camera is still out) with the button to write the logs of all the collections again.
+  deployments they say (closed, and the ones whose camera is still out).
 - **The visit book** (`/api/visits/book`) lists a visit as *Session · Where · When · Status (open or closed) · Actions · Images stored* (a tick with the deployment's id once it is created and its images imported, or **Create deployment** on a closed visit that has none), then its actions, camera, card, photos and who went; **Details** shows everything the visit says; **Create deployment** opens Import deployment with that visit chosen.
 - **The cameras and the SD cards are kept in the folder of their research project** (`<research project>/cameras.json` and `sd_cards.json`, beside `locations.json` and `visits.json`), so they travel with its collections; only the trappers stay in
   `settings.toml`. `GET /api/settings` gives the ones of every research project and `PUT /api/settings` saves each project's list in its folder — a camera or a card needs its research project (`422` otherwise). Those kept in `settings.toml`

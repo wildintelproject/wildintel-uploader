@@ -7,7 +7,7 @@ import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
 import type { ClosedVisit, StoredVisit } from '../types'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), writeFieldLogs: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn() } }))
 const mockedApi = vi.mocked(api, true)
 
 const location = (location_id: string, over: Record<string, unknown> = {}) => ({
@@ -794,12 +794,6 @@ describe('VisitsPage from a CSV file', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument() // the visits are kept: the list of them goes
     expect(screen.getByRole('button', { name: 'Back to the menu' })).toBeInTheDocument()
 
-    // the deployments the visits say go into the logs of their collections
-    mockedApi.writeFieldLogs.mockResolvedValue({ collections: [{ collection: 'R0003', closed: 1, open: 1, files: ['/c/TATR/R0003/R0003_FileTimestampLog.csv', '/c/TATR/R0003/R0003_FieldworkLog.csv'] }], warnings: [] })
-    await userEvent.click(screen.getByRole('button', { name: 'Write the logs of all the collections again' }))
-    expect(await screen.findByRole('list', { name: 'Logs written' })).toHaveTextContent('R0003: 1 closed, 1 open — R0003_FileTimestampLog.csv, R0003_FieldworkLog.csv')
-    expect(mockedApi.writeFieldLogs).toHaveBeenCalledWith('TATR')
-
     await userEvent.click(screen.getByRole('button', { name: 'Register more visits' }))
     expect(screen.getByText('Where do the visits come from?')).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
@@ -885,20 +879,6 @@ describe('VisitsPage from a CSV file', () => {
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.any(String), false, 'epicollect', undefined, 'UEsDBA=='))
     expect(await screen.findByText(/to add/)).toHaveTextContent('2 visits to add (1 from the history)')
     expect(screen.getByRole('list', { name: 'Rows with a problem' })).toHaveTextContent("History row 5: 'x' is not a date.")
-  })
-
-  it('shows the folders and logs made when the visits are kept', async () => {
-    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
-    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 1, new_sites: [], warnings: [],
-      field_logs: { collections: [{ collection: 'R0003', closed: 1, open: 0, files: ['/c/TATR/R0003/R0003_FileTimestampLog.csv', '/c/TATR/R0003/R0003_FieldworkLog.csv'] }], warnings: [] } })
-    render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
-    await userEvent.click(await screen.findByLabelText('Research project'))
-    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
-    await userEvent.upload(screen.getByLabelText('CSV file'), file)
-    await userEvent.click(await screen.findByRole('button', { name: 'Add 1 visit' }))
-
-    expect(await screen.findByRole('list', { name: 'Logs written' })).toHaveTextContent('R0003: 1 closed, 0 open — R0003_FileTimestampLog.csv, R0003_FieldworkLog.csv')
   })
 
   it('tells what is worth knowing of the visits and names the report of the import', async () => {

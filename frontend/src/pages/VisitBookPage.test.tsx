@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
 import VisitBookPage from './VisitBookPage'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), fieldDeployments: vi.fn(), writeFieldLogs: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), fieldDeployments: vi.fn() } }))
 const mockedApi = vi.mocked(api)
 
 const visit = (over: object) => ({
@@ -79,15 +79,13 @@ describe('VisitBookPage', () => {
     expect(onImportImages).toHaveBeenCalledWith({ researchProjectId: 'TATR', visit: expect.objectContaining({ session: 'R0003', location_id: 'TATR_0001' }) })
   })
 
-  it('lists the deployments the visits say, the ones still out apart, and writes the logs again', async () => {
-    mockedApi.writeFieldLogs.mockResolvedValue({ collections: [{ collection: 'R0003', closed: 1, open: 1, files: ['/c/TATR/R0003/R0003_FileTimestampLog.csv'] }], warnings: [] })
+  it('lists the deployments the visits say, the ones still out apart', async () => {
     await pickProject()
     await userEvent.click(await screen.findByRole('tab', { name: /Deployments/ }))
 
     const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
     expect(region).toHaveTextContent('R0003 · 1 closed · 1 still out')
     expect(region).toHaveTextContent('Camera still out')
-    await userEvent.click(screen.getByRole('button', { name: 'Write the logs of all the collections again' }))
-    expect(await screen.findByRole('list', { name: 'Logs written' })).toHaveTextContent('R0003: 1 closed, 1 open — R0003_FileTimestampLog.csv')
+    expect(screen.queryByRole('button', { name: /write the logs/i })).not.toBeInTheDocument() // the logs are made when a visit is registered
   })
 })

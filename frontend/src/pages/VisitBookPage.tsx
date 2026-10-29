@@ -2,8 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api'
 import FieldDeployments from '../components/FieldDeployments'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
-import Notice from '../components/Notice'
-import type { BookVisit, ClosedVisitTarget, FieldDeployment, FieldLogsResult, LocalResearchProject } from '../types'
+import type { BookVisit, ClosedVisitTarget, FieldDeployment, LocalResearchProject } from '../types'
 import { btnOutline, btnPrimary, inputClass } from './ImportDeploymentPage'
 
 interface Props {
@@ -34,10 +33,9 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [filter, setFilter] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [logs, setLogs] = useState<FieldLogsResult | null>(null)
 
   useEffect(() => {
-    setVisits(null); setDeployments(null); setLogs(null); setError(null)
+    setVisits(null); setDeployments(null); setError(null)
     if (!project) return
     let cancelled = false
     api.visitBook(project.acronym)
@@ -48,12 +46,6 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Could not read the deployments.') })
     return () => { cancelled = true }
   }, [project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function writeLogs() {
-    if (!project) return
-    setError(null)
-    try { setLogs(await api.writeFieldLogs(project.acronym)) } catch (e) { setError(e instanceof Error ? e.message : 'Could not write the logs.') }
-  }
 
   const needle = filter.trim().toLowerCase()
   const shown = (visits ?? [])
@@ -148,18 +140,6 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
           {view === 'deployments' && (
             <>
               {deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} />}
-              <div className="mt-4">
-                <Notice kind="info" action={<button type="button" className={btnOutline} onClick={() => void writeLogs()}>Write the logs of all the collections again</button>}>
-                  Each collection has a <strong>FileTimestampLog</strong> (the closed deployments) and a <strong>FieldworkLog</strong> (every one, closed or still out), made when a visit is registered.
-                </Notice>
-                {logs && (
-                  <ul aria-label="Logs written" className="mt-2 list-disc pl-6 text-sm space-y-1">
-                    {logs.collections.length === 0 && <li>No deployment yet: no visit has left a camera that another has collected, or is still out.</li>}
-                    {logs.collections.map((c) => <li key={c.collection}><span className="font-mono">{c.collection}</span>: {c.closed} closed, {c.open} open — {c.files.map((f) => f.split(/[\\\\/]/).pop()).join(', ')}</li>)}
-                    {logs.warnings.map((w) => <li key={w} className="text-amber-700 dark:text-amber-400">{w}</li>)}
-                  </ul>
-                )}
-              </div>
             </>
           )}
         </>

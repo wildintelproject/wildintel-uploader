@@ -165,9 +165,6 @@ export const api = {
   visitBook: (researchProjectId: string) => post<{ results: BookVisit[] }>('/api/visits/book', { research_project_id: researchProjectId }),
   /** The deployments the visits of a research project say, closed and open, by collection and site. */
   fieldDeployments: (researchProjectId: string) => post<{ results: FieldDeployment[] }>('/api/visits/deployments', { research_project_id: researchProjectId }),
-  /** Writes the FileTimestampLog and the FieldworkLog of the collections the visits of a research project give deployments to. */
-  writeFieldLogs: (researchProjectId: string, collections?: string[]) =>
-    post<FieldLogsResult>('/api/visits/field-logs', { research_project_id: researchProjectId, collections: collections ?? null }),
   linkVisit: (researchProjectId: string, visit: StoredVisit, deploymentId: string) =>
     post<StoredVisit>('/api/visits/link', { research_project_id: researchProjectId, location_id: visit.location_id, date: visit.date, time: visit.time, deployment_id: deploymentId }),
 
