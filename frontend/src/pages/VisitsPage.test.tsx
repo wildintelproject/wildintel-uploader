@@ -984,6 +984,12 @@ describe('visitErrors', () => {
     expect(visitErrors({ ...ok, actions: ['Installation'], sd: 'A13' }, true)).toEqual({})
   })
 
+  it('does not require the number of photos when the card was full: it is not counted', () => {
+    expect(visitErrors({ ...ok, numPhotos: '' }).numPhotos).toBe('Required.')
+    expect(visitErrors({ ...ok, numPhotos: '', card: 'Full' }).numPhotos).toBeUndefined()
+    expect(visitErrors({ ...ok, numPhotos: '12', card: 'Full' })).toEqual({}) // it may still be given
+  })
+
   it('wants a whole number of photos', () => {
     expect(visitErrors({ ...ok, numPhotos: '1.5' })).toEqual({ numPhotos: 'A whole number.' })
   })

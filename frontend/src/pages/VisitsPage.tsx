@@ -66,6 +66,12 @@ function fieldsOf(action: string): ActionFields {
 
 const STRENGTH: Record<Ask, number> = { off: 0, optional: 1, required: 2 }
 
+/** What is asked of a visit: what its actions ask — except that, with the card full, the photos are not counted, so their number is not required. */
+export function askedOf(v: { actions: string[]; card: CardState }): ActionFields {
+  const asked = fieldsFor(v.actions)
+  return v.card === 'Full' && asked.photos === 'required' ? { ...asked, photos: 'optional' } : asked
+}
+
 export function fieldsFor(actions: string[]): ActionFields {
   const all = { ...OFF }
   for (const action of actions) {
@@ -185,7 +191,7 @@ export function visitErrors(v: Visit, first = false): Partial<Record<ErrorKey, s
   if (!v.site.trim()) errors.site = 'Required.'
   if (v.actions.length === 0) errors.actions = 'Choose at least one.'
   else if (first && (v.actions.length !== 1 || v.actions[0] !== 'Installation')) errors.actions = 'The first visit to a site can only be an Installation.'
-  const asked = fieldsFor(v.actions)
+  const asked = askedOf(v)
   if (asked.photos !== 'off') {
     if (!v.numPhotos.trim()) { if (asked.photos === 'required') errors.numPhotos = 'Required.' }
     else if (!/^\d+$/.test(v.numPhotos.trim())) errors.numPhotos = 'A whole number.'
@@ -540,7 +546,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
 
   const whereDone = !!project && !!location && !editingWhere
   const whenDone = whereDone && whenConfirmed && !!visit.when
-  const asked = fieldsFor(visit.actions)
+  const asked = askedOf(visit)
   // What the last visit to the location left in the camera: the card the one that is collected now was.
   const lastVisit = kept ? latest(kept) : undefined
   const inCamera = lastVisit?.sd ?? null

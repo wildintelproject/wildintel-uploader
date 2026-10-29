@@ -367,6 +367,19 @@ def test_the_first_visit_to_a_site_can_only_be_an_installation(tmp_path: Path):
     assert installation.status_code == later.status_code == 200
 
 
+def test_the_photos_of_a_revision_are_not_required_when_the_card_was_full(tmp_path: Path):
+    with _in(tmp_path):
+        _project()
+        _installed()
+        counted = _save({**VISIT, "num_photos": None})
+        full = _save({**VISIT, "num_photos": None, "card_batteries_ok": "CarFull", "date": "2026-10-03"})
+        full_no_batteries = _save({**VISIT, "num_photos": None, "card_batteries_ok": "CarFullSinPilas", "date": "2026-10-04"})
+        written = _save({**VISIT, "num_photos": 12, "card_batteries_ok": "CarFull", "date": "2026-10-05"})
+
+    assert counted.status_code == 422 and "photos" in counted.json()["detail"]
+    assert full.status_code == full_no_batteries.status_code == written.status_code == 200  # not asked, but it may be given
+
+
 def test_a_visit_by_hand_lacks_nothing_its_actions_ask(tmp_path: Path):
     with _in(tmp_path):
         _project()
