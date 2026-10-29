@@ -632,3 +632,14 @@ def test_a_revision_is_of_the_camera_that_is_at_the_site_unless_the_visit_also_i
     assert other.status_code == 422 and "The camera at DONA_01 is P800" in other.json()["detail"] and "add an Installation" in other.json()["detail"]
     assert same.status_code == 200                                  # the camera that is there, whatever its case
     assert swapped.status_code == 200                               # the camera was replaced: the visit says so
+
+
+def test_the_visit_book_gives_each_visit_the_deployment_it_started_closed_or_open(tmp_path: Path):
+    with _in(tmp_path):
+        _field_visits()
+        book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
+
+    by = {(v["location_id"], v["session"]): v for v in book}
+    assert (by[("DONA_01", "R0003")]["deployment"], by[("DONA_01", "R0003")]["deployment_status"]) == ("R0003-DONA_01", "closed")
+    assert (by[("DONA_01", "R0004")]["deployment"], by[("DONA_01", "R0004")]["deployment_status"]) == ("R0004-DONA_01", "open")   # it left a card again: still out
+    assert (by[("DONA_02", "R0003")]["deployment"], by[("DONA_02", "R0003")]["deployment_status"]) == ("R0003-DONA_02", "open")

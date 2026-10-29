@@ -176,6 +176,17 @@ def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
     return sorted(out, key=lambda d: (d["collection"], d["site"].lower()))
 
 
+def visit_book(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
+    """The visits as the visit book shows them, each with the deployment it started — `deployment` (its id) and `deployment_status` ("closed" once a later visit collected
+    its card, "open" while the camera it left is still out) — and neither for a visit that left no camera."""
+    started = {id(d["start_visit"]): d for d in deployments(visits, keep_seconds)}
+    out = []
+    for v in visits:
+        d = started.get(id(v))
+        out.append({**v, "deployment": d["deployment_id"] if d else None, "deployment_status": d["status"] if d else None})
+    return out
+
+
 def _wall(when: str, location: dict | None) -> dt.datetime:
     date, time = visit_time.to_wall(when, location)
     return dt.datetime.fromisoformat(f"{date}T{time}")

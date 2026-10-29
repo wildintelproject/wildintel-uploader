@@ -744,6 +744,12 @@ export interface VisitsCsvResult {
   warnings: string[]
 }
 
+/** A visit as the visit book shows it: with the deployment it started — closed once a later visit collected its card, open while the camera is still out — and neither when it left no camera. */
+export interface BookVisit extends StoredVisit {
+  deployment: string | null
+  deployment_status: 'closed' | 'open' | null
+}
+
 /** A deployment the visits of a research project say: closed (a visit left the camera and a later one collected its card) or still open (the camera is out). */
 export interface FieldDeployment {
   deployment_id: string

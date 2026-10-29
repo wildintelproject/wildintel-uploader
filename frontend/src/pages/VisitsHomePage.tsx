@@ -21,7 +21,7 @@ export default function VisitsHomePage({ onBack, onOpenSettings, settingsOpen, o
   const [view, setView] = useState<View | null>(null)
 
   if (view === 'register') return <VisitsPage onBack={() => setView(null)} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onImportImages={onImportImages} />
-  if (view === 'book') return <VisitBookPage onBack={() => setView(null)} />
+  if (view === 'book') return <VisitBookPage onBack={() => setView(null)} onImportImages={onImportImages} />
 
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
