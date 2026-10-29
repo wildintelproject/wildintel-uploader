@@ -43,8 +43,8 @@ describe('MenuPage', () => {
   it('offers the tasks in the order manage visits, manage deployments, import collection, upload deployment', () => {
     render(<MenuPage onChoose={vi.fn()} />)
 
-    const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '').filter((t) => /Manage visits|Manage deployments|Import collection|Upload deployment/.test(t))
-    expect(titles.map((t) => t.match(/Manage visits|Manage deployments|Import collection|Upload deployment/)![0])).toEqual(['Manage visits', 'Manage deployments', 'Import collection', 'Upload deployment'])
+    const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '').filter((t) => /Manage visits|Manage deployments|Import deployments|Import collection|Upload deployment/.test(t))
+    expect(titles.map((t) => t.match(/Manage visits|Manage deployments|Import deployments|Import collection|Upload deployment/)![0])).toEqual(['Manage visits', 'Manage deployments', 'Import deployments', 'Import collection', 'Upload deployment'])
     expect(screen.queryByRole('button', { name: /upload session to trapper/i })).not.toBeInTheDocument()
   })
 

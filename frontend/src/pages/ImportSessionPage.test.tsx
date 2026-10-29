@@ -1102,6 +1102,18 @@ describe('an import session of visits', () => {
     expect(screen.getByRole('button', { name: 'Continue to the checks' })).toBeEnabled() // the folder is linked to the one visit
   })
 
+  it('hands a single visit over, when the page is Import deployments: it is one deployment, and Import deployment takes it', async () => {
+    const onSingleVisit = vi.fn()
+    render(<ImportSessionPage {...pageProps} title="Import deployments" onSingleVisit={onSingleVisit} />)
+    await pickProject()
+    expect(screen.getByRole('heading', { name: 'Import deployments' })).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /DONA_01 · R0002 · Revision · card A13/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+
+    expect(onSingleVisit).toHaveBeenCalledWith(expect.objectContaining({ researchProjectId: 'DONA', visit: expect.objectContaining({ location_id: 'DONA_01', session: 'R0002' }) }))
+    expect(screen.queryByText('Folder with the images')).not.toBeInTheDocument()
+  })
+
   it('offers only the visits of one session once one is ticked: the session is the revision', async () => {
     render(<ImportSessionPage {...pageProps} />)
     await pickProject()

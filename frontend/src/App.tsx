@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ImportDeploymentPage from './pages/ImportDeploymentPage'
+import ImportDeploymentsPage from './pages/ImportDeploymentsPage'
 import ImportSessionPage from './pages/ImportSessionPage'
 import MenuPage from './pages/MenuPage'
 import RepairPage from './pages/RepairPage'
@@ -106,6 +107,8 @@ export default function App() {
               : deploymentsView === 'status'
                 ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
                 : <DeploymentsHomePage onChoose={setDeploymentsView} onBack={() => setTask(null)} />
+            : task === 'deployments'
+              ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
             : task === 'session'
               ? <ImportSessionPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
               : task === 'upload'

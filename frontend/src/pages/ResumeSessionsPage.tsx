@@ -13,7 +13,7 @@ interface Props {
   onSkip: () => void
 }
 
-const TASK_TITLES: Record<SessionSummary['task'], string> = { deployment: 'Import deployment', upload: 'Upload deployment to Trapper', session: 'Import collection',
+const TASK_TITLES: Record<SessionSummary['task'], string> = { deployment: 'Import deployment', deployments: 'Import deployments', upload: 'Upload deployment to Trapper', session: 'Import collection',
   'upload-session': 'Upload session to Trapper', utils: 'Utilities', sync: 'Sync local collections', repair: 'Repair local deployments', visits: 'Register visits',
 }
 

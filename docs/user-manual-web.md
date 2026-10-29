@@ -601,6 +601,15 @@ The log's option compares itself with the photos — *Starts 32 min before the f
 quick way to notice a log row that doesn't fit its images, which is also reported when a row or a folder matches no deployment. When
 a deployment shows *Dates needed* or *To fix*, open it and pick another source or type the dates.
 
+### Import deployments
+
+The **Import deployments** entry of the menu starts like Import collection — the research project, a square for each revision and the closed visits without a deployment — and it is told by how many visits you pick:
+
+- **One visit:** it is *Import deployment*, with the visit already chosen: you give the folder with its images.
+- **Several visits:** it goes on as a collection: you give a folder with a subfolder of images for each visit and say which subfolder is of which visit.
+
+The visits have to be of one revision.
+
 ## 8. Upload a deployment to Trapper
 
 ![Upload — what to upload](img/screenshots/upload.png)

@@ -14,6 +14,7 @@ import type { EpicollectEntry } from '../epicollectImport'
 import { isValidTimezone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
+import type { ClosedVisitTarget } from '../types'
 import type {
   ClosedVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject,
   PreprocessingOptions, PreviousDeployment, SdCard, SessionScan, SessionScanDeployment, StatisticsParams, UploadTarget, ValidationResult,
@@ -82,9 +83,13 @@ interface Props {
   settingsOpen?: boolean
   /** Goes back to the menu — what Back does on the first step. */
   onBack?: () => void
+  /** The heading, when the page is not the collection's. */
+  title?: string
+  /** Given, a single visit picked is not imported here: it is handed over — Import deployment takes it, as it is one deployment. */
+  onSingleVisit?: (target: ClosedVisitTarget) => void
 }
 
-export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOpen = false, onBack }: Props = {}) {
+export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOpen = false, onBack, title = 'Import collection', onSingleVisit }: Props = {}) {
   const [step, setStep] = useState(0)
   const stepKey = STEPS[step].key
   // The sub-steps of the images and of the origin: the one open, and the furthest reached.
@@ -915,7 +920,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
-      <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">Import collection</h2>
+      <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">{title}</h2>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         Imports a folder of deployments — one subfolder each — into the local collections folder. The revision, the checks and the
         preprocessing are the same for all of them; the location, the dates and the camera are asked for each.
@@ -1014,7 +1019,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
             })()}
             <div className="flex justify-between items-center mt-4">
               {onBack ? <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button> : <div />}
-              <button type="button" aria-label="Continue to the images" className={btnPrimary} disabled={!canContinue.origin} onClick={() => setStep((s) => s + 1)}>Continue<span aria-hidden="true"> →</span></button>
+              <button type="button" aria-label="Continue to the images" className={btnPrimary} disabled={!canContinue.origin} onClick={() => (onSingleVisit && pickedList.length === 1 ? onSingleVisit({ researchProjectId: projectId, visit: pickedList[0].visit }) : setStep((s) => s + 1))}>Continue<span aria-hidden="true"> →</span></button>
             </div>
           </WizardStep>
         </div>
