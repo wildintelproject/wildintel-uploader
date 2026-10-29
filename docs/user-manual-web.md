@@ -553,7 +553,7 @@ The stages are those of [Import a deployment](#import-a-deployment), with the di
 1. **Origin** — the **research project** for the whole session and, if it has closed visits (see [Register visits](#5-manage-visits)), the
    **Visits** to tick: the ones this session is of — **all of one session**, which is the revision (once one is ticked, the visits of other sessions are
    disabled). The list has a **search** (by site, card, date…). Without closed visits, the session goes on as it always did, asking a location for each folder.
-2. **Images** — *Session folder*: choose the folder and **Scan**; its subfolders are listed, each with its images and warnings, and you tick the ones to import.
+2. **Images** — *Revision folder*: choose the folder and **Scan**; its subfolders are listed, each with its images and warnings, and you tick the ones to import.
    With visits, each folder is **linked to a visit** — a folder named after a site takes the visit of that site by itself; change it if it is not right — and
    says its **SD card** (optional). A header above the list says how many of the ticked folders have a visit, with a progress bar, the tabs *All*, *Missing* and
    *Ready* and a filter by name; a folder with no visit has to be linked or unticked before going on, and a visit is of one folder only.

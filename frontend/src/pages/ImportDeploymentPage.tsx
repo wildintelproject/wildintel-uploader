@@ -7,6 +7,7 @@ import { Fragment, createContext, useContext, useEffect, useRef, useState } from
 import type { ReactNode } from 'react'
 import { api } from '../api'
 import { defaultResearchProject } from '../defaultResearchProject'
+import RevisionSquares from '../components/RevisionSquares'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { TrapperCredentials } from '../api'
 import CheckboxList from '../components/CheckboxList'
@@ -2673,15 +2674,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
           {selectedProjectId && !addingProject && closedVisits !== null && closedVisits.length > 0 && (
             <>
             <FormCard title="Revision" description="A revision is one visit to every site. Pick one — or all — to see the visits that can still be given a deployment.">
-              <div className="flex flex-wrap gap-3" role="group" aria-label="Revision">
-                {[{ id: null as number | null, label: 'All revisions', n: closedVisits.length }, ...[...new Set(closedVisits.map((c) => revisionOfVisit(c)).filter((r): r is number => r !== null))].sort((x, y) => y - x).map((r) => ({ id: r as number | null, label: `R${String(r).padStart(4, '0')}`, n: closedVisits.filter((c) => revisionOfVisit(c) === r).length }))].map((r) => (
-                  <button key={r.label} type="button" aria-pressed={revisionPick === r.id} onClick={() => { setRevisionPick(r.id); if (r.id !== null && linkedVisit && revisionOfVisit(linkedVisit) !== r.id) selectClosedVisit(undefined) }}
-                          className={`rounded-xl border px-5 py-3 text-left transition-colors ${revisionPick === r.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}>
-                    <span className="block font-mono text-lg font-semibold">{r.label}</span>
-                    <span className="block text-sm text-zinc-500 dark:text-zinc-400">{r.n} {r.n === 1 ? 'visit' : 'visits'} without deployment</span>
-                  </button>
-                ))}
-              </div>
+              <RevisionSquares all={{ label: 'All revisions', note: `${closedVisits.length} ${closedVisits.length === 1 ? 'visit' : 'visits'} without deployment` }} value={revisionPick === null ? '' : String(revisionPick)}
+                revisions={[...new Set(closedVisits.map((c) => revisionOfVisit(c)).filter((r): r is number => r !== null))].sort((x, y) => y - x).map((r) => { const n = closedVisits.filter((c) => revisionOfVisit(c) === r).length; return { id: String(r), label: `R${String(r).padStart(4, '0')}`, note: `${n} ${n === 1 ? 'visit' : 'visits'} without deployment` } })}
+                onPick={(id) => { const r = id ? Number(id) : null; setRevisionPick(r); if (r !== null && linkedVisit && revisionOfVisit(linkedVisit) !== r) selectClosedVisit(undefined) }} />
             </FormCard>
             <FormCard title="Closed visit" description={`The visits to ${selectedProjectId} that left a camera and whose card has been collected, with no deployment yet. The deployment is of the visit you pick — where its card was left — and its location is the visit's.`}>
               <label className="sr-only" htmlFor="origin-visit">Closed visit</label>

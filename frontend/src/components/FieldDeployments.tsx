@@ -3,6 +3,7 @@ import { formatDay } from '../dateFormat'
 import { btnOutline } from '../pages/ImportDeploymentPage'
 import type { FieldDeployment } from '../types'
 import { pageNumbers } from './CheckFailures'
+import RevisionSquares from './RevisionSquares'
 
 /** How many deployments a page has. */
 const PER_PAGE = 10
@@ -57,14 +58,9 @@ export default function FieldDeployments({ deployments, highlight }: { deploymen
           <section aria-label="Revision" className="mb-6">
             <h5 className="text-lg font-semibold mb-1">Revision</h5>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see what is planned and what is done.</p>
-            <div className="flex flex-wrap gap-3">
-              {[{ id: '', label: 'All revisions', n: deployments.length }, ...revisions.map((r) => ({ id: r, label: r, n: deployments.filter((d) => d.collection === r).length }))].map((r) => (
-                <button key={r.label} type="button" aria-pressed={revision === r.id} onClick={() => { setRevision(r.id); setFilter(''); setPage(1) }} className={`${square} px-5 ${revision === r.id ? pressed : idle}`}>
-                  <span className="block font-mono text-lg font-semibold">{r.label}</span>
-                  <span className="block text-sm text-zinc-500 dark:text-zinc-400">{plural(r.n, 'deployment', 'deployments')}</span>
-                </button>
-              ))}
-            </div>
+            <RevisionSquares all={{ label: 'All revisions', note: plural(deployments.length, 'deployment', 'deployments') }} value={revision}
+              revisions={revisions.map((r) => ({ id: r, label: r, note: plural(deployments.filter((d) => d.collection === r).length, 'deployment', 'deployments') }))}
+              onPick={(id) => { setRevision(id); setFilter(''); setPage(1) }} />
           </section>
 
           <section aria-label="Deployments by status" className="mb-5">

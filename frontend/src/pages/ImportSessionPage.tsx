@@ -13,6 +13,7 @@ import type { DateSource, Period, SourceOption } from '../components/DateSourceP
 import type { EpicollectEntry } from '../epicollectImport'
 import { isValidTimezone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
+import RevisionSquares from '../components/RevisionSquares'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { ClosedVisitTarget } from '../types'
@@ -981,15 +982,9 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
               return (
                 <>
                 <FormCard title="Revision" description="A revision is one visit to every site. Pick the one these images are of: only its closed visits without a deployment are offered next.">
-                  <div className="flex flex-wrap gap-3" role="group" aria-label="Revision">
-                    {[{ id: null as number | null, label: 'All revisions', n: closedVisits.length }, ...revisions.map((r) => ({ id: r as number | null, label: `R${String(r).padStart(4, '0')}`, n: closedVisits.filter((c) => revisionOfVisit(c) === r).length }))].map((r) => (
-                      <button key={r.label} type="button" aria-pressed={(session ?? null) === r.id} onClick={() => pickRevision(r.id)}
-                              className={`rounded-xl border px-5 py-3 text-left transition-colors ${(session ?? null) === r.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}>
-                        <span className="block font-mono text-lg font-semibold">{r.label}</span>
-                        <span className="block text-sm text-zinc-500 dark:text-zinc-400">{plural(r.n, 'visit to import', 'visits to import')}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <RevisionSquares all={{ label: 'All revisions', note: plural(closedVisits.length, 'visit to import', 'visits to import') }} value={session ? String(session) : ''}
+                    revisions={revisions.map((r) => ({ id: String(r), label: `R${String(r).padStart(4, '0')}`, note: plural(closedVisits.filter((c) => revisionOfVisit(c) === r).length, 'visit to import', 'visits to import') }))}
+                    onPick={(id) => pickRevision(id ? Number(id) : null)} />
                 </FormCard>
                 <FormCard title="Visits" description={`The visits to ${projectId} that left a camera and whose card has been collected, with no deployment yet. Tick the ones the images are of — all of one revision. Each folder will be one of them: it says where and when it was taken.`}>
                   <input aria-label="Search the visits" className={`${inputClass} !w-72 mb-3`} placeholder="Search by location, card, date…" value={visitFilter} onChange={(e) => setVisitFilter(e.target.value)} />
@@ -1051,10 +1046,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           {progressChips('images')}
           <StepHeading>Images</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Select the session&rsquo;s folder, choose which checks to run over the images of its deployments, and validate them before they go any further.
+            Select the revision&rsquo;s folder, choose which checks to run over the images of its deployments, and validate them before they go any further.
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
-          <WizardStep n={1} title={singleVisit ? 'Folder with the images' : 'Session folder'} status={imagesStatus(1)} canEdit={!validating} onEdit={() => setImagesOpen(1)}
+          <WizardStep n={1} title={singleVisit ? 'Folder with the images' : 'Revision folder'} status={imagesStatus(1)} canEdit={!validating} onEdit={() => setImagesOpen(1)}
                       description={singleVisit ? 'The folder with the images of the visit\u2019s deployment, on this computer.' : 'A folder with one subfolder per deployment, on this computer.'}
                       summary={scan && <>{sessionName}<br />{plural(candidates.length, 'deployment', 'deployments')} · {plural(candidates.reduce((n, d) => n + d.image_count, 0), 'image', 'images')}</>}>
             <Notice kind="warning" className="mb-4">Copy the images from the cameras&rsquo; memory cards to a local folder first — don&rsquo;t point this at a card itself.</Notice>

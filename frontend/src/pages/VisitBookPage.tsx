@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api'
 import { pageNumbers } from '../components/CheckFailures'
+import RevisionSquares from '../components/RevisionSquares'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { BookVisit, ClosedVisitTarget } from '../types'
 import { btnOutline, btnPrimary, inputClass } from './ImportDeploymentPage'
@@ -124,15 +125,9 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
             <section aria-label="Revision" className="mb-6">
               <h5 className="text-lg font-semibold mb-1">Revision</h5>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see what is planned and what is done.</p>
-              <div className="flex flex-wrap gap-3">
-                {[{ id: '', label: 'All revisions', of: everyRow }, ...revisions.map((r) => ({ id: r, label: r, of: everyRow.filter((v) => v.session === r) }))].map((r) => (
-                  <button key={r.label} type="button" aria-pressed={revision === r.id} onClick={() => { setRevision(r.id); setStatusFilter(''); setPage(1); setOpened(null) }}
-                          className={`rounded-xl border px-5 py-3 text-left transition-colors ${revision === r.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}>
-                    <span className="block font-mono text-lg font-semibold">{r.label}</span>
-                    <span className="block text-sm text-zinc-500 dark:text-zinc-400">{r.of.filter((v) => !v.not_done).length} of {r.of.length} done</span>
-                  </button>
-                ))}
-              </div>
+              <RevisionSquares all={{ label: 'All revisions', note: `${everyRow.filter((v) => !v.not_done).length} of ${everyRow.length} done` }} value={revision}
+                revisions={revisions.map((r) => { const of = everyRow.filter((v) => v.session === r); return { id: r, label: r, note: `${of.filter((v) => !v.not_done).length} of ${of.length} done` } })}
+                onPick={(id) => { setRevision(id); setStatusFilter(''); setPage(1); setOpened(null) }} />
             </section>
           )}
           {visits !== null && (
