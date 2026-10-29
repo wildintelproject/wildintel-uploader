@@ -206,6 +206,10 @@ export const api = {
   updateLocalLocation: (researchProjectId: string, locationId: string, changes: Partial<Pick<LocalLocation, 'name' | 'latitude' | 'longitude' | 'coordinate_uncertainty' | 'timezone' | 'ignore_dst' | 'status' | 'status_date' | 'status_note'>>) =>
     post<LocalLocation>('/api/deployment-import/locations/update', { research_project_id: researchProjectId, location_id: locationId, ...changes }),
 
+  /** Marks a camera (by its serial number or label) or an SD card (by its label) of a research project as no longer available — stolen, lost… */
+  setFieldItemStatus: (researchProjectId: string, kind: 'cameras' | 'sd_cards', key: string, status: 'stolen' | 'lost' | 'broken' | 'retired', statusDate: string | null, statusNote: string | null) =>
+    post<{ updated: boolean }>('/api/settings/field-item-status', { research_project_id: researchProjectId, kind, key, status, status_date: statusDate, status_note: statusNote }),
+
   collectionPath: (researchProjectId: string, deploymentId: string) =>
     post<CollectionPath>('/api/deployment-import/collection-path', { research_project_id: researchProjectId, deployment_id: deploymentId }),
 

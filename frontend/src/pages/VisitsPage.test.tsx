@@ -7,7 +7,7 @@ import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
 import type { ClosedVisit, StoredVisit } from '../types'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn(), updateLocalLocation: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn(), updateLocalLocation: vi.fn(), setFieldItemStatus: vi.fn() } }))
 const mockedApi = vi.mocked(api, true)
 
 const location = (location_id: string, over: Record<string, unknown> = {}) => ({
@@ -196,7 +196,7 @@ describe('VisitsPage', () => {
     await userEvent.click(screen.getByRole('option', { name: 'B2' }))
     expect(screen.getByLabelText('SD card left in the camera')).toHaveValue('B2')
 
-    await userEvent.click(screen.getByRole('button', { name: /add a new sd card/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'go to Settings › SD cards' }))
     expect(onOpenSettings).toHaveBeenCalledWith('sdcards')
   })
 
@@ -216,7 +216,7 @@ describe('VisitsPage', () => {
     expect(screen.getByLabelText('Camera id')).toHaveValue('P800HG08192031 — Reconyx-PC800')
     expect(screen.getByText('Model: Reconyx-PC800')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /add a new camera/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'go to Settings › Cameras' }))
     expect(onOpenSettings).toHaveBeenCalledWith('cameras')
   })
 
@@ -1071,13 +1071,13 @@ describe('By hand 2: do you see the camera?', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'Yes, I see it' }))
     expect(hint()).toHaveTextContent('The visit is kept as Revision')
     await userEvent.click(screen.getByRole('radio', { name: 'Replace it with another' }))
-    expect(hint()).toHaveTextContent('Installation + Revision')
+    expect(hint()).toHaveTextContent('Revision + Installation')
     await userEvent.click(screen.getByRole('radio', { name: 'Take it away, without another' }))
     expect(hint()).toHaveTextContent('Revision + Desinstallation')
 
     await userEvent.click(screen.getByRole('radio', { name: 'No, it was stolen' }))
     await userEvent.click(screen.getByRole('radio', { name: 'Install a new camera' }))
-    expect(hint()).toHaveTextContent('Installation + Stolen')
+    expect(hint()).toHaveTextContent('Stolen + Installation')
     await userEvent.click(screen.getByRole('radio', { name: 'Retire the location' }))
     expect(hint()).toHaveTextContent('The visit is kept as Stolen')
   })
@@ -1094,6 +1094,62 @@ describe('By hand 2: do you see the camera?', () => {
 
     await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('TATR', 'TATR_0001', { status: 'retired', status_date: '2026-10-02', status_note: 'Repeated thefts' }))
     expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Stolen'] })
+  })
+
+  it('says the camera and the card were stolen and will be marked as not available, and does it when the visit is kept', async () => {
+    withCamera()
+    mockedApi.saveVisit.mockResolvedValue({} as never)
+    mockedApi.setFieldItemStatus.mockResolvedValue({ updated: true })
+    await start()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'No, it was stolen' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Retire the location' }))
+    await openSection('Camera'); await openSection('SD card')
+    expect(document.body).toHaveTextContent('The camera P800HG08192031 was stolen: it will be marked as not available because it was stolen.')
+    expect(document.body).toHaveTextContent('The SD card A13, which was in the camera, was stolen with it: it will be marked as not available because it was stolen.')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add visit' }))
+    await waitFor(() => expect(mockedApi.setFieldItemStatus).toHaveBeenCalledWith('TATR', 'cameras', 'P800HG08192031', 'stolen', '2026-10-02', 'Stolen'))
+    expect(mockedApi.setFieldItemStatus).toHaveBeenCalledWith('TATR', 'sd_cards', 'A13', 'stolen', '2026-10-02', 'Stolen with the camera')
+  })
+
+  it('asks whether the camera was calibrated, in the Camera card, where a camera is left or put up, and keeps it with the visit', async () => {
+    withCamera()
+    mockedApi.saveVisit.mockResolvedValue({} as never)
+    await start()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Yes, I see it' }))
+    await openSection('Camera')
+    expect(screen.getByRole('switch', { name: 'Calibration done' })).toHaveAttribute('aria-checked', 'false')
+    await userEvent.click(screen.getByRole('switch', { name: 'Calibration done' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Take it away, without another' }))
+    expect(screen.queryByRole('switch', { name: 'Calibration done' })).not.toBeInTheDocument() // nothing is left: no calibration
+    await userEvent.click(screen.getByRole('radio', { name: 'Leave it where it is' }))
+    expect(screen.getByRole('switch', { name: 'Calibration done' })).toBeInTheDocument()
+  })
+
+  it('does not ask it in By hand', async () => {
+    withCamera()
+    await chooseByHand()
+    await pickWhere()
+    await pickWhen()
+    await pickAction('Revision')
+    await openSection('Camera')
+
+    expect(screen.queryByRole('switch', { name: 'Calibration done' })).not.toBeInTheDocument()
+  })
+
+  it('has Damaged among the states a camera is found in', async () => {
+    withCamera()
+    mockedApi.saveVisit.mockResolvedValue({} as never)
+    await start()
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'Yes, I see it' }))
+    await openSection('Camera')
+    const status = screen.getByLabelText('Status of the camera')
+    expect(within(status).getAllByRole('option').map((o) => o.textContent).filter(Boolean)).toEqual(expect.arrayContaining(['OK', 'Altered', 'Knocked down', 'Damaged']))
+    await userEvent.selectOptions(status, 'Damaged')
+    expect(status).toHaveValue('Damaged')
   })
 })
 

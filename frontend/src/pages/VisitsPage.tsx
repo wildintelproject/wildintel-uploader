@@ -48,15 +48,17 @@ export interface ActionFields {
   dateTime: Ask
   /** How the camera was found. */
   status: Ask
+  /** Whether the camera was calibrated: where a camera stays or is put up. */
+  calibration: Ask
 }
 
-const OFF: ActionFields = { camera: 'off', sdLeft: 'off', photos: 'off', card: 'off', batteries: 'off', dateTime: 'off', status: 'off' }
+const OFF: ActionFields = { camera: 'off', sdLeft: 'off', photos: 'off', card: 'off', batteries: 'off', dateTime: 'off', status: 'off', calibration: 'off' }
 
 function fieldsOf(action: string): ActionFields {
   switch (action) {
-    case 'Installation': return { camera: 'required', sdLeft: 'required', photos: 'off', card: 'off', batteries: 'optional', dateTime: 'optional', status: 'off' }
-    case 'Revision': return { camera: 'required', sdLeft: 'optional', photos: 'required', card: 'optional', batteries: 'optional', dateTime: 'optional', status: 'optional' }
-    case 'Desinstallation': return { camera: 'required', sdLeft: 'off', photos: 'required', card: 'optional', batteries: 'optional', dateTime: 'optional', status: 'optional' }
+    case 'Installation': return { camera: 'required', sdLeft: 'required', photos: 'off', card: 'off', batteries: 'optional', dateTime: 'optional', status: 'off', calibration: 'optional' }
+    case 'Revision': return { camera: 'required', sdLeft: 'optional', photos: 'required', card: 'optional', batteries: 'optional', dateTime: 'optional', status: 'optional', calibration: 'optional' }
+    case 'Desinstallation': return { camera: 'required', sdLeft: 'off', photos: 'required', card: 'optional', batteries: 'optional', dateTime: 'optional', status: 'optional', calibration: 'off' }
     case 'Stolen': return { ...OFF, camera: 'required' }
     default: return OFF
   }
@@ -70,6 +72,8 @@ export function fieldsFor(actions: string[]): ActionFields {
     const f = fieldsOf(action)
     for (const key of Object.keys(all) as (keyof ActionFields)[]) if (STRENGTH[f[key]] > STRENGTH[all[key]]) all[key] = f[key]
   }
+  // a camera that is taken away is not calibrated
+  if (actions.includes('Desinstallation')) all.calibration = 'off'
   return all
 }
 
@@ -89,7 +93,7 @@ const ACTION_HINTS: Record<string, string> = {
 }
 
 /** The states a camera is found in. */
-const CAMERA_STATUSES = ['OK', 'Knocked down', 'Altered']
+const CAMERA_STATUSES = ['OK', 'Altered', 'Knocked down', 'Damaged']
 
 export type CardState = '' | 'OK' | 'Full'
 export type BatteriesState = '' | 'OK' | 'Missing'
@@ -119,6 +123,8 @@ export interface Visit {
   numPhotos: string
   sd: string
   dateTimeOK: string
+  /** Whether the camera was calibrated: asked only by By hand 2, so it starts as not said. */
+  calibration?: boolean | null
   longitude: string
   latitude: string
   details: DeploymentFields
@@ -127,7 +133,7 @@ export interface Visit {
 const EMPTY_VISIT: Visit = {
   // What is found most is that all is well: the switches start on, and what is wrong is turned off.
   trappers: '', session: '', when: '', site: '', actions: [], status: '', card: 'OK', batteries: 'OK',
-  numPhotos: '', sd: '', dateTimeOK: 'Yes', longitude: '', latitude: '', details: EMPTY_DEPLOYMENT_FIELDS,
+  numPhotos: '', sd: '', dateTimeOK: 'Yes', calibration: null, longitude: '', latitude: '', details: EMPTY_DEPLOYMENT_FIELDS,
 }
 
 /** The fields of the Camera, the Site and the Grouping sections of the form, taken from a visit kept — not the notes. The day and the time, what was
@@ -211,6 +217,7 @@ export function toStored(v: Visit): StoredVisit {
     // only what the action asks is kept, whatever was typed before it was changed
     card_batteries_ok: cardBatteriesCode(asked.card !== 'off' ? v.card : '', asked.batteries !== 'off' ? v.batteries : ''),
     num_photos: asked.photos !== 'off' ? number(v.numPhotos) : null, sd: asked.sdLeft !== 'off' ? text(v.sd) : null, date_time_ok: asked.dateTime !== 'off' ? text(v.dateTimeOK) : null,
+    calibration: asked.calibration !== 'off' ? v.calibration ?? null : null,
     latitude: number(v.latitude), longitude: number(v.longitude),
   }
 }
@@ -342,10 +349,24 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     : seeCamera === 'stolen' ? (afterTheft === 'replace' ? ['Stolen', 'Installation'] : ['Stolen'])
     : []
   const guidedKey = guidedActions?.join('+')
+  // What a theft takes: the camera at the site, and the card that was left in it — which are marked as not available when the visit is kept.
+  const theft = guided && !noCamera && seeCamera === 'stolen' && siteCamera ? siteCamera.camera : null
+  const stolenCamera = theft ? (allCameras.find((c) => cameraKey(c).toLowerCase() === theft.toLowerCase() || c.label.toLowerCase() === theft.toLowerCase())?.label ?? theft) : null
+  const stolenCard = theft && allVisits
+    ? [...allVisits].filter((v) => v.location_id.toLowerCase() === visit.site.trim().toLowerCase() && v.sd && `${v.date}T${v.time}` < (visit.when || '9999-12-31T23:59:59') && v.actions.some((a) => a === 'Installation' || a === 'Revision'))
+        .sort((a, b) => `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))[0]?.sd ?? null
+    : null
   useEffect(() => {
     if (!guidedActions) return
-    const actions = ACTIONS.filter((a) => guidedActions.includes(a))
-    setVisit((v) => (v.actions.join('+') === actions.join('+') ? v : withoutWhatIsNotAsked({ ...v, actions })))
+    // in the order the flow does them: the camera is revised, then the new one is installed
+    const actions = guidedActions
+    setVisit((v) => {
+      if (v.actions.join('+') === actions.join('+')) return v
+      const next = withoutWhatIsNotAsked({ ...v, actions, calibration: fieldsFor(actions).calibration !== 'off' ? v.calibration ?? false : null })
+      // The camera of a visit that installs another is not the one at the site: the stolen one must not stay chosen.
+      const there = siteCamera?.camera.toLowerCase()
+      return actions.includes('Installation') && there && (next.details.camera_id ?? '').toLowerCase() === there ? { ...next, details: { ...next.details, camera_id: null, camera_model: null } } : next
+    })
   }, [guidedKey]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setSeeCamera(null); setAfterRevision('stay'); setAfterTheft(null) }, [visit.site])
   const errors = { ...visitErrors(visit, kept?.length === 0), ...conflicts }
@@ -578,6 +599,18 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       setSaveError(e instanceof Error ? e.message : 'Could not save the visit.')
       return
     }
+    // A camera found stolen, and the card that was in it, are marked as not available.
+    if (theft) {
+      const day = complete.when.slice(0, 10)
+      try {
+        await api.setFieldItemStatus(project.acronym, 'cameras', theft, 'stolen', day, 'Stolen')
+        if (stolenCard) await api.setFieldItemStatus(project.acronym, 'sd_cards', stolenCard, 'stolen', day, 'Stolen with the camera')
+        setCameras((list) => list.map((c) => (cameraKey(c).toLowerCase() === theft.toLowerCase() || c.label.toLowerCase() === theft.toLowerCase() ? { ...c, status: 'stolen' as const, status_date: day } : c)))
+        if (stolenCard) setSdCards((list) => list.map((c) => (c.label.toLowerCase() === stolenCard.toLowerCase() ? { ...c, status: 'stolen' as const, status_date: day } : c)))
+      } catch (e) {
+        setSaveError(e instanceof Error ? `The visit is kept, but the camera or the card could not be marked as stolen: ${e.message}` : 'The visit is kept, but the camera or the card could not be marked as stolen.')
+      }
+    }
     // The location is retired — with the reason — when the visit says the camera was stolen and the site is not kept.
     if (guided && seeCamera === 'stolen' && afterTheft === 'retire') {
       try {
@@ -775,20 +808,22 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 title="SD card" icon={SD_ICON} total={sdValues.length} filled={sdValues.filter((v) => v.trim()).length}
                 summary={[on(asked.sdLeft) && visit.sd.trim() && `left ${visit.sd.trim()}`, on(asked.photos) && visit.numPhotos.trim() && `${visit.numPhotos.trim()} photos`, on(asked.card) && `card ${visit.card === 'Full' ? 'full' : 'OK'}`].filter(Boolean).join(' · ')}
               >
+                {stolenCard && <Notice kind="info" className="mb-4">The SD card <strong>{stolenCard}</strong>, which was in the camera, was stolen with it: it will be marked as not available because it was stolen.</Notice>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <div className="flex items-baseline"><label htmlFor="visit-sd" className={labelClass}>SD card left in the camera</label><AskTag ask={asked.sdLeft} /></div>
                     <Combobox
-                      id="visit-sd" options={sdCards.map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
+                      id="visit-sd" options={sdCards.filter((c) => !stolenCard || !visit.actions.includes('Installation') || c.label.toLowerCase() !== stolenCard.toLowerCase()).map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
                       value={visit.sd} onChange={(label) => set('sd', label)} disabled={asked.sdLeft === 'off'} invalid={asked.sdLeft === 'required' && !visit.sd.trim()}
                       placeholder={sdCards.length === 0 ? 'No SD cards yet' : 'Select an SD card…'} clearLabel="Clear SD card"
                     />
                     {(conflicts.sd || shown('sd')) && <p role={conflicts.sd ? 'alert' : undefined} className="text-xs text-red-600 dark:text-red-400 mt-1">{conflicts.sd ?? shown('sd')}</p>}
                     {asked.sdLeft !== 'off' && sdCards.length === 0 && <p className={hintClass}>The settings have no SD cards yet.</p>}
                     {asked.sdLeft !== 'off' && onOpenSettings && (
-                      <div className="mt-3">
-                        <button type="button" className={btnOutline} onClick={() => onOpenSettings('sdcards')}>➕ Add a new SD card</button>
-                      </div>
+                      <p className={`${hintClass} mt-3`}>
+                        The SD card is not here? A new SD card is created in the settings:{' '}
+                        <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => onOpenSettings('sdcards')}>go to Settings › SD cards</button>.
+                      </p>
                     )}
                   </div>
                   <Field id="visit-photos" label="Photos on the card collected" ask={asked.photos} error={shown('numPhotos')}>
@@ -807,13 +842,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 )}
                 cameraPicker={(
                   <div>
+                    {stolenCamera && <Notice kind="info" className="mb-4">The camera <strong>{stolenCamera}</strong> was stolen: it will be marked as not available because it was stolen.</Notice>}
                     <div className="flex items-baseline gap-2 mb-1.5">
                       <label htmlFor="visit-camera" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Camera id</label>
                       <AskTag ask={asked.camera} />
                       <CamtrapDpTag />
                     </div>
                     <Combobox
-                      id="visit-camera" options={cameras.filter((c) => !ofTheSiteCamera || cameraKey(c).toLowerCase() === siteCamera!.camera.toLowerCase() || c.label.toLowerCase() === siteCamera!.camera.toLowerCase()).map((c) => ({ value: c.label, label: c.camera_model ? `${c.label} — ${c.camera_model}` : c.label }))}
+                      id="visit-camera" options={cameras.filter((c) => !theft || !visit.actions.includes('Installation') || (cameraKey(c).toLowerCase() !== theft.toLowerCase() && c.label.toLowerCase() !== theft.toLowerCase())).filter((c) => !ofTheSiteCamera || cameraKey(c).toLowerCase() === siteCamera!.camera.toLowerCase() || c.label.toLowerCase() === siteCamera!.camera.toLowerCase()).map((c) => ({ value: c.label, label: c.camera_model ? `${c.label} — ${c.camera_model}` : c.label }))}
                       value={cameras.find((c) => cameraKey(c) === visit.details.camera_id)?.label ?? ''} onChange={pickCamera} disabled={asked.camera === 'off'} invalid={asked.camera === 'required' && !visit.details.camera_id}
                       placeholder={cameras.length === 0 ? 'No cameras yet' : 'Select a camera…'} clearLabel="Clear camera"
                     />
@@ -822,9 +858,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     {visit.details.camera_model && <p className={hintClass}>Model: {visit.details.camera_model}</p>}
                     {cameras.length === 0 && <p className={hintClass}>The settings have no cameras yet.</p>}
                     {onOpenSettings && (
-                      <div className="mt-3">
-                        <button type="button" className={btnOutline} onClick={() => onOpenSettings('cameras')}>➕ Add a new camera</button>
-                      </div>
+                      <p className={`${hintClass} mt-3`}>
+                        The camera is not here? A new camera is created in the settings:{' '}
+                        <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => onOpenSettings('cameras')}>go to Settings › Cameras</button>.
+                      </p>
                     )}
                   </div>
                 )}
@@ -841,6 +878,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     <div className="sm:col-span-2 space-y-3">
                       <SwitchRow label="Batteries OK" hint="Off if the camera had no batteries." checked={visit.batteries === 'OK'} disabled={asked.batteries === 'off'} onChange={(on) => set('batteries', on ? 'OK' : 'Missing')} />
                       <SwitchRow label="Date and time of the camera OK" hint="Off if the clock of the camera was wrong." checked={visit.dateTimeOK === 'Yes'} disabled={asked.dateTime === 'off'} onChange={(on) => set('dateTimeOK', on ? 'Yes' : 'No')} />
+                    {guided && asked.calibration !== 'off' && <SwitchRow label="Calibration done" hint="On if the camera was calibrated at this visit." checked={visit.calibration === true} onChange={(on) => set('calibration', on)} />}
                     </div>
                   </div>
                 ),

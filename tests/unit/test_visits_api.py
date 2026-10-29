@@ -97,6 +97,17 @@ def test_the_optional_details_of_a_deployment_are_kept_with_the_visit(tmp_path: 
     assert both.status_code == bad_feature.status_code == 422
 
 
+def test_whether_the_camera_was_calibrated_is_kept_with_the_visit(tmp_path: Path):
+    with _in(tmp_path):
+        _project()
+        _installed()
+        calibrated = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "calibration": True}})
+        silent = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "time": "09:00:00"}})
+
+    assert calibrated.status_code == 200 and calibrated.json()["calibration"] is True
+    assert silent.status_code == 200 and silent.json()["calibration"] is None
+
+
 def test_a_visit_to_a_research_project_that_is_not_kept_is_refused(tmp_path: Path):
     with _in(tmp_path):
         response = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": VISIT})

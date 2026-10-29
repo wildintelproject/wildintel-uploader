@@ -697,6 +697,8 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
   num_photos: number | null
   sd: string | null
   date_time_ok: string | null
+  /** Whether the camera was calibrated at the visit — only the form of the field flow asks it. */
+  calibration?: boolean | null
   latitude: number | null
   longitude: number | null
   /** The deployment this visit closed, once it is imported. */

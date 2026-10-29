@@ -362,6 +362,8 @@ class VisitRecord(BaseModel):
     num_photos: Optional[int] = Field(default=None, ge=0)
     sd: Optional[str] = None
     date_time_ok: Optional[str] = None
+    # Whether the camera was calibrated at the visit (a check of the field flow that Camtrap DP does not have) — asked where a camera is left or put up.
+    calibration: Optional[bool] = None
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     # The deployment this visit closed, once it is imported (see local_folder_service.closed_visits).

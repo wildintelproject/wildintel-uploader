@@ -446,3 +446,19 @@ def test_log_files_left_next_to_the_settings_are_moved_to_the_log_folder():
     assert (config.get_logs_dir() / "wildintel-uploader.log").read_text(encoding="utf-8") == "an old line\n"
     assert (config.get_logs_dir() / "wildintel-uploader.log.1").is_file()
     assert not old.exists()
+
+
+def test_a_camera_and_an_sd_card_are_marked_as_not_available_by_what_the_visit_says(tmp_path: Path):
+    body = config.Settings().model_dump(mode="json")
+    body["FIELDWORK"]["cameras"] = [{"label": "CAM-001", "camera_id": "BR5071050724", "research_project": "DONA"}, {"label": "CAM-002", "research_project": "DONA"}]
+    body["FIELDWORK"]["sd_cards"] = [{"label": "1B", "research_project": "DONA"}]
+    assert _client().put("/api/settings", json=body).status_code == 200
+
+    camera = _client().post("/api/settings/field-item-status", json={"research_project_id": "DONA", "kind": "cameras", "key": "br5071050724", "status": "stolen", "status_date": "2026-10-29", "status_note": "Stolen"})
+    card = _client().post("/api/settings/field-item-status", json={"research_project_id": "DONA", "kind": "sd_cards", "key": "1B", "status": "stolen", "status_date": "2026-10-29"})
+    nobody = _client().post("/api/settings/field-item-status", json={"research_project_id": "DONA", "kind": "cameras", "key": "nobody", "status": "stolen"})
+    shown = _client().get("/api/settings").json()["FIELDWORK"]
+
+    assert camera.json() == {"updated": True} and card.json() == {"updated": True} and nobody.json() == {"updated": False}
+    assert {c["label"]: (c["status"], c["status_date"]) for c in shown["cameras"]} == {"CAM-001": ("stolen", "2026-10-29"), "CAM-002": ("active", None)}
+    assert shown["sd_cards"][0]["status"] == "stolen"

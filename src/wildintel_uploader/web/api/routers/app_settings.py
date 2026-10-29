@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -125,6 +126,40 @@ def delete_log() -> dict:
     """Deletes the log file and its rotated copies — logging goes on, into a
     new one."""
     return {"deleted": logging_setup.clear_log()}
+
+
+class FieldItemStatusRequest(BaseModel):
+    research_project_id: str
+    kind: Literal["cameras", "sd_cards"]
+    # What the visits call it: a camera's serial number, or its label when it has none; an SD card's label.
+    key: str
+    status: Literal["active", "retired", "stolen", "lost", "broken"]
+    status_date: str | None = None
+    status_note: str | None = None
+
+
+@router.post("/field-item-status")
+def set_field_item_status(req: FieldItemStatusRequest) -> dict:
+    """Marks a camera or an SD card of a research project as no longer available (stolen, lost…) — what a visit that finds a camera stolen says of it and of its card.
+    Nothing happens, and `updated` is false, when the research project does not keep one called that."""
+    root = _root(config.load_settings())
+    try:
+        items = local_folder_service.list_field_items(root, req.research_project_id, req.kind)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    wanted = req.key.strip().lower()
+    updated = False
+    for item in items:
+        names = {str(item.get("label") or "").strip().lower()} | ({str(item.get("camera_id") or "").strip().lower()} if req.kind == "cameras" else set())
+        if wanted and wanted in names:
+            item["status"], item["status_date"], item["status_note"] = req.status, req.status_date, req.status_note
+            updated = True
+    if updated:
+        try:
+            local_folder_service.write_field_items(root, req.research_project_id, req.kind, items)
+        except local_folder_service.LocalFolderError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    return {"updated": updated}
 
 
 class NewConfigRequest(BaseModel):
