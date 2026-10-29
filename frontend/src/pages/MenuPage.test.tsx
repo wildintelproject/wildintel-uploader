@@ -4,12 +4,12 @@ import userEvent from '@testing-library/user-event'
 import MenuPage from './MenuPage'
 
 describe('MenuPage', () => {
-  it('offers Manage deployments and Import session', async () => {
+  it('offers Manage deployments and Import collection', async () => {
     const onChoose = vi.fn()
     render(<MenuPage onChoose={onChoose} />)
 
     const deploymentButton = screen.getByRole('button', { name: /manage deployments/i })
-    const sessionButton = screen.getByRole('button', { name: /import session/i })
+    const sessionButton = screen.getByRole('button', { name: /import collection/i })
 
     expect(deploymentButton).toBeEnabled()
     expect(sessionButton).toBeEnabled()
@@ -40,11 +40,11 @@ describe('MenuPage', () => {
     expect(onChoose).toHaveBeenCalledWith('upload')
   })
 
-  it('offers the tasks in the order manage visits, manage deployments, import session, upload deployment', () => {
+  it('offers the tasks in the order manage visits, manage deployments, import collection, upload deployment', () => {
     render(<MenuPage onChoose={vi.fn()} />)
 
-    const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '').filter((t) => /Manage visits|Manage deployments|Import session|Upload deployment/.test(t))
-    expect(titles.map((t) => t.match(/Manage visits|Manage deployments|Import session|Upload deployment/)![0])).toEqual(['Manage visits', 'Manage deployments', 'Import session', 'Upload deployment'])
+    const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '').filter((t) => /Manage visits|Manage deployments|Import collection|Upload deployment/.test(t))
+    expect(titles.map((t) => t.match(/Manage visits|Manage deployments|Import collection|Upload deployment/)![0])).toEqual(['Manage visits', 'Manage deployments', 'Import collection', 'Upload deployment'])
     expect(screen.queryByRole('button', { name: /upload session to trapper/i })).not.toBeInTheDocument()
   })
 

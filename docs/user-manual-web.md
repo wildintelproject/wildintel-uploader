@@ -15,7 +15,7 @@ first. Part of what the web app does can also be done from a terminal: see the
 4. [Unfinished runs](#4-unfinished-runs)
 5. [Manage visits](#5-manage-visits)
 6. [Manage deployments](#6-manage-deployments)
-7. [Import a session](#7-import-a-session)
+7. [Import a collection](#7-import-a-collection)
 8. [Upload a deployment to Trapper](#8-upload-a-deployment-to-trapper)
 9. [Utils: sync, repair and fix dates](#9-utils)
 10. [Troubleshooting](#10-troubleshooting)
@@ -178,13 +178,13 @@ Once it is configured, the menu is where you choose what you want to do:
 |---|---|
 | 📋 **Manage visits** | **Register visits** to the camera traps — who went, when, to which site and what was done — or **show the visit book**. The deployments are worked out from the visits. |
 | 📷 **Manage deployments** | **Import deployment** — check one folder of images and organize it in the collections folder — or **show the status of the deployments**. |
-| 🗂️ **Import session** | The same for a folder holding several deployments, one subfolder each. |
+| 🗂️ **Import collection** | Pick a revision and the closed visits whose images you have: **one visit** is a deployment (a folder of images, as in Import deployment), **several** are a collection (a folder with one subfolder each). |
 | ☁️ **Upload deployment to Trapper** | Send deployments already kept locally to Trapper. |
 | 🧰 **Utils** | *Check and fix dates and times* compares the dates of a folder's images with the period of the visit, when the camera clock went wrong, and shifts or removes the ones that cannot be trusted (every fix is written down). Maintenance of the local collections: *Sync local collections* brings the collections folder up to date with what Trapper already has, and *Repair local deployments* checks which deployments are still valid and writes the metadata files of the others again from their folders. |
 
 ![The task menu](img/screenshots/menu.png)
 
-The usual order is **Register visits** first, then **Import** (or **Import session**) — which take the location, the camera and the dates from the visits — and then **Upload**. *Sync* is for when
+The usual order is **Register visits** first, then **Import** (or **Import collection**) — which take the location, the camera and the dates from the visits — and then **Upload**. *Sync* is for when
 Trapper already holds deployments that this computer's collections folder doesn't know about (**Utils › Sync**).
 
 The title in the top bar takes you back to the welcome screen at any time; **? Help** opens this
@@ -291,7 +291,7 @@ and *Not on Trapper yet* (closed, with the images stored, ready to upload) — a
 
 Press **📷 Manage deployments**, then **Import deployment**. This option is meant to import the set of images that come from a **single camera**: one
 folder, one deployment. For a folder with the images of several cameras, one subfolder each, use
-[**Import session**](#7-import-a-session).
+[**Import collection**](#7-import-a-collection).
 
 It is a wizard of five stages — the bar at the top shows where you are, and a
 stage can have steps of its own, which open one after the other. Each stage is **done** (a tick and a
@@ -413,7 +413,7 @@ Each option says **Found** — with the start and end it found — or **Nothing 
 source that turns up later replaces the one taken — until you pick one yourself.
 
 If the deployment's collection has a `<COLLECTION>_FileTimestampLog.csv` (the file wildintel-tools asks for), going on from *More details*
-**adds the deployment's row to that file**. A log that is already there is used for the dates in an [*Import session*](#7-import-a-session).
+**adds the deployment's row to that file**. A log that is already there is used for the dates in an [*Import collection*](#7-import-a-collection).
 
 **2. More details.**
 
@@ -537,15 +537,18 @@ The **seal** protects against changes by mistake: if an image or `deployment.jso
 after the import, the seal no longer matches, and the app can tell. It is not a signature —
 whoever edits the files on purpose could seal them again.
 
-## 7. Import a session
+## 7. Import a collection
 
-Press **🗂️ Import session**. A **session** is a folder with **one subfolder per deployment** — the
+Press **🗂️ Import collection**. It works from the **visits**: first the **research project**, then a **revision** — a square for each one (*All revisions*, *R0003*…) with how many closed visits without a deployment it has — and then you tick the **visits** of that revision whose images you have.
+
+- **One visit:** it works as [Import deployment](#import-a-deployment): the folder is the deployment's, with its images in it (no subfolders), and it is linked to the one visit. Only its SD card is asked beside it.
+- **Several visits:** the folder is a **collection**: a folder with **one subfolder per visit**, as follows. A **collection** is a folder with **one subfolder per deployment** — the
 usual way a field trip's images come home. The revision, the checks and the preprocessing are the
 same for all; the location, dates and camera are asked for each deployment.
 
 The stages are those of [Import a deployment](#import-a-deployment), with the differences below.
 
-![Import session — the folders and their visits](img/screenshots/session-folders.png)
+![Import collection — the folders and their visits](img/screenshots/session-folders.png)
 
 1. **Origin** — the **research project** for the whole session and, if it has closed visits (see [Register visits](#5-manage-visits)), the
    **Visits** to tick: the ones this session is of — **all of one session**, which is the revision (once one is ticked, the visits of other sessions are

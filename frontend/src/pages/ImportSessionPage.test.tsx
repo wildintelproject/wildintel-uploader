@@ -10,7 +10,7 @@ import { APP_SETTINGS } from '../test/fixtures'
 
 vi.mock('../api', () => ({
   api: {
-    getSettings: vi.fn(), exiftoolStatus: vi.fn(), browseFolder: vi.fn(), scanSession: vi.fn(), guessDetails: vi.fn(), validateImages: vi.fn(),
+    getSettings: vi.fn(), exiftoolStatus: vi.fn(), browseFolder: vi.fn(), scanSession: vi.fn(), scanFolder: vi.fn(), guessDetails: vi.fn(), validateImages: vi.fn(),
     listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(),
     writeTimestampLog: vi.fn(), validateDeployment: vi.fn(), previousDeployments: vi.fn(), existingDeployments: vi.fn(), collectionPath: vi.fn(), importLocal: vi.fn(), openFolder: vi.fn(),
     trapperGetConfig: vi.fn(), trapperTestConnection: vi.fn(), trapperResearchProjects: vi.fn(), nextRevision: vi.fn(), epicollectEntriesBatch: vi.fn(),
@@ -1061,6 +1061,45 @@ describe('an import session of visits', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select all the visits offered' }))
     expect(visit(0)).not.toBeChecked()
     expect(visit(1)).not.toBeChecked()
+  })
+
+  it('has a square for each revision with visits to import, and shows only the visits of the one picked', async () => {
+    render(<ImportSessionPage {...pageProps} />)
+    await pickProject()
+    await screen.findAllByRole('checkbox', { name: /collected on/ })
+    const squares = screen.getByRole('group', { name: 'Revision' })
+
+    expect(within(squares).getAllByRole('button').map((b) => b.textContent)).toEqual(['All revisions3 visits to import', 'R00022 visits to import', 'R00011 visit to import'])
+    await userEvent.click(within(squares).getByRole('button', { name: /^R0002/ }))
+    expect(within(squares).getByRole('button', { name: /^R0002/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByRole('checkbox', { name: /collected on/ })).toHaveLength(2) // only the visits of R0002
+    await userEvent.click(visit(0))
+    await userEvent.click(within(squares).getByRole('button', { name: /^R0001/ })) // another revision: what was ticked is let go
+    expect(screen.getAllByRole('checkbox', { name: /collected on/ })).toHaveLength(1)
+    expect(screen.getByRole('checkbox', { name: /collected on/ })).not.toBeChecked()
+    await userEvent.click(within(squares).getByRole('button', { name: /^All revisions/ }))
+    expect(screen.getAllByRole('checkbox', { name: /collected on/ })).toHaveLength(3)
+  })
+
+  it('with one visit works as Import deployment: the folder is the deployment\'s, with the images in it', async () => {
+    mockedApi.scanFolder.mockResolvedValue({ file_count: 24, image_count: 24, warnings: [] })
+    render(<ImportSessionPage {...pageProps} />)
+    await pickProject()
+    await userEvent.click(await screen.findByRole('checkbox', { name: /DONA_01 · R0002 · Revision · card A13/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+
+    expect(await screen.findByText('Folder with the images')).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: 'Browse…' }))
+    await screen.findByDisplayValue('/s')
+    await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
+
+    // the images of the folder are counted, as Import deployment does — not a folder with subfolders
+    expect(await screen.findByText(/24 images/)).toBeInTheDocument()
+    expect(mockedApi.scanFolder).toHaveBeenCalledWith('/s')
+    expect(mockedApi.scanSession).not.toHaveBeenCalled()
+    expect(screen.queryByText(/subfolder\(s\)/)).not.toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('SD card of s'), 'B2')
+    expect(screen.getByRole('button', { name: 'Continue to the checks' })).toBeEnabled() // the folder is linked to the one visit
   })
 
   it('offers only the visits of one session once one is ticked: the session is the revision', async () => {

@@ -319,7 +319,7 @@ def reports(page: Page) -> None:
 
 def to_session_folders(page: Page) -> None:
     """The session of the visits to DONA: ticked in the origin, then the folder with a subfolder each, linked to its visit by its name."""
-    open_task(page, "Import session")
+    open_task(page, "Import collection")
     expect(heading(page, "Origin")).to_be_visible()
     choose(page, "origin-research-project", "DONA")
     page.get_by_role("checkbox", name="Select all the visits offered").check()
