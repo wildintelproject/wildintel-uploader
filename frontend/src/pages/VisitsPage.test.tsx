@@ -20,8 +20,8 @@ beforeEach(() => {
   mockedApi.trapperGetConfig.mockRejectedValue(new Error('no account in this test'))
   mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: {
       ...APP_SETTINGS.FIELDWORK, trappers: [{ name: 'Ana Pérez', affiliation: 'University of Huelva' }, { name: 'Luis', affiliation: null }],
-      sd_cards: [{ label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: null, research_project: null }, { label: 'B2', brand: null, capacity: null, in_service: null, research_project: null }],
-      cameras: [{ label: 'P800HG08192031', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: null, research_project: null }, { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: null }],
+      sd_cards: [{ label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: null, research_project: 'TATR' }, { label: 'B2', brand: null, capacity: null, in_service: null, research_project: 'TATR' }],
+      cameras: [{ label: 'P800HG08192031', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: null, research_project: 'TATR' }, { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'TATR' }],
     } })
   mockedApi.listVisits.mockResolvedValue({ results: [] })
   mockedApi.saveVisit.mockImplementation(async (_rp, v) => v)
@@ -416,7 +416,7 @@ describe('VisitsPage', () => {
     expect(screen.getByLabelText('Camera id')).toHaveValue('')
   })
 
-  it('offers only the cameras and the SD cards of the research project, and those that belong to none', async () => {
+  it('offers only the cameras and the SD cards of the research project: each belongs to one, and the ones of none are not offered', async () => {
     const card = (label: string, research_project: string | null) => ({ label, brand: null, capacity: null, in_service: null, research_project })
     const camera = (camera_id: string, research_project: string | null) => ({ label: camera_id, camera_id, camera_model: null, in_service: null, research_project })
     mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: {
@@ -430,15 +430,15 @@ describe('VisitsPage', () => {
     await openSection('Camera')
 
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
-    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['T1', 'F1'])
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['T1'])
     await userEvent.click(screen.getByRole('option', { name: 'T1' }))
     await userEvent.click(screen.getByLabelText('Camera id'))
-    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['CT', 'CF'])
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['CT'])
   })
 
   it('does not offer the cameras, the SD cards and the trappers that are no longer in use', async () => {
-    const card = (label: string, status: 'active' | 'lost') => ({ label, brand: null, capacity: null, in_service: null, research_project: null, status })
-    const camera = (camera_id: string, status: 'active' | 'stolen') => ({ label: camera_id, camera_id, camera_model: null, in_service: null, research_project: null, status })
+    const card = (label: string, status: 'active' | 'lost') => ({ label, brand: null, capacity: null, in_service: null, research_project: 'TATR', status })
+    const camera = (camera_id: string, status: 'active' | 'stolen') => ({ label: camera_id, camera_id, camera_model: null, in_service: null, research_project: 'TATR', status })
     mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: {
       trappers: [{ name: 'Ana Pérez', affiliation: null, status: 'active' }, { name: 'Luis', affiliation: null, status: 'inactive' }],
       sd_cards: [card('T1', 'active'), card('T2', 'lost')], cameras: [camera('CT', 'active'), camera('CS', 'stolen')],

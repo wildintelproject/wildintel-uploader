@@ -220,7 +220,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   // One visit: the folder is the one of its deployment, with the images in it, as in Import deployment; several: a folder with one subfolder for each.
   const singleVisit = pickedList.length === 1
   const visitOf = (name: string): ClosedVisit | undefined => pickedList.find((c) => visitKey(c) === folderVisit[name])
-  const projectSdCards = sdCards.filter((c) => !c.research_project || c.research_project.toLowerCase() === projectId.toLowerCase())
+  const projectSdCards = sdCards.filter((c) => (c.research_project ?? '').toLowerCase() === projectId.toLowerCase())
   // The deployments' details are asked for once the research project is picked and the details sub-step is open.
   // With visits, each folder's location is the visit's: nothing is asked of where they were taken, and the step starts at the dates.
   useEffect(() => {

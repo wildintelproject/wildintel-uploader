@@ -1021,7 +1021,7 @@ describe('an import session of visits', () => {
   beforeEach(() => {
     mockedApi.closedVisits.mockResolvedValue({ results: CLOSED })
     mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [
-      { label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: null, research_project: null }, { label: 'B2', brand: null, capacity: null, in_service: null, research_project: 'DONA' },
+      { label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: null, research_project: 'DONA' }, { label: 'B2', brand: null, capacity: null, in_service: null, research_project: 'DONA' },
       { label: 'Z9', brand: null, capacity: null, in_service: null, research_project: 'OTHER' },
     ] } })
   })

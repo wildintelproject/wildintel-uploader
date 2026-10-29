@@ -520,7 +520,7 @@ describe('ImportDeploymentPage', () => {
       describe('the SD card and the number of photos, against what the visits say', () => {
         const SD_SETTINGS = () => mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: {
           ...APP_SETTINGS.FIELDWORK, sd_cards: [
-            { label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: null, research_project: null }, { label: 'B2', brand: null, capacity: null, in_service: null, research_project: 'DONA' },
+            { label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: null, research_project: 'DONA' }, { label: 'B2', brand: null, capacity: null, in_service: null, research_project: 'DONA' },
             { label: 'Z9', brand: null, capacity: null, in_service: null, research_project: 'OTHER' },
           ],
         } })
@@ -551,7 +551,7 @@ describe('ImportDeploymentPage', () => {
           await screen.findByText('Check the details', { selector: 'h4' })
         }
 
-        it('offers, with the research project, the cards of that project and those with none', async () => {
+        it('offers, with the research project, the cards of that project', async () => {
           SD_SETTINGS()
           storedProjects = [DONA_PROJECT]
           storedLocations = { DONA: [DONA_01] }

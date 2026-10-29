@@ -295,8 +295,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const [allSdCards, setSdCards] = useState<SdCard[]>([])
   // And the cameras, to pick the one of the visit from.
   const [allCameras, setCameras] = useState<Camera[]>([])
-  // Only those of the research project — or of none, which any may use.
-  const ofProject = (rp: string | null) => !rp || !project || rp.toLowerCase() === project.acronym.toLowerCase()
+  // Only those of the research project: each belongs to one.
+  const ofProject = (rp: string | null) => !!project && (rp ?? '').toLowerCase() === project.acronym.toLowerCase()
   // ...and only those still in use: a retired, lost, stolen or broken one is not offered, unless the visit already has it.
   const inUse = (status: string | undefined) => !status || status === 'active'
   const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (inUse(c.status) || c.label === visit.sd))

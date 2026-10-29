@@ -134,12 +134,12 @@ def test_what_was_kept_in_the_settings_file_goes_to_the_research_projects_when_t
 
     shown = _client().get("/api/settings").json()["FIELDWORK"]
 
-    # a card of a research project goes to it; one that is free for any, to each; one of a project that is not here stays in the settings, and is shown
-    assert sorted((c["label"], c["research_project"]) for c in shown["sd_cards"]) == [("A1", "DONA"), ("B2", "ELSEWHERE"), ("Free", "DONA"), ("Free", "TATR")]
-    assert [c["label"] for c in json.loads((tmp_path / "DONA" / "sd_cards.json").read_text(encoding="utf-8"))] == ["A1", "Free"]
+    # a card of a research project goes to it; one of none, or of a project that is not here, stays in the settings — to be assigned to a project — and is shown
+    assert sorted((c["label"], c["research_project"] or "") for c in shown["sd_cards"]) == [("A1", "DONA"), ("B2", "ELSEWHERE"), ("Free", "")]
+    assert [c["label"] for c in json.loads((tmp_path / "DONA" / "sd_cards.json").read_text(encoding="utf-8"))] == ["A1"]
     assert [c["camera_id"] for c in json.loads((tmp_path / "TATR" / "cameras.json").read_text(encoding="utf-8"))] == ["X1"]
     left = config.load_settings().FIELDWORK
-    assert [c.label for c in left.sd_cards] == ["B2"] and left.cameras == []
+    assert sorted(c.label for c in left.sd_cards) == ["B2", "Free"] and left.cameras == []
 
 
 def test_a_camera_is_called_by_its_label_and_its_serial_number_is_optional():

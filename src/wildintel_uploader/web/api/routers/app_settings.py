@@ -49,8 +49,8 @@ def _shown(settings: config.Settings) -> dict:
 
 def _move_to_the_projects(settings: config.Settings) -> config.Settings:
     """Cameras and SD cards kept in settings.toml (as they were before) go to the folder of their research project, as a file of its own: the ones that are a
-    research project's, to it; the ones that are free for any, to each of the research projects there are. What can't be moved yet (its project isn't in the
-    collections folder) stays. Does nothing once there is nothing left to move."""
+    research project's, to it. What can't be moved stays: the ones whose project isn't in the collections folder yet, and the ones that belong to none — a camera
+    or an SD card belongs to one research project, so those wait to be assigned to one in the settings. Does nothing once there is nothing left to move."""
     fieldwork = settings.FIELDWORK
     if not fieldwork.cameras and not fieldwork.sd_cards:
         return settings
@@ -60,16 +60,17 @@ def _move_to_the_projects(settings: config.Settings) -> config.Settings:
     for kind in ("cameras", "sd_cards"):
         label = {"cameras": "label", "sd_cards": "label"}[kind]
         for project in projects:
-            mine = [i for i in getattr(fieldwork, kind) if (i.research_project or "").lower() in ("", project.lower())]
+            mine = [i for i in getattr(fieldwork, kind) if (i.research_project or "").lower() == project.lower()]
             if not mine:
                 continue
             kept = local_folder_service.list_field_items(root, project, kind)
             have = {str(i.get(label, "")).lower() for i in kept}
             added = [i.model_dump(mode="json") for i in mine if i.label.lower() not in have]
             local_folder_service.write_field_items(root, project, kind, [*kept, *added])
-        leftovers[kind] = [i for i in getattr(fieldwork, kind) if (i.research_project or "") and (i.research_project or "").lower() not in {p.lower() for p in projects}]
-    fieldwork.cameras, fieldwork.sd_cards = leftovers["cameras"], leftovers["sd_cards"]
-    config.save_settings(settings)
+        leftovers[kind] = [i for i in getattr(fieldwork, kind) if (i.research_project or "").lower() not in {p.lower() for p in projects}]
+    if (leftovers["cameras"], leftovers["sd_cards"]) != (fieldwork.cameras, fieldwork.sd_cards):
+        fieldwork.cameras, fieldwork.sd_cards = leftovers["cameras"], leftovers["sd_cards"]
+        config.save_settings(settings)
     return settings
 
 

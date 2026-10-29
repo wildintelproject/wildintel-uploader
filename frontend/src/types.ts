@@ -594,7 +594,7 @@ export interface SdCard {
   capacity: string | null
   /** YYYY-MM-DD */
   in_service: string | null
-  /** The acronym of the research project it belongs to; none, it is free for any. */
+  /** The acronym of the research project it belongs to: every one belongs to one (none only while an older one waits to be assigned). */
   research_project: string | null
   status?: SdCardStatus
   /** YYYY-MM-DD — the day it stopped being active. */
@@ -611,7 +611,7 @@ export interface Camera {
   camera_model: string | null
   /** YYYY-MM-DD — the day it was put into production. */
   in_service: string | null
-  /** The acronym of the research project it belongs to; none, it is free for any. */
+  /** The acronym of the research project it belongs to: every one belongs to one (none only while an older one waits to be assigned). */
   research_project: string | null
   status?: CameraStatus
   /** YYYY-MM-DD — the day it stopped being active. */

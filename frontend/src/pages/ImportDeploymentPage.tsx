@@ -1737,7 +1737,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   // ── Research project ──
 
   // The cards of the project chosen — and those free for any.
-  const projectSdCards = sdCards.filter((c) => !c.research_project || c.research_project.toLowerCase() === selectedProjectId.toLowerCase())
+  const projectSdCards = sdCards.filter((c) => (c.research_project ?? '').toLowerCase() === selectedProjectId.toLowerCase())
 
   function selectProject(project: LocalResearchProject | undefined) {
     setSelectedProjectId(project?.acronym ?? '')
