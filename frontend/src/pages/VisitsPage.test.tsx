@@ -908,6 +908,40 @@ describe('VisitsPage from a CSV file', () => {
     expect(region).toHaveTextContent('2024-09-04 09:00 → 2024-10-12 09:00')
   })
 
+  it('adds at once the new sites that have the coordinates of their first visit, and leaves the ones that look like a misprint', async () => {
+    const site = (id: string, over: object) => ({ site: id, session: null, actions: ['Installation'], date: '2026-10-02', time: '08:00:00', latitude: 37.1, longitude: -6.4, visits: 1, nearest: null, similar: [], ...over })
+    const sites = [site('TATR_0050', {}), site('TATR_0051', { latitude: 37.2, longitude: -6.5 }), site('TATR_0011', { similar: ['TATR_0001'] }), site('TATR_0099', { latitude: null, longitude: null })]
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: sites, warnings: [] })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: sites.slice(2), warnings: [] })
+    mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Add the 2 sites with coordinates as locations' }))
+
+    expect(mockedApi.saveLocalLocation).toHaveBeenCalledTimes(2)
+    expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0050', latitude: 37.1, longitude: -6.4, timezone: 'UTC' }))
+    expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0051' }))
+    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(2)) // the file is read again
+  })
+
+  it('has an option to see the deployments the visits say, with the logs of their collections', async () => {
+    mockedApi.fieldDeployments.mockResolvedValue({ results: [
+      { deployment_id: 'R0003-TATR_0002', collection: 'R0003', site: 'TATR_0002', status: 'open', start: '2024-09-05T09:00:00Z', end: null, setup_by: null, camera_id: 'P900', card: 'C7', photos_counted: null, start_session: 'R0003', end_session: null },
+    ] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /see the deployments/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+
+    expect(await screen.findByRole('region', { name: 'Deployments the visits say' })).toHaveTextContent('R0003-TATR_0002')
+    expect(screen.getByRole('button', { name: 'Write the logs of all the collections again' })).toBeInTheDocument()
+    expect(mockedApi.fieldDeployments).toHaveBeenCalledWith('TATR')
+  })
+
   it('forgets what the file before said when another is chosen — even one with the same name, edited', async () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [], problems: [{ row: 2, message: "'many' is not a whole number." }], skipped: 0, ignored: 0, saved: null, new_sites: [{ site: 'X', session: null, actions: ['Revision'], date: '2026-10-02', time: '08:00:00', latitude: 37.1, longitude: -6.4, visits: 1, nearest: { location_id: 'DONA_01', distance_m: 40 }, similar: ['DONA_01'] }], warnings: [] })
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })

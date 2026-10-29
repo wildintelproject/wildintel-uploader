@@ -217,6 +217,7 @@ the visits come in:
 | **By hand** | You fill in each visit yourself. |
 | **From Wildintel Epicollect** | Reads the visits of a field trip from the Epicollect download (a CSV). The time is the `created_at` of the entry, put in the timezone of the location. |
 | **From a spreadsheet file** | Any CSV: the page shows its columns and you say which one gives each field of a visit. |
+| **See the deployments** | Nothing is registered: choose a research project and the page lists the deployments its visits say — by collection, the closed ones and the ones whose camera is still out — and **Write the logs of all the collections again**. |
 
 A file can come with a **history of visits** (optional): the fieldwork datasheet, an `.xlsx` workbook whose first sheet has a Site and an Action column (Trappers, Session, Date, Time, Camera, NumPhotos, SD… or Tramperos, Sesion, Fecha, Hora…
 — found by their names, as in an Epicollect download). The history **completes the visits kept**, and then the file's are applied on top of both: sessions, what is already kept and what is odd are told with all of it in front. Its visits come first in the list, and its rows
@@ -233,7 +234,7 @@ When a file is read, the visits that were found are listed and the ones that are
 
 - **Sites that are not locations.** A site of the file that is not a location of the research project may be a site that is really new or one misnamed in the field. Its visits
   are held, and the site is shown with what tells the two apart: **how far** its first visit was from the nearest location, and the locations whose id is **one character apart**
-  from its own (*it may be a misprint*). If it is new, **Add … as a location** keeps it with the coordinates of its first visit and reads the file again; if it is a misprint, correct
+  from its own (*it may be a misprint*). If it is new, **Add … as a location** keeps it with the coordinates of its first visit and reads the file again (**Add the N sites with coordinates as locations** does it for all the ones whose file has the coordinates and that do not look like a misprint — no id one character apart, no location within 100 m); if it is a misprint, correct
   the id in the file and read it again.
 - **What to check in the field data.** A camera or an SD card at two sites in one session or in a place it cannot be (a camera installed at another site, a card still in another camera),
   what a visit's actions ask and it lacks (the photos of a Revision, the card of an Installation), two Revisions or two Installations of a site in one session, a visit that is not

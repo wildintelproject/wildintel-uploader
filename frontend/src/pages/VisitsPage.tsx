@@ -14,12 +14,13 @@ import { availabilityErrors } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, FieldDeployment, FieldLogsResult, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
-export type VisitSource = 'manual' | 'epicollect' | 'csv'
+export type VisitSource = 'manual' | 'epicollect' | 'csv' | 'deployments'
 
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
   { value: 'manual', icon: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />, title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.' },
   { value: 'epicollect', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'From Wildintel Epicollect', description: 'Read the visits of a field trip from the Epicollect download.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'From a spreadsheet file', description: 'Any spreadsheet: say which column gives each field of a visit.' },
+  { value: 'deployments', icon: <><path d="M3 7h18M3 12h18M3 17h18" /></>, title: 'See the deployments', description: 'The deployments the visits of a research project say — closed, and the ones whose camera is still out — and the logs of their collections.' },
 ]
 
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
@@ -441,6 +442,20 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     }
   }
 
+  /** The sites of the file that have the coordinates of their first visit and that do not look like a misprint of a location — a close id or a location next to them —
+   * are new sites to add, as the file has enough of them to be locations. */
+  const addable = (csvResult?.new_sites ?? []).filter((s) => s.latitude != null && s.longitude != null && s.similar.length === 0 && !(s.nearest && s.nearest.distance_m < 100))
+  async function addNewSites(sites: NewSite[]) {
+    if (!project) return
+    setCsvError(null)
+    try {
+      for (const s of sites) await api.saveLocalLocation(project.acronym, { location_id: s.site, name: s.site, timezone: 'UTC', ignore_dst: false, latitude: s.latitude!, longitude: s.longitude!, coordinate_uncertainty: null, trapper_pk: null })
+      await recheckCsv()
+    } catch (e) {
+      setCsvError(e instanceof Error ? e.message : 'Could not add the locations.')
+    }
+  }
+
   /** From another CSV file: reads the visits with the columns as they are mapped. */
   async function readMapped() {
     if (!project) return
@@ -506,6 +521,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     setLogsError(null)
     try { setLogs(await api.writeFieldLogs(project.acronym)) } catch (e) { setLogsError(e instanceof Error ? e.message : 'Could not write the logs.') }
   }
+  useEffect(() => { if (source === 'deployments' && project) void showDeployments() }, [source, project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
   /** The logs of the collections: the FileTimestampLog and the FieldworkLog worked out from the visits kept, closed deployments and the ones still open. */
   const logsCard = project && (
     <div className="mt-3" role="group" aria-label="Logs of the collections">
@@ -847,7 +863,17 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         </>
       )}
 
-      {source !== null && source !== 'manual' && (
+      {source === 'deployments' && (
+        <WizardStep
+          n={2} title="Which research project?" status={project ? 'open' : 'open'} canEdit={false} onEdit={() => {}}
+          description="The deployments are worked out from the visits kept to the research project."
+        >
+          <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={(picked) => { setProject(picked); setFieldDeployments(null); setLogs(null) }} />
+          {logsCard}
+        </WizardStep>
+      )}
+
+      {source !== null && source !== 'manual' && source !== 'deployments' && (
         <>
           <WizardStep
             n={2} title="Which research project?" status={project ? 'done' : 'open'} canEdit onEdit={() => { setProject(undefined); forgetCsv(); setCsvName(null) }}
@@ -966,6 +992,12 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   <div className="mt-4 space-y-3" role="group" aria-label="Sites that are not locations yet">
                     <p className="text-base font-semibold">{csvResult.new_sites.length === 1 ? 'A site is' : `${csvResult.new_sites.length} sites are`} not a location of {project?.acronym}</p>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400">Their visits are held. Check each one is really new and not a site misnamed in the field: if it is new, add it as a location; if not, correct its id in the file and read it again.</p>
+                    {addable.length > 0 && (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <button type="button" className={btnPrimary} onClick={() => void addNewSites(addable)}>Add the {addable.length} {addable.length === 1 ? 'site' : 'sites'} with coordinates as {addable.length === 1 ? 'a location' : 'locations'}</button>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">The file has their coordinates, taken from their first visit; the ones that look like a misprint are left for you to decide.</span>
+                      </div>
+                    )}
                     {csvResult.new_sites.map((s) => (
                       <div key={s.site} className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-5 py-4 text-sm">
                         <div className="flex items-start justify-between gap-4 flex-wrap">
