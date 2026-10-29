@@ -9,7 +9,7 @@ import RevisionSquares from './RevisionSquares'
 const PER_PAGE = 10
 
 /** The rows the status squares show: all of them, the closed ones with their images stored, the ones whose camera is still out, and the closed ones with images stored that are not on Trapper. */
-type Filter = '' | 'closed' | 'open' | 'to_upload'
+export type Filter = '' | 'closed' | 'open' | 'to_upload'
 const matches = (d: FieldDeployment, f: Filter) =>
   !f || (f === 'open' ? d.status === 'open' : f === 'closed' ? d.status === 'closed' && Boolean(d.images_stored) : d.status === 'closed' && Boolean(d.images_stored) && !d.on_trapper)
 
@@ -17,9 +17,9 @@ const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
-export default function FieldDeployments({ deployments, highlight }: { deployments: FieldDeployment[]; highlight?: string }) {
+export default function FieldDeployments({ deployments, highlight, initialFilter = '' }: { deployments: FieldDeployment[]; highlight?: string; initialFilter?: Filter }) {
   const [revision, setRevision] = useState('')
-  const [filter, setFilter] = useState<Filter>('')
+  const [filter, setFilter] = useState<Filter>(initialFilter)
   const [page, setPage] = useState(1)
   const revisions = [...new Set(deployments.map((d) => d.collection))].sort((a, b) => b.localeCompare(a))
   const inRevision = revision ? deployments.filter((d) => d.collection === revision) : deployments
