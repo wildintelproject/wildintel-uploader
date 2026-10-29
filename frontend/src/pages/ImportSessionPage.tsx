@@ -13,6 +13,7 @@ import type { DateSource, Period, SourceOption } from '../components/DateSourceP
 import type { EpicollectEntry } from '../epicollectImport'
 import { isValidTimezone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
+import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { ClosedVisitTarget } from '../types'
 import type {
@@ -78,7 +79,7 @@ interface Props {
   /** Offered once the session is imported: goes to the upload page, on the revision's collection. */
   onUpload?: (target: UploadTarget) => void
   /** Opens the settings, on a section when given one. */
-  onOpenSettings?: (section?: 'epicollect') => void
+  onOpenSettings?: (section?: 'epicollect' | 'general') => void
   /** Whether the settings are open over the wizard: what they hold is read again once they close. */
   settingsOpen?: boolean
   /** Goes back to the menu — what Back does on the first step. */
@@ -127,6 +128,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   // The research project picked, as in the Origin step of Import deployment (see ResearchProjectPicker).
   const [project, setProject] = useState<LocalResearchProject | undefined>(undefined)
   const projectId = project?.acronym ?? ''
+  // As Import deployment does, Import deployments has the default research project of the settings, which is not picked here.
+  const { project: defaultProject, defaultAcronym } = useDefaultResearchProject(settingsOpen)
+  const fixedProject = Boolean(onSingleVisit) && Boolean(defaultProject)
+  useEffect(() => { if (fixedProject && defaultProject && project?.acronym !== defaultProject.acronym) { setProject(defaultProject); setDrafts({}) } }, [fixedProject, defaultProject]) // eslint-disable-line react-hooks/exhaustive-deps
   const [localLocations, setLocalLocations] = useState<LocalLocation[]>([])
   // The visits of the project that closed a deployment with none yet: the ones the session is of are picked in the origin, and each folder is linked to one.
   const [closedVisits, setClosedVisits] = useState<ClosedVisit[] | null>(null)
@@ -957,7 +962,9 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
           <WizardStep n={1} title="Which research project?" status="open" canEdit={false} onEdit={() => {}}
                       description="The research project is the same for the whole session. Research projects are kept in the collections folder.">
-            <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />
+            {fixedProject
+              ? <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="The import" onOpenSettings={onOpenSettings} />
+              : <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />}
             {originError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{originError}</p>}
             {projectId && closedVisits !== null && closedVisits.length > 0 && (() => {
               // all of one revision: the visits whose cards were collected on the same trip

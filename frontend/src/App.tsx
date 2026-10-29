@@ -104,11 +104,11 @@ export default function App() {
             ? (resumeSession || closedVisitTarget || deploymentsView === 'import')
               ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} closedVisit={closedVisitTarget ?? undefined} onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings}
                                       onBack={() => { setClosedVisitTarget(null); setResumeSession(null); if (closedVisitTarget || resumeSession) { setDeploymentsView(null); setTask(null) } else setDeploymentsView(null) }} />
+              : deploymentsView === 'many'
+                ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setDeploymentsView(null)} />
               : deploymentsView === 'status'
                 ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
                 : <DeploymentsHomePage onChoose={setDeploymentsView} onBack={() => setTask(null)} />
-            : task === 'deployments'
-              ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
             : task === 'session'
               ? <ImportSessionPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
               : task === 'upload'

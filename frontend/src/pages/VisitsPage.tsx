@@ -6,6 +6,7 @@ import LocationPicker from '../components/LocationPicker'
 import type { ReactNode } from 'react'
 import TaskCard from '../components/TaskCard'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
+import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import Notice from '../components/Notice'
 import WizardStep from '../components/WizardStep'
 import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, SwitchRow, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
@@ -251,7 +252,7 @@ function Field({ id, label, ask, error, children }: { id: string; label: string;
 interface Props {
   onBack: () => void
   /** Opens the settings, on the section given — the page is left as it is under them. */
-  onOpenSettings?: (section: 'trappers' | 'sdcards' | 'cameras' | 'locations', researchProjectId?: string) => void
+  onOpenSettings?: (section: 'trappers' | 'sdcards' | 'cameras' | 'locations' | 'general', researchProjectId?: string) => void
   /** Whether the settings are open: the trappers are read again when they are closed, as they may have been changed. */
   settingsOpen?: boolean
   /** Goes to Import deployment for a visit that was just closed: its research project and the visit whose card was collected. */
@@ -269,6 +270,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const [visits, setVisits] = useState<Visit[]>([])
   // Where the visit was: a research project of the collections folder and one of its locations (the site of the visit).
   const [project, setProject] = useState<LocalResearchProject | undefined>(undefined)
+  // The visits are of the default research project of the settings — it is not picked here, as in Import deployment.
+  const { project: defaultProject, defaultAcronym } = useDefaultResearchProject(settingsOpen)
+  useEffect(() => { if (defaultProject && project?.acronym !== defaultProject.acronym) setProject(defaultProject) }, [defaultProject, project])
   const [location, setLocation] = useState<LocalLocation | undefined>(undefined)
   const [editingWhere, setEditingWhere] = useState(false)
   // When the visit was is confirmed with Continue, not as soon as the picker holds a value (it does while the digits are still being typed).
@@ -590,7 +594,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               {kept && <><br />Visit no. {kept.length + 1} · {sessionOf(kept.length)}{latest(kept) && <> — the last was on {latest(kept)!.date} ({actionsText(latest(kept)!.actions)})</>}</>}
             </>}
           >
-            <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={selectProject} />
+            {defaultProject
+              ? <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="The visit" onOpenSettings={onOpenSettings && ((section) => onOpenSettings(section ?? 'general'))} />
+              : <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={selectProject} />}
             {project && <LocationPicker researchProjectId={project.acronym} trapperPk={project.trapper_pk} value={visit.site} onSelect={selectLocation} />}
           </WizardStep>
 
@@ -823,7 +829,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             description="The visits are kept in the visits file of a research project of the collections folder; the sites of the file must be its locations."
             summary={project?.acronym}
           >
-            <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={(picked) => { setProject(picked); forgetCsv(); setCsvName(null) }} />
+            {defaultProject
+              ? <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="The file" onOpenSettings={onOpenSettings && ((section) => onOpenSettings(section ?? 'general'))} />
+              : <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={(picked) => { setProject(picked); forgetCsv(); setCsvName(null) }} />}
           </WizardStep>
 
           <WizardStep

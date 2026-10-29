@@ -603,7 +603,7 @@ a deployment shows *Dates needed* or *To fix*, open it and pick another source o
 
 ### Import deployments
 
-The **Import deployments** entry of the menu starts like Import collection — the research project, a square for each revision and the closed visits without a deployment — and it is told by how many visits you pick:
+The **Import deployments** entry of *Manage deployments* starts like Import collection — the default research project (fixed, as in Import deployment), a square for each revision and the closed visits without a deployment — and it is told by how many visits you pick:
 
 - **One visit:** it is *Import deployment*, with the visit already chosen: you give the folder with its images.
 - **Several visits:** it goes on as a collection: you give a folder with a subfolder of images for each visit and say which subfolder is of which visit.

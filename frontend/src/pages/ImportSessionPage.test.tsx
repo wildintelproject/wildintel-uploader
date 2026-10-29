@@ -1114,6 +1114,18 @@ describe('an import session of visits', () => {
     expect(screen.queryByText('Folder with the images')).not.toBeInTheDocument()
   })
 
+  it('has the default research project fixed, as Import deployment does, when the page is Import deployments', async () => {
+    mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'DONA' } } as never)
+    const onSingleVisit = vi.fn()
+    render(<ImportSessionPage {...pageProps} title="Import deployments" onSingleVisit={onSingleVisit} />)
+
+    expect(await screen.findByText(/The import is of the default research project/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Research project')).not.toBeInTheDocument() // it is not picked here
+    await userEvent.click(await screen.findByRole('checkbox', { name: /DONA_01 · R0002 · Revision · card A13/ })) // its visits are there already
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+    expect(onSingleVisit).toHaveBeenCalledWith(expect.objectContaining({ researchProjectId: 'DONA' }))
+  })
+
   it('offers only the visits of one session once one is ticked: the session is the revision', async () => {
     render(<ImportSessionPage {...pageProps} />)
     await pickProject()

@@ -8,7 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Added
-- **Import deployments** (new menu entry): pick one or several closed visits — with one it is Import deployment (a folder with the images); with several, a folder with a subfolder of images for each visit, and the subfolder of each is said. The visits have to be of one revision.
+- **Default research project fixed** when registering visits (by hand or from a file) and in Import deployments, as in Import deployment: it is the one of the settings, with a link to change it, and is not picked on the page.
+- **Import deployments** (new entry of *Manage deployments*): pick one or several closed visits — with one it is Import deployment (a folder with the images); with several, a folder with a subfolder of images for each visit, and the subfolder of each is said. The visits have to be of one revision.
 - **Import deployment**: the research project is the default one of the settings (with a link to change it), followed by a square for each revision and the closed visits without a deployment; the first step is called *When was it collected?* and the dates one *Dates of the deployment*. The collection's `FileTimestampLog` (dates) and `FieldworkLog` (details) are one more source — *Log files* — when they have the deployment's row (`GET /api/deployment-import/log-entry`).
 - **Release**: a macOS `.dmg` for Intel Macs (`macos-x86_64`), beside the Apple Silicon one (`macos-arm64`).
 - **Register visits** (new task): the visits to the camera traps — who went, when, to which site and what was done — by hand, from the Epicollect

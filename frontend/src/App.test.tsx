@@ -70,7 +70,7 @@ describe('App', () => {
     render(<App />)
     await getStarted()
     await userEvent.click(await screen.findByRole('button', { name: /manage deployments/i }))
-    await userEvent.click(await screen.findByRole('button', { name: /import deployment/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /Organize a folder/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'finish the import' }))
 
     expect(await screen.findByText('Upload page — DONA / R0003')).toBeInTheDocument()
@@ -80,7 +80,7 @@ describe('App', () => {
     render(<App />)
     await getStarted()
     await userEvent.click(await screen.findByRole('button', { name: /manage deployments/i }))
-    await userEvent.click(await screen.findByRole('button', { name: /import deployment/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /Organize a folder/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'finish the import' }))
     await userEvent.click(await title())
     await getStarted()

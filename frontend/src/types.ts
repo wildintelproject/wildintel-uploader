@@ -345,7 +345,7 @@ export interface PreprocessingOptions {
 }
 
 /** What the app's menu offers — import a deployment, import a whole session of them, or upload one to Trapper. */
-export type Task = 'deployment' | 'deployments' | 'upload' | 'session' | 'upload-session' | 'utils' | 'sync' | 'repair' | 'visits'
+export type Task = 'deployment' | 'upload' | 'session' | 'upload-session' | 'utils' | 'sync' | 'repair' | 'visits'
 
 /** What syncing the local collections folder with Trapper did: for each kind of thing, what it created and what was already there. */
 export interface SyncResult {
