@@ -50,10 +50,10 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('columnheader').slice(0, 5).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Status', 'Deployment'])
+    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Status', 'Actions', 'Deployment'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'R0004-TATR_0001'])
-    expect(within(second).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Closed', 'R0003-TATR_0001'])
+    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'Revision', 'R0004-TATR_0001'])
+    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Closed', 'Installation', 'R0003-TATR_0001'])
   })
 
   it('shows the details of a visit, and creates the deployment of a closed visit that has none yet', async () => {
@@ -65,6 +65,9 @@ describe('VisitBookPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Details of the visit R0004 to TATR_0001' }))
     expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('pilas cambiadas')
+    expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('P800') // the camera, the card and the photos are in the details
+    expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('241')
+    expect(within(screen.getByRole('table', { name: 'Visits' })).queryByRole('columnheader', { name: 'Camera' })).not.toBeInTheDocument()
 
     // only a closed visit offers it — not the open one, nor the closed one already imported
     expect(screen.getAllByRole('button', { name: /Create the deployment of the visit/ })).toHaveLength(1)

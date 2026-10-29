@@ -213,8 +213,8 @@ Press **📋 Manage visits**: it offers **Register visits** and **Show the visit
 Choose a research project and the book shows, in two tabs, the **visits** kept to it — newest first, with a filter — and the **deployments** its visits say, by collection: the closed ones and the ones whose camera is still out, with
 **Write the logs of all the collections again**.
 
-A visit is one row: its **Session**, **Where** (the site), **When**, its **Status** — *Closed* once a later visit collected the card it left, *Open* while that camera is still out, nothing for a visit that left no camera — and the **Deployment** it started,
-then the actions, the camera, the card and the photos. **Details** opens everything the visit says (who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). **Create deployment** appears on a *closed* visit that has no deployment imported yet:
+A visit is one row: its **Session**, **Where** (the site), **When**, its **Status** — *Closed* once a later visit collected the card it left, *Open* while that camera is still out, nothing for a visit that left no camera — the **Actions**
+and the **Deployment** it started. **Details** opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). **Create deployment** appears on a *closed* visit that has no deployment imported yet:
 it opens [Import deployment](#6-import-a-deployment) with the research project and that visit already chosen.
 
 ### Register visits

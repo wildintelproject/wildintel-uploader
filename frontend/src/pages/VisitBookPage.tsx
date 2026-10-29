@@ -81,7 +81,7 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
                         className={`px-4 py-2.5 text-sm font-medium border-l first:border-l-0 border-zinc-300 dark:border-zinc-700 ${view === id ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{label}{n !== undefined ? ` ${n}` : ''}</button>
               ))}
             </div>
-            {view === 'visits' && <input aria-label="Filter the visits" className={`${inputClass} !w-64`} placeholder="Site, session, camera, card, who…" value={filter} onChange={(e) => setFilter(e.target.value)} />}
+            {view === 'visits' && <input aria-label="Filter the visits" className={`${inputClass} !w-64`} placeholder="Site, session, camera, card, who, deployment…" value={filter} onChange={(e) => setFilter(e.target.value)} />}
           </div>
 
           {view === 'visits' && (
@@ -89,7 +89,7 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
               <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
                 <table className="w-full text-sm" aria-label="Visits">
                   <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
-                    <tr>{['Session', 'Where', 'When', 'Status', 'Deployment', 'Actions', 'Camera', 'Card', 'Photos', ''].map((h, i) => <th key={i} scope="col" className="px-3 py-2.5 text-left font-medium">{h || <span className="sr-only">What to do</span>}</th>)}</tr>
+                    <tr>{['Session', 'Where', 'When', 'Status', 'Actions', 'Deployment', ''].map((h, i) => <th key={i} scope="col" className="px-3 py-2.5 text-left font-medium">{h || <span className="sr-only">What to do</span>}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
                     {shown.map((v) => {
@@ -105,11 +105,8 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
                                 ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${v.deployment_status === 'closed' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>{v.deployment_status === 'closed' ? 'Closed' : 'Open'}</span>
                                 : <span className="text-zinc-400">—</span>}
                             </td>
-                            <td className="px-3 py-2 font-mono text-xs">{v.deployment ?? ''}{v.deployment_id ? <span className="ml-1.5 rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300 font-sans">imported</span> : null}</td>
                             <td className="px-3 py-2">{v.actions.join(' + ')}</td>
-                            <td className="px-3 py-2 font-mono">{v.camera_id ?? ''}</td>
-                            <td className="px-3 py-2 font-mono">{v.sd ?? ''}</td>
-                            <td className="px-3 py-2">{v.num_photos ?? ''}</td>
+                            <td className="px-3 py-2 font-mono text-xs">{v.deployment ?? ''}{v.deployment_id ? <span className="ml-1.5 rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300 font-sans">imported</span> : null}</td>
                             <td className="px-3 py-2 whitespace-nowrap">
                               <div className="flex flex-col gap-1.5 items-stretch">
                                 <button type="button" className={`${btnOutline} !px-2.5 !py-1 !text-xs`} aria-expanded={opened === key} aria-label={`Details of the visit ${v.session} to ${v.location_id}`} onClick={() => setOpened(opened === key ? null : key)}>Details</button>
@@ -121,7 +118,7 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
                           </tr>
                           {opened === key && (
                             <tr>
-                              <td colSpan={10} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
+                              <td colSpan={7} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
                                 <dl aria-label={`Details of the visit ${v.session} to ${v.location_id}`} className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
                                   <div className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">Actions</dt><dd>{v.actions.join(' + ')}</dd></div>
                                   {DETAILS.filter(([k]) => { const value = v[k]; return value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0) })
@@ -133,7 +130,7 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
                         </Fragment>
                       )
                     })}
-                    {shown.length === 0 && <tr><td colSpan={10} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{visits.length === 0 ? 'No visit has been registered to this research project yet.' : 'No visit matches.'}</td></tr>}
+                    {shown.length === 0 && <tr><td colSpan={7} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{visits.length === 0 ? 'No visit has been registered to this research project yet.' : 'No visit matches.'}</td></tr>}
                   </tbody>
                 </table>
               </div>
