@@ -24,13 +24,15 @@ interface Props {
   onSelect: (location: LocalLocation | undefined) => void
   /** Called with what went wrong (or null once it is gone), should the page want to say it too. */
   onError?: (message: string | null) => void
+  /** When given, a new location is not made here but in the settings: the picker only points there — and has no card of its own, as the step says what it is. */
+  onCreateInSettings?: () => void
 }
 
 const label = (l: { location_id: string; name?: string | null }) => `${l.location_id}${l.name ? ` — ${l.name}` : ''}`
 
 /** The location of a research project, as the "Where and when was it taken?" step of Import deployment asks for it: one of those kept in the
  * collections folder, picked from a list that filters as you type — or a new one, by hand or taken from Trapper. */
-export default function LocationPicker({ researchProjectId, trapperPk, value, onSelect, onError }: Props) {
+export default function LocationPicker({ researchProjectId, trapperPk, value, onSelect, onError, onCreateInSettings }: Props) {
   const [locations, setLocations] = useState<LocalLocation[]>([])
   const [adding, setAdding] = useState(false)
   const [source, setSource] = useState<OriginSource | null>(null)
@@ -191,8 +193,8 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
 
   const connectionForm = <TrapperAccountNotice account={account} conn={conn} onRetry={handleTestConnection} />
 
-  return (
-    <FormCard title="Location" description={`Locations of ${researchProjectId}, found in the collections folder.`}>
+  const content = (
+    <>
       {!adding ? (
         <>
           <label className={labelClass} htmlFor="origin-location">Location</label>
@@ -206,9 +208,16 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
           {lacksCoordinates(picked) && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{value} has no coordinates, and a deployment needs them — pick another location.</p>
           )}
-          <div className="mt-3">
-            <button type="button" className={btnOutline} onClick={startAdding}>➕ Add a new location</button>
-          </div>
+          {onCreateInSettings ? (
+            <p className={`${hintClass} mt-3`}>
+              The location is not here? A new location is created in the settings:{' '}
+              <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={onCreateInSettings}>go to Settings › Locations</button>.
+            </p>
+          ) : (
+            <div className="mt-3">
+              <button type="button" className={btnOutline} onClick={startAdding}>➕ Add a new location</button>
+            </div>
+          )}
         </>
       ) : (
         <div>
@@ -291,6 +300,7 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
         </div>
       )}
       {error && <p className="text-sm text-red-600 dark:text-red-400 mt-3">{error}</p>}
-    </FormCard>
+    </>
   )
+  return onCreateInSettings ? <div>{content}</div> : <FormCard title="Location" description={`Locations of ${researchProjectId}, found in the collections folder.`}>{content}</FormCard>
 }

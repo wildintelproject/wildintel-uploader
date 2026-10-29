@@ -8,10 +8,10 @@ describe('UploadsHomePage', () => {
     const onChoose = vi.fn(), onBack = vi.fn()
     render(<UploadsHomePage onChoose={onChoose} onBack={onBack} />)
 
-    expect(screen.getByRole('heading', { name: 'Manage uploads to Trapper' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Manage uploads' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /upload deployment to trapper/i }))
     expect(onChoose).toHaveBeenLastCalledWith('upload')
-    await userEvent.click(screen.getByRole('button', { name: /show uploads status/i }))
+    await userEvent.click(screen.getByRole('button', { name: /uploads dashboard/i }))
     expect(onChoose).toHaveBeenLastCalledWith('status')
     await userEvent.click(screen.getByRole('button', { name: /back/i }))
     expect(onBack).toHaveBeenCalled()

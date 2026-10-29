@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import FieldDeployments from '../components/FieldDeployments'
+import { MENU_ICONS, PageHeader } from '../components/TaskCard'
+import { readDeployment } from '../deploymentDetails'
 import type { FieldDeployment } from '../types'
 import { btnOutline } from './ImportDeploymentPage'
 
@@ -23,7 +25,7 @@ export function uploadsOf(deployments: FieldDeployment[]) {
   })
 }
 
-/** The status of the uploads to Trapper of the default research project: each revision with how many of its deployments are on Trapper and how many wait, and the deployments below. */
+/** The dashboard of the uploads to Trapper of the default research project: each revision with how many of its deployments are on Trapper and how many wait, and the deployments below. */
 export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen }: Props) {
   const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
@@ -43,14 +45,13 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen 
   const revisions = deployments ? uploadsOf(deployments) : []
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8">
-      <h4 className="text-lg font-semibold mb-1">Uploads status</h4>
-      <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">What is on Trapper and what is still to be uploaded, by revision and by deployment.</p>
-
-      <DefaultResearchProject project={project} defaultAcronym={defaultAcronym} of="The status" onOpenSettings={onOpenSettings} />
+      <PageHeader icon={MENU_ICONS.upload} title="Uploads dashboard" description="What is on Trapper and what is still to be uploaded, by revision and by deployment."
+        parent="Manage uploads" onParent={onBack}
+        aside={project !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The dashboard" onOpenSettings={onOpenSettings} /> : undefined} />
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {project && deployments === null && <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p>}
-      {deployments !== null && <FieldDeployments deployments={deployments} initialFilter="to_upload" belowSummary={revisions.length > 0 && (
+      {deployments !== null && <FieldDeployments deployments={deployments} initialFilter="created" loadDetails={(id) => readDeployment(project!.acronym, id)} belowSummary={revisions.length > 0 && (
   <section aria-label="Uploads by revision" className="mb-6">
     <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
       <table className="w-full text-sm" aria-label="Revisions">

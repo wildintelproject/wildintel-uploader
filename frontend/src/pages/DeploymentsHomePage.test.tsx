@@ -13,7 +13,7 @@ describe('DeploymentsHomePage', () => {
     expect(onChoose).toHaveBeenLastCalledWith('import')
     await userEvent.click(screen.getByRole('button', { name: /Pick one or several closed visits/ }))
     expect(onChoose).toHaveBeenLastCalledWith('many')
-    await userEvent.click(screen.getByRole('button', { name: /show deployments status/i }))
+    await userEvent.click(screen.getByRole('button', { name: /deployments dashboard/i }))
     expect(onChoose).toHaveBeenLastCalledWith('status')
     await userEvent.click(screen.getByRole('button', { name: /back/i }))
     expect(onBack).toHaveBeenCalled()

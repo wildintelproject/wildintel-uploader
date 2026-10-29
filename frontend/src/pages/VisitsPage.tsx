@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton'
 import Combobox from '../components/Combobox'
 import LocationPicker from '../components/LocationPicker'
 import type { ReactNode } from 'react'
-import TaskCard from '../components/TaskCard'
+import TaskCard, { PageHeader } from '../components/TaskCard'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import Notice from '../components/Notice'
@@ -18,7 +18,7 @@ import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchPro
 export type VisitSource = 'manual' | 'epicollect' | 'csv'
 
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
-  { value: 'manual', icon: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />, title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.' },
+  { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.' },
   { value: 'epicollect', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'From Wildintel Epicollect', description: 'Read the visits of a field trip from the Epicollect download.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'From a spreadsheet file', description: 'Any spreadsheet: say which column gives each field of a visit.' },
 ]
@@ -571,8 +571,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
 
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
-      <h4 className="text-lg font-semibold mb-1">Register visits</h4>
-      <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">The visits to the camera traps, from which the deployments are worked out.</p>
+      <PageHeader icon={<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />} title="Register visits" description="The visits to the camera traps, from which the deployments are worked out." parent="Manage visits" onParent={onBack}
+        aside={defaultProject !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={defaultProject} defaultAcronym={defaultAcronym} of="The visits" onOpenSettings={onOpenSettings && ((section) => onOpenSettings(section ?? 'general'))} /> : undefined} />
       <WizardStep
         n={1} title="Where do the visits come from?" status={source ? 'done' : 'open'} canEdit onEdit={() => setSource(null)}
         description="Enter them by hand, or read them from a file."
@@ -589,16 +589,16 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
           <>
           <WizardStep
             n={2} title="Where was the visit?" status={whereDone ? 'done' : 'open'} canEdit onEdit={() => setEditingWhere(true)}
-            description="The research project and the location of the visit. They are kept in the collections folder — pick one that is already there, or add a new research project."
+            description={defaultProject
+              ? `Select the location of the visit within the research project ${defaultProject.acronym}.`
+              : 'The research project and the location of the visit. They are kept in the collections folder — pick one that is already there, or add a new research project.'}
             summary={project && <>
               {project.acronym} · {visit.site}{location?.name ? `, ${location.name}` : ''}
               {kept && <><br />Visit no. {kept.length + 1} · {sessionOf(kept.length)}{latest(kept) && <> — the last was on {latest(kept)!.date} ({actionsText(latest(kept)!.actions)})</>}</>}
             </>}
           >
-            {defaultProject
-              ? <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="The visit" onOpenSettings={onOpenSettings && ((section) => onOpenSettings(section ?? 'general'))} />
-              : <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={selectProject} />}
-            {project && <LocationPicker researchProjectId={project.acronym} trapperPk={project.trapper_pk} value={visit.site} onSelect={selectLocation} />}
+            {!defaultProject && <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={selectProject} />}
+            {project && <LocationPicker researchProjectId={project.acronym} trapperPk={project.trapper_pk} value={visit.site} onSelect={selectLocation} onCreateInSettings={onOpenSettings && (() => onOpenSettings('locations'))} />}
           </WizardStep>
 
           <WizardStep
@@ -623,9 +623,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     />
                     {trappers.length === 0 && <p className={hintClass}>The settings have no trappers yet.</p>}
                     {onOpenSettings && (
-                      <div className="mt-3">
-                        <button type="button" className={btnOutline} onClick={() => onOpenSettings('trappers')}>➕ Add a new trapper</button>
-                      </div>
+                      <p className={`${hintClass} mt-3`}>
+                        The trapper is not here? A new trapper is created in the settings:{' '}
+                        <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => onOpenSettings('trappers')}>go to Settings › Trappers</button>.
+                      </p>
                     )}
                     {chosen.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-3" role="list" aria-label="Who went">
@@ -831,7 +832,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             summary={project?.acronym}
           >
             {defaultProject
-              ? <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="The file" onOpenSettings={onOpenSettings && ((section) => onOpenSettings(section ?? 'general'))} />
+              ? <p className="text-sm text-zinc-600 dark:text-zinc-300">The file is of the default research project, <span className="font-mono font-semibold">{defaultProject.acronym}</span> — it is changed in the settings, from the card at the top right.</p>
               : <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={(picked) => { setProject(picked); forgetCsv(); setCsvName(null) }} />}
           </WizardStep>
 

@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 import { api } from '../api'
 import { defaultResearchProject } from '../defaultResearchProject'
 import RevisionSquares from '../components/RevisionSquares'
+import { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { TrapperCredentials } from '../api'
 import CheckboxList from '../components/CheckboxList'
@@ -2358,10 +2359,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
       <TimeFixPage initial={{ folder: sourceDir, researchProjectId: selectedProjectId, visit: linkedVisit?.visit }} onBack={() => setFixingDates(false)} />
     )}
     <div className={fixingDates ? 'hidden' : 'mx-auto max-w-[900px] px-4 py-8'}>
-      <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">Import deployment</h2>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-        Organizes a folder of camera-trap images into a local collection. It doesn't upload them to Trapper yet.
-      </p>
+      <PageHeader icon={MENU_ICONS.deployment} title="Import deployment" description="Organizes a folder of camera-trap images into a local collection. It doesn't upload them to Trapper yet."
+        parent="Manage deployments" onParent={onBack}
+        aside={defaultProject !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={defaultProject} defaultAcronym={defaultAcronym} of="This deployment" onOpenSettings={onOpenSettings} /> : undefined} />
 
       {/* Step indicator */}
       <div className="flex items-start mb-10">
@@ -2576,7 +2576,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                         {selectedLocation.latitude != null && selectedLocation.longitude != null && <>GPS {selectedLocation.latitude}, {selectedLocation.longitude} · </>}Timezone {timezone || 'unknown'}
                       </>}>
           {usesDefaultProject && !addingProject ? (
-            <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="This deployment" onOpenSettings={onOpenSettings} />
+            <p className="text-sm text-zinc-600 dark:text-zinc-300">This deployment is of the default research project, <span className="font-mono font-semibold">{defaultProject!.acronym}</span> — it is changed in the settings, from the card at the top right.</p>
           ) : (
           <FormCard title="Research project" description="Those found in the collections folder.">
             {!addingProject ? (

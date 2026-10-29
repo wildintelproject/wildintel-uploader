@@ -28,7 +28,7 @@ describe('MenuPage', () => {
     const onChoose = vi.fn()
     render(<MenuPage onChoose={onChoose} />)
 
-    const uploadButton = screen.getByRole('button', { name: /manage uploads to trapper/i })
+    const uploadButton = screen.getByRole('button', { name: /manage uploads/i })
     expect(uploadButton).toBeEnabled()
     expect(screen.getByText(/which deployments and revisions are on trapper/i)).toBeInTheDocument()
 

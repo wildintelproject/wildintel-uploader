@@ -16,6 +16,7 @@ import UtilsPage from './pages/UtilsPage'
 import VisitsHomePage from './pages/VisitsHomePage'
 import DeploymentsHomePage from './pages/DeploymentsHomePage'
 import DeploymentStatusPage from './pages/DeploymentStatusPage'
+import type { VisitFocus } from './pages/VisitBookPage'
 import type { DeploymentsView } from './pages/DeploymentsHomePage'
 import WelcomePage from './pages/WelcomePage'
 import { api } from './api'
@@ -49,6 +50,7 @@ export default function App() {
   // What Manage deployments shows: its options (none), the import or the status — on a deployment when a link of the visit book sent the user to it.
   const [uploadsView, setUploadsView] = useState<UploadsView | null>(null)
   const [deploymentsView, setDeploymentsView] = useState<DeploymentsView | null>(null)
+  const [visitFocus, setVisitFocus] = useState<VisitFocus | undefined>(undefined)
   const [deploymentFocus, setDeploymentFocus] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -75,7 +77,7 @@ export default function App() {
   }, [])
 
   function goHome() {
-    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setClosedVisitTarget(null); setDeploymentsView(null); setUploadsView(null); setDeploymentFocus(undefined); setMenuShown(false); setHome(true)
+    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setClosedVisitTarget(null); setDeploymentsView(null); setUploadsView(null); setDeploymentFocus(undefined); setVisitFocus(undefined); setMenuShown(false); setHome(true)
   }
 
   function goToImportOfVisit(target: ClosedVisitTarget) {
@@ -84,6 +86,10 @@ export default function App() {
 
   function goToDeploymentStatus(deploymentId: string) {
     setDeploymentFocus(deploymentId); setDeploymentsView('status'); setTask('deployment')
+  }
+
+  function goToVisit(target: VisitFocus) {
+    setVisitFocus(target); setTask('visits')
   }
 
   function goToUpload(target: UploadTarget) {
@@ -110,7 +116,7 @@ export default function App() {
               : deploymentsView === 'many'
                 ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setDeploymentsView(null)} />
               : deploymentsView === 'status'
-                ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
+                ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onShowVisit={goToVisit} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
                 : <DeploymentsHomePage onChoose={setDeploymentsView} onBack={() => setTask(null)} />
             : task === 'session'
               ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
@@ -127,7 +133,7 @@ export default function App() {
               : task === 'repair'
               ? <RepairPage onBack={() => setTask(null)} />
               : task === 'visits'
-              ? <VisitsHomePage settingsOpen={settingsOpen} onOpenSettings={openSettings} onImportImages={goToImportOfVisit} onShowDeployment={goToDeploymentStatus} onBack={() => setTask(null)} />
+              ? <VisitsHomePage settingsOpen={settingsOpen} onOpenSettings={openSettings} onImportImages={goToImportOfVisit} onShowDeployment={goToDeploymentStatus} focusVisit={visitFocus} onBack={() => { setTask(null); setVisitFocus(undefined) }} />
               : showResumeScreen
                 ? (
                   <ResumeSessionsPage
@@ -138,7 +144,7 @@ export default function App() {
                   />
                 )
                 : menuShown
-                  ? <MenuPage onChoose={(t) => { setClosedVisitTarget(null); setUploadTarget(null); setUploadsView(null); setDeploymentsView(null); setDeploymentFocus(undefined); setTask(t) }} />
+                  ? <MenuPage onChoose={(t) => { setClosedVisitTarget(null); setUploadTarget(null); setUploadsView(null); setDeploymentsView(null); setDeploymentFocus(undefined); setVisitFocus(undefined); setTask(t) }} />
                   : <WelcomePage onStart={() => { setHome(false); if (!unfinishedSessions?.length) setMenuShown(true) }} />}
         </div>
       </main>

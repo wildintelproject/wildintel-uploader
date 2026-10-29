@@ -66,7 +66,7 @@ describe('VisitBookPage', () => {
     expect(await screen.findByText(/is not in the collections folder/)).toBeInTheDocument()
   })
 
-  it('has a row for each location not visited in a session, as Not done, with no buttons', async () => {
+  it('has a row for each location not visited in a session, as Planned, with no buttons', async () => {
     mockedApi.visitBook.mockResolvedValue({ results: [
       visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'closed' }),
       visit({ location_id: 'TATR_0002', session: 'R0001', date: '', time: '', actions: [], sd: null, camera_id: null, trappers: null, not_done: true, when: null }),
@@ -75,10 +75,10 @@ describe('VisitBookPage', () => {
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     const [done, notDone] = within(table).getAllByRole('row').slice(1)
-    expect(within(notDone).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', '', 'Not done'])
+    expect(within(notDone).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', '', 'Planned'])
     expect(within(notDone).queryByRole('button')).not.toBeInTheDocument()
     expect(within(done).getByRole('button', { name: /View the visit/ })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /^Not done/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Planned/ }))
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
   })
 
@@ -93,22 +93,22 @@ describe('VisitBookPage', () => {
     const squares = await screen.findByRole('region', { name: 'Visits by status' })
     const square = (name: RegExp) => within(squares).getByRole('button', { name })
 
-    expect(square(/^All the visits/)).toHaveTextContent('4')
-    expect(square(/^Not done/)).toHaveTextContent('1')
-    expect(square(/^Open/)).toHaveTextContent('1')
-    expect(square(/^Closed/)).toHaveTextContent('2')
-    expect(square(/^No deployment yet/)).toHaveTextContent('1')            // closed, and no deployment created yet
+    expect(within(squares).getByText('Visits completed').parentElement).toHaveTextContent('3 / 4')
+    expect(square(/^Planned/)).toHaveTextContent('1')
+    expect(square(/^Deployed/)).toHaveTextContent('1')
+    expect(square(/^Collected/)).toHaveTextContent('1')                   // the card collected, and no deployment made yet
+    expect(square(/^Stored/)).toHaveTextContent('1')                      // the deployment is made: the images are stored
     expect(within(squares).getByRole('progressbar', { name: 'Visits done' })).toHaveAttribute('aria-valuenow', '3')
-    expect(within(squares).getByText('3 of 4 visits done (75%)')).toBeInTheDocument()
+    expect(within(squares).getByText('3 of 4 visits done (75%) · 1 pending')).toBeInTheDocument()
 
     const table = screen.getByRole('table', { name: 'Visits' })
-    await userEvent.click(square(/^No deployment yet/))
-    expect(square(/^No deployment yet/)).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(square(/^Collected/))
+    expect(square(/^Collected/)).toHaveAttribute('aria-pressed', 'true')
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
-    await userEvent.click(square(/^No deployment yet/))                      // pressed again: all
+    await userEvent.click(square(/^Collected/))                              // pressed again: all
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(4)
-    await userEvent.click(square(/^Closed/))
-    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2)
+    await userEvent.click(square(/^Stored/))
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
   })
 
   it('has a square for each revision — one visit to every site — with how many are done, and the status squares follow the one picked', async () => {
@@ -124,20 +124,28 @@ describe('VisitBookPage', () => {
     const pick = (name: RegExp) => within(revisions).getByRole('button', { name })
 
     expect(within(revisions).getAllByRole('button').map((b) => b.textContent)).toEqual(['All revisions2 of 5 done', 'R00030 of 1 done', 'R00021 of 2 done', 'R00011 of 2 done'])
-    expect(screen.getByRole('heading', { name: 'Visits by status' })).toBeInTheDocument()
 
     await userEvent.click(pick(/^R0002/))
     expect(pick(/^R0002/)).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('heading', { name: 'Revision R0002: visits by status' })).toBeInTheDocument()
     const squares = screen.getByRole('region', { name: 'Visits by status' })
-    expect(within(squares).getByRole('button', { name: /^All the visits/ })).toHaveTextContent('2')    // the two rows of R0002
-    expect(within(squares).getByRole('button', { name: /^Open/ })).toHaveTextContent('1')
-    expect(within(squares).getByText('1 of 2 visits done (50%)')).toBeInTheDocument()
+    expect(within(squares).getByRole('button', { name: /^Deployed/ })).toHaveTextContent('1')
+    expect(within(squares).getByText('1 of 2 visits done (50%) · 1 pending')).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Visits' })
     expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0002', 'R0002'])
 
     await userEvent.click(pick(/^All revisions/))
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(5)
+  })
+
+  it('filters by status from the selector as from the cards', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'open' }),
+      visit({ session: 'R0001', location_id: 'TATR_0002', date: '', time: '', actions: [], not_done: true, sd: null, camera_id: null, trappers: null }),
+    ] })
+    await pickProject()
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Status' }), 'Planned')
+    expect(within(screen.getByRole('table', { name: 'Visits' })).getAllByRole('row').slice(1)).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Planned' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('pages the visits, ten at a time, and goes back to the first page when the filter changes', async () => {
@@ -146,11 +154,11 @@ describe('VisitBookPage', () => {
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(10)
-    expect(screen.getByRole('status')).toHaveTextContent('Visits 1–10 of 23')
+    expect(screen.getByRole('status')).toHaveTextContent('Showing 1–10 of 23 visits')
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Page 3' }))
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(3)
-    expect(screen.getByRole('status')).toHaveTextContent('Visits 21–23 of 23')
+    expect(screen.getByRole('status')).toHaveTextContent('Showing 21–23 of 23 visits')
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Previous page' }))
     expect(screen.getByRole('button', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page')
@@ -191,21 +199,18 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('columnheader').slice(0, 7).map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images stored', 'On Trapper'])
+    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Revision', 'Open', ''])
+    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Revision', 'Deployed', ''])
     // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not
-    expect(within(table).getAllByRole('img', { name: 'Images stored' })).toHaveLength(1) // only the tick, not the id of the deployment
+    expect(within(table).getAllByRole('button', { name: /^Details of the deployment/ })).toHaveLength(1) // "Show image details", not the id of the deployment
+    expect(within(table).getByRole('button', { name: /^Details of the deployment/ })).toHaveTextContent('Show image details')
     expect(within(table).queryByText('R0003-TATR_0002')).not.toBeInTheDocument()
     expect(within(table).getAllByLabelText('Images not stored')).toHaveLength(1) // the open visit: nothing to store yet
-    // and whether they were uploaded to Trapper
-    expect(within(table).getAllByRole('img', { name: 'On Trapper' })).toHaveLength(1)
-    expect(within(table).getByRole('img', { name: 'On Trapper' })).toHaveAttribute('title', 'Uploaded to Trapper on 2024-10-20')
-    expect(within(table).getAllByRole('img', { name: 'Not on Trapper' })).toHaveLength(2)
-    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Installation', 'Closed', 'Create deployment'])
+    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Installation', 'Collected', 'Create deployment'])
   })
 
-  it('links the tick of the images stored to the status of the deployment', async () => {
+  it('links the Show image details button to the status of the deployment', async () => {
     const onShowDeployment = vi.fn()
     render(<VisitBookPage onBack={vi.fn()} onShowDeployment={onShowDeployment} />)
     await screen.findByRole('table', { name: 'Visits' })
@@ -230,5 +235,22 @@ describe('VisitBookPage', () => {
     expect(screen.getAllByRole('button', { name: /Create the deployment of the visit/ })).toHaveLength(1)
     await userEvent.click(screen.getByRole('button', { name: 'Create the deployment of the visit R0003 to TATR_0001' }))
     expect(onImportImages).toHaveBeenCalledWith({ researchProjectId: 'TATR', visit: expect.objectContaining({ session: 'R0003', location_id: 'TATR_0001' }) })
+  })
+
+  it('says where it hangs from, Manage visits, and goes back there', async () => {
+    const onBack = vi.fn()
+    render(<VisitBookPage onBack={onBack} onOpenSettings={vi.fn()} />)
+
+    const here = await screen.findByRole('navigation', { name: 'You are here' })
+    expect(here).toHaveTextContent('Manage visits›Visit dashboard')
+    await userEvent.click(within(here).getByRole('button', { name: 'Manage visits' }))
+    expect(onBack).toHaveBeenCalled()
+  })
+
+  it('opens on the visit a link of the deployments dashboard goes to: its revision picked and its details open', async () => {
+    render(<VisitBookPage onBack={vi.fn()} focus={{ session: 'R0003', site: 'TATR_0002' }} />)
+
+    expect(await screen.findByLabelText('Details of the visit R0003 to TATR_0002', { selector: 'dl' })).toHaveTextContent('P900')
+    expect(within(screen.getByRole('region', { name: 'Revision' })).getByRole('button', { name: /^R0003/ })).toHaveAttribute('aria-pressed', 'true')
   })
 })

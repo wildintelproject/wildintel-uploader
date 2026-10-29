@@ -176,9 +176,9 @@ Once it is configured, the menu is where you choose what you want to do:
 
 | Task | What it's for |
 |---|---|
-| 📋 **Manage visits** | **Register visits** to the camera traps — who went, when, to which site and what was done — or **show the visit book**. The deployments are worked out from the visits. |
+| 📋 **Manage visits** | **Register visits** to the camera traps — who went, when, to which site and what was done — or the **visit dashboard**. The deployments are worked out from the visits. |
 | 📷 **Manage deployments** | **Import deployment** — check one folder of images and organize it in the collections folder —, **Import deployments** — one or several closed visits — or **show the status of the deployments**. |
-| ☁️ **Manage uploads to Trapper** | **Upload deployment to Trapper** — send deployments already kept locally — or **show the status of the uploads**: each revision with how many of its deployments are on Trapper, and the deployments still to be uploaded. |
+| ☁️ **Manage uploads** | **Upload deployment to Trapper** — send deployments already kept locally — or **show the status of the uploads**: each revision with how many of its deployments are on Trapper, and the deployments still to be uploaded. |
 | 🧰 **Utils** | *Check and fix dates and times* compares the dates of a folder's images with the period of the visit, when the camera clock went wrong, and shifts or removes the ones that cannot be trusted (every fix is written down). Maintenance of the local collections: *Sync local collections* brings the collections folder up to date with what Trapper already has, and *Repair local deployments* checks which deployments are still valid and writes the metadata files of the others again from their folders. |
 
 ![The task menu](img/screenshots/menu.png)
@@ -203,18 +203,18 @@ folder was chosen. Passwords are never saved with a run.
 
 ## 5. Manage visits
 
-Press **📋 Manage visits**: it offers **Register visits** and **Show the visit book**.
+Press **📋 Manage visits**: it offers **Register visits** and **Visit dashboard**.
 
-### Show the visit book
+### Visit dashboard
 
 ![The visit book](img/screenshots/visit-book.png)
 
 The book is of the **default research project** (the one set in Settings › General), which it names at the top with a link to the settings where it is changed. It shows, in two tabs, the **visits** kept to it — newest first, with a filter — and the **deployments** its visits say, by collection: the closed ones and the ones whose camera is still out.
 
-Besides the visits made, the book has a row — status **Not done**, with no day, no actions and no buttons — for each location of the research project (but the retired ones) that has no visit in a session the visits have: if the project has 60 locations, each session has 60 rows. The list is paged, ten rows at a time, can be filtered by text, by **revision** and by status — above the list, a square for each **revision** (one visit to every site: *All revisions*, *R0003*, *R0002*… each with *N of M done*) narrows everything to the one picked, and five **squares** above the list count the rows (*All the visits*, *Not done*, *Open*, *Closed* and *No deployment yet*: closed, ready to create) and pressing one shows only those; a bar and *N of M visits done* sum it up —, and **sorted by a column** — press its name, and again to turn it round (the rows not made always go last).
+Besides the visits made, the book has a row — status **Planned**, with no day, no actions and no buttons — for each location of the research project (but the retired ones) that has no visit in a session the visits have: if the project has 60 locations, each session has 60 rows. The list is paged, ten rows at a time, can be filtered by text, by **revision** and by status — above the list, a square for each **revision** (one visit to every site: *All revisions*, *R0003*, *R0002*… each with *N of M done*) narrows everything to the one picked, and four **cards** above the list count the rows (*Planned*, *Deployed*, *Collected* and *Stored*) and pressing one shows only those; a bar and *N of M visits done* sum it up —, and **sorted by a column** — press its name, and again to turn it round (the rows not made always go last).
 
-A visit is one row: its **Session**, **Where** (the site), **When**, the **Actions**, its **Status** — *Closed* once a later visit collected the card it left, *Open* while that camera is still out, nothing for a visit that left no camera —
-and **Images stored**: a **tick** once the deployment is created and its images imported, with a **Deployment details** link that opens [Show deployments status](#show-deployments-status) on that deployment; a **Create deployment** button on a *closed* visit that has none yet — it opens [Import deployment](#import-a-deployment) with the research project and that visit already chosen —; and a grey crossed circle on an *open* visit, whose card has not been collected. **On Trapper** says whether that deployment is on Trapper — a tick when it was uploaded from here (the day is in its tooltip) or synced from there, a grey crossed circle when not. **View** (the eye button, as in the entities) opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
+A visit is one row: its **Session**, **Where** (the site), **When**, the **Actions**, its **Status**, which follows the life of a visit — *Planned* (not made yet), *Deployed* (it left a camera that is still out), *Collected* (a later visit collected the card it left) and *Stored* (its deployment is made, so the images are stored); nothing for a visit that left no camera —
+and **Images**: a **Show image details** button once the deployment is made and its images are stored, which opens [Deployments dashboard](#show-deployments-status) on that deployment; a **Create deployment** button on a *collected* visit that has none yet — it opens [Import deployment](#import-a-deployment) with the research project and that visit already chosen —; and a grey crossed circle on a *deployed* visit, whose card has not been collected. **View** (the eye button, as in the entities) opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
 ### Register visits
 
 Press **Register visits**.
@@ -278,10 +278,9 @@ closed deployments' start and end, as the cameras' wall clock) and its `<R000N>_
 
 ## 6. Manage deployments
 
-### Show deployments status
+### Deployments dashboard
 
-Press **📷 Manage deployments**, then **Show deployments status**. It is of the **default research project**, and it is a book: a square for each **revision** (*All revisions*, *R0003*… with how many deployments each has), the **status squares** of the one picked — *Deployments of R0003*, *Deployed* (the camera is still out), *Collected* (the camera is back, its images not imported yet), *Imported* (the images are stored)
-and *Not on Trapper yet* (closed, with the images stored, ready to upload) — and a table with the deployment, where, its status, its period, its card and photos, and whether it is on Trapper. The **Deployment details** link of a visit of the visit book opens it on that deployment.
+Press **📷 Manage deployments**, then **Deployments dashboard**. It is of the **default research project**, and it is a book: a square for each **revision** (*All revisions*, *R0003*… with how many deployments each has), a ring with the share of the deployments that are created, and three **cards** that count them — *Not created* (the images are collected, but not stored), *Created* (the images are stored, not uploaded yet) and *Uploaded* (on Trapper); pressing one shows only those —, a search box, a *Status* filter and a table with the deployment, where, **when** — the visit that started it (a link that opens the [visit dashboard](#visit-dashboard) on that visit, with its details) and the period —, its card and photos, its **Creation** (*Not created* or *Created*) and its **Upload** (*Uploaded* or *Not uploaded*). The camera still out or the card not imported is the state of the *visit*, not of the deployment. The **Show image details** button of a visit of the visit dashboard opens it on that deployment.
 
 ![The status of the deployments](img/screenshots/deployments-status.png)
 
@@ -604,7 +603,7 @@ a deployment shows *Dates needed* or *To fix*, open it and pick another source o
 
 ![Upload — what to upload](img/screenshots/upload.png)
 
-Press **☁️ Manage uploads to Trapper**, then **Upload deployment to Trapper**. (The other option, **Show uploads status**, lists the revisions of the default research project with how many of their deployments are on Trapper, and the deployments that are closed, with their images stored, and not on Trapper yet.) It sends deployments kept in the collections folder.
+Press **☁️ Manage uploads**, then **Upload deployment to Trapper**. (The other option, **Uploads dashboard**, lists the revisions of the default research project with how many of their deployments are on Trapper, and the deployments that are closed, with their images stored, and not on Trapper yet.) It sends deployments kept in the collections folder.
 For each one it does what wildintel-tools did in three commands:
 
 1. creates the **location** in Trapper, from the deployment's coordinates, if the research project

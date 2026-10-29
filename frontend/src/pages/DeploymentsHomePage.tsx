@@ -1,4 +1,4 @@
-import TaskCard from '../components/TaskCard'
+import TaskCard, { MENU_ICONS, SectionHeader } from '../components/TaskCard'
 import { btnOutline } from './ImportDeploymentPage'
 
 export type DeploymentsView = 'import' | 'many' | 'status'
@@ -12,15 +12,14 @@ interface Props {
 export default function DeploymentsHomePage({ onBack, onChoose }: Props) {
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
-      <h1 className="text-2xl font-bold mb-1">Manage deployments</h1>
-      <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">Import the images of a deployment, or see how far the deployments are.</p>
+      <SectionHeader icon={MENU_ICONS.deployment} title="Manage deployments" description="Import the images of a deployment, or see how far the deployments are." onMenu={onBack} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <TaskCard icon={<><path d="M18 20V10M12 20V4M6 20v-6" /></>} title="Deployments dashboard"
+                  description="The deployments the visits say and their statistics: which are created (their images stored), which are not yet, and which are uploaded to Trapper." onClick={() => onChoose('status')} />
         <TaskCard icon={<><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></>} title="Import deployment"
                   description="Organize a folder of camera-trap images on this computer, then register the deployment in Trapper." onClick={() => onChoose('import')} />
         <TaskCard icon={<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />} title="Import deployments"
                   description="Pick one or several closed visits whose images you have: one is a folder of images, several a folder with a subfolder of images for each." onClick={() => onChoose('many')} />
-        <TaskCard icon={<><path d="M18 20V10M12 20V4M6 20v-6" /></>} title="Show deployments status"
-                  description="The deployments the visits say and their statistics: closed with their images stored, camera still out, and the ones not on Trapper yet." onClick={() => onChoose('status')} />
       </div>
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>

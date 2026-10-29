@@ -211,6 +211,19 @@ describe('VisitsPage', () => {
     expect(onOpenSettings).toHaveBeenCalledWith('cameras')
   })
 
+  it('says to create a location in the settings, instead of offering to add one here', async () => {
+    const onOpenSettings = vi.fn()
+    render(<VisitsPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
+    await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+
+    expect(await screen.findByLabelText('Location')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add a new location/i })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'go to Settings › Locations' }))
+    expect(onOpenSettings).toHaveBeenCalledWith('locations')
+  })
+
   it('answers what is yes or no with a switch, on when all is well, and saves what is off as the code of the datasheet', async () => {
     installedBefore()
     await chooseByHand()
@@ -606,17 +619,17 @@ describe('VisitsPage', () => {
     await pickWhere()
 
     expect(await screen.findByText('The settings have no trappers yet.')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /add a new trapper/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'go to Settings › Trappers' }))
     expect(onOpenSettings).toHaveBeenCalledWith('trappers')
   })
 
-  it('has the button to add a new trapper under the list also when there are some', async () => {
+  it('points to the settings to create a new trapper under the list also when there are some', async () => {
     const onOpenSettings = vi.fn()
     render(<VisitsPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
     await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
     await pickWhere()
 
-    await userEvent.click(await screen.findByRole('button', { name: /add a new trapper/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'go to Settings › Trappers' }))
     expect(onOpenSettings).toHaveBeenCalledWith('trappers')
   })
 

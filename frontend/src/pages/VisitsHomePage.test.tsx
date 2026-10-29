@@ -28,12 +28,25 @@ describe('VisitsHomePage', () => {
     expect(await screen.findByText('Where do the visits come from?')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /back/i }))
 
-    await userEvent.click(screen.getByRole('button', { name: /show the visit book/i }))
-    expect(await screen.findByRole('heading', { name: 'Visit book' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /visit dashboard/i }))
+    expect(await screen.findByRole('heading', { name: 'Visit dashboard' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /back/i }))
     expect(screen.getByRole('heading', { name: 'Manage visits' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /back/i }))
     expect(onBack).toHaveBeenCalled()
+  })
+
+  it('says where each page hangs from, and goes back there from the breadcrumb', async () => {
+    const onBack = vi.fn()
+    render(<VisitsHomePage onBack={onBack} />)
+    expect(screen.getByRole('navigation', { name: 'You are here' })).toHaveTextContent('Menu›Manage visits')
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
+    expect(onBack).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(screen.getByRole('button', { name: /register visits/i }))
+    expect(await screen.findByRole('navigation', { name: 'You are here' })).toHaveTextContent('Manage visits›Register visits')
+    await userEvent.click(screen.getByRole('button', { name: 'Manage visits' }))
+    expect(screen.getByRole('heading', { name: 'Manage visits' })).toBeInTheDocument()
   })
 })

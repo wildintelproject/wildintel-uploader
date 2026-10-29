@@ -14,6 +14,7 @@ import type { EpicollectEntry } from '../epicollectImport'
 import { isValidTimezone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import RevisionSquares from '../components/RevisionSquares'
+import { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { ClosedVisitTarget } from '../types'
@@ -926,11 +927,10 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
-      <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">{title}</h2>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-        Imports a folder of deployments — one subfolder each — into the local collections folder. The revision, the checks and the
-        preprocessing are the same for all of them; the location, the dates and the camera are asked for each.
-      </p>
+      <PageHeader icon={MENU_ICONS.deployment} title={title}
+        description="Imports a folder of deployments — one subfolder each — into the local collections folder. The revision, the checks and the preprocessing are the same for all of them; the location, the dates and the camera are asked for each."
+        parent="Manage deployments" onParent={onBack}
+        aside={defaultProject !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={defaultProject} defaultAcronym={defaultAcronym} of="The import" onOpenSettings={onOpenSettings} /> : undefined} />
 
       {/* Step indicator */}
       <div className="flex items-start mb-10">
@@ -964,7 +964,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           <WizardStep n={1} title="Which research project?" status="open" canEdit={false} onEdit={() => {}}
                       description="The research project is the same for all of them. Research projects are kept in the collections folder.">
             {fixedProject
-              ? <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="The import" onOpenSettings={onOpenSettings} />
+              ? <p className="text-sm text-zinc-600 dark:text-zinc-300">The import is of the default research project, <span className="font-mono font-semibold">{defaultProject?.acronym ?? defaultAcronym}</span> — it is changed in the settings, from the card at the top right.</p>
               : <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />}
             {originError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{originError}</p>}
             {projectId && closedVisits !== null && closedVisits.length > 0 && (() => {
