@@ -493,6 +493,14 @@ export function fillFromVisit(d: DeploymentFields, start: StoredVisit): Deployme
   }
 }
 
+/** The revision (the collection) a closed visit gives its deployment: the session of the visit that collected the card, minus one — R0013 collects the
+ * deployments of R0012, as the field records name them — and, when the sessions are not numbers, the session of the visit that left the camera. */
+export function revisionOfVisit(c: ClosedVisit): number | null {
+  const left = Number(/\d+/.exec(c.visit.session)?.[0]), collected = Number(/\d+/.exec(c.end.session)?.[0])
+  const revision = collected >= 2 ? collected - 1 : left
+  return revision >= 1 ? revision : null
+}
+
 /** What a closed visit says of the deployment it gave, for the collection's FieldworkLog. */
 export const fieldworkVisits = (c: ClosedVisit, sdCard: string): FieldworkVisits => ({
   left_session: c.visit.session, left_action: c.visit.actions.join(' + '), left_sd: c.visit.sd ?? null,
@@ -1829,8 +1837,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     setLinkedVisit(closed)
     selectLocation(location)
     fillFromVisits(closed)
-    const session = Number(/\d+/.exec(closed.visit.session)?.[0])
-    if (session >= 1) { revisionTouched.current = true; setRevisionHint(null); applyRevision(String(session)) }
+    const revision = revisionOfVisit(closed)
+    if (revision) { revisionTouched.current = true; setRevisionHint(null); applyRevision(String(revision)) }
   }
 
   function startAddingLocation() {

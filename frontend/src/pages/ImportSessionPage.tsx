@@ -23,7 +23,7 @@ import {
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
   DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, statParamsOf, statParamsValid, toggled, fillFromVisit, visitKey, visitLabel,
-  FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound, fieldworkVisits,
+  FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound, fieldworkVisits, revisionOfVisit,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
 
@@ -297,8 +297,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     setPickedVisits(next)
     setDrafts({})
     const first = (closedVisits ?? []).find((v) => next.has(visitKey(v)))
-    const session = Number(/\d+/.exec(first?.visit.session ?? '')?.[0])
-    if (first && session >= 1) { revisionTouched.current = true; setRevision(String(session)); setRevisionFromLog(null); setRevisionSuggested(false); setRevisionFromVisits(true) }
+    const revision = first ? revisionOfVisit(first) : null
+    if (first && revision) { revisionTouched.current = true; setRevision(String(revision)); setRevisionFromLog(null); setRevisionSuggested(false); setRevisionFromVisits(true) }
     else setRevisionFromVisits(false)
   }
 
@@ -922,13 +922,14 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
             <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />
             {originError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{originError}</p>}
             {projectId && closedVisits !== null && closedVisits.length > 0 && (() => {
-              const session = pickedList[0]?.visit.session
-              const offered = (c: ClosedVisit) => !session || c.visit.session === session
+              // all of one revision: the visits whose cards were collected on the same trip
+              const session = pickedList[0] ? revisionOfVisit(pickedList[0]) : null
+              const offered = (c: ClosedVisit) => !session || revisionOfVisit(c) === session
               const needle = visitFilter.trim().toLowerCase()
               const shown = needle ? closedVisits.filter((c) => visitLabel(c).toLowerCase().includes(needle)) : closedVisits
               // "Select all" takes the visits of one session — the ticked one's, or else the first shown
-              const target = session ?? shown[0]?.visit.session
-              const enabled = shown.filter((c) => c.visit.session === target)
+              const target = session ?? (shown[0] ? revisionOfVisit(shown[0]) : null)
+              const enabled = shown.filter((c) => revisionOfVisit(c) === target)
               const allTicked = enabled.length > 0 && enabled.every((c) => pickedVisits.has(visitKey(c)))
               return (
                 <FormCard title="Visits" description={`The visits to ${projectId} that left a camera and whose card has been collected, with no deployment yet. Tick the ones this session is of — all of one session, which is the revision. Each folder will be one of them: it says where and when it was taken.`}>
@@ -1104,7 +1105,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                 {visitsMode && (() => {
                   const without = candidates.filter((d) => !folderVisit[d.name])
                   return without.length === 0
-                    ? <Notice kind="success" role="status" className="mt-3">Every folder has its visit: {plural(candidates.length, 'deployment', 'deployments')} of the session {pickedList[0].visit.session}.</Notice>
+                    ? <Notice kind="success" role="status" className="mt-3">Every folder has its visit: {plural(candidates.length, 'deployment', 'deployments')} of the collection R{String(revisionOfVisit(pickedList[0]) ?? 0).padStart(4, '0')}.</Notice>
                     : <Notice kind="warning" role="alert" className="mt-3">{without.length === 1 ? 'A folder has' : `${without.length} folders have`} no visit yet — pick it above: <span className="font-mono">{without.slice(0, 5).map((d) => d.name).join(', ')}{without.length > 5 ? ', …' : ''}</span>. Or untick {without.length === 1 ? 'it' : 'them'} if {without.length === 1 ? 'it is' : 'they are'} not of this session.</Notice>
                 })()}
                 {scan.timestamp_log && (scan.timestamp_log.unmatched?.length ?? 0) > 0 && (

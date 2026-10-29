@@ -389,3 +389,59 @@ def test_a_site_that_is_not_a_location_comes_back_as_new_or_misnamed(tmp_path: P
     assert by_site["DONA_011"]["nearest"]["distance_m"] < 50
     assert by_site["FAR_01"]["similar"] == [] and by_site["FAR_01"]["nearest"]["distance_m"] > 100000
     assert (by_site["FAR_01"]["latitude"], by_site["FAR_01"]["longitude"]) == (38.5, -5.0)
+
+
+# ── the deployments the visits say, and the logs of their collections ───────────────────────────────────────────
+
+def _field_visits() -> None:
+    _save_all([
+        # DONA_01: left on R0003, collected on R0004 — a closed deployment of R0003 — and a card left again, still out
+        _visit("2024-09-04", ["Installation"], session="R0003", sd="A13", camera_id="P800", camera_model="Reconyx", setup_by="Ana", habitat="Pine", tags=["forest"], comments="new camera", camera_height=1.2, bait_use=True),
+        _visit("2024-10-12", ["Revision"], session="R0004", sd="B2", camera_id="P800", num_photos=241, trappers="Luis", habitat="Scrub", tags=["pine", "forest"], comments="pilas", camera_height=1.5, bait_use=True),
+        # DONA_02: left on R0003 and not collected yet — open
+        _visit("2024-09-05", ["Installation"], site="DONA_02", session="R0003", sd="C7", camera_id="P900"),
+    ])
+
+
+def test_the_deployments_of_the_visits_are_closed_or_open_and_named_by_the_session_that_collects_them(tmp_path: Path):
+    with _in(tmp_path):
+        _field_visits()
+        found = {d["deployment_id"]: d for d in _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]}
+
+    closed, open_ = found["R0003-DONA_01"], found["R0004-DONA_01"]
+    assert closed["status"] == "closed" and (closed["start"], closed["end"]) == ("2024-09-04T09:00:00Z", "2024-10-12T09:00:00Z")
+    assert (closed["card"], closed["photos_counted"], closed["camera_id"]) == ("A13", 241, "P800")
+    assert (closed["start_session"], closed["end_session"]) == ("R0003", "R0004")
+    # the Revision of R0004 left a card too: still out, and the collection being completed (R0003 was the last trip's before it)
+    assert open_["status"] == "open" and open_["card"] == "B2" and open_["end"] is None
+    assert found["R0003-DONA_02"]["status"] == "open"                      # left on R0003, before the last trip R0004: the collection being completed
+
+
+def test_what_the_two_visits_of_a_deployment_say_of_it_is_kept_beside_each_other(tmp_path: Path):
+    with _in(tmp_path):
+        _field_visits()
+        closed = next(d for d in _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"] if d["deployment_id"] == "R0003-DONA_01")
+
+    assert closed["setup_by"] == "Setup: Ana | Retrieval: Luis"
+    assert closed["fields"]["habitat"] == "Setup: Pine | Retrieval: Scrub"       # a text both say differently
+    assert closed["fields"]["deploymentTags"] == "forest | pine"                 # the tags of both, once each
+    assert closed["fields"]["cameraHeight"] == 1.2 and closed["fields"]["baitUse"] is True   # a number as the setup says it
+    assert closed["comments"] == "Setup: new camera | Retrieval: pilas; cameraHeight 1.5 (setup 1.2)"
+
+
+def test_the_logs_of_the_collections_are_written_with_every_deployment_closed_or_open(tmp_path: Path):
+    import csv
+    with _in(tmp_path):
+        _field_visits()
+        done = _client().post("/api/visits/field-logs", json={"research_project_id": "DONA"})
+
+    assert done.status_code == 200
+    by_collection = {c["collection"]: c for c in done.json()["collections"]}
+    assert (by_collection["R0003"]["closed"], by_collection["R0003"]["open"]) == (1, 1)
+    stamp = (tmp_path / "DONA" / "R0003" / "R0003_FileTimestampLog.csv").read_text(encoding="utf-8-sig").splitlines()
+    assert stamp[1:] == ["r0003-dona_01,2024:09:04,09:00:00,2024:10:12,09:00:00"]            # only the closed one
+    with (tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv").open(encoding="utf-8-sig", newline="") as f:
+        rows = {r["deploymentID"]: r for r in csv.DictReader(f)}
+    assert set(rows) == {"R0003-DONA_01", "R0003-DONA_02"}                                    # the open one too
+    assert rows["R0003-DONA_01"]["status"] == "closed" and rows["R0003-DONA_01"]["cardSD"] == "A13" and rows["R0003-DONA_01"]["photosCounted"] == "241"
+    assert rows["R0003-DONA_02"]["status"] == "open" and rows["R0003-DONA_02"]["deploymentEnd"] == ""

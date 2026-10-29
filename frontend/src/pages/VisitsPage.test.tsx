@@ -7,7 +7,7 @@ import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
 import type { ClosedVisit, StoredVisit } from '../types'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), writeFieldLogs: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn() } }))
 const mockedApi = vi.mocked(api, true)
 
 const location = (location_id: string, over: Record<string, unknown> = {}) => ({
@@ -775,6 +775,12 @@ describe('VisitsPage from a CSV file', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to TATR. The deployments will be worked out from them.')
     expect(screen.queryByRole('table')).not.toBeInTheDocument() // the visits are kept: the list of them goes
     expect(screen.getByRole('button', { name: 'Back to the menu' })).toBeInTheDocument()
+
+    // the deployments the visits say go into the logs of their collections
+    mockedApi.writeFieldLogs.mockResolvedValue({ collections: [{ collection: 'R0003', closed: 1, open: 1, files: ['/c/TATR/R0003/R0003_FileTimestampLog.csv', '/c/TATR/R0003/R0003_FieldworkLog.csv'] }], warnings: [] })
+    await userEvent.click(screen.getByRole('button', { name: 'Write the logs of the collections' }))
+    expect(await screen.findByRole('list', { name: 'Logs written' })).toHaveTextContent('R0003: 1 closed, 1 open — R0003_FileTimestampLog.csv, R0003_FieldworkLog.csv')
+    expect(mockedApi.writeFieldLogs).toHaveBeenCalledWith('TATR')
 
     await userEvent.click(screen.getByRole('button', { name: 'Register more visits' }))
     expect(screen.getByText('Where do the visits come from?')).toBeInTheDocument()

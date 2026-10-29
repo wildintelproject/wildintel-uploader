@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.schemas.requests import ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, SaveVisitRequest, VisitsCsvColumnsRequest
-from wildintel_uploader.core.services import local_folder_service, visit_rules, visit_time, visits_csv
+from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, SaveVisitRequest, VisitsCsvColumnsRequest
+from wildintel_uploader.core.services import local_folder_service, visit_deployments, visit_rules, visit_time, visits_csv
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
 
@@ -79,5 +79,28 @@ def link_visit(req: LinkVisitRequest) -> dict:
         return local_folder_service.link_visit(
             config.collections_dir(), req.research_project_id, req.location_id, req.date.isoformat(), req.time.isoformat(), req.deployment_id,
         )
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/deployments")
+def deployments(req: ListVisitsRequest) -> dict:
+    """The deployments the visits of a research project say — closed ones (a visit left the camera and a later one collected its card) and open ones (the camera is
+    still out) — by collection, with their fields as Camtrap DP names them."""
+    try:
+        root = config.collections_dir()
+        local_folder_service.require_research_project(root, req.research_project_id)
+        found = visit_deployments.deployments(local_folder_service.list_visits(root, req.research_project_id, req.location_id))
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"results": [{k: v for k, v in d.items() if k not in ("start_visit", "end_visit")} | {"start_session": d["start_visit"].get("session"), "end_session": (d["end_visit"] or {}).get("session")} for d in found]}
+
+
+@router.post("/field-logs")
+def field_logs(req: FieldLogsRequest) -> dict:
+    """Writes, in the folder of each collection the visits give deployments to, its FileTimestampLog (the closed deployments' start and end) and its FieldworkLog
+    (every deployment, closed or open, with its fields as Camtrap DP names them)."""
+    try:
+        return visit_deployments.write_collection_logs(config.collections_dir(), req.research_project_id, req.collections)
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc

@@ -12,7 +12,7 @@ import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, Sw
 import { shownErrors, validateDeployment } from '../deploymentValidation'
 import { availabilityErrors } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
-import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
+import type { Camera, DeploymentFields, FieldLogsResult, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
 export type VisitSource = 'manual' | 'epicollect' | 'csv'
 
@@ -471,6 +471,30 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
 
   /** The visits the ones just kept closed — their card was collected — so that their images can be imported. */
   // Each visit the ones just added closed: its card was collected, so its images can be imported — a card of its own, with the way in on the right.
+  const [logs, setLogs] = useState<FieldLogsResult | null>(null)
+  const [logsError, setLogsError] = useState<string | null>(null)
+  async function writeLogs() {
+    if (!project) return
+    setLogsError(null)
+    try { setLogs(await api.writeFieldLogs(project.acronym)) } catch (e) { setLogsError(e instanceof Error ? e.message : 'Could not write the logs.') }
+  }
+  /** The logs of the collections: the FileTimestampLog and the FieldworkLog worked out from the visits kept, closed deployments and the ones still open. */
+  const logsCard = project && (
+    <div className="mt-3" role="group" aria-label="Logs of the collections">
+      <Notice kind="info" action={<button type="button" className={btnOutline} onClick={() => void writeLogs()}>Write the logs of the collections</button>}>
+        The deployments the visits say go into each collection's <strong>FileTimestampLog</strong> (the closed ones) and <strong>FieldworkLog</strong> (every one, closed or still open).
+      </Notice>
+      {logsError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{logsError}</p>}
+      {logs && (
+        <ul aria-label="Logs written" className="mt-2 list-disc pl-6 text-sm space-y-1">
+          {logs.collections.length === 0 && <li>No deployment yet: no visit has left a camera that another has collected, or is still out.</li>}
+          {logs.collections.map((c) => <li key={c.collection}><span className="font-mono">{c.collection}</span>: {c.closed} closed, {c.open} open — {c.files.map((f) => f.split(/[\\/]/).pop()).join(', ')}</li>)}
+          {logs.warnings.map((w) => <li key={w} className="text-amber-700 dark:text-amber-400">{w}</li>)}
+        </ul>
+      )}
+    </div>
+  )
+
   const closedLinks = onImportImages && project && justClosed.length > 0 && (
     <div className="mt-3 space-y-2">
       {justClosed.map((c) => (
@@ -760,6 +784,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             </Notice>
           )}
           {closedLinks}
+          {justAdded && logsCard}
           {justAdded && (
             <div className="mt-6 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
               <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to add another visit?</p>
@@ -926,6 +951,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       <strong>{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added</strong> to {project?.acronym}. The deployments will be worked out from {csvSaved === 1 ? 'it' : 'them'}.
                     </Notice>
                     {closedLinks}
+                    {logsCard}
                     <div className="mt-5 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
                       <button type="button" className="px-6 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-base font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                               onClick={() => { forgetCsv(); setCsvName(null); setProject(undefined); setSource(null) }}>Register more visits</button>

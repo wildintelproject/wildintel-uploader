@@ -3,7 +3,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits } from './types'
+  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
 async function errorMessage(r: Response): Promise<string> {
@@ -161,6 +161,9 @@ export const api = {
   closedVisits: (researchProjectId: string) => post<{ results: ClosedVisit[] }>('/api/visits/closed', { research_project_id: researchProjectId }),
 
   // Records on a visit the deployment it closed.
+  /** Writes the FileTimestampLog and the FieldworkLog of the collections the visits of a research project give deployments to. */
+  writeFieldLogs: (researchProjectId: string, collections?: string[]) =>
+    post<FieldLogsResult>('/api/visits/field-logs', { research_project_id: researchProjectId, collections: collections ?? null }),
   linkVisit: (researchProjectId: string, visit: StoredVisit, deploymentId: string) =>
     post<StoredVisit>('/api/visits/link', { research_project_id: researchProjectId, location_id: visit.location_id, date: visit.date, time: visit.time, deployment_id: deploymentId }),
 

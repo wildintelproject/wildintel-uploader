@@ -236,6 +236,14 @@ it lacks what its actions ask, or its camera or card are not where it says.
 
 Each field is marked *required* or *optional* according to the actions.
 
+**The deployments the visits say, and the logs of the collections.** Each site's visits, in order, give a deployment for every pair where the first **left a camera** (an Installation or a Revision)
+and the second **collected its card**: it goes from the one to the other and is *closed*. It belongs to the collection **the session of the visit that collected it names, minus one** — R0013
+collects the deployments of R0012 — and that is the revision [Import deployment](#6-import-a-deployment) gives it. A camera that was left and has not been collected is *open*: it will belong to
+the collection that the visit that collects it names. After adding visits, **Write the logs of the collections** writes, in the folder of each collection, its `<R000N>_FileTimestampLog.csv` (the
+closed deployments' start and end, as the cameras' wall clock) and its `<R000N>_FieldworkLog.csv` (every deployment, closed or open, with its fields as Camtrap DP names them, in UTC, in the order of the
+[`FieldworkLog` columns](#6-import-a-deployment)). When the visit that left a camera and the one that collected it say different things of a field, both are kept: a text as `Setup: … | Retrieval: …`
+(who set it up, the habitat), the tags and groups of both together, and a number, a yes/no or a feature type as the setup says it with the retrieval's value noted in the comments.
+
 ## 6. Import a deployment
 
 Press **📷 Import deployment**. This option is meant to import the set of images that come from a **single camera**: one

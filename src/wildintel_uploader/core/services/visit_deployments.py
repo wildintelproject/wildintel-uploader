@@ -1,0 +1,209 @@
+"""The deployments a research project's visits say, and the logs of their collections — what the field records of a trip come to.
+
+Each site's visits, in order, give a deployment for every pair of consecutive ones where the first left a camera (an Installation or a Revision) and
+the second collected its card (see local_folder_service.closes_collection): the deployment goes from the one to the other, and is **closed**. It belongs to
+the collection **the session of the visit that collected it names, minus one** (R0013 collects the deployments of R0012). A camera that was left and
+has not been collected yet is an **open** deployment: it will belong to the collection the visit that collects it will name — the one being completed if it
+was left before the last trip, the next one if it was left on it.
+
+From the two visits of a deployment come its fields as Camtrap DP names them: who set it up, the camera and the card it was left with, the photos counted
+when it was collected, and the details of the camera and the site. When the visit that left it and the one that collected it say something different of
+a field, both are kept: a text as "Setup: … | Retrieval: …", the tags and groups of both together, and a number, a yes/no or a feature type as the setup says
+it with the retrieval's value noted in the comments.
+
+write_collection_logs() writes, in each collection's folder, the FileTimestampLog (the closed deployments' start and end) and the FieldworkLog (every
+deployment of the collection, closed or open).
+"""
+from __future__ import annotations
+
+import datetime as dt
+import logging
+import re
+from pathlib import Path
+
+from wildintel_uploader.core.services import local_folder_service, visit_rules, visit_time
+
+logger = logging.getLogger(__name__)
+
+# The details of a visit that are Camtrap DP's: the field of the visit, how Camtrap DP names it, and what kind of value it is.
+_EXTRAS: list[tuple[str, str, str]] = [
+    ("camera_model", "cameraModel", "single"), ("camera_interval", "cameraDelay", "number"), ("camera_height", "cameraHeight", "number"),
+    ("camera_depth", "cameraDepth", "number"), ("camera_tilt", "cameraTilt", "number"), ("camera_heading", "cameraHeading", "number"),
+    ("detection_distance", "detectionDistance", "number"), ("timestamp_issues", "timestampIssues", "bool"), ("bait_use", "baitUse", "bool"),
+    ("feature_type", "featureType", "single"), ("habitat", "habitat", "text"), ("deployment_groups", "deploymentGroups", "list"), ("tags", "deploymentTags", "list"),
+]
+
+
+def session_number(session: str | None) -> int | None:
+    m = re.search(r"\d+", session or "")
+    return int(m.group(0)) if m else None
+
+
+def collection_name(number: int) -> str:
+    return f"R{number:04d}"
+
+
+def _leaves_camera(v: dict) -> bool:
+    return bool({"Installation", "Revision"} & set(v.get("actions") or []))
+
+
+def _not_revised(v: dict) -> bool:
+    return str(v.get("status") or "").lower() in visit_rules.NOT_REVISED
+
+
+def _text(value) -> str | None:
+    text = str(value).strip() if value not in (None, "") else None
+    return text or None
+
+
+def _both(setup, retrieval) -> str | None:
+    """A text both visits give: one value when they agree or only one gives it, else "Setup: … | Retrieval: …"."""
+    setup, retrieval = _text(setup), _text(retrieval)
+    if not setup or not retrieval or setup.lower() == retrieval.lower():
+        return setup or retrieval
+    return f"Setup: {setup} | Retrieval: {retrieval}"
+
+
+def _list(value) -> list[str]:
+    if isinstance(value, (list, tuple)):
+        return [str(t).strip() for t in value if str(t).strip()]
+    return [t.strip() for t in re.split(r"[|;,]", str(value or "")) if t.strip()]
+
+
+def _shown(value) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    return str(value)
+
+
+def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
+    """The Camtrap DP fields of a deployment from its visits — {Camtrap DP's name: value} — and the retrieval's values that could not be kept beside the setup's."""
+    out: dict[str, object] = {}
+    retrieval_notes: list[str] = []
+    for key, name, kind in _EXTRAS:
+        setup, retrieval = start.get(key), (end or {}).get(key)
+        if kind == "list":
+            joined = list(dict.fromkeys([*_list(setup), *_list(retrieval)]))
+            if joined:
+                out[name] = " | ".join(joined)
+        elif kind == "text":
+            value = _both(setup, retrieval)
+            if value:
+                out[name] = value
+        else:
+            value = setup if setup not in (None, "") else retrieval
+            if value not in (None, ""):
+                out[name] = value
+            if setup not in (None, "") and retrieval not in (None, "") and str(setup).lower() != str(retrieval).lower():
+                retrieval_notes.append(f"{name} {_shown(retrieval)} (setup {_shown(setup)})")
+    return out, retrieval_notes
+
+
+def _comments(start: dict, end: dict | None, retrieval_notes: list[str]) -> str:
+    """What both visits noted: "Setup: …" and "Retrieval: …", each only when it says something — the retrieval's with the values of its fields that could not
+    be kept beside the setup's."""
+    parts = []
+    if _text(start.get("comments")):
+        parts.append(f"Setup: {_text(start['comments'])}")
+    retrieval = [n for n in [_text((end or {}).get("comments")), *retrieval_notes] if n]
+    if retrieval:
+        parts.append(f"Retrieval: {'; '.join(retrieval)}")
+    return " | ".join(parts)
+
+
+def _utc(when: str | None) -> str:
+    if not when:
+        return ""
+    return when if when.endswith("Z") else when.replace("+00:00", "Z")
+
+
+def _deployment(collection: int, start: dict, end: dict | None) -> dict:
+    """A deployment from the visit that left the camera and, once it is collected, the one that collected it."""
+    fields, notes = _fields(start, end)
+    # who set it up: the one the visit that left it says (else who went); who collected it: who went on the visit that did
+    return {
+        "deployment_id": f"{collection_name(collection)}-{start['location_id']}", "collection": collection_name(collection), "site": start["location_id"],
+        "status": "closed" if end else "open", "start": _utc(start.get("when")), "end": _utc(end.get("when")) if end else None,
+        "setup_by": _both(start.get("setup_by") or start.get("trappers"), (end or {}).get("trappers")), "camera_id": _text(start.get("camera_id")), "card": _text(start.get("sd")),
+        "photos_counted": end.get("num_photos") if end else None, "comments": _comments(start, end, notes), "fields": fields,
+        "start_visit": start, "end_visit": end,
+    }
+
+
+def deployments(visits: list[dict]) -> list[dict]:
+    """Every deployment the visits say, closed and open, by collection and site."""
+    by_site: dict[str, list[dict]] = {}
+    for v in visits:
+        if v.get("when") and not _not_revised(v):
+            by_site.setdefault(str(v["location_id"]).lower(), []).append(v)
+    last_session = max((n for n in (session_number(v.get("session")) for v in visits) if n is not None), default=0)
+    out: list[dict] = []
+    for group in by_site.values():
+        group.sort(key=lambda v: v["when"])
+        for earlier, later in zip(group, group[1:]):
+            number = session_number(later.get("session"))
+            if number is None or not _leaves_camera(earlier) or not local_folder_service.closes_collection(later):
+                continue
+            out.append(_deployment(number - 1, earlier, later))
+        last = group[-1]
+        number = session_number(last.get("session"))
+        if _leaves_camera(last) and not {"Desinstallation", "Stolen"} & set(last.get("actions") or []) and number is not None:
+            # still out there: the collection the visit that collects it will name — the one being completed when it was left before the last trip
+            out.append(_deployment(last_session - 1 if number < last_session else last_session, last, None))
+    return sorted(out, key=lambda d: (d["collection"], d["site"].lower()))
+
+
+def _wall(when: str, location: dict | None) -> dt.datetime:
+    date, time = visit_time.to_wall(when, location)
+    return dt.datetime.fromisoformat(f"{date}T{time}")
+
+
+def write_collection_logs(root: Path, research_project_id: str, collections: list[str] | None = None) -> dict:
+    """Writes the FileTimestampLog and the FieldworkLog of each collection the visits give deployments to (only the ones named, when `collections` is
+    given). The FileTimestampLog is the camera's wall clock — the location's — and the FieldworkLog UTC; the row of a deployment already in them is replaced.
+
+    Returns {"collections": [{"collection", "closed", "open", "files": [...]}], "warnings": [...]}.
+
+    Raises:
+        LocalFolderError: the research project isn't kept in the collections folder.
+    """
+    local_folder_service.require_research_project(root, research_project_id)
+    visits = local_folder_service.list_visits(root, research_project_id)
+    locations = local_folder_service.list_locations(root, research_project_id)
+    where = {str(l["location_id"]).lower(): l for l in locations}
+    project = root / research_project_id
+    wanted = {c.upper() for c in collections} if collections else None
+    by_collection: dict[str, list[dict]] = {}
+    for d in deployments(visits):
+        if wanted is None or d["collection"] in wanted:
+            by_collection.setdefault(d["collection"], []).append(d)
+    result, warnings = [], []
+    for collection, items in sorted(by_collection.items()):
+        folder = project / collection
+        files = []
+        for d in items:
+            location = where.get(d["site"].lower())
+            if d["status"] == "closed":
+                try:
+                    local_folder_service.upsert_timestamp_log(folder, d["deployment_id"], _wall(d["start"], location), _wall(d["end"], location))
+                except local_folder_service.LocalFolderError as exc:
+                    warnings.append(f"{d['deployment_id']}: not put in the FileTimestampLog: {exc}")
+            local_folder_service.upsert_fieldwork_log(folder, _row(d))
+        for path in (local_folder_service.timestamp_log_path(folder), local_folder_service.fieldwork_log_path(folder)):
+            if path.is_file():
+                files.append(str(path))
+        result.append({"collection": collection, "closed": sum(d["status"] == "closed" for d in items), "open": sum(d["status"] == "open" for d in items), "files": files})
+    return {"collections": result, "warnings": warnings}
+
+
+def _row(d: dict) -> dict:
+    """A deployment's row of the FieldworkLog."""
+    start, end = d["start_visit"], d["end_visit"]
+    cell = lambda v: "" if v is None else ("true" if v is True else "false" if v is False else str(v))  # noqa: E731
+    return {
+        "deploymentID": d["deployment_id"], "locationID": d["site"], "deploymentStart": d["start"], "deploymentEnd": d["end"] or "",
+        "setupBy": d["setup_by"] or "", "cameraID": d["camera_id"] or "", **{name: cell(d["fields"].get(name)) for _, name, _ in _EXTRAS},
+        "deploymentComments": d["comments"], "status": d["status"], "collection": d["collection"], "cardSD": d["card"] or "",
+        "photosCounted": cell(d["photos_counted"]), "startSession": start.get("session") or "", "startAction": " + ".join(start.get("actions") or []),
+        "endSession": (end or {}).get("session") or "", "endAction": " + ".join((end or {}).get("actions") or []),
+    }

@@ -406,6 +406,12 @@ class SaveVisitRequest(LocalLocationsRequest):
     visit: VisitRecord
 
 
+class FieldLogsRequest(LocalLocationsRequest):
+    """Write the logs of the collections the visits of a research project give deployments to — only the ones named, when some are."""
+
+    collections: Optional[list[str]] = None
+
+
 class LinkVisitRequest(LocalLocationsRequest):
     """The visit that closed a deployment (found by its location, day and time), and the deployment."""
 

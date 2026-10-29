@@ -13,6 +13,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   download or from any CSV, kept in the research project's `visits.json`. The Camera section comes before the SD card, and what the visit before
   said fills in the Camera, Site and Grouping sections. Entities (research projects, locations, trappers, SD cards and cameras) have their own
   tab in Settings, with CSV import; `examples/` has example CSVs of all of them.
+- **The deployments the visits say and the logs of their collections** (`/api/visits/deployments`, `/api/visits/field-logs`, as the field records of the first piece of the field workflow): each site's visits give
+  a deployment for every pair of consecutive ones where the first left a camera and the second collected its card — *closed* — or for a camera still out — *open*. A deployment belongs to the collection the session of
+  the visit that collected it names, minus one, which is also the revision Import deployment and Import session give a visit's deployment. **Write the logs of the collections** (in Register visits) writes each
+  collection's `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv`, with the details both visits give merged: `Setup: … | Retrieval: …` for a text, the tags and groups of both, the setup's number or yes/no with the
+  retrieval's value noted in `deploymentComments`.
 - **A location's timezone (and its summer-time setting) cannot be changed once it is created**: the instants kept for it were worked out with them. The server refuses a different one (`409`), and the form of a location shows them disabled.
 - **The time of a visit is kept as an instant**: `when`, ISO 8601 in UTC with a Z (`2024-09-04T11:10:00Z`), in the research project's `visits.json`. The day (`date`) and the
   time (`time`) the forms and the tables show are the wall clock of the visit's location, in the timezone the location says; the API gives both. A `visits.json` kept with a day and

@@ -721,6 +721,12 @@ export interface VisitsCsvResult {
   warnings: string[]
 }
 
+/** What writing the logs of the collections did: for each, how many deployments are closed and how many open, and the files written. */
+export interface FieldLogsResult {
+  collections: { collection: string; closed: number; open: number; files: string[] }[]
+  warnings: string[]
+}
+
 /** A site of a file that is not a location of the research project yet: new, or misnamed in the field. */
 export interface NewSite {
   site: string
