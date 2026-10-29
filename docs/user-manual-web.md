@@ -607,7 +607,7 @@ a deployment shows *Dates needed* or *To fix*, open it and pick another source o
 
 ![Upload — what to upload](img/screenshots/upload.png)
 
-Press **☁️ Manage uploads**, then **Upload deployment to Trapper**. (The other option, **Uploads dashboard**, lists the revisions of the default research project with how many of their deployments are on Trapper, and the deployments that are closed, with their images stored, and not on Trapper yet.) It sends deployments kept in the collections folder.
+Press **☁️ Manage uploads**, then **Upload deployment to Trapper**. (The other option, **Uploads dashboard**, lists the revisions of the default research project with how many of their deployments are uploaded, and the deployments that are created, with their images stored, and not uploaded yet.) It sends deployments kept in the collections folder.
 For each one it does what wildintel-tools did in three commands:
 
 1. creates the **location** in Trapper, from the deployment's coordinates, if the research project

@@ -53,7 +53,7 @@ describe('DeploymentStatusPage', () => {
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Deployment', 'Where', 'When', 'Card and photos', 'Creation', 'Upload', 'What to do'])
     const first = within(table).getAllByRole('row')[1]
     expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['R0003-TATR_0001', 'TATR_0001', 'Visit R0003 · TATR_00014 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'Card A13 · 241 photos', 'Created', 'Uploaded', 'View'])
-    expect(within(first).getByText('Uploaded')).toHaveAttribute('title', 'Uploaded to Trapper on 2024-10-20')
+    expect(within(first).getByText('Uploaded')).toHaveAttribute('title', 'Uploaded on 2024-10-20')
 
     await userEvent.click(square(/^Created/))
     expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0003-TATR_0002'])

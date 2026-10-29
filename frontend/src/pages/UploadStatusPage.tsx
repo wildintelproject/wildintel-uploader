@@ -46,7 +46,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen 
   const revisions = deployments ? uploadsOf(deployments) : []
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8">
-      <PageHeader icon={MENU_ICONS.upload} title="Uploads dashboard" description="What is on Trapper and what is still to be uploaded, by revision and by deployment."
+      <PageHeader icon={MENU_ICONS.upload} title="Uploads dashboard" description="What is uploaded and what is still to be uploaded, by revision and by deployment."
         parent="Manage uploads" onParent={onBack}
         aside={project !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The dashboard" onOpenSettings={onOpenSettings} /> : undefined} />
 
@@ -57,7 +57,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen 
     <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
       <table className="w-full text-sm" aria-label="Revisions">
         <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
-          <tr>{['Revision', 'Deployments', 'Ready to upload', 'On Trapper', 'Progress'].map((h) => <th key={h} scope="col" className="px-3 py-2.5 text-left font-medium">{h}</th>)}</tr>
+          <tr>{['Revision', 'Deployments', 'Ready to upload', 'Uploaded', 'Progress'].map((h) => <th key={h} scope="col" className="px-3 py-2.5 text-left font-medium">{h}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
           {revisions.map((r) => (
@@ -67,7 +67,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen 
               <td className="px-3 py-3">{r.toUpload}</td>
               <td className="px-3 py-3">{r.onTrapper} of {r.total}</td>
               <td className="px-3 py-3 w-48">
-                <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-700" role="progressbar" aria-label={`${r.collection} on Trapper`} aria-valuemin={0} aria-valuemax={r.total} aria-valuenow={r.onTrapper}>
+                <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-700" role="progressbar" aria-label={`${r.collection} uploaded`} aria-valuemin={0} aria-valuemax={r.total} aria-valuenow={r.onTrapper}>
                   <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${r.total ? Math.round((r.onTrapper / r.total) * 100) : 0}%` }} />
                 </div>
               </td>

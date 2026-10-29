@@ -15,7 +15,7 @@ export default function UploadsHomePage({ onBack, onChoose }: Props) {
       <SectionHeader icon={MENU_ICONS.upload} title="Manage uploads" description="Send a deployment to Trapper, or see how far the uploads are." onMenu={onBack} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TaskCard icon={<><path d="M18 20V10M12 20V4M6 20v-6" /></>} title="Uploads dashboard"
-                  description="Which deployments and revisions are on Trapper, and which are created and still to be uploaded." onClick={() => onChoose('status')} />
+                  description="Which deployments and revisions are uploaded, and which are created and still to be uploaded." onClick={() => onChoose('status')} />
         <TaskCard icon={<><path d="M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 4 14.9" /><path d="M12 12v9M8 16l4-4 4 4" /></>} title="Upload deployment to Trapper"
                   description="Pick a collection kept on this computer and send a deployment to Trapper. Its location and the deployment are created there if they are missing." onClick={() => onChoose('upload')} />
       </div>

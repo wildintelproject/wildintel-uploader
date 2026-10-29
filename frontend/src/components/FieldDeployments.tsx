@@ -69,7 +69,7 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
   const SQUARES: { filter: Exclude<Filter, ''>; label: string; note: string; tone: string; badge: string; icon: ReactNode }[] = [
     { filter: 'not_created', label: 'Not created', note: 'Images collected, not stored', tone: 'text-zinc-600 dark:text-zinc-300', badge: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>} className="h-5 w-5" /> },
     { filter: 'created', label: 'Created', note: 'Images stored, not uploaded yet', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />} className="h-5 w-5" /> },
-    { filter: 'uploaded', label: 'Uploaded', note: 'On Trapper', tone: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300', icon: <Icon path={<><path d="M20 16.2A4.5 4.5 0 0017.5 8h-1.8A7 7 0 104 14.9" /><path d="M12 12v9M8 16l4-4 4 4" /></>} className="h-5 w-5" /> },
+    { filter: 'uploaded', label: 'Uploaded', note: 'Information uploaded', tone: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300', icon: <Icon path={<><path d="M20 16.2A4.5 4.5 0 0017.5 8h-1.8A7 7 0 104 14.9" /><path d="M12 12v9M8 16l4-4 4 4" /></>} className="h-5 w-5" /> },
     { filter: 'no_images', label: 'No images', note: 'Camera stolen: nothing collected', tone: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><path d="M12 3l10 18H2z" /><path d="M12 10v4M12 17.5v.01" /></>} className="h-5 w-5" /> },
   ]
 
@@ -148,9 +148,9 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                     </td>
                     <td className="px-3 py-3">
                       {phaseOf(d) === 'uploaded'
-                        ? <span title={d.uploaded_at ? `Uploaded to Trapper on ${d.uploaded_at.slice(0, 10)}` : 'On Trapper: synced from there'} className="rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Uploaded</span>
+                        ? <span title={d.uploaded_at ? `Uploaded on ${d.uploaded_at.slice(0, 10)}` : 'Uploaded: synced from there'} className="rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Uploaded</span>
                         : phaseOf(d) === 'created'
-                        ? <span title="Not uploaded to Trapper" className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not uploaded</span>
+                        ? <span title="Not uploaded yet" className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not uploaded</span>
                         : <span className="text-zinc-400">—</span>}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
@@ -202,7 +202,7 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                 {SQUARES.map((q) => <Fragment key={q.filter}><dt className={`font-medium ${q.tone}`}>{q.label}</dt><dd>{q.note}</dd></Fragment>)}
               </dl>
             </LegendCard>
-            <LegendCard title="Creation and upload" tone="text-violet-600 dark:text-violet-400"><p>A deployment is <em>created</em> when its images are stored (the visit that started it is then Stored) and <em>uploaded</em> when its information is on Trapper. The camera still out, or the card not imported, is the state of the visit, not of the deployment. <em>No images</em> is a deployment closed by a theft: nothing was collected, and it is left out of the progress.</p></LegendCard>
+            <LegendCard title="Creation and upload" tone="text-violet-600 dark:text-violet-400"><p>A deployment is <em>created</em> when its images are stored (the visit that started it is then Stored) and <em>uploaded</em> when its information is on the platform it is uploaded to. The camera still out, or the card not imported, is the state of the visit, not of the deployment. <em>No images</em> is a deployment closed by a theft: nothing was collected, and it is left out of the progress.</p></LegendCard>
             <LegendCard title="Filters and search" tone="text-sky-600 dark:text-sky-400"><p>Search by deployment, site, card or camera, and filter by status; pick a revision above.</p></LegendCard>
           </section>
         </>

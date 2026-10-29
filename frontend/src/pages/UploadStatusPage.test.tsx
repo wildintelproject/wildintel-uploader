@@ -33,7 +33,7 @@ describe('UploadStatusPage', () => {
     const rows = within(table).getAllByRole('row')
     expect(within(rows[1]).getByText('R0002')).toBeInTheDocument()
     expect(within(rows[1]).getByText('1 of 2')).toBeInTheDocument()
-    expect(within(rows[1]).getByRole('progressbar', { name: 'R0002 on Trapper' })).toHaveAttribute('aria-valuenow', '1')
+    expect(within(rows[1]).getByRole('progressbar', { name: 'R0002 uploaded' })).toHaveAttribute('aria-valuenow', '1')
     // the deployments start with the ones not on Trapper yet
     const deployments = await screen.findByRole('table', { name: 'Deployments' })
     expect(within(deployments).getByText('R0002-DONA_02')).toBeInTheDocument()
