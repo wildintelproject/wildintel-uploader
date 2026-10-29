@@ -394,7 +394,7 @@ fields as Trapper's own deployment form. Each section is a card that says how ma
 
 | Source | What it gives |
 |---|---|
-| **What the field sheet says** | What the visit wrote down in the field: the camera, who set it up, the placement, the site. The visits are not changed. |
+| **What the field sheet says** | What the **two visits** of the deployment — the one that left the camera and the one that collected its card — wrote down in the field, mixed as the [FieldworkLog](#5-register-visits) mixes them: who set it up and the habitat as `Setup: … \| Retrieval: …` when they differ, the tags and groups of both, the setup's number or yes/no, and both visits' notes as `Setup: … \| Retrieval: …`. The visits are not changed. |
 | **What the previous deployment says** | The camera, the site and the notes of the previous revision of the location (never its dates). Not available — *Nothing found* — when there is none. |
 | **Fill in by hand** | You type them, **starting from the values the last source gave**. |
 

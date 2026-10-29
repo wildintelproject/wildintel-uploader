@@ -18,6 +18,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the visit that collected it names, minus one, which is also the revision Import deployment and Import session give a visit's deployment. **Write the logs of the collections** (in Register visits) writes each
   collection's `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv`, with the details both visits give merged: `Setup: … | Retrieval: …` for a text, the tags and groups of both, the setup's number or yes/no with the
   retrieval's value noted in `deploymentComments`.
+- **The form of a deployment of a visit starts from the same mix as the logs**: `/api/visits/closed` gives each closed visit its `details` — what the two visits say of the deployment, mixed as the FieldworkLog mixes them
+  (`Setup: … | Retrieval: …`, the tags and groups of both, the setup's number, both visits' notes in the comments) — and *What the field sheet says* (Import deployment and Import session) fills the form with it.
 - **Registering a visit makes the folders and the logs**: the folder of each collection the visit changes (with its `collection.json`) gets its `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv` at once — by hand or from a file —,
   as importing the deployment or the collection did before (`field_logs` in the answer of `/api/visits/save` and `/api/visits/import-csv`).
 - **A history of visits for a CSV import** (`history_xlsx` in `/api/visits/import-csv`, `visits_xlsx.py`, new dependency `openpyxl`): the fieldwork datasheet, an `.xlsx`, completes the visits kept before the file's are applied on top of both.

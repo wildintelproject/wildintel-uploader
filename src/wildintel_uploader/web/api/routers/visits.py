@@ -106,7 +106,9 @@ def csv_columns(req: VisitsCsvColumnsRequest) -> dict:
 def closed_visits(req: ListVisitsRequest) -> dict:
     """The visits of a research project that closed a deployment and have none yet — the ones a deployment is imported for."""
     try:
-        return {"results": local_folder_service.closed_visits(config.collections_dir(), req.research_project_id)}
+        closed = local_folder_service.closed_visits(config.collections_dir(), req.research_project_id)
+        # with what the two visits say of the deployment, mixed as the FieldworkLog mixes them: what the form of the deployment starts from
+        return {"results": [{**c, "details": visit_deployments.merged_details(c["visit"], c["end"])} for c in closed]}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
 

@@ -22,7 +22,7 @@ import {
   ALL_DEPLOYMENT_CHECKS, DEFAULT_CHECK_SETTINGS, DEPLOYMENT_CHECK_DISPLAY, DEPLOYMENT_CHECK_OPTIONS, DeploymentCheckReport, Field,
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
   DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
-  inputClass, labelClass, statParamsOf, statParamsValid, toggled, fillFromVisit, visitKey, visitLabel,
+  inputClass, labelClass, statParamsOf, statParamsValid, toggled, fillFromClosedVisit, visitKey, visitLabel,
   FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound, fieldworkVisits, revisionOfVisit,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
@@ -321,7 +321,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           // Only the dates a timestamp log gives are known by now: the rest are read from the images, below.
           start_date: stampTimezone(d.start_date ?? '', timezone), end_date: d.end_date ? stampTimezone(d.end_date, timezone) : null,
         }
-        next[d.name] = { timezone, ignoreDst: location?.ignore_dst ?? null, fields: cv ? fillFromVisit(base, cv.visit) : base }
+        next[d.name] = { timezone, ignoreDst: location?.ignore_dst ?? null, fields: cv ? fillFromClosedVisit(base, cv) : base }
       }
       return added ? next : current
     })
@@ -649,7 +649,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     const previous = previousFound[`${projectId}|${fieldsOf(name).deployment_id}`]?.deployment
     updateEntry(name, (e) => {
       const emptied = { ...e.fields, ...Object.fromEntries(FILLED_FROM_PREVIOUS.map((k) => [k, EMPTY_DEPLOYMENT_FIELDS[k]])) }
-      return { ...e, fields: source === 'visit' && cv ? fillFromVisit(emptied, cv.visit) : source === 'previous' && previous ? fillFromPreviousRevision(emptied, previous) : e.fields }
+      return { ...e, fields: source === 'visit' && cv ? fillFromClosedVisit(emptied, cv) : source === 'previous' && previous ? fillFromPreviousRevision(emptied, previous) : e.fields }
     })
   }
 
@@ -1530,7 +1530,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                       <h5 className="sr-only">{fieldsOf(d.name).deployment_id || d.name}</h5>
                       {visitOf(d.name) && (() => {
                         const cv = visitOf(d.name)!
-                        const given = fillFromVisit(EMPTY_DEPLOYMENT_FIELDS, cv.visit)
+                        const given = fillFromClosedVisit(EMPTY_DEPLOYMENT_FIELDS, cv)
                         const visitFound = detailsFound(given)
                         const previous = previousFound[`${projectId}|${fieldsOf(d.name).deployment_id}`]
                         const previousFound_ = detailsFound(previous ? fillFromPreviousRevision(EMPTY_DEPLOYMENT_FIELDS, previous.deployment) : EMPTY_DEPLOYMENT_FIELDS)

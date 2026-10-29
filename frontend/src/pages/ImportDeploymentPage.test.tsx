@@ -449,7 +449,9 @@ describe('ImportDeploymentPage', () => {
       it('fills in the revision, the period and the details from the two visits, and says where they come from', async () => {
         const start = stored({ session: 'R0001', date: '2026-06-10', time: '09:30:00', actions: ['Installation'], sd: 'A13', camera_id: 'P800', camera_model: 'Reconyx-PC800', setup_by: null, trappers: 'Ana Pérez', camera_height: 1.2, bait_use: true, comments: 'New camera' })
         const end = stored({ session: 'R0002', date: '2026-08-05', time: '08:10:00', actions: ['Revision'], num_photos: 12, comments: 'Batteries changed' })
-        mockedApi.closedVisits.mockResolvedValue({ results: [{ visit: start, end }] })
+        // what the server says of the deployment from its two visits, mixed as the FieldworkLog mixes them
+        const details = { camera_id: 'P800', camera_model: 'Reconyx-PC800', setup_by: 'Setup: Ana Pérez | Retrieval: Luis', camera_height: 1.2, bait_use: true, comments: 'Setup: New camera | Retrieval: Batteries changed' }
+        mockedApi.closedVisits.mockResolvedValue({ results: [{ visit: start, end, details }] })
         storedProjects = [DONA_PROJECT]
         storedLocations = { DONA: [DONA_01] }
         await goToOriginStep()
@@ -468,21 +470,21 @@ describe('ImportDeploymentPage', () => {
         expect(screen.getByText(/The visits \(the field sheet\) are not changed/)).toBeInTheDocument()
         expect(screen.getByRole('radio', { name: 'What the previous deployment says' })).toBeDisabled() // none on file
         expect(screen.getByText(/No earlier revision of DONA_01 is on file/)).toBeInTheDocument()
-        expect(screen.getByText('5 fields found')).toBeInTheDocument() // camera id and model, set up by, height, bait
-        expect(screen.getByText(/as it was written in the field: the camera, who set it up, mounting and site\./)).toBeInTheDocument()
+        expect(screen.getByText('6 fields found')).toBeInTheDocument() // camera id and model, set up by, height, bait and the notes
+        expect(screen.getByText(/as it was written in the field: the camera, who set it up, mounting, site and notes\./)).toBeInTheDocument()
         await openSection(/^Camera/); await openSection(/^Site/); await openSection(/^Grouping and notes/)
         expect(screen.getByLabelText('Camera id')).toHaveValue('P800')
-        expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
-        expect(screen.getByLabelText('Comments')).toHaveValue('') // the notes are each visit's own
+        expect(screen.getByLabelText('Set up by')).toHaveValue('Setup: Ana Pérez | Retrieval: Luis')
+        expect(screen.getByLabelText('Comments')).toHaveValue('Setup: New camera | Retrieval: Batteries changed') // both visits' notes, as the log has them
         // what the visit says is shown, not edited — until it is filled in by hand, which keeps the values
         expect(screen.getByLabelText('Set up by')).toBeDisabled()
         await userEvent.click(screen.getByRole('radio', { name: 'Fill in by hand' }))
         expect(screen.getByLabelText('Set up by')).toBeEnabled()
-        expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
+        expect(screen.getByLabelText('Set up by')).toHaveValue('Setup: Ana Pérez | Retrieval: Luis')
         await userEvent.clear(screen.getByLabelText('Set up by'))
         await userEvent.type(screen.getByLabelText('Set up by'), 'Luis')
         await userEvent.click(screen.getByRole('radio', { name: 'What the field sheet says' }))
-        expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez') // back to what the visit says
+        expect(screen.getByLabelText('Set up by')).toHaveValue('Setup: Ana Pérez | Retrieval: Luis') // back to what the visits say
       })
 
       describe('the SD card and the number of photos, against what the visits say', () => {

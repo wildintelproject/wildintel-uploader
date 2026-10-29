@@ -527,3 +527,15 @@ def test_a_history_that_is_not_a_workbook_with_visits_is_refused(tmp_path: Path)
 
     assert not_xlsx.status_code == 400 and ".xlsx" in not_xlsx.json()["detail"]
     assert no_visits.status_code == 400 and "history of visits" in no_visits.json()["detail"]
+
+
+def test_a_closed_visit_comes_with_what_its_two_visits_say_of_the_deployment_mixed_as_the_log_mixes_them(tmp_path: Path):
+    with _in(tmp_path):
+        _field_visits()
+        closed = _closed()
+
+    details = next(c["details"] for c in closed if c["visit"]["session"] == "R0003" and c["visit"]["location_id"] == "DONA_01")
+    assert details["setup_by"] == "Setup: Ana | Retrieval: Luis" and details["camera_id"] == "P800"
+    assert details["habitat"] == "Setup: Pine | Retrieval: Scrub" and details["tags"] == ["forest", "pine"]
+    assert details["camera_height"] == 1.2 and details["bait_use"] is True                  # the setup's number
+    assert details["comments"] == "Setup: new camera | Retrieval: pilas; cameraHeight 1.5 (setup 1.2)"

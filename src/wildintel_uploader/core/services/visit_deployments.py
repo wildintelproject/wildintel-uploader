@@ -76,8 +76,9 @@ def _shown(value) -> str:
     return str(value)
 
 
-def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
-    """The Camtrap DP fields of a deployment from its visits — {Camtrap DP's name: value} — and the retrieval's values that could not be kept beside the setup's."""
+def _merged(start: dict, end: dict | None) -> tuple[dict, list[str]]:
+    """The details of a deployment from its visits, by the name the visit gives them (camera_model, tags…): the ones both visits say are put together,
+    and the retrieval's values that could not be kept beside the setup's come back as notes for the comments."""
     out: dict[str, object] = {}
     retrieval_notes: list[str] = []
     for key, name, kind in _EXTRAS:
@@ -85,18 +86,38 @@ def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
         if kind == "list":
             joined = list(dict.fromkeys([*_list(setup), *_list(retrieval)]))
             if joined:
-                out[name] = " | ".join(joined)
+                out[key] = joined
         elif kind == "text":
             value = _both(setup, retrieval)
             if value:
-                out[name] = value
+                out[key] = value
         else:
             value = setup if setup not in (None, "") else retrieval
             if value not in (None, ""):
-                out[name] = value
+                out[key] = value
             if setup not in (None, "") and retrieval not in (None, "") and str(setup).lower() != str(retrieval).lower():
                 retrieval_notes.append(f"{name} {_shown(retrieval)} (setup {_shown(setup)})")
     return out, retrieval_notes
+
+
+def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
+    """The Camtrap DP fields of a deployment from its visits — {Camtrap DP's name: value}, a list as its values apart by " | " — and the retrieval's notes."""
+    merged, notes = _merged(start, end)
+    names = {key: name for key, name, _ in _EXTRAS}
+    return {names[k]: (" | ".join(v) if isinstance(v, list) else v) for k, v in merged.items()}, notes
+
+
+def merged_details(start: dict, end: dict | None) -> dict:
+    """What the two visits of a deployment say of it, as the fields of the form of a deployment have them — the same mix the FieldworkLog gets: who set it up
+    (the setup's, with the retrieval's beside when it differs), the camera, the details of the camera and the site, the tags of both, and the comments of
+    both as "Setup: … | Retrieval: …". Only the fields they say something of."""
+    merged, notes = _merged(start, end)
+    details = {k: (" | ".join(v) if k == "deployment_groups" and isinstance(v, list) else v) for k, v in merged.items()}
+    setup_by = _both(start.get("setup_by") or start.get("trappers"), (end or {}).get("trappers"))
+    for key, value in (("setup_by", setup_by), ("camera_id", _text(start.get("camera_id"))), ("comments", _comments(start, end, notes))):
+        if value:
+            details[key] = value
+    return details
 
 
 def _comments(start: dict, end: dict | None, retrieval_notes: list[str]) -> str:

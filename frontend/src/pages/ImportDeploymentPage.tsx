@@ -507,6 +507,14 @@ export const fieldworkVisits = (c: ClosedVisit, sdCard: string): FieldworkVisits
   collected_session: c.end.session, collected_action: c.end.actions.join(' + '), counted_photos: c.end.num_photos ?? null, sd_card: sdCard || null,
 })
 
+/** The details of the deployment a closed visit gave, as what both its visits say mixes — the same mix the FieldworkLog gets, worked out by the server (`details`);
+ * the visit that left the camera alone when there is none. What the visits do not say stays as it was. */
+export function fillFromClosedVisit(d: DeploymentFields, c: ClosedVisit): DeploymentFields {
+  if (!c.details) return fillFromVisit(d, c.visit)
+  const said = Object.fromEntries(Object.entries(c.details).filter(([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)))
+  return { ...d, ...said }
+}
+
 /** A closed visit as an option: when it was, where, which session, what was done there, and when its card was collected — and how many photos it had. */
 export const visitKey = (c: ClosedVisit) => `${c.visit.location_id}|${c.visit.date}|${c.visit.time}`
 export const visitLabel = (c: ClosedVisit) =>
@@ -1820,9 +1828,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
 
   /** What the visit that left the card knows of the camera and the site fills in the details: the camera, who set it up, how it was put up — not the
    * notes, which are of each visit. The visit that collected the card gives only where the period ends: the next deployment starts there. */
-  function fillFromVisits({ visit: start }: ClosedVisit) {
-    setDeployment((d) => fillFromVisit(d, start))
-    setFilledFrom(`the visit ${start.session}`)
+  function fillFromVisits(closed: ClosedVisit) {
+    setDeployment((d) => fillFromClosedVisit(d, closed))
+    setFilledFrom(`the visit ${closed.visit.session}`)
   }
 
   /** The visit the deployment is of, where its card was left — its location is the deployment's, and its session is the revision. */
@@ -2291,7 +2299,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   // The sources to pick the details from are shown when there are two to choose from, by hand included.
   const pickable = Boolean(linkedVisit || previousRevision)
   const detailsSource: 'visit' | 'previous' | 'manual' = detailsPick ?? (linkedVisit ? 'visit' : 'manual')
-  const visitFound = detailsFound(linkedVisit ? fillFromVisit(EMPTY_DEPLOYMENT_FIELDS, linkedVisit.visit) : EMPTY_DEPLOYMENT_FIELDS)
+  const visitFound = detailsFound(linkedVisit ? fillFromClosedVisit(EMPTY_DEPLOYMENT_FIELDS, linkedVisit) : EMPTY_DEPLOYMENT_FIELDS)
   const previousFound = detailsFound(previousRevision ? fillFromPreviousRevision(EMPTY_DEPLOYMENT_FIELDS, previousRevision.deployment) : EMPTY_DEPLOYMENT_FIELDS)
 
   /** The camera, the site and the notes as a source says them: what the visit or the previous deployment do not say is left empty. */
@@ -2300,7 +2308,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     if (source === 'manual') return
     const emptied = (d: DeploymentFields): DeploymentFields => ({ ...d, ...Object.fromEntries(FILLED_FROM_PREVIOUS.map((k) => [k, EMPTY_DEPLOYMENT_FIELDS[k]])) })
     if (source === 'visit' && linkedVisit) {
-      setDeployment((d) => fillFromVisit(emptied(d), linkedVisit.visit))
+      setDeployment((d) => fillFromClosedVisit(emptied(d), linkedVisit))
       setFilledFrom(`the visit ${linkedVisit.visit.session}`)
     } else if (source === 'previous' && previousRevision) {
       setDeployment((d) => fillFromPreviousRevision(emptied(d), previousRevision.deployment))

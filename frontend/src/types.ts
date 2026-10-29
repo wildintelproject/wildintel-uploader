@@ -685,6 +685,8 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
 export interface ClosedVisit {
   visit: StoredVisit
   end: StoredVisit
+  /** What the two visits say of the deployment, mixed as the FieldworkLog mixes them (Setup: … | Retrieval: …): what its form starts from. */
+  details?: Partial<DeploymentFields>
 }
 
 /** Where Import deployment starts from when it is reached from a visit that was just closed: the research project, and the visit whose card was
