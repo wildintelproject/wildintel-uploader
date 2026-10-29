@@ -54,7 +54,7 @@ describe('SettingsPage', () => {
     expect(await screen.findByRole('radio', { name: /Normal/ })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page')
 
-    await section('Trapper')
+    await section('Uploader')
     expect(screen.getByLabelText('Web address')).toHaveValue('https://trapper.example.org')
     expect(screen.getByLabelText('Username')).toHaveValue('alice')
     expect(screen.getByText('Saved')).toBeInTheDocument() // a saved password is shown as kept, never its value
@@ -168,10 +168,21 @@ describe('SettingsPage', () => {
   })
 
   describe('Trapper', () => {
+    it('is set up in the Uploader section, on the tab of the platform', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      expect(screen.queryByRole('button', { name: 'Trapper' })).not.toBeInTheDocument() // Trapper is not a section of its own
+      await section('Uploader')
+
+      expect(screen.getByRole('heading', { name: 'Uploader' })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Trapper' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByLabelText('Web address')).toBeInTheDocument()
+    })
+
     it('saves the server and the account, a blank password keeping the saved one', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
 
       await userEvent.clear(screen.getByLabelText('Username'))
       await userEvent.type(screen.getByLabelText('Username'), 'bob')
@@ -184,7 +195,7 @@ describe('SettingsPage', () => {
     it('sets the largest zip an upload makes, from 1 to 5000 MB', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
       const field = screen.getByLabelText('Largest package')
       expect(field).toHaveValue('500')
 
@@ -202,7 +213,7 @@ describe('SettingsPage', () => {
     it('never keeps the password in the form once saved', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
       await userEvent.click(screen.getByRole('button', { name: 'Change' }))
       await userEvent.type(screen.getByLabelText('Password'), 'new-secret')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -217,7 +228,7 @@ describe('SettingsPage', () => {
       mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, TRAPPER: { base_url: null, user_name: null, has_password: false, max_zip_mb: 500 } })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
 
       expect(screen.getByText(/no password saved yet/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Test connection' })).toBeDisabled() // nothing to connect with
@@ -227,7 +238,7 @@ describe('SettingsPage', () => {
       mockedApi.trapperTestConnection.mockResolvedValue({ ok: true, research_projects_count: 3 })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
 
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
@@ -240,7 +251,7 @@ describe('SettingsPage', () => {
       mockedApi.trapperTestConnection.mockRejectedValue(new Error('Invalid credentials'))
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
       expect(await screen.findByText('Invalid credentials')).toBeInTheDocument()
@@ -756,7 +767,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage onClose={vi.fn()} />)
     await screen.findByLabelText('Level')
     await userEvent.click(screen.getByRole('radio', { name: /Warnings/ }))
-    await section('Trapper')
+    await section('Uploader')
     await userEvent.clear(screen.getByLabelText('Web address'))
     await userEvent.type(screen.getByLabelText('Web address'), 'https://other.example.org')
     await section('Validation')
@@ -1153,7 +1164,7 @@ describe('SettingsPage', () => {
 
       await waitFor(() => expect(mockedApi.activateConfig).toHaveBeenCalledWith('b'))
       await waitFor(() => expect(mockedApi.getSettings).toHaveBeenCalledTimes(2)) // the settings are read again
-      await userEvent.click(screen.getByRole('button', { name: 'Trapper' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Uploader' }))
       expect(await screen.findByDisplayValue('bob@b.org')).toBeInTheDocument()
     })
 

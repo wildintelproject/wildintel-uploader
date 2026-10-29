@@ -56,6 +56,9 @@ const CameraIcon = () => (
     <circle cx="12" cy="13" r="3" />
   </Icon>
 )
+const UploadIcon = () => (
+  <Icon><path d="M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 4 14.9" /><path d="M12 12v9M8 16l4-4 4 4" /></Icon>
+)
 const SlidersIcon = () => (
   <Icon>
     <path d="M4 21v-7" /><path d="M4 10V3" /><path d="M12 21v-9" /><path d="M12 8V3" />
@@ -275,7 +278,7 @@ function sectionValid(d: Draft, id: SectionId): boolean {
       && [d.imageTolerance, d.sequenceCountTolerance, d.sequenceLengthTolerance].every((t) => numberIn(t, SIMILARITY_TOLERANCE) !== null)
   }
   if (id === 'preprocessing') return numberIn(d.resizeWidth, RESIZE_WIDTH) !== null
-  if (id === 'trapper') return numberIn(d.maxZipMb, MAX_ZIP_MB) !== null
+  if (id === 'uploader') return numberIn(d.maxZipMb, MAX_ZIP_MB) !== null
   return true
 }
 
@@ -322,7 +325,7 @@ const FOLDERS: { draftKey: 'collectionsDir' | 'reportsDir' | 'packagesDir'; labe
     hint: 'Handy when the packages are big and the data folder is on a small disk.' },
 ]
 
-type SectionId = 'general' | 'trapper' | 'epicollect' | 'fieldlog' | 'validation' | 'postvalidation' | 'preprocessing' | 'entities' | 'reports' | 'config'
+type SectionId = 'general' | 'uploader' | 'epicollect' | 'fieldlog' | 'validation' | 'postvalidation' | 'preprocessing' | 'entities' | 'reports' | 'config'
 
 /** The lists of the entities, each with its own tab. The sections of the settings that used to be one each open the entities on their tab. */
 type EntityTab = 'projects' | 'trappers' | 'locations' | 'cameras' | 'sdcards'
@@ -339,9 +342,12 @@ const FIELDLOG_COLUMNS: [string, string, string][] = [
   ['feature_type', 'Feature type (Camtrap DP)', 'featureType'], ['habitat', 'Habitat (Camtrap DP)', 'habitat'], ['deployment_groups', 'Deployment groups (Camtrap DP)', 'deploymentGroups'], ['tags', 'Deployment tags (Camtrap DP)', 'deploymentTags'],
 ]
 
+/** The platforms a deployment can be uploaded to, each set up in the Uploader section. */
+const UPLOAD_DESTINATIONS: { id: 'trapper'; label: string }[] = [{ id: 'trapper', label: 'Trapper' }]
+
 const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'general', label: 'General', icon: SlidersIcon },
-  { id: 'trapper', label: 'Trapper', icon: CameraIcon },
+  { id: 'uploader', label: 'Uploader', icon: UploadIcon },
   { id: 'epicollect', label: 'Epicollect5', icon: FileIcon },
   { id: 'fieldlog', label: 'Field records', icon: ReportIcon },
   { id: 'validation', label: 'Validation', icon: CheckIcon },
@@ -1987,6 +1993,7 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
  * images are kept in and the log, the Trapper account, which validation
  * and postvalidation checks the wizard shows, and how the images are preprocessed. One Save saves every section. */
 export default function SettingsPage({ onClose, initialSection, initialProject }: Props) {
+  const [uploadDestination, setUploadDestination] = useState<'trapper'>('trapper')
   const [section, setSection] = useState<SectionId>(initialSection && initialSection in ENTITY_SECTIONS ? 'entities' : (initialSection as SectionId | undefined) ?? 'general')
   const [saved, setSaved] = useState<AppSettings | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -2173,7 +2180,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
         {!(section === 'entities' && entityDetail) && (
           <div className="flex items-center gap-3 mb-2">
             <h4 className="text-2xl font-semibold">{current.label}</h4>
-            {section === 'trapper' && conn.kind === 'ok' && <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Connected</span>}
+            {section === 'uploader' && conn.kind === 'ok' && <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Connected</span>}
           </div>
         )}
 
@@ -2271,7 +2278,16 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
           </div>
         )}
 
-        {draft && saved && section === 'trapper' && (
+        {draft && saved && section === 'uploader' && (
+          <div className="space-y-5 pt-5">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">The platforms a deployment can be uploaded to. Pick one to set it up. Trapper is the only one for now; others may come in a future version.</p>
+          <div role="tablist" aria-label="Upload destinations" className="flex flex-wrap gap-2">
+            {UPLOAD_DESTINATIONS.map((d) => (
+              <button key={d.id} type="button" role="tab" aria-selected={uploadDestination === d.id} onClick={() => setUploadDestination(d.id)}
+                      className={`px-4 h-10 rounded-lg border text-sm font-medium ${uploadDestination === d.id ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>{d.label}</button>
+            ))}
+          </div>
+          {uploadDestination === 'trapper' && (
           <SettingsCard>
             <CardBlock title="Server" description="The Trapper website you work with. Research projects and locations come from it, and deployments are uploaded to it.">
               <PlainField label="Web address">
@@ -2315,6 +2331,8 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
               <div className="max-w-60"><PlainField label="Largest package"><NumberBox label="Largest package" value={draft.maxZipMb} limits={MAX_ZIP_MB} onChange={(v) => set('maxZipMb', v)} unit="MB" /></PlainField></div>
             </CardBlock>
           </SettingsCard>
+          )}
+          </div>
         )}
 
         {draft && saved && section === 'fieldlog' && (

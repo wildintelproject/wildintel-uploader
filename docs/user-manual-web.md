@@ -55,9 +55,13 @@ dot marks a section with an invalid value.
   bug report.
 - **About** — at the top: the app's name and version, **Check for updates** (it offers the download when there is a newer version), and links to **Report a problem** (a GitHub issue that already says the version and your browser), the **Documentation**, the **GitHub** project and **What's new** (the release notes).
 
-### Trapper
+### Uploader
 
-![Settings › Trapper](img/screenshots/settings-trapper.png)
+The platforms a deployment can be uploaded to, each set up on its own tab. **Trapper** is the only one for now; the section is there so that other platforms can be added in a future version.
+
+#### Trapper
+
+![Settings › Uploader › Trapper](img/screenshots/settings-trapper.png)
 
 The server's **URL**, and the **username** (its email — Trapper's import form only accepts
 that) and **password** of your account. **Test connection** reports the research projects it can
@@ -617,7 +621,7 @@ The deployment must have been imported with the wizard — the yaml needs the da
 wizard before uploading it", and can't be ticked.
 
 A note at the top says which Trapper account is used: the one saved in the settings (**Change in Settings** takes you
-there; **Test connection** is in [Settings › Trapper](#trapper)). The page is a wizard of its own.
+there; **Test connection** is in [Settings › Uploader › Trapper](#trapper)). The page is a wizard of its own.
 
 ### Step 1 — Choose what to upload
 
@@ -643,7 +647,7 @@ there; **Test connection** is in [Settings › Trapper](#trapper)). The page is 
 
 With **Upload to Trapper**, tick **Delete the package files once they are uploaded** to take the zips, the yamls and the deployment's row of the `_deployments.csv` away when Trapper has them. Unticked (the default) they stay in the packages folder, as when only preparing them, and the result says where. The option is also offered when you go on to upload files you have just prepared.
 
-The size of the zips is a setting: [Settings › Trapper](#trapper). The page says what you will get before you go on.
+The size of the zips is a setting: [Settings › Uploader › Trapper](#trapper). The page says what you will get before you go on.
 
 ### Step 3 — Upload
 
@@ -761,7 +765,7 @@ the originals are gone.
     the window that started it says which (`Server on http://127.0.0.1:8770`).
 
 **"Incorrect Trapper username or password"**
-:   The username is the **email** of your account. Check it in Settings › Trapper and press
+:   The username is the **email** of your account. Check it in Settings › Uploader › Trapper and press
     **Test connection**.
 
 **"Could not connect to the Trapper server"**
