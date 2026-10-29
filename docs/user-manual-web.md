@@ -13,7 +13,7 @@ first. Part of what the web app does can also be done from a terminal: see the
 2. [Settings](#2-settings)
 3. [The task menu](#3-the-task-menu)
 4. [Unfinished runs](#4-unfinished-runs)
-5. [Register visits](#5-register-visits)
+5. [Manage visits](#5-manage-visits)
 6. [Import a deployment](#6-import-a-deployment)
 7. [Import a session](#7-import-a-session)
 8. [Upload a deployment to Trapper](#8-upload-a-deployment-to-trapper)
@@ -176,7 +176,7 @@ Once it is configured, the menu is where you choose what you want to do:
 
 | Task | What it's for |
 |---|---|
-| 📋 **Register visits** | Record the visits to the camera traps — who went, when, to which site and what was done. The deployments are worked out from them. |
+| 📋 **Manage visits** | **Register visits** to the camera traps — who went, when, to which site and what was done — or **show the visit book**. The deployments are worked out from the visits. |
 | 📷 **Import deployment** | Check one folder of images and organize it in the collections folder. |
 | 🗂️ **Import session** | The same for a folder holding several deployments, one subfolder each. |
 | ☁️ **Upload deployment to Trapper** | Send deployments already kept locally to Trapper. |
@@ -202,9 +202,20 @@ folder was chosen. Passwords are never saved with a run.
 
 ![Unfinished runs](img/screenshots/unfinished-runs.png)
 
-## 5. Register visits
+## 5. Manage visits
 
-Press **📋 Register visits**.
+Press **📋 Manage visits**: it offers **Register visits** and **Show the visit book**.
+
+### Show the visit book
+
+![The visit book](img/screenshots/visit-book.png)
+
+Choose a research project and the book shows, in two tabs, the **visits** kept to it — newest first, with the site, session, actions, camera, card, photos, who went and the deployment each one closed, and a filter —
+and the **deployments** its visits say, by collection: the closed ones and the ones whose camera is still out, with **Write the logs of all the collections again**.
+
+### Register visits
+
+Press **Register visits**.
 
 ![Register visits](img/screenshots/visits.png)
  A **visit** is one trip to a camera trap: when it was, which site, who went and what was
@@ -217,7 +228,6 @@ the visits come in:
 | **By hand** | You fill in each visit yourself. |
 | **From Wildintel Epicollect** | Reads the visits of a field trip from the Epicollect download (a CSV). The time is the `created_at` of the entry, put in the timezone of the location. |
 | **From a spreadsheet file** | Any CSV: the page shows its columns and you say which one gives each field of a visit. |
-| **See the deployments** | Nothing is registered: choose a research project and the page lists the deployments its visits say — by collection, the closed ones and the ones whose camera is still out — and **Write the logs of all the collections again**. |
 
 A file can come with a **history of visits** (optional): the fieldwork datasheet, an `.xlsx` workbook whose first sheet has a Site and an Action column (Trappers, Session, Date, Time, Camera, NumPhotos, SD… or Tramperos, Sesion, Fecha, Hora…
 — found by their names, as in an Epicollect download). The history **completes the visits kept**, and then the file's are applied on top of both: sessions, what is already kept and what is odd are told with all of it in front. Its visits come first in the list, and its rows
@@ -301,11 +311,11 @@ The **research project** the images belong to, and where they were taken. They a
   saved in the settings — it never asks for the credentials again; if there isn't one, it says so.
 
 **The closed visit.** Once the research project is chosen, the **Closed visit** lists the visits to it that left a camera and whose card has been
-[collected](#5-register-visits), and that have **no deployment yet** (a visit that already has one is not offered). Picking one gives the deployment
+[collected](#5-manage-visits), and that have **no deployment yet** (a visit that already has one is not offered). Picking one gives the deployment
 its **location**, its **revision** (the session of the visit) and, later, the camera, the site and the period: the deployment is *of that visit*. If you do
 not pick a visit, you pick the **location** yourself and everything else is asked by hand. A project with no closed visits goes on without one.
 
-If you start from a visit — from [Register visits](#5-register-visits) — the project and the visit are already chosen.
+If you start from a visit — from [Register visits](#5-manage-visits) — the project and the visit are already chosen.
 
 ### Stage 2 — Images
 
@@ -410,7 +420,7 @@ fields as Trapper's own deployment form. Each section is a card that says how ma
 
 | Source | What it gives |
 |---|---|
-| **What the field sheet says** | What the **two visits** of the deployment — the one that left the camera and the one that collected its card — wrote down in the field, mixed as the [FieldworkLog](#5-register-visits) mixes them: who set it up and the habitat as `Setup: … \| Retrieval: …` when they differ, the tags and groups of both, the setup's number or yes/no, and both visits' notes as `Setup: … \| Retrieval: …`. The visits are not changed. |
+| **What the field sheet says** | What the **two visits** of the deployment — the one that left the camera and the one that collected its card — wrote down in the field, mixed as the [FieldworkLog](#5-manage-visits) mixes them: who set it up and the habitat as `Setup: … \| Retrieval: …` when they differ, the tags and groups of both, the setup's number or yes/no, and both visits' notes as `Setup: … \| Retrieval: …`. The visits are not changed. |
 | **What the previous deployment says** | The camera, the site and the notes of the previous revision of the location (never its dates). Not available — *Nothing found* — when there is none. |
 | **Fill in by hand** | You type them, **starting from the values the last source gave**. |
 
@@ -524,7 +534,7 @@ The stages are those of [Import a deployment](#6-import-a-deployment), with the 
 
 ![Import session — the folders and their visits](img/screenshots/session-folders.png)
 
-1. **Origin** — the **research project** for the whole session and, if it has closed visits (see [Register visits](#5-register-visits)), the
+1. **Origin** — the **research project** for the whole session and, if it has closed visits (see [Register visits](#5-manage-visits)), the
    **Visits** to tick: the ones this session is of — **all of one session**, which is the revision (once one is ticked, the visits of other sessions are
    disabled). The list has a **search** (by site, card, date…). Without closed visits, the session goes on as it always did, asking a location for each folder.
 2. **Images** — *Session folder*: choose the folder and **Scan**; its subfolders are listed, each with its images and warnings, and you tick the ones to import.

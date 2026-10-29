@@ -392,6 +392,10 @@
       'POST /api/visits/closed': () => ({ results: CLOSED_VISITS }),
       'POST /api/visits/link': () => ({ status: 'ok' }),
       'POST /api/visits/list': () => ({ results: [...CLOSED_VISITS.flatMap((c) => [c.visit, c.end])] }),
+      'POST /api/visits/deployments': () => ({ results: [
+        { deployment_id: 'R0003-DONA_01', collection: 'R0003', site: 'DONA_01', status: 'closed', start: '2024-09-04T12:55:00Z', end: '2024-10-12T07:30:00Z', setup_by: 'Ana Pérez', camera_id: CAMERA.id, card: 'A13', photos_counted: 241, start_session: 'R0003', end_session: 'R0004' },
+        { deployment_id: 'R0003-DONA_02', collection: 'R0003', site: 'DONA_02', status: 'open', start: '2024-09-04T14:00:00Z', end: null, setup_by: 'Ana Pérez', camera_id: 'P800HG11', card: 'B2', photos_counted: null, start_session: 'R0003', end_session: null },
+      ] }),
       'POST /api/epicollect/entries': () => ({ results: [EPICOLLECT_ENTRY] }),
       'POST /api/epicollect/entries/batch': (body) => ({ results: Object.fromEntries(body.location_ids.map((id) => [id, id === 'DONA_01' ? EPICOLLECT_ENTRY : null])) }),
       'GET /api/epicollect/form': () => ({ project: { name: 'Doñana cameras', slug: 'donana-cameras' }, inputs: [

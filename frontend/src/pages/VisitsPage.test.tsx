@@ -7,7 +7,7 @@ import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
 import type { ClosedVisit, StoredVisit } from '../types'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), writeFieldLogs: vi.fn(), fieldDeployments: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), writeFieldLogs: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn() } }))
 const mockedApi = vi.mocked(api, true)
 
 const location = (location_id: string, over: Record<string, unknown> = {}) => ({
@@ -883,13 +883,9 @@ describe('VisitsPage from a CSV file', () => {
     expect(await screen.findByRole('list', { name: 'Logs written' })).toHaveTextContent('R0003: 1 closed, 0 open — R0003_FileTimestampLog.csv, R0003_FieldworkLog.csv')
   })
 
-  it('tells what is worth knowing of the visits, names the report of the import, and lists the deployments the visits say — the ones still out apart', async () => {
+  it('tells what is worth knowing of the visits and names the report of the import', async () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [], notes: ['R0004: sites visited in R0003 and not on this trip, their cameras still out: TATR_0002.'] })
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 1, new_sites: [], warnings: [], report: '/c/TATR/visits_import_20241012_090000.txt' })
-    mockedApi.fieldDeployments.mockResolvedValue({ results: [
-      { deployment_id: 'R0003-TATR_0001', collection: 'R0003', site: 'TATR_0001', status: 'closed', start: '2024-09-04T09:00:00Z', end: '2024-10-12T09:00:00Z', setup_by: 'Ana', camera_id: 'P800', card: 'A13', photos_counted: 241, start_session: 'R0003', end_session: 'R0004' },
-      { deployment_id: 'R0003-TATR_0002', collection: 'R0003', site: 'TATR_0002', status: 'open', start: '2024-09-05T09:00:00Z', end: null, setup_by: null, camera_id: 'P900', card: 'C7', photos_counted: null, start_session: 'R0003', end_session: null },
-    ] })
     render(<VisitsPage onBack={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
@@ -899,13 +895,6 @@ describe('VisitsPage from a CSV file', () => {
     expect(await screen.findByRole('list', { name: 'Notes on the visits' })).toHaveTextContent('their cameras still out: TATR_0002')
     await userEvent.click(screen.getByRole('button', { name: 'Add 1 visit' }))
     expect(await screen.findByText(/visits_import_20241012_090000\.txt/)).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Show the deployments' }))
-    const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
-    expect(region).toHaveTextContent('R0003 · 1 closed · 1 still out')
-    expect(region).toHaveTextContent('R0003-TATR_0002')
-    expect(region).toHaveTextContent('Camera still out')
-    expect(region).toHaveTextContent('2024-09-04 09:00 → 2024-10-12 09:00')
   })
 
   it('adds at once the new sites that have the coordinates of their first visit, and leaves the ones that look like a misprint', async () => {
@@ -926,20 +915,6 @@ describe('VisitsPage from a CSV file', () => {
     expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0050', latitude: 37.1, longitude: -6.4, timezone: 'UTC' }))
     expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0051' }))
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(2)) // the file is read again
-  })
-
-  it('has an option to see the deployments the visits say, with the logs of their collections', async () => {
-    mockedApi.fieldDeployments.mockResolvedValue({ results: [
-      { deployment_id: 'R0003-TATR_0002', collection: 'R0003', site: 'TATR_0002', status: 'open', start: '2024-09-05T09:00:00Z', end: null, setup_by: null, camera_id: 'P900', card: 'C7', photos_counted: null, start_session: 'R0003', end_session: null },
-    ] })
-    render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /see the deployments/i }))
-    await userEvent.click(await screen.findByLabelText('Research project'))
-    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
-
-    expect(await screen.findByRole('region', { name: 'Deployments the visits say' })).toHaveTextContent('R0003-TATR_0002')
-    expect(screen.getByRole('button', { name: 'Write the logs of all the collections again' })).toBeInTheDocument()
-    expect(mockedApi.fieldDeployments).toHaveBeenCalledWith('TATR')
   })
 
   it('forgets what the file before said when another is chosen — even one with the same name, edited', async () => {

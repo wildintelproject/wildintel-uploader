@@ -19,7 +19,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   collection's `<R000N>_FileTimestampLog.csv` and `<R000N>_FieldworkLog.csv`, with the details both visits give merged: `Setup: … | Retrieval: …` for a text, the tags and groups of both, the setup's number or yes/no with the
   retrieval's value noted in `deploymentComments`.
 - **Locations from the file itself**: the sites of a file that are not locations come with the coordinates of their first visit, and **Add the N sites with coordinates as locations** keeps them all at once (the ones that look like a misprint are left for the user).
-  **See the deployments** is a source of Register visits of its own: the deployments the visits of a research project say, and the logs of their collections.
+- **Manage visits** is the task of the menu (it was *Register visits*): it offers **Register visits** and **Show the visit book** — the visits kept to a research project (newest first, with a filter and the deployment each closed) and, in a second tab, the
+  deployments they say (closed, and the ones whose camera is still out) with the button to write the logs of all the collections again.
 - **The cameras and the SD cards are kept in the folder of their research project** (`<research project>/cameras.json` and `sd_cards.json`, beside `locations.json` and `visits.json`), so they travel with its collections; only the trappers stay in
   `settings.toml`. `GET /api/settings` gives the ones of every research project and `PUT /api/settings` saves each project's list in its folder — a camera or a card needs its research project (`422` otherwise). Those kept in `settings.toml`
   until now are moved when the settings are read (one that was free for any goes to each research project; one of a project that is not in the collections folder stays in the settings).

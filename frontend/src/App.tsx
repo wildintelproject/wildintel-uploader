@@ -10,7 +10,7 @@ import SettingsPage from './pages/SettingsPage'
 import SyncCollectionsPage from './pages/SyncCollectionsPage'
 import UploadDeploymentPage from './pages/UploadDeploymentPage'
 import UtilsPage from './pages/UtilsPage'
-import VisitsPage from './pages/VisitsPage'
+import VisitsHomePage from './pages/VisitsHomePage'
 import WelcomePage from './pages/WelcomePage'
 import { api } from './api'
 import type { ClosedVisitTarget, SessionSummary, Task, UploadTarget } from './types'
@@ -102,7 +102,7 @@ export default function App() {
               : task === 'repair'
               ? <RepairPage onBack={() => setTask(null)} />
               : task === 'visits'
-              ? <VisitsPage settingsOpen={settingsOpen} onOpenSettings={openSettings} onImportImages={goToImportOfVisit} onBack={() => setTask(null)} />
+              ? <VisitsHomePage settingsOpen={settingsOpen} onOpenSettings={openSettings} onImportImages={goToImportOfVisit} onBack={() => setTask(null)} />
               : showResumeScreen
                 ? (
                   <ResumeSessionsPage

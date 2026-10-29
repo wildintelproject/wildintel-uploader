@@ -12,15 +12,14 @@ import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, Sw
 import { shownErrors, validateDeployment } from '../deploymentValidation'
 import { availabilityErrors } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
-import type { Camera, DeploymentFields, FieldDeployment, FieldLogsResult, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
+import type { Camera, DeploymentFields, FieldLogsResult, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
-export type VisitSource = 'manual' | 'epicollect' | 'csv' | 'deployments'
+export type VisitSource = 'manual' | 'epicollect' | 'csv'
 
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
   { value: 'manual', icon: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />, title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.' },
   { value: 'epicollect', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'From Wildintel Epicollect', description: 'Read the visits of a field trip from the Epicollect download.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'From a spreadsheet file', description: 'Any spreadsheet: say which column gives each field of a visit.' },
-  { value: 'deployments', icon: <><path d="M3 7h18M3 12h18M3 17h18" /></>, title: 'See the deployments', description: 'The deployments the visits of a research project say — closed, and the ones whose camera is still out — and the logs of their collections.' },
 ]
 
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
@@ -510,48 +509,18 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // Each visit the ones just added closed: its card was collected, so its images can be imported — a card of its own, with the way in on the right.
   const [logs, setLogs] = useState<FieldLogsResult | null>(null)
   const [logsError, setLogsError] = useState<string | null>(null)
-  const [fieldDeployments, setFieldDeployments] = useState<FieldDeployment[] | null>(null)
-  async function showDeployments() {
-    if (!project) return
-    setLogsError(null)
-    try { setFieldDeployments((await api.fieldDeployments(project.acronym)).results) } catch (e) { setLogsError(e instanceof Error ? e.message : 'Could not read the deployments.') }
-  }
   async function writeLogs() {
     if (!project) return
     setLogsError(null)
     try { setLogs(await api.writeFieldLogs(project.acronym)) } catch (e) { setLogsError(e instanceof Error ? e.message : 'Could not write the logs.') }
   }
-  useEffect(() => { if (source === 'deployments' && project) void showDeployments() }, [source, project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
   /** The logs of the collections: the FileTimestampLog and the FieldworkLog worked out from the visits kept, closed deployments and the ones still open. */
   const logsCard = project && (
     <div className="mt-3" role="group" aria-label="Logs of the collections">
       <Notice kind="info" action={<button type="button" className={btnOutline} onClick={() => void writeLogs()}>Write the logs of all the collections again</button>}>
         The folder of each collection the visits change is made with its <strong>FileTimestampLog</strong> (the closed deployments) and <strong>FieldworkLog</strong> (every one, closed or still out).
       </Notice>
-      <div className="mt-2"><button type="button" className={btnOutline} onClick={() => void showDeployments()}>Show the deployments</button></div>
       {logsError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{logsError}</p>}
-      {fieldDeployments && (
-        <div aria-label="Deployments the visits say" role="region" className="mt-3 space-y-3">
-          {fieldDeployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">No deployment yet: no visit has left a camera.</p>}
-          {[...new Set(fieldDeployments.map((d) => d.collection))].map((collection) => (
-            <div key={collection} className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-x-auto">
-              <p className="px-4 py-2 text-sm font-semibold bg-zinc-50 dark:bg-zinc-800"><span className="font-mono">{collection}</span> · {fieldDeployments.filter((d) => d.collection === collection && d.status === 'closed').length} closed · {fieldDeployments.filter((d) => d.collection === collection && d.status === 'open').length} still out</p>
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                  {fieldDeployments.filter((d) => d.collection === collection).map((d) => (
-                    <tr key={d.deployment_id}>
-                      <td className="px-4 py-2 font-mono">{d.deployment_id}</td>
-                      <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${d.status === 'closed' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>{d.status === 'closed' ? 'Closed' : 'Camera still out'}</span></td>
-                      <td className="px-3 py-2 font-mono text-xs">{d.start.slice(0, 16).replace('T', ' ')} → {d.end ? d.end.slice(0, 16).replace('T', ' ') : '…'}</td>
-                      <td className="px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">{d.card ? `card ${d.card}` : ''}{d.photos_counted != null ? ` · ${d.photos_counted} photos` : ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-        </div>
-      )}
       {logs && (
         <ul aria-label="Logs written" className="mt-2 list-disc pl-6 text-sm space-y-1">
           {logs.collections.length === 0 && <li>No deployment yet: no visit has left a camera that another has collected, or is still out.</li>}
@@ -863,17 +832,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         </>
       )}
 
-      {source === 'deployments' && (
-        <WizardStep
-          n={2} title="Which research project?" status={project ? 'open' : 'open'} canEdit={false} onEdit={() => {}}
-          description="The deployments are worked out from the visits kept to the research project."
-        >
-          <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={(picked) => { setProject(picked); setFieldDeployments(null); setLogs(null) }} />
-          {logsCard}
-        </WizardStep>
-      )}
-
-      {source !== null && source !== 'manual' && source !== 'deployments' && (
+      {source !== null && source !== 'manual' && (
         <>
           <WizardStep
             n={2} title="Which research project?" status={project ? 'done' : 'open'} canEdit onEdit={() => { setProject(undefined); forgetCsv(); setCsvName(null) }}
