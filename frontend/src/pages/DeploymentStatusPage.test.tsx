@@ -93,4 +93,23 @@ describe('DeploymentStatusPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'View the deployment R0003-TATR_0002' }))
     expect(screen.queryByLabelText('Details of the deployment R0003-TATR_0002', { selector: 'dl' })).not.toBeInTheDocument()
   })
+
+  it('has the deployment closed by a theft apart: no images, nothing to create or upload, and left out of the progress', async () => {
+    mockedApi.fieldDeployments.mockResolvedValue({ results: [
+      deployment({ on_trapper: true }),
+      deployment({ deployment_id: 'R0003-TATR_0002', site: 'TATR_0002', images_stored: false, no_images: 'stolen', photos_counted: null, card: 'C7' }),
+    ] })
+    render(<DeploymentStatusPage onBack={vi.fn()} />)
+
+    const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
+    const squares = within(region).getByRole('region', { name: 'Deployments by status' })
+    expect(within(squares).getByRole('button', { name: 'No images' })).toHaveTextContent('1')
+    expect(within(squares).getByRole('button', { name: 'Not created' })).toHaveTextContent('0')
+    expect(within(squares).getByText('All the deployments').parentElement).toHaveTextContent('1 / 1') // the one with no images is not counted
+    const table = within(region).getByRole('table', { name: 'Deployments' })
+    const stolen = within(table).getByText('R0003-TATR_0002').closest('tr')!
+    expect(within(stolen).getByText('No images')).toBeInTheDocument()
+    expect(within(stolen).queryByRole('button', { name: /View the deployment/ })).not.toBeInTheDocument()
+  })
 })
+

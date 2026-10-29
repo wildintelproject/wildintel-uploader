@@ -9,9 +9,9 @@ import RevisionSquares from './RevisionSquares'
 /** How many deployments a page has. */
 const PER_PAGE = 10
 
-/** Where a deployment is in its life — which says nothing of the camera, that is the visit's: not created (its images are not stored yet), created (its images are stored: the visit is Stored) and uploaded (its information is on Trapper). */
-export type Filter = '' | 'not_created' | 'created' | 'uploaded'
-const phaseOf = (d: FieldDeployment): Exclude<Filter, ''> => d.on_trapper ? 'uploaded' : d.images_stored ? 'created' : 'not_created'
+/** Where a deployment is in its life — which says nothing of the camera, that is the visit's: not created (its images are not stored yet), created (its images are stored: the visit is Stored), uploaded (its information is on Trapper), or with no images (the camera was stolen: there are none, and never will be). */
+export type Filter = '' | 'not_created' | 'created' | 'uploaded' | 'no_images'
+const phaseOf = (d: FieldDeployment): Exclude<Filter, ''> => d.no_images ? 'no_images' : d.on_trapper ? 'uploaded' : d.images_stored ? 'created' : 'not_created'
 const matches = (d: FieldDeployment, f: Filter) => !f || phaseOf(d) === f
 
 /** The fields of a deployment the details show, in this order, when it has them. */
@@ -65,11 +65,12 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
   }, [highlight, deployments])
   useEffect(() => { marked.current?.scrollIntoView?.({ block: 'center' }) })
 
-  const percent = inRevision.length ? Math.round(((count('created') + count('uploaded')) / inRevision.length) * 100) : 0
+  const percent = inRevision.length - count('no_images') > 0 ? Math.round(((count('created') + count('uploaded')) / (inRevision.length - count('no_images') || 1)) * 100) : 0
   const SQUARES: { filter: Exclude<Filter, ''>; label: string; note: string; tone: string; badge: string; icon: ReactNode }[] = [
     { filter: 'not_created', label: 'Not created', note: 'Images collected, not stored', tone: 'text-zinc-600 dark:text-zinc-300', badge: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>} className="h-5 w-5" /> },
     { filter: 'created', label: 'Created', note: 'Images stored, not uploaded yet', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />} className="h-5 w-5" /> },
     { filter: 'uploaded', label: 'Uploaded', note: 'On Trapper', tone: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300', icon: <Icon path={<><path d="M20 16.2A4.5 4.5 0 0017.5 8h-1.8A7 7 0 104 14.9" /><path d="M12 12v9M8 16l4-4 4 4" /></>} className="h-5 w-5" /> },
+    { filter: 'no_images', label: 'No images', note: 'Camera stolen: nothing collected', tone: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><path d="M12 3l10 18H2z" /><path d="M12 10v4M12 17.5v.01" /></>} className="h-5 w-5" /> },
   ]
 
   return (
@@ -86,16 +87,16 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
 
           <section aria-label="Deployments by status" className="mb-5">
             <p className="mb-2 text-right text-xs text-zinc-500 dark:text-zinc-400">Pick a card to show only those deployments.</p>
-            <div className="grid grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1fr] gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-[1.6fr_repeat(4,1fr)] gap-3">
               <div className="col-span-2 lg:col-span-1 flex items-center gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 px-5 py-4">
                 <Ring percent={percent} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{revision ? `Deployments of ${revision}` : 'All the deployments'}</p>
-                  <p className="text-2xl font-semibold leading-tight">{count('created') + count('uploaded')} <span className="text-zinc-400">/ {inRevision.length}</span></p>
-                  <div role="progressbar" aria-label="Deployments created" aria-valuemin={0} aria-valuemax={inRevision.length} aria-valuenow={count('created') + count('uploaded')} className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                  <p className="text-2xl font-semibold leading-tight">{count('created') + count('uploaded')} <span className="text-zinc-400">/ {inRevision.length - count('no_images')}</span></p>
+                  <div role="progressbar" aria-label="Deployments created" aria-valuemin={0} aria-valuemax={inRevision.length - count('no_images')} aria-valuenow={count('created') + count('uploaded')} className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
                     <div className="h-1.5 bg-emerald-500" style={{ width: `${percent}%` }} />
                   </div>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{count('created') + count('uploaded')} created · {count('not_created')} to create</p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{count('created') + count('uploaded')} created · {count('not_created')} to create{count('no_images') > 0 && ` · ${count('no_images')} with no images`}</p>
                 </div>
               </div>
               {SQUARES.map((q) => (
@@ -139,7 +140,9 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                     </td>
                     <td className="px-3 py-3 text-xs text-zinc-600 dark:text-zinc-400">{[d.card && `Card ${d.card}`, d.photos_counted != null && `${d.photos_counted} photos`].filter(Boolean).join(' · ')}</td>
                     <td className="px-3 py-3">
-                      {phaseOf(d) === 'not_created'
+                      {phaseOf(d) === 'no_images'
+                        ? <span title="The camera was stolen: nothing was collected" className="rounded-full px-2 py-0.5 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">No images</span>
+                        : phaseOf(d) === 'not_created'
                         ? <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not created</span>
                         : <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Created</span>}
                     </td>
@@ -151,7 +154,7 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                         : <span className="text-zinc-400">—</span>}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
-                      {phaseOf(d) !== 'not_created' && (
+                      {phaseOf(d) !== 'not_created' && phaseOf(d) !== 'no_images' && (
                         <button type="button" className={`${btnOutline} inline-flex items-center justify-center gap-2`} aria-expanded={opened === d.deployment_id} aria-label={`View the deployment ${d.deployment_id}`} onClick={() => toggle(d.deployment_id)}>
                           <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" className="fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>View
                         </button>
@@ -199,7 +202,7 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                 {SQUARES.map((q) => <Fragment key={q.filter}><dt className={`font-medium ${q.tone}`}>{q.label}</dt><dd>{q.note}</dd></Fragment>)}
               </dl>
             </LegendCard>
-            <LegendCard title="Creation and upload" tone="text-violet-600 dark:text-violet-400"><p>A deployment is <em>created</em> when its images are stored (the visit that started it is then Stored) and <em>uploaded</em> when its information is on Trapper. The camera still out, or the card not imported, is the state of the visit, not of the deployment.</p></LegendCard>
+            <LegendCard title="Creation and upload" tone="text-violet-600 dark:text-violet-400"><p>A deployment is <em>created</em> when its images are stored (the visit that started it is then Stored) and <em>uploaded</em> when its information is on Trapper. The camera still out, or the card not imported, is the state of the visit, not of the deployment. <em>No images</em> is a deployment closed by a theft: nothing was collected, and it is left out of the progress.</p></LegendCard>
             <LegendCard title="Filters and search" tone="text-sky-600 dark:text-sky-400"><p>Search by deployment, site, card or camera, and filter by status; pick a revision above.</p></LegendCard>
           </section>
         </>

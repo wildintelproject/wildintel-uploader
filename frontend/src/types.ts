@@ -759,6 +759,8 @@ export interface VisitsCsvResult {
 export interface BookVisit extends StoredVisit {
   deployment: string | null
   deployment_status: 'closed' | 'open' | null
+  /** The deployment this visit gave was closed with no images: the camera was stolen. */
+  deployment_no_images?: 'stolen' | null
   /** When the deployment this visit gave was uploaded to Trapper from here (null when it was not), and whether it is on Trapper — uploaded from here or synced from there. */
   uploaded_at?: string | null
   on_trapper?: boolean
@@ -783,6 +785,8 @@ export interface FieldDeployment {
   end_session: string | null
   /** Whether the deployment was created and its images imported, and whether it is on Trapper (uploaded from here, or synced from there). */
   images_stored?: boolean
+  /** Why there are no images, and never will be: the camera was stolen, so the visit that found it closed the deployment with nothing collected. */
+  no_images?: 'stolen' | null
   uploaded_at?: string | null
   on_trapper?: boolean
 }

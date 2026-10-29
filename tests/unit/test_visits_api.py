@@ -323,6 +323,27 @@ def test_what_does_not_collect_a_card_leaves_the_visit_before_it_open(tmp_path: 
     assert [c["visit"]["date"] for c in closed] == ["2026-11-01"] and closed[0]["end"]["date"] == "2026-12-01"
 
 
+def test_a_stolen_camera_closes_its_deployment_with_no_images(tmp_path: Path):
+    with _in(tmp_path):
+        _save_all([
+            _visit("2026-06-10", ["Installation"]),
+            _visit("2026-08-05", ["Stolen", "Installation"], session="R0002"),   # the camera was stolen, another is put up
+            _visit("2026-10-02", ["Revision"], session="R0003", num_photos=300),
+        ])
+        found = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
+        book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
+        closed = _closed()
+
+    stolen, collected, still_out = sorted(found, key=lambda d: d["start"])  # the revision leaves a card too: its deployment is open
+    assert (stolen["status"], stolen["no_images"], stolen["end"].startswith("2026-08-05"), stolen["images_stored"]) == ("closed", "stolen", True, False)
+    assert (collected["status"], collected["no_images"], still_out["status"]) == ("closed", None, "open")
+    started = {v["date"]: v for v in book}
+    assert started["2026-06-10"]["deployment_status"] == "closed" and started["2026-06-10"]["deployment_no_images"] == "stolen"
+    assert started["2026-08-05"]["deployment_no_images"] is None
+    # nothing is offered to import for the stolen one: there are no images; the other deployment is closed by its revision
+    assert [(c["visit"]["date"], c["end"]["date"]) for c in closed] == [("2026-08-05", "2026-10-02")]
+
+
 def test_a_visit_linked_to_a_deployment_is_not_offered_again(tmp_path: Path):
     with _in(tmp_path):
         _save_all([_visit("2026-06-10", ["Installation"]), _visit("2026-08-05", ["Revision"], num_photos=1620)])

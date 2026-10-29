@@ -140,8 +140,9 @@ def _utc(when: str | None, keep_seconds: bool = True) -> str:
     return when if keep_seconds else re.sub(r":\d{2}Z$", ":00Z", when)
 
 
-def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bool = True) -> dict:
-    """A deployment from the visit that left the camera and, once it is collected, the one that collected it."""
+def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bool = True, no_images: str | None = None) -> dict:
+    """A deployment from the visit that left the camera and, once it is collected, the one that collected it. When the camera was stolen the visit that found it
+    so closes the deployment, but nothing was collected: `no_images` says why there are none ("stolen"), and there never will be."""
     fields, notes = _fields(start, end)
     # who set it up: the one the visit that left it says (else who went); who collected it: who went on the visit that did
     return {
@@ -149,7 +150,7 @@ def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bo
         "status": "closed" if end else "open", "start": _utc(start.get("when"), keep_seconds), "end": _utc(end.get("when"), keep_seconds) if end else None,
         "setup_by": _both(start.get("setup_by") or start.get("trappers"), (end or {}).get("trappers")), "camera_id": _text(start.get("camera_id")), "card": _text(start.get("sd")),
         "photos_counted": end.get("num_photos") if end else None, "comments": _comments(start, end, notes), "fields": fields,
-        "start_visit": start, "end_visit": end,
+        "start_visit": start, "end_visit": end, "no_images": no_images,
     }
 
 
@@ -165,9 +166,13 @@ def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
         group.sort(key=lambda v: v["when"])
         for earlier, later in zip(group, group[1:]):
             number = session_number(later.get("session"))
-            if number is None or not _leaves_camera(earlier) or not local_folder_service.closes_collection(later):
+            if number is None or not _leaves_camera(earlier):
                 continue
-            out.append(_deployment(number - 1, earlier, later, keep_seconds))
+            if "Stolen" in (later.get("actions") or []):
+                # a stolen camera closes its deployment with no images: nothing was on a card that was taken away
+                out.append(_deployment(number - 1, earlier, later, keep_seconds, no_images="stolen"))
+            elif local_folder_service.closes_collection(later):
+                out.append(_deployment(number - 1, earlier, later, keep_seconds))
         last = group[-1]
         number = session_number(last.get("session"))
         if _leaves_camera(last) and not {"Desinstallation", "Stolen"} & set(last.get("actions") or []) and number is not None:
@@ -186,7 +191,8 @@ def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[di
     out = []
     for v in visits:
         d = started.get(id(v))
-        out.append({**v, "deployment": d["deployment_id"] if d else None, "deployment_status": d["status"] if d else None, "not_done": False})
+        out.append({**v, "deployment": d["deployment_id"] if d else None, "deployment_status": d["status"] if d else None,
+                    "deployment_no_images": d["no_images"] if d else None, "not_done": False})
     if locations:
         visited = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in visits}
         sessions = sorted({str(v["session"]).upper() for v in visits if v.get("session")})
@@ -241,7 +247,7 @@ def write_collection_logs(root: Path, research_project_id: str, collections: lis
         files = []
         for d in items:
             location = where.get(d["site"].lower())
-            if d["status"] == "closed":
+            if d["status"] == "closed" and not d["no_images"]:
                 try:
                     local_folder_service.upsert_timestamp_log(folder, d["deployment_id"], _wall(d["start"], location), _wall(d["end"], location))
                 except local_folder_service.LocalFolderError as exc:

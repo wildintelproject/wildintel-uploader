@@ -263,4 +263,20 @@ describe('VisitBookPage', () => {
     expect(details).toHaveTextContent('Photos collected from the SD card previously installed (A13)241')
     expect(details).toHaveTextContent('SD card leftB2')
   })
+
+  it('says Stolen of the visit whose camera was stolen, with no button to create a deployment', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'closed', deployment_no_images: 'stolen' }),
+    ] })
+    render(<VisitBookPage onBack={vi.fn()} onImportImages={vi.fn()} />)
+
+    const table = await screen.findByRole('table', { name: 'Visits' })
+    const row = within(table).getAllByRole('row')[1]
+    expect(within(row).getByText('Stolen')).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: /Create the deployment/ })).not.toBeInTheDocument()
+    const cards = screen.getByRole('region', { name: 'Visits by status' })
+    expect(within(cards).getByRole('button', { name: 'Stolen' })).toHaveTextContent('1')
+    expect(within(cards).getByRole('button', { name: 'Collected' })).toHaveTextContent('0')
+  })
 })
+

@@ -18,7 +18,8 @@ interface Props {
 export function uploadsOf(deployments: FieldDeployment[]) {
   const revisions = [...new Set(deployments.map((d) => d.collection))].sort((a, b) => b.localeCompare(a))
   return revisions.map((collection) => {
-    const own = deployments.filter((d) => d.collection === collection)
+    // a deployment closed with no images (the camera was stolen) has nothing to upload: it is not counted
+    const own = deployments.filter((d) => d.collection === collection && !d.no_images)
     const ready = own.filter((d) => d.status === 'closed' && d.images_stored)
     const onTrapper = own.filter((d) => d.on_trapper).length
     return { collection, total: own.length, ready: ready.length, onTrapper, toUpload: ready.filter((d) => !d.on_trapper).length }

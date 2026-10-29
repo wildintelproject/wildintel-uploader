@@ -50,16 +50,17 @@ function sortValue(v: BookVisit, key: SortKey): string | number {
 }
 
 /** Where a visit is in its life: planned (not made yet), deployed (it left a camera that is still out), collected (the card was collected: a later visit closed it) and stored (the deployment is made, so its images are kept). A visit that left no camera has none. */
-type Phase = 'planned' | 'deployed' | 'collected' | 'stored'
+type Phase = 'planned' | 'deployed' | 'collected' | 'stored' | 'stolen'
 const phaseOf = (v: BookVisit): Phase | null =>
-  v.not_done ? 'planned' : v.deployment_status === 'open' ? 'deployed' : v.deployment_status === 'closed' ? (v.deployment_id ? 'stored' : 'collected') : null
-const PHASES: Phase[] = ['stored', 'collected', 'deployed', 'planned']
-const PHASE_LABEL: Record<Phase, string> = { planned: 'Planned', deployed: 'Deployed', collected: 'Collected', stored: 'Stored' }
+  v.not_done ? 'planned' : v.deployment_status === 'open' ? 'deployed' : v.deployment_status === 'closed' ? (v.deployment_no_images ? 'stolen' : v.deployment_id ? 'stored' : 'collected') : null
+const PHASES: Phase[] = ['stored', 'collected', 'stolen', 'deployed', 'planned']
+const PHASE_LABEL: Record<Phase, string> = { planned: 'Planned', deployed: 'Deployed', collected: 'Collected', stored: 'Stored', stolen: 'Stolen' }
 const PHASE_BADGE: Record<Phase, string> = {
   planned: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300',
   deployed: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300',
   collected: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300',
   stored: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
+  stolen: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
 }
 
 /** The rows the status cards show: the ones in a phase, or all. */
@@ -121,6 +122,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
     { filter: 'deployed', label: 'Deployed', note: 'Camera out, card not collected', tone: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300', icon: <Icon path={<><path d="M12 3l10 18H2z" /><path d="M12 10v4M12 17.5v.01" /></>} className="h-5 w-5" /> },
     { filter: 'collected', label: 'Collected', note: 'Card collected, deployment not made', tone: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></>} className="h-5 w-5" /> },
     { filter: 'stored', label: 'Stored', note: 'Deployment made, images stored', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />} className="h-5 w-5" /> },
+    { filter: 'stolen', label: 'Stolen', note: 'Camera stolen, no images', tone: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>} className="h-5 w-5" /> },
   ]
 
   // the visit a link of the deployments dashboard goes to is brought into view: on its revision, on its page, and open
@@ -181,14 +183,14 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
           {visits !== null && (
             <section aria-label="Visits by status" className="mb-5">
               <p className="mb-2 text-right text-xs text-zinc-500 dark:text-zinc-400">Pick a card to show only those visits.</p>
-              <div className="grid grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1fr_1fr] gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-[1.6fr_repeat(5,1fr)] gap-3">
                 <div className="col-span-2 lg:col-span-1 flex items-center gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 px-5 py-4">
                   <Ring percent={percent} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">Visits completed</p>
                     <p className="text-2xl font-semibold leading-tight">{made} <span className="text-zinc-400">/ {rows.length}</span></p>
                     <div role="progressbar" aria-label="Visits done" aria-valuemin={0} aria-valuemax={rows.length} aria-valuenow={made} className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                      <div className="bg-emerald-500" style={{ width: `${rows.length ? ((count('collected') + count('stored')) / rows.length) * 100 : 0}%` }} />
+                      <div className="bg-emerald-500" style={{ width: `${rows.length ? ((count('collected') + count('stored') + count('stolen')) / rows.length) * 100 : 0}%` }} />
                       <div className="bg-amber-500" style={{ width: `${rows.length ? (count('deployed') / rows.length) * 100 : 0}%` }} />
                     </div>
                     <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{made} of {rows.length} visits done ({percent}%) · {rows.length - made} pending</p>
@@ -258,9 +260,9 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 <button type="button" className={`${btnOutline} inline-flex items-center gap-1.5 !px-2.5 !py-1 !text-xs whitespace-nowrap text-emerald-700 dark:text-emerald-300`} aria-label={`Details of the deployment ${v.deployment_id}`} onClick={() => onShowDeployment?.(v.deployment_id!)}>
                                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Show image details
                                 </button>
-                              ) : v.deployment_status === 'closed' && onImportImages ? (
+                              ) : v.deployment_status === 'closed' && !v.deployment_no_images && onImportImages ? (
                                 <button type="button" className={`${btnOutline} !px-2.5 !py-1 !text-xs whitespace-nowrap`} aria-label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })}>Create deployment</button>
-                              ) : <span role="img" aria-label="Images not stored" title="Not stored: the card has not been collected yet" className="inline-flex text-zinc-400 dark:text-zinc-500">
+                              ) : <span role="img" aria-label="Images not stored" title={v.deployment_no_images ? 'No images: the camera was stolen' : 'Not stored: the card has not been collected yet'} className="inline-flex text-zinc-400 dark:text-zinc-500">
                                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
                                 </span>}
                             </td>
@@ -322,7 +324,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
         </div>
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
           <h5 className="mb-1.5 font-semibold text-violet-600 dark:text-violet-400">Data states</h5>
-          <p className="text-zinc-500 dark:text-zinc-400"><span className="font-medium text-zinc-700 dark:text-zinc-200">Images</span>: once the deployment of the visit is made its images are stored — the visit is Stored — and <em>Show image details</em> opens that deployment.</p>
+          <p className="text-zinc-500 dark:text-zinc-400"><span className="font-medium text-zinc-700 dark:text-zinc-200">Images</span>: once the deployment of the visit is made its images are stored — the visit is Stored — and <em>Show image details</em> opens that deployment. A visit whose camera was stolen is <em>Stolen</em>: there are no images, and nothing to create.</p>
         </div>
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
           <h5 className="mb-1.5 font-semibold text-sky-600 dark:text-sky-400">Filters and search</h5>
