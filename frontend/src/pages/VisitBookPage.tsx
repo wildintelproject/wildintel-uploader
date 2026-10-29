@@ -89,7 +89,7 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
               <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
                 <table className="w-full text-sm" aria-label="Visits">
                   <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
-                    <tr>{['Session', 'Where', 'When', 'Status', 'Actions', 'Deployment', ''].map((h, i) => <th key={i} scope="col" className="px-3 py-2.5 text-left font-medium">{h || <span className="sr-only">What to do</span>}</th>)}</tr>
+                    <tr>{['Session', 'Where', 'When', 'Status', 'Actions', 'Images stored', ''].map((h, i) => <th key={i} scope="col" className="px-3 py-2.5 text-left font-medium">{h || <span className="sr-only">What to do</span>}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
                     {shown.map((v) => {
@@ -106,17 +106,19 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
                                 : <span className="text-zinc-400">—</span>}
                             </td>
                             <td className="px-3 py-2">{v.actions.join(' + ')}</td>
-                            <td className="px-3 py-2 font-mono text-xs">
-                              {v.deployment_id
-                                ? v.deployment_id
-                                : v.deployment_status === 'closed' ? <span className="font-sans text-zinc-400">Not created yet</span> : null}
+                            <td className="px-3 py-2">
+                              {v.deployment_id ? (
+                                <span role="img" aria-label={`Images stored: ${v.deployment_id}`} title={v.deployment_id} className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                                  <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{v.deployment_id}</span>
+                                </span>
+                              ) : v.deployment_status === 'closed' && onImportImages ? (
+                                <button type="button" className={`${btnPrimary} !px-2.5 !py-1 !text-xs whitespace-nowrap`} aria-label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })}>Create deployment</button>
+                              ) : <span aria-label="Images not stored" className="text-zinc-400">—</span>}
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap">
                               <div className="flex flex-col gap-1.5 items-stretch">
                                 <button type="button" className={`${btnOutline} !px-2.5 !py-1 !text-xs`} aria-expanded={opened === key} aria-label={`Details of the visit ${v.session} to ${v.location_id}`} onClick={() => setOpened(opened === key ? null : key)}>Details</button>
-                                {v.deployment_status === 'closed' && !v.deployment_id && onImportImages && (
-                                  <button type="button" className={`${btnPrimary} !px-2.5 !py-1 !text-xs`} aria-label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })}>Create deployment</button>
-                                )}
                               </div>
                             </td>
                           </tr>

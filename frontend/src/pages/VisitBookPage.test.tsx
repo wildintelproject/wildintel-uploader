@@ -28,7 +28,7 @@ beforeEach(() => {
 })
 
 async function pickProject() {
-  render(<VisitBookPage onBack={vi.fn()} />)
+  render(<VisitBookPage onBack={vi.fn()} onImportImages={vi.fn()} />)
   await userEvent.click(await screen.findByLabelText('Research project'))
   await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
 }
@@ -46,16 +46,18 @@ describe('VisitBookPage', () => {
     expect(mockedApi.visitBook).toHaveBeenCalledWith('TATR')
   })
 
-  it('has the session first, then where and when, the status of the visit (closed or open), the actions and the deployment — only once it is created, with its images imported', async () => {
+  it('has the session first, then where and when, the status of the visit (closed or open), the actions and whether its images are stored (a tick, or the button to create the deployment)', async () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Status', 'Actions', 'Deployment'])
+    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Status', 'Actions', 'Images stored'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'Revision', ''])
-    // the id a deployment would have is not shown: it appears when the deployment is created and its images imported
-    expect(within(screen.getByRole('table', { name: 'Visits' })).getByText('R0003-TATR_0002')).toBeInTheDocument()
-    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Closed', 'Installation', 'Not created yet'])
+    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'Revision', '—'])
+    // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not
+    expect(within(table).getByRole('img', { name: 'Images stored: R0003-TATR_0002' })).toBeInTheDocument()
+    expect(within(table).getAllByRole('img', { name: /^Images stored/ })).toHaveLength(1)
+    expect(within(table).getAllByLabelText('Images not stored')).toHaveLength(1) // the open visit: nothing to store yet
+    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Closed', 'Installation', 'Create deployment'])
   })
 
   it('shows the details of a visit, and creates the deployment of a closed visit that has none yet', async () => {
