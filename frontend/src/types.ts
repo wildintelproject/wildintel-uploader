@@ -791,6 +791,19 @@ export interface FieldDeployment {
   on_trapper?: boolean
 }
 
+/** One upload of a deployment: the platform it was sent to (`destination`), when, and what it did there. A deployment that came from the platform (`synced`) was not sent from here, so it has no day. */
+export interface UploadRecord {
+  deployment_id: string
+  collection: string
+  site: string
+  destination: string
+  kind: 'uploaded' | 'synced'
+  uploaded_at: string | null
+  parts: number | null
+  location_created: boolean | null
+  deployment_created: boolean | null
+}
+
 /** What writing the logs of the collections did: for each, how many deployments are closed and how many open, and the files written. */
 export interface FieldLogsResult {
   collections: { collection: string; closed: number; open: number; files: string[] }[]

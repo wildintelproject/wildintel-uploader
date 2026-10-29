@@ -30,7 +30,7 @@ export default function ChoiceCards<V extends string>({ label, value, choices, o
         return (
           <button
             key={c.value} type="button" role="radio" aria-checked={on} aria-label={c.label} onClick={() => onChange(c.value)}
-            className={`group flex w-full items-center gap-3 rounded-xl border text-left transition-all duration-150 active:translate-y-0.5 active:shadow-none ${large ? 'p-4' : 'p-3.5'} ${on ? `${accent} -translate-y-px` : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 hover:border-zinc-400 dark:hover:border-zinc-500 hover:-translate-y-0.5'}`}
+            className={`group flex w-full items-center gap-3 rounded-xl border text-left transition-all duration-150 active:translate-y-[3px] active:shadow-[0_1px_0_0_#a1a1aa] dark:active:shadow-[0_1px_0_0_#1e293b] ${large ? 'p-4' : 'p-3.5'} ${on ? `${accent} -translate-y-px` : 'border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 shadow-[0_4px_0_0_#d4d4d8] dark:shadow-[0_4px_0_0_#1e293b] hover:border-zinc-400 dark:hover:border-zinc-500 hover:-translate-y-0.5'}`}
           >
             <span aria-hidden="true" className={`flex shrink-0 items-center justify-center rounded-lg border ${large ? 'h-10 w-10' : 'h-8 w-8'} ${on ? (red ? 'border-red-300 dark:border-red-800 text-red-600 dark:text-red-400' : 'border-blue-300 dark:border-blue-800 text-blue-600 dark:text-blue-400') : 'border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400'}`}>
               <LineIcon size={large ? 20 : 16}>{c.icon}</LineIcon>

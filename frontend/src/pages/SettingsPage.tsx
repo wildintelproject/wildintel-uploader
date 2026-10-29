@@ -11,6 +11,7 @@ import EpicollectMapping from '../components/EpicollectMapping'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
 import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS, SD_CARD_CAPACITIES } from '../entities'
 import Notice from '../components/Notice'
+import { UPLOAD_DESTINATIONS, type UploadDestinationId } from '../uploadDestinations'
 import ReportsList from '../components/ReportsList'
 import { isValidTimezone } from '../deploymentValidation'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
@@ -343,7 +344,6 @@ const FIELDLOG_COLUMNS: [string, string, string][] = [
 ]
 
 /** The platforms a deployment can be uploaded to, each set up in the Uploader section. */
-const UPLOAD_DESTINATIONS: { id: 'trapper'; label: string }[] = [{ id: 'trapper', label: 'Trapper' }]
 
 const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'general', label: 'General', icon: SlidersIcon },
@@ -1993,7 +1993,7 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
  * images are kept in and the log, the Trapper account, which validation
  * and postvalidation checks the wizard shows, and how the images are preprocessed. One Save saves every section. */
 export default function SettingsPage({ onClose, initialSection, initialProject }: Props) {
-  const [uploadDestination, setUploadDestination] = useState<'trapper'>('trapper')
+  const [uploadDestination, setUploadDestination] = useState<UploadDestinationId>('trapper')
   const [section, setSection] = useState<SectionId>(initialSection && initialSection in ENTITY_SECTIONS ? 'entities' : (initialSection as SectionId | undefined) ?? 'general')
   const [saved, setSaved] = useState<AppSettings | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)

@@ -161,6 +161,36 @@ def deployments(req: ListVisitsRequest) -> dict:
     return {"results": results}
 
 
+@router.post("/uploads")
+def uploads(req: ListVisitsRequest) -> dict:
+    """The uploads of the deployments of a research project — one for each deployment that went somewhere, newest first: which `destination` (the platform it was sent to:
+    only "trapper" for now, the rest of the fields say what that upload did), when, and how. A deployment that came from Trapper (synced) is there too, as `kind` "synced",
+    with no day: it was not sent from here."""
+    try:
+        root = config.collections_dir()
+        local_folder_service.require_research_project(root, req.research_project_id)
+        found = visit_deployments.deployments(local_folder_service.list_visits(root, req.research_project_id, req.location_id), config.load_settings().FIELDLOG.keep_seconds)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    results = []
+    for d in found:
+        imported = d["start_visit"].get("deployment_id")
+        if not imported:
+            continue
+        folder = root / req.research_project_id / imported.split("-", 1)[0] / imported
+        upload = local_folder_service._read_json(folder / trapper_upload_service.UPLOAD_LOG_FILE)
+        sent = isinstance(upload, dict) and upload.get("uploaded_at")
+        if not sent and not local_folder_service.is_synced(folder):
+            continue
+        results.append({
+            "deployment_id": imported, "collection": d["collection"], "site": d["site"], "destination": "trapper", "kind": "uploaded" if sent else "synced",
+            "uploaded_at": upload.get("uploaded_at") if sent else None, "parts": upload.get("parts") if sent else None,
+            "location_created": bool(upload.get("location_created")) if sent else None, "deployment_created": bool(upload.get("deployment_created")) if sent else None,
+        })
+    # every revision the deployments have, with or without uploads: the dashboard is looked at by revision
+    return {"results": sorted(results, key=lambda u: (u["uploaded_at"] or "", u["deployment_id"]), reverse=True), "revisions": sorted({d["collection"] for d in found}, reverse=True)}
+
+
 @router.post("/field-logs")
 def field_logs(req: FieldLogsRequest) -> dict:
     """Writes, in the folder of each collection the visits give deployments to, its FileTimestampLog (the closed deployments' start and end) and its FieldworkLog

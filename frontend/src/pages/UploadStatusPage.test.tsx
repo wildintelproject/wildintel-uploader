@@ -1,42 +1,90 @@
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FieldDeployment } from '../types'
+import type { UploadRecord } from '../types'
 
-vi.mock('../api', () => ({ api: { fieldDeployments: vi.fn(), listResearchProjects: vi.fn(), getSettings: vi.fn() } }))
+vi.mock('../api', () => ({ api: { uploads: vi.fn(), listResearchProjects: vi.fn(), getSettings: vi.fn() } }))
 import { api } from '../api'
-import UploadStatusPage, { uploadsOf } from './UploadStatusPage'
+import UploadStatusPage from './UploadStatusPage'
 
-const dep = (id: string, collection: string, extra: Partial<FieldDeployment> = {}): FieldDeployment => ({
-  deployment_id: id, collection, site: 'DONA_01', status: 'closed', start: '2026-06-10T09:00:00Z', end: '2026-08-05T08:00:00Z', setup_by: null, camera_id: null, card: null,
-  photos_counted: null, start_session: collection, end_session: collection, images_stored: true, on_trapper: false, ...extra,
+const upload = (id: string, extra: Partial<UploadRecord> = {}): UploadRecord => ({
+  deployment_id: id, collection: id.split('-')[0], site: 'DONA_01', destination: 'trapper', kind: 'uploaded', uploaded_at: '2026-10-20T10:00:00+00:00', parts: 2,
+  location_created: true, deployment_created: true, ...extra,
 })
-const DEPLOYMENTS = [dep('R0002-DONA_01', 'R0002', { on_trapper: true }), dep('R0002-DONA_02', 'R0002'), dep('R0001-DONA_01', 'R0001', { on_trapper: true }), dep('R0001-DONA_02', 'R0001', { status: 'open', end: null, images_stored: false })]
+const UPLOADS = [upload('R0002-DONA_01'), upload('R0001-DONA_01', { uploaded_at: '2026-09-01T08:30:00+00:00', parts: 1, location_created: false, deployment_created: true }), upload('R0001-DONA_02', { kind: 'synced', uploaded_at: null, parts: null, location_created: null, deployment_created: null })]
 
 describe('UploadStatusPage', () => {
   beforeEach(() => {
     vi.mocked(api.getSettings).mockResolvedValue({ GENERAL: { default_research_project: 'DONA' } } as never)
     vi.mocked(api.listResearchProjects).mockResolvedValue({ results: [{ acronym: 'DONA', name: 'Doñana' }] } as never)
-    vi.mocked(api.fieldDeployments).mockResolvedValue({ results: DEPLOYMENTS } as never)
+    vi.mocked(api.uploads).mockResolvedValue({ results: UPLOADS })
   })
 
-  it('counts, for each revision, its deployments, those ready to upload and those on Trapper', () => {
-    expect(uploadsOf(DEPLOYMENTS)).toEqual([
-      { collection: 'R0002', total: 2, ready: 2, onTrapper: 1, toUpload: 1 },
-      { collection: 'R0001', total: 2, ready: 1, onTrapper: 1, toUpload: 0 },
-    ])
-  })
-
-  it('shows the revisions with their uploads and the deployments still to be uploaded', async () => {
+  it('shows the uploads — where each deployment went, when, and what it did — not the states of the deployments', async () => {
     render(<UploadStatusPage onBack={() => {}} />)
 
-    const table = await screen.findByRole('table', { name: 'Revisions' })
-    const rows = within(table).getAllByRole('row')
-    expect(within(rows[1]).getByText('R0002')).toBeInTheDocument()
-    expect(within(rows[1]).getByText('1 of 2')).toBeInTheDocument()
-    expect(within(rows[1]).getByRole('progressbar', { name: 'R0002 uploaded' })).toHaveAttribute('aria-valuenow', '1')
-    // the deployments start with the ones not on Trapper yet
-    const deployments = await screen.findByRole('table', { name: 'Deployments' })
-    expect(within(deployments).getByText('R0002-DONA_02')).toBeInTheDocument()
-    expect(within(deployments).queryByText('R0002-DONA_01')).not.toBeInTheDocument()
+    const table = await screen.findByRole('table', { name: 'Uploads' })
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Deployment', 'Revision', 'Platform', 'Uploaded', 'What it did'])
+    const [first, second, synced] = within(table).getAllByRole('row').slice(1)
+    expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['R0002-DONA_01', 'R0002', 'Trapper', '20 Oct 2026, 10:00', '2 packages · location and deployment created there'])
+    expect(within(second).getAllByRole('cell')[4]).toHaveTextContent('1 package · deployment created there')
+    expect(within(synced).getAllByRole('cell')[3]).toHaveTextContent('—')
+    expect(within(synced).getAllByRole('cell')[4]).toHaveTextContent('Synced from Trapper: it was not sent from here')
+    expect(screen.queryByRole('button', { name: 'Not created' })).not.toBeInTheDocument()
+  })
+
+  it('has a card for each platform, with its uploads, that filters the table', async () => {
+    render(<UploadStatusPage onBack={() => {}} />)
+
+    const cards = await screen.findByRole('region', { name: 'Uploads by platform' })
+    expect(within(cards).getByText('Uploaded deployments').parentElement).toHaveTextContent('3')
+    expect(within(cards).getByText(/The last, R0002-DONA_01, on 20 Oct 2026/)).toBeInTheDocument()
+    expect(within(cards).getByRole('button', { name: 'Trapper' })).toHaveTextContent('3')
+    await userEvent.click(within(cards).getByRole('button', { name: 'Trapper' }))
+    expect(within(screen.getByRole('table', { name: 'Uploads' })).getAllByRole('row').slice(1)).toHaveLength(3)
+    await userEvent.type(screen.getByLabelText('Filter the uploads'), 'DONA_02')
+    expect(within(screen.getByRole('table', { name: 'Uploads' })).getAllByRole('row').slice(1)).toHaveLength(1)
+  })
+
+  it('says so when nothing has been uploaded, and still has the card of the platform', async () => {
+    vi.mocked(api.uploads).mockResolvedValue({ results: [] })
+    render(<UploadStatusPage onBack={() => {}} />)
+
+    expect(await screen.findByText('No deployment has been uploaded yet.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Trapper' })).toHaveTextContent('0')
+    expect(screen.getByText('None uploaded from here yet')).toBeInTheDocument()
+  })
+
+  it('comes back from the breadcrumb', async () => {
+    const onBack = vi.fn()
+    render(<UploadStatusPage onBack={onBack} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Manage uploads' }))
+    expect(onBack).toHaveBeenCalled()
+  })
+
+  it('has the revisions to pick one: the cards and the table follow it', async () => {
+    render(<UploadStatusPage onBack={() => {}} />)
+
+    const revisions = await screen.findByRole('region', { name: 'Revision' })
+    expect(within(revisions).getAllByRole('button').map((b) => b.textContent)).toEqual(['All revisions3 uploads', 'R00021 upload', 'R00012 uploads'])
+    await userEvent.click(within(revisions).getByRole('button', { name: /^R0001/ }))
+
+    const table = screen.getByRole('table', { name: 'Uploads' })
+    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0001-DONA_01', 'R0001-DONA_02'])
+    expect(within(screen.getByRole('region', { name: 'Uploads by platform' })).getByRole('button', { name: 'Trapper' })).toHaveTextContent('2')
+    await userEvent.click(within(revisions).getByRole('button', { name: /^All revisions/ }))
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(3)
+  })
+
+  it('has every revision of the project to pick from, also the ones with no upload yet', async () => {
+    vi.mocked(api.uploads).mockResolvedValue({ results: UPLOADS, revisions: ['R0004', 'R0002', 'R0001'] })
+    render(<UploadStatusPage onBack={() => {}} />)
+
+    const revisions = await screen.findByRole('region', { name: 'Revision' })
+    expect(within(revisions).getAllByRole('button').map((b) => b.textContent)).toEqual(['All revisions3 uploads', 'R00040 uploads', 'R00021 upload', 'R00012 uploads'])
+    await userEvent.click(within(revisions).getByRole('button', { name: /^R0004/ }))
+    expect(screen.getByText('No upload matches.')).toBeInTheDocument()
   })
 })
+

@@ -27,8 +27,8 @@ const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
-export default function FieldDeployments({ deployments, highlight, initialFilter = '', belowSummary, onShowVisit, loadDetails }: {
-  deployments: FieldDeployment[]; highlight?: string; initialFilter?: Filter; belowSummary?: ReactNode; onShowVisit?: (visit: { session: string; site: string }) => void
+export default function FieldDeployments({ deployments, highlight, initialFilter = '', onShowVisit, loadDetails }: {
+  deployments: FieldDeployment[]; highlight?: string; initialFilter?: Filter; onShowVisit?: (visit: { session: string; site: string }) => void
   /** Reads what a created deployment says of itself: its details, for its View button. */
   loadDetails?: (deploymentId: string) => Promise<DeploymentFields | null>
 }) {
@@ -118,8 +118,6 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
               </select>
             </label>
           </div>
-
-          {belowSummary}
 
           <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
             <table className="w-full text-sm" aria-label="Deployments">
