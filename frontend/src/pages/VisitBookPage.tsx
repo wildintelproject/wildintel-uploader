@@ -278,7 +278,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 <dl aria-label={`Details of the visit ${v.session} to ${v.location_id}`} className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
                                   <div className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">Actions</dt><dd>{v.actions.join(' + ')}</dd></div>
                                   {DETAILS.filter(([k]) => { const value = v[k]; return value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0) })
-                                    .map(([k, label]) => <div key={k} className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">{k === 'num_photos' && collectedCard(everyRow, v) ? `Photos counted on the card collected (${collectedCard(everyRow, v)})` : label}</dt><dd className="font-mono text-xs break-all self-center">{shownValue(v[k])}</dd></div>)}
+                                    .map(([k, label]) => <div key={k} className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">{k === 'num_photos' && collectedCard(everyRow, v) ? `Photos collected from the SD card previously installed (${collectedCard(everyRow, v)})` : label}</dt><dd className="font-mono text-xs break-all self-center">{shownValue(v[k])}</dd></div>)}
                                 </dl>
                               </td>
                             </tr>

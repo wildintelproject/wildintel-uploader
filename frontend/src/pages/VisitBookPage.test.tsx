@@ -260,7 +260,7 @@ describe('VisitBookPage', () => {
     await userEvent.click(within(table).getByRole('button', { name: /View the visit R0004 to TATR_0001/ }))
 
     const details = screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })
-    expect(details).toHaveTextContent('Photos counted on the card collected (A13)241')
+    expect(details).toHaveTextContent('Photos collected from the SD card previously installed (A13)241')
     expect(details).toHaveTextContent('SD card leftB2')
   })
 })
