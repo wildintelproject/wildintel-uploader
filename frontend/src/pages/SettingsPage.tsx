@@ -1,3 +1,4 @@
+import QrCode, { qrPayload } from '../components/QrCode'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
@@ -899,7 +900,7 @@ function DateBox({ label, value, onChange }: { label: string; value: string; onC
   )
 }
 
-function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isNew, onChange, onRemove, onClose, onDone, doneLabel = 'Save changes', lockFirst = false, badges, readOnly = false, notice, extraRows = [], styled = false }: {
+function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isNew, onChange, onRemove, onClose, onDone, doneLabel = 'Save changes', lockFirst = false, badges, readOnly = false, notice, extraRows = [], styled = false, qr }: {
   noun: string; backLabel: string; fields: ItemField<T>[]; item: T; others: T[]; isNew: boolean; onChange: (patch: Partial<T>) => void; onClose: () => void
   /** Without it the item cannot be removed from here. */
   onRemove?: () => void
@@ -915,6 +916,8 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
   styled?: boolean
   /** Rows a read-only view says after the fields: what it is that cannot be a field, such as what belongs to it. */
   extraRows?: { label: string; value: string }[]
+  /** What its QR code says, shown over the fields once it is added. */
+  qr?: string
 }) {
   const [first] = fields
   const name = textOf(item, first.key).trim()
@@ -927,6 +930,7 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
       region={Noun} backLabel={backLabel} onBack={onClose} title={isNew ? `New ${noun}` : readOnly ? name : `Edit ${name}`} badges={badges} readOnly={readOnly} notice={notice}
       onCancel={onClose} onSave={onDone} saveLabel={doneLabel} saveDisabled={invalid} onRemove={onRemove} removeLabel={styled ? `Delete ${noun}` : `Remove ${noun}`}
     >
+      {!isNew && qr && <QrCode value={qr} label={name} />}
       {readOnly ? (
         <dl className="rounded-xl border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800">
           {[...fields.filter((f, i) => i > 0 && f.key !== 'status').map((f) => {
@@ -1038,7 +1042,9 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
 }
 
 /** A list kept in the settings: a card for each, with the way to edit it or delete it, and to add one. Adding or editing is a page of its own, kept with Done. */
-function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, fields, subtitle, empty, fileName, badges, onDetail, icon, styled, searchLabel, canDelete, plain, dim, meta, readOnly, notice, footnote }: {
+function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, fields, subtitle, empty, fileName, badges, onDetail, icon, styled, searchLabel, canDelete, plain, dim, meta, readOnly, notice, footnote, qr }: {
+  /** What the QR code of an item says, shown on its page. */
+  qr?: (item: T) => string | undefined
   heading: string; noun: string; items: T[]; onChange: (v: T[]) => void
   /** What an item is when it is added, before it is edited. */
   blank: T
@@ -1107,7 +1113,7 @@ function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, 
         noun={noun} backLabel={heading} fields={fields} item={editing.item} others={items.filter((_, i) => i !== editing.index)} isNew={editing.index === null}
         onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))}
         onRemove={editing.index === null ? undefined : () => { onChange(items.filter((_, i) => i !== editing.index)); setEditing(null) }}
-        onClose={() => setEditing(null)} onDone={done} doneLabel={styled ? (editing.index === null ? 'Add' : 'Save changes') : 'Done'} badges={badges?.(editing.item)} styled={styled} readOnly={readOnly?.(editing.item)} notice={notice?.(editing.item)}
+        onClose={() => setEditing(null)} onDone={done} doneLabel={styled ? (editing.index === null ? 'Add' : 'Save changes') : 'Done'} badges={badges?.(editing.item)} styled={styled} qr={qr?.(editing.item)} readOnly={readOnly?.(editing.item)} notice={notice?.(editing.item)}
       />
     )
   }
@@ -1488,7 +1494,7 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
       <div className="space-y-3">
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <ItemForm<LocationDraft>
-          noun="location" styled backLabel={`Locations of ${project.acronym}`} fields={LOCATION_FIELDS} item={editing.item} others={editing.isNew ? locations.map(locationDraft) : []} isNew={editing.isNew} lockFirst={!editing.isNew}
+          noun="location" styled qr={editing.isNew ? undefined : qrPayload('location', project.acronym, editing.item.location_id)} backLabel={`Locations of ${project.acronym}`} fields={LOCATION_FIELDS} item={editing.item} others={editing.isNew ? locations.map(locationDraft) : []} isNew={editing.isNew} lockFirst={!editing.isNew}
           badges={editing.isNew ? undefined : [...unusualStatus(editing.item), ...(stored?.trapper_pk != null ? [originBadge(stored.trapper_pk)] : [])]} readOnly={stored?.trapper_pk != null}
           notice={stored?.trapper_pk != null ? <TrapperNotice noun="location" /> : undefined}
           onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))} onClose={() => { setEditing(null); setError(null) }} onDone={() => void done()} doneLabel={editing.isNew ? 'Add' : 'Save changes'}
@@ -1678,7 +1684,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
 
       {tab === 'sdcards' && (!projectId ? <p className={hintClass}>Pick a research project to see its SD cards.</p> : (
         <ItemsEditor<SdCard>
-          heading={`SD cards${owner ? ` of ${owner}` : ' of no project'}`} noun="SD card" fileName={`${owner ?? 'unassigned'}_sd_cards`} icon={<SdCardIcon />} onDetail={setDetail} styled
+          heading={`SD cards${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('sdcard', owner, c.label) : undefined)} noun="SD card" fileName={`${owner ?? 'unassigned'}_sd_cards`} icon={<SdCardIcon />} onDetail={setDetail} styled
           items={sdCards.filter((c) => belongs(c.research_project))}
           onChange={(v) => onSdCards([...sdCards.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
           blank={{ label: '', brand: null, capacity: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
@@ -1699,7 +1705,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
 
       {tab === 'cameras' && (!projectId ? <p className={hintClass}>Pick a research project to see its cameras.</p> : (
         <ItemsEditor<Camera>
-          heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />} onDetail={setDetail} styled
+          heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('camera', owner, c.label) : undefined)} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />} onDetail={setDetail} styled
           items={cameras.filter((c) => belongs(c.research_project))}
           onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
           blank={{ label: '', camera_id: null, camera_model: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}

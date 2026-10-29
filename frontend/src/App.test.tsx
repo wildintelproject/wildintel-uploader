@@ -38,6 +38,7 @@ describe('App', () => {
   it('goes back to the welcome screen when the title is pressed, from wherever you are', async () => {
     render(<App />)
     await getStarted()
+    await userEvent.click(await screen.findByRole('button', { name: /manage uploads to trapper/i }))
     await userEvent.click(await screen.findByRole('button', { name: /upload deployment to trapper/i }))
     expect(await screen.findByText(/Upload page — nothing chosen/)).toBeInTheDocument()
 
@@ -84,6 +85,7 @@ describe('App', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'finish the import' }))
     await userEvent.click(await title())
     await getStarted()
+    await userEvent.click(await screen.findByRole('button', { name: /manage uploads to trapper/i }))
     await userEvent.click(await screen.findByRole('button', { name: /upload deployment to trapper/i }))
 
     expect(await screen.findByText('Upload page — nothing chosen')).toBeInTheDocument()

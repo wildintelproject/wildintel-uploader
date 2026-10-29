@@ -4,20 +4,16 @@ import userEvent from '@testing-library/user-event'
 import MenuPage from './MenuPage'
 
 describe('MenuPage', () => {
-  it('offers Manage deployments and Import collection', async () => {
+  it('offers Manage deployments, and no Import collection of its own', async () => {
     const onChoose = vi.fn()
     render(<MenuPage onChoose={onChoose} />)
 
     const deploymentButton = screen.getByRole('button', { name: /manage deployments/i })
-    const sessionButton = screen.getByRole('button', { name: /import collection/i })
-
     expect(deploymentButton).toBeEnabled()
-    expect(sessionButton).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /import collection/i })).not.toBeInTheDocument()
 
     await userEvent.click(deploymentButton)
     expect(onChoose).toHaveBeenCalledWith('deployment')
-    await userEvent.click(sessionButton)
-    expect(onChoose).toHaveBeenCalledWith('session')
   })
 
   it('offers to manage the visits', async () => {
@@ -32,19 +28,19 @@ describe('MenuPage', () => {
     const onChoose = vi.fn()
     render(<MenuPage onChoose={onChoose} />)
 
-    const uploadButton = screen.getByRole('button', { name: /upload deployment to trapper/i })
+    const uploadButton = screen.getByRole('button', { name: /manage uploads to trapper/i })
     expect(uploadButton).toBeEnabled()
-    expect(screen.getByText(/its location and the deployment are created there if they are missing/i)).toBeInTheDocument()
+    expect(screen.getByText(/which deployments and revisions are on trapper/i)).toBeInTheDocument()
 
     await userEvent.click(uploadButton)
     expect(onChoose).toHaveBeenCalledWith('upload')
   })
 
-  it('offers the tasks in the order manage visits, manage deployments, import collection, upload deployment', () => {
+  it('offers the tasks in the order manage visits, manage deployments, manage uploads', () => {
     render(<MenuPage onChoose={vi.fn()} />)
 
-    const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '').filter((t) => /Manage visits|Manage deployments|Import collection|Upload deployment/.test(t))
-    expect(titles.map((t) => t.match(/Manage visits|Manage deployments|Import deployments|Import collection|Upload deployment/)![0])).toEqual(['Manage visits', 'Manage deployments', 'Import collection', 'Upload deployment'])
+    const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '').filter((t) => /Manage visits|Manage deployments|Manage uploads/.test(t))
+    expect(titles.map((t) => t.match(/Manage visits|Manage deployments|Manage uploads/)![0])).toEqual(['Manage visits', 'Manage deployments', 'Manage uploads'])
     expect(screen.queryByRole('button', { name: /upload session to trapper/i })).not.toBeInTheDocument()
   })
 

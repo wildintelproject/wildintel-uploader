@@ -964,6 +964,14 @@ describe('SettingsPage', () => {
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: '2026-05-20', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
     })
 
+    it('shows the QR code of an SD card in its page', async () => {
+      await open([B3])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
+      expect(screen.getByRole('img', { name: 'QR code of B3' }).querySelector('svg')).not.toBeNull()
+      expect(screen.getByText('wildintel:sdcard:DONA:B3')).toBeInTheDocument()
+    })
+
     it('offers the usual brands to pick, and keeps any other that is typed', async () => {
       await open([B3])
 
@@ -1006,6 +1014,18 @@ describe('SettingsPage', () => {
 
       expect(screen.getByText('Reconyx-PC800 · P800HG08192031')).toBeInTheDocument() // the model and the serial number under the label
       expect(await screen.findByText('In production since 12 Nov 2025 · No visits yet')).toBeInTheDocument()
+    })
+
+    it('shows the QR code of a camera in its page — not when it is being added', async () => {
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: 'Reconyx-PC800', in_service: null, research_project: 'DONA' }])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add camera' }))
+      expect(screen.queryByRole('img', { name: /QR code of/ })).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: /Cancel/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
+      expect(screen.getByRole('img', { name: 'QR code of X1' }).querySelector('svg')).not.toBeNull()
+      expect(screen.getByText('wildintel:camera:DONA:X1')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Download QR code' })).toHaveAttribute('download', 'X1_qr.svg')
     })
 
     it('adds a camera by its id and model, and saves it', async () => {
@@ -1401,6 +1421,14 @@ describe('SettingsPage — Entities', () => {
       await waitFor(() => expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
         location_id: 'DONA_02', name: null, latitude: 37.01, longitude: -6.44, coordinate_uncertainty: null, timezone: 'Europe/Madrid', ignore_dst: true, trapper_pk: null, status: 'active', status_date: null, status_note: null,
       }))
+    })
+
+    it('shows the QR code of a location in its page', async () => {
+      await openLocations()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
+      expect(screen.getByRole('img', { name: 'QR code of DONA_01' }).querySelector('svg')).not.toBeNull()
+      expect(screen.getByText(/wildintel:location:.*:DONA_01/)).toBeInTheDocument()
     })
 
     it('deletes one after asking, from its page — and says why when it can not be', async () => {
