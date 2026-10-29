@@ -57,7 +57,7 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
 
   const needle = filter.trim().toLowerCase()
   const shown = (visits ?? [])
-    .filter((v) => !needle || `${v.location_id} ${v.session} ${v.camera_id ?? ''} ${v.sd ?? ''} ${v.trappers ?? ''} ${v.actions.join(' ')} ${v.deployment ?? ''} ${v.deployment_status ?? ''}`.toLowerCase().includes(needle))
+    .filter((v) => !needle || `${v.location_id} ${v.session} ${v.camera_id ?? ''} ${v.sd ?? ''} ${v.trappers ?? ''} ${v.actions.join(' ')} ${v.deployment_id ?? ''} ${v.deployment_status ?? ''}`.toLowerCase().includes(needle))
     .sort((a, b) => `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))
 
   return (
@@ -106,7 +106,11 @@ export default function VisitBookPage({ onBack, onImportImages }: Props) {
                                 : <span className="text-zinc-400">—</span>}
                             </td>
                             <td className="px-3 py-2">{v.actions.join(' + ')}</td>
-                            <td className="px-3 py-2 font-mono text-xs">{v.deployment ?? ''}{v.deployment_id ? <span className="ml-1.5 rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300 font-sans">imported</span> : null}</td>
+                            <td className="px-3 py-2 font-mono text-xs">
+                              {v.deployment_id
+                                ? v.deployment_id
+                                : v.deployment_status === 'closed' ? <span className="font-sans text-zinc-400">Not created yet</span> : null}
+                            </td>
                             <td className="px-3 py-2 whitespace-nowrap">
                               <div className="flex flex-col gap-1.5 items-stretch">
                                 <button type="button" className={`${btnOutline} !px-2.5 !py-1 !text-xs`} aria-expanded={opened === key} aria-label={`Details of the visit ${v.session} to ${v.location_id}`} onClick={() => setOpened(opened === key ? null : key)}>Details</button>

@@ -46,14 +46,16 @@ describe('VisitBookPage', () => {
     expect(mockedApi.visitBook).toHaveBeenCalledWith('TATR')
   })
 
-  it('has the session first, then where and when, the status of the visit (closed or open) and its deployment', async () => {
+  it('has the session first, then where and when, the status of the visit (closed or open), the actions and the deployment — only once it is created, with its images imported', async () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Status', 'Actions', 'Deployment'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'Revision', 'R0004-TATR_0001'])
-    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Closed', 'Installation', 'R0003-TATR_0001'])
+    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Open', 'Revision', ''])
+    // the id a deployment would have is not shown: it appears when the deployment is created and its images imported
+    expect(within(screen.getByRole('table', { name: 'Visits' })).getByText('R0003-TATR_0002')).toBeInTheDocument()
+    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Closed', 'Installation', 'Not created yet'])
   })
 
   it('shows the details of a visit, and creates the deployment of a closed visit that has none yet', async () => {
