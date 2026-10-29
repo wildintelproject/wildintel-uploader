@@ -794,7 +794,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left opacity-75">
-                      <th className="pr-3 py-1 font-medium">Session</th><th className="pr-3 font-medium">When</th>
+                      <th className="pr-3 py-1 font-medium">Revision</th><th className="pr-3 font-medium">When</th>
                       <th className="pr-3 font-medium">Site</th><th className="pr-3 font-medium">Camera</th><th className="font-medium">Actions</th>
                     </tr>
                   </thead>
@@ -981,7 +981,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-left text-zinc-500 dark:text-zinc-400">
-                          <th className="pr-3 py-1 font-medium">Session</th><th className="pr-3 font-medium">When</th><th className="pr-3 font-medium">Site</th>
+                          <th className="pr-3 py-1 font-medium">Revision</th><th className="pr-3 font-medium">When</th><th className="pr-3 font-medium">Site</th>
                           <th className="pr-3 font-medium">Camera</th><th className="font-medium">Actions</th>
                         </tr>
                       </thead>

@@ -30,7 +30,7 @@ const shownValue = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') 
 
 /** The columns the book can be sorted by. */
 type SortKey = 'session' | 'where' | 'when' | 'status' | 'actions' | 'stored' | 'trapper'
-const COLUMNS: [SortKey, string][] = [['session', 'Session'], ['where', 'Where'], ['when', 'When'], ['actions', 'Actions'], ['status', 'Status'], ['stored', 'Images stored'], ['trapper', 'On Trapper']]
+const COLUMNS: [SortKey, string][] = [['session', 'Revision'], ['where', 'Where'], ['when', 'When'], ['actions', 'Actions'], ['status', 'Status'], ['stored', 'Images stored'], ['trapper', 'On Trapper']]
 
 /** What a row says in a column, to sort by it: the rows not made go last whatever the direction (they have no day, no actions…). */
 function sortValue(v: BookVisit, key: SortKey): string | number {
@@ -63,7 +63,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   // A revision is one visit to every site: the book can be of one of them, or of all.
   const [revision, setRevision] = useState('')
   const [page, setPage] = useState(1)
-  // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest session first.
+  // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest revision first.
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const error = projectError ?? loadError
@@ -96,7 +96,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const shown = rows
     .filter((v) => matches(v, statusFilter))
     .filter((v) => !needle || `${v.location_id} ${v.session} ${v.camera_id ?? ''} ${v.sd ?? ''} ${v.trappers ?? ''} ${v.actions.join(' ')} ${v.deployment_id ?? ''} ${v.deployment_status ?? ''} ${v.not_done ? 'not done' : ''}`.toLowerCase().includes(needle))
-    // by the column chosen — the rows not made last —, else the latest session first, within it the visits made newest first and then the ones not made, by site
+    // by the column chosen — the rows not made last —, else the latest revision first, within it the visits made newest first and then the ones not made, by site
     .sort((a, b) => {
       const byDefault = () => b.session.localeCompare(a.session) || Number(a.not_done) - Number(b.not_done) || (a.not_done ? a.location_id.localeCompare(b.location_id) : `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))
       if (!sort) return byDefault()
@@ -161,7 +161,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
           )}
 
           {<div className="mb-3 flex justify-end">
-            <input aria-label="Filter the visits" className={`${inputClass} !w-64`} placeholder="Site, session, camera, card, who, deployment…" value={filter} onChange={(e) => { setFilter(e.target.value); setPage(1); setOpened(null) }} />
+            <input aria-label="Filter the visits" className={`${inputClass} !w-64`} placeholder="Site, revision, camera, card, who, deployment…" value={filter} onChange={(e) => { setFilter(e.target.value); setPage(1); setOpened(null) }} />
           </div>}
 
           {(

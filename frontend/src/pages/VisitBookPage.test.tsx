@@ -191,7 +191,7 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('columnheader').slice(0, 7).map((h) => h.textContent)).toEqual(['Session', 'Where', 'When', 'Actions', 'Status', 'Images stored', 'On Trapper'])
+    expect(within(table).getAllByRole('columnheader').slice(0, 7).map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images stored', 'On Trapper'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
     expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Revision', 'Open', ''])
     // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not

@@ -961,7 +961,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
           <WizardStep n={1} title="Which research project?" status="open" canEdit={false} onEdit={() => {}}
-                      description="The research project is the same for the whole session. Research projects are kept in the collections folder.">
+                      description="The research project is the same for all of them. Research projects are kept in the collections folder.">
             {fixedProject
               ? <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="The import" onOpenSettings={onOpenSettings} />
               : <ResearchProjectPicker value={projectId} onSelect={(picked) => { setProject(picked); setDrafts({}) }} />}
@@ -991,7 +991,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                     ))}
                   </div>
                 </FormCard>
-                <FormCard title="Visits" description={`The visits to ${projectId} that left a camera and whose card has been collected, with no deployment yet. Tick the ones this session is of — all of one session, which is the revision. Each folder will be one of them: it says where and when it was taken.`}>
+                <FormCard title="Visits" description={`The visits to ${projectId} that left a camera and whose card has been collected, with no deployment yet. Tick the ones the images are of — all of one revision. Each folder will be one of them: it says where and when it was taken.`}>
                   <input aria-label="Search the visits" className={`${inputClass} !w-72 mb-3`} placeholder="Search by location, card, date…" value={visitFilter} onChange={(e) => setVisitFilter(e.target.value)} />
                   <div className="max-h-[22rem] overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
                     <table className="w-full text-sm">
@@ -1018,7 +1018,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                     </table>
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2" role="status">
-                    {pickedList.length === 0 ? 'No visit ticked yet.' : `${plural(pickedList.length, 'visit', 'visits')} of the session ${session}.`}
+                    {pickedList.length === 0 ? 'No visit ticked yet.' : `${plural(pickedList.length, 'visit', 'visits')} of the revision R${String(session).padStart(4, '0')}.`}
                   </p>
                 </FormCard>
                 </>
@@ -1360,7 +1360,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                               {located && (fields!.latitude == null || fields!.longitude == null) && (
                                 <p className="text-xs text-red-600 dark:text-red-400 mt-2">This location has no coordinates, and a deployment needs them.</p>
                               )}
-                              {duplicated(d.name) && <p className="text-xs text-red-600 dark:text-red-400 mt-2">Another deployment of the session has this id — each needs its own location.</p>}
+                              {duplicated(d.name) && <p className="text-xs text-red-600 dark:text-red-400 mt-2">Another deployment of the revision has this id — each needs its own location.</p>}
                               {existingFolder(d.name) && (
                                 <Notice kind="warning" role="alert" className="mt-2">
                                   This deployment already exists: <span className="font-mono break-all">{existingFolder(d.name)}</span> is already kept, and
@@ -1486,7 +1486,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           {scan?.timestamp_log && (
             <p aria-live="polite" className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
               The start and end dates of {scan.timestamp_log.matched} of these {chosen.length} deployment(s) were taken from{' '}
-              <span className="font-mono">{scan.timestamp_log.name}</span>, found in the session folder, not from the images' EXIF data.
+              <span className="font-mono">{scan.timestamp_log.name}</span>, found in the folder, not from the images' EXIF data.
             </p>
           )}
           <FormCard title="When was each one collected?" description="The period of every deployment, and where its dates come from. Open a row to change its dates.">
@@ -1862,7 +1862,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
               </p>
               {allDone && (
                 <div className="flex items-center gap-3 flex-wrap">
-                  <p className="text-sm text-emerald-600 dark:text-emerald-400"><Mark kind="success" />Session imported — {chosen.length} deployment(s).</p>
+                  <p className="text-sm text-emerald-600 dark:text-emerald-400"><Mark kind="success" />Imported — {chosen.length} deployment(s).</p>
                   {collectionPath && <button type="button" className={btnOutline} onClick={handleOpenFolder}>Open folder</button>}
                   {onUpload && projectId && revisionValid && (
                     <button type="button" className={btnPrimary} onClick={() => onUpload({ researchProjectId: projectId, collection: revisionName })}>

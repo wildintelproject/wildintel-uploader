@@ -614,7 +614,7 @@ describe('ImportSessionPage', () => {
     await toDetails()
     await chooseLocation(screen.getByLabelText('Location of DONA_02'), 'DONA_01')
 
-    expect((await screen.findAllByText(/Another deployment of the session has this id/)).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(/Another deployment of the revision has this id/)).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
   })
 
@@ -818,7 +818,7 @@ describe('ImportSessionPage', () => {
     await next() // checks → prepare
     await userEvent.click(await screen.findByRole('button', { name: 'Import 2 deployments' }))
 
-    await screen.findByText(/Session imported — 2 deployment/)
+    await screen.findByText(/Imported — 2 deployment/)
     expect(mockedApi.importLocal.mock.calls.map((c) => [c[0], c[1], c[3].deployment_id])).toEqual([
       ['/s/DONA_01', COLLECTION, 'R0003-DONA_01'], ['/s/DONA_02', COLLECTION, 'R0003-DONA_02'],
     ])
@@ -837,7 +837,7 @@ describe('ImportSessionPage', () => {
     expect(screen.getByText('Save to your collection', { selector: 'h4' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Import 2 deployments' }))
 
-    await screen.findByText(/Session imported — 2 deployment/)
+    await screen.findByText(/Imported — 2 deployment/)
     expect(screen.getByRole('progressbar', { name: 'Deployments imported' })).toHaveAttribute('aria-valuenow', '100')
     expect(screen.getByText('2 of 2 deployments imported')).toBeInTheDocument()
   })
@@ -848,7 +848,7 @@ describe('ImportSessionPage', () => {
     await userEvent.click(await screen.findByRole('checkbox', { name: 'Resize the images' }))
     await userEvent.click(screen.getByRole('button', { name: 'Import 2 deployments' }))
 
-    await screen.findByText(/Session imported/)
+    await screen.findByText(/Imported — /)
     expect(mockedApi.importLocal.mock.calls[0][4]).toEqual(expect.objectContaining({ rename: true, resize: false }))
   })
 
@@ -861,7 +861,7 @@ describe('ImportSessionPage', () => {
     expect(screen.queryByRole('button', { name: 'Upload to Trapper' })).not.toBeInTheDocument()
     await userEvent.click(await screen.findByRole('button', { name: 'Import 2 deployments' }))
 
-    await screen.findByText(/Session imported — 2 deployment/)
+    await screen.findByText(/Imported — 2 deployment/)
     await userEvent.click(screen.getByRole('button', { name: 'Upload to Trapper' }))
     expect(onUpload).toHaveBeenCalledWith({ researchProjectId: 'DONA', collection: 'R0003' })
   })
@@ -881,7 +881,7 @@ describe('ImportSessionPage', () => {
     failing = false
     await userEvent.click(screen.getByRole('button', { name: 'Import the 1 left' }))
 
-    await screen.findByText(/Session imported/)
+    await screen.findByText(/Imported — /)
     expect(mockedApi.importLocal).toHaveBeenCalledTimes(3)
     expect(mockedApi.importLocal.mock.calls[2][3].deployment_id).toBe('R0003-DONA_01')
   })
@@ -897,7 +897,7 @@ describe('ImportSessionPage', () => {
     await next(); await next()
     await userEvent.click(await screen.findByRole('button', { name: 'Import 2 deployments' }))
 
-    await screen.findByText(/Session imported/)
+    await screen.findByText(/Imported — /)
     expect(mockedApi.importLocal.mock.calls[0][3]).toEqual(expect.objectContaining({ setup_by: 'Ana', comments: 'Near the pond', camera_height: 1.2 }))
     expect(mockedApi.importLocal.mock.calls[1][3].setup_by).toBeNull() // each deployment has its own
   })
@@ -1000,7 +1000,7 @@ describe('ImportSessionPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Open DONA_61' }))
       expect(screen.getByRole('group', { name: 'Dates of DONA_61' })).toBeInTheDocument()
       await chooseLocation(screen.getByLabelText('Location of DONA_61'), 'DONA_01')
-      expect((await screen.findAllByText(/Another deployment of the session has this id/)).length).toBeGreaterThan(0)
+      expect((await screen.findAllByText(/Another deployment of the revision has this id/)).length).toBeGreaterThan(0)
     })
   })
 })
