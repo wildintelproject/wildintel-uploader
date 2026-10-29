@@ -50,34 +50,32 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen 
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {project && deployments === null && <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p>}
-      {deployments !== null && revisions.length > 0 && (
-        <section aria-label="Uploads by revision" className="mb-6">
-          <h5 className="text-lg font-semibold mb-2">Revisions</h5>
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
-            <table className="w-full text-sm" aria-label="Revisions">
-              <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
-                <tr>{['Revision', 'Deployments', 'Ready to upload', 'On Trapper', 'Progress'].map((h) => <th key={h} scope="col" className="px-3 py-2.5 text-left font-medium">{h}</th>)}</tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                {revisions.map((r) => (
-                  <tr key={r.collection}>
-                    <td className="px-3 py-3 font-mono text-xs font-semibold">{r.collection}</td>
-                    <td className="px-3 py-3">{r.total}</td>
-                    <td className="px-3 py-3">{r.toUpload}</td>
-                    <td className="px-3 py-3">{r.onTrapper} of {r.total}</td>
-                    <td className="px-3 py-3 w-48">
-                      <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-700" role="progressbar" aria-label={`${r.collection} on Trapper`} aria-valuemin={0} aria-valuemax={r.total} aria-valuenow={r.onTrapper}>
-                        <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${r.total ? Math.round((r.onTrapper / r.total) * 100) : 0}%` }} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-      {deployments !== null && <FieldDeployments deployments={deployments} initialFilter="to_upload" />}
+      {deployments !== null && <FieldDeployments deployments={deployments} initialFilter="to_upload" belowSummary={revisions.length > 0 && (
+  <section aria-label="Uploads by revision" className="mb-6">
+    <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+      <table className="w-full text-sm" aria-label="Revisions">
+        <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
+          <tr>{['Revision', 'Deployments', 'Ready to upload', 'On Trapper', 'Progress'].map((h) => <th key={h} scope="col" className="px-3 py-2.5 text-left font-medium">{h}</th>)}</tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+          {revisions.map((r) => (
+            <tr key={r.collection}>
+              <td className="px-3 py-3 font-mono text-xs font-semibold">{r.collection}</td>
+              <td className="px-3 py-3">{r.total}</td>
+              <td className="px-3 py-3">{r.toUpload}</td>
+              <td className="px-3 py-3">{r.onTrapper} of {r.total}</td>
+              <td className="px-3 py-3 w-48">
+                <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-700" role="progressbar" aria-label={`${r.collection} on Trapper`} aria-valuemin={0} aria-valuemax={r.total} aria-valuenow={r.onTrapper}>
+                  <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${r.total ? Math.round((r.onTrapper / r.total) * 100) : 0}%` }} />
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+      )} />}
 
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>

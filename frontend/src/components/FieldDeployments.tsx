@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatDay } from '../dateFormat'
 import { btnOutline } from '../pages/ImportDeploymentPage'
 import type { FieldDeployment } from '../types'
@@ -17,7 +17,7 @@ const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
-export default function FieldDeployments({ deployments, highlight, initialFilter = '' }: { deployments: FieldDeployment[]; highlight?: string; initialFilter?: Filter }) {
+export default function FieldDeployments({ deployments, highlight, initialFilter = '', belowSummary }: { deployments: FieldDeployment[]; highlight?: string; initialFilter?: Filter; belowSummary?: ReactNode }) {
   const [revision, setRevision] = useState('')
   const [filter, setFilter] = useState<Filter>(initialFilter)
   const [page, setPage] = useState(1)
@@ -78,6 +78,8 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
               ))}
             </div>
           </section>
+
+          {belowSummary}
 
           <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
             <table className="w-full text-sm" aria-label="Deployments">
