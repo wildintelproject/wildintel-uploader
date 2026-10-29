@@ -15,10 +15,11 @@ import { availabilityErrors, cameraAtSite } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
-export type VisitSource = 'manual' | 'epicollect' | 'csv'
+export type VisitSource = 'manual' | 'manual2' | 'epicollect' | 'csv'
 
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
   { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.' },
+  { value: 'manual2', icon: <><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>, title: 'By hand 2', description: 'The new form, being adapted to the field flow of a visit. For now it is the same as By hand.' },
   { value: 'epicollect', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'From Wildintel Epicollect', description: 'Read the visits of a field trip from the Epicollect download.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'From a spreadsheet file', description: 'Any spreadsheet: say which column gives each field of a visit.' },
 ]
@@ -266,6 +267,8 @@ const cameraKey = (c: Camera) => c.camera_id || c.label
 
 export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = false, onImportImages }: Props) {
   const [source, setSource] = useState<VisitSource | null>(null)
+  // By hand and By hand 2 ask the same, for now: the second is where the form of the field flow is made.
+  const byHand = source === 'manual' || source === 'manual2'
   const [visit, setVisit] = useState<Visit>(EMPTY_VISIT)
   const [tried, setTried] = useState(false)
   const [visits, setVisits] = useState<Visit[]>([])
@@ -583,7 +586,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         </div>
       </WizardStep>
 
-      {source === 'manual' && (
+      {byHand && (
         <>
           {!justAdded && (
           <>
@@ -824,7 +827,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         </>
       )}
 
-      {source !== null && source !== 'manual' && (
+      {source !== null && !byHand && (
         <>
           <WizardStep
             n={2} title="Which research project?" status={project ? 'done' : 'open'} canEdit onEdit={() => { setProject(undefined); forgetCsv(); setCsvName(null) }}

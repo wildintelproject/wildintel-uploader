@@ -30,7 +30,7 @@ beforeEach(() => {
 
 async function chooseByHand() {
   render(<VisitsPage onBack={vi.fn()} />)
-  await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+  await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
 }
 
 async function pickWhere(site = 'TATR_0001') {
@@ -75,11 +75,20 @@ async function typePhotos(count = '1620') {
 const installedBefore = () => mockedApi.listVisits.mockResolvedValue({ results: [toStored({ ...BLANK, session: 'R0001', when: '2026-01-10T09:00:00', site: 'TATR_0001', actions: ['Installation'] })] })
 
 describe('VisitsPage', () => {
+  it('has By hand 2, the form of the field flow, which starts the same as By hand', async () => {
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /by hand 2/i }))
+
+    expect(await screen.findByText('Where was the visit?')).toBeInTheDocument()
+    expect(screen.getByText('Who went, and when?')).toBeInTheDocument()
+    expect(screen.getAllByText('By hand 2').length).toBeGreaterThan(0)
+  })
+
   it('first asks where the visits come from, with by hand, Wildintel Epicollect and a spreadsheet file', () => {
     render(<VisitsPage onBack={vi.fn()} />)
 
     expect(screen.getByText('Where do the visits come from?')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /by hand/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /^by hand(?! 2)/i })).toBeEnabled()
     expect(screen.getByRole('button', { name: /from wildintel epicollect/i })).toBeEnabled()
     expect(screen.getByRole('button', { name: /from a spreadsheet file/i })).toBeEnabled()
   })
@@ -176,7 +185,7 @@ describe('VisitsPage', () => {
   it('picks the SD card of the visit from those of the settings, with a way to add a new one there', async () => {
     const onOpenSettings = vi.fn()
     render(<VisitsPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
-    await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
     await pickWhere()
     await pickWhen()
     await pickAction('Installation')
@@ -194,7 +203,7 @@ describe('VisitsPage', () => {
   it('does not ask for the camera model and id: one of the cameras of the settings is picked, with a way to add a new one there', async () => {
     const onOpenSettings = vi.fn()
     render(<VisitsPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
-    await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
     await pickWhere()
     await pickWhen()
     await pickAction('Installation')
@@ -214,7 +223,7 @@ describe('VisitsPage', () => {
   it('says to create a location in the settings, instead of offering to add one here', async () => {
     const onOpenSettings = vi.fn()
     render(<VisitsPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
-    await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
 
@@ -491,7 +500,7 @@ describe('VisitsPage', () => {
     async function addRevision(onImportImages = vi.fn()) {
       mockedApi.listVisits.mockResolvedValue({ results: [left] })
       render(<VisitsPage onBack={vi.fn()} onImportImages={onImportImages} />)
-      await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
       await pickWhere()
       await pickWhen()
       await pickAction('Revision')
@@ -525,7 +534,7 @@ describe('VisitsPage', () => {
     const onBack = vi.fn()
     mockedApi.listVisits.mockResolvedValue({ results: [] })
     render(<VisitsPage onBack={onBack} />)
-    await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
     await pickWhere()
     await pickWhen()
     await pickAction('Installation')
@@ -615,7 +624,7 @@ describe('VisitsPage', () => {
     mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: APP_SETTINGS.FIELDWORK })
     const onOpenSettings = vi.fn()
     render(<VisitsPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
-    await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
     await pickWhere()
 
     expect(await screen.findByText('The settings have no trappers yet.')).toBeInTheDocument()
@@ -626,7 +635,7 @@ describe('VisitsPage', () => {
   it('points to the settings to create a new trapper under the list also when there are some', async () => {
     const onOpenSettings = vi.fn()
     render(<VisitsPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
-    await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
     await pickWhere()
 
     await userEvent.click(await screen.findByRole('button', { name: 'go to Settings › Trappers' }))
@@ -636,7 +645,7 @@ describe('VisitsPage', () => {
   it('reads the trappers again when the settings are closed', async () => {
     mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: APP_SETTINGS.FIELDWORK })
     const view = render(<VisitsPage onBack={vi.fn()} onOpenSettings={vi.fn()} settingsOpen />)
-    await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^by hand(?! 2)/i }))
     await pickWhere()
     expect(await screen.findByText('The settings have no trappers yet.')).toBeInTheDocument()
 
