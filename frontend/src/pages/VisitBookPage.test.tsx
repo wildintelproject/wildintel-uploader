@@ -199,14 +199,28 @@ describe('VisitBookPage', () => {
     const [first, second] = within(table).getAllByRole('row').slice(1)
     expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12 09:00', 'Revision', 'Open', ''])
     // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not
-    expect(within(table).getByRole('img', { name: 'Images stored: R0003-TATR_0002' })).toBeInTheDocument()
-    expect(within(table).getAllByRole('img', { name: /^Images stored/ })).toHaveLength(1)
+    expect(within(table).getAllByRole('img', { name: 'Images stored' })).toHaveLength(1) // only the tick, not the id of the deployment
+    expect(within(table).queryByText('R0003-TATR_0002')).not.toBeInTheDocument()
     expect(within(table).getAllByLabelText('Images not stored')).toHaveLength(1) // the open visit: nothing to store yet
     // and whether they were uploaded to Trapper
     expect(within(table).getAllByRole('img', { name: 'On Trapper' })).toHaveLength(1)
     expect(within(table).getByRole('img', { name: 'On Trapper' })).toHaveAttribute('title', 'Uploaded to Trapper on 2024-10-20')
     expect(within(table).getAllByRole('img', { name: 'Not on Trapper' })).toHaveLength(2)
     expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Installation', 'Closed', 'Create deployment'])
+  })
+
+  it('has the tabs first, and links the tick of the images stored to the details of the deployment', async () => {
+    await pickProject()
+    const tabs = await screen.findByRole('tablist', { name: 'Show' })
+    // the tabs come before the revisions and the status squares
+    expect(tabs.compareDocumentPosition(screen.getByRole('region', { name: 'Revision' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(tabs.compareDocumentPosition(screen.getByRole('region', { name: 'Visits by status' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Details of the deployment R0003-TATR_0002' }))
+    expect(screen.getByRole('tab', { name: /Deployments/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('region', { name: 'Revision' })).not.toBeInTheDocument()  // the revisions and the status are of the visits
+    const row = within(screen.getByRole('region', { name: 'Deployments the visits say' })).getByText('R0003-TATR_0002').closest('tr')!
+    expect(row).toHaveAttribute('aria-current', 'true')                                     // the deployment of the link, highlighted
   })
 
   it('shows the details of a visit, and creates the deployment of a closed visit that has none yet', async () => {

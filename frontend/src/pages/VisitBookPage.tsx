@@ -66,6 +66,8 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
   // A revision is one visit to every site: the book can be of one of them, or of all.
   const [revision, setRevision] = useState('')
+  // The deployment the Deployments tab shows highlighted: the one a visit's link goes to.
+  const [focusDeployment, setFocusDeployment] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest session first.
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
@@ -156,7 +158,15 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
 
       {project && (
         <>
-          {visits !== null && revisions.length > 0 && (
+          <div className="mb-5">
+            <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700" role="tablist" aria-label="Show">
+              {([['visits', 'Visits', visits?.filter((v) => !v.not_done).length], ['deployments', 'Deployments', deployments?.length]] as const).map(([id, label, n]) => (
+                <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
+                        className={`px-4 py-2.5 text-sm font-medium border-l first:border-l-0 border-zinc-300 dark:border-zinc-700 ${view === id ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{label}{n !== undefined ? ` ${n}` : ''}</button>
+              ))}
+            </div>
+          </div>
+          {view === 'visits' && visits !== null && revisions.length > 0 && (
             <section aria-label="Revision" className="mb-6">
               <h5 className="text-lg font-semibold mb-1">Revision</h5>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see what is planned and what is done.</p>
@@ -171,7 +181,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
               </div>
             </section>
           )}
-          {visits !== null && (
+          {view === 'visits' && visits !== null && (
             <section aria-label="Visits by status" className="mb-5">
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                 <h5 className="text-lg font-semibold">{revision ? `Revision ${revision}: visits by status` : 'Visits by status'}</h5>
@@ -195,15 +205,10 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
               <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">{made} of {rows.length} visits done ({rows.length ? Math.round((made / rows.length) * 100) : 0}%)</p>
             </section>
           )}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700" role="tablist" aria-label="Show">
-              {([['visits', 'Visits', visits?.filter((v) => !v.not_done).length], ['deployments', 'Deployments', deployments?.length]] as const).map(([id, label, n]) => (
-                <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
-                        className={`px-4 py-2.5 text-sm font-medium border-l first:border-l-0 border-zinc-300 dark:border-zinc-700 ${view === id ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{label}{n !== undefined ? ` ${n}` : ''}</button>
-              ))}
-            </div>
-            {view === 'visits' && <input aria-label="Filter the visits" className={`${inputClass} !w-64`} placeholder="Site, session, camera, card, who, deployment…" value={filter} onChange={(e) => { setFilter(e.target.value); setPage(1); setOpened(null) }} />}
-          </div>
+
+          {view === 'visits' && <div className="mb-3 flex justify-end">
+            <input aria-label="Filter the visits" className={`${inputClass} !w-64`} placeholder="Site, session, camera, card, who, deployment…" value={filter} onChange={(e) => { setFilter(e.target.value); setPage(1); setOpened(null) }} />
+          </div>}
 
           {view === 'visits' && (
             visits === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the visits…</p> : (
@@ -241,9 +246,11 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                             </td>
                             <td className="px-3 py-2">
                               {v.not_done ? null : v.deployment_id ? (
-                                <span role="img" aria-label={`Images stored: ${v.deployment_id}`} title={v.deployment_id} className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-                                  <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{v.deployment_id}</span>
+                                <span className="inline-flex items-center gap-2">
+                                  <span role="img" aria-label="Images stored" className="inline-flex text-emerald-600 dark:text-emerald-400">
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                                  </span>
+                                  <button type="button" className="text-xs text-blue-600 dark:text-blue-400 hover:underline" aria-label={`Details of the deployment ${v.deployment_id}`} onClick={() => { setFocusDeployment(v.deployment_id!); setView('deployments') }}>Deployment details</button>
                                 </span>
                               ) : v.deployment_status === 'closed' && onImportImages ? (
                                 <button type="button" className={`${btnPrimary} !px-2.5 !py-1 !text-xs whitespace-nowrap`} aria-label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })}>Create deployment</button>
@@ -307,7 +314,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
 
           {view === 'deployments' && (
             <>
-              {deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} />}
+              {deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} highlight={focusDeployment ?? undefined} />}
             </>
           )}
         </>
