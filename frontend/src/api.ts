@@ -2,7 +2,7 @@ import type { EpicollectEntry } from './epicollectImport'
 import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
-  AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
+  AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
   ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
@@ -238,6 +238,10 @@ export const api = {
   // row in the <collection>_FieldworkLog.csv, with what the visits it is of say of it.
   writeTimestampLog: (researchProjectId: string, deployment: DeploymentFields, visits?: FieldworkVisits) =>
     post<TimestampLogResult>('/api/deployment-import/timestamp-log', { research_project_id: researchProjectId, deployment, visits: visits ?? null }),
+
+  // What the collection's two logs say of a deployment, if they have its row.
+  logEntry: (researchProjectId: string, deploymentId: string) =>
+    req<LogEntry>(`/api/deployment-import/log-entry?research_project_id=${encodeURIComponent(researchProjectId)}&deployment_id=${encodeURIComponent(deploymentId)}`),
 
   importDeployment: (
     creds: TrapperCredentials, researchProjectPk: number, classificationProjectPk: number | null,

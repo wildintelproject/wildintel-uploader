@@ -15,6 +15,7 @@ vi.mock('../api', () => ({
     getSettings: vi.fn(),
     exiftoolStatus: vi.fn(),
     writeTimestampLog: vi.fn(),
+    logEntry: vi.fn(),
     trapperTestConnection: vi.fn(),
     trapperResearchProjects: vi.fn(),
     trapperClassificationProjects: vi.fn(),
@@ -93,6 +94,7 @@ beforeEach(() => {
   mockedApi.nextRevision.mockRejectedValue(new Error('no suggestion'))  // the revision stays to be typed, unless a test says otherwise
   mockedApi.previousDeployments.mockResolvedValue({ results: {} })
   mockedApi.exiftoolStatus.mockResolvedValue({ available: true, path: '/usr/bin/exiftool' })
+  mockedApi.logEntry.mockResolvedValue({ collection: 'R0001', timestamps: null, fieldwork: null })
   mockedApi.writeTimestampLog.mockResolvedValue({ path: `${COLLECTIONS_DIR}/R0001_FileTimestampLog.csv`, action: 'added', rows: 1, collection: 'R0001' })
   mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice', has_password: true })
   mockedApi.trapperTestConnection.mockResolvedValue({ ok: true, research_projects_count: 1 })
@@ -410,7 +412,7 @@ describe('ImportDeploymentPage', () => {
 
         await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
         await continueToDates()
-        await screen.findByText('When was it collected?')
+        await screen.findByText('Dates of the deployment')
         expect(screen.getByText((_, el) => el?.textContent === 'Visit DONA_01 · 2026-08-05 → 2026-10-02')).toBeInTheDocument() // the research project and the visit, with its range
         expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
         expect(screen.getByLabelText('Deployment Id')).toHaveValue('R0002-DONA_01')
@@ -421,7 +423,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByLabelText('Closed visit'))
         await userEvent.click(await screen.findByRole('option', { name: /R0002/ }))
         await continueToDates()
-        await screen.findByText('When was it collected?')
+        await screen.findByText('Dates of the deployment')
         await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
         await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
         await screen.findByText('Check the details', { selector: 'h4' })
@@ -443,7 +445,7 @@ describe('ImportDeploymentPage', () => {
         expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
         expect((screen.getByLabelText('Closed visit') as HTMLInputElement).value).toMatch(/R0001/)
         await continueToDates()
-        await screen.findByText('When was it collected?')
+        await screen.findByText('Dates of the deployment')
         expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
         expect(screen.getByLabelText('Deployment Id')).toHaveValue('R0001-DONA_01')
       })
@@ -462,7 +464,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByLabelText('Closed visit'))
         await userEvent.click(await screen.findByRole('option', { name: /R0001/ }))
         await continueToDates()
-        await screen.findByText('When was it collected?')
+        await screen.findByText('Dates of the deployment')
 
         expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
         expect(screen.getByLabelText('Deployment Id')).toHaveValue('R0001-DONA_01')
@@ -488,6 +490,31 @@ describe('ImportDeploymentPage', () => {
         await userEvent.type(screen.getByLabelText('Set up by'), 'Luis')
         await userEvent.click(screen.getByRole('radio', { name: 'What the field sheet says' }))
         expect(screen.getByLabelText('Set up by')).toHaveValue('Setup: Ana Pérez | Retrieval: Luis') // back to what the visits say
+      })
+
+      it('offers the collection\'s logs as a source of the dates and the details when they have the deployment\'s row', async () => {
+        const start = stored({ session: 'R0001', date: '2026-06-10', time: '09:30:00', actions: ['Installation'], sd: 'A13', camera_id: 'P800', camera_model: 'Reconyx-PC800', setup_by: null })
+        const end = stored({ session: 'R0002', date: '2026-08-05', time: '08:10:00', actions: ['Revision'], num_photos: 12 })
+        mockedApi.closedVisits.mockResolvedValue({ results: [{ visit: start, end }] })
+        mockedApi.logEntry.mockResolvedValue({ collection: 'R0001', timestamps: { start: '2026-06-10T09:35:00', end: '2026-08-05T08:05:00' },
+          fieldwork: { start: null, end: null, details: { setup_by: 'Ana', camera_height: 1.4 } } })
+        storedProjects = [DONA_PROJECT]
+        storedLocations = { DONA: [DONA_01] }
+        await goToOriginStep()
+        await userEvent.click(await screen.findByLabelText('Research project'))
+        await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+        await userEvent.click(await screen.findByLabelText('Closed visit'))
+        await userEvent.click(await screen.findByRole('option', { name: /R0001/ }))
+        await continueToDates()
+        await screen.findByText('Dates of the deployment')
+        await waitFor(() => expect(mockedApi.logEntry).toHaveBeenCalledWith('DONA', 'R0001-DONA_01'))
+        await userEvent.click(await screen.findByRole('radio', { name: 'Timestamp log file' }))
+        expect(screen.getByText(/FileTimestampLog of R0001/)).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Continue to more details' }))
+        await userEvent.click(await screen.findByRole('radio', { name: 'Log files' }))
+        expect(screen.getByRole('radio', { name: 'Log files' }).closest('label')).toHaveTextContent('2 fields found')
+        await openSection(/^Camera/); await openSection(/^Site/); await openSection(/^Grouping and notes/)
+        expect(screen.getByLabelText('Set up by')).toHaveValue('Ana')
       })
 
       describe('the SD card and the number of photos, against what the visits say', () => {
@@ -518,7 +545,7 @@ describe('ImportDeploymentPage', () => {
           await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
           await screen.findByText('Choose the checks')
           await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-          await screen.findByText('When was it collected?')
+          await screen.findByText('Dates of the deployment')
           await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
           await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
           await screen.findByText('Check the details', { selector: 'h4' })

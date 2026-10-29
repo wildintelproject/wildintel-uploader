@@ -209,6 +209,15 @@ export interface TimestampLogResult {
   collection: string
 }
 
+/** What the collection's FileTimestampLog and FieldworkLog say of a deployment — each null where it has no row of it. */
+export interface LogEntry {
+  collection: string
+  /** The camera's wall-clock time, ISO, from the FileTimestampLog. */
+  timestamps: { start: string; end: string } | null
+  /** The FieldworkLog: its dates in UTC and the details it fills in. */
+  fieldwork: { start: string | null; end: string | null; details: Partial<DeploymentFields> } | null
+}
+
 /** What the visit a deployment is of says, for the checks against it: the card it left, and the photos counted when it was collected. */
 export interface VisitCheckInfo {
   left_session: string | null

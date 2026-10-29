@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Added
+- **Import deployment**: the research project is the default one of the settings (with a link to change it), followed by a square for each revision and the closed visits without a deployment; the first step is called *When was it collected?* and the dates one *Dates of the deployment*. The collection's `FileTimestampLog` (dates) and `FieldworkLog` (details) are one more source — *Log files* — when they have the deployment's row (`GET /api/deployment-import/log-entry`).
 - **Release**: a macOS `.dmg` for Intel Macs (`macos-x86_64`), beside the Apple Silicon one (`macos-arm64`).
 - **Register visits** (new task): the visits to the camera traps — who went, when, to which site and what was done — by hand, from the Epicollect
   download or from any CSV, kept in the research project's `visits.json`. The Camera section comes before the SD card, and what the visit before

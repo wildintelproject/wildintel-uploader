@@ -135,6 +135,16 @@ def exiftool() -> dict:
     return {"available": path is not None, "path": path}
 
 
+@router.get("/log-entry")
+def log_entry(research_project_id: str, deployment_id: str) -> dict:
+    """What the collection's FileTimestampLog and FieldworkLog say of a deployment, if they have its row — the dates and details a
+    deployment can be filled in from."""
+    try:
+        return deployment_import_service.log_entry(research_project_id, deployment_id)
+    except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.post("/timestamp-log")
 def timestamp_log(req: TimestampLogRequest) -> dict:
     """Puts the deployment's start and end in its collection's <collection>_FileTimestampLog.csv —

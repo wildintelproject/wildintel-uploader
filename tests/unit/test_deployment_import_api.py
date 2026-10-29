@@ -1039,3 +1039,18 @@ def test_validate_deployment_takes_the_visit_for_the_card_and_the_photos(tmp_pat
     body = response.json()
     assert body["sd_card"]["ok"] is False and "left 7B" in body["sd_card"]["message"]
     assert body["photo_count"]["ok"] is False and "1,899 photos missing" in body["photo_count"]["message"]
+
+
+def test_log_entry_gives_what_the_collections_logs_say_of_a_deployment(tmp_path: Path):
+    payload = _log_payload(setup_by="Ana", camera_id="P800", camera_height=1.2, bait_use=True, tags=["forest", "pine"])
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/timestamp-log", json=payload)
+        found = _client().get("/api/deployment-import/log-entry", params={"research_project_id": "DONA", "deployment_id": "R0003-DONA_0007_B"})
+        other = _client().get("/api/deployment-import/log-entry", params={"research_project_id": "DONA", "deployment_id": "R0003-DONA_0008_B"})
+
+    assert found.status_code == 200
+    body = found.json()
+    assert body["collection"] == "R0003"
+    assert body["timestamps"] == {"start": "2024-09-04T13:10:00", "end": "2024-11-04T14:28:00"}
+    assert body["fieldwork"]["details"] == {"setup_by": "Ana", "camera_id": "P800", "camera_height": 1.2, "bait_use": True, "tags": ["forest", "pine"]}
+    assert other.json()["timestamps"] is None and other.json()["fieldwork"] is None

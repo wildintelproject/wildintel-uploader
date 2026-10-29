@@ -7,13 +7,14 @@ import { Fragment, createContext, useContext, useEffect, useRef, useState } from
 import type { ReactNode } from 'react'
 import { api } from '../api'
 import { defaultResearchProject } from '../defaultResearchProject'
+import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { TrapperCredentials } from '../api'
 import CheckboxList from '../components/CheckboxList'
 import Combobox from '../components/Combobox'
 import OptionCards from '../components/OptionCards'
 import type { Option } from '../components/OptionCards'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
-import type { ClosedVisit, ClosedVisitTarget, FieldworkVisits, SdCard, StoredVisit } from '../types'
+import type { ClosedVisit, ClosedVisitTarget, FieldworkVisits, LogEntry, SdCard, StoredVisit } from '../types'
 import { applyEntry, entryLabel, entryPeriod } from '../epicollectImport'
 import DateSourcePicker from '../components/DateSourcePicker'
 import TimeFixPage from './TimeFixPage'
@@ -1329,7 +1330,7 @@ interface Props {
   /** Offered once a deployment is imported: goes to the upload page, on the collection it went into. */
   onUpload?: (target: UploadTarget) => void
   /** Opens the settings — where the owner and publisher written into the images are set — on a section when given one. */
-  onOpenSettings?: (section?: 'epicollect') => void
+  onOpenSettings?: (section?: 'epicollect' | 'general') => void
   /** Whether the settings are open over the wizard: what they hold is read again once they close. */
   settingsOpen?: boolean
   /** Goes back to the menu — what Back does on the first step. */
@@ -1377,6 +1378,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const [origin, setOrigin] = useState({ researchProject: '', locationId: '', locationName: '', timezone: '' })
   const [localProjects, setLocalProjects] = useState<LocalResearchProject[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState('')
+  const { project: defaultProject, defaultAcronym } = useDefaultResearchProject(settingsOpen)
+  const [revisionPick, setRevisionPick] = useState<number | null>(null)
+  // What the collection's FileTimestampLog and FieldworkLog say of this deployment, once its id is known.
+  const [logEntry, setLogEntry] = useState<LogEntry | null>(null)
   const defaultProjectApplied = useRef(false)
   const [addingProject, setAddingProject] = useState(false)
   const [projectSource, setProjectSource] = useState<OriginSource | null>(null)
@@ -1409,7 +1414,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const [previousRevision, setPreviousRevision] = useState<PreviousDeployment | null>(null)
   const [filledFrom, setFilledFrom] = useState<string | null>(null)
   // Where the camera, site and notes come from — the visit, the previous deployment or the user — once one is picked; the visit before that, if there is one.
-  const [detailsPick, setDetailsPick] = useState<'visit' | 'previous' | 'manual' | null>(null)
+  const [detailsPick, setDetailsPick] = useState<'visit' | 'previous' | 'log' | 'manual' | null>(null)
   // The SD card the images come from, as the user says it: the cards of the settings are offered. It is checked against the visit's.
   const [sdCards, setSdCards] = useState<SdCard[]>([])
   const [sdCard, setSdCard] = useState('')
@@ -1631,6 +1636,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const projectErrors = validateResearchProject(projectDraft)
   const shownProjectFieldErrors = shownProjectErrors(projectErrors)
   const selectedProject = localProjects.find((p) => p.acronym === selectedProjectId)
+  // the default research project of the settings stands for the project of the page, unless a visit or a saved session brought another one
+  const usesDefaultProject = Boolean(defaultProject) && (!selectedProjectId || selectedProjectId.toLowerCase() === defaultProject!.acronym.toLowerCase())
   const selectedLocation = localLocations.find((l) => l.location_id === selectedLocationId)
   /** What has been settled so far, as chips that fill in with each step: the research project, the visit, the photos and the card, and — once the dates and details are
    * set — the deployment, where and when it was, and what the camera and the site are. */
@@ -2085,6 +2092,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   function periodOf(source: DateSource): Period | null {
     if (source === 'exif') return guess?.start_date ? { start: stampTimezone(guess.start_date, timezone), end: guess.end_date ? stampTimezone(guess.end_date, timezone) : null } : null
     if (source === 'epicollect') return entryPeriod(epicollectEntry?.fields, timezone)
+    if (source === 'log') return logEntry?.timestamps ? { start: stampTimezone(logEntry.timestamps.start, timezone), end: stampTimezone(logEntry.timestamps.end, timezone) } : null
     if (source === 'visit' && linkedVisit) {
       const { visit: start, end } = linkedVisit
       return { start: stampTimezone(`${start.date}T${start.time}`, timezone), end: stampTimezone(`${end.date}T${end.time}`, timezone) }
@@ -2103,10 +2111,21 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   useEffect(() => {
     if (stepKey !== 'dates' || sourcePicked.current) return
     const looking = guessing || (epicollectOn && !epicollectDone)
-    const best = ([...(linkedVisit ? ['visit'] : []), 'exif', 'manual'] as DateSource[]).find((src) => (src === 'manual' ? !looking : periodOf(src) !== null))
+    const best = ([...(linkedVisit ? ['visit'] : []), 'log', 'exif', 'manual'] as DateSource[]).find((src) => (src === 'manual' ? !looking : periodOf(src) !== null))
     if (best && best !== dateSource) takePeriod(best)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepKey, guess, guessing, epicollectEntry, epicollectOn, epicollectDone, timezone, linkedVisit])
+  }, [stepKey, guess, guessing, epicollectEntry, epicollectOn, epicollectDone, timezone, linkedVisit, logEntry])
+
+  // The collection's logs, read once the deployment has its id: what they say of it is offered as a source.
+  const logRead = useRef('')
+  useEffect(() => {
+    const id = deployment.deployment_id
+    if (stepKey !== 'dates' || !selectedProjectId || !id || /-$/.test(id) || logRead.current === `${selectedProjectId}/${id}`) return
+    logRead.current = `${selectedProjectId}/${id}`; setLogEntry(null)
+    let cancelled = false
+    api.logEntry(selectedProjectId, id).then((entry) => { if (!cancelled) setLogEntry(entry.timestamps || entry.fieldwork ? entry : null) }).catch(() => { if (!cancelled) setLogEntry(null) })
+    return () => { cancelled = true }
+  }, [stepKey, selectedProjectId, deployment.deployment_id])
 
   function pickSource(source: DateSource) {
     sourcePicked.current = true
@@ -2297,19 +2316,24 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
 
   /** Takes back what was copied from the previous revision: the optional details start empty again. */
   // The sources to pick the details from are shown when there are two to choose from, by hand included.
-  const pickable = Boolean(linkedVisit || previousRevision)
-  const detailsSource: 'visit' | 'previous' | 'manual' = detailsPick ?? (linkedVisit ? 'visit' : 'manual')
+  const logDetails = logEntry?.fieldwork?.details ?? null
+  const pickable = Boolean(linkedVisit || previousRevision || logDetails)
+  const detailsSource: 'visit' | 'previous' | 'log' | 'manual' = detailsPick ?? (linkedVisit ? 'visit' : 'manual')
   const visitFound = detailsFound(linkedVisit ? fillFromClosedVisit(EMPTY_DEPLOYMENT_FIELDS, linkedVisit) : EMPTY_DEPLOYMENT_FIELDS)
+  const logFound = detailsFound(logDetails ? { ...EMPTY_DEPLOYMENT_FIELDS, ...logDetails } : EMPTY_DEPLOYMENT_FIELDS)
   const previousFound = detailsFound(previousRevision ? fillFromPreviousRevision(EMPTY_DEPLOYMENT_FIELDS, previousRevision.deployment) : EMPTY_DEPLOYMENT_FIELDS)
 
   /** The camera, the site and the notes as a source says them: what the visit or the previous deployment do not say is left empty. */
-  function pickDetailsSource(source: 'visit' | 'previous' | 'manual') {
+  function pickDetailsSource(source: 'visit' | 'previous' | 'log' | 'manual') {
     setDetailsPick(source)
     if (source === 'manual') return
     const emptied = (d: DeploymentFields): DeploymentFields => ({ ...d, ...Object.fromEntries(FILLED_FROM_PREVIOUS.map((k) => [k, EMPTY_DEPLOYMENT_FIELDS[k]])) })
     if (source === 'visit' && linkedVisit) {
       setDeployment((d) => fillFromClosedVisit(emptied(d), linkedVisit))
       setFilledFrom(`the visit ${linkedVisit.visit.session}`)
+    } else if (source === 'log' && logDetails) {
+      setDeployment((d) => ({ ...emptied(d), ...logDetails, start_date: d.start_date, end_date: d.end_date }))
+      setFilledFrom(`the logs of ${logEntry!.collection}`)
     } else if (source === 'previous' && previousRevision) {
       setDeployment((d) => fillFromPreviousRevision(emptied(d), previousRevision.deployment))
       setFilledFrom(previousRevision.deployment_id)
@@ -2541,7 +2565,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
           {stepKey === 'origin' && (
-          <WizardStep n={1} title="Where was it taken?" status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
+          <WizardStep n={1} title={closedVisits && closedVisits.length > 0 ? 'When was it collected?' : 'Where was it taken?'} status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
                       description={closedVisits && closedVisits.length > 0
                         ? 'The research project and the visit the images come from — the visit whose card was collected. It says where they were taken. Research projects are kept in the collections folder.'
                         : 'The research project and the location the images come from. They are kept in the collections folder — pick one that is already there, or add a new one, by hand or from Trapper.'}
@@ -2550,6 +2574,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                         {linkedVisit && <>Closed visit: {visitLabel(linkedVisit)}<br /></>}
                         {selectedLocation.latitude != null && selectedLocation.longitude != null && <>GPS {selectedLocation.latitude}, {selectedLocation.longitude} · </>}Timezone {timezone || 'unknown'}
                       </>}>
+          {usesDefaultProject && !addingProject ? (
+            <DefaultResearchProject project={defaultProject} defaultAcronym={defaultAcronym} of="This deployment" onOpenSettings={onOpenSettings} />
+          ) : (
           <FormCard title="Research project" description="Those found in the collections folder.">
             {!addingProject ? (
               <>
@@ -2641,13 +2668,26 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
               </div>
             )}
           </FormCard>
+          )}
 
           {selectedProjectId && !addingProject && closedVisits !== null && closedVisits.length > 0 && (
+            <>
+            <FormCard title="Revision" description="A revision is one visit to every site. Pick one — or all — to see the visits that can still be given a deployment.">
+              <div className="flex flex-wrap gap-3" role="group" aria-label="Revision">
+                {[{ id: null as number | null, label: 'All revisions', n: closedVisits.length }, ...[...new Set(closedVisits.map((c) => revisionOfVisit(c)).filter((r): r is number => r !== null))].sort((x, y) => y - x).map((r) => ({ id: r as number | null, label: `R${String(r).padStart(4, '0')}`, n: closedVisits.filter((c) => revisionOfVisit(c) === r).length }))].map((r) => (
+                  <button key={r.label} type="button" aria-pressed={revisionPick === r.id} onClick={() => { setRevisionPick(r.id); if (r.id !== null && linkedVisit && revisionOfVisit(linkedVisit) !== r.id) selectClosedVisit(undefined) }}
+                          className={`rounded-xl border px-5 py-3 text-left transition-colors ${revisionPick === r.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}>
+                    <span className="block font-mono text-lg font-semibold">{r.label}</span>
+                    <span className="block text-sm text-zinc-500 dark:text-zinc-400">{r.n} {r.n === 1 ? 'visit' : 'visits'} without deployment</span>
+                  </button>
+                ))}
+              </div>
+            </FormCard>
             <FormCard title="Closed visit" description={`The visits to ${selectedProjectId} that left a camera and whose card has been collected, with no deployment yet. The deployment is of the visit you pick — where its card was left — and its location is the visit's.`}>
               <label className="sr-only" htmlFor="origin-visit">Closed visit</label>
               <Combobox
                 id="origin-visit"
-                options={closedVisits.map((c) => ({ value: visitKey(c), label: visitLabel(c) }))}
+                options={closedVisits.filter((c) => revisionPick === null || revisionOfVisit(c) === revisionPick).map((c) => ({ value: visitKey(c), label: visitLabel(c) }))}
                 value={linkedVisit ? visitKey(linkedVisit) : ''} onChange={(key) => selectClosedVisit(closedVisits.find((c) => visitKey(c) === key))}
                 placeholder="Select a closed visit…" clearLabel="Clear closed visit"
               />
@@ -2655,6 +2695,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{selectedLocationId} has no coordinates, and a deployment needs them — add them to the location.</p>
               )}
             </FormCard>
+            </>
           )}
 
           {selectedProjectId && !addingProject && closedVisits !== null && closedVisits.length === 0 && (
@@ -2768,7 +2809,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
           )}
 
           {stepKey === 'dates' && (
-          <WizardStep n={2} title="When was it collected?" status={originStatus(2)} canEdit onEdit={() => setOriginOpen(2)}
+          <WizardStep n={2} title={closedVisits && closedVisits.length > 0 ? 'Dates of the deployment' : 'When was it collected?'} status={originStatus(2)} canEdit onEdit={() => setOriginOpen(2)}
                       description={!timezone
                         ? <span className="text-red-600 dark:text-red-400">The location <strong>{deployment.location_id}</strong> has no timezone, and a deployment needs it: add it to the location.</span>
                         : <>Tell us when the images of <strong>{deployment.location_id}</strong> were collected. Times are in <strong>{timezone}</strong>, which {ignoreDst ? 'has no daylight saving time' : 'follows daylight saving time'}.</>}
@@ -2850,6 +2891,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                   options={[
                     ...(linkedVisit ? [{ source: 'visit' as const, title: 'Visits of the field work', period: periodOf('visit'),
                       hint: `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), where the card was left, to ${linkedVisit.end.session} (${linkedVisit.end.date}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
+                    ...(logEntry?.timestamps ? [{ source: 'log' as const, title: 'Log files', period: periodOf('log'),
+                      hint: `From the FileTimestampLog of ${logEntry.collection}, which has a row for ${deployment.deployment_id}: the camera's wall-clock time, in the timezone of the location.` }] : []),
                     { source: 'exif', title: 'Camera data in the photos', period: periodOf('exif'),
                       hint: `First and last photo of the deployment.${scan && periodOf('exif') ? ` ${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'photo' : 'photos'}, read from their EXIF data.` : ''}` },
                     { source: 'manual', title: 'Manual entry', period: null, hint: 'Type the start and the end yourself.' },
@@ -2878,6 +2921,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                     { source: 'previous' as const, title: 'What the previous deployment says', found: previousRevision ? previousFound : null, available: Boolean(previousRevision),
                       hint: previousRevision ? `From ${previousRevision.deployment_id}, the previous deployment at this location${previousFound.parts ? `: ${previousFound.parts}` : ''}. Dates are never copied.`
                         : `No earlier revision of ${deployment.location_id || 'this location'} is on file.` },
+                    { source: 'log' as const, title: 'Log files', found: logDetails ? logFound : null, available: Boolean(logDetails),
+                      hint: logDetails ? `From the FieldworkLog of ${logEntry!.collection}, which has a row for ${deployment.deployment_id}${logFound.parts ? `: ${logFound.parts}` : ''}. Dates are never copied.`
+                        : `The FieldworkLog of this collection has no row for ${deployment.deployment_id || 'this deployment'}.` },
                     { source: 'manual' as const, title: 'Fill in by hand', found: null, available: true, hint: 'Type them yourself, starting from the values the last source gave.' },
                   ]).map((o) => (
                     <label key={o.source} className={`block rounded-xl border px-4 py-3 ${o.available ? 'cursor-pointer' : 'opacity-60'} ${detailsSource === o.source ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700'}`}>

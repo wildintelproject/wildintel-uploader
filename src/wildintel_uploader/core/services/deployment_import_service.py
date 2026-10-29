@@ -110,6 +110,46 @@ def fieldwork_log_row(deployment: DeploymentFields, visits: dict | None = None) 
     }
 
 
+_FROM_FIELDWORK_LOG: dict[str, tuple[str, type]] = {
+    "setupBy": ("setup_by", str), "cameraID": ("camera_id", str), "cameraModel": ("camera_model", str), "cameraDelay": ("camera_interval", int),
+    "cameraHeight": ("camera_height", float), "cameraDepth": ("camera_depth", float), "cameraTilt": ("camera_tilt", int),
+    "cameraHeading": ("camera_heading", int), "detectionDistance": ("detection_distance", float), "timestampIssues": ("timestamp_issues", bool),
+    "baitUse": ("bait_use", bool), "featureType": ("feature_type", str), "habitat": ("habitat", str),
+    "deploymentGroups": ("deployment_groups", str), "deploymentComments": ("comments", str),
+}
+
+
+def log_entry(research_project_id: str, deployment_id: str) -> dict:
+    """What the collection's two logs say of a deployment — their row with its id, compared ignoring case — or nothing where there is none:
+    {"collection", "timestamps": {"start", "end"} | None (the camera's wall-clock time, ISO), "fieldwork": {"start", "end" (UTC),
+    "details": the fields of DeploymentFields it fills in} | None}. A log that can't be read says so as LocalFolderError."""
+    collection = default_collection_dir(research_project_id, deployment_id)
+    wanted = deployment_id.lower()
+    timestamps = None
+    for row in local_folder_service.read_timestamp_log(local_folder_service.timestamp_log_path(collection)):
+        if row["Deployment"].lower() == wanted and row["StartDate"] and row["EndDate"]:
+            # the log writes its dates as the camera does (2024:09:04): ISO here
+            timestamps = {"start": f"{row['StartDate'].replace(':', '-')}T{row['StartTime'] or '00:00:00'}",
+                          "end": f"{row['EndDate'].replace(':', '-')}T{row['EndTime'] or '00:00:00'}"}
+    fieldwork = None
+    for row in local_folder_service.read_fieldwork_log(local_folder_service.fieldwork_log_path(collection)):
+        if row["deploymentID"].lower() != wanted:
+            continue
+        details: dict = {}
+        for column, (field, kind) in _FROM_FIELDWORK_LOG.items():
+            cell = row.get(column, "")
+            if not cell:
+                continue
+            try:
+                details[field] = (cell.lower() == "true") if kind is bool else kind(cell)
+            except ValueError:
+                continue
+        if row.get("deploymentTags"):
+            details["tags"] = [t.strip() for t in row["deploymentTags"].split("|") if t.strip()]
+        fieldwork = {"start": row.get("deploymentStart") or None, "end": row.get("deploymentEnd") or None, "details": details}
+    return {"collection": collection.name, "timestamps": timestamps, "fieldwork": fieldwork}
+
+
 def default_collection_dir(research_project_id: str, deployment_id: str) -> Path:
     """Where a deployment's collection lives locally by default:
     <collections folder>/<research project id>/<R0003>. Every collection is
