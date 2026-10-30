@@ -37,7 +37,18 @@ const CAMERA_PATHS = {
   archive: <><path d="M3 4h18v4H3zM5 8v12h14V8M10 12h4" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   ban: <><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>,
+  ok: <><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></>,
+  altered: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>,
+  down: <><path d="M12 4v14M6 12l6 6 6-6" /></>,
 }
+
+/** The states a camera that is there is found in, asked by By hand 2 before what is done with it. */
+const FOUND_STATES: { value: string; description: string; icon: ReactNode }[] = [
+  { value: 'OK', description: 'All is well', icon: CAMERA_PATHS.ok },
+  { value: 'Altered', description: 'Moved or changed', icon: CAMERA_PATHS.altered },
+  { value: 'Knocked down', description: 'Fallen or tilted', icon: CAMERA_PATHS.down },
+  { value: 'Damaged', description: 'Broken or harmed', icon: CAMERA_PATHS.alert },
+]
 
 /** What was done at the visit — the values the field records read. */
 const ACTIONS = ['Installation', 'Revision', 'Desinstallation', 'Stolen']
@@ -363,7 +374,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const guided = source === 'manual2'
   const guidedActions = !guided ? null
     : noCamera ? ['Installation']
-    : seeCamera === 'yes' ? (afterRevision === 'replace' ? ['Revision', 'Installation'] : afterRevision === 'remove' ? ['Revision', 'Desinstallation'] : ['Revision'])
+    : seeCamera === 'yes' ? (!visit.status ? [] : afterRevision === 'replace' ? ['Revision', 'Installation'] : afterRevision === 'remove' ? ['Revision', 'Desinstallation'] : ['Revision'])
     : seeCamera === 'stolen' ? (afterTheft === 'replace' ? ['Stolen', 'Installation'] : ['Stolen'])
     : []
   const guidedKey = guidedActions?.join('+')
@@ -388,7 +399,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       return actions.includes('Installation') && there && (next.details.camera_id ?? '').toLowerCase() === there ? { ...next, details: { ...next.details, camera_id: null, camera_model: null } } : next
     })
   }, [guidedKey]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setSeeCamera(null); setAfterRevision('stay'); setAfterTheft(null) }, [visit.site])
+  useEffect(() => { setSeeCamera(null); setAfterRevision('stay'); setAfterTheft(null); setVisit((v) => (v.status && source === 'manual2' ? { ...v, status: '' } : v)) }, [visit.site]) // eslint-disable-line react-hooks/exhaustive-deps
   const retireFields = (
     <div className="max-w-md pt-1">
       <label htmlFor="retire-reason" className={labelClass}>Why is it retired?</label>
@@ -617,6 +628,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     setTried(true)
     if (Object.keys(errors).length > 0 || Object.keys(moreErrors).length > 0 || !project || !kept) return
     if (guided && seeCamera === 'stolen' && !afterTheft) return
+    if (guided && seeCamera === 'yes' && !visit.status) return
     setSaveError(null)
     // The session is worked out from the visits kept to the location, as its coordinates come from the location.
     const complete: Visit = { ...visit, session: sessionOf(kept.length), site: visit.site.trim() }
@@ -776,6 +788,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                           ]} />
                       )}
                       {!noCamera && seeCamera === 'yes' && (
+                        <div className="reveal mt-5 space-y-3" role="group" aria-label="What state is the camera in?">
+                          <p className="text-sm font-semibold">What state is the camera in?</p>
+                          <ChoiceCards<string> label="What state is the camera in?" value={visit.status || null} onChange={(v) => set('status', v)}
+                            choices={FOUND_STATES.map((f) => ({ value: f.value, label: f.value, description: f.description, icon: f.icon }))} />
+                          {tried && !visit.status && <p className="text-xs text-red-600 dark:text-red-400">Say what state the camera is in.</p>}
+                        </div>
+                      )}
+                      {!noCamera && seeCamera === 'yes' && visit.status && (
                         <div className="reveal mt-5 space-y-3" role="group" aria-label="What do you do with the camera?">
                           <p className="text-sm font-semibold">What do you do with the camera?</p>
                           <ChoiceCards<'stay' | 'replace' | 'remove'> label="What do you do with the camera?" size="compact" value={afterRevision} onChange={setAfterRevision}
@@ -899,12 +919,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 total: cameraValues.length, filled: cameraValues.filter((v) => v.trim()).length,
                 children: (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {!guided && (
                     <Field id="visit-status" label="Status of the camera" ask={asked.status} error={shown('status')}>
-                      <select id="visit-status" className={`${inputClass} ${asked.status === 'required' && !visit.status.trim() ? red : ''}`} value={visit.status} disabled={asked.status === 'off'} onChange={(e) => set('status', e.target.value)}>
-                        <option value="">—</option>
-                        {CAMERA_STATUSES.map((a) => <option key={a} value={a}>{a}</option>)}
-                      </select>
-                    </Field>
+                        <select id="visit-status" className={`${inputClass} ${asked.status === 'required' && !visit.status.trim() ? red : ''}`} value={visit.status} disabled={asked.status === 'off'} onChange={(e) => set('status', e.target.value)}>
+                          <option value="">—</option>
+                          {CAMERA_STATUSES.map((a) => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                      </Field>
+                    )}
                     <div className="sm:col-span-2 space-y-3">
                       <SwitchRow label="Batteries OK" hint="Off if the camera had no batteries." checked={visit.batteries === 'OK'} disabled={asked.batteries === 'off'} onChange={(on) => set('batteries', on ? 'OK' : 'Missing')} />
                       <SwitchRow label="Date and time of the camera OK" hint="Off if the clock of the camera was wrong." checked={visit.dateTimeOK === 'Yes'} disabled={asked.dateTime === 'off'} onChange={(on) => set('dateTimeOK', on ? 'Yes' : 'No')} />

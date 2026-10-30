@@ -1075,6 +1075,7 @@ describe('By hand 2: do you see the camera?', () => {
 
     expect(await screen.findByRole('radio', { name: 'Yes, I see it' })).not.toBeChecked()
     await userEvent.click(screen.getByRole('radio', { name: 'Yes, I see it' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'OK' }))
     expect(hint()).toHaveTextContent('The visit is kept as Revision')
     await userEvent.click(screen.getByRole('radio', { name: 'Replace it with another' }))
     expect(hint()).toHaveTextContent('Revision + Installation')
@@ -1125,6 +1126,8 @@ describe('By hand 2: do you see the camera?', () => {
     await start()
 
     await userEvent.click(await screen.findByRole('radio', { name: 'Yes, I see it' }))
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'OK' }))
     await openSection('Camera')
     expect(screen.getByRole('switch', { name: 'Calibration done' })).toHaveAttribute('aria-checked', 'false')
     await userEvent.click(screen.getByRole('switch', { name: 'Calibration done' }))
@@ -1145,17 +1148,19 @@ describe('By hand 2: do you see the camera?', () => {
     expect(screen.queryByRole('switch', { name: 'Calibration done' })).not.toBeInTheDocument()
   })
 
-  it('has Damaged among the states a camera is found in', async () => {
+  it('asks the state of the camera, as cards, before what is done with it: OK, Altered, Knocked down and Damaged', async () => {
     withCamera()
     mockedApi.saveVisit.mockResolvedValue({} as never)
     await start()
 
     await userEvent.click(await screen.findByRole('radio', { name: 'Yes, I see it' }))
+    const states = screen.getByRole('radiogroup', { name: 'What state is the camera in?' })
+    expect(within(states).getAllByRole('radio').map((o) => o.getAttribute('aria-label'))).toEqual(['OK', 'Altered', 'Knocked down', 'Damaged'])
+    expect(screen.queryByRole('radiogroup', { name: 'What do you do with the camera?' })).not.toBeInTheDocument() // asked once the state is said
+    await userEvent.click(within(states).getByRole('radio', { name: 'Damaged' }))
+    expect(screen.getByRole('radiogroup', { name: 'What do you do with the camera?' })).toBeInTheDocument()
     await openSection('Camera')
-    const status = screen.getByLabelText('Status of the camera')
-    expect(within(status).getAllByRole('option').map((o) => o.textContent).filter(Boolean)).toEqual(expect.arrayContaining(['OK', 'Altered', 'Knocked down', 'Damaged']))
-    await userEvent.selectOptions(status, 'Damaged')
-    expect(status).toHaveValue('Damaged')
+    expect(screen.queryByLabelText('Status of the camera')).not.toBeInTheDocument() // it is not asked twice
   })
 
   it('retires the location, for good, when the camera is taken away and no other is put up', async () => {
@@ -1165,6 +1170,8 @@ describe('By hand 2: do you see the camera?', () => {
     await start()
 
     await userEvent.click(await screen.findByRole('radio', { name: 'Yes, I see it' }))
+
+    await userEvent.click(await screen.findByRole('radio', { name: 'OK' }))
     await userEvent.click(screen.getByRole('radio', { name: 'Take it away, and retire the location' }))
     expect(document.body).toHaveTextContent('A retired location is retired for good: it never goes back to active')
     await userEvent.clear(screen.getByLabelText('Why is it retired?'))
@@ -1174,7 +1181,7 @@ describe('By hand 2: do you see the camera?', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add visit' }))
 
     await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('TATR', 'TATR_0001', { status: 'retired', status_date: '2026-10-02', status_note: 'No cameras left' }))
-    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Revision', 'Desinstallation'] })
+    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Revision', 'Desinstallation'], status: 'OK' }) // the state the camera was found in
   })
 
   it('does not offer a retired location', async () => {

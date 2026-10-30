@@ -79,11 +79,17 @@ describe('UploadStatusPage', () => {
   it('asks where they were uploaded: All and each uploader; the table follows it, and the Show filter', async () => {
     render(<UploadStatusPage onBack={() => {}} />)
 
-    const uploaders = await screen.findByRole('group', { name: 'Uploader' })
-    expect(within(uploaders).getAllByRole('button').map((b) => b.textContent)).toEqual(['All1 uploader', 'Trapper3 of 4 uploaded'])
-    expect(screen.getByRole('region', { name: 'Upload progress' })).toHaveTextContent('3 / 4')   // 4 deployments × 1 uploader
-    await userEvent.click(within(uploaders).getByRole('button', { name: /^Trapper/ }))
-    expect(screen.getByRole('region', { name: 'Upload progress' })).toHaveTextContent('All the uploads to Trapper')
+    const progress = await screen.findByRole('region', { name: 'Upload progress' })
+    // to the right of the ring: All and each uploader, with what went to it
+    expect(within(progress).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(progress).getByRole('button', { name: 'Trapper' })).toHaveTextContent('3')
+    expect(progress).toHaveTextContent('3 / 4')   // 4 deployments × 1 uploader
+    await userEvent.click(within(progress).getByRole('button', { name: 'Trapper' }))
+    expect(within(progress).getByRole('button', { name: 'Trapper' })).toHaveAttribute('aria-pressed', 'true')
+    expect(progress).toHaveTextContent('All the uploads to Trapper')
+    await userEvent.click(within(progress).getByRole('button', { name: 'All' }))
+    expect(within(progress).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(within(progress).getByRole('button', { name: 'Trapper' }))
 
     const table = screen.getByRole('table', { name: 'Deployments' })
     await userEvent.selectOptions(screen.getByLabelText('Show'), 'Not uploaded')

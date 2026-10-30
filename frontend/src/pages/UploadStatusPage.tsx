@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api'
 import { pageNumbers } from '../components/CheckFailures'
-import { Icon, LegendCard, Ring } from '../components/Dashboard'
+import { Icon, LegendCard, Ring, StateCard } from '../components/Dashboard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import RevisionSquares from '../components/RevisionSquares'
 import UploadList from '../components/UploadList'
@@ -104,25 +104,29 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
             </section>
           )}
 
-          <section aria-label="Uploader" className="mb-6">
-            <h5 className="text-lg font-semibold mb-1">Uploader</h5>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">Where were they uploaded? Pick one, or All.</p>
-            <RevisionSquares label="Uploader" all={{ label: 'All', note: `${destinations.length} ${destinations.length === 1 ? 'uploader' : 'uploaders'}` }} value={uploader}
-              revisions={destinations.map((d) => ({ id: d, label: destinationLabel(d), note: `${own.filter((x) => sentTo(x, d)).length} of ${own.length} uploaded` }))}
-              onPick={(id) => { setUploader(id); setPage(1) }} />
-          </section>
-
           <section aria-label="Upload progress" className="mb-5">
-            <div className="flex max-w-xl items-center gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 px-5 py-4">
-              <Ring percent={percent} />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{revision ? `Uploads of ${revision}` : 'All the uploads'}{uploader ? ` to ${destinationLabel(uploader)}` : ''}</p>
-                <p className="text-2xl font-semibold leading-tight">{done} <span className="text-zinc-400">/ {max}</span></p>
-                <div role="progressbar" aria-label="Uploads done" aria-valuemin={0} aria-valuemax={max} aria-valuenow={done} className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                  <div className="h-1.5 bg-blue-500" style={{ width: `${percent}%` }} />
+            <p className="mb-2 text-right text-xs text-zinc-500 dark:text-zinc-400">Where were they uploaded? Pick All, or one uploader.</p>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1.6fr_repeat(var(--cards),1fr)]" style={{ '--cards': destinations.length + 1 } as React.CSSProperties}>
+              <div className="col-span-2 flex items-center gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 px-5 py-4 lg:col-span-1">
+                <Ring percent={percent} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{revision ? `Uploads of ${revision}` : 'All the uploads'}{uploader ? ` to ${destinationLabel(uploader)}` : ''}</p>
+                  <p className="text-2xl font-semibold leading-tight">{done} <span className="text-zinc-400">/ {max}</span></p>
+                  <div role="progressbar" aria-label="Uploads done" aria-valuemin={0} aria-valuemax={max} aria-valuenow={done} className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div className="h-1.5 bg-blue-500" style={{ width: `${percent}%` }} />
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{own.length} {own.length === 1 ? 'deployment' : 'deployments'} × {chosen.length} {chosen.length === 1 ? 'uploader' : 'uploaders'}: the most there can be</p>
                 </div>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{own.length} {own.length === 1 ? 'deployment' : 'deployments'} × {chosen.length} {chosen.length === 1 ? 'uploader' : 'uploaders'}: the most there can be</p>
               </div>
+              <StateCard label="All" note={`${destinations.length} ${destinations.length === 1 ? 'uploader' : 'uploaders'}`} count={own.reduce((n, d) => n + destinations.filter((c) => sentTo(d, c)).length, 0)}
+                         tone="text-zinc-700 dark:text-zinc-200" badge="bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
+                         icon={<Icon path={<path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5" />} className="h-5 w-5" />}
+                         pressed={uploader === ''} onPress={() => { setUploader(''); setPage(1) }} />
+              {destinations.map((d) => (
+                <StateCard key={d} label={destinationLabel(d)} note={`of ${own.length} uploaded`} count={own.filter((x) => sentTo(x, d)).length} tone="text-blue-600 dark:text-blue-400"
+                           badge="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" icon={<Icon path={<><path d="M20 16.2A4.5 4.5 0 0017.5 8h-1.8A7 7 0 104 14.9" /><path d="M12 12v9M8 16l4-4 4 4" /></>} className="h-5 w-5" />}
+                           pressed={uploader === d} onPress={() => { setUploader(uploader === d ? '' : d); setPage(1) }} />
+              ))}
             </div>
           </section>
 
