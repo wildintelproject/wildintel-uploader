@@ -80,9 +80,13 @@ How the visits of a field trip are read from the file of the field app (an Epico
 - **Columns** — the file is read by the names its questions usually have (`1_Responsable`, `4_Location`, `6_Action`, and the Camtrap DP fields by their names). For a form that names them otherwise, write the name of the column
   that gives each field of a visit; blank, the usual names.
 
-### Epicollect5
+### Visit sources
 
-![Settings › Epicollect5](img/screenshots/settings-epicollect.png)
+The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab. **Epicollect5** is the only one for now; the section is there so that other sources can be added in a future version.
+
+#### Epicollect5
+
+![Settings › Visit sources › Epicollect5](img/screenshots/settings-epicollect.png)
 
 The Epicollect5 project the deployments' information will be imported from (see [Dates and details](#stage-3-dates-and-details)): its **slug**, the
 name in its URL (`five.epicollect.net/project/<slug>`), and, only if the project is private, the **client id** and **secret** of
@@ -607,7 +611,7 @@ a deployment shows *Dates needed* or *To fix*, open it and pick another source o
 
 ![Upload — what to upload](img/screenshots/upload.png)
 
-Press **☁️ Manage uploads**, then **Upload deployment to Trapper**. (The other option, **Uploads dashboard**, shows the **created** deployments of the default research project by revision: a square for each revision, to pick one, and then **where they were uploaded** — *All* and each uploader (Trapper for now, more to come). A **ring** counts the uploads done over the most there can be: the deployments of the revision times the uploaders picked. The table has, for each deployment, **Where**, **When** (the visit that started it, a link that opens the visit dashboard on it, and the period) and whether it was uploaded: a **label for every uploader** it went to, with the day, or *Not uploaded*. The deployment's name is a **link** to its details in the Deployments dashboard; **View** opens the list of where it was uploaded, when, and a **link** to reach the upload; and a deployment not uploaded to the uploaders picked has an **Upload** button, which opens the upload page on its revision. There is a search and a *Show* filter (all, uploaded, not uploaded).) It sends deployments kept in the collections folder.
+Press **☁️ Manage uploads**, then **Upload deployment to Trapper**. (The other option, **Uploads dashboard**, shows the **created** deployments of the default research project by revision: a square for each revision, to pick one, and a **ring** that counts the uploads done over the most there can be: the deployments of the revision times the uploaders picked. To its right, **where they were uploaded**: *All* and a card for each uploader (Trapper for now, more to come), which show how many went to it and pick it. The table has, for each deployment, **Where**, **When** (the visit that started it, a link that opens the visit dashboard on it, and the period) and whether it was uploaded: a **label for every uploader** it went to, with the day, or *Not uploaded*. The deployment's name is a **link** to its details in the Deployments dashboard; **View** opens the list of where it was uploaded, when, and a **link** to reach the upload; and a deployment not uploaded to the uploaders picked has an **Upload** button, which opens the upload page on its revision. There is a search and a *Show* filter (all, uploaded, not uploaded).) It sends deployments kept in the collections folder.
 For each one it does what wildintel-tools did in three commands:
 
 1. creates the **location** in Trapper, from the deployment's coordinates, if the research project

@@ -259,11 +259,28 @@ describe('SettingsPage', () => {
   })
 
   describe('Epicollect5 connection', () => {
+    it('is set up in the Visit sources section, on the tab of the source', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      expect(screen.queryByRole('button', { name: 'Epicollect5' })).not.toBeInTheDocument() // Epicollect5 is not a section of its own
+      await section('Visit sources')
+
+      expect(screen.getByRole('heading', { name: 'Visit sources' })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Epicollect5' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('switch', { name: 'Import deployment information from Epicollect5' })).toBeInTheDocument()
+    })
+
+    it('is opened on Epicollect5 when a page asks for the Epicollect5 settings', async () => {
+      render(<SettingsPage onClose={vi.fn()} initialSection="epicollect" />)
+
+      expect(await screen.findByRole('tab', { name: 'Epicollect5' })).toHaveAttribute('aria-selected', 'true')
+    })
+
     it('tests the project with what is typed, and says what it found', async () => {
       mockedApi.epicollectTestConnection.mockResolvedValue({ ok: true, project: 'Doñana cameras', slug: 'donana', forms: 1, inputs: 5 })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Epicollect5')
+      await section('Visit sources')
       await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
@@ -275,7 +292,7 @@ describe('SettingsPage', () => {
       mockedApi.epicollectTestConnection.mockRejectedValue(new Error('Epicollect5 refused the client id and secret.'))
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Epicollect5')
+      await section('Visit sources')
       expect(screen.getByRole('button', { name: 'Test connection' })).toBeDisabled()
 
       await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
@@ -365,7 +382,7 @@ describe('SettingsPage', () => {
     it('turns the use of Epicollect5 and the unmapped answers into comments on, and saves them', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Epicollect5')
+      await section('Visit sources')
       const use = screen.getByRole('switch', { name: 'Import deployment information from Epicollect5' })
       const unmapped = screen.getByRole('switch', { name: /^Add answers with no place to go/ })
       expect(use).toHaveAttribute('aria-checked', 'false')

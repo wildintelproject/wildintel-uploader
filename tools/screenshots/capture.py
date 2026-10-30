@@ -121,7 +121,7 @@ def utils(page: Page) -> None:
 
 
 SETTINGS_SECTIONS = {
-    "general": "General", "trapper": "Uploader", "epicollect": "Epicollect5", "validation": "Validation",
+    "general": "General", "trapper": "Uploader", "epicollect": "Visit sources", "validation": "Validation",
     "postvalidation": "Postvalidation", "preprocessing": "Preprocessing", "entities": "Entities", "config": "Config",
 }
 
