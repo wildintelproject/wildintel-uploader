@@ -22,6 +22,7 @@ def _public(settings: config.Settings) -> dict:
     data = settings.model_dump(mode="json")
     data["TRAPPER"]["has_password"] = bool(data["TRAPPER"].pop("user_password"))
     data["EPICOLLECT5"]["has_secret"] = bool(data["EPICOLLECT5"].pop("client_secret"))
+    data["AGOUTI"]["has_api_key"] = bool(data["AGOUTI"].pop("api_key"))
     data["DATA"]["dir"] = data["DATA"]["dir"] or str(config.default_data_dir())
     # What the collections folder is when no folder of its own is set — shown as the default.
     for key in ("collections", "reports", "packages"):
@@ -89,7 +90,9 @@ def save_settings(new: config.Settings) -> dict:
         new.TRAPPER.user_password = current.TRAPPER.user_password
     if not new.EPICOLLECT5.client_secret:
         new.EPICOLLECT5.client_secret = current.EPICOLLECT5.client_secret
-    for section, fields in ((new.TRAPPER, ("base_url", "user_name")), (new.EPICOLLECT5, ("project_slug", "client_id"))):
+    if not new.AGOUTI.api_key:
+        new.AGOUTI.api_key = current.AGOUTI.api_key
+    for section, fields in ((new.TRAPPER, ("base_url", "user_name")), (new.EPICOLLECT5, ("project_slug", "client_id")), (new.AGOUTI, ("base_url", "project_id"))):
         for field in fields:
             if not getattr(section, field):
                 setattr(section, field, None)

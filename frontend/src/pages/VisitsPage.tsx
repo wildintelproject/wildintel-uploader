@@ -16,13 +16,13 @@ import { availabilityErrors, cameraAtSite } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
-export type VisitSource = 'manual' | 'manual2' | 'epicollect' | 'csv'
+export type VisitSource = 'manual' | 'manual2' | 'wildintel' | 'csv'
 
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
   { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.' },
   { value: 'manual2', icon: <><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>, title: 'By hand 2', description: 'The new form, being adapted to the field flow of a visit. For now it is the same as By hand.' },
-  { value: 'epicollect', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'From Wildintel Epicollect', description: 'Read the visits of a field trip from the Epicollect download.' },
-  { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'From a spreadsheet file', description: 'Any spreadsheet: say which column gives each field of a visit.' },
+  { value: 'wildintel', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect', description: 'Read the visits of a field trip from the CSV downloaded from the WildINTEL Epicollect project.' },
+  { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'Custom CSV', description: 'A CSV of any shape: say which column gives each field of a visit.' },
 ]
 
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
@@ -339,6 +339,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const [allSdCards, setSdCards] = useState<SdCard[]>([])
   // And the cameras, to pick the one of the visit from.
   const [allCameras, setCameras] = useState<Camera[]>([])
+  // Which sources of visits are used, as the settings say: one that is not, is not offered.
+  const [sourcesUsed, setSourcesUsed] = useState({ wildintel: true, csv: true })
   // Only those of the research project: each belongs to one.
   const ofProject = (rp: string | null) => !!project && (rp ?? '').toLowerCase() === project.acronym.toLowerCase()
   // ...and only those still in use: a retired, lost, stolen or broken one is not offered, unless the visit already has it.
@@ -357,7 +359,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // From a CSV file: its columns, and the one that gives each field of a visit.
   const [csvColumns, setCsvColumns] = useState<VisitsCsvColumns | null>(null)
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
-  const csvFormat: VisitsCsvFormat = source === 'epicollect' ? 'epicollect' : 'mapped'
+  const csvFormat: VisitsCsvFormat = source === 'wildintel' ? 'epicollect' : 'mapped'
   const chosen = SOURCE_OPTIONS.find((o) => o.value === source)
   // A camera put up while it is somewhere else, or a card left while it is in another camera, cannot be kept — said as soon as it is chosen.
   const conflicts = allVisits ? availabilityErrors(allVisits, visit) : {}
@@ -422,6 +424,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         setTrappers((settings.FIELDWORK?.trappers ?? []).filter((t) => !t.status || t.status === 'active').map((t) => t.name))
         setSdCards(settings.FIELDWORK?.sd_cards ?? [])
         setCameras(settings.FIELDWORK?.cameras ?? [])
+        setSourcesUsed({ wildintel: settings.FIELDLOG?.enabled ?? true, csv: settings.CUSTOMCSV?.enabled ?? true })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -683,7 +686,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         summary={chosen?.title}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {SOURCE_OPTIONS.map((o) => <TaskCard key={o.value} icon={o.icon} title={o.title} description={o.description} selected={source === o.value} onClick={() => setSource(o.value)} />)}
+          {SOURCE_OPTIONS.filter((o) => (o.value === 'wildintel' ? sourcesUsed.wildintel : o.value === 'csv' ? sourcesUsed.csv : true)).map((o) => <TaskCard key={o.value} icon={o.icon} title={o.title} description={o.description} selected={source === o.value} onClick={() => setSource(o.value)} />)}
         </div>
       </WizardStep>
 
@@ -1001,7 +1004,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
 
           <WizardStep
             n={3} title="Choose the spreadsheet file" status={!project ? 'locked' : csvResult || csvColumns ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
-            description={source === 'epicollect'
+            description={source === 'wildintel'
               ? <>The Epicollect download of the field trip. Its columns are found by their names ({['1_Responsable', '2_Collection', '4_Location', '5_Camera', '6_Action', '7_Status_of_the_camera', 'created_at'].map((c, i, all) => (
                 <span key={c}><code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-xs font-mono">{c}</code>{i < all.length - 2 ? ', ' : i === all.length - 2 ? ', and ' : ''}</span>
               ))}), whatever the case or the number in front. So are those of the Doñana form. The time of a visit is when its entry was created, put in the timezone of the location.</>

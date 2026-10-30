@@ -103,7 +103,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
                 raise HTTPException(400, f"The history of visits: {exc}") from exc
         field_options = config.load_settings().FIELDLOG
         result = visits_csv.parse_visits(req.csv, locations, kept + (history["visits"] if history else []), prefix, req.format, req.mapping,
-                                         {"time_source": field_options.time_source, "columns": field_options.columns})
+                                         {"time_source": field_options.time_source})
         if history:
             seen = {s["site"].lower() for s in result["new_sites"]}
             result = {

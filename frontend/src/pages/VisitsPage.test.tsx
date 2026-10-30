@@ -84,13 +84,22 @@ describe('VisitsPage', () => {
     expect(screen.getAllByText('By hand 2').length).toBeGreaterThan(0)
   })
 
-  it('first asks where the visits come from, with by hand, Wildintel Epicollect and a spreadsheet file', () => {
+  it('offers only the sources the settings say are used', async () => {
+    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDLOG: { ...APP_SETTINGS.FIELDLOG, enabled: false }, CUSTOMCSV: { enabled: false } })
+    render(<VisitsPage onBack={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: /^by hand(?! 2)/i })).toBeEnabled()
+    await waitFor(() => expect(screen.queryByRole('button', { name: /wildintel epicollect/i })).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /custom csv/i })).not.toBeInTheDocument()
+  })
+
+  it('first asks where the visits come from, with by hand, WildINTEL Epicollect and Custom CSV', () => {
     render(<VisitsPage onBack={vi.fn()} />)
 
     expect(screen.getByText('Where do the visits come from?')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^by hand(?! 2)/i })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /from wildintel epicollect/i })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /from a spreadsheet file/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /wildintel epicollect/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /custom csv/i })).toBeEnabled()
   })
 
   it('marks the step done with the source chosen, and lets it be changed', async () => {
@@ -781,7 +790,7 @@ describe('VisitsPage from a CSV file', () => {
   }
   const MAPPING = { location_id: 'Lugar', date: 'Dia', time: 'Hora', actions: 'Tarea', num_photos: 'Fotos' }
 
-  async function start(option = /from a spreadsheet file/i) {
+  async function start(option = /custom csv/i) {
     mockedApi.visitsCsvColumns.mockResolvedValue(COLUMNS)
     render(<VisitsPage onBack={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: option }))
@@ -835,7 +844,7 @@ describe('VisitsPage from a CSV file', () => {
   it('says why a file cannot be read, and offers nothing to map', async () => {
     mockedApi.visitsCsvColumns.mockRejectedValue(new Error('The file is empty.'))
     render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from a spreadsheet file/i }))
+    await userEvent.click(screen.getByRole('button', { name: /custom csv/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
@@ -849,7 +858,7 @@ describe('VisitsPage from a CSV file', () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
     const onOpenSettings = vi.fn()
     const { rerender } = render(<VisitsPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
-    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
@@ -872,7 +881,7 @@ describe('VisitsPage from a CSV file', () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [typo], warnings: [] })
     mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
     render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
@@ -892,7 +901,7 @@ describe('VisitsPage from a CSV file', () => {
   it('completes the visits kept with a history of visits (.xlsx) first, and applies the file on top of both', async () => {
     mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit({ session: 'R0003' }), visit()], problems: [{ row: 5, message: "'x' is not a date.", history: true }], skipped: 0, ignored: 0, saved: null, history: 1, new_sites: [], warnings: [] })
     render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('History of visits (.xlsx)'), new File([new Uint8Array([80, 75, 3, 4])], 'history.xlsx'))
@@ -909,7 +918,7 @@ describe('VisitsPage from a CSV file', () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [], notes: ['R0004: sites visited in R0003 and not on this trip, their cameras still out: TATR_0002.'] })
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 1, new_sites: [], warnings: [], report: '/c/TATR/visits_import_20241012_090000.txt' })
     render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
@@ -926,7 +935,7 @@ describe('VisitsPage from a CSV file', () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: sites.slice(2), warnings: [] })
     mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
     render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
@@ -943,7 +952,7 @@ describe('VisitsPage from a CSV file', () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [], problems: [{ row: 2, message: "'many' is not a whole number." }], skipped: 0, ignored: 0, saved: null, new_sites: [{ site: 'X', session: null, actions: ['Revision'], date: '2026-10-02', time: '08:00:00', latitude: 37.1, longitude: -6.4, visits: 1, nearest: { location_id: 'DONA_01', distance_m: 40 }, similar: ['DONA_01'] }], warnings: [] })
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
     render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     const input = screen.getByLabelText('CSV file') as HTMLInputElement
@@ -959,7 +968,7 @@ describe('VisitsPage from a CSV file', () => {
   it('reads a Wildintel Epicollect download without asking for any column', async () => {
     mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit()], problems: [], skipped: 0, ignored: 3, saved: null, new_sites: [], warnings: [] })
     render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /from wildintel epicollect/i }))
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)

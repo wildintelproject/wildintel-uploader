@@ -631,20 +631,6 @@ def test_the_time_of_a_visit_is_when_its_entry_was_created_or_the_date_and_the_h
     assert (typed["date"], typed["time"], typed["when"]) == ("2024-09-04", "12:30:00", "2024-09-04T12:30:00Z")   # the hour typed in the form
 
 
-def test_the_columns_of_a_form_named_otherwise_are_said_in_the_settings(tmp_path: Path):
-    text = "created_at,Quien,Viaje,Donde,Que,Camara\n2024-09-04T11:10:00.000Z,Ana,R0003,DONA_01,Installation,P800\n"
-    import pytest
-
-    from wildintel_uploader.core.services import visits_csv
-    with pytest.raises(visits_csv.VisitsCsvError, match="no column for: location_id, actions"):   # 'Donde' and 'Que' are not names it knows
-        _parse(text)
-    with_settings = _parse(text, options={"columns": {"trappers": "Quien", "session": "Viaje", "location_id": "Donde", "actions": "Que"}})
-
-    assert with_settings["problems"] == []
-    [visit] = with_settings["visits"]
-    assert (visit["location_id"], visit["session"], visit["trappers"], visit["actions"]) == ("DONA_01", "R0003", "Ana", ["Installation"])
-
-
 def test_the_date_typed_that_differs_from_the_day_of_the_entry_is_warned_of():
     text = EPI_HEADER + "2024-09-04T23:50:00.000Z,Ana,R0003,2024-09-05,DONA_01,P800,Installation,,A13,12:30\n"
 

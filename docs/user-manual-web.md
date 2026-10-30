@@ -63,6 +63,8 @@ The platforms a deployment can be uploaded to, each set up on its own tab. **Tra
 
 #### Trapper
 
+Each platform can be **used or not** — a check at the top of its tab (a green dot on the tab says it is used). One not used is not offered, and has no card in the Uploads dashboard.
+
 ![Settings › Uploader › Trapper](img/screenshots/settings-trapper.png)
 
 The server's **URL**, and the **username** (its email — Trapper's import form only accepts
@@ -72,18 +74,24 @@ see. The password is saved in `settings.toml` but never sent back to your browse
 **Upload packages — Largest package** is the size, in MB, of the packages an [upload](#8-upload-a-deployment-to-trapper) makes: the
 images of each deployment are uploaded in packages of this size at most (500 by default, up to 5000).
 
+#### Agouti
+
+What an upload to Agouti needs: the address of its API (usually `https://api.agouti.eu`), the **API key** that Agouti's support gives (kept private, and a blank key on saving keeps the saved one) and the **id of the project**. Nothing is uploaded to Agouti yet: the form only keeps these, and it is off by default.
+
 ### Visit sources
 
-The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab. The section is there so that other sources can be added in a future version.
+The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab — the sources are **WildINTEL Epicollect**, **Epicollect** and **Custom CSV**. Each can be **used or not**: a check at the top of its tab (and a green dot on the tab); a source not used is not offered in *Register visits*. The section is there so that other sources can be added in a future version.
 
 #### WildINTEL Epicollect
 
-The visits are read from the **CSV file downloaded from the WildINTEL Epicollect project** (*Register visits › From Wildintel Epicollect*): no connection to Epicollect is needed. Here is how the file is read:
+The visits are read from the **CSV file downloaded from the WildINTEL Epicollect project** (*Register visits › WildINTEL Epicollect*): no connection to Epicollect is needed. Here is how the file is read:
 
 - **The time of a visit** — *when its entry was created* (`created_at`, UTC; the default) or *the date and the hour typed in the form*. The hour typed is the wall clock of the visit's location, and is used when the row has a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.
-- **Columns** — the file is read by the names its questions usually have (`1_Responsable`, `4_Location`, `6_Action`, and the Camtrap DP fields by their names). For a form that names them otherwise, write the name of the column that gives each field of a visit; blank, the usual names.
+- The columns are found by their names (`1_Responsable`, `4_Location`, `6_Action`, and the Camtrap DP fields by their names), whatever the case or the number in front, in English or in Spanish: there is nothing to say about them.
 
-#### Epicollect5
+#### Epicollect
+
+The connection to Epicollect5 and the mapping of its questions, to read the entries of a project directly (for the details of a deployment, and — coming — for visits).
 
 ![Settings › Visit sources › Epicollect5](img/screenshots/settings-epicollect.png)
 
@@ -235,8 +243,8 @@ the visits come in:
 | Source | What it does |
 |---|---|
 | **By hand** | You fill in each visit yourself. |
-| **From Wildintel Epicollect** | Reads the visits of a field trip from the Epicollect download (a CSV). The time is the `created_at` of the entry, put in the timezone of the location. |
-| **From a spreadsheet file** | Any CSV: the page shows its columns and you say which one gives each field of a visit. |
+| **WildINTEL Epicollect** | Reads the visits of a field trip from the Epicollect download (a CSV). The time is the `created_at` of the entry, put in the timezone of the location. |
+| **Custom CSV** | Any CSV: the page shows its columns and you say which one gives each field of a visit. |
 
 A file can come with a **history of visits** (optional): the fieldwork datasheet, an `.xlsx` workbook whose first sheet has a Site and an Action column (Trappers, Session, Date, Time, Camera, NumPhotos, SD… or Tramperos, Sesion, Fecha, Hora…
 — found by their names, as in an Epicollect download). The history **completes the visits kept**, and then the file's are applied on top of both: sessions, what is already kept and what is odd are told with all of it in front. Its visits come first in the list, and its rows

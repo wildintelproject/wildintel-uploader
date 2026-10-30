@@ -150,7 +150,6 @@ interface Draft {
   /** Field records: when a visit happened, the seconds of the logs, and the columns of the file of the field app. */
   fieldlogTimeSource: 'created_at' | 'hour'
   fieldlogKeepSeconds: boolean
-  fieldlogColumns: Record<string, string>
   logLevel: LogLevel
   workers: string
   /** The acronym of the research project that comes filled in; blank for none. */
@@ -159,6 +158,14 @@ interface Draft {
   collectionsDir: string
   reportsDir: string
   packagesDir: string
+  /** Which of the sources of visits and of the places to upload to are used. */
+  wildintelEnabled: boolean
+  customCsvEnabled: boolean
+  trapperEnabled: boolean
+  agoutiEnabled: boolean
+  agoutiUrl: string
+  agoutiKey: string
+  agoutiProject: string
   trapperUrl: string
   maxZipMb: string
   trapperUser: string
@@ -219,7 +226,7 @@ function toDraft(s: AppSettings): Draft {
     sd_card: post.sd_card, photo_count: post.photo_count,
   }
   return {
-    fieldlogTimeSource: s.FIELDLOG.time_source, fieldlogKeepSeconds: s.FIELDLOG.keep_seconds, fieldlogColumns: { ...s.FIELDLOG.columns },
+    fieldlogTimeSource: s.FIELDLOG.time_source, fieldlogKeepSeconds: s.FIELDLOG.keep_seconds,
     logLevel: s.GENERAL.log_level,
     workers: String(s.GENERAL.workers),
     defaultResearchProject: s.GENERAL.default_research_project ?? '',
@@ -227,6 +234,8 @@ function toDraft(s: AppSettings): Draft {
     collectionsDir: s.DATA.collections_dir ?? '',
     reportsDir: s.DATA.reports_dir ?? '',
     packagesDir: s.DATA.packages_dir ?? '',
+    wildintelEnabled: s.FIELDLOG.enabled ?? true, customCsvEnabled: s.CUSTOMCSV?.enabled ?? true, trapperEnabled: s.TRAPPER.enabled ?? true,
+    agoutiEnabled: s.AGOUTI?.enabled ?? false, agoutiUrl: s.AGOUTI?.base_url ?? '', agoutiKey: '', agoutiProject: s.AGOUTI?.project_id ?? '',
     trapperUrl: s.TRAPPER.base_url ?? '',
     maxZipMb: String(s.TRAPPER.max_zip_mb),
     trapperUser: s.TRAPPER.user_name ?? '',
@@ -288,8 +297,10 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
   if (!SECTIONS.every((s) => sectionValid(d, s.id))) return null
   return {
     GENERAL: { log_level: d.logLevel, workers: Number(d.workers), default_research_project: d.defaultResearchProject.trim() || null },
-    TRAPPER: { base_url: d.trapperUrl.trim() || null, user_name: d.trapperUser.trim() || null, user_password: d.trapperPassword, max_zip_mb: Number(d.maxZipMb) },
+    TRAPPER: { enabled: d.trapperEnabled, base_url: d.trapperUrl.trim() || null, user_name: d.trapperUser.trim() || null, user_password: d.trapperPassword, max_zip_mb: Number(d.maxZipMb) },
     EPICOLLECT5: { enabled: d.epicollectEnabled, unmapped_to_comments: d.epicollectUnmappedToComments, project_slug: d.epicollectSlug.trim() || null, client_id: d.epicollectClientId.trim() || null, client_secret: d.epicollectClientSecret, mapping: d.epicollectMapping },
+    AGOUTI: { enabled: d.agoutiEnabled, base_url: d.agoutiUrl.trim() || null, api_key: d.agoutiKey, project_id: d.agoutiProject.trim() || null },
+    CUSTOMCSV: { enabled: d.customCsvEnabled },
     DATA: { dir: d.dataDir.trim() || null, collections_dir: d.collectionsDir.trim() || null, reports_dir: d.reportsDir.trim() || null, packages_dir: d.packagesDir.trim() || null },
     VALIDATION: d.validation,
     POSTVALIDATION: {
@@ -306,8 +317,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
       trappers: d.trappers, sd_cards: d.sdCards, cameras: d.cameras,
     },
     FIELDLOG: {
-      time_source: d.fieldlogTimeSource, keep_seconds: d.fieldlogKeepSeconds,
-      columns: Object.fromEntries(Object.entries(d.fieldlogColumns).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v)),
+      enabled: d.wildintelEnabled, time_source: d.fieldlogTimeSource, keep_seconds: d.fieldlogKeepSeconds,
     },
   }
 }
@@ -332,17 +342,6 @@ type SectionId = 'general' | 'uploader' | 'sources' | 'validation' | 'postvalida
 /** The lists of the entities, each with its own tab. The sections of the settings that used to be one each open the entities on their tab. */
 type EntityTab = 'projects' | 'trappers' | 'locations' | 'cameras' | 'sdcards'
 const ENTITY_SECTIONS: Record<string, EntityTab> = { trappers: 'trappers', sdcards: 'sdcards', cameras: 'cameras', locations: 'locations' }
-
-/** The fields of a visit whose column of the field app's file can be said in the settings: the field, what it is, and the name it usually has. */
-const FIELDLOG_COLUMNS: [string, string, string][] = [
-  ['location_id', 'Site', '4_Location'], ['session', 'Session', '2_Collection'], ['actions', 'Action', '6_Action'], ['trappers', 'Who went', '1_Responsable'],
-  ['camera_id', 'Camera', '5_Camera'], ['status', 'Status of the camera', '7_Status_of_the_camera'], ['num_photos', 'Photos counted', '9_Number_of_pictures'],
-  ['sd', 'SD card', '10_SD'], ['comments', 'Notes', '12_Observation'], ['latitude', 'Latitude', 'lat_13_Coordenates'], ['longitude', 'Longitude', 'long_13_Coordenates'],
-  ['camera_model', 'Camera model (Camtrap DP)', 'cameraModel'], ['camera_interval', 'Camera delay (Camtrap DP)', 'cameraDelay'], ['camera_height', 'Camera height (Camtrap DP)', 'cameraHeight'],
-  ['camera_depth', 'Camera depth (Camtrap DP)', 'cameraDepth'], ['camera_tilt', 'Camera tilt (Camtrap DP)', 'cameraTilt'], ['camera_heading', 'Camera heading (Camtrap DP)', 'cameraHeading'],
-  ['detection_distance', 'Detection distance (Camtrap DP)', 'detectionDistance'], ['timestamp_issues', 'Timestamp issues (Camtrap DP)', 'timestampIssues'], ['bait_use', 'Bait use (Camtrap DP)', 'baitUse'],
-  ['feature_type', 'Feature type (Camtrap DP)', 'featureType'], ['habitat', 'Habitat (Camtrap DP)', 'habitat'], ['deployment_groups', 'Deployment groups (Camtrap DP)', 'deploymentGroups'], ['tags', 'Deployment tags (Camtrap DP)', 'deploymentTags'],
-]
 
 /** The platforms a deployment can be uploaded to, each set up in the Uploader section. */
 
@@ -2003,6 +2002,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
   const [conn, setConn] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; message?: string }>({ kind: 'idle' })
   // A saved password is shown as kept, and only asked for again when it is to be replaced.
   const [changingPassword, setChangingPassword] = useState(false)
+  const [changingKey, setChangingKey] = useState(false)
   const [changingSecret, setChangingSecret] = useState(false)
   const [epiConn, setEpiConn] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; message?: string }>({ kind: 'idle' })
   const [browsing, setBrowsing] = useState(false)
@@ -2287,10 +2287,16 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
           <div role="tablist" aria-label="Upload destinations" className="flex flex-wrap gap-2">
             {UPLOAD_DESTINATIONS.map((d) => (
               <button key={d.id} type="button" role="tab" aria-selected={uploadDestination === d.id} onClick={() => setUploadDestination(d.id)}
-                      className={`px-4 h-10 rounded-lg border text-sm font-medium ${uploadDestination === d.id ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>{d.label}</button>
+                      className={`inline-flex items-center gap-2 px-4 h-10 rounded-lg border text-sm font-medium ${uploadDestination === d.id ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>
+                {d.label}
+                <span aria-hidden="true" title={(d.id === 'trapper' ? draft.trapperEnabled : draft.agoutiEnabled) ? 'Used' : 'Not used'} className={`h-2 w-2 rounded-full ${(d.id === 'trapper' ? draft.trapperEnabled : draft.agoutiEnabled) ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+              </button>
             ))}
           </div>
           {uploadDestination === 'trapper' && (
+          <>
+          <ToggleCard title="Use Trapper" checked={draft.trapperEnabled} onChange={(v) => set('trapperEnabled', v)}
+                      description="Offers Trapper as a place to upload deployments to. Turned off, it is not offered, and its uploads are not shown in the uploads dashboard." />
           <SettingsCard>
             <CardBlock title="Server" description="The Trapper website you work with. Research projects and locations come from it, and deployments are uploaded to it.">
               <PlainField label="Web address">
@@ -2334,6 +2340,43 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
               <div className="max-w-60"><PlainField label="Largest package"><NumberBox label="Largest package" value={draft.maxZipMb} limits={MAX_ZIP_MB} onChange={(v) => set('maxZipMb', v)} unit="MB" /></PlainField></div>
             </CardBlock>
           </SettingsCard>
+          </>
+          )}
+          {uploadDestination === 'agouti' && (
+          <>
+          <ToggleCard title="Use Agouti" checked={draft.agoutiEnabled} onChange={(v) => set('agoutiEnabled', v)}
+                      description="Offers Agouti as a place to upload deployments to. Nothing is uploaded to Agouti yet: this keeps what an upload will need." />
+          <SettingsCard>
+            <CardBlock title="Server" description="Agouti's API. Its address is the one Agouti publishes.">
+              <PlainField label="Web address" hint="Usually https://api.agouti.eu">
+                <input aria-label="Agouti web address" className={`${fieldBox} font-mono text-sm`} value={draft.agoutiUrl} placeholder="https://api.agouti.eu" autoComplete="off" onChange={(e) => set('agoutiUrl', e.target.value)} />
+              </PlainField>
+            </CardBlock>
+            <CardBlock title="Access" description="Agouti's support gives an API key to those who ask for it. It is sent with every request.">
+              <PlainField label="API key" hint={saved.AGOUTI?.has_api_key ? (changingKey ? 'Leave it blank to keep the saved key.' : 'The saved key is kept private. Press Change to replace it.') : 'No key saved yet.'}>
+                {saved.AGOUTI?.has_api_key && !changingKey ? (
+                  <div className="flex items-center gap-3">
+                    <div className={`${fieldBox} flex items-center justify-between`} aria-label="Saved API key">
+                      <span aria-hidden="true" className="tracking-widest text-zinc-500">••••••••</span>
+                      <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Saved</span>
+                    </div>
+                    <button type="button" className={`${btnOutline} h-12 shrink-0`} onClick={() => setChangingKey(true)}>Change</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <input aria-label="API key" type="password" className={fieldBox} value={draft.agoutiKey} autoComplete="new-password" onChange={(e) => set('agoutiKey', e.target.value)} />
+                    {saved.AGOUTI?.has_api_key && <button type="button" className={`${btnOutline} h-12 shrink-0`} onClick={() => { set('agoutiKey', ''); setChangingKey(false) }}>Keep it</button>}
+                  </div>
+                )}
+              </PlainField>
+            </CardBlock>
+            <CardBlock title="Project" description="The Agouti project the deployments are uploaded to.">
+              <PlainField label="Project id" hint="The number of the project in Agouti.">
+                <input aria-label="Agouti project id" className={`${fieldBox} font-mono text-sm`} value={draft.agoutiProject} autoComplete="off" onChange={(e) => set('agoutiProject', e.target.value)} />
+              </PlainField>
+            </CardBlock>
+          </SettingsCard>
+          </>
           )}
           </div>
         )}
@@ -2342,13 +2385,21 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
           <div className="space-y-5 pt-5">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">The places the visits of a research project can be taken from, besides entering them by hand. Pick one to set it up. Others may come in a future version.</p>
             <div role="tablist" aria-label="Visit sources" className="flex flex-wrap gap-2">
-              {VISIT_SOURCES.map((d) => (
-                <button key={d.id} type="button" role="tab" aria-selected={visitSource === d.id} onClick={() => setVisitSource(d.id)}
-                        className={`px-4 h-10 rounded-lg border text-sm font-medium ${visitSource === d.id ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>{d.label}</button>
-              ))}
+              {VISIT_SOURCES.map((d) => {
+                const used = d.id === 'wildintel' ? draft.wildintelEnabled : d.id === 'epicollect' ? draft.epicollectEnabled : draft.customCsvEnabled
+                return (
+                  <button key={d.id} type="button" role="tab" aria-selected={visitSource === d.id} onClick={() => setVisitSource(d.id)}
+                          className={`inline-flex items-center gap-2 px-4 h-10 rounded-lg border text-sm font-medium ${visitSource === d.id ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>
+                    {d.label}
+                    <span aria-hidden="true" title={used ? 'Used' : 'Not used'} className={`h-2 w-2 rounded-full ${used ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                  </button>
+                )
+              })}
             </div>
             {visitSource === 'wildintel' && (
               <div className="space-y-5">
+                <ToggleCard title="Use WildINTEL Epicollect" checked={draft.wildintelEnabled} onChange={(v) => set('wildintelEnabled', v)}
+                            description="Offers to read the visits from the CSV of the WildINTEL Epicollect project, with the datasheet of visits if you have it. Turned off, it is not offered in Register visits." />
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">The visits are read from the CSV file downloaded from the WildINTEL Epicollect project: no connection to Epicollect is needed. Here is how the file is read.</p>
                 <SettingsCard>
                   <CardBlock title="When did a visit happen?" description="A visit is read from the file of the field app. Its time can be when its entry was created, or the date and the hour typed in the form.">
@@ -2357,22 +2408,19 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
                     <p className={hintClass}>The hour typed is the wall clock of the visit's location; the time of the entry is UTC, and is put in the timezone of the location. A row without a date and an hour typed is read by the time of its entry.</p>
                   </CardBlock>
                 </SettingsCard>
-                <SettingsCard>
-                  <CardBlock title="Columns" description="The file of the field app is read by the names its questions usually have. For a form that names them otherwise, write here the name of the column that gives each field of a visit; blank, the usual names.">
-                    {FIELDLOG_COLUMNS.map(([field, label, example]) => (
-                      <PlainField key={field} label={label}>
-                        <input aria-label={`Column for ${label}`} className={`${fieldBox} font-mono text-sm`} value={draft.fieldlogColumns[field] ?? ''} placeholder={example} autoComplete="off"
-                               onChange={(e) => set('fieldlogColumns', { ...draft.fieldlogColumns, [field]: e.target.value })} />
-                      </PlainField>
-                    ))}
-                  </CardBlock>
-                </SettingsCard>
+              </div>
+            )}
+            {visitSource === 'csv' && (
+              <div className="space-y-5">
+                <ToggleCard title="Use Custom CSV" checked={draft.customCsvEnabled} onChange={(v) => set('customCsvEnabled', v)}
+                            description="Offers to read the visits from a CSV file of any shape, saying which column gives each field of a visit. Turned off, it is not offered in Register visits." />
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">There is nothing else to set up: the columns are matched when each file is read.</p>
               </div>
             )}
             {visitSource === 'epicollect' && (
               <div className="space-y-5">
-              <ToggleCard title="Import deployment information from Epicollect5" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)}
-                          description="Offers to fill in the dates, camera, site and notes of a deployment from its entry in your Epicollect5 project. Turned off, nothing is read from Epicollect5." />
+              <ToggleCard title="Use Epicollect" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)}
+                              description="Offers Epicollect as a source: of the visits of a research project, and of the details of a deployment — its dates, camera, site and notes — when it is imported. Turned off, nothing is read from Epicollect." />
               <SettingsCard>
                 <CardBlock title="Project" description="The Epicollect5 project the information is imported from.">
                   <PlainField label="Project name in its web address" hint={`It is the last part of the project's address: five.epicollect.net/project/${draft.epicollectSlug.trim() || 'my-project'}`}>

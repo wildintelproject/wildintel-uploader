@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UploadEntry, UploadedDeployment } from '../types'
@@ -136,6 +136,16 @@ describe('UploadStatusPage', () => {
     expect(screen.queryByRole('button', { name: 'Upload the deployment R0002-DONA_01' })).not.toBeInTheDocument() // already uploaded
     await userEvent.click(screen.getByRole('button', { name: 'Upload the deployment R0002-DONA_02' }))
     expect(onUpload).toHaveBeenCalledWith({ researchProjectId: 'DONA', collection: 'R0002' })
+  })
+
+  it('has a card for each uploader the settings say is used — Agouti too, when it is — and none for the others', async () => {
+    vi.mocked(api.getSettings).mockResolvedValue({ GENERAL: { default_research_project: 'DONA' }, TRAPPER: { enabled: false }, AGOUTI: { enabled: true } } as never)
+    render(<UploadStatusPage onBack={() => {}} />)
+
+    const progress = await screen.findByRole('region', { name: 'Upload progress' })
+    await waitFor(() => expect(within(progress).getByRole('button', { name: 'Agouti' })).toBeInTheDocument())
+    expect(within(progress).queryByRole('button', { name: 'Trapper' })).not.toBeInTheDocument()
+    expect(progress).toHaveTextContent('0 / 4')   // 4 deployments × 1 uploader (Agouti): none of them went there
   })
 })
 

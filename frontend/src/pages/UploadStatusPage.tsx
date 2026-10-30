@@ -40,6 +40,11 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   // every revision the deployments have — also the ones with nothing created yet
   const [allRevisions, setAllRevisions] = useState<string[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  // which uploaders are used, as the settings say: one that is not, has no card
+  const [used, setUsed] = useState<Record<string, boolean>>({ trapper: true, agouti: false })
+  useEffect(() => {
+    api.getSettings().then((s) => setUsed({ trapper: s.TRAPPER?.enabled ?? true, agouti: s.AGOUTI?.enabled ?? false })).catch(() => {})
+  }, [settingsOpen])
   const [revision, setRevision] = useState('')
   // where they were uploaded: '' for all the uploaders, or the id of one
   const [uploader, setUploader] = useState('')
@@ -66,7 +71,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   // the cards and the table follow the revision picked
   const own = revision ? every.filter((d) => d.collection === revision) : every
   // a card for each platform there is — also the ones nothing went to — and for any other an upload names
-  const destinations = [...UPLOAD_DESTINATIONS.map((d) => d.id as string), ...new Set(every.flatMap((d) => d.uploads.map((u) => u.destination)).filter((x) => !UPLOAD_DESTINATIONS.some((k) => k.id === x)))]
+  const destinations = [...UPLOAD_DESTINATIONS.filter((d) => used[d.id]).map((d) => d.id as string), ...new Set(every.flatMap((d) => d.uploads.map((u) => u.destination)).filter((x) => !UPLOAD_DESTINATIONS.some((k) => k.id === x)))]
   const sentTo = (d: UploadedDeployment, to: string) => d.uploads.some((u) => u.destination === to)
   // the uploaders the progress is of: the one picked, or all of them
   const chosen = uploader ? [uploader] : destinations

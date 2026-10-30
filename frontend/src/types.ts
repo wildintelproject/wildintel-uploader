@@ -531,7 +531,11 @@ export interface ConfigInfo {
 export interface AppSettings {
   /** workers: how many images are validated or preprocessed at once; cpu_count: the CPUs this machine has (read-only). */
   GENERAL: { log_level: LogLevel; workers: number; cpu_count: number; log_file: string; log_level_override: string | null; default_research_project?: string | null }
-  TRAPPER: { base_url: string | null; user_name: string | null; has_password: boolean; max_zip_mb: number }
+  TRAPPER: { enabled: boolean; base_url: string | null; user_name: string | null; has_password: boolean; max_zip_mb: number }
+  /** What an upload to Agouti needs — kept; nothing is uploaded to Agouti yet. */
+  AGOUTI: { enabled: boolean; base_url: string | null; has_api_key: boolean; project_id: string | null }
+  /** Whether a CSV of any shape can be read for visits. */
+  CUSTOMCSV: { enabled: boolean }
   /** mapping: the ref of the Epicollect5 input that gives each field of a deployment (deployment field → ref). */
   EPICOLLECT5: { enabled: boolean; unmapped_to_comments: boolean; project_slug: string | null; client_id: string | null; has_secret: boolean; mapping: Record<string, string> }
   /** The folder where the app keeps what it makes — its collections, reports and packages go in folders inside it, unless each has one of its own. */
@@ -553,7 +557,9 @@ export interface AppSettings {
 /** What the settings page saves. A blank password keeps the saved one. */
 export interface AppSettingsUpdate {
   GENERAL: { log_level: LogLevel; workers: number; default_research_project: string | null }
-  TRAPPER: { base_url: string | null; user_name: string | null; user_password: string; max_zip_mb: number }
+  TRAPPER: { enabled: boolean; base_url: string | null; user_name: string | null; user_password: string; max_zip_mb: number }
+  AGOUTI: { enabled: boolean; base_url: string | null; api_key: string; project_id: string | null }
+  CUSTOMCSV: { enabled: boolean }
   EPICOLLECT5: { enabled: boolean; unmapped_to_comments: boolean; project_slug: string | null; client_id: string | null; client_secret: string; mapping: Record<string, string> }
   DATA: { dir: string | null; collections_dir: string | null; reports_dir: string | null; packages_dir: string | null }
   VALIDATION: ValidationSettings
@@ -565,12 +571,12 @@ export interface AppSettingsUpdate {
 
 /** How the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them. */
 export interface FieldlogSettings {
+  /** Whether the CSV of the WildINTEL Epicollect project can be read for visits. */
+  enabled: boolean
   /** When a visit happened: when its entry was created (UTC), or the date and the hour typed in the form. */
   time_source: 'created_at' | 'hour'
   /** Keep the seconds of the start and the end of the deployments written in the logs; off, they are cut to the minute. */
   keep_seconds: boolean
-  /** The column of the file that gives each field of a visit, for forms whose questions are named otherwise. */
-  columns: Record<string, string>
 }
 
 /** The people, the SD cards and the cameras of the field work, kept in the settings. */

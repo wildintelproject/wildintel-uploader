@@ -120,14 +120,13 @@ def _table(text: str) -> list[list[str]]:
     return table
 
 
-def _fields(header: list[str], fmt: str, mapping: dict[str, str] | None, columns: dict[str, str] | None = None) -> list[str | None]:
+def _fields(header: list[str], fmt: str, mapping: dict[str, str] | None) -> list[str | None]:
     """The field of a visit each column of the header gives — nothing for a column that is not used. In an Epicollect download the columns are found by the
-    names they usually have, and `columns` ({field: the column's name}) says the ones a form names otherwise."""
+    names they usually have."""
     if fmt == "mapped":
         by_column = {column: field for field, column in (mapping or {}).items() if column}
         return [by_column.get(cell) for cell in header]
     by_name = {alias: field for field, aliases in EPICOLLECT_COLUMNS.items() for alias in aliases}
-    by_name |= {_key(name): field for field, name in (columns or {}).items() if name and field in EPICOLLECT_COLUMNS}   # what is said wins over what is guessed
     return [by_name.get(_key(cell)) for cell in header]
 
 
@@ -144,10 +143,10 @@ def suggest_mapping(text: str) -> dict:
     return {"columns": header, "sample": table[1:4], "mapping": mapping}
 
 
-def _rows(text: str, fmt: str, mapping: dict[str, str] | None, columns: dict[str, str] | None = None) -> tuple[dict[str, str], list[dict[str, str]]]:
+def _rows(text: str, fmt: str, mapping: dict[str, str] | None) -> tuple[dict[str, str], list[dict[str, str]]]:
     """The file's columns, as the visit's fields they are, and its rows keyed by those fields."""
     table = _table(text)
-    fields = _fields(table[0], fmt, mapping, columns)
+    fields = _fields(table[0], fmt, mapping)
     present = {f for f in fields if f}
     missing = [f for f in REQUIRED if f not in present]
     if not present & {"created_at", "when"} and not {"date", "time"} <= present:
@@ -211,8 +210,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     kept — what their actions ask and they lack, a camera or a card where it cannot be, two Revisions in a session… — comes back in "warnings": the
     visits are kept as the field wrote them and questioned, as the field records are.
 
-    `options` are the settings of the field records: "time_source" ("created_at", or "hour" to read the date and the hour typed) and "columns" ({field: the name
-    of the column that gives it} for an Epicollect form whose questions are named otherwise). A row whose session, site, camera and actions are those of a visit already
+    `options` are the settings of the field records: "time_source" ("created_at", or "hour" to read the date and the hour typed). A row whose session, site, camera and actions are those of a visit already
     kept is that visit: left as it is, and counted as skipped.
 
     Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "ignored": int, "new_sites": [...], "warnings": [str], "notes": [str]} — the rows
@@ -224,7 +222,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     """
     options = options or {}
     time_source = options.get("time_source") or "created_at"
-    columns, rows = _rows(text, fmt, mapping, options.get("columns"))
+    columns, rows = _rows(text, fmt, mapping)
     epicollect = fmt == "epicollect" and "created_at" in columns
     known = {str(l.get("location_id", "")).lower(): l for l in locations}
     already = {(str(v.get("location_id", "")).lower(), v.get("date"), v.get("time")) for v in kept}

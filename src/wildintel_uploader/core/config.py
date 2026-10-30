@@ -91,6 +91,7 @@ class GeneralSettings(BaseModel):
 
 
 class TrapperSettings(BaseModel):
+    enabled: bool = Field(default=True, description="Whether Trapper is used as a place to upload deployments to. (TRAPPER.enabled)")
     base_url: Optional[str] = Field(default=None, description="Trapper server URL. (TRAPPER.base_url)")
     user_name: Optional[str] = Field(default=None, description="Trapper username (its email — the import form only accepts that). (TRAPPER.user_name)")
     user_password: Optional[str] = Field(
@@ -102,8 +103,28 @@ class TrapperSettings(BaseModel):
     )
 
 
+class AgoutiSettings(BaseModel):
+    """What an upload to Agouti needs (its public API: https://docs.agouti.eu/api/endpoints.html) — kept here; nothing is uploaded to Agouti yet."""
+
+    enabled: bool = Field(default=False, description="Whether Agouti is used as a place to upload deployments to. (AGOUTI.enabled)")
+    base_url: Optional[str] = Field(default=None, description="The address of Agouti's API (https://api.agouti.eu). (AGOUTI.base_url)")
+    api_key: Optional[str] = Field(
+        default=None, description="The API key Agouti's support gives, sent as X-API-KEY. (AGOUTI.api_key)", json_schema_extra={"secret": True},
+    )
+    project_id: Optional[str] = Field(default=None, description="The id of the Agouti project the deployments are uploaded to. (AGOUTI.project_id)")
+
+    @field_validator("base_url", "project_id")
+    @classmethod
+    def _stripped(cls, value: Optional[str]) -> Optional[str]:
+        return (value.strip() or None) if isinstance(value, str) else value
+
+
+class CustomCsvSettings(BaseModel):
+    enabled: bool = Field(default=True, description="Whether a CSV file of any shape can be read for visits, saying which column gives each field. (CUSTOMCSV.enabled)")
+
+
 class Epicollect5Settings(BaseModel):
-    enabled: bool = Field(default=False, description="Whether the details of a deployment can be imported from Epicollect5. (EPICOLLECT5.enabled)")
+    enabled: bool = Field(default=False, description="Whether Epicollect5 is used as a source: of visits, and of the details of a deployment when it is imported. (EPICOLLECT5.enabled)")
     unmapped_to_comments: bool = Field(
         default=False,
         description="What an entry says in an input that is not mapped to any field goes to the comments of the deployment. (EPICOLLECT5.unmapped_to_comments)",
@@ -379,6 +400,7 @@ class FieldlogSettings(BaseModel):
     """Field records: how the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them
     (see services.visits_csv and services.visit_deployments)."""
 
+    enabled: bool = Field(default=True, description="Whether the CSV of the WildINTEL Epicollect project can be read for visits. (FIELDLOG.enabled)")
     time_source: Literal["created_at", "hour"] = Field(
         default="created_at",
         description="When a visit happened: created_at, the time its entry was created (UTC); or hour, the date and the hour typed in the form (the wall clock of its location). (FIELDLOG.time_source)",
@@ -386,16 +408,14 @@ class FieldlogSettings(BaseModel):
     keep_seconds: bool = Field(
         default=False, description="Keep the seconds of the visits in the deployments' start and end written in the logs; off, they are cut to the minute. (FIELDLOG.keep_seconds)",
     )
-    columns: dict[str, str] = Field(
-        default_factory=dict,
-        description="The column of the field app's file that gives each field of a visit, for forms whose questions are named otherwise — blank, the names it knows. (FIELDLOG.columns)",
-    )
 
 
 class Settings(BaseModel):
     GENERAL: GeneralSettings = Field(default_factory=GeneralSettings)
     TRAPPER: TrapperSettings = Field(default_factory=TrapperSettings)
     EPICOLLECT5: Epicollect5Settings = Field(default_factory=Epicollect5Settings)
+    AGOUTI: AgoutiSettings = Field(default_factory=AgoutiSettings)
+    CUSTOMCSV: CustomCsvSettings = Field(default_factory=CustomCsvSettings)
     DATA: DataSettings = Field(default_factory=DataSettings)
     VALIDATION: ValidationSettings = Field(default_factory=ValidationSettings)
     POSTVALIDATION: PostvalidationSettings = Field(default_factory=PostvalidationSettings)

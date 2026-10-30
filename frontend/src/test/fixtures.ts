@@ -84,7 +84,9 @@ export const DETAILED_SESSION: SessionSummary = {
 export const APP_SETTINGS: AppSettings = {
   GENERAL: { log_level: 'INFO', workers: 4, cpu_count: 8, log_file: '/home/me/.config/wildintel-uploader/logs/wildintel-uploader.log', log_level_override: null },
   EPICOLLECT5: { enabled: false, unmapped_to_comments: false, project_slug: null, client_id: null, has_secret: false, mapping: {} },
-  TRAPPER: { base_url: 'https://trapper.example.org', user_name: 'alice', has_password: true, max_zip_mb: 500 },
+  TRAPPER: { enabled: true, base_url: 'https://trapper.example.org', user_name: 'alice', has_password: true, max_zip_mb: 500 },
+  AGOUTI: { enabled: false, base_url: null, has_api_key: false, project_id: null },
+  CUSTOMCSV: { enabled: true },
   DATA: { dir: '/home/me/Documents/wildintel-uploader', collections_dir: null, reports_dir: null, packages_dir: null,
     default_collections_dir: '/home/me/Documents/wildintel-uploader/collections', default_reports_dir: '/home/me/Documents/wildintel-uploader/reports', default_packages_dir: '/home/me/Documents/wildintel-uploader/packages' },
   VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },
@@ -99,5 +101,5 @@ export const APP_SETTINGS: AppSettings = {
     license_url: 'https://creativecommons.org/licenses/by-nc/4.0/', ignore_dst: true, convert_to_utc: true,
   },
   FIELDWORK: { trappers: [], sd_cards: [], cameras: [] },
-  FIELDLOG: { time_source: 'created_at', keep_seconds: false, columns: {} },
+  FIELDLOG: { enabled: true, time_source: 'created_at', keep_seconds: false },
 }
