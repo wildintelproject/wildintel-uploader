@@ -10,6 +10,7 @@ import { UploadedToTrapper, UploadingToTrapper } from '../components/UploadToTra
 import type { UploadItem } from '../components/UploadToTrapper'
 import Notice, { Mark } from '../components/Notice'
 import WizardStep from '../components/WizardStep'
+import { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import { formatPeriod } from '../dateFormat'
 import type { AccessCheck, ClassificationProject, LocalResearchProject, UploadCollection, UploadTarget, UploadDeploymentInfo, UploadEvent, UploadMode, UploadStep } from '../types'
 
@@ -28,7 +29,7 @@ const STEPS: { step: UploadStep; label: string }[] = [
   { step: 'csv', label: 'Deployments csv' },
   { step: 'upload', label: 'Upload' },
   { step: 'process', label: 'Process' },
-  { step: 'wait', label: 'Collection created' },
+  { step: 'wait', label: 'Revision created' },
 ]
 
 /** One deployment's upload as it goes. */
@@ -141,7 +142,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
       setCollections(results)
       if (pick) selectCollection(pick, results)
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Could not read the collections.')
+      setLoadError(e instanceof Error ? e.message : 'Could not read the revisions.')
     }
   }
 
@@ -341,10 +342,8 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
 
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
-      <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">Upload deployment to Trapper</h2>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-        Sends deployments from your collections folder to Trapper. Anything missing there is created, then the images are sent for Trapper to process.
-      </p>
+      <PageHeader icon={MENU_ICONS.upload} title="Upload deployment to Trapper" description="Sends the deployments of a revision to Trapper. Anything missing there is created, then the images are sent for Trapper to process."
+        parent="Manage uploads" onParent={onBack} />
 
       {trapper === null ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">Reading the settings…</p>
@@ -362,7 +361,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
 
       <WizardStep n={1} title="Choose what to upload" status={stepStatus(1)} canEdit={!uploading} onEdit={() => { setChosen(false); setModeChosen(false); setPrepared(null) }}
                   summary={collection && <>{projectId} › {collectionName} · {toUpload.length} {toUpload.length === 1 ? 'deployment' : 'deployments'} ({images(imagesToSend)})</>}
-                  description="The research project, collection and deployments kept in your collections folder.">
+                  description="The research project, revision and deployments kept in your collections folder.">
         <div className="mb-4">
           <label className={labelClass} htmlFor="upload-research-project">Research project</label>
           <Combobox
@@ -392,11 +391,11 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
 
         {projectId && (
           <div className="mb-4">
-            <label className={labelClass} htmlFor="upload-collection">Collection</label>
+            <label className={labelClass} htmlFor="upload-collection">Revision</label>
             <Combobox
               id="upload-collection" options={collections.map((c) => ({ value: c.name, label: `${c.name} · ${c.deployments.length} ${c.deployments.length === 1 ? 'deployment' : 'deployments'}` }))}
               value={collectionName} onChange={chooseCollection} disabled={uploading}
-              placeholder={collections.length === 0 ? 'No collections yet' : 'Select a collection…'} clearLabel="Clear collection"
+              placeholder={collections.length === 0 ? 'No revisions yet' : 'Select a revision…'} clearLabel="Clear revision"
             />
             {checkingSelection && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Checking your access in Trapper…</p>}
             {selectionError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{selectionError}</p>}
@@ -416,7 +415,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
         {collection && (
           <div className="mb-4">
             <p className={labelClass}>Deployments</p>
-            {collection.deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This collection has no deployments.</p>}
+            {collection.deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This revision has no deployments.</p>}
             {collection.deployments.length > 0 && (
               <div className="rounded-lg border border-zinc-200 dark:border-zinc-700">
                 <div className="flex items-center gap-3 flex-wrap px-4 py-2 text-xs border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
@@ -469,7 +468,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
                      placeholder="Its pk in Trapper" onChange={(e) => setClassificationPk(e.target.value)} aria-invalid={classificationValid ? undefined : true} />
             )}
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-              {projectMissing ? `Available once ${projectId} is found in Trapper.` : 'The collection is created in this classification project of Trapper.'}
+              {projectMissing ? `Available once ${projectId} is found in Trapper.` : 'The revision is created in this classification project of Trapper.'}
             </p>
             {connected && !projectMissing && classifications.some((c) => String(c.pk) === classificationPk) && (
               <p className="flex items-center gap-2 mt-2 text-sm text-emerald-600 dark:text-emerald-400">
@@ -483,7 +482,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
             )}
             {!connected && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Without a Trapper account they can’t be listed: type its pk.</p>}
             {connected && classifications.length > 1 && !classificationReady && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">The research project has several: pick the one the collection goes to.</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">The research project has several: pick the one the revision goes to.</p>
             )}
           </div>
         )}

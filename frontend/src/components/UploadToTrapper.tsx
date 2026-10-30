@@ -255,7 +255,7 @@ export function UploadedToTrapper({ collection, researchProject, items, startedA
             {[
               { name: researchProject, kind: 'Research project', pill: <Pill tone="grey">Already there</Pill> },
               ...(locations.length ? [{ name: locations.join(', '), kind: locations.length === 1 ? 'Location' : 'Locations', pill: locationsCreated.size === 0 ? <Pill tone="grey">Already there</Pill> : <Pill tone="green">Created</Pill> }] : []),
-              { name: collection, kind: 'Collection', pill: <Pill tone="blue">Sent</Pill> },
+              { name: collection, kind: 'Revision', pill: <Pill tone="blue">Sent</Pill> },
               ...sent.map((i) => ({ name: i.id, kind: 'Deployment', pill: i.deploymentCreated ? <Pill tone="green">Created</Pill> : <Pill tone="grey">Already there</Pill> })),
             ].map((row) => (
               <li key={`${row.kind}-${row.name}`} className="flex items-center gap-3 px-5 py-3">

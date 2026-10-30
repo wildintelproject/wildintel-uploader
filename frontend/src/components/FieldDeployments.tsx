@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatDay } from '../dateFormat'
 import { btnOutline, inputClass } from '../pages/ImportDeploymentPage'
 import type { DeploymentFields, FieldDeployment } from '../types'
+import UploadList from './UploadList'
 import { pageNumbers } from './CheckFailures'
 import { Icon, LegendCard, Ring, StateCard } from './Dashboard'
 import RevisionSquares from './RevisionSquares'
@@ -27,10 +28,12 @@ const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
-export default function FieldDeployments({ deployments, highlight, initialFilter = '', onShowVisit, loadDetails }: {
+export default function FieldDeployments({ deployments, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload }: {
   deployments: FieldDeployment[]; highlight?: string; initialFilter?: Filter; onShowVisit?: (visit: { session: string; site: string }) => void
   /** Reads what a created deployment says of itself: its details, for its View button. */
   loadDetails?: (deploymentId: string) => Promise<DeploymentFields | null>
+  /** Goes to upload the deployment — its revision is what the upload page starts from. */
+  onUpload?: (deployment: FieldDeployment) => void
 }) {
   const [revision, setRevision] = useState('')
   const [filter, setFilter] = useState<Filter>(initialFilter)
@@ -38,6 +41,8 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
   const [text, setText] = useState('')
   // the deployment whose details are open
   const [opened, setOpened] = useState<string | null>(null)
+  // the deployment whose uploads are open
+  const [openedUpload, setOpenedUpload] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, DeploymentFields | null | 'error'>>({})
   function toggle(id: string) {
     if (opened === id) { setOpened(null); return }
@@ -144,12 +149,17 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                         ? <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not created</span>
                         : <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Created</span>}
                     </td>
-                    <td className="px-3 py-3">
-                      {phaseOf(d) === 'uploaded'
-                        ? <span title={d.uploaded_at ? `Uploaded on ${d.uploaded_at.slice(0, 10)}` : 'Uploaded: synced from there'} className="rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Uploaded</span>
-                        : phaseOf(d) === 'created'
-                        ? <span title="Not uploaded yet" className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not uploaded</span>
-                        : <span className="text-zinc-400">—</span>}
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      {phaseOf(d) === 'uploaded' ? (
+                        <button type="button" className={`${btnOutline} inline-flex items-center gap-1.5 !px-2.5 !py-1 !text-xs text-blue-700 dark:text-blue-300`} aria-expanded={openedUpload === d.deployment_id} aria-label={`Show the upload details of ${d.deployment_id}`}
+                                onClick={() => setOpenedUpload(openedUpload === d.deployment_id ? null : d.deployment_id)}>
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Show upload details
+                        </button>
+                      ) : phaseOf(d) === 'created' ? (
+                        onUpload
+                          ? <button type="button" className={`${btnOutline} !px-2.5 !py-1 !text-xs`} aria-label={`Upload the deployment ${d.deployment_id}`} onClick={() => onUpload(d)}>Upload</button>
+                          : <span title="Not uploaded yet" className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not uploaded</span>
+                      ) : <span className="text-zinc-400">—</span>}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       {phaseOf(d) !== 'not_created' && phaseOf(d) !== 'no_images' && (
@@ -159,6 +169,13 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                       )}
                     </td>
                   </tr>
+                  {openedUpload === d.deployment_id && (
+                    <tr>
+                      <td colSpan={7} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
+                        <UploadList deployment={d.deployment_id} uploads={d.uploads?.length ? d.uploads : [{ destination: 'trapper', kind: d.uploaded_at ? 'uploaded' : 'synced', uploaded_at: d.uploaded_at ?? null, parts: null, location_created: null, deployment_created: null }]} />
+                      </td>
+                    </tr>
+                  )}
                   {opened === d.deployment_id && (
                     <tr>
                       <td colSpan={7} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">

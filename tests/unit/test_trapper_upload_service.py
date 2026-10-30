@@ -360,7 +360,7 @@ def test_the_yaml_names_the_classification_project_and_not_the_research_project(
 
     events = _upload(tmp_path, collection, fake, classification_project_pk=8)
 
-    assert next(e for e in events if e.get("step") == "classification" and e["status"] == "done")["message"] == "The collection goes to the classification project B (#8)."
+    assert next(e for e in events if e.get("step") == "classification" and e["status"] == "done")["message"] == "The revision goes to the classification project B (#8)."
     assert json.loads((collection / DEPLOYMENT_ID / "upload.json").read_text())["classification_project_pk"] == 8
     # what went up is deleted afterwards, so the yaml itself is looked at when only generating
     _upload(tmp_path / "again", _imported(tmp_path / "again", 2), fake, mode="generate", classification_project_pk=8)

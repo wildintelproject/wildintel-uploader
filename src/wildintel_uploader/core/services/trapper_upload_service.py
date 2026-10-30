@@ -307,11 +307,11 @@ def resolve_classification_project(credentials: tuple[str, str, str], research_p
         return found
     if not projects:
         raise TrapperUploadError(
-            "The research project has no classification project in Trapper, and the collection needs one — create it there first."
+            "The research project has no classification project in Trapper, and the revision needs one — create it there first."
         )
     if len(projects) > 1:
         names = ", ".join(f"{p['name']} (#{p['pk']})" for p in projects)
-        raise TrapperUploadError(f"The research project has several classification projects — choose which one the collection goes to: {names}.")
+        raise TrapperUploadError(f"The research project has several classification projects — choose which one the revision goes to: {names}.")
     return projects[0]
 
 
@@ -586,7 +586,7 @@ def check_access(
     else:
         try:
             chosen = resolve_classification_project(credentials, project_pk, classification_project_pk)
-            check("classification_project", True, f"The collection will go to the classification project {chosen['name']} (#{chosen['pk']}).")
+            check("classification_project", True, f"The revision will go to the classification project {chosen['name']} (#{chosen['pk']}).")
         except Exception as exc:
             check("classification_project", False, describe(exc))
         try:
@@ -629,9 +629,9 @@ def check_selection(credentials: tuple[str, str, str], research_project: dict, c
         client = trapper_service.client(*credentials)
         found = [c for c in client.collections.where(research_projects=project_pk, search=collection) if c.name == collection]
         if found:
-            message = f"You have access to the collection {collection} (#{found[0].pk}): it is already in Trapper, so the upload adds to it."
+            message = f"You have access to the revision {collection} (#{found[0].pk}): it is already in Trapper, so the upload adds to it."
         else:
-            message = f"You can read the collections of the research project; {collection} isn't in Trapper yet, so the upload creates it."
+            message = f"You can read the revisions of the research project; {collection} isn't in Trapper yet, so the upload creates it."
         checks.append({"check": "collection", "ok": True, "found": bool(found), "message": message})
     except Exception as exc:
         checks.append({"check": "collection", "ok": False, "message": describe(exc)})
@@ -731,11 +731,11 @@ def upload_stream(
         yield step("classification", "running", "Looking for the classification project…")
         chosen = resolve_classification_project(credentials, project_pk, classification_project_pk)
         classification_pk = chosen["pk"]
-        yield step("classification", "done", f"The collection goes to the classification project {chosen['name']} (#{classification_pk}).")
+        yield step("classification", "done", f"The revision goes to the classification project {chosen['name']} (#{classification_pk}).")
     elif classification_pk is None:
         raise TrapperUploadError("The yaml needs the classification project's pk in Trapper — choose one, which needs the Trapper account saved in the settings.")
     else:
-        yield step("classification", "done", f"The collection goes to the classification project #{classification_pk}.")
+        yield step("classification", "done", f"The revision goes to the classification project #{classification_pk}.")
 
     work_dir = packages_dir
     location_created = deployment_created = False
@@ -753,6 +753,7 @@ def upload_stream(
         yield step("uploader", "done", "Trapper's uploader accepts the account.")
 
     # ── what has to exist in Trapper ──
+    deployment_url = collection_url = None  # the pages of what was sent, kept with the upload so that it can be reached from the dashboards
     if mode != "generate":
         yield step("location", "running", f"Looking for the location {deployment.location_id} in Trapper…")
         if dry:
@@ -791,7 +792,8 @@ def upload_stream(
             message = f"Deployment {deployment_id} {'created' if deployment_created else 'was already in Trapper'}"
             if trapper_deployment_id and trapper_deployment_id != deployment_id:
                 message += f", as {trapper_deployment_id} — the package uses that id"
-            yield step("deployment", "done", message + ".", trapper_link(credentials, "deployment", (record or {}).get("pk")))
+            deployment_url = trapper_link(credentials, "deployment", (record or {}).get("pk"))
+            yield step("deployment", "done", message + ".", deployment_url)
 
     elif credentials is not None:  # only generating: what the location says is read — nothing is created
         timezone_name, ignore_dst, note = _location_time_settings(find_location(credentials, project_pk, deployment), timezone_name, ignore_dst)  # type: ignore[arg-type]
@@ -802,7 +804,7 @@ def upload_stream(
     if dry:
         plan = plan_packages(deployment_dir, log, max_zip_bytes)
         yield step("package", "done", f"Would pack {plan['images']} image(s) into {plan['parts']} package(s) of about {_megabytes(plan['bytes'] / plan['parts'])} MB each.")
-        for name, message in [("upload", "Nothing is uploaded in a dry run."), ("process", "Trapper isn't asked to process anything."), ("wait", "No collection is waited for.")]:
+        for name, message in [("upload", "Nothing is uploaded in a dry run."), ("process", "Trapper isn't asked to process anything."), ("wait", "No revision is waited for.")]:
             yield step(name, "skipped", message)
         yield {
             "type": "done", "mode": mode, "collection": collection, "deployment_id": deployment_id, "would_create_location": location_created,
@@ -860,11 +862,12 @@ def upload_stream(
             raise TrapperUploadError(f"Trapper refused to process the package: {_trapper_message(exc)}") from exc
         yield step("process", "done", "Trapper is processing the package.")
 
-    yield step("wait", "running", f"Waiting for the collection {collection} to appear in Trapper…")
+    yield step("wait", "running", f"Waiting for the revision {collection} to appear in Trapper…")
     found_collection = _wait_for_collection(client, project_pk, collection, timeout=wait_seconds, poll=poll_seconds)
     if found_collection is None:
-        raise TrapperUploadError(f"The collection {collection} didn't appear in Trapper within {int(wait_seconds)} seconds — it may still be processing.")
-    yield step("wait", "done", f"Collection {collection} is in Trapper.", trapper_link(credentials, "collection", getattr(found_collection, "pk", None)))
+        raise TrapperUploadError(f"The revision {collection} didn't appear in Trapper within {int(wait_seconds)} seconds — it may still be processing.")
+    collection_url = trapper_link(credentials, "collection", getattr(found_collection, "pk", None))
+    yield step("wait", "done", f"Revision {collection} is in Trapper.", collection_url)
 
     csv_path = output_dir / f"{collection}{DEPLOYMENTS_CSV_SUFFIX}"
     kept: list[Path] = []
@@ -883,6 +886,7 @@ def upload_stream(
     (deployment_dir / UPLOAD_LOG_FILE).write_text(json.dumps({
         "uploaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "research_project_pk": project_pk, "classification_project_pk": classification_pk, "collection": collection,
         "parts": len(packages), "location_created": location_created, "deployment_created": deployment_created,
+        "deployment_url": deployment_url, "collection_url": collection_url,
     }, indent=2), encoding="utf-8")
     yield {
         "type": "done", "mode": mode, "collection": collection, "deployment_id": deployment_id, "location_created": location_created,

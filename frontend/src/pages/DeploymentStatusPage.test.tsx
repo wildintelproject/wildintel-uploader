@@ -52,8 +52,8 @@ describe('DeploymentStatusPage', () => {
     const table = within(region).getByRole('table', { name: 'Deployments' })
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Deployment', 'Where', 'When', 'Card and photos', 'Creation', 'Upload', 'What to do'])
     const first = within(table).getAllByRole('row')[1]
-    expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['R0003-TATR_0001', 'TATR_0001', 'Visit R0003 · TATR_00014 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'Card A13 · 241 photos', 'Created', 'Uploaded', 'View'])
-    expect(within(first).getByText('Uploaded')).toHaveAttribute('title', 'Uploaded on 2024-10-20')
+    expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['R0003-TATR_0001', 'TATR_0001', 'Visit R0003 · TATR_00014 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'Card A13 · 241 photos', 'Created', 'Show upload details', 'View'])
+    expect(within(first).getByRole('button', { name: 'Show the upload details of R0003-TATR_0001' })).toBeInTheDocument() // it was uploaded
 
     await userEvent.click(square(/^Created/))
     expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0003-TATR_0002'])
@@ -110,6 +110,28 @@ describe('DeploymentStatusPage', () => {
     const stolen = within(table).getByText('R0003-TATR_0002').closest('tr')!
     expect(within(stolen).getByText('No images')).toBeInTheDocument()
     expect(within(stolen).queryByRole('button', { name: /View the deployment/ })).not.toBeInTheDocument()
+  })
+
+  it('has, in the Upload column, a button to upload a created deployment and one to see the upload of an uploaded one', async () => {
+    const onUpload = vi.fn()
+    mockedApi.fieldDeployments.mockResolvedValue({ results: [
+      deployment({ on_trapper: true, uploaded_at: '2024-10-20T10:00:00+00:00', uploads: [{ destination: 'trapper', kind: 'uploaded', uploaded_at: '2024-10-20T10:00:00+00:00', parts: 2, location_created: true, deployment_created: false, url: 'https://trapper.example.org/geomap/deployment/detail/7/' }] }),
+      deployment({ deployment_id: 'R0003-TATR_0002', site: 'TATR_0002' }),
+      deployment({ deployment_id: 'R0003-TATR_0003', site: 'TATR_0003', images_stored: false }),
+    ] })
+    render(<DeploymentStatusPage onBack={vi.fn()} onUpload={onUpload} />)
+    await screen.findByRole('table', { name: 'Deployments' })
+
+    expect(screen.queryByRole('button', { name: 'Upload the deployment R0003-TATR_0003' })).not.toBeInTheDocument() // not created: nothing to upload
+    await userEvent.click(screen.getByRole('button', { name: 'Upload the deployment R0003-TATR_0002' }))
+    expect(onUpload).toHaveBeenCalledWith({ researchProjectId: 'TATR', collection: 'R0003' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show the upload details of R0003-TATR_0001' }))
+    const list = screen.getByRole('list', { name: 'Uploads of R0003-TATR_0001' })
+    expect(list).toHaveTextContent('TrapperUploaded on 20 Oct 2024, 10:00 · 2 packages · location created there')
+    expect(within(list).getByRole('link', { name: 'Open R0003-TATR_0001 in Trapper' })).toHaveAttribute('href', 'https://trapper.example.org/geomap/deployment/detail/7/')
+    await userEvent.click(screen.getByRole('button', { name: 'Show the upload details of R0003-TATR_0001' }))
+    expect(screen.queryByRole('list', { name: 'Uploads of R0003-TATR_0001' })).not.toBeInTheDocument()
   })
 })
 

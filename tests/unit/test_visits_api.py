@@ -750,7 +750,8 @@ def test_the_uploads_say_which_created_deployments_went_where_and_when(tmp_path:
             _client().post("/api/visits/link", json={"research_project_id": "DONA", "location_id": site, "date": day, "time": "09:00:00", "deployment_id": f"R0003-{site}"})
         sent = tmp_path / "DONA" / "R0003" / "R0003-DONA_01"
         sent.mkdir(parents=True)
-        (sent / "upload.json").write_text(json.dumps({"uploaded_at": "2024-10-20T10:00:00+00:00", "parts": 2, "location_created": True, "deployment_created": True}), encoding="utf-8")
+        (sent / "upload.json").write_text(json.dumps({"uploaded_at": "2024-10-20T10:00:00+00:00", "parts": 2, "location_created": True, "deployment_created": True,
+                                                       "deployment_url": "https://trapper.example.org/geomap/deployment/detail/7/", "collection_url": "https://trapper.example.org/storage/collection/detail/26/"}), encoding="utf-8")
         kept = tmp_path / "DONA" / "R0003" / "R0003-DONA_02"          # created here and not sent anywhere
         kept.mkdir(parents=True)
         body = _client().post("/api/visits/uploads", json={"research_project_id": "DONA"}).json()
@@ -759,6 +760,8 @@ def test_the_uploads_say_which_created_deployments_went_where_and_when(tmp_path:
     assert set(created) == {"R0003-DONA_01", "R0003-DONA_02"}                                  # the created ones only: the others have no images yet
     assert [(u["destination"], u["kind"], u["uploaded_at"], u["parts"], u["location_created"], u["deployment_created"]) for u in created["R0003-DONA_01"]["uploads"]] == [
         ("trapper", "uploaded", "2024-10-20T10:00:00+00:00", 2, True, True)]
+    assert created["R0003-DONA_01"]["uploads"][0]["url"] == "https://trapper.example.org/geomap/deployment/detail/7/"   # the page of the deployment in Trapper
+    assert created["R0003-DONA_01"]["start_session"] == "R0003"
     assert created["R0003-DONA_02"]["uploads"] == []                                           # created, not uploaded
     assert body["revisions"] == ["R0004", "R0003"]  # every revision the deployments have, also the one with nothing created: the dashboard is looked at by revision
 
@@ -774,4 +777,6 @@ def test_the_deployments_say_whether_their_images_are_stored_and_whether_they_ar
         found = {d["deployment_id"]: d for d in _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]}
 
     assert (found["R0003-DONA_01"]["images_stored"], found["R0003-DONA_01"]["on_trapper"], found["R0003-DONA_01"]["uploaded_at"]) == (True, True, "2024-10-20T10:00:00+00:00")
+    assert [(u["destination"], u["kind"], u["uploaded_at"]) for u in found["R0003-DONA_01"]["uploads"]] == [("trapper", "uploaded", "2024-10-20T10:00:00+00:00")]
+    assert found["R0003-DONA_02"]["uploads"] == []
     assert (found["R0003-DONA_02"]["images_stored"], found["R0003-DONA_02"]["on_trapper"]) == (False, False)

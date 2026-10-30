@@ -116,7 +116,7 @@ export default function App() {
               : deploymentsView === 'many'
                 ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setDeploymentsView(null)} />
               : deploymentsView === 'status'
-                ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onShowVisit={goToVisit} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
+                ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onShowVisit={goToVisit} onUpload={goToUpload} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
                 : <DeploymentsHomePage onChoose={setDeploymentsView} onBack={() => setTask(null)} />
             : task === 'session'
               ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
@@ -124,7 +124,7 @@ export default function App() {
               ? (uploadsView === 'upload' || uploadTarget || resumeSession)
                 ? <UploadDeploymentPage initial={uploadTarget ?? undefined} onOpenSettings={() => openSettings()} onBack={() => { setUploadTarget(null); if (uploadsView === 'upload' && !resumeSession) setUploadsView(null); else setTask(null) }} />
                 : uploadsView === 'status'
-                  ? <UploadStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setUploadsView(null)} />
+                  ? <UploadStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} onShowVisit={goToVisit} onShowDeployment={goToDeploymentStatus} onUpload={goToUpload} onBack={() => setUploadsView(null)} />
                   : <UploadsHomePage onChoose={setUploadsView} onBack={() => setTask(null)} />
               : task === 'utils'
               ? <UtilsPage onBack={() => setTask(null)} />

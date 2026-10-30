@@ -789,6 +789,8 @@ export interface FieldDeployment {
   no_images?: 'stolen' | null
   uploaded_at?: string | null
   on_trapper?: boolean
+  /** What was done with it: one upload for each platform it was sent to. */
+  uploads?: UploadEntry[]
 }
 
 /** One upload of a deployment: the platform it was sent to (`destination`), when, and what it did there. A deployment that came from the platform (`synced`) was not sent from here, so it has no day. */
@@ -799,6 +801,8 @@ export interface UploadEntry {
   parts: number | null
   location_created: boolean | null
   deployment_created: boolean | null
+  /** The page of what was sent, on the platform — the platform's own address when the exact page was not kept. */
+  url?: string | null
 }
 
 /** A deployment that is created — its images are stored here — with its uploads: one for each platform it was sent to, none when it was not sent anywhere. */
@@ -808,6 +812,7 @@ export interface UploadedDeployment {
   site: string
   start: string
   end: string | null
+  start_session?: string | null
   uploads: UploadEntry[]
 }
 

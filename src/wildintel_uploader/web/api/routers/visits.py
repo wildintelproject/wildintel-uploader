@@ -23,6 +23,21 @@ def _trapper_state(root, research_project_id: str, deployment_id: str | None) ->
     return uploaded_at, bool(uploaded_at) or local_folder_service.is_synced(folder)
 
 
+def _uploads_of(folder) -> list[dict]:
+    """What was done with a deployment's folder: one upload for each platform it was sent to (only "trapper" for now) — `kind` "uploaded" with the day and what it did, or "synced"
+    when the deployment came from Trapper and was not sent from here. None when it was not sent anywhere."""
+    upload = local_folder_service._read_json(folder / trapper_upload_service.UPLOAD_LOG_FILE)
+    # the page of the deployment in Trapper — or of its revision —, as it was when it was sent; an upload made before that was kept goes to the site
+    site = (config.load_settings().TRAPPER.base_url or "").rstrip("/") or None
+    if isinstance(upload, dict) and upload.get("uploaded_at"):
+        return [{"destination": "trapper", "kind": "uploaded", "uploaded_at": upload.get("uploaded_at"), "parts": upload.get("parts"),
+                 "location_created": bool(upload.get("location_created")), "deployment_created": bool(upload.get("deployment_created")),
+                 "url": upload.get("deployment_url") or upload.get("collection_url") or site}]
+    if local_folder_service.is_synced(folder):
+        return [{"destination": "trapper", "kind": "synced", "uploaded_at": None, "parts": None, "location_created": None, "deployment_created": None, "url": site}]
+    return []
+
+
 def _write_logs(root, research_project_id: str, new: list[dict]) -> dict:
     """The folders of the collections the new visits change, and their FileTimestampLog and FieldworkLog — made when a visit is registered, not when its
     deployment is imported. {"collections": [...], "warnings": [...]}; nothing is written when no deployment is said by the visits yet."""
@@ -157,6 +172,7 @@ def deployments(req: ListVisitsRequest) -> dict:
             "start_session": d["start_visit"].get("session"), "end_session": (d["end_visit"] or {}).get("session"),
             # whether the deployment was created and its images imported (its visit says which deployment it gave), and whether it is on Trapper
             "images_stored": bool(imported), "uploaded_at": uploaded_at, "on_trapper": on_trapper,
+            "uploads": _uploads_of(root / req.research_project_id / imported.split("-", 1)[0] / imported) if imported else [],
         })
     return {"results": results}
 
@@ -178,15 +194,9 @@ def uploads(req: ListVisitsRequest) -> dict:
         if not imported:
             continue
         folder = root / req.research_project_id / imported.split("-", 1)[0] / imported
-        upload = local_folder_service._read_json(folder / trapper_upload_service.UPLOAD_LOG_FILE)
-        sent = isinstance(upload, dict) and upload.get("uploaded_at")
-        sends = []
-        if sent:
-            sends.append({"destination": "trapper", "kind": "uploaded", "uploaded_at": upload.get("uploaded_at"), "parts": upload.get("parts"),
-                          "location_created": bool(upload.get("location_created")), "deployment_created": bool(upload.get("deployment_created"))})
-        elif local_folder_service.is_synced(folder):
-            sends.append({"destination": "trapper", "kind": "synced", "uploaded_at": None, "parts": None, "location_created": None, "deployment_created": None})
-        results.append({"deployment_id": imported, "collection": d["collection"], "site": d["site"], "start": d["start"], "end": d["end"], "uploads": sends})
+        sends = _uploads_of(folder)
+        results.append({"deployment_id": imported, "collection": d["collection"], "site": d["site"], "start": d["start"], "end": d["end"],
+                        "start_session": d["start_visit"].get("session"), "uploads": sends})
     return {"deployments": sorted(results, key=lambda r: (r["collection"], r["site"].lower()), reverse=True),
             "revisions": sorted({d["collection"] for d in found}, reverse=True)}
 

@@ -77,7 +77,7 @@ async function pickCollection(name = 'R0003', go = true, toStep3 = false) {
   render(<UploadDeploymentPage />)
   await userEvent.click(await screen.findByLabelText('Research project'))
   await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-  await userEvent.click(await screen.findByLabelText('Collection'))
+  await userEvent.click(await screen.findByLabelText('Revision'))
   await userEvent.click(await screen.findByRole('option', { name: new RegExp(`^${name}`) }))
   if (go) await proceed()
   if (go && toStep3) await proceedToStep3()
@@ -130,12 +130,12 @@ describe('UploadDeploymentPage', () => {
   it('asks for the collection only once a research project is picked, and for its deployments once a collection is', async () => {
     render(<UploadDeploymentPage />)
     await screen.findByLabelText('Research project')
-    expect(screen.queryByLabelText('Collection')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
     expect(mockedApi.uploadCollections).toHaveBeenCalledWith('DONA')
-    await userEvent.click(await screen.findByLabelText('Collection'))
+    await userEvent.click(await screen.findByLabelText('Revision'))
     expect(await screen.findByRole('option', { name: 'R0001 · 1 deployment' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'R0003 · 4 deployments' })).toBeInTheDocument()
     expect(screen.queryByText('Deployments')).not.toBeInTheDocument()
@@ -290,7 +290,7 @@ describe('UploadDeploymentPage', () => {
     await proceedToStep3()
     await screen.findByText('Upload complete')
 
-    await userEvent.click(screen.getByLabelText('Collection'))
+    await userEvent.click(screen.getByLabelText('Revision'))
     await userEvent.click(await screen.findByRole('option', { name: /^R0001/ }))
 
     expect(screen.queryByText('Upload complete')).not.toBeInTheDocument()
@@ -430,7 +430,7 @@ describe('UploadDeploymentPage', () => {
   it('starts from the research project and collection a finished import went into', async () => {
     render(<UploadDeploymentPage initial={{ researchProjectId: 'DONA', collection: 'R0003' }} />)
 
-    expect(await screen.findByLabelText('Collection')).toHaveValue('R0003 · 4 deployments')
+    expect(await screen.findByLabelText('Revision')).toHaveValue('R0003 · 4 deployments')
     expect(mockedApi.uploadCollections).toHaveBeenCalledWith('DONA')
     expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
     // what is left to send is ticked, as when the collection is picked by hand
@@ -552,8 +552,8 @@ describe('UploadDeploymentPage', () => {
       expect(mockedApi.checkUploadSelection).toHaveBeenCalledWith('DONA', 'R0003')
       // each message sits under its own field
       expect(project.closest('div')).toContainElement(screen.getByLabelText('Research project'))
-      expect(project.closest('div')).not.toContainElement(screen.getByLabelText('Collection'))
-      expect(collection.closest('div')).toContainElement(screen.getByLabelText('Collection'))
+      expect(project.closest('div')).not.toContainElement(screen.getByLabelText('Revision'))
+      expect(collection.closest('div')).toContainElement(screen.getByLabelText('Revision'))
     })
 
     it('says the collection is not in Trapper yet when the upload would create it', async () => {

@@ -207,7 +207,7 @@ describe('VisitBookPage', () => {
     expect(within(table).getByRole('button', { name: /^Details of the deployment/ })).toHaveTextContent('Show image details')
     expect(within(table).queryByText('R0003-TATR_0002')).not.toBeInTheDocument()
     expect(within(table).getAllByLabelText('Images not stored')).toHaveLength(1) // the open visit: nothing to store yet
-    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Installation', 'Collected', 'Create deployment'])
+    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04 09:00', 'Installation', 'Collected', 'Store images'])
   })
 
   it('links the Show image details button to the status of the deployment', async () => {
@@ -232,8 +232,8 @@ describe('VisitBookPage', () => {
     expect(within(screen.getByRole('table', { name: 'Visits' })).queryByRole('columnheader', { name: 'Camera' })).not.toBeInTheDocument()
 
     // only a closed visit offers it — not the open one, nor the closed one already imported
-    expect(screen.getAllByRole('button', { name: /Create the deployment of the visit/ })).toHaveLength(1)
-    await userEvent.click(screen.getByRole('button', { name: 'Create the deployment of the visit R0003 to TATR_0001' }))
+    expect(screen.getAllByRole('button', { name: /Store the images of the visit/ })).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Store the images of the visit R0003 to TATR_0001' }))
     expect(onImportImages).toHaveBeenCalledWith({ researchProjectId: 'TATR', visit: expect.objectContaining({ session: 'R0003', location_id: 'TATR_0001' }) })
   })
 
@@ -273,7 +273,7 @@ describe('VisitBookPage', () => {
     const table = await screen.findByRole('table', { name: 'Visits' })
     const row = within(table).getAllByRole('row')[1]
     expect(within(row).getByText('Stolen')).toBeInTheDocument()
-    expect(within(row).queryByRole('button', { name: /Create the deployment/ })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: /Store the images of the visit/ })).not.toBeInTheDocument()
     const cards = screen.getByRole('region', { name: 'Visits by status' })
     expect(within(cards).getByRole('button', { name: 'Stolen' })).toHaveTextContent('1')
     expect(within(cards).getByRole('button', { name: 'Collected' })).toHaveTextContent('0')

@@ -4,7 +4,7 @@ import { PageHeader } from '../components/TaskCard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import FieldDeployments from '../components/FieldDeployments'
 import { readDeployment } from '../deploymentDetails'
-import type { FieldDeployment } from '../types'
+import type { FieldDeployment, UploadTarget } from '../types'
 import { btnOutline } from './ImportDeploymentPage'
 import type { VisitFocus } from './VisitBookPage'
 
@@ -17,10 +17,12 @@ interface Props {
   focus?: string
   /** Goes to the visit dashboard, on a visit: the one that started a deployment. */
   onShowVisit?: (visit: VisitFocus) => void
+  /** Goes to upload a deployment: the research project and the revision it is of. */
+  onUpload?: (target: UploadTarget) => void
 }
 
 /** The dashboard of the deployments of the default research project — the statistics: which are closed with their images stored, which still have the camera out, which are not on Trapper yet. */
-export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsOpen, focus, onShowVisit }: Props) {
+export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsOpen, focus, onShowVisit, onUpload }: Props) {
   const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -43,7 +45,7 @@ export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsO
         aside={project !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The dashboard" onOpenSettings={onOpenSettings} /> : undefined} />
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} />)}
+      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
 
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>
