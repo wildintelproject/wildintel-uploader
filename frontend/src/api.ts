@@ -3,7 +3,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, UploadedDeployment } from './types'
+  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, UploadedDeployment, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
 async function errorMessage(r: Response): Promise<string> {
@@ -301,6 +301,14 @@ export const api = {
     post<RepairState>('/api/repair/inspect', { research_project_id: researchProjectId, collection, deployment_id: deploymentId }),
   repairDeployment: (researchProjectId: string, collection: string, deploymentId: string, onEvent: (event: RepairEvent) => void) =>
     streamNdjson<RepairEvent>('/api/repair/deployment', { research_project_id: researchProjectId, collection, deployment_id: deploymentId }, onEvent, 'The repair ended unexpectedly.'),
+  // Backups of the settings and of a research project, and their restoration.
+  backupProjectInfo: (researchProjectId: string) => post<BackupProjectInfo>('/api/backup/project-info', { research_project_id: researchProjectId }),
+  backupPickFile: () => post<{ path: string | null }>('/api/backup/pick-file', {}),
+  backupRead: (path: string) => post<BackupRead>('/api/backup/read', { path }),
+  backupCreate: (request: BackupCreateRequest, onEvent: (event: BackupEvent) => void) =>
+    streamNdjson<BackupEvent>('/api/backup/create', request, onEvent, 'The backup ended unexpectedly.'),
+  backupRestore: (request: BackupRestoreRequest, onEvent: (event: RestoreEvent) => void) =>
+    streamNdjson<RestoreEvent>('/api/backup/restore', request, onEvent, 'The restoration ended unexpectedly.'),
   // Fixing the dates and times of the images in a folder, against the period of the visit that left the camera (see the backend's timefix_service).
   timefixTimeline: (target: TimeFixTarget) => post<Timeline>('/api/timefix/timeline', target),
   timefixShift: (target: TimeFixTarget, first: string, last: string | null, offsetSeconds: number, reason: string) =>

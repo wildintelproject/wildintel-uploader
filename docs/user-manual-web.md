@@ -765,6 +765,17 @@ number once), the size (not wider than the width of the settings), the XMP metad
 still the ones that were preprocessed. What the preprocessing *did* — the resizing, the renaming — can't be checked beyond that:
 the originals are gone.
 
+### Backup and restore
+
+Press **🧰 Utils**, then **Backup and restore**. It keeps the settings and the data of a research project in one `.zip` file, and puts back what a file holds. It asks first whether to **make a backup** or to **restore** one.
+
+**Making a backup.** It asks:
+
+1. **What to back up.** The **global settings** (a check, on by default; without passwords or secrets, and without the folders of this computer) and a **research project** (the active one comes chosen; leave it empty to back up only the settings). Of the project: its **data** (the research project, locations, cameras and SD cards), the **list of visits**, and the **deployments** — each one, a whole revision, or all — with their size. A switch, **Include the images of the deployments**, says whether their images go in (off by default) and how many megabytes that adds.
+2. **Where to keep it.** A folder. The file is named after what it holds and the day (`wildintel-backup_DONA_20261030-103000.zip`), and a bar shows the progress. When it is made, it says what the file holds and offers to open the folder.
+
+**Restoring.** It asks for the backup file, and shows what it says it holds (when it was made, by which version, of which project, and the list), and what of it is already here. You pick what to restore: the settings, the data of the project, the visits and the deployments, and — if the backup has them — their images. **Replace what is already here** is off by default: what is there is left as it is and only what is missing is added; on, what the backup holds wins. **What is retired stays retired** whatever is chosen (a retired location, camera or SD card never goes back). Restoring the settings keeps the passwords and the folders of this computer.
+
 ## 10. Troubleshooting
 
 **"Backend not reachable — is the server running?"**

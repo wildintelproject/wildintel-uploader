@@ -979,6 +979,56 @@ export type RepairEvent =
   | { type: 'step'; step: RepairStep; status: 'running' | 'done' | 'skipped'; message: string }
   | { type: 'done'; deployment_id: string; images: number; written: string[]; problems: number; status: RepairState['status']; report_id: string | null }
 
+/** What a research project has that can go in a backup: its counts, and its deployments by collection, with their files and bytes — those that are images apart. */
+export interface BackupProjectInfo {
+  research_project_id: string
+  locations: number
+  cameras: number
+  sd_cards: number
+  visits: number
+  collections: { name: string; deployments: { id: string; files: number; bytes: number; images: number; image_bytes: number }[] }[]
+}
+
+/** What a backup says it holds, as the zip's manifest. */
+export interface BackupManifest {
+  format: string
+  version: number
+  app_version: string
+  created_at: string
+  scope: { settings: boolean; research_project: string | null; project_files: boolean; visits: boolean; images: boolean; deployments: { id: string; collection: string; files: number; images: boolean }[] }
+  counts: { locations?: number; cameras?: number; sd_cards?: number; visits?: number }
+  secrets_included: boolean
+}
+
+/** A backup read: its manifest, and what of it is already here. */
+export interface BackupRead {
+  manifest: BackupManifest
+  here: { project: boolean; deployments: Record<string, boolean>; visits: { in_backup: number; already: number } }
+  has_images: Record<string, boolean>
+}
+
+export interface BackupCreateRequest { dest_dir: string; settings: boolean; research_project_id: string | null; project_files: boolean; visits: boolean; deployments: string[]; images: boolean }
+export interface BackupRestoreRequest { path: string; settings: boolean; project_files: boolean; visits: boolean; deployments: string[]; images: boolean; replace: boolean }
+
+/** What a backup or a restoration says as it goes. */
+export type BackupEvent =
+  | { type: 'step'; message: string }
+  | { type: 'file'; index: number; total: number; name: string }
+  | { type: 'done'; path: string; bytes: number; files: number; manifest: BackupManifest }
+
+export interface RestoreSummary {
+  settings: boolean
+  project_files: { research_project?: 'written' | 'kept'; locations?: { added: number; replaced: number; kept: number }; cameras?: { added: number; replaced: number; kept: number }; sd_cards?: { added: number; replaced: number; kept: number } }
+  visits: { added?: number; replaced?: number; kept?: number }
+  deployments: { restored: string[]; skipped: string[] }
+  files: number
+}
+
+export type RestoreEvent =
+  | { type: 'step'; message: string }
+  | { type: 'file'; index: number; total: number; name: string }
+  | { type: 'done'; summary: RestoreSummary; manifest: BackupManifest }
+
 /** One input of the Epicollect5 project's form — what can be mapped onto a field of a deployment. */
 export interface EpicollectInput {
   ref: string

@@ -42,5 +42,11 @@ describe('UtilsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
     expect(onBack).toHaveBeenCalled()
   })
+
+  it('offers backup and restore too', () => {
+    render(<UtilsPage onBack={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: /backup and restore/i })).toBeEnabled()
+  })
 })
 
