@@ -327,7 +327,7 @@ const FOLDERS: { draftKey: 'collectionsDir' | 'reportsDir' | 'packagesDir'; labe
     hint: 'Handy when the packages are big and the data folder is on a small disk.' },
 ]
 
-type SectionId = 'general' | 'uploader' | 'sources' | 'fieldlog' | 'validation' | 'postvalidation' | 'preprocessing' | 'entities' | 'reports' | 'config'
+type SectionId = 'general' | 'uploader' | 'sources' | 'validation' | 'postvalidation' | 'preprocessing' | 'entities' | 'reports' | 'config'
 
 /** The lists of the entities, each with its own tab. The sections of the settings that used to be one each open the entities on their tab. */
 type EntityTab = 'projects' | 'trappers' | 'locations' | 'cameras' | 'sdcards'
@@ -350,7 +350,6 @@ const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'general', label: 'General', icon: SlidersIcon },
   { id: 'uploader', label: 'Uploader', icon: UploadIcon },
   { id: 'sources', label: 'Visit sources', icon: FileIcon },
-  { id: 'fieldlog', label: 'Field records', icon: ReportIcon },
   { id: 'validation', label: 'Validation', icon: CheckIcon },
   { id: 'postvalidation', label: 'Postvalidation', icon: ShieldIcon },
   { id: 'preprocessing', label: 'Preprocessing', icon: ImageIcon },
@@ -1995,7 +1994,7 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
  * and postvalidation checks the wizard shows, and how the images are preprocessed. One Save saves every section. */
 export default function SettingsPage({ onClose, initialSection, initialProject }: Props) {
   const [uploadDestination, setUploadDestination] = useState<UploadDestinationId>('trapper')
-  const [visitSource, setVisitSource] = useState<VisitSourceId>('epicollect')
+  const [visitSource, setVisitSource] = useState<VisitSourceId>(initialSection === ('epicollect' as string) ? 'epicollect' : 'wildintel')
   const [section, setSection] = useState<SectionId>(initialSection && initialSection in ENTITY_SECTIONS ? 'entities' : initialSection === ('epicollect' as string) ? 'sources' : (initialSection as SectionId | undefined) ?? 'general')
   const [saved, setSaved] = useState<AppSettings | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -2277,6 +2276,8 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
               {clearLog.kind === 'error' && <p className="text-xs text-red-600 dark:text-red-400 px-1">{clearLog.message}</p>}
               </div>
             </GroupCard>
+            <ToggleCard title="Keep the seconds in the logs" checked={draft.fieldlogKeepSeconds} onChange={(v) => set('fieldlogKeepSeconds', v)}
+                        description="The start and the end of the deployments written in the FileTimestampLog and the FieldworkLog. Turned off, they are cut to the minute." />
           </div>
         )}
 
@@ -2337,39 +2338,37 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
           </div>
         )}
 
-        {draft && saved && section === 'fieldlog' && (
-          <div className="space-y-5 pt-5">
-            <SettingsCard>
-              <CardBlock title="When did a visit happen?" description="A visit is read from the file of the field app. Its time can be when its entry was created, or the date and the hour typed in the form.">
-                <SelectBox label="The time of a visit is" value={draft.fieldlogTimeSource} onChange={(v) => set('fieldlogTimeSource', v)}
-                           options={[{ value: 'created_at', label: 'When its entry was created (UTC)' }, { value: 'hour', label: 'The date and the hour typed in the form' }]} />
-                <p className={hintClass}>The hour typed is the wall clock of the visit's location; the time of the entry is UTC, and is put in the timezone of the location. A row without a date and an hour typed is read by the time of its entry.</p>
-              </CardBlock>
-            </SettingsCard>
-            <ToggleCard title="Keep the seconds in the logs" checked={draft.fieldlogKeepSeconds} onChange={(v) => set('fieldlogKeepSeconds', v)}
-                        description="The start and the end of the deployments written in the FileTimestampLog and the FieldworkLog. Turned off, they are cut to the minute." />
-            <SettingsCard>
-              <CardBlock title="Columns" description="The file of the field app is read by the names its questions usually have. For a form that names them otherwise, write here the name of the column that gives each field of a visit; blank, the usual names.">
-                {FIELDLOG_COLUMNS.map(([field, label, example]) => (
-                  <PlainField key={field} label={label}>
-                    <input aria-label={`Column for ${label}`} className={`${fieldBox} font-mono text-sm`} value={draft.fieldlogColumns[field] ?? ''} placeholder={example} autoComplete="off"
-                           onChange={(e) => set('fieldlogColumns', { ...draft.fieldlogColumns, [field]: e.target.value })} />
-                  </PlainField>
-                ))}
-              </CardBlock>
-            </SettingsCard>
-          </div>
-        )}
-
         {draft && saved && section === 'sources' && (
           <div className="space-y-5 pt-5">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">The places the visits of a research project can be taken from, besides entering them by hand. Pick one to set it up. Epicollect5 is the only one for now; others may come in a future version.</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">The places the visits of a research project can be taken from, besides entering them by hand. Pick one to set it up. Others may come in a future version.</p>
             <div role="tablist" aria-label="Visit sources" className="flex flex-wrap gap-2">
               {VISIT_SOURCES.map((d) => (
                 <button key={d.id} type="button" role="tab" aria-selected={visitSource === d.id} onClick={() => setVisitSource(d.id)}
                         className={`px-4 h-10 rounded-lg border text-sm font-medium ${visitSource === d.id ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>{d.label}</button>
               ))}
             </div>
+            {visitSource === 'wildintel' && (
+              <div className="space-y-5">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">The visits are read from the CSV file downloaded from the WildINTEL Epicollect project: no connection to Epicollect is needed. Here is how the file is read.</p>
+                <SettingsCard>
+                  <CardBlock title="When did a visit happen?" description="A visit is read from the file of the field app. Its time can be when its entry was created, or the date and the hour typed in the form.">
+                    <SelectBox label="The time of a visit is" value={draft.fieldlogTimeSource} onChange={(v) => set('fieldlogTimeSource', v)}
+                               options={[{ value: 'created_at', label: 'When its entry was created (UTC)' }, { value: 'hour', label: 'The date and the hour typed in the form' }]} />
+                    <p className={hintClass}>The hour typed is the wall clock of the visit's location; the time of the entry is UTC, and is put in the timezone of the location. A row without a date and an hour typed is read by the time of its entry.</p>
+                  </CardBlock>
+                </SettingsCard>
+                <SettingsCard>
+                  <CardBlock title="Columns" description="The file of the field app is read by the names its questions usually have. For a form that names them otherwise, write here the name of the column that gives each field of a visit; blank, the usual names.">
+                    {FIELDLOG_COLUMNS.map(([field, label, example]) => (
+                      <PlainField key={field} label={label}>
+                        <input aria-label={`Column for ${label}`} className={`${fieldBox} font-mono text-sm`} value={draft.fieldlogColumns[field] ?? ''} placeholder={example} autoComplete="off"
+                               onChange={(e) => set('fieldlogColumns', { ...draft.fieldlogColumns, [field]: e.target.value })} />
+                      </PlainField>
+                    ))}
+                  </CardBlock>
+                </SettingsCard>
+              </div>
+            )}
             {visitSource === 'epicollect' && (
               <div className="space-y-5">
               <ToggleCard title="Import deployment information from Epicollect5" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)}

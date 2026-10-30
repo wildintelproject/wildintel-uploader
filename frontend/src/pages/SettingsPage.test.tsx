@@ -259,14 +259,18 @@ describe('SettingsPage', () => {
   })
 
   describe('Epicollect5 connection', () => {
-    it('is set up in the Visit sources section, on the tab of the source', async () => {
+    it('is set up in the Visit sources section, on the tab of the source: WildINTEL Epicollect first, then the connection to Epicollect5', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       expect(screen.queryByRole('button', { name: 'Epicollect5' })).not.toBeInTheDocument() // Epicollect5 is not a section of its own
+      expect(screen.queryByRole('button', { name: 'Field records' })).not.toBeInTheDocument() // nor are the field records
       await section('Visit sources')
 
       expect(screen.getByRole('heading', { name: 'Visit sources' })).toBeInTheDocument()
-      expect(screen.getByRole('tab', { name: 'Epicollect5' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['WildINTEL Epicollect', 'Epicollect5'])
+      expect(screen.getByRole('tab', { name: 'WildINTEL Epicollect' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByLabelText('The time of a visit is')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('tab', { name: 'Epicollect5' }))
       expect(screen.getByRole('switch', { name: 'Import deployment information from Epicollect5' })).toBeInTheDocument()
     })
 
@@ -280,7 +284,7 @@ describe('SettingsPage', () => {
       mockedApi.epicollectTestConnection.mockResolvedValue({ ok: true, project: 'Doñana cameras', slug: 'donana', forms: 1, inputs: 5 })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Visit sources')
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect5' }))
       await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
@@ -292,7 +296,7 @@ describe('SettingsPage', () => {
       mockedApi.epicollectTestConnection.mockRejectedValue(new Error('Epicollect5 refused the client id and secret.'))
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Visit sources')
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect5' }))
       expect(screen.getByRole('button', { name: 'Test connection' })).toBeDisabled()
 
       await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
@@ -382,7 +386,7 @@ describe('SettingsPage', () => {
     it('turns the use of Epicollect5 and the unmapped answers into comments on, and saves them', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Visit sources')
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect5' }))
       const use = screen.getByRole('switch', { name: 'Import deployment information from Epicollect5' })
       const unmapped = screen.getByRole('switch', { name: /^Add answers with no place to go/ })
       expect(use).toHaveAttribute('aria-checked', 'false')
@@ -1566,20 +1570,17 @@ describe('SettingsPage — Entities', () => {
 })
 
 
-describe('SettingsPage — Field records', () => {
-  async function open() {
+describe('SettingsPage — WildINTEL Epicollect file', () => {
+  it('says when a visit happened and the columns of a form named otherwise — in the tab of the source — and whether the logs keep the seconds, in General — and saves them', async () => {
     render(<SettingsPage onClose={vi.fn()} />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Field records' }))
-  }
-
-  it('says when a visit happened, whether the logs keep the seconds, and the columns of a form named otherwise — and saves them', async () => {
-    await open()
+    await userEvent.click(await screen.findByRole('button', { name: 'Visit sources' }))
 
     expect(screen.getByLabelText('The time of a visit is')).toHaveValue('created_at')
     await userEvent.selectOptions(screen.getByLabelText('The time of a visit is'), 'hour')
-    await userEvent.click(screen.getByRole('switch', { name: 'Keep the seconds in the logs' }))
     await userEvent.type(screen.getByLabelText('Column for Who went'), 'Quien')
     await userEvent.type(screen.getByLabelText('Column for Habitat (Camtrap DP)'), '  Hábitat ')
+    await userEvent.click(screen.getByRole('button', { name: 'General' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Keep the seconds in the logs' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(mockedApi.saveSettings).toHaveBeenCalled())

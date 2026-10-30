@@ -55,6 +55,8 @@ dot marks a section with an invalid value.
   bug report.
 - **About** — at the top: the app's name and version, **Check for updates** (it offers the download when there is a newer version), and links to **Report a problem** (a GitHub issue that already says the version and your browser), the **Documentation**, the **GitHub** project and **What's new** (the release notes).
 
+- **Keep the seconds in the logs** — the start and the end of the deployments written in the `FileTimestampLog` and the `FieldworkLog`, for the visits of any origin. Off by default: they are cut to the minute.
+
 ### Uploader
 
 The platforms a deployment can be uploaded to, each set up on its own tab. **Trapper** is the only one for now; the section is there so that other platforms can be added in a future version.
@@ -70,19 +72,16 @@ see. The password is saved in `settings.toml` but never sent back to your browse
 **Upload packages — Largest package** is the size, in MB, of the packages an [upload](#8-upload-a-deployment-to-trapper) makes: the
 images of each deployment are uploaded in packages of this size at most (500 by default, up to 5000).
 
-### Field records
-
-How the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them:
-
-- **The time of a visit** — *when its entry was created* (`created_at`, UTC; the default) or *the date and the hour typed in the form*. The hour typed is the wall clock of the visit's location, and is used when the row has
-  a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.
-- **Keep the seconds in the logs** — the start and the end of the deployments written in the `FileTimestampLog` and the `FieldworkLog`. Off by default: they are cut to the minute.
-- **Columns** — the file is read by the names its questions usually have (`1_Responsable`, `4_Location`, `6_Action`, and the Camtrap DP fields by their names). For a form that names them otherwise, write the name of the column
-  that gives each field of a visit; blank, the usual names.
-
 ### Visit sources
 
-The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab. **Epicollect5** is the only one for now; the section is there so that other sources can be added in a future version.
+The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab. The section is there so that other sources can be added in a future version.
+
+#### WildINTEL Epicollect
+
+The visits are read from the **CSV file downloaded from the WildINTEL Epicollect project** (*Register visits › From Wildintel Epicollect*): no connection to Epicollect is needed. Here is how the file is read:
+
+- **The time of a visit** — *when its entry was created* (`created_at`, UTC; the default) or *the date and the hour typed in the form*. The hour typed is the wall clock of the visit's location, and is used when the row has a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.
+- **Columns** — the file is read by the names its questions usually have (`1_Responsable`, `4_Location`, `6_Action`, and the Camtrap DP fields by their names). For a form that names them otherwise, write the name of the column that gives each field of a visit; blank, the usual names.
 
 #### Epicollect5
 
