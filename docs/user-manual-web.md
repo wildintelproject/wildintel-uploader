@@ -244,6 +244,7 @@ the visits come in:
 |---|---|
 | **By hand** | You fill in each visit yourself. |
 | **WildINTEL Epicollect** | Reads the visits of a field trip from the Epicollect download (a CSV). The time is the `created_at` of the entry, put in the timezone of the location. |
+| **Epicollect** | The visits read straight from the Epicollect5 project of the settings, with no file: every entry is a visit, and the questions are found by their labels (*setupBy*, *Date*, *locationID*, *Status of the camera*, *Action*, …). Camera height is read in centimetres. |
 | **Custom CSV** | Any CSV: the page shows its columns and you say which one gives each field of a visit. |
 
 A file can come with a **history of visits** (optional): the fieldwork datasheet, an `.xlsx` workbook whose first sheet has a Site and an Action column (Trappers, Session, Date, Time, Camera, NumPhotos, SD… or Tramperos, Sesion, Fecha, Hora…

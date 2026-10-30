@@ -766,3 +766,40 @@ def test_the_deployments_say_whether_their_images_are_stored_and_whether_they_ar
     assert [(u["destination"], u["kind"], u["uploaded_at"]) for u in found["R0003-DONA_01"]["uploads"]] == [("trapper", "uploaded", "2024-10-20T10:00:00+00:00")]
     assert found["R0003-DONA_02"]["uploads"] == []
     assert (found["R0003-DONA_02"]["images_stored"], found["R0003-DONA_02"]["on_trapper"]) == (False, False)
+
+
+# ── The visits read straight from the Epicollect5 project of the settings ───────────────────────────────────────────────
+
+EPI_INPUTS = [{"ref": f"f_{i}", "label": label} for i, label in enumerate(
+    ["setupBy", "Collection", "Date", "locationID", "Status of the camera", "Action", "Card and batteries", "Nº pictures collected", "Date and time OK", "Serial number", "cameraHeight", "Calibration"])]
+EPI_REF = {i["label"]: i["ref"] for i in EPI_INPUTS}
+EPI_ENTRIES = [
+    {"created_at": "2026-10-02T08:14:05.000Z", EPI_REF["setupBy"]: ["Ana"], EPI_REF["Collection"]: 1, EPI_REF["Date"]: "02/10/2026", EPI_REF["locationID"]: "DONA_01",
+     EPI_REF["Status of the camera"]: "New site", EPI_REF["Serial number"]: "A13", EPI_REF["cameraHeight"]: "50", EPI_REF["Calibration"]: "Yes"},
+    {"created_at": "2026-11-05T09:00:00.000Z", EPI_REF["setupBy"]: ["Ana"], EPI_REF["Collection"]: 2, EPI_REF["Date"]: "05/11/2026", EPI_REF["locationID"]: "DONA_01",
+     EPI_REF["Status of the camera"]: "OK", EPI_REF["Action"]: "Camera inspection", EPI_REF["Card and batteries"]: "Card full", EPI_REF["Nº pictures collected"]: "1620", EPI_REF["Date and time OK"]: "OK"},
+]
+
+
+def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_camera_at_the_site(tmp_path: Path):
+    import pytest  # noqa: PLC0415
+    from unittest.mock import patch  # noqa: PLC0415
+    from wildintel_uploader.core.services import epicollect_service  # noqa: PLC0415
+    with patch.object(epicollect_service, "fetch_form", return_value={"project": {}, "inputs": EPI_INPUTS}), patch.object(epicollect_service, "_all_entries", return_value=EPI_ENTRIES):
+        text = epicollect_service.visits_csv()
+        done = _import(tmp_path, "", save=True, fmt="epicollect-api")
+    rows = {r["date"]: r for r in __import__("csv").DictReader(__import__("io").StringIO(text))}
+    assert rows["2026-10-02"]["actions"] == "Installation" and rows["2026-10-02"]["camera_height"] == "0.5" and rows["2026-10-02"]["calibration"] == "yes"
+    assert rows["2026-11-05"]["actions"] == "Revision" and rows["2026-11-05"]["card_batteries_ok"] == "CarFull" and rows["2026-11-05"]["date_time_ok"] == "Yes"
+    assert done.status_code == 200, done.text
+    kept = done.json()["visits"]
+    assert len(kept) == 2 and {v["camera_id"] for v in kept} == {"A13"}
+
+
+def test_a_form_that_is_not_the_one_of_a_visit_is_said_plainly():
+    import pytest  # noqa: PLC0415
+    from unittest.mock import patch  # noqa: PLC0415
+    from wildintel_uploader.core.services import epicollect_service  # noqa: PLC0415
+    with patch.object(epicollect_service, "fetch_form", return_value={"project": {}, "inputs": [{"ref": "x", "label": "Other"}]}):
+        with pytest.raises(epicollect_service.EpicollectError, match="locationID"):
+            epicollect_service.visits_csv()

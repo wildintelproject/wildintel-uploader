@@ -809,6 +809,19 @@ describe('VisitsPage from a CSV file', () => {
     expect(mockedApi.importVisitsCsv).not.toHaveBeenCalled()
   })
 
+  it('reads the visits straight from Epicollect, with no file, when that source is used', async () => {
+    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, EPICOLLECT5: { ...APP_SETTINGS.EPICOLLECT5, enabled: true } })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: /^epicollect/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Read the entries' }))
+
+    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', '', false, 'epicollect-api'))
+    expect(await screen.findByText(/to add/)).toBeInTheDocument()
+  })
+
   it('reads the visits with the columns as they are mapped, says what it found, and keeps them with the same mapping', async () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit(), visit({ session: 'R0002', date: '2026-11-05', actions: ['Revision', 'Installation'] })], problems: [{ row: 4, message: "'many' is not a whole number." }], skipped: 1, ignored: 0, saved: null, new_sites: [{ site: 'X', session: null, actions: ['Revision'], date: '2026-10-02', time: '08:00:00', latitude: 37.1, longitude: -6.4, visits: 1, nearest: { location_id: 'DONA_01', distance_m: 40 }, similar: ['DONA_01'] }], warnings: [] })
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 2, new_sites: [], warnings: [] })

@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, SaveVisitRequest, VisitsCsvColumnsRequest
-from wildintel_uploader.core.services import local_folder_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
+from wildintel_uploader.core.services import epicollect_service, local_folder_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
 
@@ -102,8 +102,15 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             except visits_csv.VisitsCsvError as exc:
                 raise HTTPException(400, f"The history of visits: {exc}") from exc
         field_options = config.load_settings().FIELDLOG
-        result = visits_csv.parse_visits(req.csv, locations, kept + (history["visits"] if history else []), prefix, req.format, req.mapping,
-                                         {"time_source": field_options.time_source})
+        text, fmt, mapping, time_source = req.csv, req.format, req.mapping, field_options.time_source
+        if fmt == "epicollect-api":
+            # the entries come from Epicollect5 as rows of a visit's columns; the day and the hour typed in the form are the time of the visit
+            try:
+                text = epicollect_service.visits_csv(config.load_settings())
+            except epicollect_service.EpicollectError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            fmt, mapping, time_source = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}, "hour"
+        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source})
         if history:
             seen = {s["site"].lower() for s in result["new_sites"]}
             result = {

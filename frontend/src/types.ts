@@ -727,7 +727,7 @@ export interface ClosedVisitTarget {
 }
 
 /** How a CSV file of visits is read: as an Epicollect download, or with the column of each field said. */
-export type VisitsCsvFormat = 'epicollect' | 'mapped'
+export type VisitsCsvFormat = 'epicollect' | 'mapped' | 'epicollect-api'
 
 /** The columns of a CSV file, a few of its rows, the fields of a visit it can give (those a visit needs marked) and the column that most
  * likely gives each. */

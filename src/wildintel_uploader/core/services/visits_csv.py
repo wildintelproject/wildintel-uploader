@@ -48,6 +48,7 @@ EPICOLLECT_COLUMNS: dict[str, tuple[str, ...]] = {
     "camera_heading": ("cameraheading",),
     "detection_distance": ("detectiondistance",),
     "timestamp_issues": ("timestampissues",),
+    "calibration": ("calibration", "cameracalibrated"),
     "bait_use": ("baituse",),
     "feature_type": ("featuretype",),
     "habitat": ("habitat",),
@@ -83,6 +84,7 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("detection_distance", "Detection distance (m)", False),
     ("timestamp_issues", "Timestamp issues (yes/no)", False),
     ("bait_use", "Bait use (yes/no)", False),
+    ("calibration", "Camera calibrated (yes/no)", False),
     ("feature_type", "Feature type", False),
     ("habitat", "Habitat", False),
     ("deployment_groups", "Deployment groups", False),
@@ -275,7 +277,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             for f in ("camera_height", "camera_depth", "detection_distance"):
                 if f in row:
                     data[f] = float(row[f])
-            for f in ("timestamp_issues", "bait_use"):
+            for f in ("timestamp_issues", "bait_use", "calibration"):
                 if f in row:
                     word = row[f].lower()
                     if word not in YES | NO:
@@ -321,6 +323,11 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     for _, record in sorted(parsed, key=lambda p: (p[1]["date"], p[1]["time"])):
         given = record.pop("_given")
         loc = record["location_id"].lower()
+        # a visit that does not put a camera up is of the one at the site: an inspection or a removal does not say which — it is the one of the deployment that is open
+        if not record.get("camera_id") and "Installation" not in record["actions"]:
+            there = visit_rules.camera_at_site([*kept, *visits], record["location_id"], record.get("when") or f"{record['date']}T{record['time']}")
+            if there:
+                record["camera_id"] = there["camera"]
         if not given:
             record["session"] = f"R{count[loc] + 1:04d}"
         count[loc] += 1
