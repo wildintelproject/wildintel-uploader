@@ -5,6 +5,8 @@ import Combobox from '../components/Combobox'
 import { Mark, mark } from '../components/Notice'
 import BackButton from '../components/BackButton'
 import ReportPanel from '../components/ReportPanel'
+import ActiveProjectCard from '../components/ActiveProjectCard'
+import { PageHeader, UTIL_ICONS } from '../components/TaskCard'
 import WizardStep from '../components/WizardStep'
 import { SmallSpinner, btnOutline, btnPrimary } from './ImportDeploymentPage'
 import type { LocalResearchProject, RepairCollection, RepairEvent, RepairState, RepairStep } from '../types'
@@ -48,7 +50,7 @@ function StateBadge({ state, repairing }: { state: RepairState | undefined; repa
  * are not: their metadata files (deployment.json, images.json, preprocessing.json, seal.json) are written again from what the folder
  * holds, taking the period from the collection's timestamp log when it has the deployment. Three steps: what to check, what the check
  * found, and the repairs. */
-export default function RepairPage({ onBack }: { onBack?: () => void } = {}) {
+export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { onBack?: () => void; onOpenSettings?: (section?: 'general') => void; settingsOpen?: boolean } = {}) {
   const [projects, setProjects] = useState<LocalResearchProject[]>([])
   const [projectId, setProjectId] = useState('')
   const [collections, setCollections] = useState<RepairCollection[]>([])
@@ -156,12 +158,10 @@ export default function RepairPage({ onBack }: { onBack?: () => void } = {}) {
 
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
-      <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">Repair local deployments</h2>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-        A deployment is <strong>valid</strong> when its <span className="font-mono">seal.json</span> still matches it. For the ones that are not, the metadata files are written again
+      <PageHeader icon={UTIL_ICONS.repair} title="Repair local deployments" parent="Utilities" onParent={onBack} aside={<ActiveProjectCard of="The repair" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />}
+        description={<>A deployment is <strong>valid</strong> when its <span className="font-mono">seal.json</span> still matches it. For the ones that are not, the metadata files are written again
         from what the folder holds — the dates of the images, their camera, the location&rsquo;s details — and the images are validated and postvalidated again. If the
-        collection&rsquo;s <span className="font-mono">FileTimestampLog.csv</span> has the deployment, it says its period.
-      </p>
+        collection&rsquo;s <span className="font-mono">FileTimestampLog.csv</span> has the deployment, it says its period.</>} />
 
       <WizardStep n={1} title="Choose what to check" status={chosen ? 'done' : 'open'} canEdit={!busy} onEdit={startOver}
                   summary={collection && <>{projectId} › {collectionName} · {toCheck.length} {toCheck.length === 1 ? 'deployment' : 'deployments'}</>}

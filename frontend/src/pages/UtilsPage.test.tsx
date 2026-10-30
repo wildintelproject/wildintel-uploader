@@ -32,4 +32,15 @@ describe('UtilsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(onBack).toHaveBeenCalled()
   })
+
+  it('has the header of the other pages: the way back to the menu, the icon, the title and the active research project', async () => {
+    const onBack = vi.fn()
+    render(<UtilsPage onBack={onBack} />)
+
+    expect(screen.getByRole('navigation', { name: 'You are here' })).toHaveTextContent('Menu›Utilities')
+    expect(screen.getByRole('heading', { name: 'Utilities' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
+    expect(onBack).toHaveBeenCalled()
+  })
 })
+

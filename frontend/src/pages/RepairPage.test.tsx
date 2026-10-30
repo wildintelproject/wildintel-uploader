@@ -138,4 +138,15 @@ describe('RepairPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Back' }))
     expect(onBack).toHaveBeenCalled()
   })
+
+  it('has the header of the other pages: the way back to Utilities, the icon and the title', async () => {
+    const onBack = vi.fn()
+    render(<RepairPage onBack={onBack} />)
+
+    expect(screen.getByRole('navigation', { name: 'You are here' })).toHaveTextContent('Utilities›Repair local deployments')
+    expect(screen.getByRole('heading', { name: 'Repair local deployments' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Utilities' }))
+    expect(onBack).toHaveBeenCalled()
+  })
 })
+

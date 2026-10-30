@@ -2,6 +2,8 @@ import BackButton from '../components/BackButton'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import Combobox from '../components/Combobox'
+import ActiveProjectCard from '../components/ActiveProjectCard'
+import { PageHeader, UTIL_ICONS } from '../components/TaskCard'
 import WizardStep from '../components/WizardStep'
 import { SmallSpinner, btnOutline } from './ImportDeploymentPage'
 import type { ClassificationProject, ResearchProject, SyncCollection, SyncResult } from '../types'
@@ -29,7 +31,7 @@ function unassignedCollections(ids: string[]): string[] {
 }
 
 /** Checks the local collections folder against what Trapper has for a classification project, and creates what it lacks. */
-export default function SyncCollectionsPage({ onBack }: { onBack?: () => void } = {}) {
+export default function SyncCollectionsPage({ onBack, onOpenSettings, settingsOpen }: { onBack?: () => void; onOpenSettings?: (section?: 'general') => void; settingsOpen?: boolean } = {}) {
   const [projects, setProjects] = useState<ResearchProject[]>([])
   const [projectPk, setProjectPk] = useState('')
   const [classifications, setClassifications] = useState<ClassificationProject[]>([])
@@ -110,11 +112,9 @@ export default function SyncCollectionsPage({ onBack }: { onBack?: () => void } 
 
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">
-      <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">Sync local collections</h2>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-        The local folders are checked against what Trapper has for a classification project, and what is missing is created: the research project and its locations, the collection
-        (with its timestamp log) and the chosen deployments. What is already there is left as it is. The images are only downloaded if you ask for it.
-      </p>
+      <PageHeader icon={UTIL_ICONS.sync} title="Sync local collections" parent="Utilities" onParent={onBack} aside={<ActiveProjectCard of="The sync" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />}
+        description={<>The local folders are checked against what Trapper has for a classification project, and what is missing is created: the research project and its locations, the collection
+        (with its timestamp log) and the chosen deployments. What is already there is left as it is. The images are only downloaded if you ask for it.</>} />
 
       <WizardStep n={1} title="Choose what to sync" status={started ? 'done' : 'open'} canEdit={!syncing} onEdit={startOver}
                   summary={collection && <>{projects.find((p) => String(p.pk) === projectPk)?.acronym ?? projectPk} › {classifications.find((c) => String(c.pk) === classificationPk)?.name} › {collection.name} · {chosenDeployments.size} {chosenDeployments.size === 1 ? 'deployment' : 'deployments'}</>}

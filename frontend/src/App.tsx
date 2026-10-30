@@ -127,7 +127,7 @@ export default function App() {
                   ? <UploadStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} onShowVisit={goToVisit} onShowDeployment={goToDeploymentStatus} onUpload={goToUpload} onBack={() => setUploadsView(null)} />
                   : <UploadsHomePage onChoose={setUploadsView} onBack={() => setTask(null)} />
               : task === 'utils'
-              ? <UtilsPage onBack={() => setTask(null)} />
+              ? <UtilsPage onBack={() => setTask(null)} onOpenSettings={openSettings} settingsOpen={settingsOpen} />
               : task === 'sync'
               ? <SyncCollectionsPage onBack={() => setTask(null)} />
               : task === 'repair'

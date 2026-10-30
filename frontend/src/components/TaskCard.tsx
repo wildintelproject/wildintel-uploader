@@ -20,6 +20,13 @@ export const MENU_ICONS: Record<string, ReactNode> = {
   utils: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
 }
 
+/** The icon of each of the utilities, drawn the same in the list of Utils and in the title of its page. */
+export const UTIL_ICONS = {
+  timefix: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  repair: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
+  sync: <><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16" /><path d="M16 16h5v5" /></>,
+}
+
 /** Where a page hangs from: the section before it, to go back to, and the page itself. */
 export function Breadcrumb({ parent, onParent, current }: { parent: string; onParent?: () => void; current: string }) {
   return (
@@ -32,7 +39,7 @@ export function Breadcrumb({ parent, onParent, current }: { parent: string; onPa
 }
 
 /** The title of a page: the way back to the section it hangs from, the icon, the title and what it is for. */
-export function PageHeader({ icon, title, description, parent, onParent, aside }: { icon: ReactNode; title: string; description: string; parent: string; onParent?: () => void; aside?: ReactNode }) {
+export function PageHeader({ icon, title, description, parent, onParent, aside }: { icon: ReactNode; title: string; description: ReactNode; parent: string; onParent?: () => void; aside?: ReactNode }) {
   return (
     <>
       <Breadcrumb parent={parent} onParent={onParent} current={title} />

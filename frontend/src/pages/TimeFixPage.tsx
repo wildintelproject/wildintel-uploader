@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { defaultResearchProject } from '../defaultResearchProject'
 import Combobox from '../components/Combobox'
+import ActiveProjectCard from '../components/ActiveProjectCard'
 import BackButton from '../components/BackButton'
+import { PageHeader, UTIL_ICONS } from '../components/TaskCard'
 import { SmallSpinner, btnOutline, btnPrimary, visitKey, visitLabel } from './ImportDeploymentPage'
 import type { ClosedVisit, LocalResearchProject, StoredVisit, TimeFixTarget, TimeSegment, Timeline } from '../types'
 
@@ -77,10 +79,14 @@ function TimeChart({ timeline }: { timeline: Timeline }) {
 /** Checking and fixing the dates and times of the images in a folder: where the clock went wrong, a run of images shifted
  * by an offset (or to match an image whose real time is known), images with no time to trust removed — every fix written
  * down. */
-export default function TimeFixPage({ initial, onBack }: {
+export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsOpen, parent = 'Utilities' }: {
   /** Opened from where the dates were found wrong: the folder, and the research project and visit its dates are checked against. */
   initial?: { folder: string; researchProjectId?: string; visit?: StoredVisit }
   onBack?: () => void
+  onOpenSettings?: (section?: 'general') => void
+  settingsOpen?: boolean
+  /** The page it is reached from: Utilities, or Import deployment when the dates were found wrong there. */
+  parent?: string
 } = {}) {
   const [projects, setProjects] = useState<LocalResearchProject[]>([])
   const [projectId, setProjectId] = useState('')
@@ -192,15 +198,11 @@ export default function TimeFixPage({ initial, onBack }: {
 
   return (
     <div className="max-w-screen-lg mx-auto px-4 py-8 space-y-6">
-      <div>
-        <h2 className="text-xl font-bold mb-1 text-zinc-900 dark:text-zinc-100">Check and fix dates and times</h2>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          For the images of a card copied to a folder, whose camera clock went wrong: see where the time jumps, shift a run of images by an offset — or to match an image
+      <PageHeader icon={UTIL_ICONS.timefix} title="Check and fix dates and times" parent={parent} onParent={onBack} aside={<ActiveProjectCard of="The dates" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />}
+        description={<>For the images of a card copied to a folder, whose camera clock went wrong: see where the time jumps, shift a run of images by an offset — or to match an image
           whose real time you know — and remove the images whose time can&rsquo;t be trusted. The dates are checked against the period of the visit that left the camera.
           The images of the folder are changed, so work on the copy, never on the card; every fix is written down in the folder
-          (<span className="font-mono">time_corrections.json</span>) and a shift is undone by shifting back.
-        </p>
-      </div>
+          (<span className="font-mono">time_corrections.json</span>) and a shift is undone by shifting back.</>} />
 
       <div className="space-y-4">
         <div>
