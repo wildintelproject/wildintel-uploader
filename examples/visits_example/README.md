@@ -22,7 +22,7 @@ Each file says in the Source step which option to pick. Where it says **auto**, 
 The one to start with. Its headers are the names of the fields of a visit, so **Custom CSV** matches every column by itself (auto). The data is right:
 
 - `R0001`: an Installation at each of the four locations, with its camera and its card.
-- `R0002`: a Revision at three of them (collecting the card of `R0001` and leaving another) and a Desinstallation at `WICP_0002`.
+- `R0002`: a Revision at three of them (collecting the card of `R0001` and leaving another) and a Revision + Desinstallation at `WICP_0002` (the camera is revised and taken away: a camera is never taken away without looking at it first).
 - Expected: **8 visits, no problems, no warnings, no new sites.**
 
 ### `revision2_before_revision1_finished.csv` — a revision cannot start before the one before is finished
@@ -35,7 +35,7 @@ The one to start with. Its headers are the names of the fields of a visit, so **
 The download of the Epicollect5 project of the field flow, with its columns (`2_Collection`, `4_Location`, `6_Action`, …), with the sites as numbers (`1` is `WICP_0001`). Pick **WildINTEL Epicollect**; no mapping is asked.
 
 - The time is when the entry was created (`created_at`, UTC), put in the timezone of the location.
-- It has a `Revision` with *Card full* (the photos are not counted), a `Desinstallation` with *no batteries*, and a last entry with no collection number (an old version of the form): it is **ignored**, and counted as such.
+- It has a `Revision` with *Card full* (the photos are not counted), a `Revision + Desinstallation` with *no batteries*, and a last entry with no collection number (an old version of the form): it is **ignored**, and counted as such.
 - Expected: **7 visits, 1 ignored**, and a note that `WICP_0004` was visited in `R0001` and not in `R0002`.
 
 ### `columns_to_map.csv` — columns of its own, to be mapped by hand
