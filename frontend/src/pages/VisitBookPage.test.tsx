@@ -151,13 +151,13 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    const row = (site: string, session: string) => within(table).getAllByRole('row').find((r) => within(r).queryByRole('button', { name: new RegExp(`^View the visit ${session} to ${site}`) }))!
+    const row = (site: string, session: string) => within(table).getAllByRole('row').find((r) => { const cells = within(r).queryAllByRole('cell'); return cells[0]?.textContent === session && cells[1]?.textContent === site })!
     expect(within(row('TATR_0001', 'R0001')).queryByRole('button', { name: /^Show the previous visit to TATR_0001/ })).not.toBeInTheDocument()   // the first revision of the location
     expect(within(row('TATR_0003', 'R0002')).queryByRole('button', { name: /^Show the previous visit to TATR_0003/ })).not.toBeInTheDocument()   // nothing before it
     expect(within(row('TATR_0001', 'R0002')).queryByRole('button', { name: /^Show the next visit to TATR_0001/ })).not.toBeInTheDocument()          // the last revision of the location
     expect(within(row('TATR_0002', 'R0001')).queryByRole('button', { name: /^Show the next visit to TATR_0002/ })).not.toBeInTheDocument()          // nothing after it
-    // View is between the two: the one before, View, the one after
-    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['Show the previous visit', 'View the visit R0001', 'Show the next visit', 'Create the visit R0001', 'Create the deployment of the visit R0001'])
+    // only what applies is there, View between the one before and the one after: the first revision has no one before; a visit made is not created again, its deployment is
+    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
 
     await userEvent.click(within(row('TATR_0001', 'R0002')).getByRole('button', { name: 'Show the previous visit to TATR_0001 (R0001)' }))
     // the revision before is picked and its visit to the location is open
