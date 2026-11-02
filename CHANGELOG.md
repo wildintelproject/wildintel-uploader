@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Added
+- **Registering a visit**: an Installation now requires the camera's height (or depth), delay, tilt, heading and whether bait was used, as the field form does. The GPS where the note was taken is asked (it starts as the location's) and an error is shown, and the visit is not added, when it is more than 1 km from the location; the visits read from a file or Epicollect get a warning for the same.
 - **Epicollect** as a source of visits: the entries of the Epicollect5 project of the settings are read directly, with no file, and become visits (an inspection is of the camera at the site); it appears in *Register visits* once it is used in *Settings › Visit sources*.
 - **Backup and restore** (*Utils*): the global settings (without passwords or secrets) and the data of a research project — its locations, cameras, SD cards, visits and the deployments chosen, with or without their images — in one `.zip` that says what it holds (`manifest.json`), and the restoration of what is picked from it: what is there is not overwritten unless asked to, and what is retired stays retired. Endpoints `/api/backup/*`.
 - **QR codes** for the cameras, the SD cards and the locations: each one's page, in *Settings › Entities*, shows its QR code — it says `wildintel:<camera|sdcard|location>:<research project>:<id>` — with a button to download it as an SVG, to print on a label.
@@ -92,7 +93,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   previous revision of the same deployment (one or all).
   - If the session folder has a `<COLLECTION>_FileTimestampLog.csv` (the file wildintel-tools asks for beside
     a collection's deployments), the start and end of each deployment it has a row for are taken from it
-    instead of from the images' EXIF, and the *Details* step says so. See `examples/session_example_timestamp_log`.
+    instead of from the images' EXIF, and the *Details* step says so. See `examples/session_examples/timestamp_log`.
 - The timezone and the summer-time ("ignore DST") setting belong to the **location**, never to a deployment: the details
   no longer ask for them, nor does any request carry them. They are said, in bold, in a sentence before the details
   (the location, its GPS coordinates, its timezone and whether it ignores summer time), and the images are read and
@@ -125,7 +126,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Results of the postvalidation of a session** are laid out like those of the folders: figures, a message, *By deployment* / *By check*, and for each deployment the checks it failed with *View the images* and *Download report*.
 - **Upload results**: what was uploaded and what failed are in one list — a failure with its reason —, with counts of the deployments uploaded and failed and of the locations and deployments created in Trapper, the date of the run and its report — kept with the others in *Settings › Reports* (kind *Upload*, `POST /api/upload/report`) — to download.
 - **Locations of someone else**: Trapper only takes a deployment whose location the account owns or manages. The dry run warns when the location may not be usable (it goes by the owner and by whether Trapper offers the account to delete it — the managers are not listed), and when Trapper refuses the deployment the error says who owns the location.
-- `examples/session_example_faulty`: a session with a fault in every folder (corrupted, unordered, subfolders, mixed cameras, missing EXIF, duplicates) and a timestamp log that does not fit.
+- `examples/session_examples/faulty`: a session with a fault in every folder (corrupted, unordered, subfolders, mixed cameras, missing EXIF, duplicates) and a timestamp log that does not fit.
 - **Utils** (menu): *Repair local deployments* and *Sync local collections* are kept under one button, apart from the import and upload tasks.
 - **Sync local collections**: pick a research project and one of its classification projects in Trapper, and the collections
   folder gets what it lacks — the research project (`research_project.json`) and its `locations.json`, the collections
