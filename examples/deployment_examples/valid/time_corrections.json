@@ -1,0 +1,12 @@
+[
+  {
+    "at": "2026-10-27T23:15:49Z",
+    "by": "ijfviana",
+    "action": "shift",
+    "first": "IMG_0001.JPG",
+    "last": "IMG_0024.JPG",
+    "count": 24,
+    "offset_seconds": 46811197,
+    "reason": "Segment IMG_0001.JPG–IMG_0024.JPG so that it starts when the deployment started"
+  }
+]
