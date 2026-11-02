@@ -132,13 +132,25 @@ def upload_deployment(req: UploadDeploymentRequest) -> StreamingResponse:
         delete_after_upload=req.delete_files,
     )
 
+    def keep(note: str | None) -> None:
+        """What happened to an upload is kept — it failed, with why, or it worked and the failure goes — so that the dashboard says it, and a failed one is tried again."""
+        if req.mode != "upload":
+            return
+        try:
+            local_folder_service.set_upload_failure(config.collections_dir(), req.research_project_id, req.deployment_id, "trapper", note)
+        except local_folder_service.LocalFolderError:
+            pass
+
     def lines() -> Iterator[str]:
         try:
             for event in events:
+                if event.get("type") == "done":
+                    keep(None)
                 yield json.dumps(event) + "\n"
         except Exception as exc:
             logger.warning("Uploading %s failed: %s", req.deployment_id, exc, exc_info=debugging())
             detail = str(exc) if isinstance(exc, trapper_upload_service.TrapperUploadError) else http_exc(exc).detail
+            keep(detail)
             yield json.dumps({"type": "error", "detail": detail}) + "\n"
 
     return StreamingResponse(lines(), media_type="application/x-ndjson")

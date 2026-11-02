@@ -10,7 +10,7 @@ The zip holds:
   deployments/<collection>/<deployment>/...    what a deployment keeps — with its images only when they were asked for
   deployments/<collection>/<name>              the files of a collection (its collection.json and its logs)
 
-Restoring never overwrites what is there unless it is asked to; and what is retired stays retired (a retired location, camera or SD card is retired for good).
+Restoring never overwrites what is there unless it is asked to; and what is archived stays archived (an archived location, camera or SD card is archived for good).
 """
 from __future__ import annotations
 
@@ -257,7 +257,7 @@ def read_backup(root: Path, path: Path) -> dict:
 # ── restoring ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _merge(current: list[dict], backed: list[dict], key, *, replace: bool) -> tuple[list[dict], int, int, int]:
-    """The list kept with what the backup adds: what is there stays unless `replace` says the backup's wins — except what is retired, which is retired for good.
+    """The list kept with what the backup adds: what is there stays unless `replace` says the backup's wins — except what is archived, which is archived for good.
     Returns the list and how many were added, replaced and left as they were."""
     out = list(current)
     index = {key(item): i for i, item in enumerate(out)}
@@ -268,7 +268,7 @@ def _merge(current: list[dict], backed: list[dict], key, *, replace: bool) -> tu
             index[k] = len(out)
             out.append(item)
             added += 1
-        elif replace and out[index[k]].get("status") != "retired":
+        elif replace and out[index[k]].get("status") != "archived":
             out[index[k]] = item
             replaced += 1
         else:

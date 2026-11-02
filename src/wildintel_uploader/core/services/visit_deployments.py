@@ -47,6 +47,13 @@ def _leaves_camera(v: dict) -> bool:
     return bool({"Installation", "Revision"} & set(v.get("actions") or []))
 
 
+def _camera_stays(v: dict) -> bool:
+    """Whether a camera is left out after the visit: one put up (an Installation — also when the visit found the other stolen, or took it away), or the one that
+    was there and stays (a Revision that does not take it away nor finds it stolen)."""
+    actions = set(v.get("actions") or [])
+    return "Installation" in actions or ("Revision" in actions and not {"Desinstallation", "Stolen"} & actions)
+
+
 def _not_revised(v: dict) -> bool:
     return str(v.get("status") or "").lower() in visit_rules.NOT_REVISED
 
@@ -175,10 +182,39 @@ def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
                 out.append(_deployment(number - 1, earlier, later, keep_seconds))
         last = group[-1]
         number = session_number(last.get("session"))
-        if _leaves_camera(last) and not {"Desinstallation", "Stolen"} & set(last.get("actions") or []) and number is not None:
+        if _camera_stays(last) and number is not None:
             # still out there: the collection the visit that collects it will name — the one being completed when it was left before the last trip
             out.append(_deployment(last_session - 1 if number < last_session else last_session, last, None, keep_seconds))
     return sorted(out, key=lambda d: (d["collection"], d["site"].lower()))
+
+
+def visit_states(visits: list[dict], keep_seconds: bool = True) -> dict[tuple[str, str], str | None]:
+    """The state of each visit, by its site (ignoring case) and its instant: not_visited (it could not be made); deployed, collected or stolen for the visit that left
+    a camera — out there still, its card collected by a later visit, or the camera found stolen —; a visit that left none is collected when it took the card away (a
+    Desinstallation) and stolen when it found the camera stolen, and has no state otherwise (it only archived the location)."""
+    started = {id(d["start_visit"]): d for d in deployments(visits, keep_seconds)}
+    states: dict[tuple[str, str], str | None] = {}
+    for v in visits:
+        d = started.get(id(v))
+        actions = v.get("actions") or []
+        if _not_revised(v):
+            state = "not_visited"
+        elif d:
+            state = "deployed" if d["status"] == "open" else "stolen" if d["no_images"] else "collected"
+        elif "Stolen" in actions:
+            state = "stolen"
+        elif "Desinstallation" in actions:
+            state = "collected"
+        else:
+            state = None
+        states[(str(v.get("location_id", "")).lower(), str(v.get("when") or ""))] = state
+    return states
+
+
+def refresh_states(root: Path, research_project_id: str, keep_seconds: bool = True) -> int:
+    """Keeps the state of the visits of a research project — worked out from all of them: a visit that left a camera is deployed until a later visit collects its
+    card, and then it is collected (or stolen). Called when a visit is added and when one is given its deployment. Returns how many visits changed."""
+    return local_folder_service.write_states(root, research_project_id, visit_states(local_folder_service.list_visits(root, research_project_id), keep_seconds))
 
 
 def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[dict] | None = None) -> list[dict]:
@@ -186,22 +222,24 @@ def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[di
     its card, "open" while the camera it left is still out) — and neither for a visit that left no camera.
 
     With the `locations` of the research project, the book also has a row — `not_done` — for each location that has no visit in a session the visits have: a trip is
-    made to every location, so the one that was not visited says so, with no day, no time and no actions. The retired locations are left out."""
+    made to every location, so the one that was not visited says so, with no day, no time and no actions. The archived locations are left out."""
     started = {id(d["start_visit"]): d for d in deployments(visits, keep_seconds)}
+    states = visit_states(visits, keep_seconds)
     out = []
     for v in visits:
         d = started.get(id(v))
         out.append({**v, "deployment": d["deployment_id"] if d else None, "deployment_status": d["status"] if d else None,
-                    "deployment_no_images": d["no_images"] if d else None, "not_done": False})
+                    "deployment_no_images": d["no_images"] if d else None, "not_done": False, "not_visited": _not_revised(v),
+                    "state": states[(str(v.get("location_id", "")).lower(), str(v.get("when") or ""))]})
     if locations:
         visited = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in visits}
         sessions = sorted({str(v["session"]).upper() for v in visits if v.get("session")})
         for session in sessions:
             for location in locations:
                 site = str(location.get("location_id", ""))
-                if not site or location.get("status") == "retired" or (session, site.lower()) in visited:
+                if not site or location.get("status") == "archived" or (session, site.lower()) in visited:
                     continue
-                out.append({"location_id": site, "session": session, "date": "", "time": "", "when": None, "actions": [], "deployment": None, "deployment_status": None, "not_done": True})
+                out.append({"location_id": site, "session": session, "date": "", "time": "", "when": None, "actions": [], "deployment": None, "deployment_status": None, "not_done": True, "not_visited": False, "state": "planned"})
     return out
 
 

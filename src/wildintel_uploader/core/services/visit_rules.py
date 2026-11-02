@@ -14,13 +14,14 @@ from __future__ import annotations
 from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
 
-ACTIONS = ("Installation", "Revision", "Desinstallation", "Stolen")
+ACTIONS = ("Installation", "Revision", "Desinstallation", "Stolen", "Archive")
 # What each action asks: the camera, the card left, the photos collected, and how the camera was found — "required" or "optional".
 _ASKED = {
     "Installation": {"camera": "required", "sd": "required"},
     "Revision": {"camera": "required", "sd": "optional", "photos": "required", "status": "optional"},
     "Desinstallation": {"camera": "required", "photos": "required", "status": "optional"},
     "Stolen": {"camera": "required"},
+    "Archive": {},  # the location is given up: nothing else is asked
 }
 _LABELS = {"camera": "The camera", "sd": "The SD card left in the camera", "photos": "The photos on the card collected", "status": "The status of the camera"}
 NOT_REVISED = ("not revised", "no revisada", "no revisado")
@@ -43,8 +44,13 @@ def _takes_away(v: dict) -> bool:
     return bool({"Desinstallation", "Stolen"} & set(v.get("actions") or []))
 
 
+def is_not_revised(v: dict) -> bool:
+    """A visit that could not be made: its status says it was not revised, so nothing was looked at, collected or left."""
+    return str(v.get("status") or "").lower() in NOT_REVISED
+
+
 def _collects_card(v: dict) -> bool:
-    return _takes_away(v) or "Revision" in (v.get("actions") or [])
+    return _takes_away(v) or ("Revision" in (v.get("actions") or []) and not is_not_revised(v))
 
 
 def _leaves_card(v: dict) -> bool:
@@ -64,6 +70,8 @@ def asked(actions: list[str]) -> dict[str, str]:
 def required_errors(visit: dict) -> dict[str, str]:
     """What a visit lacks of what its actions ask of it, by field (camera, sd, photos, status) — nothing when it is complete."""
     errors = {}
+    if is_not_revised(visit):
+        return errors  # nothing was done at it: nothing is asked
     actions = visit.get("actions") or []
     value = {"camera": visit.get("camera_id"), "sd": visit.get("sd"), "photos": visit.get("num_photos"), "status": visit.get("status")}
     # With the card full the photos are not counted: the count is not asked (it may still be given).
@@ -206,6 +214,10 @@ def history_warnings(new: list[dict], kept: list[dict]) -> list[str]:
     return list(dict.fromkeys(warnings))
 
 
+# The farthest the GPS of a note may be from its location before the site is doubted.
+GPS_TOLERANCE_M = 1000
+
+
 def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """The distance between two points on the Earth, in metres (haversine)."""
     dlat, dlon = radians(lat2 - lat1), radians(lon2 - lon1)
@@ -253,10 +265,12 @@ def refusals(visit: dict, kept: list[dict], locations: list[dict]) -> list[str]:
     if any(_same(v["location_id"], visit["location_id"]) and v.get("date") == visit["date"] and v.get("time") == visit["time"] for v in kept):
         reasons.append(f"There is already a visit to {visit['location_id']} on {visit['date']} at {visit['time']}.")
     # The first visit to a site puts the camera up: nothing else can be done where no camera is known to be.
-    if not any(_same(v["location_id"], visit["location_id"]) and _stamp(v) < _stamp(visit) for v in kept) and list(visit.get("actions") or []) != ["Installation"]:
+    if not is_not_revised(visit) and not any(_same(v["location_id"], visit["location_id"]) and _stamp(v) < _stamp(visit) for v in kept) and list(visit.get("actions") or []) != ["Installation"]:
         reasons.append(f"The first visit to {visit['location_id']} can only be an Installation.")
     reasons += required_errors(visit).values()
     reasons += availability_errors(kept, visit).values()
+    reasons += archive_errors(visit, kept, next((l for l in locations if _same(l.get("location_id"), visit["location_id"])), None))
+    reasons += [why for _, why in revision_gate([visit], kept, locations)]
     return reasons
 
 
@@ -264,6 +278,76 @@ def _session_number(session) -> int | None:
     import re  # noqa: PLC0415
     m = re.search(r"\d+", str(session or ""))
     return int(m.group(0)) if m else None
+
+
+def archive_errors(visit: dict, kept: list[dict], location: dict | None) -> list[str]:
+    """What stops a visit for the state of its location: an archived location is archived for good, so nothing is done there after the day it was archived;
+    and a visit that archives it leaves no camera there — it takes the one that is out away, or finds it stolen — and does not put one up."""
+    errors: list[str] = []
+    site = str(visit["location_id"]).strip()
+    if location and location.get("status") == "archived" and (not location.get("status_date") or str(visit.get("date")) > str(location["status_date"])):
+        errors.append(f"{site} is archived{' since ' + str(location['status_date']) if location.get('status_date') else ''}: no visit is kept for it after that.")
+    actions = visit.get("actions") or []
+    if "Archive" in actions:
+        if "Installation" in actions:
+            errors.append(f"A visit that archives {site} cannot put a camera up there.")
+        there = camera_at_site(kept, site, _stamp(visit))
+        if there and not _takes_away(visit):
+            errors.append(f"The camera at {site} ({there['camera']}) is still there: take it away (Desinstallation) or say it was stolen in the visit that archives the location.")
+    return errors
+
+
+def not_visited_records(previous: int, visits: list[dict], locations: list[dict]) -> list[dict]:
+    """The visits that finish revision `previous` as not visited: one for each location that is not archived when it starts and has no visit in it —
+    status "Not revised", on the last day of the revision, with the camera that is at the site (none is asked of them)."""
+    of = [v for v in visits if _session_number(v.get("session")) == previous]
+    if not of:
+        return []
+    start, last = min(str(v["date"]) for v in of), max(str(v["date"]) for v in of)
+    visited = {str(v["location_id"]).lower() for v in of}
+    records = []
+    for l in locations:
+        site = str(l.get("location_id") or "")
+        if not site or site.lower() in visited or (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start)):
+            continue
+        camera = camera_at_site(visits, site, f"{last}T23:59:59")
+        records.append({"location_id": site, "session": f"R{previous:04d}", "date": last, "time": "23:59:00", "actions": [], "status": "Not revised",
+                        "camera_id": camera["camera"] if camera else None, "comments": "Marked as not visited when the next revision was started."})
+    return records
+
+
+def unfinished_revision(number: int, visits: list[dict], locations: list[dict], floor: int, day: str = "") -> str | None:
+    """Why revision `number` cannot be started: the one before it is not finished. A revision is one visit to each of the locations that are not archived
+    when it starts (the day of its first visit; an archived location with no date is archived for good); the first revision of the visits (`floor`) has none before it."""
+    previous = number - 1
+    if previous < floor:
+        return None
+    of = [v for v in visits if _session_number(v.get("session")) == previous]
+    start = min((str(v["date"]) for v in of), default=day)
+    expected = [str(l["location_id"]) for l in locations
+                if l.get("location_id") and not (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start))]
+    visited = {str(v["location_id"]).lower() for v in of}
+    missing = sorted(s for s in expected if s.lower() not in visited)
+    if not missing:
+        return None
+    return f"R{number:04d} cannot start: R{previous:04d} is not finished, {len(missing)} location(s) still to be visited in it: {', '.join(missing)}."
+
+
+def revision_gate(new: list[dict], kept: list[dict], locations: list[dict]) -> list[tuple[dict, str]]:
+    """The visits of `new` that cannot be kept because the revision before theirs is not finished — each with why. The revisions are taken in order, so a
+    revision that is refused does not finish the one after it."""
+    numbers = [n for n in (_session_number(v.get("session")) for v in [*kept, *new]) if n is not None]
+    if not numbers:
+        return []
+    floor, accepted, refused = min(numbers), list(kept), []
+    for number in sorted({n for n in (_session_number(v.get("session")) for v in new) if n is not None}):
+        group = [v for v in new if _session_number(v.get("session")) == number]
+        reason = unfinished_revision(number, accepted, locations, floor, min(str(v["date"]) for v in group))
+        if reason:
+            refused += [(v, reason) for v in group]
+        else:
+            accepted += group
+    return refused
 
 
 def session_jump(new: list[dict], kept: list[dict]) -> list[str]:

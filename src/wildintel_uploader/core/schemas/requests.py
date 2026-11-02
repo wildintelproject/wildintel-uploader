@@ -79,6 +79,12 @@ class ScanFolderRequest(BaseModel):
     path: str
 
 
+class CardRequest(BaseModel):
+    """A memory card — or the copy of one — by the path of its folder."""
+
+    path: str = Field(min_length=1)
+
+
 class BrowseFolderRequest(BaseModel):
     # None uses the picker's own default title.
     title: Optional[str] = None
@@ -300,10 +306,13 @@ class LocationRecord(BaseModel):
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     coordinate_uncertainty: Optional[int] = Field(default=None, ge=1)
     trapper_pk: Optional[int] = None
-    # Whether it is in use; a retired or a planned one is not offered for a visit. When it changed (YYYY-MM-DD) and why are free to leave out.
-    status: Literal["active", "retired", "planned"] = "active"
+    # Whether it is in use; an archived or a planned one is not offered for a visit. When it changed (YYYY-MM-DD) and why are free to leave out.
+    status: Literal["active", "archived", "planned"] = "active"
     status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     status_note: Optional[str] = None
+
+    # what was kept as "retired" is archived now
+    _legacy_status = field_validator("status", mode="before")(lambda cls, v: "archived" if v == "retired" else v)
 
     @field_validator("ignore_dst", mode="before")
     @classmethod
@@ -354,7 +363,8 @@ class VisitRecord(BaseModel):
     # The instant of the visit, ISO 8601 in UTC with a Z — what is kept; the day and the time above are the wall clock of its location. Worked out when it is left out.
     when: Optional[str] = None
     # A visit may do several things: a camera revised and another put up, a card changed and the camera taken away…
-    actions: list[Literal["Installation", "Revision", "Desinstallation", "Stolen"]] = Field(min_length=1)
+    # Empty only for a visit that could not be made (its status says it was not revised): nothing was done at it.
+    actions: list[Literal["Installation", "Revision", "Desinstallation", "Stolen", "Archive"]] = Field(default_factory=list)
     trappers: Optional[str] = None
     status: Optional[str] = None
     # How the card and the batteries were, as the datasheet writes it: OK, CarFull (card full), SinPilas (no batteries) or both.
@@ -368,6 +378,9 @@ class VisitRecord(BaseModel):
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     # The deployment this visit closed, once it is imported (see local_folder_service.closed_visits).
     deployment_id: Optional[str] = None
+    # Where the visit is in its life: deployed (it left a camera that is still out), collected (its card was collected), stolen, or not visited (it could not be made).
+    # Kept when the visit is added, and changed when a later visit gives it a deployment — see visit_deployments.refresh_states.
+    state: Optional[Literal["deployed", "collected", "stolen", "not_visited"]] = None
 
     setup_by: Optional[str] = None
     camera_id: Optional[str] = None
@@ -392,6 +405,13 @@ class VisitRecord(BaseModel):
         return list(dict.fromkeys(actions))
 
     @model_validator(mode="after")
+    def _something_was_done(self):
+        # a visit that could not be made did nothing; any other did at least one thing
+        if not self.actions and str(self.status or "").strip().lower() not in ("not revised", "no revisada", "no revisado"):
+            raise ValueError("A visit does at least one action — only a visit that could not be made (status Not revised) has none.")
+        return self
+
+    @model_validator(mode="after")
     def _height_or_depth(self) -> "VisitRecord":
         if self.camera_height is not None and self.camera_depth is not None:
             raise ValueError("camera_height and camera_depth are mutually exclusive: only one should be set.")
@@ -402,6 +422,12 @@ class ListVisitsRequest(LocalLocationsRequest):
     """The visits of a research project — only those to one location when it is given."""
 
     location_id: Optional[str] = None
+
+
+class MarkNotVisitedRequest(LocalLocationsRequest):
+    """Finish a revision: the locations with no visit in it are marked as not visited."""
+
+    session: str = Field(pattern=r"^R\d+$")
 
 
 class SaveVisitRequest(LocalLocationsRequest):
@@ -453,7 +479,7 @@ class UpdateLocationRequest(LocalLocationsRequest):
     coordinate_uncertainty: Optional[int] = Field(default=None, ge=1)
     timezone: Optional[str] = None
     ignore_dst: Optional[bool] = None
-    status: Optional[Literal["active", "retired", "planned"]] = None
+    status: Optional[Literal["active", "archived", "planned"]] = None
     status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     status_note: Optional[str] = None
 

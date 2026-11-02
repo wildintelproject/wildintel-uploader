@@ -17,6 +17,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from wildintel_uploader.core.config import migrate_gear
 from wildintel_uploader.core.services import visit_time
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,8 @@ IMAGES_FILE = "images.json"
 RESEARCH_PROJECT_METADATA_FILE = "research_project.json"
 LOCATIONS_FILE = "locations.json"
 VISITS_FILE = "visits.json"
+# The uploads that were tried and failed — one record for each deployment and destination: an upload is planned until it is done, and a failed one is tried again.
+UPLOAD_FAILURES_FILE = "upload_failures.json"
 CAMERAS_FILE = "cameras.json"
 SD_CARDS_FILE = "sd_cards.json"
 
@@ -212,7 +215,7 @@ def delete_research_project(root: Path, research_project_id: str) -> dict:
         LocalFolderError: the research project isn't there, or it holds more than its own files.
     """
     folder = project_dir(root, research_project_id)
-    own = {RESEARCH_PROJECT_METADATA_FILE, LOCATIONS_FILE, VISITS_FILE}
+    own = {RESEARCH_PROJECT_METADATA_FILE, LOCATIONS_FILE, VISITS_FILE, UPLOAD_FAILURES_FILE}
     if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
     others = sorted(e.name for e in folder.iterdir() if e.name not in own)
@@ -234,7 +237,8 @@ def list_locations(root: Path, research_project_id: str) -> list[dict]:
         LocalFolderError: the research project id can't be a folder name.
     """
     locations = _read_json(project_dir(root, research_project_id) / LOCATIONS_FILE)
-    return [l for l in locations if isinstance(l, dict)] if isinstance(locations, list) else []
+    # what was kept as "retired" is archived now
+    return [{**l, "status": "archived"} if l.get("status") == "retired" else l for l in locations if isinstance(l, dict)] if isinstance(locations, list) else []
 
 
 def write_location(root: Path, research_project_id: str, location: dict) -> dict:
@@ -259,17 +263,17 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
     """Changes a kept location's fields (found ignoring case) — only the keys in changes, the rest stay. Its timezone, and whether its cameras ignore
     summer time, are fixed when it is created: every instant kept for it (a visit's `when`) was worked out with them, so they say the same or are refused.
 
-    A retired location is retired for good: it never goes back to active or to planned.
+    An archived location is archived for good: it never goes back to active or to planned.
 
     Raises:
-        LocalFolderError: the research project or the location isn't there, the timezone (or the summer-time setting) is changed, or a retired location is given another status.
+        LocalFolderError: the research project or the location isn't there, the timezone (or the summer-time setting) is changed, or an archived location is given another status.
     """
     locations = list_locations(root, research_project_id)
     index = next((i for i, l in enumerate(locations) if l.get("location_id", "").lower() == location_id.lower()), None)
     if index is None:
         raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
-    if locations[index].get("status") == "retired" and changes.get("status", "retired") != "retired":
-        raise LocalFolderError(f"The status of a location can't be changed once it is retired: {location_id} is retired for good.")
+    if locations[index].get("status") == "archived" and changes.get("status", "archived") != "archived":
+        raise LocalFolderError(f"The status of a location can't be changed once it is archived: {location_id} is archived for good.")
     now = {"timezone": locations[index].get("timezone") or visit_time.DEFAULT_TIMEZONE, "ignore_dst": bool(locations[index].get("ignore_dst"))}
     for key, label in (("timezone", "timezone"), ("ignore_dst", "summer-time setting")):
         if key in changes:
@@ -284,7 +288,7 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
 
 def delete_location(root: Path, research_project_id: str, location_id: str) -> dict:
     """Removes a kept location (found ignoring case). One that holds visits stays, as they would be left with no place; so does one taken from
-    Trapper, which is only read here — mark a location as retired instead and it is no longer offered.
+    Trapper, which is only read here — mark a location as archived instead and it is no longer offered.
 
     Raises:
         LocalFolderError: the location isn't there, it comes from Trapper, or visits were made to it.
@@ -297,7 +301,7 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
         raise LocalFolderError(f"The location '{location_id}' comes from Trapper, so it can't be deleted here.")
     visits = len(list_visits(root, research_project_id, location_id))
     if visits:
-        raise LocalFolderError(f"The location '{location_id}' still has {visits} visit{'s' if visits != 1 else ''}: it can't be deleted — mark it as retired instead.")
+        raise LocalFolderError(f"The location '{location_id}' still has {visits} visit{'s' if visits != 1 else ''}: it can't be deleted — mark it as archived instead.")
     removed = locations.pop(index)
     (project_dir(root, research_project_id) / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
     return {"deleted": removed["location_id"]}
@@ -314,7 +318,7 @@ _FIELD_ITEM_FILES = {"cameras": CAMERAS_FILE, "sd_cards": SD_CARDS_FILE}
 def list_field_items(root: Path, research_project_id: str, kind: str) -> list[dict]:
     """The cameras (`kind` "cameras") or the SD cards ("sd_cards") kept for a research project — each with its `research_project` set to it. Empty until one is kept."""
     items = _read_json(project_dir(root, research_project_id) / _FIELD_ITEM_FILES[kind])
-    return [{**i, "research_project": research_project_id} for i in items if isinstance(i, dict)] if isinstance(items, list) else []
+    return [{**migrate_gear(i), "research_project": research_project_id} for i in items if isinstance(i, dict)] if isinstance(items, list) else []
 
 
 def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict]) -> None:
@@ -422,6 +426,40 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
         list_visits(root, research_project_id)  # an earlier file is moved to instants first
         _write_raw_visits(root, research_project_id, _raw_visits(root, research_project_id) + [_kept(v, locations) for v in new])
     return len(new)
+
+
+def list_upload_failures(root: Path, research_project_id: str) -> list[dict]:
+    """The uploads of the deployments of a research project that were tried and failed: {"deployment_id", "destination", "note", "at"}. An upload that was done is not here:
+    it is told by the deployment's own folder — and a success takes the failure away."""
+    failures = _read_json(project_dir(root, research_project_id) / UPLOAD_FAILURES_FILE)
+    return [f for f in failures if isinstance(f, dict)] if isinstance(failures, list) else []
+
+
+def set_upload_failure(root: Path, research_project_id: str, deployment_id: str, destination: str, note: str | None) -> None:
+    """Keeps that the upload of a deployment to a destination failed, with why — or, with no note (None), takes the failure away: it was tried again and worked.
+
+    Raises:
+        LocalFolderError: the research project isn't there."""
+    require_research_project(root, research_project_id)
+    failures = [f for f in list_upload_failures(root, research_project_id) if not (f.get("deployment_id") == deployment_id and f.get("destination") == destination)]
+    if note is not None:
+        failures.append({"deployment_id": deployment_id, "destination": destination, "note": note.strip() or None, "at": datetime.now().astimezone().isoformat(timespec="seconds")})
+    (project_dir(root, research_project_id) / UPLOAD_FAILURES_FILE).write_text(json.dumps(failures, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def write_states(root: Path, research_project_id: str, states: dict[tuple[str, str], str | None]) -> int:
+    """Keeps the `state` of the visits — found by their site (ignoring case) and their instant — where it changed; returns how many changed."""
+    list_visits(root, research_project_id)  # an earlier file is moved to instants first
+    raw = _raw_visits(root, research_project_id)
+    changed = 0
+    for visit in raw:
+        key = (str(visit.get("location_id", "")).lower(), str(visit.get("when") or ""))
+        if key in states and visit.get("state") != states[key]:
+            visit["state"] = states[key]
+            changed += 1
+    if changed:
+        _write_raw_visits(root, research_project_id, raw)
+    return changed
 
 
 def closes_collection(visit: dict) -> bool:

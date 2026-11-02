@@ -7,7 +7,7 @@ import base64
 from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, SaveVisitRequest, VisitsCsvColumnsRequest
+from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, MarkNotVisitedRequest, SaveVisitRequest, VisitRecord, VisitsCsvColumnsRequest
 from wildintel_uploader.core.services import epicollect_service, local_folder_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
@@ -38,6 +38,30 @@ def _uploads_of(folder) -> list[dict]:
     return []
 
 
+# Where a deployment can be sent, and the settings that say whether each is used: only the uploaders that are in use have an upload planned.
+UPLOADERS = {"trapper": lambda settings: settings.TRAPPER.enabled, "agouti": lambda settings: settings.AGOUTI.enabled}
+
+
+def _upload_states(root, research_project_id: str, imported: str | None, deployment_id: str, failures: list[dict]) -> list[dict]:
+    """The upload of a deployment to each uploader in use: "planned" from the start, then "done" (it was sent from here, or it was synced from the destination) or "failed" (it was
+    tried and did not work: it can be tried again) — {"destination", "state", "kind", "uploaded_at", "note"}."""
+    settings = config.load_settings()
+    # what was done is told by the folder of the deployment, once it is created (`imported`); what failed, by the failures kept
+    done = {u["destination"]: u for u in (_uploads_of(root / research_project_id / imported.split("-", 1)[0] / imported) if imported else [])}
+    failed = {f["destination"]: f for f in failures if f.get("deployment_id") == deployment_id}
+    out = []
+    for destination, used in UPLOADERS.items():
+        if not used(settings) and destination not in done:
+            continue
+        if destination in done:
+            out.append({"destination": destination, "state": "done", "kind": done[destination]["kind"], "uploaded_at": done[destination].get("uploaded_at"), "note": None})
+        elif destination in failed:
+            out.append({"destination": destination, "state": "failed", "kind": None, "uploaded_at": None, "note": failed[destination].get("note")})
+        else:
+            out.append({"destination": destination, "state": "planned", "kind": None, "uploaded_at": None, "note": None})
+    return out
+
+
 def _write_logs(root, research_project_id: str, new: list[dict]) -> dict:
     """The folders of the collections the new visits change, and their FileTimestampLog and FieldworkLog — made when a visit is registered, not when its
     deployment is imported. {"collections": [...], "warnings": [...]}; nothing is written when no deployment is said by the visits yet."""
@@ -46,6 +70,26 @@ def _write_logs(root, research_project_id: str, new: list[dict]) -> dict:
     visits = local_folder_service.list_visits(root, research_project_id)
     keep = config.load_settings().FIELDLOG.keep_seconds
     return visit_deployments.write_collection_logs(root, research_project_id, visit_deployments.collections_of(visits, new, keep), keep)
+
+
+def _refresh_states(root, research_project_id: str) -> None:
+    """Keeps the state of the visits — a visit that left a camera is collected once a later one took its card, and the one just added has its own."""
+    visit_deployments.refresh_states(root, research_project_id, config.load_settings().FIELDLOG.keep_seconds)
+
+
+def _archive_locations(root, research_project_id: str, new: list[dict]) -> list[str]:
+    """The locations that the visits with an Archive action give up: archived from the day of the visit, with a note that says which visit did it."""
+    done = []
+    for v in new:
+        if "Archive" not in (v.get("actions") or []):
+            continue
+        note = f"Archived in the visit {v.get('session')}" + (f": {v['comments']}" if v.get("comments") else "")
+        try:
+            local_folder_service.update_location(root, research_project_id, v["location_id"], {"status": "archived", "status_date": v["date"], "status_note": note})
+            done.append(v["location_id"])
+        except local_folder_service.LocalFolderError:
+            continue
+    return done
 
 
 @router.post("/list")
@@ -73,7 +117,29 @@ def save_visit(req: SaveVisitRequest) -> dict:
         if reasons:
             raise HTTPException(422, " ".join(reasons))
         kept = local_folder_service.write_visit(root, req.research_project_id, visit)
+        _archive_locations(root, req.research_project_id, [kept])
+        _refresh_states(root, req.research_project_id)
         return {**kept, "field_logs": _write_logs(root, req.research_project_id, [kept])}
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/mark-not-visited")
+def mark_not_visited(req: MarkNotVisitedRequest) -> dict:
+    """Finishes a revision whose locations were not all visited: each of them that has no visit in it gets one with the status "Not revised" — the visit
+    that could not be made. {"session", "marked": [location ids]}."""
+    root = config.collections_dir()
+    try:
+        local_folder_service.require_research_project(root, req.research_project_id)
+        locations = local_folder_service.list_locations(root, req.research_project_id)
+        kept = local_folder_service.list_visits(root, req.research_project_id)
+        records = visit_rules.not_visited_records(int(req.session[1:]), kept, locations)
+        for record in records:
+            location = next((l for l in locations if str(l.get("location_id", "")).lower() == record["location_id"].lower()), None)
+            record["when"] = visit_time.to_when(record["date"], record["time"], location)
+        local_folder_service.write_visits(root, req.research_project_id, [VisitRecord.model_validate(r).model_dump(mode="json") for r in records])
+        _refresh_states(root, req.research_project_id)
+        return {"session": req.session, "marked": [r["location_id"] for r in records]}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -123,6 +189,8 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
         saved = field_logs = report = None
         if req.save:
             saved = local_folder_service.write_visits(root, req.research_project_id, result["visits"])
+            _archive_locations(root, req.research_project_id, result["visits"])
+            _refresh_states(root, req.research_project_id)
             field_logs = _write_logs(root, req.research_project_id, result["visits"])
             report = visits_csv.write_report(root, req.research_project_id, result, saved)
     except (local_folder_service.LocalFolderError, visits_csv.VisitsCsvError) as exc:
@@ -154,9 +222,10 @@ def closed_visits(req: ListVisitsRequest) -> dict:
 def link_visit(req: LinkVisitRequest) -> dict:
     """Records which deployment a visit closed, once it is imported."""
     try:
-        return local_folder_service.link_visit(
-            config.collections_dir(), req.research_project_id, req.location_id, req.date.isoformat(), req.time.isoformat(), req.deployment_id,
-        )
+        root = config.collections_dir()
+        linked = local_folder_service.link_visit(root, req.research_project_id, req.location_id, req.date.isoformat(), req.time.isoformat(), req.deployment_id)
+        _refresh_states(root, req.research_project_id)
+        return linked
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -172,6 +241,7 @@ def deployments(req: ListVisitsRequest) -> dict:
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
     results = []
+    failures = local_folder_service.list_upload_failures(root, req.research_project_id)
     for d in found:
         imported = d["start_visit"].get("deployment_id")
         uploaded_at, on_trapper = _trapper_state(root, req.research_project_id, imported)
@@ -180,32 +250,10 @@ def deployments(req: ListVisitsRequest) -> dict:
             # whether the deployment was created and its images imported (its visit says which deployment it gave), and whether it is on Trapper
             "images_stored": bool(imported), "uploaded_at": uploaded_at, "on_trapper": on_trapper,
             "uploads": _uploads_of(root / req.research_project_id / imported.split("-", 1)[0] / imported) if imported else [],
+            # the upload to each uploader in use is its own: planned, done or failed — apart from the deployment's own state; a deployment that will not be made has none
+            "upload_states": [] if d["no_images"] else _upload_states(root, req.research_project_id, imported, d["deployment_id"], failures),
         })
     return {"results": results}
-
-
-@router.post("/uploads")
-def uploads(req: ListVisitsRequest) -> dict:
-    """The deployments of a research project that are created — their images are stored here — each with its `uploads`: one for each platform it was sent to (only "trapper"
-    for now), with the day, and what it did. A deployment that came from Trapper (synced) has its upload as `kind` "synced", with no day: it was not sent from here. A
-    deployment not sent anywhere has none. Also the `revisions` the deployments have, newest first — with or without uploads: the dashboard is looked at by revision."""
-    try:
-        root = config.collections_dir()
-        local_folder_service.require_research_project(root, req.research_project_id)
-        found = visit_deployments.deployments(local_folder_service.list_visits(root, req.research_project_id, req.location_id), config.load_settings().FIELDLOG.keep_seconds)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    results = []
-    for d in found:
-        imported = d["start_visit"].get("deployment_id")
-        if not imported:
-            continue
-        folder = root / req.research_project_id / imported.split("-", 1)[0] / imported
-        sends = _uploads_of(folder)
-        results.append({"deployment_id": imported, "collection": d["collection"], "site": d["site"], "start": d["start"], "end": d["end"],
-                        "start_session": d["start_visit"].get("session"), "uploads": sends})
-    return {"deployments": sorted(results, key=lambda r: (r["collection"], r["site"].lower()), reverse=True),
-            "revisions": sorted({d["collection"] for d in found}, reverse=True)}
 
 
 @router.post("/field-logs")
@@ -225,6 +273,7 @@ def visit_book(req: ListVisitsRequest) -> dict:
     try:
         root = config.collections_dir()
         local_folder_service.require_research_project(root, req.research_project_id)
+        _refresh_states(root, req.research_project_id)  # what was kept before the states were is given its own
         visits = local_folder_service.list_visits(root, req.research_project_id, req.location_id)
         locations = local_folder_service.list_locations(root, req.research_project_id) if req.location_id is None else None
         book = visit_deployments.visit_book(visits, config.load_settings().FIELDLOG.keep_seconds, locations)

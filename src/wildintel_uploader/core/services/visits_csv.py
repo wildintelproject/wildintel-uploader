@@ -58,7 +58,7 @@ EPICOLLECT_COLUMNS: dict[str, tuple[str, ...]] = {
 # The fields of a visit a CSV can give, in the order they are asked for: what each one is, and whether the visit needs it.
 FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("location_id", "Site (a location of the research project)", True),
-    ("actions", "Actions (Installation, Revision, Desinstallation, Stolen — several with +)", True),
+    ("actions", "Actions (Installation, Revision, Desinstallation, Stolen, Archive — several with +)", True),
     ("date", "Date (YYYY-MM-DD or DD/MM/YYYY)", False),
     ("time", "Time (HH:MM[:SS])", False),
     ("when", "Date and time in one column (YYYY-MM-DD HH:MM:SS)", False),
@@ -92,7 +92,7 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
 )
 REQUIRED = tuple(f for f, _, required in FIELDS if required)
 EPICOLLECT_NUMBER = re.compile(r"^\s*(\d+)\s*([bB]?)\s*$")
-ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation", "Stolen")} | {
+ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation", "Stolen", "Archive")} | {
     # as the datasheets of the field work write them
     "i": "Installation", "r": "Revision", "d": "Desinstallation", "robada": "Stolen", "uninstallation": "Desinstallation", "removal": "Desinstallation",
 }
@@ -260,7 +260,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                     pass
             actions = [ACTIONS.get(a.strip().lower()) for a in re.split(r"[+;/|&,]", row.get("actions", "")) if a.strip()]
             if not actions or None in actions:
-                raise ValueError(f"The actions '{row.get('actions', '')}' are not Installation, Revision, Desinstallation or Stolen.")
+                raise ValueError(f"The actions '{row.get('actions', '')}' are not Installation, Revision, Desinstallation, Stolen or Archive.")
             data: dict = {
                 f: row[f] for f in ("trappers", "status", "sd", "date_time_ok", "camera_id", "camera_model", "comments", "setup_by", "session") if f in row
             }
@@ -288,6 +288,11 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                     data[f] = row[f]
             if "tags" in row:
                 data["tags"] = [t.strip() for t in re.split(r"[|;]", row["tags"]) if t.strip()]
+            # the GPS of the note is compared with the location's, to check that the site is the right one
+            if row.get("latitude") and row.get("longitude") and location.get("latitude") is not None and location.get("longitude") is not None:
+                gap = visit_rules.distance_m(float(row["latitude"]), float(row["longitude"]), float(location["latitude"]), float(location["longitude"]))
+                if gap > visit_rules.GPS_TOLERANCE_M:
+                    date_warnings.append(f"Row {n} ({site}): the GPS of the note is {round(gap)} m from the location; check that the site is the right one.")
             for f in ("latitude", "longitude"):
                 value = row.get(f) or location.get(f)
                 if value not in (None, ""):
@@ -316,6 +321,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         already.add((record["location_id"].lower(), record["date"], record["time"]))
         parsed.append((n, record | {"_given": "session" in row}))
 
+    row_of = {id(r): n for n, r in parsed}
     count: dict[str, int] = {}
     for loc in {r["location_id"].lower() for _, r in parsed}:
         count[loc] = sum(1 for v in kept if str(v.get("location_id", "")).lower() == loc)
@@ -334,8 +340,14 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         visits.append(record)
     new_sites = [visit_rules.new_site(site, records, locations) for site, records in sorted(held.items())]
     warnings = [*date_warnings, *visit_rules.session_jump(visits, kept), *visit_rules.history_warnings(visits, kept)]
+    notes = visit_rules.history_notes(visits, kept)
+    # a revision is not started before the one before it is finished: its visits are refused, with the rows they come from
+    refused = visit_rules.revision_gate(visits, kept, locations)
+    for visit, why in refused:
+        problem(row_of[id(visit)], why)
+    visits = [v for v in visits if id(v) not in {id(r) for r, _ in refused}]
     return {"visits": visits, "problems": problems, "skipped": skipped, "ignored": ignored, "new_sites": new_sites,
-            "warnings": list(dict.fromkeys(warnings)), "notes": visit_rules.history_notes(visits, kept)}
+            "warnings": list(dict.fromkeys(warnings)), "notes": notes}
 
 
 def _first(exc: ValidationError) -> str:

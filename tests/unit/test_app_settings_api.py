@@ -80,7 +80,7 @@ def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     ]  # one kept before it had a label is called by its id
 
 
-ACTIVE = {"status": "active", "status_date": None, "status_note": None}
+ACTIVE = {"status": "active", "archive_reason": None, "status_date": None, "status_note": None}
 
 
 def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_only_the_known_ones_are_taken():
@@ -90,10 +90,11 @@ def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_onl
         "trappers": [{"name": "Ana", "status": "inactive"}],
     })
 
-    assert saved["FIELDWORK"]["cameras"][0]["status"] == "stolen"
+    # stolen, lost and broken are the reasons for being archived
+    assert (saved["FIELDWORK"]["cameras"][0]["status"], saved["FIELDWORK"]["cameras"][0]["archive_reason"]) == ("archived", "stolen")
     assert saved["FIELDWORK"]["cameras"][0]["status_date"] == "2026-05-02"
     assert saved["FIELDWORK"]["cameras"][0]["status_note"] == "taken from the tree"
-    assert (saved["FIELDWORK"]["sd_cards"][0]["status"], saved["FIELDWORK"]["sd_cards"][0]["status_date"]) == ("lost", None)
+    assert (saved["FIELDWORK"]["sd_cards"][0]["status"], saved["FIELDWORK"]["sd_cards"][0]["archive_reason"], saved["FIELDWORK"]["sd_cards"][0]["status_date"]) == ("archived", "lost", None)
     assert saved["FIELDWORK"]["trappers"][0]["status"] == "inactive"
 
     # each has its own: a card is not planned, a trapper is not broken
@@ -460,19 +461,19 @@ def test_a_camera_and_an_sd_card_are_marked_as_not_available_by_what_the_visit_s
     shown = _client().get("/api/settings").json()["FIELDWORK"]
 
     assert camera.json() == {"updated": True} and card.json() == {"updated": True} and nobody.json() == {"updated": False}
-    assert {c["label"]: (c["status"], c["status_date"]) for c in shown["cameras"]} == {"CAM-001": ("stolen", "2026-10-29"), "CAM-002": ("active", None)}
-    assert shown["sd_cards"][0]["status"] == "stolen"
+    assert {c["label"]: (c["status"], c["archive_reason"], c["status_date"]) for c in shown["cameras"]} == {"CAM-001": ("archived", "stolen", "2026-10-29"), "CAM-002": ("active", None, None)}
+    assert (shown["sd_cards"][0]["status"], shown["sd_cards"][0]["archive_reason"]) == ("archived", "stolen")
 
 
-def test_a_retired_camera_or_sd_card_is_not_changed(tmp_path: Path):
+def test_a_archived_camera_or_sd_card_is_not_changed(tmp_path: Path):
     body = config.Settings().model_dump(mode="json")
-    body["FIELDWORK"]["cameras"] = [{"label": "CAM-001", "camera_id": "BR1", "research_project": "DONA", "status": "retired", "status_date": "2026-10-01"}]
-    body["FIELDWORK"]["sd_cards"] = [{"label": "1B", "research_project": "DONA", "status": "retired"}]
+    body["FIELDWORK"]["cameras"] = [{"label": "CAM-001", "camera_id": "BR1", "research_project": "DONA", "status": "archived", "status_date": "2026-10-01"}]
+    body["FIELDWORK"]["sd_cards"] = [{"label": "1B", "research_project": "DONA", "status": "archived"}]
     assert _client().put("/api/settings", json=body).status_code == 200
 
     body["FIELDWORK"]["cameras"][0]["status"] = "active"
     back = _client().put("/api/settings", json=body)
-    body["FIELDWORK"]["cameras"][0]["status"] = "retired"
+    body["FIELDWORK"]["cameras"][0]["status"] = "archived"
     body["FIELDWORK"]["cameras"][0]["camera_model"] = "Browning"
     edited = _client().put("/api/settings", json=body)
     body["FIELDWORK"]["cameras"][0].pop("camera_model")
@@ -480,7 +481,7 @@ def test_a_retired_camera_or_sd_card_is_not_changed(tmp_path: Path):
     card = _client().put("/api/settings", json=body)
     marked = _client().post("/api/settings/field-item-status", json={"research_project_id": "DONA", "kind": "cameras", "key": "BR1", "status": "stolen"})
 
-    assert back.status_code == edited.status_code == card.status_code == 422 and "retired for good" in back.json()["detail"]
+    assert back.status_code == edited.status_code == card.status_code == 422 and "archived for good" in back.json()["detail"]
     assert marked.json() == {"updated": False}
 
 

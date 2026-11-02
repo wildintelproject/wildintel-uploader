@@ -21,11 +21,11 @@ def _in(tmp_path: Path):
         yield
 
 
-def _project() -> None:
-    """The research project, with the locations the tests visit."""
+def _project(archived: tuple[int, ...] = ()) -> None:
+    """The research project, with the locations the tests visit — the numbers `archived` out of use, so that no revision waits for them."""
     _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
     for n in (1, 2, 3):
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"DONA_0{n}", "name": f"Site {n}", "timezone": "UTC", "latitude": 37.0 + n / 100, "longitude": -6.5}})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"DONA_0{n}", "name": f"Site {n}", "timezone": "UTC", "latitude": 37.0 + n / 100, "longitude": -6.5, "status": "archived" if n in archived else "active"}})
 
 
 def _installed() -> None:
@@ -129,8 +129,10 @@ AUTO = object()  # the mapping the page starts from: the columns found by their 
 def _import(tmp_path: Path, text: str, save: bool = False, fmt: str = "mapped", mapping=AUTO, **location):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        # DONA_0001 is only there to be mistaken for DONA_01, and DONA_02 is a site with one visit: both are out of use, so no revision waits for them
+        archived = {"DONA_0001": {"status": "archived"}, "DONA_02": {"status": "archived"}}
         for site, lat in (("DONA_01", 37.1), ("DONA_02", None), ("DONA_0001", 37.1)):
-            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": site, "latitude": lat, "longitude": -6.4 if lat else None, **location}})
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": site, "latitude": lat, "longitude": -6.4 if lat else None, **location, **archived.get(site, {})}})
         if mapping is AUTO:
             mapping = _client().post("/api/visits/csv-columns", json={"csv": text}).json().get("mapping") if fmt == "mapped" else None
         return _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "save": save, "format": fmt, "mapping": mapping})
@@ -522,7 +524,7 @@ def test_the_folder_of_a_collection_and_its_logs_are_made_when_a_visit_closes_a_
     install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "session": "R0003", "date": "2024-09-04", "time": "09:00:00"}
     collect = {**VISIT, "actions": ["Revision"], "sd": "B2", "num_photos": 241, "session": "R0004", "date": "2024-10-12", "time": "09:00:00"}
     with _in(tmp_path):
-        _project()
+        _project(archived=(2, 3))
         first = _save(install)
         # a camera left and not collected yet is an open deployment of the collection being completed: its folder and its FieldworkLog are made at once
         folder = tmp_path / "DONA" / "R0003"
@@ -570,7 +572,7 @@ HISTORY = [
 def test_a_history_completes_the_visits_kept_and_the_file_is_applied_on_top(tmp_path: Path):
     csv_text = "location_id,date,time,actions,session,num_photos,sd,camera_id\nDONA_01,2024-10-12,09:00,Revision,R0004,241,B2,P800\n"
     with _in(tmp_path):
-        _project()
+        _project(archived=(2, 3))
         mapping = _client().post("/api/visits/csv-columns", json={"csv": csv_text}).json()["mapping"]
         body = {"research_project_id": "DONA", "csv": csv_text, "format": "mapped", "mapping": mapping, "history_xlsx": _workbook(HISTORY)}
         shown = _client().post("/api/visits/import-csv", json=body).json()
@@ -678,7 +680,7 @@ def test_the_seconds_are_cut_from_the_logs_unless_they_are_kept_and_an_import_le
 def test_a_revision_is_of_the_camera_that_is_at_the_site_unless_the_visit_also_installs_another(tmp_path: Path):
     install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0003"}
     with _in(tmp_path):
-        _project()
+        _project(archived=(2, 3))
         _save(install)
         other = _save({**VISIT, "actions": ["Revision"], "camera_id": "P999", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0004"})
         same = _save({**VISIT, "actions": ["Revision"], "camera_id": "p800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0004"})
@@ -698,16 +700,28 @@ def test_the_visit_book_gives_each_visit_the_deployment_it_started_closed_or_ope
     assert (by[("DONA_01", "R0003")]["deployment"], by[("DONA_01", "R0003")]["deployment_status"]) == ("R0003-DONA_01", "closed")
     assert (by[("DONA_01", "R0004")]["deployment"], by[("DONA_01", "R0004")]["deployment_status"]) == ("R0004-DONA_01", "open")   # it left a card again: still out
     assert (by[("DONA_02", "R0003")]["deployment"], by[("DONA_02", "R0003")]["deployment_status"]) == ("R0003-DONA_02", "open")
+    assert not any(v["not_visited"] for v in book)                                                  # every one of them was made
+
+
+def test_the_visit_book_says_a_visit_that_could_not_be_made_is_not_visited(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        second = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 0, "sd": "B2", "status": "Not revised", "date": "2024-10-12", "session": "R0002"})
+        book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
+
+    assert second.status_code == 200, second.text
+    assert {v["session"]: v["not_visited"] for v in book} == {"R0001": False, "R0002": True}
 
 
 def test_the_visit_book_has_a_row_for_each_location_that_was_not_visited_in_a_session(tmp_path: Path):
     with _in(tmp_path):
         _field_visits()   # DONA_01 and DONA_02 are visited in R0003, DONA_01 alone in R0004; the project has DONA_01, DONA_02 and DONA_03
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_04", "status": "retired"}})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_04", "status": "archived"}})
         book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
 
     not_done = sorted((v["session"], v["location_id"]) for v in book if v["not_done"])
-    assert not_done == [("R0003", "DONA_03"), ("R0004", "DONA_02"), ("R0004", "DONA_03")]       # DONA_04 is retired: left out
+    assert not_done == [("R0003", "DONA_03"), ("R0004", "DONA_02"), ("R0004", "DONA_03")]       # DONA_04 is archived: left out
     assert all(v["actions"] == [] and v["date"] == "" for v in book if v["not_done"])
     assert sum(1 for v in book if not v["not_done"]) == 3                                           # the visits are the ones made
 
@@ -728,7 +742,7 @@ def test_the_visit_book_says_which_deployments_are_on_trapper_uploaded_from_here
     assert book[("DONA_01", "R0004")]["on_trapper"] is False                                                          # no deployment of its own yet
 
 
-def test_the_uploads_say_which_created_deployments_went_where_and_when(tmp_path: Path):
+def test_the_deployments_say_where_and_when_each_was_uploaded(tmp_path: Path):
     import json
     with _in(tmp_path):
         _field_visits()
@@ -740,16 +754,17 @@ def test_the_uploads_say_which_created_deployments_went_where_and_when(tmp_path:
                                                        "deployment_url": "https://trapper.example.org/geomap/deployment/detail/7/", "collection_url": "https://trapper.example.org/storage/collection/detail/26/"}), encoding="utf-8")
         kept = tmp_path / "DONA" / "R0003" / "R0003-DONA_02"          # created here and not sent anywhere
         kept.mkdir(parents=True)
-        body = _client().post("/api/visits/uploads", json={"research_project_id": "DONA"}).json()
+        body = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()
 
-    created = {d["deployment_id"]: d for d in body["deployments"]}
-    assert set(created) == {"R0003-DONA_01", "R0003-DONA_02"}                                  # the created ones only: the others have no images yet
+    created = {d["deployment_id"]: d for d in body["results"]}
     assert [(u["destination"], u["kind"], u["uploaded_at"], u["parts"], u["location_created"], u["deployment_created"]) for u in created["R0003-DONA_01"]["uploads"]] == [
         ("trapper", "uploaded", "2024-10-20T10:00:00+00:00", 2, True, True)]
     assert created["R0003-DONA_01"]["uploads"][0]["url"] == "https://trapper.example.org/geomap/deployment/detail/7/"   # the page of the deployment in Trapper
     assert created["R0003-DONA_01"]["start_session"] == "R0003"
     assert created["R0003-DONA_02"]["uploads"] == []                                           # created, not uploaded
-    assert body["revisions"] == ["R0004", "R0003"]  # every revision the deployments have, also the one with nothing created: the dashboard is looked at by revision
+    # the upload to each uploader in use is its own state: done where it was, planned where it was not
+    assert [(u["destination"], u["state"]) for u in created["R0003-DONA_01"]["upload_states"]] == [("trapper", "done")]
+    assert [(u["destination"], u["state"]) for u in created["R0003-DONA_02"]["upload_states"]] == [("trapper", "planned")]
 
 
 def test_the_deployments_say_whether_their_images_are_stored_and_whether_they_are_on_trapper(tmp_path: Path):
@@ -803,3 +818,152 @@ def test_a_form_that_is_not_the_one_of_a_visit_is_said_plainly():
     with patch.object(epicollect_service, "fetch_form", return_value={"project": {}, "inputs": [{"ref": "x", "label": "Other"}]}):
         with pytest.raises(epicollect_service.EpicollectError, match="locationID"):
             epicollect_service.visits_csv()
+
+
+def test_a_note_whose_gps_is_far_from_its_location_is_warned_of(tmp_path: Path):
+    text = "location_id,date,time,actions,latitude,longitude\nDONA_01,2026-10-02,08:00:00,Installation,37.2,-6.4\nDONA_0001,2026-10-03,08:00:00,Installation,37.1,-6.4\n"
+    shown = _import(tmp_path, text).json()
+    assert any("DONA_01" in w and "m from the location" in w for w in shown["warnings"])
+    assert not any("DONA_0001" in w and "m from the location" in w for w in shown["warnings"])
+
+
+def test_a_revision_cannot_start_while_the_one_before_it_has_a_location_still_to_be_visited(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(3,))
+        for n in (1, 2):
+            _save({**VISIT, "location_id": f"DONA_0{n}", "actions": ["Installation"], "num_photos": None, "sd": f"S{n}", "camera_id": f"C{n}", "date": "2024-09-04", "session": "R0001"})
+        # R0001 has DONA_01 and DONA_02 (DONA_03 is archived): R0002 starts with DONA_01, then it has DONA_02 to go
+        second = {**VISIT, "actions": ["Revision"], "camera_id": "C1", "num_photos": 10, "sd": "B1", "date": "2024-10-12", "session": "R0002"}
+        assert _save(second).status_code == 200
+        third = _save({**second, "date": "2024-11-12", "session": "R0003"})
+
+    assert third.status_code == 422 and "R0003 cannot start: R0002 is not finished" in third.json()["detail"] and "DONA_02" in third.json()["detail"]
+
+
+def test_a_revision_waits_for_the_locations_not_archived_when_the_one_before_it_started(tmp_path: Path):
+    with _in(tmp_path):
+        _project()
+        first = _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "S1", "camera_id": "C1", "date": "2024-09-04", "session": "R0001"})
+        _save({**VISIT, "location_id": "DONA_02", "actions": ["Installation"], "num_photos": None, "sd": "S2", "camera_id": "C2", "date": "2024-09-04", "session": "R0001"})
+        # DONA_03 is not visited in R0001 and nothing says it was archived: R0002 is refused
+        second = _save({**VISIT, "actions": ["Revision"], "camera_id": "C1", "num_photos": 10, "sd": "B1", "date": "2024-10-12", "session": "R0002"})
+
+    assert first.status_code == 200
+    assert second.status_code == 422 and "R0001 is not finished" in second.json()["detail"] and "DONA_03" in second.json()["detail"]
+
+
+def test_a_visit_that_archives_a_location_takes_the_camera_away_and_archives_it_from_that_day(tmp_path: Path):
+    install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"}
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save(install)
+        # the camera is still out: the location cannot be given up
+        refused = _save({**VISIT, "actions": ["Archive"], "camera_id": None, "date": "2024-10-12", "session": "R0002"})
+        done = _save({**VISIT, "actions": ["Revision", "Desinstallation", "Archive"], "camera_id": "P800", "num_photos": 10, "sd": None, "comments": "site abandoned", "date": "2024-10-12", "session": "R0002"})
+        locations = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
+        after = _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "B2", "camera_id": "P800", "date": "2024-11-12", "session": "R0003"})
+
+    assert refused.status_code == 422 and "is still there" in refused.json()["detail"]
+    assert done.status_code == 200
+    archived = next(l for l in locations if l["location_id"] == "DONA_01")
+    assert (archived["status"], archived["status_date"], archived["status_note"]) == ("archived", "2024-10-12", "Archived in the visit R0002: site abandoned")
+    assert after.status_code == 422 and "is archived since 2024-10-12" in after.json()["detail"]
+
+
+def test_a_revision_that_is_not_finished_is_finished_by_marking_what_is_left_as_not_visited(tmp_path: Path):
+    install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"}
+    with _in(tmp_path):
+        _project(archived=(3,))
+        _save(install)                                   # DONA_01 is visited in R0001, DONA_02 is not (DONA_03 is archived)
+        blocked = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
+        marked = _client().post("/api/visits/mark-not-visited", json={"research_project_id": "DONA", "session": "R0001"})
+        book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
+        next_one = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
+
+    assert blocked.status_code == 422 and "R0001 is not finished" in blocked.json()["detail"]
+    assert marked.json() == {"session": "R0001", "marked": ["DONA_02"]}
+    assert all(v["actions"] == [] for v in book if v["not_visited"])               # nothing was done at a visit that could not be made
+    assert [(v["location_id"], v["not_visited"]) for v in book if v["session"] == "R0001"] == [("DONA_01", False), ("DONA_02", True)]
+    assert next_one.status_code == 200
+
+
+def test_a_visit_is_kept_with_its_state_which_changes_when_a_later_visit_collects_its_card(tmp_path: Path):
+    def states():
+        shown = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
+        return [(v["session"], v.get("state")) for v in shown]
+
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        left = states()
+        _save({**VISIT, "actions": ["Revision", "Installation"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
+        revised = states()
+        _save({**VISIT, "actions": ["Stolen"], "camera_id": "P800", "num_photos": None, "sd": None, "date": "2024-11-12", "session": "R0003"})
+        stolen = states()
+
+    assert left == [("R0001", "deployed")]                                        # it left a camera that is still out
+    assert revised == [("R0001", "collected"), ("R0002", "deployed")]               # a later visit took its card: it is collected, and the new one is out
+    assert stolen == [("R0001", "collected"), ("R0002", "stolen"), ("R0003", "stolen")]   # the camera of the second was found stolen
+
+
+def test_a_visit_has_no_actions_only_when_it_could_not_be_made(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        refused = _save({**VISIT, "actions": [], "camera_id": None, "date": "2024-10-12", "session": "R0002"})
+        kept = _save({**VISIT, "actions": [], "status": "Not revised", "camera_id": None, "num_photos": None, "sd": None, "date": "2024-10-12", "session": "R0002"})
+
+    assert refused.status_code == 422 and "at least one action" in refused.text
+    assert kept.status_code == 200 and kept.json()["actions"] == []
+
+
+def test_an_upload_is_planned_for_each_deployment_and_each_uploader_in_use_and_a_failed_one_is_tried_again(tmp_path: Path):
+    from wildintel_uploader.core import config
+    from wildintel_uploader.core.services import local_folder_service
+
+    def states():
+        shown = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
+        return {d["deployment_id"]: [(u["destination"], u["state"]) for u in d["upload_states"]] for d in shown}
+
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
+        planned = states()                                   # Trapper is in use and Agouti is not: one upload for each deployment, before anything was created
+        settings = config.load_settings()
+        settings.AGOUTI.enabled = True
+        config.save_settings(settings)
+        both = states()
+        local_folder_service.set_upload_failure(tmp_path, "DONA", "R0001-DONA_01", "trapper", "Trapper refused it")
+        failed = states()
+        local_folder_service.set_upload_failure(tmp_path, "DONA", "R0001-DONA_01", "trapper", None)     # it worked on the second try
+        retried = states()
+
+    assert planned["R0001-DONA_01"] == [("trapper", "planned")]
+    assert both["R0001-DONA_01"] == [("trapper", "planned"), ("agouti", "planned")]    # one upload for each uploader in use
+    assert failed["R0001-DONA_01"] == [("trapper", "failed"), ("agouti", "planned")]
+    assert retried["R0001-DONA_01"] == [("trapper", "planned"), ("agouti", "planned")]  # the failure is gone: it can be tried again
+
+
+def test_a_deployment_that_will_not_be_made_has_no_upload_planned(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        _save({**VISIT, "actions": ["Stolen"], "camera_id": "P800", "num_photos": None, "sd": None, "date": "2024-10-12", "session": "R0002"})
+        shown = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
+
+    assert [(d["no_images"], d["upload_states"]) for d in shown] == [("stolen", [])]   # the card is gone: nothing to upload
+
+
+def test_a_visit_that_finds_the_camera_stolen_and_puts_up_another_opens_a_deployment_for_the_new_one(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        _save({**VISIT, "actions": ["Stolen", "Installation"], "num_photos": None, "sd": "B2", "camera_id": "P900", "date": "2024-10-12", "session": "R0002"})
+        shown = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
+        listed = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
+
+    by_id = {d["deployment_id"]: d for d in shown}
+    assert (by_id["R0001-DONA_01"]["status"], by_id["R0001-DONA_01"]["no_images"]) == ("closed", "stolen")       # the first camera went with its card
+    assert by_id["R0002-DONA_01"]["status"] == "open" and by_id["R0002-DONA_01"]["camera_id"] == "P900"          # the new one is out
+    assert [(v["session"], v["state"]) for v in listed] == [("R0001", "stolen"), ("R0002", "deployed")]

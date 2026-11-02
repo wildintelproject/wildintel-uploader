@@ -13,7 +13,7 @@ from wildintel_uploader.core.services import backup_service, local_folder_servic
 def _project(root: Path, acronym: str = "DONA") -> Path:
     local_folder_service.write_research_project(root, {"name": "Doñana", "acronym": acronym})
     pdir = root / acronym
-    (pdir / "locations.json").write_text(json.dumps([{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "retired"}]), encoding="utf-8")
+    (pdir / "locations.json").write_text(json.dumps([{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "archived"}]), encoding="utf-8")
     (pdir / "cameras.json").write_text(json.dumps([{"label": "CAM-1", "camera_id": "BR1", "status": "active"}]), encoding="utf-8")
     (pdir / "sd_cards.json").write_text(json.dumps([{"label": "A13", "status": "active"}]), encoding="utf-8")
     (pdir / "visits.json").write_text(json.dumps([
@@ -184,7 +184,7 @@ def test_the_images_are_restored_only_when_asked_and_when_the_backup_has_them(tm
     assert (folder / "deployment.json").is_file() and not (folder / "IMG_0001.JPG").exists()
 
 
-def test_what_is_there_is_not_overwritten_unless_it_is_asked_and_what_is_retired_stays_retired(tmp_path: Path):
+def test_what_is_there_is_not_overwritten_unless_it_is_asked_and_what_is_archived_stays_archived(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
     pdir = _project(source)
@@ -192,8 +192,8 @@ def test_what_is_there_is_not_overwritten_unless_it_is_asked_and_what_is_retired
     dest.mkdir()
     done = _make(source, dest, images=True)
 
-    # the same project, a little later: a location changed, one is retired for good, a deployment has other files, a visit was added
-    (pdir / "locations.json").write_text(json.dumps([{"location_id": "DONA_01", "status": "retired"}, {"location_id": "DONA_02", "status": "active", "name": "later"}, {"location_id": "DONA_03"}]), encoding="utf-8")
+    # the same project, a little later: a location changed, one is archived for good, a deployment has other files, a visit was added
+    (pdir / "locations.json").write_text(json.dumps([{"location_id": "DONA_01", "status": "archived"}, {"location_id": "DONA_02", "status": "active", "name": "later"}, {"location_id": "DONA_03"}]), encoding="utf-8")
     (pdir / "R0001" / "R0001-DONA_01" / "IMG_0001.JPG").write_bytes(b"changed")
     visits = json.loads((pdir / "visits.json").read_text(encoding="utf-8"))
     (pdir / "visits.json").write_text(json.dumps(visits + [{"location_id": "DONA_03", "session": "R0001", "date": "2026-06-11", "time": "10:00:00", "when": "2026-06-11T10:00:00Z", "actions": ["Installation"]}]), encoding="utf-8")
@@ -205,8 +205,8 @@ def test_what_is_there_is_not_overwritten_unless_it_is_asked_and_what_is_retired
 
     replaced = _restore(source, done["path"], replace=True)
     locations = {l["location_id"]: l for l in json.loads((pdir / "locations.json").read_text(encoding="utf-8"))}
-    assert locations["DONA_01"]["status"] == "retired"                      # retired in the backup's own copy of it as in what is here: it stays
-    assert locations["DONA_02"]["status"] == "retired"                      # what is here was active, the backup says retired: the backup wins
+    assert locations["DONA_01"]["status"] == "archived"                      # archived in the backup's own copy of it as in what is here: it stays
+    assert locations["DONA_02"]["status"] == "archived"                      # what is here was active, the backup says archived: the backup wins
     assert "DONA_03" in locations                                           # what the backup does not have is kept
     assert replaced["project_files"]["locations"]["replaced"] == 1 and replaced["project_files"]["locations"]["kept"] == 1
     assert replaced["deployments"]["restored"] == ["R0001-DONA_01"]

@@ -970,8 +970,8 @@ def test_the_status_of_a_location_and_of_a_research_project_is_kept_and_defaults
     with _in(tmp_path):
         project = _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "status": "planned"})
         _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01"}})
-        retired = _client().post("/api/deployment-import/locations/update", json={
-            "research_project_id": "DONA", "location_id": "DONA_01", "status": "retired", "status_date": "2026-06-01", "status_note": "the road was closed",
+        archived = _client().post("/api/deployment-import/locations/update", json={
+            "research_project_id": "DONA", "location_id": "DONA_01", "status": "archived", "status_date": "2026-06-01", "status_note": "the road was closed",
         })
         # a null status (the field left blank) changes nothing
         same = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": None, "name": "Site"})
@@ -979,8 +979,8 @@ def test_the_status_of_a_location_and_of_a_research_project_is_kept_and_defaults
         bad_day = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status_date": "June"})
 
     assert project.json()["status"] == "planned"
-    assert (retired.json()["status"], retired.json()["status_date"], retired.json()["status_note"]) == ("retired", "2026-06-01", "the road was closed")
-    assert (same.json()["status"], same.json()["name"]) == ("retired", "Site")
+    assert (archived.json()["status"], archived.json()["status_date"], archived.json()["status_note"]) == ("archived", "2026-06-01", "the road was closed")
+    assert (same.json()["status"], same.json()["name"]) == ("archived", "Site")
     assert wrong.status_code == 422 and bad_day.status_code == 422
 
 
@@ -1056,15 +1056,15 @@ def test_log_entry_gives_what_the_collections_logs_say_of_a_deployment(tmp_path:
     assert other.json()["timestamps"] is None and other.json()["fieldwork"] is None
 
 
-def test_a_retired_location_never_goes_back_to_active_or_planned(tmp_path: Path):
+def test_a_archived_location_never_goes_back_to_active_or_planned(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01"}})
-        retired = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "retired", "status_note": "Repeated thefts"})
+        archived = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "archived", "status_note": "Repeated thefts"})
         back = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "active"})
         planned = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "planned"})
-        renamed = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "retired", "status_note": "Stolen twice"})
+        renamed = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "archived", "status_note": "Stolen twice"})
 
-    assert retired.status_code == 200
-    assert back.status_code == planned.status_code == 409 and "retired for good" in back.json()["detail"]
+    assert archived.status_code == 200
+    assert back.status_code == planned.status_code == 409 and "archived for good" in back.json()["detail"]
     assert renamed.status_code == 200 and renamed.json()["status_note"] == "Stolen twice"  # what says why may be said better; the status stays

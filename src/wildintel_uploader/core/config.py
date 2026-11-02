@@ -279,6 +279,21 @@ def _blank_date(value):
     return None if isinstance(value, str) and not value.strip() else value
 
 
+def migrate_gear(data):
+    """A camera or an SD card as it was kept before: "retired" is archived, and "stolen", "lost" and "broken" are archived with that reason. An archived one has a reason."""
+    if not isinstance(data, dict):
+        return data
+    data = dict(data)
+    status = data.get("status")
+    if status in ("stolen", "lost", "broken"):
+        data["status"], data["archive_reason"] = "archived", data.get("archive_reason") or status
+    elif status == "retired":
+        data["status"] = "archived"
+    if data.get("status") == "archived" and not data.get("archive_reason"):
+        data["archive_reason"] = "other"
+    return data
+
+
 class SdCard(BaseModel):
     """One of the SD cards of the field work — its label, as it is written on it, and optionally its brand, its capacity and the
     day it was put into production."""
@@ -287,7 +302,8 @@ class SdCard(BaseModel):
     capacity: Optional[str] = Field(default=None, description="How much it holds, free text (e.g. 64 GB).")
     in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
     research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to: every one belongs to one (a card or camera without it, as older settings had, waits to be assigned).")
-    status: Literal["active", "retired", "stolen", "lost", "broken"] = Field(default="active", description="Whether it can still be used; only an active one is offered for a visit.")
+    status: Literal["ready", "active", "archived"] = Field(default="active", description="Ready: available, not in the field yet. Active: in use. Archived: out of use for good (see archive_reason).")
+    archive_reason: Optional[Literal["lost", "stolen", "broken", "other"]] = Field(default=None, description="Why it was archived; other when it is none of the others (the status note says it).")
     status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
 
@@ -295,6 +311,7 @@ class SdCard(BaseModel):
     _blank_status_date = field_validator("status_date", mode="before")(_blank_date)
     _research_project = field_validator("research_project")(lambda cls, v: _tidy(v))
     _status_note = field_validator("status_note")(lambda cls, v: _tidy(v))
+    _migrated = model_validator(mode="before")(lambda cls, data: migrate_gear(data))
 
     @field_validator("brand")
     @classmethod
@@ -320,7 +337,8 @@ class Camera(BaseModel):
     camera_model: Optional[str] = Field(default=None, description="Manufacturer and model, written as manufacturer-model. (cameraModel)")
     in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
     research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to: every one belongs to one (a card or camera without it, as older settings had, waits to be assigned).")
-    status: Literal["active", "retired", "stolen", "lost", "broken"] = Field(default="active", description="Whether it can still be used; only an active one is offered for a visit.")
+    status: Literal["ready", "active", "archived"] = Field(default="active", description="Ready: available, not in the field yet. Active: in use. Archived: out of use for good (see archive_reason).")
+    archive_reason: Optional[Literal["lost", "stolen", "broken", "other"]] = Field(default=None, description="Why it was archived; other when it is none of the others (the status note says it).")
     status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
 
@@ -328,6 +346,7 @@ class Camera(BaseModel):
     _blank_status_date = field_validator("status_date", mode="before")(_blank_date)
     _research_project = field_validator("research_project")(lambda cls, v: _tidy(v))
     _status_note = field_validator("status_note")(lambda cls, v: _tidy(v))
+    _migrated = model_validator(mode="before")(lambda cls, data: migrate_gear(data))
 
     @model_validator(mode="before")
     @classmethod
