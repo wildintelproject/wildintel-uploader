@@ -107,7 +107,8 @@ async function typePhotos(count = '1620') {
   await userEvent.type(screen.getByLabelText('Photos on the card collected'), count)
 }
 
-const installedBefore = () => mockedApi.listVisits.mockResolvedValue({ results: [toStored({ ...BLANK, session: 'R0001', when: '2026-01-10T09:00:00', site: 'TATR_0001', actions: ['Installation'] })] })
+// a visit that put the camera P800HG08192031 up, with the card A13: what a later visit sees there
+const withCamera = () => mockedApi.listVisits.mockResolvedValue({ results: [toStored({ ...BLANK, session: 'R0001', when: '2026-01-10T09:00:00', site: 'TATR_0001', actions: ['Installation'], sd: 'A13', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: 'P800HG08192031' } })] })
 
 describe('VisitsPage', () => {
   it('has By hand, the form of the field flow', async () => {
@@ -156,6 +157,7 @@ describe('VisitsPage', () => {
   })
 
   it('asks for the location of the research project picked, and opens the form with it as the site and its coordinates', async () => {
+    withCamera()
     await chooseByHand()
     await pickWhere()
 
@@ -167,7 +169,7 @@ describe('VisitsPage', () => {
     await pickWhen()
     await pickAction('Revision')
     await openSection('SD card'); await openSection('Camera'); await openSection('Site'); await openSection('Grouping and notes')
-    for (const label of ['Status of the camera', 'SD card left in the camera', 'Photos on the card collected', 'Camera id', 'Set up by', 'Comments']) {
+    for (const label of ['SD card left in the camera', 'Photos on the card collected', 'Camera id', 'Set up by', 'Comments']) {
       expect(screen.getByLabelText(label)).toBeInTheDocument()
     }
     expect(screen.queryByRole('textbox', { name: 'Site' })).not.toBeInTheDocument() // the site is the location
@@ -190,6 +192,7 @@ describe('VisitsPage', () => {
   })
 
   it('keeps the SD card in a section of its own, shut until it is opened, with what is filled in on its header, and the card and the batteries as the one code of the datasheet', async () => {
+    withCamera()
     await chooseByHand()
     await pickWhere()
     await pickWhen()
@@ -204,25 +207,25 @@ describe('VisitsPage', () => {
     await userEvent.type(screen.getByLabelText('Photos on the card collected'), '1620')
     await userEvent.click(screen.getByRole('switch', { name: 'Card OK' }))
     expect(screen.getByRole('switch', { name: 'Card OK' })).toHaveAttribute('aria-checked', 'false')
-    expect(within(screen.getByRole('region', { name: 'SD card' })).getByText('3 of 3 filled')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'SD card' })).getByText(/^3 of 3 filled/)).toBeInTheDocument()
   })
 
-  it('keeps the status of the camera, as one of the three it is found in, and whether its date and time were right in the Camera section, counted with the rest of it', async () => {
+  it('keeps whether the date and time of the camera were right in the Camera section, counted with the rest of it', async () => {
+    withCamera()
     await chooseByHand()
     await pickWhere()
     await pickWhen()
 
     await pickAction('Revision')
     const camera = () => within(screen.getByRole('region', { name: 'Camera' }))
-    expect(camera().getByText(/^2 of 10 filled/)).toBeInTheDocument() // the batteries and the date and time of the camera start OK
+    expect(camera().getByText(/^5 of 10 filled/)).toBeInTheDocument() // the camera, its state, the batteries and the date and time of the camera start filled in
     await openSection('Camera')
-    await userEvent.selectOptions(screen.getByLabelText('Status of the camera'), 'Knocked down')
     await userEvent.click(screen.getByRole('switch', { name: 'Date and time of the camera OK' }))
     expect(screen.getByRole('switch', { name: 'Date and time of the camera OK' })).toHaveAttribute('aria-checked', 'false')
-    expect(camera().getByText(/^3 of 10 filled/)).toBeInTheDocument()
   })
 
   it('tags the fields that are Camtrap DP\'s, and only those', async () => {
+    withCamera()
     await chooseByHand()
     await pickWhere()
     await pickWhen()
@@ -233,8 +236,6 @@ describe('VisitsPage', () => {
     expect(within(screen.getByRole('region', { name: 'Camera' })).getAllByText('Camtrap DP')).toHaveLength(6)
     // the aim of the camera, habitat, set up by, bait and the photo dates
     expect(within(screen.getByRole('region', { name: 'Site' })).getAllByText('Camtrap DP')).toHaveLength(5)
-    // the status of the camera and the card are the visit's own
-    expect(screen.getByLabelText('Status of the camera').closest('div')!.textContent).not.toMatch(/Camtrap DP/)
     expect(within(screen.getByRole('region', { name: 'SD card' })).queryByText('Camtrap DP')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Camera id').closest('div')!.parentElement!.textContent).toMatch(/Camtrap DP/)
   })
@@ -291,7 +292,7 @@ describe('VisitsPage', () => {
   })
 
   it('answers what is yes or no with a switch, on when all is well, and saves what is off as the code of the datasheet', async () => {
-    installedBefore()
+    withCamera()
     await chooseByHand()
     await pickWhere()
     await pickWhen()
@@ -314,10 +315,10 @@ describe('VisitsPage', () => {
     await pickWhere()
     await pickWhen()
 
-    await addVisit()
-    expect(screen.getByText('Choose at least one.')).toBeInTheDocument() // the actions
+    await addVisit()   // where no camera is known the visit installs one, and nothing of it is filled in
     expect(screen.getByRole('alert')).toHaveTextContent('The visit cannot be added yet')
     expect(screen.queryByText(/visits? added/)).not.toBeInTheDocument()
+    expect(mockedApi.saveVisit).not.toHaveBeenCalled()
   })
 
   it('opens by hand on the research project and the location of a planned visit that is to be created', async () => {
@@ -358,7 +359,9 @@ describe('VisitsPage', () => {
   })
 
   it('adds a visit with the session worked out from the visits kept, and asks for the location and the time of the next keeping the project and who went', async () => {
-    const earlier = (date: string, session: string, site: string) => toStored({ ...BLANK, session, when: `${date}T09:00:00`, site, actions: ['Installation'] })
+    withCamera()
+    // the camera is at TATR_0001 (so a Revision is seen there); TATR_0002 has none known
+    const earlier = (date: string, session: string, site: string) => toStored({ ...BLANK, session, when: `${date}T09:00:00`, site, actions: ['Installation'], ...(site === 'TATR_0001' ? { sd: 'A13', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: 'P800HG08192031' } } : {}) })
     const kept = ['TATR_0001', 'TATR_0002'].flatMap((site) => [earlier('2026-06-10', 'R0001', site), earlier('2026-08-05', 'R0002', site)])
     mockedApi.listVisits.mockImplementation(async (_project, site) => ({ results: kept.filter((v) => !site || v.location_id === site) })) // the visits of the site asked for
     mockedApi.listLocalLocations.mockResolvedValue({ results: [location('TATR_0001', { name: 'Ridge', latitude: 49.2, longitude: 20.1 }), location('TATR_0002')] })
@@ -459,7 +462,7 @@ describe('VisitsPage', () => {
   })
 
   describe('the visit a new one closes', () => {
-    const left = toStored({ ...BLANK, session: 'R0001', when: '2026-06-10T09:00:00', site: 'TATR_0001', actions: ['Installation'], sd: 'A13' })
+    const left = toStored({ ...BLANK, session: 'R0001', when: '2026-06-10T09:00:00', site: 'TATR_0001', actions: ['Installation'], sd: 'A13', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: 'P800HG08192031' } })
     const closing = (over: Partial<StoredVisit> = {}): ClosedVisit => ({ visit: left, end: { ...left, session: 'R0002', date: '2026-10-02', time: '08:14:05', actions: ['Revision'], ...over } })
 
     async function addRevision(onImportImages = vi.fn()) {
@@ -476,6 +479,7 @@ describe('VisitsPage', () => {
     }
 
     it('offers a link to import the images of the visit whose card it collected', async () => {
+    withCamera()
       mockedApi.closedVisits.mockResolvedValue({ results: [closing()] })
       const onImportImages = await addRevision()
 
@@ -487,6 +491,7 @@ describe('VisitsPage', () => {
     })
 
     it('offers nothing when the visit closed none', async () => {
+    withCamera()
       mockedApi.closedVisits.mockResolvedValue({ results: [closing({ time: '07:00:00' })] }) // the closed visit is one that came before
       await addRevision()
 
@@ -572,7 +577,7 @@ describe('VisitsPage', () => {
   })
 
   it('keeps nothing and says why when the visit cannot be saved', async () => {
-    installedBefore()
+    withCamera()
     mockedApi.saveVisit.mockRejectedValue(new Error('The research project is not there.'))
     await chooseByHand()
     await pickWhere()
@@ -716,14 +721,13 @@ describe('the visit filled in from the last one', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('The Camera, Site and Grouping sections are filled in from the visit R0001, except the notes')
     expect(screen.queryByRole('list', { name: 'Who went' })).not.toBeInTheDocument() // who went is asked above
-    expect(screen.getByRole('group', { name: 'Actions' }).querySelectorAll('input:checked')).toHaveLength(0) // what was done is of this visit
+    expect(screen.getByRole('radio', { name: 'Yes, I see it' })).not.toBeChecked() // what was done is of this visit: it is asked again
 
     await pickAction('Revision')
     await openSection('SD card'); await openSection('Camera'); await openSection('Site'); await openSection('Grouping and notes')
     expect(screen.getByLabelText('SD card left in the camera')).toHaveValue('') // the card collected is the last one's, so it is not left back
     expect(screen.getByLabelText('Photos on the card collected')).toHaveValue('')
     expect(screen.getByLabelText('Camera id')).toHaveValue('P800HG08192031 — Reconyx-PC800')
-    expect(screen.getByLabelText('Status of the camera')).toHaveValue('OK')
     expect(screen.getByLabelText('Set up by')).toHaveValue('Ana')
     expect(screen.getByLabelText('Comments')).toHaveValue('') // the notes of the last visit are not this one's
     expect(screen.getByRole('switch', { name: 'Batteries OK' })).toHaveAttribute('aria-checked', 'false')
@@ -731,13 +735,12 @@ describe('the visit filled in from the last one', () => {
 
     // a Desinstallation leaves no card: what was typed for the Revision is left out
     await userEvent.type(screen.getByLabelText('Photos on the card collected'), '10')
-    await pickAction('Revision')
     await pickAction('Desinstallation')
     await addVisit()
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalled())
     expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({
-      actions: ['Desinstallation'], sd: null, num_photos: 10, camera_id: 'P800HG08192031', camera_height: 1.2, card_batteries_ok: 'SinPilas', date_time_ok: 'No', comments: null,
+      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: 'P800HG08192031', camera_height: 1.2, card_batteries_ok: 'SinPilas', date_time_ok: 'No', comments: null,
     })
   })
 
@@ -826,8 +829,14 @@ describe('VisitsPage from a CSV file', () => {
 
     await userEvent.selectOptions(await screen.findByLabelText('Time'), '')
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()
+    expect(screen.getByText('To read the visits, match also the time.')).toBeInTheDocument()   // it says what is missing: the date and the time are needed too
+    await userEvent.selectOptions(screen.getByLabelText('Date'), '')
+    expect(screen.getByText('To read the visits, match also the date and the time (or one column with both).')).toBeInTheDocument()
+    expect(screen.getAllByText('required')).toHaveLength(4)   // the site, the actions, the date and the time
     await userEvent.selectOptions(screen.getByLabelText('Time'), 'Hora')
+    await userEvent.selectOptions(screen.getByLabelText('Date'), 'Dia')
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeEnabled()
+    expect(screen.queryByText(/To read the visits, match also/)).not.toBeInTheDocument()
   })
 
   it('says why a file cannot be read, and offers nothing to map', async () => {
@@ -1048,7 +1057,6 @@ describe('namesOf, addName and removeName', () => {
 })
 
 describe('By hand: do you see the camera?', () => {
-  const withCamera = () => mockedApi.listVisits.mockResolvedValue({ results: [toStored({ ...BLANK, session: 'R0001', when: '2026-01-10T09:00:00', site: 'TATR_0001', actions: ['Installation'], sd: 'A13', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: 'P800HG08192031' } })] })
   async function start() {
     render(<VisitsPage onBack={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: /^by hand/i }))

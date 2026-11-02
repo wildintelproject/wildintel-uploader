@@ -664,6 +664,12 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
 
   // A visit needs a site, what was done, and when: a date and a time, the two in one column, or the time the entry was created.
   const mappedEnough = !!csvMapping.location_id && !!csvMapping.actions && (!!csvMapping.when || !!csvMapping.created_at || (!!csvMapping.date && !!csvMapping.time))
+  // What is still to be matched before the visits can be read: the site, the actions and when — a date and a time, or one column with both, or the time the entry was created.
+  const inOneColumn = !!csvMapping.when || !!csvMapping.created_at
+  const stillToMap = [
+    !csvMapping.location_id && 'the site', !csvMapping.actions && 'the actions',
+    ...(inOneColumn ? [] : !csvMapping.date && !csvMapping.time ? ['the date and the time (or one column with both)'] : [!csvMapping.date && 'the date', !csvMapping.time && 'the time']),
+  ].filter(Boolean) as string[]
 
   // The revision of the visit is the next of its location; it cannot start while the one before it has locations still to be visited.
   const revisionBlock = allVisits && location && !editingWhere
@@ -1232,7 +1238,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                         <div key={field} className="grid grid-cols-1 sm:grid-cols-[1fr_16rem_10rem] gap-2 items-center">
                           <div>
                             <label htmlFor={`map-${field}`} className="text-sm text-zinc-800 dark:text-zinc-200">{label}</label>
-                            {required && <span className="ml-2 text-xs text-red-600 dark:text-red-400">required</span>}
+                            {(required || (!inOneColumn && (field === 'date' || field === 'time'))) && <span className="ml-2 text-xs text-red-600 dark:text-red-400">required</span>}
                           </div>
                           <select
                             id={`map-${field}`} className={inputClass} value={csvMapping[field] ?? ''}
@@ -1247,6 +1253,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     })}
                   </div>
                   <p className={hintClass}>A visit needs the site, the actions and when: a date and a time, the two in one column, or the time the entry was created.</p>
+                  {stillToMap.length > 0 && <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-400">To read the visits, match also {stillToMap.join(', ')}.</p>}
                   <div className="mt-4 flex justify-end">
                     <button type="button" className={btnPrimary} disabled={!mappedEnough} onClick={() => void readMapped()}>Read the visits</button>
                   </div>
