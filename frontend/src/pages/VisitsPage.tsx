@@ -463,7 +463,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       const there = siteCamera?.camera.toLowerCase()
       return actions.includes('Installation') && there && (next.details.camera_id ?? '').toLowerCase() === there ? { ...next, details: { ...next.details, camera_id: null, camera_model: null } } : next
     })
-  }, [guidedKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [guidedKey, visit.actions.join('+')]) // eslint-disable-line react-hooks/exhaustive-deps
   // The visit that could not be made says so with its status; any other answer takes it away.
   useEffect(() => {
     if (!guided) return
@@ -1157,7 +1157,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
           {justAdded && (
             <div className="mt-6 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
               <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to add another visit?</p>
-              <button type="button" className={btnPrimary} onClick={() => setJustAdded(false)}>Add another visit</button>
+              <button type="button" className={btnPrimary} onClick={() => { setJustAdded(false); setVisits([]); setJustClosed([]) }}>Add another visit</button>
               <button type="button" className={btnOutline} onClick={onBack}>Back to the start</button>
             </div>
           )}

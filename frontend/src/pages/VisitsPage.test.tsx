@@ -381,7 +381,7 @@ describe('VisitsPage', () => {
     }))
     expect(screen.queryByText('Where was the visit?')).not.toBeInTheDocument() // the form is out of the way while the next step is asked
     await userEvent.click(screen.getByRole('button', { name: 'Add another visit' }))
-    expect(screen.getAllByText('TATR_0001').length).toBeGreaterThan(0)
+    expect(screen.queryByText('1 visit added')).not.toBeInTheDocument()   // what was added is out of the way when another visit is made
     expect(screen.getAllByRole('img', { name: 'Locked' }).length).toBeGreaterThan(0)
     expect(screen.getByLabelText('Research project')).toHaveValue('TATR — Tatra')
 
@@ -390,6 +390,7 @@ describe('VisitsPage', () => {
     await pickWhen('2026-10-03T09:00:00')
     await openSection('Camera')
     expect(screen.getByLabelText('Camera id')).toHaveValue('')
+    expect(screen.getByLabelText('Camera id')).toBeEnabled()   // the visit installs one where none is known: its camera is asked, as the first time
   })
 
   it('offers only the cameras and the SD cards of the research project: each belongs to one, and the ones of none are not offered', async () => {
@@ -539,6 +540,32 @@ describe('VisitsPage', () => {
     expect(screen.queryByRole('button', { name: 'Add visit' })).not.toBeInTheDocument()
     await userEvent.click(next.getByRole('button', { name: 'Back to the start' }))
     expect(onBack).toHaveBeenCalled()
+  })
+
+  it('asks for the camera of the next visit too when it is an Installation again: the form comes back as the first time', async () => {
+    mockedApi.listVisits.mockResolvedValue({ results: [] })
+    mockedApi.listLocalLocations.mockResolvedValue({ results: [location('TATR_0001', { name: 'Ridge', latitude: 49.2, longitude: 20.1 }), location('TATR_0002')] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /^by hand/i }))
+    await pickWhere()
+    await pickWhen()
+    await pickAction('Installation')
+    await pickCamera()
+    await openSection('SD card')
+    await userEvent.click(screen.getByLabelText('SD card left in the camera'))
+    await userEvent.click(await screen.findByRole('option', { name: 'B2' }))
+    await fillInstallation()
+    await addVisit()
+    await userEvent.click(await screen.findByRole('button', { name: 'Add another visit' }))
+    expect(screen.queryByText('1 visit added')).not.toBeInTheDocument()   // what was added is out of the way
+
+    await pickWhere('TATR_0002')
+    await pickWhen('2026-10-03T09:00:00')
+    await openSection('Camera'); await openSection('SD card')
+    expect(screen.getByLabelText('Camera id')).toBeEnabled()
+    expect(screen.getByLabelText('SD card left in the camera')).toBeEnabled()
+    await userEvent.click(screen.getByLabelText('Camera id'))
+    expect(await screen.findByRole('option', { name: 'X1' })).toBeInTheDocument()   // a camera can be picked
   })
 
   it('offers to add a new location by hand, and picks it as the site of the visit', async () => {
