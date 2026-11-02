@@ -17,11 +17,11 @@ from pydantic import BaseModel
 from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
 from wildintel_uploader.core.schemas.requests import (
-    BrowseFolderRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
+    BrowseFolderRequest, CardRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
     DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
     NextRevisionRequest, UpdateLocationRequest, UpdateResearchProjectRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
-from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service
+from wildintel_uploader.core.services import camera_info, card_copy_service, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
 
 router = APIRouter(prefix="/api/deployment-import", tags=["deployment-import"])
@@ -38,6 +38,19 @@ def browse_folder(req: BrowseFolderRequest = BrowseFolderRequest()) -> dict:
     except folder_picker.FolderPickerUnavailable as exc:
         raise HTTPException(501, str(exc)) from exc
     return {"path": path}
+
+
+@router.post("/copy-card")
+def copy_card(req: CardRequest) -> StreamingResponse:
+    """Copies a camera's memory card — read only — to a temporary folder of this computer, so that its images are processed as any local folder. Streamed:
+    "start", "progress" after each file and "done" with the `path` of the copy; it is removed with /discard-card-copy when the import is over."""
+    return _stream(card_copy_service.copy_card(req.path), "The memory card could not be copied")
+
+
+@router.post("/discard-card-copy")
+def discard_card_copy(req: CardRequest) -> dict:
+    """Removes the temporary copy of a memory card — only one made by /copy-card. {"removed": bool}"""
+    return {"removed": card_copy_service.discard(req.path)}
 
 
 @router.post("/check-collection")
