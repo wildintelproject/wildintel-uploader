@@ -11,7 +11,7 @@ import type { VisitFocus } from './VisitBookPage'
 interface Props {
   onBack: () => void
   /** Opens the settings, on the section given — where the default research project is changed. */
-  onOpenSettings?: (section?: 'general') => void
+  onOpenSettings?: (section?: 'general' | 'sdcards' | 'locations', researchProjectId?: string, item?: string) => void
   settingsOpen?: boolean
   /** The deployment shown highlighted, on its revision and its page: the one a link of the visit book goes to. */
   focus?: string
@@ -19,10 +19,12 @@ interface Props {
   onShowVisit?: (visit: VisitFocus) => void
   /** Goes to upload a deployment: the research project and the revision it is of. */
   onUpload?: (target: UploadTarget) => void
+  /** Goes to the uploads dashboard, on the uploads of a deployment. */
+  onShowUploads?: (deploymentId: string) => void
 }
 
 /** The dashboard of the deployments of the default research project — the statistics: which are closed with their images stored, which still have the camera out, which are not on Trapper yet. */
-export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsOpen, focus, onShowVisit, onUpload }: Props) {
+export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsOpen, focus, onShowVisit, onUpload, onShowUploads }: Props) {
   const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -40,12 +42,12 @@ export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsO
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8">
-      <PageHeader icon={<path d="M18 20V10M12 20V4M6 20v-6" />} title="Deployments dashboard" description="The deployments the visits say, and how far each one is."
+      <PageHeader icon={<path d="M18 20V10M12 20V4M6 20v-6" />} title="Deployments dashboard" description="The deployments indicated by the visits and their current status."
         parent="Manage deployments" onParent={onBack}
         aside={project !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The dashboard" onOpenSettings={onOpenSettings} /> : undefined} />
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
+      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} onShowSd={onOpenSettings && ((label) => onOpenSettings('sdcards', project.acronym, label))} onShowLocation={onOpenSettings && ((site) => onOpenSettings('locations', project.acronym, site))} onShowUploads={onShowUploads} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
 
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>

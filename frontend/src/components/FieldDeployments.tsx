@@ -1,18 +1,19 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatDay } from '../dateFormat'
 import { btnOutline, inputClass } from '../pages/ImportDeploymentPage'
-import type { DeploymentFields, FieldDeployment } from '../types'
-import UploadList from './UploadList'
+import type { DeploymentFields, DeploymentUploadState, FieldDeployment } from '../types'
 import { pageNumbers } from './CheckFailures'
 import { Icon, LegendCard, Ring, StateCard } from './Dashboard'
 import RevisionSquares from './RevisionSquares'
+import IconButton, { ICON_PATHS } from './IconButton'
+import LinkButton from './LinkButton'
 
 /** How many deployments a page has. */
 const PER_PAGE = 10
 
-/** Where a deployment is in its life — which says nothing of the camera, that is the visit's: not created (its images are not stored yet), created (its images are stored: the visit is Stored), uploaded (its information is on Trapper), or with no images (the camera was stolen: there are none, and never will be). */
-export type Filter = '' | 'not_created' | 'created' | 'uploaded' | 'no_images'
-const phaseOf = (d: FieldDeployment): Exclude<Filter, ''> => d.no_images ? 'no_images' : d.on_trapper ? 'uploaded' : d.images_stored ? 'created' : 'not_created'
+/** Where a deployment is in its life — which says nothing of the camera, that is the visit's, nor of its uploads, which are their own: planned (a card was left, so its deployment is to be made), created (its images are stored) or not created (the camera was stolen, the card is gone: it will not be made — as a visit that could not be made). */
+export type Filter = '' | 'planned' | 'created' | 'not_created'
+const phaseOf = (d: FieldDeployment): Exclude<Filter, ''> => d.no_images ? 'not_created' : d.images_stored ? 'created' : 'planned'
 const matches = (d: FieldDeployment, f: Filter) => !f || phaseOf(d) === f
 
 /** The fields of a deployment the details show, in this order, when it has them. */
@@ -24,25 +25,46 @@ const DEPLOYMENT_DETAILS: [keyof DeploymentFields, string][] = [
 ]
 const shownValue = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') : Array.isArray(v) ? v.join(', ') : String(v))
 
+/** What a destination is called. */
+const DESTINATION_NAME: Record<string, string> = { trapper: 'Trapper', agouti: 'Agouti' }
+const STATE_NAME: Record<string, string> = { planned: 'planned', done: 'done', failed: 'failed' }
+
 const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
-export default function FieldDeployments({ deployments, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload }: {
+export default function FieldDeployments({ deployments: every, onShowSd, onShowLocation, onShowUploads, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload }: {
+  /** Goes to the SD card — its page in the settings, where its state and, if it is archived, why are. */
+  onShowSd?: (label: string) => void
+  /** Goes to the location — its page in the settings. */
+  onShowLocation?: (site: string) => void
+  /** Goes to the uploads dashboard, on the uploads of a deployment. */
+  onShowUploads?: (deploymentId: string) => void
   deployments: FieldDeployment[]; highlight?: string; initialFilter?: Filter; onShowVisit?: (visit: { session: string; site: string }) => void
   /** Reads what a created deployment says of itself: its details, for its View button. */
   loadDetails?: (deploymentId: string) => Promise<DeploymentFields | null>
   /** Goes to upload the deployment — its revision is what the upload page starts from. */
   onUpload?: (deployment: FieldDeployment) => void
 }) {
+  // Every card that was left is a deployment to make; the ones whose camera was stolen will not be made (Not created).
+  const deployments = every
+  // The upload to each uploader in use is its own state, apart from the deployment's: planned from the start, then done or failed.
+  const statesOf = (d: FieldDeployment): DeploymentUploadState[] => d.upload_states ?? [
+    { destination: 'trapper', state: d.on_trapper ? 'done' : 'planned', kind: d.on_trapper ? (d.uploaded_at ? 'uploaded' : 'synced') : null, uploaded_at: d.uploaded_at ?? null, note: null },
+  ]
   const [revision, setRevision] = useState('')
   const [filter, setFilter] = useState<Filter>(initialFilter)
   const [page, setPage] = useState(1)
   const [text, setText] = useState('')
+  // a deployment the previous and next buttons go to: it takes the place of the one a link of another page said, and is brought into view
+  const [jump, setJump] = useState<string | undefined>(undefined)
+  const focus = jump ?? highlight
+  // the deployment of the same site in the revision before (-1) or after (1)
+  const neighbour = (d: FieldDeployment, step: -1 | 1) => deployments
+    .filter((o) => o.site.toLowerCase() === d.site.toLowerCase() && (step < 0 ? o.collection < d.collection : o.collection > d.collection))
+    .sort((x, y) => (step < 0 ? y.collection.localeCompare(x.collection) : x.collection.localeCompare(y.collection)))[0]
   // the deployment whose details are open
   const [opened, setOpened] = useState<string | null>(null)
-  // the deployment whose uploads are open
-  const [openedUpload, setOpenedUpload] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, DeploymentFields | null | 'error'>>({})
   function toggle(id: string) {
     if (opened === id) { setOpened(null); return }
@@ -61,21 +83,21 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
   // the one a link of the visit book goes to is brought into view, on its revision and on its page
   const marked = useRef<HTMLTableRowElement | null>(null)
   useEffect(() => {
-    if (!highlight) return
-    const target = deployments.find((d) => d.deployment_id === highlight)
+    if (!focus) return
+    const target = deployments.find((d) => d.deployment_id === focus)
     if (!target) return
-    setRevision(target.collection); setFilter('')
-    const position = deployments.filter((d) => d.collection === target.collection).findIndex((d) => d.deployment_id === highlight)
+    setRevision(target.collection); setFilter(''); setText('')
+    const position = deployments.filter((d) => d.collection === target.collection).findIndex((d) => d.deployment_id === focus)
     setPage(Math.floor(position / PER_PAGE) + 1)
-  }, [highlight, deployments])
+  }, [focus, deployments])
   useEffect(() => { marked.current?.scrollIntoView?.({ block: 'center' }) })
 
-  const percent = inRevision.length - count('no_images') > 0 ? Math.round(((count('created') + count('uploaded')) / (inRevision.length - count('no_images') || 1)) * 100) : 0
+  // of everything that was planned: a deployment that will not be made was planned too
+  const percent = inRevision.length > 0 ? Math.round((count('created') / inRevision.length) * 100) : 0
   const SQUARES: { filter: Exclude<Filter, ''>; label: string; note: string; tone: string; badge: string; icon: ReactNode }[] = [
-    { filter: 'not_created', label: 'Not created', note: 'Images collected, not stored', tone: 'text-zinc-600 dark:text-zinc-300', badge: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>} className="h-5 w-5" /> },
-    { filter: 'created', label: 'Created', note: 'Images stored, not uploaded yet', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />} className="h-5 w-5" /> },
-    { filter: 'uploaded', label: 'Uploaded', note: 'Information uploaded', tone: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300', icon: <Icon path={<><path d="M20 16.2A4.5 4.5 0 0017.5 8h-1.8A7 7 0 104 14.9" /><path d="M12 12v9M8 16l4-4 4 4" /></>} className="h-5 w-5" /> },
-    { filter: 'no_images', label: 'No images', note: 'Camera stolen: nothing collected', tone: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><path d="M12 3l10 18H2z" /><path d="M12 10v4M12 17.5v.01" /></>} className="h-5 w-5" /> },
+    { filter: 'planned', label: 'Planned', note: 'Images collected: to be created', tone: 'text-zinc-600 dark:text-zinc-300', badge: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>} className="h-5 w-5" /> },
+    { filter: 'created', label: 'Created', note: 'Images stored', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />} className="h-5 w-5" /> },
+    { filter: 'not_created', label: 'Not created', note: 'Camera stolen: the card is gone', tone: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>} className="h-5 w-5" /> },
   ]
 
   return (
@@ -92,16 +114,16 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
 
           <section aria-label="Deployments by status" className="mb-5">
             <p className="mb-2 text-right text-xs text-zinc-500 dark:text-zinc-400">Pick a card to show only those deployments.</p>
-            <div className="grid grid-cols-2 lg:grid-cols-[1.6fr_repeat(4,1fr)] gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-[1.6fr_repeat(3,1fr)] gap-3">
               <div className="col-span-2 lg:col-span-1 flex items-center gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 px-5 py-4">
                 <Ring percent={percent} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{revision ? `Deployments of ${revision}` : 'All the deployments'}</p>
-                  <p className="text-2xl font-semibold leading-tight">{count('created') + count('uploaded')} <span className="text-zinc-400">/ {inRevision.length - count('no_images')}</span></p>
-                  <div role="progressbar" aria-label="Deployments created" aria-valuemin={0} aria-valuemax={inRevision.length - count('no_images')} aria-valuenow={count('created') + count('uploaded')} className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                  <p className="text-2xl font-semibold leading-tight">{count('created')} <span className="text-zinc-400">/ {inRevision.length}</span></p>
+                  <div role="progressbar" aria-label="Deployments created" aria-valuemin={0} aria-valuemax={inRevision.length} aria-valuenow={count('created')} className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
                     <div className="h-1.5 bg-emerald-500" style={{ width: `${percent}%` }} />
                   </div>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{count('created') + count('uploaded')} created · {count('not_created')} to create{count('no_images') > 0 && ` · ${count('no_images')} with no images`}</p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{count('created')} created · {count('planned')} to create{count('not_created') > 0 && ` · ${count('not_created')} will not be created`}</p>
                 </div>
               </div>
               {SQUARES.map((q) => (
@@ -127,55 +149,72 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
           <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
             <table className="w-full text-sm" aria-label="Deployments">
               <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
-                <tr>{['Deployment', 'Where', 'When', 'Card and photos', 'Creation', 'Upload'].map((h) => <th key={h} scope="col" className="px-3 py-2.5 text-left font-medium">{h}</th>)}<th scope="col" className="px-3 py-2.5"><span className="sr-only">What to do</span></th></tr>
+                <tr>{['Deployment', 'Where', 'When', 'SD and photos', 'Creation', 'Upload'].map((h) => <th key={h} scope="col" className="px-3 py-2.5 text-left font-medium">{h}</th>)}<th scope="col" className="px-3 py-2.5"><span className="sr-only">What to do</span></th></tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
                 {onPage.map((d) => (
                   <Fragment key={d.deployment_id}>
-                  <tr ref={d.deployment_id === highlight ? marked : undefined} aria-current={d.deployment_id === highlight ? 'true' : undefined} className={d.deployment_id === highlight ? 'bg-blue-50 dark:bg-blue-950/40' : ''}>
+                  <tr ref={d.deployment_id === focus ? marked : undefined} aria-current={d.deployment_id === focus ? 'true' : undefined} className={d.deployment_id === focus ? 'bg-blue-50 dark:bg-blue-950/40' : ''}>
                     <td className="px-3 py-3 font-mono text-xs font-semibold">{d.deployment_id}</td>
-                    <td className="px-3 py-3 font-mono text-xs">{d.site}</td>
+                    <td className="px-3 py-3 font-mono text-xs">
+                      {onShowLocation
+                        ? <LinkButton title={`Show the details of the location ${d.site}`} onClick={() => onShowLocation(d.site)}>{d.site}</LinkButton>
+                        : d.site}
+                    </td>
                     <td className="px-3 py-3">
                       {d.start_session && (onShowVisit
-                        ? <button type="button" className="block text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => onShowVisit({ session: d.start_session!, site: d.site })}>Visit {d.start_session} · {d.site}</button>
+                        ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => onShowVisit({ session: d.start_session!, site: d.site })}>Visit {d.start_session} · {d.site}</LinkButton>
                         : <span className="block text-xs font-semibold">Visit {d.start_session} · {d.site}</span>)}
                       <span className="block font-mono text-xs">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
                     </td>
-                    <td className="px-3 py-3 text-xs text-zinc-600 dark:text-zinc-400">{[d.card && `Card ${d.card}`, d.photos_counted != null && `${d.photos_counted} photos`].filter(Boolean).join(' · ')}</td>
+                    <td className="px-3 py-3 text-xs text-zinc-600 dark:text-zinc-400">
+                      {d.card && (onShowSd
+                        ? <LinkButton className="font-semibold" aria-label={`Show the state of the SD card ${d.card}`} onClick={() => onShowSd(d.card!)}>SD {d.card}</LinkButton>
+                        : <>SD {d.card}</>)}
+                      {d.card && d.photos_counted != null && ' · '}{d.photos_counted != null && `${d.photos_counted} photos`}
+                    </td>
                     <td className="px-3 py-3">
-                      {phaseOf(d) === 'no_images'
-                        ? <span title="The camera was stolen: nothing was collected" className="rounded-full px-2 py-0.5 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">No images</span>
-                        : phaseOf(d) === 'not_created'
-                        ? <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not created</span>
+                      {phaseOf(d) === 'not_created'
+                        ? <span title="The camera was stolen: the card is gone, so the deployment will not be created" className="rounded-full px-2 py-0.5 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Not created</span>
+                        : phaseOf(d) === 'planned'
+                        ? <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Planned</span>
                         : <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Created</span>}
                     </td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      {phaseOf(d) === 'uploaded' ? (
-                        <button type="button" className={`${btnOutline} inline-flex items-center gap-1.5 !px-2.5 !py-1 !text-xs text-blue-700 dark:text-blue-300`} aria-expanded={openedUpload === d.deployment_id} aria-label={`Show the upload details of ${d.deployment_id}`}
-                                onClick={() => setOpenedUpload(openedUpload === d.deployment_id ? null : d.deployment_id)}>
-                          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Show upload details
-                        </button>
-                      ) : phaseOf(d) === 'created' ? (
-                        onUpload
-                          ? <button type="button" className={`${btnOutline} !px-2.5 !py-1 !text-xs`} aria-label={`Upload the deployment ${d.deployment_id}`} onClick={() => onUpload(d)}>Upload</button>
-                          : <span title="Not uploaded yet" className="rounded-full px-2 py-0.5 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Not uploaded</span>
-                      ) : <span className="text-zinc-400">—</span>}
+                    <td className="px-3 py-3">
+                      {phaseOf(d) === 'created' ? (() => {
+                        const states = statesOf(d)
+                        const tip = states.map((u) => `${DESTINATION_NAME[u.destination] ?? u.destination}: ${STATE_NAME[u.state] ?? u.state}`).join(' · ')
+                        const tick = <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></svg>
+                        return states.some((u) => u.state === 'done')
+                          ? (onShowUploads
+                            ? <button type="button" title={`Uploaded (${tip}). Show its uploads`} aria-label={`Show the uploads of the deployment ${d.deployment_id}`} onClick={() => onShowUploads(d.deployment_id)}
+                                      className="inline-flex rounded-full text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{tick}</button>
+                            : <span role="img" title={`Uploaded (${tip})`} aria-label="Uploaded" className="inline-flex text-emerald-600 dark:text-emerald-400">{tick}</span>)
+                          : <span role="img" title={`Not uploaded (${tip})`} aria-label="Not uploaded" className="inline-flex text-zinc-400 dark:text-zinc-500">
+                              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
+                            </span>
+                      })() : <span className="text-zinc-400">—</span>}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
-                      {phaseOf(d) !== 'not_created' && phaseOf(d) !== 'no_images' && (
-                        <button type="button" className={`${btnOutline} inline-flex items-center justify-center gap-2`} aria-expanded={opened === d.deployment_id} aria-label={`View the deployment ${d.deployment_id}`} onClick={() => toggle(d.deployment_id)}>
-                          <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" className="fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>View
-                        </button>
-                      )}
+                      {/* only what can be done with the row: the options that do not apply to it are not there */}
+                      <div className="flex items-center justify-end gap-1.5" role="group" aria-label={`Options of the deployment ${d.deployment_id}`}>
+                        {(() => {
+                          const before = neighbour(d, -1)
+                          return before && <IconButton label={`Show the previous deployment of ${d.site} (${before.collection})`} title={`The previous revision of this location: ${before.collection}`} onClick={() => setJump(before.deployment_id)} path={ICON_PATHS.before} />
+                        })()}
+                        {phaseOf(d) === 'created' && (
+                          <IconButton label={`View the deployment ${d.deployment_id}`} title="View the deployment" expanded={opened === d.deployment_id} onClick={() => toggle(d.deployment_id)} path={ICON_PATHS.view} />
+                        )}
+                        {(() => {
+                          const after = neighbour(d, 1)
+                          return after && <IconButton label={`Show the next deployment of ${d.site} (${after.collection})`} title={`The next revision of this location: ${after.collection}`} onClick={() => setJump(after.deployment_id)} path={ICON_PATHS.after} />
+                        })()}
+                        {phaseOf(d) === 'created' && onUpload && statesOf(d).some((u) => u.destination === 'trapper' && u.state !== 'done') && (
+                          <IconButton label={`Upload the deployment ${d.deployment_id}`} title={statesOf(d).some((u) => u.state === 'failed') ? 'Upload the images again' : 'Upload the images'} onClick={() => onUpload(d)} path={ICON_PATHS.upload} />
+                        )}
+                      </div>
                     </td>
                   </tr>
-                  {openedUpload === d.deployment_id && (
-                    <tr>
-                      <td colSpan={7} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
-                        <UploadList deployment={d.deployment_id} uploads={d.uploads?.length ? d.uploads : [{ destination: 'trapper', kind: d.uploaded_at ? 'uploaded' : 'synced', uploaded_at: d.uploaded_at ?? null, parts: null, location_created: null, deployment_created: null }]} />
-                      </td>
-                    </tr>
-                  )}
                   {opened === d.deployment_id && (
                     <tr>
                       <td colSpan={7} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
@@ -217,7 +256,7 @@ export default function FieldDeployments({ deployments, highlight, initialFilter
                 {SQUARES.map((q) => <Fragment key={q.filter}><dt className={`font-medium ${q.tone}`}>{q.label}</dt><dd>{q.note}</dd></Fragment>)}
               </dl>
             </LegendCard>
-            <LegendCard title="Creation and upload" tone="text-violet-600 dark:text-violet-400"><p>A deployment is <em>created</em> when its images are stored (the visit that started it is then Stored) and <em>uploaded</em> when its information is on the platform it is uploaded to. The camera still out, or the card not imported, is the state of the visit, not of the deployment. <em>No images</em> is a deployment closed by a theft: nothing was collected, and it is left out of the progress.</p></LegendCard>
+            <LegendCard title="Creation and uploads" tone="text-violet-600 dark:text-violet-400"><p>A deployment is <em>planned</em> while its card is to be imported and <em>created</em> when its images are stored. <em>Not created</em> is a deployment of a camera that was stolen: the card is gone. Uploading is another thing: each deployment has an upload for every uploader in use, <em>planned</em> from the start, then <em>done</em> or <em>failed</em> — a failed one is tried again.</p></LegendCard>
             <LegendCard title="Filters and search" tone="text-sky-600 dark:text-sky-400"><p>Search by deployment, site, card or camera, and filter by status; pick a revision above.</p></LegendCard>
           </section>
         </>
