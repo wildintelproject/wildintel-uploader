@@ -1,0 +1,5 @@
+label,camera_id,camera_model,in_service,status,status_date,status_note
+CAM-001,BR5071050724,Browning-BTC-8A,2025-01-10,active,,
+CAM-002,RE5699252753,Reconyx-PC800,2025-01-10,active,,
+CAM-003,RE1161042648,Reconyx-HC600,2025-02-03,active,,
+CAM-004,SP1776213899,Spypoint-Force-Dark,2025-02-03,active,,
