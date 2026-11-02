@@ -454,7 +454,7 @@ def sync(page: Page) -> None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-PHOTOS = sorted((ROOT / "examples" / "deployment_example").glob("*.JPG"))
+PHOTOS = sorted((ROOT / "examples" / "deployment_examples" / "valid").glob("*.JPG"))
 
 
 def _photo(route) -> None:
