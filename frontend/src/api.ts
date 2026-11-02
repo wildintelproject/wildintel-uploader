@@ -2,8 +2,8 @@ import type { EpicollectEntry } from './epicollectImport'
 import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
-  AccessCheck, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, UploadedDeployment, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent } from './types'
+  AccessCheck, CardCopyEvent, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
+  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
 async function errorMessage(r: Response): Promise<string> {
@@ -147,6 +147,10 @@ export const api = {
   deleteResearchProject: (acronym: string) =>
     post<{ deleted: string }>('/api/deployment-import/research-projects/delete', { research_project_id: acronym }),
 
+  /** Finishes a revision: the locations with no visit in it are marked as not visited. */
+  markNotVisited: (researchProjectId: string, session: string) =>
+    post<{ session: string; marked: string[] }>('/api/visits/mark-not-visited', { research_project_id: researchProjectId, session }),
+
   listLocalLocations: (researchProjectId: string) =>
     post<{ results: LocalLocation[] }>('/api/deployment-import/locations/list', { research_project_id: researchProjectId }),
 
@@ -165,8 +169,6 @@ export const api = {
   visitBook: (researchProjectId: string) => post<{ results: BookVisit[] }>('/api/visits/book', { research_project_id: researchProjectId }),
   /** The deployments the visits of a research project say, closed and open, by collection and site. */
   fieldDeployments: (researchProjectId: string) => post<{ results: FieldDeployment[] }>('/api/visits/deployments', { research_project_id: researchProjectId }),
-  /** The created deployments of a research project, each with the platforms it was uploaded to and when — and the revisions there are. */
-  uploads: (researchProjectId: string) => post<{ deployments: UploadedDeployment[]; revisions?: string[] }>('/api/visits/uploads', { research_project_id: researchProjectId }),
   linkVisit: (researchProjectId: string, visit: StoredVisit, deploymentId: string) =>
     post<StoredVisit>('/api/visits/link', { research_project_id: researchProjectId, location_id: visit.location_id, date: visit.date, time: visit.time, deployment_id: deploymentId }),
 
@@ -209,7 +211,7 @@ export const api = {
     post<LocalLocation>('/api/deployment-import/locations/update', { research_project_id: researchProjectId, location_id: locationId, ...changes }),
 
   /** Marks a camera (by its serial number or label) or an SD card (by its label) of a research project as no longer available — stolen, lost… */
-  setFieldItemStatus: (researchProjectId: string, kind: 'cameras' | 'sd_cards', key: string, status: 'stolen' | 'lost' | 'broken' | 'retired', statusDate: string | null, statusNote: string | null) =>
+  setFieldItemStatus: (researchProjectId: string, kind: 'cameras' | 'sd_cards', key: string, status: 'stolen' | 'lost' | 'broken' | 'archived', statusDate: string | null, statusNote: string | null) =>
     post<{ updated: boolean }>('/api/settings/field-item-status', { research_project_id: researchProjectId, kind, key, status, status_date: statusDate, status_note: statusNote }),
 
   collectionPath: (researchProjectId: string, deploymentId: string) =>
@@ -258,6 +260,13 @@ export const api = {
       ...creds, research_project_pk: researchProjectPk, research_project_id: researchProjectId, classification_project_pk: classificationProjectPk,
       source_dir: sourceDir, deployment, register_deployment: registerDeployment,
     }, onEvent, 'The import ended unexpectedly.'),
+
+  // Copies a memory card — read only — to a temporary folder of this computer: its images are then processed as any local folder.
+  copyCard: (path: string, onEvent: (event: CardCopyEvent) => void) =>
+    streamNdjson<CardCopyEvent>('/api/deployment-import/copy-card', { path }, onEvent, 'The copy of the memory card ended unexpectedly.'),
+
+  // Removes the temporary copy of a memory card once the import is over.
+  discardCardCopy: (path: string) => post<{ removed: boolean }>('/api/deployment-import/discard-card-copy', { path }),
 
   // preprocessing null copies the images as they are.
   importLocal: (

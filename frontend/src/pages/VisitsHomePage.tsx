@@ -24,9 +24,11 @@ interface Props {
 /** Manage the visits: register new ones, or look at the visit book. */
 export default function VisitsHomePage({ onBack, onOpenSettings, settingsOpen, onImportImages, onShowDeployment, focusVisit }: Props) {
   const [view, setView] = useState<View | null>(focusVisit ? 'book' : null)
+  // The visit that was planned and is to be created: the register opens on it.
+  const [start, setStart] = useState<{ researchProjectId: string; site: string } | undefined>(undefined)
 
-  if (view === 'register') return <VisitsPage onBack={() => setView(null)} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onImportImages={onImportImages} />
-  if (view === 'book') return <VisitBookPage onBack={() => setView(null)} onImportImages={onImportImages} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onShowDeployment={onShowDeployment} focus={focusVisit} />
+  if (view === 'register') return <VisitsPage start={start} onBack={() => { setStart(undefined); setView(null) }} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onImportImages={onImportImages} />
+  if (view === 'book') return <VisitBookPage onBack={() => setView(null)} onImportImages={onImportImages} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onShowDeployment={onShowDeployment} focus={focusVisit} onCreateVisit={(target) => { setStart(target); setView('register') }} />
 
   return (
     <div className="mx-auto max-w-[900px] px-4 py-8">

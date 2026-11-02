@@ -4,6 +4,8 @@ import { pageNumbers } from '../components/CheckFailures'
 import { Icon, Ring } from '../components/Dashboard'
 import { Breadcrumb } from '../components/TaskCard'
 import RevisionSquares from '../components/RevisionSquares'
+import IconButton, { ICON_PATHS } from '../components/IconButton'
+import LinkButton from '../components/LinkButton'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { BookVisit, ClosedVisitTarget } from '../types'
 import { btnOutline, inputClass } from './ImportDeploymentPage'
@@ -13,13 +15,15 @@ interface Props {
   /** Goes to Import deployment for a closed visit: its research project, and the visit whose card was collected — the deployment is of it. */
   onImportImages?: (target: ClosedVisitTarget) => void
   /** Opens the settings, on the section given — where the default research project is changed. */
-  onOpenSettings?: (section?: 'general') => void
+  onOpenSettings?: (section?: 'general' | 'locations', researchProjectId?: string, item?: string) => void
   /** Whether the settings are open: the default research project is read again when they are closed, as it may have been changed. */
   settingsOpen?: boolean
   /** Goes to the status of the deployments, on one of them: the link of the tick of the images stored. */
   onShowDeployment?: (deploymentId: string) => void
   /** The visit shown open, on its revision and its page: the one a link of the deployments dashboard goes to. */
   focus?: VisitFocus
+  /** Goes to register the visit of a location that is planned: its research project and the location. */
+  onCreateVisit?: (target: { researchProjectId: string; site: string }) => void
 }
 
 /** The fields of a visit the details show, in this order, when it has them. */
@@ -49,18 +53,19 @@ function sortValue(v: BookVisit, key: SortKey): string | number {
   }
 }
 
-/** Where a visit is in its life: planned (not made yet), deployed (it left a camera that is still out), collected (the card was collected: a later visit closed it) and stored (the deployment is made, so its images are kept). A visit that left no camera has none. */
-type Phase = 'planned' | 'deployed' | 'collected' | 'stored' | 'stolen'
+/** Where a visit is in its life: planned (not made yet), deployed (it left a camera that is still out), collected (the card was collected: a later visit closed it), stolen (the camera was
+ * stolen, so no images) and not visited (the visit could not be made). Whether the images are stored is told by the Images column, not by the state. A visit that left no camera has no state. */
+type Phase = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited'
 const phaseOf = (v: BookVisit): Phase | null =>
-  v.not_done ? 'planned' : v.deployment_status === 'open' ? 'deployed' : v.deployment_status === 'closed' ? (v.deployment_no_images ? 'stolen' : v.deployment_id ? 'stored' : 'collected') : null
-const PHASES: Phase[] = ['stored', 'collected', 'stolen', 'deployed', 'planned']
-const PHASE_LABEL: Record<Phase, string> = { planned: 'Planned', deployed: 'Deployed', collected: 'Collected', stored: 'Stored', stolen: 'Stolen' }
+  v.state !== undefined ? v.state : v.not_done ? 'planned' : v.not_visited ? 'not_visited' : v.deployment_status === 'open' ? 'deployed' : v.deployment_status === 'closed' ? (v.deployment_no_images ? 'stolen' : 'collected') : null
+const PHASES: Phase[] = ['collected', 'stolen', 'deployed', 'not_visited', 'planned']
+const PHASE_LABEL: Record<Phase, string> = { planned: 'Planned', deployed: 'Deployed', collected: 'Collected', stolen: 'Stolen', not_visited: 'Not visited' }
 const PHASE_BADGE: Record<Phase, string> = {
   planned: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300',
   deployed: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300',
-  collected: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300',
-  stored: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
+  collected: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
   stolen: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
+  not_visited: 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200',
 }
 
 /** The rows the status cards show: the ones in a phase, or all. */
@@ -81,11 +86,31 @@ const collectedCard = (visits: BookVisit[], v: BookVisit): string | null => {
 }
 const keyOf = (v: BookVisit) => `${v.session}|${v.location_id}|${v.date}|${v.time}`
 
+/** The visit's wall clock as ISO 8601 with its offset from UTC (2024-09-04T13:10+02:00): the offset is what the instant kept (UTC) differs from the wall clock of the location. Without the instant, the wall clock alone. */
+function isoWithOffset(v: BookVisit): string {
+  const local = `${v.date}T${v.time.slice(0, 5)}`
+  if (!v.when) return local
+  const minutes = Math.round((Date.parse(`${v.date}T${v.time.length > 5 ? v.time : `${v.time}:00`}Z`) - Date.parse(v.when)) / 60000)
+  if (Number.isNaN(minutes)) return local
+  const abs = Math.abs(minutes)
+  return `${local}${minutes < 0 ? '-' : '+'}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`
+}
+
+/** The days a revision went from and to — its first and its last visit made, as the wall clock of their locations says —, or nothing when none was made. The end is only
+ * told when the revision is complete (no visit left planned): one still going has its end open ("2024-09-04 → …"). */
+function spanOf(visits: BookVisit[]): string | undefined {
+  const days = visits.filter((v) => !v.not_done && v.date).map((v) => v.date).sort()
+  if (days.length === 0) return undefined
+  const first = days[0], last = days[days.length - 1]
+  if (visits.some((v) => v.not_done)) return `${first} → …`
+  return first === last ? first : `${first} → ${last}`
+}
+
 /** How many visits a page of the book has. */
 const PER_PAGE = 10
 
 /** The visit book of a research project: the visits kept to it, and the deployments they say — closed, and the ones whose camera is still out — with the logs of their collections. */
-export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, settingsOpen, onShowDeployment, focus }: Props) {
+export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, settingsOpen, onShowDeployment, focus, onCreateVisit }: Props) {
   // The book is of the research project the general settings say is the default: the one that is active.
   const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
   const [visits, setVisits] = useState<BookVisit[] | null>(null)
@@ -99,7 +124,6 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const error = projectError ?? loadError
-
   useEffect(() => {
     setVisits(null); setLoadError(null); setPage(1); setOpened(null); setRevision('')
     if (!project) return
@@ -115,25 +139,37 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const revisions = [...new Set(everyRow.map((v) => v.session))].sort((x, y) => y.localeCompare(x))
   const rows = revision ? everyRow.filter((v) => v.session === revision) : everyRow
   const count = (f: StatusFilter) => rows.filter((v) => matches(v, f)).length
+  // a visit that could not be made is settled: it counts as completed — what is pending is what is still planned
   const made = rows.filter((v) => !v.not_done).length
   const percent = rows.length ? Math.round((made / rows.length) * 100) : 0
   const SQUARES: { filter: Phase; label: string; note: string; tone: string; badge: string; icon: ReactNode }[] = [
     { filter: 'planned', label: 'Planned', note: 'Not visited yet', tone: 'text-zinc-600 dark:text-zinc-300', badge: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>} className="h-5 w-5" /> },
     { filter: 'deployed', label: 'Deployed', note: 'Camera out, card not collected', tone: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300', icon: <Icon path={<><path d="M12 3l10 18H2z" /><path d="M12 10v4M12 17.5v.01" /></>} className="h-5 w-5" /> },
-    { filter: 'collected', label: 'Collected', note: 'Card collected, deployment not made', tone: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></>} className="h-5 w-5" /> },
-    { filter: 'stored', label: 'Stored', note: 'Deployment made, images stored', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />} className="h-5 w-5" /> },
+    { filter: 'collected', label: 'Collected', note: 'Card collected', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></>} className="h-5 w-5" /> },
     { filter: 'stolen', label: 'Stolen', note: 'Camera stolen, no images', tone: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>} className="h-5 w-5" /> },
+    { filter: 'not_visited', label: 'Not visited', note: 'The visit could not be made', tone: 'text-slate-600 dark:text-slate-300', badge: 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>} className="h-5 w-5" /> },
   ]
 
-  // the visit a link of the deployments dashboard goes to is brought into view: on its revision, on its page, and open
+  // a visit is brought into view: on its revision, on its page, and open
+  function showVisit(target: BookVisit) {
+    setRevision(target.session); setStatusFilter(''); setFilter(''); setSort(null)
+    setPage(Math.floor((visits ?? []).filter((v) => v.session === target.session).sort(byDefault).findIndex((v) => keyOf(v) === keyOf(target)) / PER_PAGE) + 1)
+    setOpened(keyOf(target))
+  }
+  // the visit a link of the deployments dashboard goes to
   useEffect(() => {
     if (!focus || !visits) return
     const target = visits.find((v) => !v.not_done && v.session === focus.session && v.location_id.toLowerCase() === focus.site.toLowerCase())
-    if (!target) return
-    setRevision(target.session); setStatusFilter(''); setFilter(''); setSort(null)
-    setPage(Math.floor(visits.filter((v) => v.session === target.session).sort(byDefault).findIndex((v) => keyOf(v) === keyOf(target)) / PER_PAGE) + 1)
-    setOpened(keyOf(target))
-  }, [focus, visits])
+    if (target) showVisit(target)
+  }, [focus, visits]) // eslint-disable-line react-hooks/exhaustive-deps
+  // the visit that was made to the same location in the closest revision after the one of a row
+  const nextOf = (v: BookVisit) => everyRow
+    .filter((w) => !w.not_done && w.location_id.toLowerCase() === v.location_id.toLowerCase() && w.session > v.session)
+    .sort((a, b) => a.session.localeCompare(b.session) || `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0]
+  // the visit that was made to the same location in the closest revision before the one of a row
+  const previousOf = (v: BookVisit) => everyRow
+    .filter((w) => !w.not_done && w.location_id.toLowerCase() === v.location_id.toLowerCase() && w.session < v.session)
+    .sort((a, b) => b.session.localeCompare(a.session) || `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))[0]
 
   const needle = filter.trim().toLowerCase()
   const shown = rows
@@ -176,7 +212,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
               <h5 className="text-lg font-semibold mb-1">Revision</h5>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see what is planned and what is done.</p>
               <RevisionSquares all={{ label: 'All revisions', note: `${everyRow.filter((v) => !v.not_done).length} of ${everyRow.length} done` }} value={revision}
-                revisions={revisions.map((r) => { const of = everyRow.filter((v) => v.session === r); return { id: r, label: r, note: `${of.filter((v) => !v.not_done).length} of ${of.length} done` } })}
+                revisions={revisions.map((r) => { const of = everyRow.filter((v) => v.session === r); return { id: r, label: r, note: `${of.filter((v) => !v.not_done).length} of ${of.length} done`, dates: spanOf(of) } })}
                 onPick={(id) => { setRevision(id); setStatusFilter(''); setPage(1); setOpened(null) }} />
             </section>
           )}
@@ -190,8 +226,9 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                     <p className="text-sm font-medium">Visits completed</p>
                     <p className="text-2xl font-semibold leading-tight">{made} <span className="text-zinc-400">/ {rows.length}</span></p>
                     <div role="progressbar" aria-label="Visits done" aria-valuemin={0} aria-valuemax={rows.length} aria-valuenow={made} className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                      <div className="bg-emerald-500" style={{ width: `${rows.length ? ((count('collected') + count('stored') + count('stolen')) / rows.length) * 100 : 0}%` }} />
+                      <div className="bg-emerald-500" style={{ width: `${rows.length ? ((count('collected') + count('stolen')) / rows.length) * 100 : 0}%` }} />
                       <div className="bg-amber-500" style={{ width: `${rows.length ? (count('deployed') / rows.length) * 100 : 0}%` }} />
+                      <div className="bg-slate-400" style={{ width: `${rows.length ? (count('not_visited') / rows.length) * 100 : 0}%` }} />
                     </div>
                     <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{made} of {rows.length} visits done ({percent}%) · {rows.length - made} pending</p>
                   </div>
@@ -247,9 +284,13 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                         <Fragment key={key}>
                           <tr ref={focus && opened === key ? (el) => el?.scrollIntoView?.({ block: 'center' }) : undefined}>
                             <td className="px-3 py-2 font-mono">{v.session}</td>
-                            <td className="px-3 py-2 font-mono">{v.location_id}</td>
-                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.not_done ? <span className="font-sans text-zinc-400">—</span> : `${v.date} ${v.time.slice(0, 5)}`}</td>
-                            <td className="px-3 py-2">{v.actions.join(' + ')}</td>
+                            <td className="px-3 py-2 font-mono">
+                              {onOpenSettings && project
+                                ? <LinkButton title={`Show the details of the location ${v.location_id}`} className="font-mono" onClick={() => onOpenSettings('locations', project.acronym, v.location_id)}>{v.location_id}</LinkButton>
+                                : v.location_id}
+                            </td>
+                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.not_done ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
+                            <td className="px-3 py-2">{v.actions.length === 0 && !v.not_done ? '—' : v.actions.join(' + ')}</td>
                             <td className="px-3 py-2">
                               {phaseOf(v)
                                 ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PHASE_BADGE[phaseOf(v)!]}`}>{PHASE_LABEL[phaseOf(v)!]}</span>
@@ -257,28 +298,50 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                             </td>
                             <td className="px-3 py-2">
                               {v.not_done ? null : v.deployment_id ? (
-                                <button type="button" className={`${btnOutline} inline-flex items-center gap-1.5 !px-2.5 !py-1 !text-xs whitespace-nowrap text-emerald-700 dark:text-emerald-300`} aria-label={`Details of the deployment ${v.deployment_id}`} onClick={() => onShowDeployment?.(v.deployment_id!)}>
-                                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Show image details
+                                <button type="button" title="Show image details" className="inline-flex rounded-full text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={`Details of the deployment ${v.deployment_id}`} onClick={() => onShowDeployment?.(v.deployment_id!)}>
+                                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></svg>
                                 </button>
-                              ) : v.deployment_status === 'closed' && !v.deployment_no_images && onImportImages ? (
-                                <button type="button" className={`${btnOutline} !px-2.5 !py-1 !text-xs whitespace-nowrap`} aria-label={`Store the images of the visit ${v.session} to ${v.location_id}`} onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })}>Store images</button>
                               ) : <span role="img" aria-label="Images not stored" title={v.deployment_no_images ? 'No images: the camera was stolen' : 'Not stored: the card has not been collected yet'} className="inline-flex text-zinc-400 dark:text-zinc-500">
                                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
                                 </span>}
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap">
-                              {!v.not_done && <div className="flex flex-col gap-1.5 items-stretch">
-                                <button type="button" className={`${btnOutline} inline-flex items-center justify-center gap-2`} aria-expanded={opened === key} aria-label={`View the visit ${v.session} to ${v.location_id}`} onClick={() => setOpened(opened === key ? null : key)}>
-                                  <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" className="fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>View
-                                </button>
-                              </div>}
+                              {/* only what can be done with the row: the options that do not apply to it are not there */}
+                              <div className="flex items-center justify-end gap-1.5" role="group" aria-label={`Options of the visit ${v.session} to ${v.location_id}`}>
+                                {(() => {
+                                  const before = previousOf(v)
+                                  return before && (
+                                    <IconButton label={`Show the previous visit to ${v.location_id} (${before.session})`} title={`The previous revision of this location: ${before.session}`}
+                                      onClick={() => showVisit(before)} path={ICON_PATHS.before} />
+                                  )
+                                })()}
+                                {!v.not_done && (
+                                  <IconButton label={`View the visit ${v.session} to ${v.location_id}`} title="View the visit" expanded={opened === key}
+                                    onClick={() => setOpened(opened === key ? null : key)} path={ICON_PATHS.view} />
+                                )}
+                                {(() => {
+                                  const after = nextOf(v)
+                                  return after && (
+                                    <IconButton label={`Show the next visit to ${v.location_id} (${after.session})`} title={`The next revision of this location: ${after.session}`}
+                                      onClick={() => showVisit(after)} path={ICON_PATHS.after} />
+                                  )
+                                })()}
+                                {v.not_done && onCreateVisit && (
+                                  <IconButton label={`Create the visit ${v.session} to ${v.location_id}`} title="Create the visit"
+                                    onClick={() => onCreateVisit({ researchProjectId: project!.acronym, site: v.location_id })} path={<><path d="M12 21s-7-6.2-7-11a7 7 0 1114 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></>} />
+                                )}
+                                {!v.not_done && !v.deployment_id && v.deployment_status === 'closed' && !v.deployment_no_images && onImportImages && (
+                                  <IconButton label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} title="Create the deployment"
+                                    onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })} path={<><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><circle cx="12" cy="13" r="3.5" /></>} />
+                                )}
+                              </div>
                             </td>
                           </tr>
                           {opened === key && (
                             <tr>
                               <td colSpan={7} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
                                 <dl aria-label={`Details of the visit ${v.session} to ${v.location_id}`} className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
-                                  <div className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">Actions</dt><dd>{v.actions.join(' + ')}</dd></div>
+                                  <div className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">Actions</dt><dd>{v.actions.length === 0 ? 'None: the visit could not be made' : v.actions.join(' + ')}</dd></div>
                                   {DETAILS.filter(([k]) => { const value = v[k]; return value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0) })
                                     .map(([k, label]) => <div key={k} className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">{k === 'num_photos' && collectedCard(everyRow, v) ? `Photos collected from the SD card previously installed (${collectedCard(everyRow, v)})` : label}</dt><dd className="font-mono text-xs break-all self-center">{shownValue(v[k])}</dd></div>)}
                                 </dl>
@@ -324,7 +387,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
         </div>
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
           <h5 className="mb-1.5 font-semibold text-violet-600 dark:text-violet-400">Data states</h5>
-          <p className="text-zinc-500 dark:text-zinc-400"><span className="font-medium text-zinc-700 dark:text-zinc-200">Images</span>: once the deployment of the visit is made its images are stored — the visit is Stored — and <em>Show image details</em> opens that deployment. A visit whose camera was stolen is <em>Stolen</em>: there are no images, and nothing to create.</p>
+          <p className="text-zinc-500 dark:text-zinc-400"><span className="font-medium text-zinc-700 dark:text-zinc-200">Images</span>: once the deployment of the visit is made its images are stored, whatever the state of the visit, and its tick opens the details of that deployment in the deployments dashboard. A visit whose camera was stolen is <em>Stolen</em>: there are no images, and nothing to create.</p>
         </div>
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
           <h5 className="mb-1.5 font-semibold text-sky-600 dark:text-sky-400">Filters and search</h5>

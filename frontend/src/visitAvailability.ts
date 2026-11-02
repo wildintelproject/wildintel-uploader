@@ -17,7 +17,8 @@ function before(visits: StoredVisit[], when: string): StoredVisit[] {
 }
 
 const takesAway = (v: StoredVisit) => v.actions.includes('Desinstallation') || v.actions.includes('Stolen')
-const collectsCard = (v: StoredVisit) => takesAway(v) || v.actions.includes('Revision')
+const notRevised = (v: StoredVisit) => ['not revised', 'no revisada', 'no revisado'].includes((v.status ?? '').trim().toLowerCase())
+const collectsCard = (v: StoredVisit) => takesAway(v) || (v.actions.includes('Revision') && !notRevised(v))
 
 /** The site a camera is put up at on a given moment — null when it is nowhere: never put up, uninstalled or stolen. */
 export function cameraAt(visits: StoredVisit[], cameraId: string, when: string): Whereabouts | null {
@@ -92,4 +93,26 @@ export function availabilityErrors(kept: StoredVisit[], visit: Visit): { camera?
     }
   }
   return errors
+}
+
+const revisionNumber = (session: string | undefined) => {
+  const m = /\d+/.exec(session ?? '')
+  return m ? Number(m[0]) : null
+}
+
+/** Why a revision cannot start: the one before it is not finished. A revision is one visit to each of the locations that are not archived when it
+ * starts (the day of its first visit; an archived one with no day is archived for good). The first revision of the visits has none before it. */
+export function unfinishedRevision(number: number, visits: StoredVisit[], locations: { location_id: string; status?: string; status_date?: string | null }[], day = ''): { message: string; previous: string; missing: string[] } | null {
+  const numbers = visits.map((v) => revisionNumber(v.session)).filter((n): n is number => n !== null)
+  const previous = number - 1
+  if (numbers.length === 0 || previous < Math.min(...numbers)) return null
+  const of = visits.filter((v) => revisionNumber(v.session) === previous)
+  const start = of.length ? of.map((v) => v.date).sort()[0] : day
+  const visited = new Set(of.map((v) => v.location_id.toLowerCase()))
+  const missing = locations
+    .filter((l) => !(l.status === 'archived' && (!l.status_date || l.status_date <= start)))
+    .map((l) => l.location_id).filter((id) => !visited.has(id.toLowerCase())).sort()
+  if (missing.length === 0) return null
+  const name = (n: number) => `R${String(n).padStart(4, '0')}`
+  return { message: `${name(number)} cannot start: ${name(previous)} is not finished, ${missing.length} location(s) still to be visited in it: ${missing.join(', ')}.`, previous: name(previous), missing }
 }

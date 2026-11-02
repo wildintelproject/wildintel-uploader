@@ -318,6 +318,13 @@ export const EMPTY_DEPLOYMENT_FIELDS: DeploymentFields = {
   tags: [],
 }
 
+/** What copying a memory card to a temporary folder says: how many files there are, how many are copied, and where the copy is when it is done. */
+export type CardCopyEvent =
+  | { type: 'start'; files: number; bytes: number }
+  | { type: 'progress'; copied: number; files: number; bytes_copied: number; bytes: number }
+  | { type: 'done'; path: string; files: number; bytes: number }
+  | { type: 'error'; detail: string }
+
 export type ImportEvent =
   | { type: 'copy'; index: number; total: number; name: string }
   | { type: 'registering' }
@@ -587,10 +594,14 @@ export interface FieldworkSettings {
 }
 
 /** Whether a camera or an SD card can still be used; only an active one is offered for a visit. */
-export type CameraStatus = 'active' | 'retired' | 'stolen' | 'lost' | 'broken'
-export type SdCardStatus = 'active' | 'retired' | 'stolen' | 'lost' | 'broken'
+export type CameraStatus = 'ready' | 'active' | 'archived'
+export type SdCardStatus = 'ready' | 'active' | 'archived'
+/** Why a camera or an SD card was archived. */
+/** Where a visit is in its life. */
+export type VisitState = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited'
+export type ArchiveReason = 'lost' | 'stolen' | 'broken' | 'other'
 export type TrapperStatus = 'active' | 'inactive'
-export type LocationStatus = 'active' | 'retired' | 'planned'
+export type LocationStatus = 'active' | 'archived' | 'planned'
 export type ResearchProjectStatus = 'planned' | 'active' | 'finished'
 
 /** One of the SD cards: what it is called (its number, or the label on it), who makes it, what it holds and the day it was put into production. */
@@ -603,6 +614,7 @@ export interface SdCard {
   /** The acronym of the research project it belongs to: every one belongs to one (none only while an older one waits to be assigned). */
   research_project: string | null
   status?: SdCardStatus
+  archive_reason?: ArchiveReason | null
   /** YYYY-MM-DD — the day it stopped being active. */
   status_date?: string | null
   status_note?: string | null
@@ -620,6 +632,7 @@ export interface Camera {
   /** The acronym of the research project it belongs to: every one belongs to one (none only while an older one waits to be assigned). */
   research_project: string | null
   status?: CameraStatus
+  archive_reason?: ArchiveReason | null
   /** YYYY-MM-DD — the day it stopped being active. */
   status_date?: string | null
   status_note?: string | null
@@ -693,8 +706,10 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
   time: string
   /** The instant of the visit: ISO 8601, UTC, with a Z (2024-09-04T11:10:00Z) — what is kept; the day and the time above are the wall clock of its location. */
   when?: string
+  /** Where the visit is in its life — kept by the backend when the visit is added, and changed when a later visit collects its card. */
+  state?: VisitState | null
   /** What was done at the visit — one or more. */
-  actions: ('Installation' | 'Revision' | 'Desinstallation' | 'Stolen')[]
+  actions: ('Installation' | 'Revision' | 'Desinstallation' | 'Stolen' | 'Archive')[]
   /** Who went on the visit. */
   trappers: string | null
   status: string | null
@@ -772,6 +787,10 @@ export interface BookVisit extends StoredVisit {
   on_trapper?: boolean
   /** A row for a location that has no visit in a session the visits have: the visit was not made — it has no day, no time and no actions. */
   not_done: boolean
+  /** The visit could not be made (its status says it was not revised): nothing was collected. */
+  not_visited: boolean
+  /** Where the visit is in its life, as it is kept: kept when the visit is added, and changed when a later visit collects its card. A planned row is not a visit. */
+  state?: VisitState | null
 }
 
 /** A deployment the visits of a research project say: closed (a visit left the camera and a later one collected its card) or still open (the camera is out). */
@@ -797,6 +816,18 @@ export interface FieldDeployment {
   on_trapper?: boolean
   /** What was done with it: one upload for each platform it was sent to. */
   uploads?: UploadEntry[]
+  /** The upload to each uploader in use — its own state, apart from the deployment's: planned, done or failed. None for a deployment that will not be made. */
+  upload_states?: DeploymentUploadState[]
+}
+
+/** Where the upload of a deployment to an uploader is: planned from the start, then done (sent from here, or synced from there) or failed — a failed one is tried again. */
+export type UploadStateName = 'planned' | 'done' | 'failed'
+export interface DeploymentUploadState {
+  destination: string
+  state: UploadStateName
+  kind: 'uploaded' | 'synced' | null
+  uploaded_at: string | null
+  note: string | null
 }
 
 /** One upload of a deployment: the platform it was sent to (`destination`), when, and what it did there. A deployment that came from the platform (`synced`) was not sent from here, so it has no day. */

@@ -12,15 +12,14 @@ import Notice from '../components/Notice'
 import WizardStep from '../components/WizardStep'
 import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, SwitchRow, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
 import { shownErrors, validateDeployment } from '../deploymentValidation'
-import { availabilityErrors, cameraAtSite } from '../visitAvailability'
+import { availabilityErrors, cameraAtSite, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
-export type VisitSource = 'manual' | 'manual2' | 'epicollect' | 'wildintel' | 'csv'
+export type VisitSource = 'manual' | 'epicollect' | 'wildintel' | 'csv'
 
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
-  { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself: the site, when, who went and what was done.' },
-  { value: 'manual2', icon: <><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>, title: 'By hand 2', description: 'The new form, being adapted to the field flow of a visit. For now it is the same as By hand.' },
+  { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself, following the field flow: the site, when, who went and what was done.' },
   { value: 'epicollect', icon: <><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></>, title: 'Epicollect', description: 'Read the visits straight from the Epicollect5 project of the settings, with no file.' },
   { value: 'wildintel', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect', description: 'Read the visits of a field trip from the CSV downloaded from the WildINTEL Epicollect project.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'Custom CSV', description: 'A CSV of any shape: say which column gives each field of a visit.' },
@@ -29,7 +28,7 @@ const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; desc
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
 const SD_ICON = <><path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" /><path d="M8 6v3M11 6v3M14 7v2" /></>
 
-/** The icons of the answers of By hand 2, drawn as line icons. */
+/** The icons of the answers of By hand, drawn as line icons. */
 const CAMERA_PATHS = {
   eye: <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
   alert: <><path d="M12 3l10 18H2z" /><path d="M12 10v4M12 17.5v.01" /></>,
@@ -37,13 +36,14 @@ const CAMERA_PATHS = {
   replace: <><path d="M20 11a8 8 0 0 0-14-4L4 9M4 4v5h5M4 13a8 8 0 0 0 14 4l2-2M20 20v-5h-5" /></>,
   archive: <><path d="M3 4h18v4H3zM5 8v12h14V8M10 12h4" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
   ban: <><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>,
   ok: <><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></>,
   altered: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>,
   down: <><path d="M12 4v14M6 12l6 6 6-6" /></>,
 }
 
-/** The states a camera that is there is found in, asked by By hand 2 before what is done with it. */
+/** The states a camera that is there is found in, asked by By hand before what is done with it. */
 const FOUND_STATES: { value: string; description: string; icon: ReactNode }[] = [
   { value: 'OK', description: 'All is well', icon: CAMERA_PATHS.ok },
   { value: 'Altered', description: 'Moved or changed', icon: CAMERA_PATHS.altered },
@@ -52,7 +52,7 @@ const FOUND_STATES: { value: string; description: string; icon: ReactNode }[] = 
 ]
 
 /** What was done at the visit — the values the field records read. */
-const ACTIONS = ['Installation', 'Revision', 'Desinstallation', 'Stolen']
+const ACTIONS = ['Installation', 'Revision', 'Desinstallation', 'Stolen', 'Archive']
 /** How a field is asked at a visit: it must be filled, it may be, or it does not apply (and is turned off). */
 export type Ask = 'required' | 'optional' | 'off'
 
@@ -76,6 +76,10 @@ export interface ActionFields {
   calibration: Ask
 }
 
+/** What the status of a visit that could not be made says: nothing was done at it — no camera was looked at, no card collected or left. */
+export const NOT_VISITED = 'Not revised'
+export const isNotVisited = (status: string | null | undefined) => ['not revised', 'no revisada', 'no revisado'].includes((status ?? '').trim().toLowerCase())
+
 const OFF: ActionFields = { camera: 'off', sdLeft: 'off', photos: 'off', card: 'off', batteries: 'off', dateTime: 'off', status: 'off', calibration: 'off' }
 
 function fieldsOf(action: string): ActionFields {
@@ -91,13 +95,14 @@ function fieldsOf(action: string): ActionFields {
 const STRENGTH: Record<Ask, number> = { off: 0, optional: 1, required: 2 }
 
 /** What is asked of a visit: what its actions ask — except that, with the card full, the photos are not counted, so their number is not required. */
-export function askedOf(v: { actions: string[]; card: CardState }): ActionFields {
-  const asked = fieldsFor(v.actions)
+export function askedOf(v: { actions: string[]; card: CardState; status?: string }): ActionFields {
+  const asked = fieldsFor(v.actions, isNotVisited(v.status))
   return v.card === 'Full' && asked.photos === 'required' ? { ...asked, photos: 'optional' } : asked
 }
 
-export function fieldsFor(actions: string[]): ActionFields {
+export function fieldsFor(actions: string[], notVisited = false): ActionFields {
   const all = { ...OFF }
+  if (notVisited) return all // a visit that could not be made asks for nothing
   for (const action of actions) {
     const f = fieldsOf(action)
     for (const key of Object.keys(all) as (keyof ActionFields)[]) if (STRENGTH[f[key]] > STRENGTH[all[key]]) all[key] = f[key]
@@ -110,8 +115,9 @@ export function fieldsFor(actions: string[]): ActionFields {
 /** The tag beside a field's label: what is asked of it. */
 function AskTag({ ask }: { ask: Ask }) {
   const text = ask === 'required' ? 'required' : ask === 'optional' ? 'optional' : 'not for this visit'
-  const colour = ask === 'required' ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400'
-  return <span className={`ml-2 text-xs font-normal ${colour}`}>{text}</span>
+  // as the other pages tag what is required: blue — red is for what is wrong
+  const colour = ask === 'required' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 dark:text-zinc-400'
+  return <span className={`ml-2 text-[11px] font-normal uppercase tracking-wide ${colour}`}>{text}</span>
 }
 
 /** What each action is, in a few words. */
@@ -120,6 +126,7 @@ const ACTION_HINTS: Record<string, string> = {
   Revision: 'The card is collected and another is left; the camera stays.',
   Desinstallation: 'The camera is taken away, with its card.',
   Stolen: 'The camera is gone: nothing is collected and nothing is left.',
+  Archive: 'The location is given up: it is archived for good, from this day. No camera can be left there.',
 }
 
 /** The states a camera is found in. */
@@ -153,7 +160,7 @@ export interface Visit {
   numPhotos: string
   sd: string
   dateTimeOK: string
-  /** Whether the camera was calibrated: asked only by By hand 2, so it starts as not said. */
+  /** Whether the camera was calibrated: asked only by By hand, so it starts as not said. */
   calibration?: boolean | null
   longitude: string
   latitude: string
@@ -185,11 +192,12 @@ export function visitFrom(previous: StoredVisit, now: Visit): Visit {
 
 /** What the form holds of what the actions do not ask — it is not kept, so it is put back to how it starts. */
 export function withoutWhatIsNotAsked(v: Visit): Visit {
-  const asked = fieldsFor(v.actions)
-  if (v.actions.length === 0) return v
+  const notVisited = isNotVisited(v.status)
+  const asked = fieldsFor(v.actions, notVisited)
+  if (v.actions.length === 0 && !notVisited) return v
   return {
     ...v,
-    sd: asked.sdLeft === 'off' ? '' : v.sd, numPhotos: asked.photos === 'off' ? '' : v.numPhotos, status: asked.status === 'off' ? '' : v.status,
+    sd: asked.sdLeft === 'off' ? '' : v.sd, numPhotos: asked.photos === 'off' ? '' : v.numPhotos, status: asked.status === 'off' && !notVisited ? '' : v.status,
     card: asked.card === 'off' ? 'OK' : v.card, batteries: asked.batteries === 'off' ? 'OK' : v.batteries, dateTimeOK: asked.dateTime === 'off' ? 'Yes' : v.dateTimeOK,
     details: asked.camera === 'off' ? { ...v.details, camera_id: null, camera_model: null } : v.details,
   }
@@ -213,8 +221,9 @@ export function visitErrors(v: Visit, first = false): Partial<Record<ErrorKey, s
   const errors: Partial<Record<ErrorKey, string>> = {}
   if (!v.when) errors.when = 'Required.'
   if (!v.site.trim()) errors.site = 'Required.'
-  if (v.actions.length === 0) errors.actions = 'Choose at least one.'
-  else if (first && (v.actions.length !== 1 || v.actions[0] !== 'Installation')) errors.actions = 'The first visit to a site can only be an Installation.'
+  if (isNotVisited(v.status)) { /* nothing was done at it: it has no action */ }
+  else if (v.actions.length === 0) errors.actions = 'Choose at least one.'
+  else if (first && !isNotVisited(v.status) && (v.actions.length !== 1 || v.actions[0] !== 'Installation')) errors.actions = 'The first visit to a site can only be an Installation.'
   const asked = askedOf(v)
   if (asked.photos !== 'off') {
     if (!v.numPhotos.trim()) { if (asked.photos === 'required') errors.numPhotos = 'Required.' }
@@ -233,17 +242,51 @@ export function detailsErrors(details: DeploymentFields) {
   return shownErrors(validateDeployment(whole, 'UTC'))
 }
 
+/** What an Installation asks of the camera that the optional details do not: how it is mounted and aimed, its delay and whether there is bait — each is a
+ * question of the field form. By field of the details, as `detailsErrors` gives them. */
+export function installationErrors(v: Visit): Record<string, string> {
+  if (!v.actions.includes('Installation')) return {}
+  const d = v.details
+  const errors: Record<string, string> = {}
+  if (d.camera_height == null && d.camera_depth == null) errors.camera_height = 'Height or depth is required for Installation.'
+  if (d.camera_interval == null) errors.camera_interval = 'Camera delay is required for Installation.'
+  if (d.camera_tilt == null) errors.camera_tilt = 'Tilt is required for Installation.'
+  if (d.camera_heading == null) errors.camera_heading = 'Heading is required for Installation.'
+  if (d.bait_use == null) errors.bait_use = 'Say whether bait was used (required for Installation).'
+  return errors
+}
+
+/** The metres between two points of the Earth (haversine). */
+export function distanceMetres(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const rad = (d: number) => (d * Math.PI) / 180
+  const a = Math.sin(rad(lat2 - lat1) / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1) / 2) ** 2
+  return 2 * 6371000 * Math.asin(Math.sqrt(a))
+}
+
+/** How far the GPS of the note is from the coordinates of the location, in metres — nothing when either is not known. */
+export function gpsDistance(v: Visit, location: { latitude?: number | null; longitude?: number | null } | undefined): number | null {
+  const lat = v.latitude.trim() === '' ? NaN : Number(v.latitude), lon = v.longitude.trim() === '' ? NaN : Number(v.longitude)
+  if (!location || location.latitude == null || location.longitude == null || Number.isNaN(lat) || Number.isNaN(lon)) return null
+  return Math.round(distanceMetres(lat, lon, location.latitude, location.longitude))
+}
+
+/** The farthest the GPS of the note may be from its location, in metres: farther is an error. */
+export const GPS_TOLERANCE_M = 1000
+
 /** A visit as the visits file keeps it: the numbers as numbers, what is left blank as none. */
 export function toStored(v: Visit): StoredVisit {
   const text = (t: string) => t.trim() || null
   const number = (t: string) => (t.trim() ? Number(t) : null)
   const { deployment_id, location_id, location_name, coordinate_uncertainty, start_date, end_date, latitude, longitude, ...details } = v.details
   void deployment_id; void location_id; void location_name; void coordinate_uncertainty; void start_date; void end_date; void latitude; void longitude
-  const asked = fieldsFor(v.actions)
+  const notVisited = isNotVisited(v.status)
+  const asked = fieldsFor(v.actions, notVisited)
   return {
     ...details,
-    location_id: v.site.trim(), session: sessionName(v.session)!, date: v.when.slice(0, 10), time: v.when.slice(11, 19), actions: v.actions as StoredVisit['actions'],
-    trappers: text(v.trappers), status: asked.status !== 'off' ? text(v.status) : null,
+    // a visit that could not be made looked at no camera
+    ...(notVisited ? { camera_id: null, camera_model: null } : {}),
+    location_id: v.site.trim(), session: sessionName(v.session)!, date: v.when.slice(0, 10), time: v.when.slice(11, 19), actions: (notVisited ? [] : v.actions) as StoredVisit['actions'],
+    trappers: text(v.trappers), status: notVisited ? NOT_VISITED : asked.status !== 'off' ? text(v.status) : null,
     // only what the action asks is kept, whatever was typed before it was changed
     card_batteries_ok: cardBatteriesCode(asked.card !== 'off' ? v.card : '', asked.batteries !== 'off' ? v.batteries : ''),
     num_photos: asked.photos !== 'off' ? number(v.numPhotos) : null, sd: asked.sdLeft !== 'off' ? text(v.sd) : null, date_time_ok: asked.dateTime !== 'off' ? text(v.dateTimeOK) : null,
@@ -296,22 +339,23 @@ interface Props {
   settingsOpen?: boolean
   /** Goes to Import deployment for a visit that was just closed: its research project and the visit whose card was collected. */
   onImportImages?: (target: ClosedVisitTarget) => void
+  /** A visit that was planned, to be created: the register opens by hand on its research project and its location. */
+  start?: { researchProjectId: string; site: string }
 }
 
 /** Register the visits to the camera traps, in steps — the first asks where they come from. */
 /** What a visit keeps of its camera: its serial number, or its label when it has none. */
 const cameraKey = (c: Camera) => c.camera_id || c.label
 
-export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = false, onImportImages }: Props) {
+export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = false, onImportImages, start }: Props) {
   const [source, setSource] = useState<VisitSource | null>(null)
-  // By hand and By hand 2 ask the same, for now: the second is where the form of the field flow is made.
-  const byHand = source === 'manual' || source === 'manual2'
+  const byHand = source === 'manual'
   const [visit, setVisit] = useState<Visit>(EMPTY_VISIT)
-  // By hand 2 asks what the visit did as a question — do you see the camera? — and works the actions out from the answers.
-  const [seeCamera, setSeeCamera] = useState<'yes' | 'stolen' | null>(null)
-  const [afterRevision, setAfterRevision] = useState<'stay' | 'replace' | 'remove'>('stay')
-  const [afterTheft, setAfterTheft] = useState<'replace' | 'retire' | null>(null)
-  const [retireReason, setRetireReason] = useState('Repeated thefts')
+  // By hand asks what the visit did as a question — do you see the camera? — and works the actions out from the answers.
+  const [seeCamera, setSeeCamera] = useState<'yes' | 'stolen' | 'cannot' | null>(null)
+  const [afterRevision, setAfterRevision] = useState<'stay' | 'replace' | 'take' | 'remove'>('stay')
+  const [afterTheft, setAfterTheft] = useState<'replace' | 'archive' | 'nothing'>('nothing')
+  const [archiveReason, setArchiveReason] = useState('Repeated thefts')
   const [tried, setTried] = useState(false)
   const [visits, setVisits] = useState<Visit[]>([])
   // Where the visit was: a research project of the collections folder and one of its locations (the site of the visit).
@@ -320,6 +364,20 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const { project: defaultProject, defaultAcronym } = useDefaultResearchProject(settingsOpen)
   useEffect(() => { if (defaultProject && project?.acronym !== defaultProject.acronym) setProject(defaultProject) }, [defaultProject, project])
   const [location, setLocation] = useState<LocalLocation | undefined>(undefined)
+  // A planned visit is created from the book: it opens by hand, on its research project and its location.
+  useEffect(() => {
+    if (!start) return
+    let cancelled = false
+    setSource('manual')
+    Promise.all([api.listResearchProjects(), api.listLocalLocations(start.researchProjectId)]).then(([projects, locations]) => {
+      if (cancelled) return
+      const picked = projects.results.find((p) => p.acronym === start.researchProjectId)
+      const place = locations.results.find((l) => l.location_id.toLowerCase() === start.site.toLowerCase())
+      if (picked) setProject(picked)
+      if (place) selectLocation(place)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [start]) // eslint-disable-line react-hooks/exhaustive-deps
   const [editingWhere, setEditingWhere] = useState(false)
   // When the visit was is confirmed with Continue, not as soon as the picker holds a value (it does while the digits are still being typed).
   const [whenConfirmed, setWhenConfirmed] = useState(false)
@@ -327,6 +385,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const [kept, setKept] = useState<StoredVisit[] | null>(null)
   // Every visit kept to the research project: where its cameras and its SD cards are is worked out from them.
   const [allVisits, setAllVisits] = useState<StoredVisit[] | null>(null)
+  // The locations of the research project: a revision is one visit to each of them, and cannot start before the one before it is finished.
+  const [projectLocations, setProjectLocations] = useState<LocalLocation[]>([])
   // The visits the ones just added closed — their card was collected — each with a way to import its images.
   const [justClosed, setJustClosed] = useState<ClosedVisit[]>([])
   // The session of the visit the form was filled in from, when it was.
@@ -344,8 +404,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const [sourcesUsed, setSourcesUsed] = useState({ wildintel: true, csv: true, epicollect: false })
   // Only those of the research project: each belongs to one.
   const ofProject = (rp: string | null) => !!project && (rp ?? '').toLowerCase() === project.acronym.toLowerCase()
-  // ...and only those still in use: a retired, lost, stolen or broken one is not offered, unless the visit already has it.
-  const inUse = (status: string | undefined) => !status || status === 'active'
+  // ...and only those still in use: an archived one (lost, stolen, broken…) is not offered, unless the visit already has it.
+  const inUse = (status: string | undefined) => !status || status === 'active' || status === 'ready'
   const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (inUse(c.status) || c.label === visit.sd))
   const cameras = allCameras.filter((c) => ofProject(c.research_project) && (inUse(c.status) || cameraKey(c) === visit.details.camera_id))
   // From a CSV file: its text, what reading it gave, and what was kept of it.
@@ -374,15 +434,17 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   }, [ofTheSiteCamera, siteCamera?.camera, visit.details.camera_id]) // eslint-disable-line react-hooks/exhaustive-deps
   // Where no camera is known — a first visit, or after one was taken away or stolen — the visit can only install one, and nothing is asked.
   const noCamera = Boolean(allVisits) && !siteCamera
-  const guided = source === 'manual2'
+  const guided = byHand
+  // A camera taken away with no other put up, or stolen with none put up, gives the location up: it is archived — for good — with the reason.
+  const archiving = guided && !noCamera && ((seeCamera === 'yes' && afterRevision === 'remove') || (seeCamera === 'stolen' && afterTheft === 'archive'))
+  const notVisited = guided && seeCamera === 'cannot'
   const guidedActions = !guided ? null
+    : notVisited ? [] // the visit that could not be made: nothing was done at it, so it has no action (its status says it was not revised)
     : noCamera ? ['Installation']
-    : seeCamera === 'yes' ? (!visit.status ? [] : afterRevision === 'replace' ? ['Revision', 'Installation'] : afterRevision === 'remove' ? ['Revision', 'Desinstallation'] : ['Revision'])
-    : seeCamera === 'stolen' ? (afterTheft === 'replace' ? ['Stolen', 'Installation'] : ['Stolen'])
+    : seeCamera === 'yes' ? (!visit.status ? [] : afterRevision === 'replace' ? ['Revision', 'Installation'] : afterRevision === 'take' ? ['Revision', 'Desinstallation'] : afterRevision === 'remove' ? ['Revision', 'Desinstallation', 'Archive'] : ['Revision'])
+    : seeCamera === 'stolen' ? (afterTheft === 'replace' ? ['Stolen', 'Installation'] : afterTheft === 'archive' ? ['Stolen', 'Archive'] : ['Stolen'])
     : []
   const guidedKey = guidedActions?.join('+')
-  // A camera taken away with no other put up, or stolen with none put up, gives the location up: it is retired — for good — with the reason.
-  const retiring = guided && !noCamera && ((seeCamera === 'yes' && afterRevision === 'remove') || (seeCamera === 'stolen' && afterTheft === 'retire'))
   // What a theft takes: the camera at the site, and the card that was left in it — which are marked as not available when the visit is kept.
   const theft = guided && !noCamera && seeCamera === 'stolen' && siteCamera ? siteCamera.camera : null
   const stolenCamera = theft ? (allCameras.find((c) => cameraKey(c).toLowerCase() === theft.toLowerCase() || c.label.toLowerCase() === theft.toLowerCase())?.label ?? theft) : null
@@ -402,16 +464,22 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       return actions.includes('Installation') && there && (next.details.camera_id ?? '').toLowerCase() === there ? { ...next, details: { ...next.details, camera_id: null, camera_model: null } } : next
     })
   }, [guidedKey]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setSeeCamera(null); setAfterRevision('stay'); setAfterTheft(null); setVisit((v) => (v.status && source === 'manual2' ? { ...v, status: '' } : v)) }, [visit.site]) // eslint-disable-line react-hooks/exhaustive-deps
-  const retireFields = (
+  // The visit that could not be made says so with its status; any other answer takes it away.
+  useEffect(() => {
+    if (!guided) return
+    setVisit((v) => (seeCamera === 'cannot' ? withoutWhatIsNotAsked({ ...v, status: NOT_VISITED }) : isNotVisited(v.status) ? { ...v, status: '' } : v))
+  }, [seeCamera]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setSeeCamera(null); setAfterRevision('stay'); setAfterTheft('nothing'); setVisit((v) => (v.status && guided ? { ...v, status: '' } : v)) }, [visit.site]) // eslint-disable-line react-hooks/exhaustive-deps
+  const archiveFields = (
     <div className="max-w-md pt-1">
-      <label htmlFor="retire-reason" className={labelClass}>Why is it retired?</label>
-      <input id="retire-reason" className={inputClass} value={retireReason} onChange={(e) => setRetireReason(e.target.value)} />
-      <p className={hintClass}>{visit.site} will be kept as a retired location, with this reason, from the day of the visit. A retired location is retired for good: it never goes back to active, and it can no longer be changed.</p>
+      <label htmlFor="archive-reason" className={labelClass}>Why is it archived?</label>
+      <input id="archive-reason" className={inputClass} value={archiveReason} onChange={(e) => setArchiveReason(e.target.value)} />
+      <p className={hintClass}>{visit.site} will be kept as an archived location, with this reason, from the day of the visit. An archived location is archived for good: it never goes back to active, and it can no longer be changed.</p>
     </div>
   )
-  const errors = { ...visitErrors(visit, kept?.length === 0), ...conflicts }
-  const moreErrors = detailsErrors(visit.details)
+  const gapM = gpsDistance(visit, location)
+  const errors = { ...visitErrors(visit, kept?.length === 0), ...conflicts, ...(gapM != null && gapM > GPS_TOLERANCE_M ? { latitude: `The GPS is ${gapM} m from the location.` } : {}) }
+  const moreErrors = { ...detailsErrors(visit.details), ...installationErrors(visit) }
   const shown = (field: ErrorKey) => (tried ? errors[field] : undefined)
   // What the visit needs and does not have yet is in red from the start, not only once adding it was tried.
   const red = 'border-red-500 dark:border-red-500'
@@ -432,9 +500,12 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   }, [settingsOpen])
 
   useEffect(() => {
-    setAllVisits(null)
+    setAllVisits(null); setProjectLocations([])
     if (!project) return
     let cancelled = false
+    Promise.resolve().then(() => api.listLocalLocations(project.acronym))
+      .then(({ results }) => { if (!cancelled) setProjectLocations(results) })
+      .catch(() => {})
     Promise.resolve().then(() => api.listVisits(project.acronym))
       .then(({ results }) => { if (!cancelled) setAllVisits(results) })
       .catch(() => {})
@@ -461,7 +532,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     setLocation(picked); setFilledFrom(null)
     setVisit((v) => ({
       ...v, site: picked?.location_id ?? '',
-      latitude: picked?.latitude != null ? String(picked.latitude) : '',
+      latitude: picked?.latitude != null ? String(picked.latitude) : '', // the GPS of the note starts as the location's, to be corrected
       longitude: picked?.longitude != null ? String(picked.longitude) : '',
     }))
     setEditingWhere(!picked)
@@ -594,7 +665,27 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // A visit needs a site, what was done, and when: a date and a time, the two in one column, or the time the entry was created.
   const mappedEnough = !!csvMapping.location_id && !!csvMapping.actions && (!!csvMapping.when || !!csvMapping.created_at || (!!csvMapping.date && !!csvMapping.time))
 
-  const whereDone = !!project && !!location && !editingWhere
+  // The revision of the visit is the next of its location; it cannot start while the one before it has locations still to be visited.
+  const revisionBlock = allVisits && location && !editingWhere
+    ? unfinishedRevision((kept?.length ?? 0) + 1, allVisits, projectLocations, visit.when.slice(0, 10)) : null
+  const whereDone = !!project && !!location && !editingWhere && !revisionBlock
+  const [marking, setMarking] = useState(false)
+  // Marking the locations as not visited finishes the revision before: it is asked again before it is done.
+  const [confirmingMark, setConfirmingMark] = useState(false)
+  // The locations of the revision before that were not visited are marked as such — the visits that could not be made — and the revision is finished.
+  async function markNotVisited() {
+    if (!project || !revisionBlock) return
+    setMarking(true)
+    try {
+      setConfirmingMark(false)
+      await api.markNotVisited(project.acronym, revisionBlock.previous)
+      setAllVisits((await api.listVisits(project.acronym)).results)
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'The locations could not be marked as not visited.')
+    } finally {
+      setMarking(false)
+    }
+  }
   const whenDone = whereDone && whenConfirmed && !!visit.when
   const asked = askedOf(visit)
   // What the last visit to the location left in the camera: the card the one that is collected now was.
@@ -642,11 +733,22 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     } catch { setJustClosed([]) }
   }
 
+  /** What stops the visit being added yet — nothing when it is complete. */
+  const incomplete = Object.keys(errors).length > 0 || Object.keys(moreErrors).length > 0 || !project || !kept
+    || (guided && seeCamera === 'yes' && !visit.status)
+  // A visit cannot be changed once it is created: it is asked again before it is kept.
+  const [confirming, setConfirming] = useState(false)
+  function review() {
+    setTried(true)
+    if (incomplete) return
+    setSaveError(null)
+    setConfirming(true)
+  }
+
   async function add() {
     setTried(true)
-    if (Object.keys(errors).length > 0 || Object.keys(moreErrors).length > 0 || !project || !kept) return
-    if (guided && seeCamera === 'stolen' && !afterTheft) return
-    if (guided && seeCamera === 'yes' && !visit.status) return
+    setConfirming(false)
+    if (incomplete) return
     setSaveError(null)
     // The session is worked out from the visits kept to the location, as its coordinates come from the location.
     const complete: Visit = { ...visit, session: sessionOf(kept.length), site: visit.site.trim() }
@@ -662,18 +764,18 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       try {
         await api.setFieldItemStatus(project.acronym, 'cameras', theft, 'stolen', day, 'Stolen')
         if (stolenCard) await api.setFieldItemStatus(project.acronym, 'sd_cards', stolenCard, 'stolen', day, 'Stolen with the camera')
-        setCameras((list) => list.map((c) => (cameraKey(c).toLowerCase() === theft.toLowerCase() || c.label.toLowerCase() === theft.toLowerCase() ? { ...c, status: 'stolen' as const, status_date: day } : c)))
-        if (stolenCard) setSdCards((list) => list.map((c) => (c.label.toLowerCase() === stolenCard.toLowerCase() ? { ...c, status: 'stolen' as const, status_date: day } : c)))
+        setCameras((list) => list.map((c) => (cameraKey(c).toLowerCase() === theft.toLowerCase() || c.label.toLowerCase() === theft.toLowerCase() ? { ...c, status: 'archived' as const, archive_reason: 'stolen' as const, status_date: day } : c)))
+        if (stolenCard) setSdCards((list) => list.map((c) => (c.label.toLowerCase() === stolenCard.toLowerCase() ? { ...c, status: 'archived' as const, archive_reason: 'stolen' as const, status_date: day } : c)))
       } catch (e) {
         setSaveError(e instanceof Error ? `The visit is kept, but the camera or the card could not be marked as stolen: ${e.message}` : 'The visit is kept, but the camera or the card could not be marked as stolen.')
       }
     }
-    // The location is retired — with the reason — when the visit says the camera was stolen and the site is not kept.
-    if (retiring) {
+    // The visit archived the location (its Archive action): the reason is what its note says.
+    if (archiving) {
       try {
-        await api.updateLocalLocation(project.acronym, complete.site, { status: 'retired', status_date: complete.when.slice(0, 10), status_note: retireReason.trim() || null })
+        await api.updateLocalLocation(project.acronym, complete.site, { status_note: archiveReason.trim() || null })
       } catch (e) {
-        setSaveError(e instanceof Error ? `The visit is kept, but the location could not be retired: ${e.message}` : 'The visit is kept, but the location could not be retired.')
+        setSaveError(e instanceof Error ? `The visit is kept and the location archived, but its reason could not be noted: ${e.message}` : 'The visit is kept and the location archived, but its reason could not be noted.')
       }
     }
     setVisits((list) => [...list, complete])
@@ -720,6 +822,21 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             </>}
           >
             {!defaultProject && <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={selectProject} />}
+            {revisionBlock && !confirmingMark && (
+              <Notice kind="warning" role="alert" className="mb-3" action={<button type="button" className={btnOutline} disabled={marking} onClick={() => setConfirmingMark(true)}>Mark them as not visited</button>}>
+                {revisionBlock.message} This visit cannot be made until it is. Do you want to mark as not visited the locations of {revisionBlock.previous} that still are not visited: {revisionBlock.missing.join(', ')}?
+              </Notice>
+            )}
+            {revisionBlock && confirmingMark && (
+              <Notice kind="warning" role="alert" className="mb-3" action={(
+                <span className="flex gap-2">
+                  <button type="button" className={btnOutline} disabled={marking} onClick={() => setConfirmingMark(false)}>Cancel</button>
+                  <button type="button" className={btnPrimary} disabled={marking} onClick={() => void markNotVisited()}>Yes, mark them as not visited</button>
+                </span>
+              )}>
+                Once this is done, the visit book of <strong>{revisionBlock.previous}</strong> will be consolidated and it cannot be modified. Do you want to mark {revisionBlock.missing.join(', ')} as not visited?
+              </Notice>
+            )}
             {project && <LocationPicker researchProjectId={project.acronym} trapperPk={project.trapper_pk} value={visit.site} onSelect={selectLocation} onCreateInSettings={onOpenSettings && (() => onOpenSettings('locations'))} />}
           </WizardStep>
 
@@ -769,6 +886,19 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 <DateTimeField label="Date and time of the visit" required value={visit.when} onChange={(v) => set('when', v)} error={shown('when')} />
               </div>
             </FormCard>
+            {visit.site && (
+              <div className="mt-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5">
+                <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">GPS where the note was taken <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">to check the location</span></h5>
+                <p className={hintClass}>The coordinates of the GPS where the note was taken. They start as those of the location, and are compared with those of {visit.site}{location?.latitude != null && location?.longitude != null ? ` (${location.latitude}, ${location.longitude})` : ''}.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 max-w-xl">
+                  <Field id="visit-latitude" label="Latitude"><input id="visit-latitude" type="number" step="any" min={-90} max={90} className={inputClass} value={visit.latitude} onChange={(e) => set('latitude', e.target.value)} /></Field>
+                  <Field id="visit-longitude" label="Longitude"><input id="visit-longitude" type="number" step="any" min={-180} max={180} className={inputClass} value={visit.longitude} onChange={(e) => set('longitude', e.target.value)} /></Field>
+                </div>
+                {gapM != null && (gapM > GPS_TOLERANCE_M
+                  ? <Notice kind="error" role="alert" className="mt-3">These coordinates are {gapM < 1000 ? `${gapM} m` : `${(gapM / 1000).toFixed(1)} km`} from {visit.site}, more than {GPS_TOLERANCE_M / 1000} km: check that the location is the right one, or the coordinates.</Notice>
+                  : <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">{gapM} m from {visit.site}: the location matches.</p>)}
+              </div>
+            )}
             <div className="flex justify-between items-center mt-4">
               <button type="button" className={btnOutline} onClick={() => setEditingWhere(true)}><span aria-hidden="true">← </span>Back</button>
               <button type="button" aria-label="Continue to the visit" className={btnPrimary} disabled={!visit.when} onClick={() => setWhenConfirmed(true)}>Continue<span aria-hidden="true"> →</span></button>
@@ -776,7 +906,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
           </WizardStep>
 
           <WizardStep n={4} title="Enter the visit" status={whenDone ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description={<>What was done at this visit. The fields tagged <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Camtrap DP</span> are those of the deployments table of the Camtrap Data Package; the others are the visit&rsquo;s own.</>}>
-            <form noValidate onSubmit={(e) => { e.preventDefault(); void add() }}>
+            <form noValidate onSubmit={(e) => { e.preventDefault(); review() }}>
               {lastVisit && (
                 <div className="mb-4">
                   {filledFrom === lastVisit.session ? (
@@ -796,13 +926,17 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     <fieldset className="sm:col-span-2" aria-describedby="visit-actions-hint">
                       <legend className={labelClass}>Do you see the camera?</legend>
                       {noCamera ? (
-                        <ChoiceCards<'install'> label="Do you see the camera?" value="install" onChange={() => undefined}
-                          choices={[{ value: 'install', label: 'Of course not, I am going to install it', description: `No camera is known at ${visit.site}`, icon: CAMERA_PATHS.plus }]} />
+                        <ChoiceCards<'install' | 'cannot'> label="Do you see the camera?" value={seeCamera === 'cannot' ? 'cannot' : 'install'} onChange={(v) => setSeeCamera(v === 'cannot' ? 'cannot' : null)}
+                          choices={[
+                            { value: 'install', label: 'Of course not, I am going to install it', description: `No camera is known at ${visit.site}`, icon: CAMERA_PATHS.plus },
+                            { value: 'cannot', label: 'No, I cannot make the visit', description: 'The visit could not be done', icon: CAMERA_PATHS.ban },
+                          ]} />
                       ) : (
-                        <ChoiceCards<'yes' | 'stolen'> label="Do you see the camera?" value={seeCamera} onChange={setSeeCamera}
+                        <ChoiceCards<'yes' | 'stolen' | 'cannot'> label="Do you see the camera?" value={seeCamera} onChange={setSeeCamera}
                           choices={[
                             { value: 'yes', label: 'Yes, I see it', description: 'The camera is there', icon: CAMERA_PATHS.eye },
                             { value: 'stolen', label: 'No, it was stolen', description: 'The camera is gone', icon: CAMERA_PATHS.alert, tone: 'red' },
+                            { value: 'cannot', label: 'No, I cannot make the visit', description: 'The visit could not be done', icon: CAMERA_PATHS.ban },
                           ]} />
                       )}
                       {!noCamera && seeCamera === 'yes' && (
@@ -816,29 +950,30 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       {!noCamera && seeCamera === 'yes' && visit.status && (
                         <div className="reveal mt-5 space-y-3" role="group" aria-label="What do you do with the camera?">
                           <p className="text-sm font-semibold">What do you do with the camera?</p>
-                          <ChoiceCards<'stay' | 'replace' | 'remove'> label="What do you do with the camera?" size="compact" value={afterRevision} onChange={setAfterRevision}
+                          <ChoiceCards<'stay' | 'replace' | 'take' | 'remove'> label="What do you do with the camera?" size="compact" value={afterRevision} onChange={setAfterRevision}
                             choices={[
                               { value: 'stay', label: 'Leave it where it is', icon: CAMERA_PATHS.anchor },
                               { value: 'replace', label: 'Replace it with another', icon: CAMERA_PATHS.replace },
-                              { value: 'remove', label: 'Take it away, and retire the location', icon: CAMERA_PATHS.archive },
+                              { value: 'take', label: 'Take it away', description: 'The location stays active', icon: CAMERA_PATHS.minus },
+                              { value: 'remove', label: 'Take it away, and archive the location', icon: CAMERA_PATHS.archive },
                             ]} />
-                          {afterRevision === 'remove' && retireFields}
+                          {afterRevision === 'remove' && archiveFields}
                         </div>
                       )}
                       {!noCamera && seeCamera === 'stolen' && (
                         <div className="reveal mt-5 space-y-3" role="group" aria-label="What now?">
                           <p className="text-sm font-semibold">What now?</p>
-                          <ChoiceCards<'replace' | 'retire'> label="What now?" size="compact" value={afterTheft} onChange={setAfterTheft}
+                          <ChoiceCards<'replace' | 'archive' | 'nothing'> label="What now?" size="compact" value={afterTheft} onChange={setAfterTheft}
                             choices={[
                               { value: 'replace', label: 'Install a new camera', icon: CAMERA_PATHS.plus, tone: 'red' },
-                              { value: 'retire', label: 'Retire the location', icon: CAMERA_PATHS.ban, tone: 'red' },
+                              { value: 'archive', label: 'Archive the location', icon: CAMERA_PATHS.ban, tone: 'red' },
+                              { value: 'nothing', label: 'Nothing yet', description: 'Only the theft is noted', icon: CAMERA_PATHS.anchor, tone: 'red' },
                             ]} />
-                          {afterTheft === 'retire' && retireFields}
-                          {tried && !afterTheft && <p className="text-xs text-red-600 dark:text-red-400">Say what is done after the theft.</p>}
+                          {afterTheft === 'archive' && archiveFields}
                         </div>
                       )}
                       <p id="visit-actions-hint" className="mt-5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800/60 px-4 py-3 text-xs sm:text-sm text-zinc-600 dark:text-zinc-300">
-                        {visit.actions.length === 0 ? 'Answer the question: the rest of the form depends on it.' : <>The visit is kept as <strong>{actionsText(visit.actions)}</strong>. {visit.actions.map((a) => ACTION_HINTS[a]).join(' ')}</>}
+                        {notVisited ? <>The visit is kept as <strong>not visited</strong>: nothing was done at it, so it has no action, and no camera, card or photos are asked.</> : visit.actions.length === 0 ? 'Answer the question: the rest of the form depends on it.' : <>The visit is kept as <strong>{actionsText(visit.actions)}</strong>. {visit.actions.map((a) => ACTION_HINTS[a]).join(' ')}</>}
                       </p>
                       {shown('actions') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">Say whether you see the camera.</p>}
                     </fieldset>
@@ -863,17 +998,23 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   </fieldset>
                   )}
                 </div>
-                {kept && kept.length === 0 && (
+                {kept && kept.length === 0 && !notVisited && (
                   <p role="status" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                     This is the first visit to {visit.site}: it can only be an Installation, as no camera is known to be there yet.
                   </p>
                 )}
               </FormCard>
 
-              <MoreDetailsForm deployment={visit.details} errors={moreErrors} onField={setDetail} camtrapTags
+              {notVisited ? (
+                <FormCard title="Why could the visit not be made?" description="Optional. Nothing else is asked of this visit.">
+                  <label className="sr-only" htmlFor="not-visited-reason">Reason</label>
+                  <textarea id="not-visited-reason" rows={3} className={inputClass} placeholder="e.g. the road was flooded" value={visit.details.comments ?? ''} onChange={(e) => setDetail('comments', e.target.value || null)} />
+                </FormCard>
+              ) : (
+              <MoreDetailsForm deployment={visit.details} errors={moreErrors} onField={setDetail} camtrapTags requiredKeys={Object.keys(installationErrors(visit))} cameraMissing={errors.camera ? 1 : 0}
                 afterCamera={(
               <SectionCard
-                title="SD card" icon={SD_ICON} total={sdValues.length} filled={sdValues.filter((v) => v.trim()).length}
+                title="SD card" icon={SD_ICON} total={sdValues.length} filled={sdValues.filter((v) => v.trim()).length} missing={(errors.sd ? 1 : 0) + (errors.numPhotos === 'Required.' ? 1 : 0)}
                 summary={[on(asked.sdLeft) && visit.sd.trim() && `left ${visit.sd.trim()}`, on(asked.photos) && visit.numPhotos.trim() && `${visit.numPhotos.trim()} photos`, on(asked.card) && `card ${visit.card === 'Full' ? 'full' : 'OK'}`].filter(Boolean).join(' · ')}
               >
                 {stolenCard && <Notice kind="info" className="mb-4">The SD card <strong>{stolenCard}</strong>, which was in the camera, was stolen with it: it will be marked as not available because it was stolen.</Notice>}
@@ -953,6 +1094,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   </div>
                 ),
               }} />
+              )}
 
               {tried && (Object.keys(errors).length > 0 || Object.keys(moreErrors).length > 0) && (
                 <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -960,10 +1102,21 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 </p>
               )}
               {saveError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{saveError}</p>}
+              {confirming ? (
+                <Notice kind="warning" role="status" className="mt-4" action={(
+                  <span className="flex gap-2">
+                    <button type="button" className={btnOutline} onClick={() => setConfirming(false)}>Back to the form</button>
+                    <button type="button" className={btnPrimary} onClick={() => void add()}>Yes, add the visit</button>
+                  </span>
+                )}>
+                  A visit cannot be changed once it is created. Do you want to add the {notVisited ? 'visit that could not be made' : 'visit'} to <strong>{visit.site}</strong> ({kept ? sessionOf(kept.length) : ''}, {visit.when.replace('T', ' ')})?
+                </Notice>
+              ) : (
               <div className="mt-4 flex justify-end gap-2">
                 <button type="button" className={btnOutline} onClick={() => { setVisit({ ...EMPTY_VISIT, site: visit.site, latitude: visit.latitude, longitude: visit.longitude, when: visit.when }); setTried(false); setFilledFrom(null) }}>Clear</button>
                 <button type="submit" className={btnPrimary} disabled={!kept}>Add visit</button>
               </div>
+              )}
             </form>
           </WizardStep>
 
@@ -985,7 +1138,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     {visits.map((v, i) => (
                       <tr key={i} className="border-t border-emerald-300/60 dark:border-emerald-800">
                         <td className="pr-3 py-1">{v.session}</td><td className="pr-3">{v.when.replace('T', ' ')}</td>
-                        <td className="pr-3">{v.site}</td><td className="pr-3">{v.details.camera_id}</td><td>{actionsText(v.actions)}</td>
+                        <td className="pr-3">{v.site}</td><td className="pr-3">{v.details.camera_id}</td><td>{v.actions.length === 0 ? 'Not visited' : actionsText(v.actions)}</td>
                       </tr>
                     ))}
                   </tbody>

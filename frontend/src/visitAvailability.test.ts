@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { availabilityErrors, cameraAt, cardAt } from './visitAvailability'
+import { availabilityErrors, cameraAt, cardAt, unfinishedRevision } from './visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from './types'
 import type { StoredVisit } from './types'
 import type { Visit } from './pages/VisitsPage'
@@ -83,5 +83,23 @@ describe('a Revision is of the camera that is at the site', () => {
     expect(revision('C9', ['Revision', 'Installation']).camera).toBeUndefined() // replaced: the visit says so
     expect(availabilityErrors(KEPT, visit({ site: 'DONA_01', actions: ['Desinstallation'], camera: 'C9' })).camera).toContain('is of that camera')
     expect(availabilityErrors(KEPT, visit({ site: 'DONA_03', actions: ['Revision'], camera: 'C9', when: '2026-12-01T09:00:00' })).camera).toBeUndefined() // no camera there: nothing to compare
+  })
+})
+
+describe('when a revision can start', () => {
+  const sites = [{ location_id: 'WICP_0001' }, { location_id: 'WICP_0002' }, { location_id: 'WICP_0003', status: 'archived', status_date: '2026-01-01' }]
+  const first = [stored({ location_id: 'WICP_0001' })]
+
+  it('is not until every location that is not archived has been visited in the one before', () => {
+    expect(unfinishedRevision(2, first, sites)).toEqual({ message: 'R0002 cannot start: R0001 is not finished, 1 location(s) still to be visited in it: WICP_0002.', previous: 'R0001', missing: ['WICP_0002'] })
+    expect(unfinishedRevision(2, [...first, stored({ location_id: 'wicp_0002' })], sites)).toBeNull()
+  })
+
+  it('is when it is the first revision there is, or a location was archived before the one before it started', () => {
+    expect(unfinishedRevision(1, [], sites)).toBeNull()
+    expect(unfinishedRevision(13, [stored({ session: 'R0013' })], sites)).toBeNull()
+    expect(unfinishedRevision(2, first, [{ location_id: 'WICP_0001' }, { location_id: 'WICP_0002', status: 'archived', status_date: '2026-06-01' }])).toBeNull()
+    // archived after the revision started: it was still to be visited
+    expect(unfinishedRevision(2, first, [{ location_id: 'WICP_0001' }, { location_id: 'WICP_0002', status: 'archived', status_date: '2026-12-01' }])?.missing).toContain('WICP_0002')
   })
 })
