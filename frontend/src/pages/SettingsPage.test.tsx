@@ -968,6 +968,14 @@ describe('SettingsPage', () => {
       await pickProject()
     }
 
+    it('opens on the page of the card a link of another page goes to', async () => {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [A12, B3] } })
+      render(<SettingsPage onClose={vi.fn()} initialSection="sdcards" initialProject="DONA" initialItem="b3" />)
+
+      expect(await screen.findByRole('region', { name: 'SD card' })).toBeInTheDocument()
+      expect(screen.getByText('Edit B3')).toBeInTheDocument()
+    })
+
     it('lists the cards with their brand, capacity and the day they were put into production', async () => {
       await open([A12, B3])
 
@@ -1078,26 +1086,27 @@ describe('SettingsPage', () => {
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
     })
 
-    it('gives a camera a status, the day it began and why — and says it on its card', async () => {
-      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+    it('gives a camera a status — and, once archived, the day, why and a comment — and says it on its card', async () => {
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'active' }])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
       const dialog = within(screen.getByRole('region', { name: 'Camera' }))
       expect(dialog.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
       expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual([
-        'ActiveOffered when a visit is registered.', 'LostNot offered. Past visits keep it.', 'StolenNot offered. Past visits keep it.', 'BrokenNot offered until it is repaired.', 'RetiredTaken out of use for good: it never goes back to active.',
+        'ReadyAvailable, not in the field yet. Offered when a visit is registered.', 'ActiveIn use in the field. Offered when a visit is registered.', 'ArchivedOut of use for good: lost, stolen, broken… It never goes back to ready or active.',
       ])
-      expect(dialog.queryByLabelText('Status since')).not.toBeInTheDocument() // asked once it is not active
-      await userEvent.click(dialog.getByRole('radio', { name: /Stolen/ }))
+      expect(dialog.queryByLabelText('Status since')).not.toBeInTheDocument() // asked once it is archived
+      await userEvent.click(dialog.getByRole('radio', { name: /Archived/ }))
+      expect(dialog.getByRole('button', { name: 'Other' })).toHaveAttribute('aria-pressed', 'true') // the reason a new archive starts with
+      await userEvent.click(dialog.getByRole('button', { name: 'Stolen' }))
       fireEvent.change(dialog.getByLabelText('Status since'), { target: { value: '2026-05-02' } })
-      await userEvent.type(dialog.getByLabelText('Status note'), 'taken from the tree')
+      await userEvent.type(dialog.getByLabelText('Comment'), 'taken from the tree')
       await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
 
-      expect(screen.getByText('Stolen')).toHaveAttribute('title', 'since 2026-05-02 — taken from the tree')
-      expect(screen.getByText(/Stolen since 2 May 2026/)).toBeInTheDocument()
+      expect(screen.getByText('Archived')).toHaveAttribute('title', 'since 2026-05-02 — taken from the tree')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([
-        { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'stolen', status_date: '2026-05-02', status_note: 'taken from the tree' },
+        { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'archived', archive_reason: 'stolen', status_date: '2026-05-02', status_note: 'taken from the tree' },
       ])
     })
 
@@ -1466,7 +1475,7 @@ describe('SettingsPage — Entities', () => {
     })
 
     it('deletes one after asking, from its page — and says why when it can not be', async () => {
-      mockedApi.deleteLocalLocation.mockRejectedValueOnce(new Error("The location 'DONA_01' still has 1 visit: it can't be deleted — mark it as retired instead."))
+      mockedApi.deleteLocalLocation.mockRejectedValueOnce(new Error("The location 'DONA_01' still has 1 visit: it can't be deleted — mark it as archived instead."))
       mockedApi.deleteLocalLocation.mockResolvedValueOnce({ deleted: 'DONA_01' })
       await openLocations()
 

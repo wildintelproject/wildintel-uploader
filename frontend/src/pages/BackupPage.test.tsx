@@ -122,7 +122,7 @@ describe('BackupPage', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'Restore a backup' }))
     await userEvent.click(screen.getByRole('button', { name: 'Choose the backup…' }))
     await userEvent.click(await screen.findByRole('switch', { name: 'Replace what is already here' }))
-    expect(screen.getByText(/What is retired stays retired/)).toBeInTheDocument()
+    expect(screen.getByText(/What is archived stays archived/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Restore' }))
 
     await waitFor(() => expect(mocked.backupRestore).toHaveBeenCalled())

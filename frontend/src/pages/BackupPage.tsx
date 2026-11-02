@@ -346,7 +346,7 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
                           hint={Object.values(read.has_images).some(Boolean) ? 'Off: only what describes each deployment is restored.' : 'This backup was made without the images.'} />
                 )}
                 <Option label="Replace what is already here" checked={replace} onChange={setReplace}
-                        hint={conflicts.length === 0 ? 'Nothing of what you chose is here yet.' : replace ? `What the backup holds wins over: ${conflicts.join(', ')}. What is retired stays retired.` : `Off: what is already here is left as it is (${conflicts.join(', ')}); only what is missing is added.`} />
+                        hint={conflicts.length === 0 ? 'Nothing of what you chose is here yet.' : replace ? `What the backup holds wins over: ${conflicts.join(', ')}. What is archived stays archived.` : `Off: what is already here is left as it is (${conflicts.join(', ')}); only what is missing is added.`} />
                 <div className="flex items-center gap-3">
                   <button type="button" className={btnPrimary} disabled={!somethingToRestore || running} onClick={() => void restore()}>Restore</button>
                   {running && <span className="inline-flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400"><SmallSpinner />Restoring…</span>}

@@ -12,6 +12,7 @@ import { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { TrapperCredentials } from '../api'
 import CheckboxList from '../components/CheckboxList'
+import ChoiceCards from '../components/ChoiceCards'
 import Combobox from '../components/Combobox'
 import OptionCards from '../components/OptionCards'
 import type { Option } from '../components/OptionCards'
@@ -802,7 +803,7 @@ function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, sugg
 /** True while the details are shown as they were taken from a source, not to be edited: the fields of every card in it are disabled. */
 export const LockedDetailsContext = createContext(false)
 
-export function SectionCard({ title, icon, filled, total, summary, optional = false, children }: { title: string; icon: ReactNode; filled: number; total: number; summary?: string; optional?: boolean; children: ReactNode }) {
+export function SectionCard({ title, icon, filled, total, summary, optional = false, missing = 0, children }: { title: string; icon: ReactNode; filled: number; total: number; summary?: string; optional?: boolean; missing?: number; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const locked = useContext(LockedDetailsContext)
   return (
@@ -813,7 +814,7 @@ export function SectionCard({ title, icon, filled, total, summary, optional = fa
           <span className="block text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}{optional && <span className="ml-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">optional</span>}</span>
           {!open && summary && <span className="block truncate text-sm text-zinc-500 dark:text-zinc-400">{summary}</span>}
         </span>
-        <span className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${filled > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'}`}>{filled} of {total} filled</span>
+        <span className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${missing > 0 ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : filled > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'}`}>{filled} of {total} filled{missing > 0 && ` · ${missing} required missing`}</span>
         <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 fill-none stroke-current text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
       </button>
       {open && <div className="px-4 pb-4"><fieldset disabled={locked} className="contents">{children}</fieldset></div>}
@@ -828,9 +829,11 @@ const HEADINGS: { label: string; degrees: number }[] = [
 const roundPill = (active: boolean) => `px-4 py-2 text-sm font-medium rounded-full border transition-colors ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
 
 /** An angle in degrees: its label, a short input with the degree sign, the quick picks beside it, and one line on what it means. */
-function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, children }: {
+function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, required, children, unit = '°', step = 1, width = 'w-32' }: {
   label: string; value: number | null | undefined; onChange: (v: number | null) => void; min: number; max: number; placeholder: string
-  hint: string; error?: string; children: ReactNode
+  hint: string; error?: string; required?: boolean; children: ReactNode
+  /** What it is measured in, said at the end of the box (none: nothing is said). */
+  unit?: string; step?: number | 'any'; width?: string
 }) {
   const id = fieldId(label)
   return (
@@ -838,13 +841,14 @@ function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, 
       <div className="flex items-baseline gap-2 mb-1.5">
         <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
         <CamtrapDpTag />
+        {required && <span className="text-[11px] uppercase tracking-wide text-blue-600 dark:text-blue-400">Required</span>}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative w-32">
-          <input id={id} type="number" min={min} max={max} step={1} placeholder={placeholder} aria-invalid={error ? true : undefined}
-                 className={`${inputClass} pr-8 ${error ? 'border-red-500 dark:border-red-500' : ''}`}
+        <div className={`relative ${width}`}>
+          <input id={id} type="number" min={min} max={max} step={step} placeholder={placeholder} aria-invalid={error ? true : undefined}
+                 className={`${inputClass} ${unit ? 'pr-8' : ''} ${error ? 'border-red-500 dark:border-red-500' : ''}`}
                  value={value?.toString() ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} />
-          <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500 dark:text-zinc-400 pointer-events-none">°</span>
+          {unit && <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500 dark:text-zinc-400 pointer-events-none">{unit}</span>}
         </div>
         {children}
       </div>
@@ -854,10 +858,12 @@ function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, 
   )
 }
 
+/** The heights a camera is usually put up at, in metres. */
+const HEIGHTS = [0.5, 1, 1.5, 2]
 const TILTS: { label: string; degrees: number }[] = [{ label: 'Down −90°', degrees: -90 }, { label: 'Level 0°', degrees: 0 }, { label: 'Up 90°', degrees: 90 }]
 
 /** The optional details of a deployment — its camera, its site, its groups, tags and comments — as three cards, every field in view. */
-export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraPicker, afterCamera, camtrapTags = false }: {
+export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraPicker, afterCamera, camtrapTags = false, requiredKeys = [], cameraMissing = 0 }: {
   deployment: DeploymentFields; errors: ReturnType<typeof shownErrors>
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
   /** More fields for the Camera card, of the page that uses the form: how many there are, how many are filled in, and the fields themselves. */
@@ -868,10 +874,18 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
   afterCamera?: ReactNode
   /** Tags each field of the form as one of Camtrap DP's — for a page that asks for fields that are not, beside them. */
   camtrapTags?: boolean
+  /** The fields (of the deployment) the page asks for: marked as required, and bait is answered with yes or no instead of a switch. */
+  requiredKeys?: string[]
+  /** How many required fields the page asks for in the Camera card that are still empty, besides the ones of the deployment — the camera the page picks. */
+  cameraMissing?: number
 }) {
+  const ask = (key: string) => requiredKeys.includes(key)
   const [mount, setMount] = useState<'above' | 'below'>(deployment.camera_depth != null ? 'below' : 'above')
   const groups = (deployment.deployment_groups ?? '').split('|').map((g) => g.trim()).filter(Boolean)
   const count = (values: unknown[]) => values.filter((v) => v != null && v !== '' && v !== false).length
+  // the required fields of a card that are still empty — the card says so instead of only how many are filled; a depth stands for a height
+  const emptyIn = (keys: string[]) => requiredKeys.filter((k) => keys.includes(k)
+    && ((deployment as unknown as Record<string, unknown>)[k === 'camera_height' && mount === 'below' ? 'camera_depth' : k] ?? '') === '').length
   const chooseMount = (next: 'above' | 'below') => {
     setMount(next)
     if (next === 'above') onField('camera_depth', null); else onField('camera_height', null)
@@ -895,6 +909,7 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
     <CamtrapDpContext.Provider value={camtrapTags}>
     <div>
       <SectionCard title="Camera" icon={camera.icon} total={7 + (cameraExtra?.total ?? 0)} summary={cameraSummary}
+                   missing={emptyIn(['camera_model', 'camera_id', 'camera_height', 'camera_tilt', 'camera_heading', 'camera_interval', 'detection_distance']) + cameraMissing}
                    filled={count([deployment.camera_model, deployment.camera_id, mount === 'above' ? deployment.camera_height : deployment.camera_depth, deployment.camera_tilt, deployment.camera_heading, deployment.camera_interval, deployment.detection_distance]) + (cameraExtra?.filled ?? 0)}>
         {cameraPicker ?? (
           <div className="grid grid-cols-2 gap-4">
@@ -911,23 +926,25 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
           <button type="button" aria-pressed={mount === 'above'} className={pill(mount === 'above')} onClick={() => chooseMount('above')}>Above the ground</button>
           <button type="button" aria-pressed={mount === 'below'} className={pill(mount === 'below')} onClick={() => chooseMount('below')}>Below the surface</button>
         </div>
-        <div className="max-w-xs">
+        <div className={mount === 'above' ? '' : 'max-w-xs'}>
           {mount === 'above' ? (
-            <Field label="Height above the ground (m)" type="number" min={0} step="any" placeholder="e.g. 1.2" hint="Measured from the ground to the camera, in meters." error={errors.camera_height}
-                   value={deployment.camera_height?.toString() ?? ''} onChange={(v) => onField('camera_height', v ? Number(v) : null)} />
+            <AngleRow label="Height above the ground (m)" placeholder="e.g. 1.2" min={0} max={1000} step="any" unit="m" value={deployment.camera_height} error={errors.camera_height} required={ask('camera_height')}
+                      hint="Measured from the ground to the camera, in meters." onChange={(v) => onField('camera_height', v)}>
+              {HEIGHTS.map((h) => <button key={h} type="button" aria-label={`Height ${h} m`} className={roundPill(deployment.camera_height === h)} onClick={() => onField('camera_height', h)}>{h} m</button>)}
+            </AngleRow>
           ) : (
-            <Field label="Depth below the surface (m)" type="number" min={0} step="any" placeholder="e.g. 4.8" hint="For underwater cameras, measured down from the surface, in meters." error={errors.camera_depth}
+            <Field label="Depth below the surface (m)" type="number" min={0} step="any" placeholder="e.g. 4.8" hint="For underwater cameras, measured down from the surface, in meters." error={errors.camera_depth ?? errors.camera_height} required={ask('camera_height')}
                    value={deployment.camera_depth?.toString() ?? ''} onChange={(v) => onField('camera_depth', v ? Number(v) : null)} />
           )}
         </div>
 
         <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-2">Where does it point?</p>
         <div className="space-y-4">
-          <AngleRow label="Tilt" placeholder="e.g. -90" min={-90} max={90} value={deployment.camera_tilt} error={errors.camera_tilt}
+          <AngleRow label="Tilt" placeholder="e.g. -90" min={-90} max={90} value={deployment.camera_tilt} error={errors.camera_tilt} required={ask('camera_tilt')}
                     hint="Angle up or down: -90° faces the ground, 0° is level, 90° faces the sky." onChange={(v) => onField('camera_tilt', v)}>
             {TILTS.map((t) => <button key={t.label} type="button" className={roundPill(deployment.camera_tilt === t.degrees)} onClick={() => onField('camera_tilt', t.degrees)}>{t.label}</button>)}
           </AngleRow>
-          <AngleRow label="Heading" placeholder="e.g. 225" min={0} max={360} value={deployment.camera_heading} error={errors.camera_heading}
+          <AngleRow label="Heading" placeholder="e.g. 225" min={0} max={360} value={deployment.camera_heading} error={errors.camera_heading} required={ask('camera_heading')}
                     hint="Compass direction, from 0° to 360°: 0 is north, 90 east, 180 south, 270 west." onChange={(v) => onField('camera_heading', v)}>
             {HEADINGS.map((h) => <button key={h.label} type="button" aria-label={`Heading ${h.label}`} className={roundPill(deployment.camera_heading === h.degrees)} onClick={() => onField('camera_heading', h.degrees)}>{h.label}</button>)}
           </AngleRow>
@@ -935,7 +952,7 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
 
         <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-2">How does it detect?</p>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Camera delay (s)" type="number" min={0} step={1} placeholder="e.g. 120" hint={DESCRIPTIONS.cameraDelay} error={errors.camera_interval}
+          <Field label="Camera delay (s)" type="number" min={0} step={1} placeholder="e.g. 120" hint={DESCRIPTIONS.cameraDelay} error={errors.camera_interval} required={ask('camera_interval')}
                  value={deployment.camera_interval?.toString() ?? ''} onChange={(v) => onField('camera_interval', v ? Number(v) : null)} />
           <Field label="Detection distance (m)" type="number" min={0} step="any" placeholder="e.g. 9.5" hint={DESCRIPTIONS.detectionDistance} error={errors.detection_distance}
                  value={deployment.detection_distance?.toString() ?? ''} onChange={(v) => onField('detection_distance', v ? Number(v) : null)} />
@@ -952,7 +969,7 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
       {/* what the page puts here is its own, not Camtrap DP's */}
       {afterCamera && <CamtrapDpContext.Provider value={false}>{afterCamera}</CamtrapDpContext.Provider>}
 
-      <SectionCard title="Site" icon={site.icon} total={5} summary={siteSummary} filled={count([deployment.feature_type, deployment.habitat, deployment.setup_by, deployment.bait_use, deployment.timestamp_issues])}>
+      <SectionCard title="Site" icon={site.icon} total={5} summary={siteSummary} missing={emptyIn(['feature_type', 'habitat', 'setup_by', 'bait_use', 'timestamp_issues'])} filled={count([deployment.feature_type, deployment.habitat, deployment.setup_by, deployment.bait_use, deployment.timestamp_issues])}>
         <p className="flex items-baseline gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">What is the camera aimed at?<CamtrapDpTag /></p>
         <p className={`${hintClass} mt-0 mb-2`}>The kind of feature in view, if any.</p>
         <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Feature type">
@@ -968,7 +985,19 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
                  value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />
         </div>
         <div className="mt-4 space-y-3">
-          <SwitchRow label="Bait was used" hint="Say what it was in the tags or comments below." checked={!!deployment.bait_use} onChange={(v) => onField('bait_use', v || null)} />
+          {ask('bait_use') ? (
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-5 py-4" role="group" aria-label="Bait was used">
+              <p className="flex items-baseline gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">Bait was used<CamtrapDpTag /><span className="text-[11px] uppercase tracking-wide text-blue-600 dark:text-blue-400">Required</span></p>
+              <p className={`${hintClass} mt-0.5`}>Say what it was in the tags or comments below.</p>
+              <div className="flex gap-2 mt-2">
+                <button type="button" aria-pressed={deployment.bait_use === true} className={pill(deployment.bait_use === true)} onClick={() => onField('bait_use', true)}>Yes</button>
+                <button type="button" aria-pressed={deployment.bait_use === false} className={pill(deployment.bait_use === false)} onClick={() => onField('bait_use', false)}>No</button>
+              </div>
+              {errors.bait_use && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.bait_use}</p>}
+            </div>
+          ) : (
+            <SwitchRow label="Bait was used" hint="Say what it was in the tags or comments below." checked={!!deployment.bait_use} onChange={(v) => onField('bait_use', v || null)} />
+          )}
           <SwitchRow label="Photo dates may be wrong" hint="Turn on if the dates in the photos are known to be off and can’t be fixed, for example an unknown or wrong camera clock." checked={!!deployment.timestamp_issues} onChange={(v) => onField('timestamp_issues', v || null)} />
         </div>
       </SectionCard>
@@ -1360,6 +1389,14 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const [guessing, setGuessing] = useState(false)
   const guessedFor = useRef<string | null>(null)
   const [sourceDir, setSourceDir] = useState('')
+  // Where the images are: on the camera's memory card — copied to a temporary folder of this computer, and then processed as any local folder — or in a folder already.
+  const [imageSource, setImageSource] = useState<'sd' | 'folder' | null>(null)
+  const [cardDir, setCardDir] = useState('')
+  const [copying, setCopying] = useState(false)
+  const [copyProgress, setCopyProgress] = useState<{ copied: number; files: number } | null>(null)
+  const [copyError, setCopyError] = useState<string | null>(null)
+  const [cardCopy, setCardCopy] = useState<string | null>(null)
+  const cardCopyRef = useRef<string | null>(null)
   const [browsing, setBrowsing] = useState(false)
   const [browseError, setBrowseError] = useState<string | null>(null)
   const [scan, setScan] = useState<ScanResult | null>(null)
@@ -1548,7 +1585,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   // the deployment's details, if it had got as far as filling them in.
   useEffect(() => {
     if (!resumeSession) return
-    setSourceDir(resumeSession.source_dir)
+    setSourceDir(resumeSession.source_dir); setImageSource('folder')  // a run that was resumed has its folder
     setScan(resumeSession.scan)
     if (resumeSession.deployment) {
       setDeployment(resumeSession.deployment)
@@ -1589,6 +1626,56 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
         setSourceDir(path); setScan(null); setValidation(null); setValidationError(null)
         await handleScan(path)
       }
+    } catch (e) {
+      setBrowseError(e instanceof Error ? e.message : 'Could not open the folder browser.')
+    } finally {
+      setBrowsing(false)
+    }
+  }
+
+  /** Removes the temporary copy of the memory card, when there is one. */
+  function discardCardCopy() {
+    const path = cardCopyRef.current
+    if (!path) return
+    cardCopyRef.current = null; setCardCopy(null)
+    void api.discardCardCopy(path).catch(() => {})
+  }
+  useEffect(() => () => { const path = cardCopyRef.current; if (path) void api.discardCardCopy(path).catch(() => {}) }, [])
+
+  function chooseImageSource(next: 'sd' | 'folder') {
+    if (next === imageSource) return
+    discardCardCopy()
+    setImageSource(next)
+    setSourceDir(''); setScan(null); setValidation(null); setValidationError(null); setScanError(null)
+    setCardDir(''); setCopyError(null); setCopyProgress(null)
+  }
+
+  /** The card is copied to a temporary folder — it is only read — and, once it is there, the process goes on with the copy as with any local folder. */
+  async function copyCard(path: string = cardDir) {
+    discardCardCopy()
+    setCopying(true); setCopyError(null); setCopyProgress(null); setScan(null); setValidation(null); setValidationError(null); setSourceDir('')
+    try {
+      let copy = ''
+      await api.copyCard(path, (event) => {
+        if (event.type === 'progress') setCopyProgress({ copied: event.copied, files: event.files })
+        else if (event.type === 'start') setCopyProgress({ copied: 0, files: event.files })
+        else if (event.type === 'done') copy = event.path
+      })
+      cardCopyRef.current = copy; setCardCopy(copy)
+      setSourceDir(copy)
+      await handleScan(copy)
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : 'Could not copy the memory card.')
+    } finally {
+      setCopying(false)
+    }
+  }
+
+  async function browseCard() {
+    setBrowsing(true); setBrowseError(null)
+    try {
+      const { path } = await api.browseFolder('Select the memory card')
+      if (path) { setCardDir(path); await copyCard(path) }
     } catch (e) {
       setBrowseError(e instanceof Error ? e.message : 'Could not open the folder browser.')
     } finally {
@@ -2411,7 +2498,38 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
           <WizardStep n={1} title="Select the folder" status={imagesStatus(1)} canEdit={!validating} onEdit={() => setImagesOpen(1)}
                       description="Where the deployment's camera-trap images are, on this computer."
                       summary={scan && <>{folderName}<br />{imageCount}</>}>
-            <Notice kind="warning" className="mb-4">Copy the images from the camera's memory card to a local folder first — don't point this at the card itself.</Notice>
+            <fieldset className="mb-4">
+              <legend className={labelClass}>Are the images on a memory card?</legend>
+              <ChoiceCards<'sd' | 'folder'> label="Are the images on a memory card?" value={imageSource} onChange={chooseImageSource}
+                choices={[
+                  { value: 'sd', label: 'Yes, they are on the SD card', description: 'The card is only read: its content is copied to a temporary folder', icon: <><path d="M6 3h8l4 4v14H6z" /><path d="M9 7v3M12 7v3M15 7v3" /></> },
+                  { value: 'folder', label: 'No, they are in a folder', description: 'Already copied to this computer', icon: <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /> },
+                ]} />
+            </fieldset>
+            {imageSource === 'sd' && (
+              <div className="mb-4 reveal">
+                <label className={labelClass} htmlFor="card-dir">Where is the memory card?</label>
+                <div className="flex gap-2">
+                  <input id="card-dir" className={`${inputClass} flex-1`} placeholder="/run/media/me/CARD" value={cardDir} disabled={copying}
+                         onChange={(e) => { setCardDir(e.target.value); setCopyError(null) }} onKeyDown={(e) => { if (e.key === 'Enter' && cardDir.trim() && !copying) void copyCard() }} />
+                  <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={browsing || copying} onClick={() => void browseCard()}>
+                    {browsing && <SmallSpinner />}
+                    {browsing ? 'Browsing…' : 'Browse…'}
+                  </button>
+                  <button type="button" className={btnPrimary} disabled={!cardDir.trim() || copying} onClick={() => void copyCard()}>Copy the card</button>
+                </div>
+                {browseError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{browseError}</p>}
+                {copying && (
+                  <div role="status" className="mt-3 flex items-center gap-3 rounded border border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                    <SmallSpinner />
+                    {copyProgress && copyProgress.files > 0 ? `Copying the card to a temporary folder… ${copyProgress.copied.toLocaleString('en-US')} of ${copyProgress.files.toLocaleString('en-US')} files` : 'Reading the card…'}
+                  </div>
+                )}
+                {copyError && <p role="alert" className="text-sm text-red-600 dark:text-red-400 mt-2">{copyError}</p>}
+                {cardCopy && !copying && <p className={`${hintClass} mt-2`}>Copied to a temporary folder, which is removed when the import is over. The card itself was not changed.</p>}
+              </div>
+            )}
+            {imageSource === 'folder' && (
             <div className="mb-4">
               <label className={labelClass} htmlFor="source-dir">Folder</label>
               <div className="flex gap-2">
@@ -2424,6 +2542,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
               </div>
               {browseError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{browseError}</p>}
             </div>
+            )}
             {scanError && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{scanError}</p>}
             {scanning ? (
               <div className="flex items-center gap-3 rounded border border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
@@ -3280,16 +3399,17 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                   {events.some((e) => e.type === 'done' && e.sealed === false) && ' It could not be sealed — see the log.'}
                 </p>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
-              <button type="button" className={btnOutline} onClick={handleOpenFolder}>Open folder</button>
-              {onUpload && selectedProjectId && plannedCollection && (
-                <button type="button" className={btnPrimary} onClick={() => onUpload({ researchProjectId: selectedProjectId, collection: plannedCollection.collection })}>
-                  Upload to Trapper
-                </button>
-              )}
-              <button type="button" className={btnOutline} onClick={handleStartOver}>Start over</button>
-              {openFolderError && <p className="text-sm text-red-600 dark:text-red-400">{openFolderError}</p>}
+              {/* what happens next is asked as it is when a visit is added: the question, then the options — one of them the main one */}
+              <div className="flex flex-wrap items-center gap-3" role="group" aria-label="What next">
+                <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to add another deployment?</p>
+                <button type="button" className={btnOutline} onClick={handleOpenFolder}>Open folder</button>
+                {onUpload && selectedProjectId && plannedCollection && (
+                  <button type="button" className={btnOutline} onClick={() => onUpload({ researchProjectId: selectedProjectId, collection: plannedCollection.collection })}>Upload to Trapper</button>
+                )}
+                <button type="button" className={btnPrimary} onClick={handleStartOver}>Add another deployment</button>
+                {onBack && <button type="button" className={btnOutline} onClick={onBack}>Back to the start</button>}
               </div>
+              {openFolderError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{openFolderError}</p>}
             </div>
           )}
             </WizardStep>

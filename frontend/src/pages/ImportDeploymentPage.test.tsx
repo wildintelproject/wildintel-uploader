@@ -21,7 +21,7 @@ vi.mock('../api', () => ({
     trapperClassificationProjects: vi.fn(),
     trapperLocations: vi.fn(),
     trapperDeployments: vi.fn(),
-    browseFolder: vi.fn(),
+    browseFolder: vi.fn(), copyCard: vi.fn(), discardCardCopy: vi.fn(),
     scanFolder: vi.fn(), guessDetails: vi.fn(),
     importDeployment: vi.fn(),
     importLocal: vi.fn(), preprocess: vi.fn(), consolidate: vi.fn(),
@@ -124,8 +124,15 @@ beforeEach(() => {
 // Props the page is rendered with — reset for every test.
 let pageProps: ComponentProps<typeof ImportDeploymentPage> = {}
 
+/** The images are in a folder, not on a memory card — what is asked first. */
+async function chooseFolder() {
+  const folder = await screen.findByRole('radio', { name: /^No, they are in a folder/ })
+  if (folder.getAttribute('aria-checked') !== 'true') await userEvent.click(folder)
+}
+
 /** The folder of the images, typed and scanned — the second step, after the origin. */
 async function scanTheFolder() {
+  await chooseFolder()
   await userEvent.type(screen.getByLabelText('Folder'), '/home/me/deployments/DONA_01')
   await userEvent.click(screen.getByRole('button', { name: 'Scan' }))
   await screen.findByText(/12 images found/)
@@ -173,6 +180,7 @@ async function goToImagesStep() {
   await addProjectByHand()
   await addLocationByHand()
   await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+  await chooseFolder()
   await screen.findByLabelText('Folder')
 }
 
@@ -289,6 +297,7 @@ describe('ImportDeploymentPage', () => {
     await addProjectByHand()
     await addLocationByHand()
     await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
+    await chooseFolder()
     expect(await screen.findByLabelText('Folder')).toBeInTheDocument() // the folder and the checks are one screen
     await scanTheFolder()
     await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
@@ -1225,6 +1234,52 @@ describe('ImportDeploymentPage', () => {
     expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
   })
 
+  it('asks whether the images are on a memory card, and shows the folder or the card according to the answer', async () => {
+    await goToImagesStep()   // goes through the answer: a folder
+    expect(screen.getByRole('radio', { name: /^No, they are in a folder/ })).toBeChecked()
+    expect(screen.queryByLabelText('Where is the memory card?')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('radio', { name: /^Yes, they are on the SD card/ }))
+    expect(screen.getByLabelText('Where is the memory card?')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Folder')).not.toBeInTheDocument()
+  })
+
+  it('copies the memory card to a temporary folder and goes on with the copy as with a local folder', async () => {
+    mockedApi.copyCard.mockImplementation(async (_path, onEvent) => {
+      onEvent({ type: 'start', files: 12, bytes: 1200 })
+      onEvent({ type: 'progress', copied: 12, files: 12, bytes_copied: 1200, bytes: 1200 })
+      onEvent({ type: 'done', path: '/tmp/wildintel-sd/card-x/CARD_A', files: 12, bytes: 1200 })
+    })
+    mockedApi.discardCardCopy.mockResolvedValue({ removed: true })
+    await goToImagesStep()
+    await userEvent.click(screen.getByRole('radio', { name: /^Yes, they are on the SD card/ }))
+
+    expect(screen.getByRole('button', { name: 'Copy the card' })).toBeDisabled()          // where the card is is asked first
+    await userEvent.type(screen.getByLabelText('Where is the memory card?'), '/run/media/me/CARD_A')
+    await userEvent.click(screen.getByRole('button', { name: 'Copy the card' }))
+
+    expect(mockedApi.copyCard).toHaveBeenCalledWith('/run/media/me/CARD_A', expect.any(Function))
+    await waitFor(() => expect(mockedApi.scanFolder).toHaveBeenCalledWith('/tmp/wildintel-sd/card-x/CARD_A'))   // the copy is what is scanned
+    expect(await screen.findByText(/12 images found/)).toBeInTheDocument()
+    expect(screen.getByText(/Copied to a temporary folder/)).toBeInTheDocument()
+
+    // another answer discards the copy
+    await userEvent.click(screen.getByRole('radio', { name: /^No, they are in a folder/ }))
+    expect(mockedApi.discardCardCopy).toHaveBeenCalledWith('/tmp/wildintel-sd/card-x/CARD_A')
+  })
+
+  it('starts the copy as soon as the card is picked with the native browser, and says what went wrong when it cannot be copied', async () => {
+    mockedApi.browseFolder.mockResolvedValue({ path: '/run/media/me/CARD_B' })
+    mockedApi.copyCard.mockRejectedValue(new Error("There is nothing on the memory card '/run/media/me/CARD_B'."))
+    await goToImagesStep()
+    await userEvent.click(screen.getByRole('radio', { name: /^Yes, they are on the SD card/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^browse/i }))
+
+    expect(mockedApi.browseFolder).toHaveBeenCalledWith('Select the memory card')
+    expect(await screen.findByRole('alert')).toHaveTextContent('There is nothing on the memory card')
+    expect(mockedApi.scanFolder).not.toHaveBeenCalled()
+  })
+
   it('fills the folder path from the native browser', async () => {
     mockedApi.browseFolder.mockResolvedValue({ path: '/home/me/deployments/DONA_01' })
     await goToImagesStep()
@@ -1373,7 +1428,7 @@ describe('ImportDeploymentPage', () => {
         await goToValidateStep()
 
         expect(strictness('Same camera on every image', 'Warn')).toBeChecked()
-        expect(screen.getAllByRole('radiogroup')).toHaveLength(6)
+        expect(screen.getAllByRole('radiogroup')).toHaveLength(7) // and the question of where the images are
       })
 
       it('passes when every image was taken by one camera, and says which', async () => {
@@ -1839,7 +1894,7 @@ describe('ImportDeploymentPage', () => {
       expect(screen.queryByRole('radiogroup', { name: 'How strict: Required photo data' })).not.toBeInTheDocument()
       expect(screen.queryByRole('radiogroup', { name: 'How strict: Folder structure (subfolders)' })).not.toBeInTheDocument()
       expect(screen.getByRole('radiogroup', { name: 'How strict: Corrupted images' })).toBeInTheDocument()
-      expect(screen.getAllByRole('radiogroup')).toHaveLength(3)
+      expect(screen.getAllByRole('radiogroup')).toHaveLength(4) // and the question of where the images are
 
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
       expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'camera'])
@@ -1886,7 +1941,7 @@ describe('ImportDeploymentPage', () => {
       mockedApi.getSettings.mockRejectedValue(new Error('Backend not reachable'))
       await goToValidateStep()
 
-      expect(screen.getAllByRole('radiogroup')).toHaveLength(6)
+      expect(screen.getAllByRole('radiogroup')).toHaveLength(7) // and the question of where the images are
     })
 
     it('shows only the postvalidation checks turned on, and runs only those', async () => {
@@ -2241,7 +2296,7 @@ describe('ImportDeploymentPage', () => {
       expect(mockedApi.consolidate).toHaveBeenCalledWith('/home/me/deployments/DONA_01', COLLECTIONS_DIR, deployment, expect.any(Function))
       expect(screen.getByText(/R0001-DONA_01 is now in your local collection/)).toBeInTheDocument()
       expect(mockedApi.discardSession).toHaveBeenCalledWith('task-1')
-      expect(screen.getByRole('button', { name: 'Start over' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Add another deployment' })).toBeInTheDocument()
     })
 
     it('reuses a collection that already exists, keeping the name it has', async () => {
@@ -2331,7 +2386,7 @@ describe('ImportDeploymentPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
       await screen.findByText(/Deployment saved/)
 
-      await userEvent.click(screen.getByRole('button', { name: 'Start over' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Add another deployment' }))
 
       expect(await screen.findByText('Where was it taken?')).toBeInTheDocument() // from the beginning, the origin first
       expect(screen.getByLabelText('Research project')).toHaveValue('')

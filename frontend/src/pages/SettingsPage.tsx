@@ -631,7 +631,7 @@ const TONES: Record<Tone, string> = {
   blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   zinc: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300',
 }
-const STATUS_TONES: Record<string, Tone> = { active: 'green', planned: 'amber', finished: 'zinc', inactive: 'zinc', retired: 'zinc', stolen: 'red', lost: 'red', broken: 'red' }
+const STATUS_TONES: Record<string, Tone> = { active: 'green', planned: 'amber', finished: 'zinc', inactive: 'zinc', archived: 'zinc', stolen: 'red', lost: 'red', broken: 'red' }
 /** The badge of a status — what day it began and why are in its tooltip. */
 const statusBadge = (status: string | null | undefined, date?: string | null, note?: string | null): BadgeSpec => ({
   text: STATUS_LABELS[status ?? 'active'] ?? String(status), tone: STATUS_TONES[status ?? 'active'] ?? 'zinc',
@@ -676,7 +676,7 @@ function ItemCard({ icon, plain = false, dim = false, title, badges = [], subtit
         {readOnly ? <EyeIcon /> : <PencilIcon />}{readOnly ? 'View' : 'Edit'}
       </button>
       {onDelete && (
-        <button type="button" aria-label={deleteLabel ?? `Delete ${title}`} title={deleteDisabled ? 'It has visits: mark it as retired instead' : 'Delete'} onClick={onDelete} disabled={deleteDisabled}
+        <button type="button" aria-label={deleteLabel ?? `Delete ${title}`} title={deleteDisabled ? 'It has visits: mark it as archived instead' : 'Delete'} onClick={onDelete} disabled={deleteDisabled}
                 className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-40 disabled:hover:bg-transparent">
           <TrashIcon />
         </button>
@@ -860,6 +860,8 @@ interface ItemField<T> {
   unit?: string
   /** What a 'select' offers, the first being what a new item starts with. */
   options?: { value: string; label: string; hint?: string }[]
+  /** A 'select' that is not the status: what it says while nothing is chosen. */
+  fallback?: string
 }
 
 /** A field of an item as the text it is — nothing when it is left blank. */
@@ -905,7 +907,7 @@ function DateBox({ label, value, onChange }: { label: string; value: string; onC
   )
 }
 
-function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isNew, onChange, onRemove, onClose, onDone, doneLabel = 'Save changes', lockFirst = false, badges, readOnly = false, notice, extraRows = [], styled = false, qr }: {
+function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isNew, onChange, onRemove, onClose, onDone, doneLabel = 'Save changes', lockFirst = false, badges, readOnly = false, notice, extraRows = [], styled = false, qr, confirmArchive = false }: {
   noun: string; backLabel: string; fields: ItemField<T>[]; item: T; others: T[]; isNew: boolean; onChange: (patch: Partial<T>) => void; onClose: () => void
   /** Without it the item cannot be removed from here. */
   onRemove?: () => void
@@ -923,12 +925,19 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
   extraRows?: { label: string; value: string }[]
   /** What its QR code says, shown over the fields once it is added. */
   qr?: string
+  /** Archiving is for good: to archive what was not archived, its name is typed again. */
+  confirmArchive?: boolean
 }) {
   const [first] = fields
   const name = textOf(item, first.key).trim()
+  const statusKey = fields.find((f) => f.kind === 'select')?.key
+  const [wasArchived] = useState(statusKey ? textOf(item, statusKey) === 'archived' : false)
+  const [typed, setTyped] = useState('')
+  const archiving = confirmArchive && !isNew && !wasArchived && !!statusKey && textOf(item, statusKey) === 'archived'
+  const unconfirmed = archiving && typed.trim() !== name
   const error = !name ? `A ${first.label.toLowerCase()} is required.` : others.some((o) => textOf(o, first.key).trim().toLowerCase() === name.toLowerCase()) ? `${name} is already in the list.` : null
   const fieldError = (f: ItemField<T>, i: number) => (i === 0 ? error : null) ?? f.validate?.(textOf(item, f.key).trim()) ?? null
-  const invalid = fields.some((f, i) => !!fieldError(f, i))
+  const invalid = fields.some((f, i) => !!fieldError(f, i)) || unconfirmed
   const Noun = noun[0].toUpperCase() + noun.slice(1)
   return (
     <FormPage
@@ -953,7 +962,7 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
         const choice = fields.findIndex((f) => f.kind === 'select')
         const stateOf = choice >= 0 ? textOf(item, fields[choice].key) || fields[choice].options?.[0]?.value || '' : ''
         // The day and the reason of a status are asked once it is not the active one.
-        const ofStatus = (f: ItemField<T>) => f.key === 'status_date' || f.key === 'status_note'
+        const ofStatus = (f: ItemField<T>) => f.key === 'status_date' || f.key === 'status_note' || f.key === 'archive_reason'
         const control = (f: ItemField<T>, i: number) => {
           const value = textOf(item, f.key)
           const label = (child: ReactNode) => (
@@ -968,6 +977,18 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : ''}`} />
                 </button>
               </div>
+            )
+          }
+          if (f.kind === 'select') {
+            // a choice among a few, shown as buttons (the status is the one that has cards of its own)
+            const picked = value || f.fallback || ''
+            return label(
+              <div className="flex flex-wrap gap-2" role="group" aria-label={f.label}>
+                {(f.options ?? []).map((o) => (
+                  <button key={o.value} type="button" aria-pressed={picked === o.value} onClick={() => change(f, i)(o.value)}
+                          className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${picked === o.value ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{o.label}</button>
+                ))}
+              </div>,
             )
           }
           if (f.kind === 'date') {
@@ -1019,7 +1040,12 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
             {choice >= 0 && (
               <div className={card}>
                 <StatusChoice options={(fields[choice].options ?? []).map((o) => ({ ...o, hint: o.hint ?? '' }))} value={stateOf} onChange={change(fields[choice], choice)} />
-                {stateOf !== 'active' && lines(fields.map((f, i) => ({ f, i })).filter(({ f }) => ofStatus(f)))}
+                {stateOf !== 'active' && stateOf !== 'ready' && lines(fields.map((f, i) => ({ f, i })).filter(({ f }) => ofStatus(f)))}
+                {archiving && (
+                  <LabelledField label={`Type the ${first.label.toLowerCase()} to archive it`} required hint={`Archiving is for good. Write ${name} to confirm.`} htmlFor="archive-confirm">
+                    <input id="archive-confirm" aria-label={`Confirm the ${first.label.toLowerCase()}`} className={fieldBox} value={typed} placeholder={name} autoComplete="off" onChange={(e) => setTyped(e.target.value)} />
+                  </LabelledField>
+                )}
               </div>
             )}
           </>
@@ -1047,7 +1073,7 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
 }
 
 /** A list kept in the settings: a card for each, with the way to edit it or delete it, and to add one. Adding or editing is a page of its own, kept with Done. */
-function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, fields, subtitle, empty, fileName, badges, onDetail, icon, styled, searchLabel, canDelete, plain, dim, meta, readOnly, notice, footnote, qr }: {
+function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, fields, subtitle, empty, fileName, badges, onDetail, icon, styled, searchLabel, canDelete, plain, dim, meta, readOnly, notice, footnote, qr, openItem }: {
   /** What the QR code of an item says, shown on its page. */
   qr?: (item: T) => string | undefined
   heading: string; noun: string; items: T[]; onChange: (v: T[]) => void
@@ -1083,11 +1109,19 @@ function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, 
   badges?: (item: T) => BadgeSpec[]
   /** Told whether a page of an item is open, which takes the place of the list and of what is over it. */
   onDetail?: (open: boolean) => void
+  /** The item (by its name) whose page opens at once — what a link from another page goes to. */
+  openItem?: string
 }) {
   // The item being added (index null) or edited, as it is changed: it is kept with Done and dropped with Cancel.
   const [editing, setEditing] = useState<{ index: number | null; item: T } | null>(null)
   const key = fields[0].key
   const [search, setSearch] = useState('')
+  const opened = useRef(false)
+  useEffect(() => {
+    if (!openItem || opened.current) return
+    const index = items.findIndex((it) => textOf(it, key).toLowerCase() === openItem.toLowerCase())
+    if (index >= 0) { opened.current = true; setEditing({ index, item: items[index] }) }
+  }, [openItem, items]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onDetail?.(editing !== null) }, [editing !== null]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onDetail?.(false), []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1113,12 +1147,14 @@ function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, 
       onChange(editing.index === null ? [...items, editing.item] : items.map((it, i) => (i === editing.index ? editing.item : it)))
       setEditing(null)
     }
+    // what is read-only is what was kept: an item that is being archived is still being edited
+    const kept = editing.index === null ? editing.item : items[editing.index]
     return (
       <ItemForm
         noun={noun} backLabel={heading} fields={fields} item={editing.item} others={items.filter((_, i) => i !== editing.index)} isNew={editing.index === null}
         onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))}
         onRemove={editing.index === null ? undefined : () => { onChange(items.filter((_, i) => i !== editing.index)); setEditing(null) }}
-        onClose={() => setEditing(null)} onDone={done} doneLabel={styled ? (editing.index === null ? 'Add' : 'Save changes') : 'Done'} badges={badges?.(editing.item)} styled={styled} qr={qr?.(editing.item)} readOnly={readOnly?.(editing.item)} notice={notice?.(editing.item)}
+        onClose={() => setEditing(null)} onDone={done} doneLabel={styled ? (editing.index === null ? 'Add' : 'Save changes') : 'Done'} badges={badges?.(editing.item)} styled={styled} qr={qr?.(editing.item)} readOnly={readOnly?.(kept)} notice={notice?.(kept)}
       />
     )
   }
@@ -1155,23 +1191,25 @@ function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, 
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  active: 'Active', inactive: 'Inactive', retired: 'Retired', stolen: 'Stolen', lost: 'Lost', broken: 'Broken', planned: 'Planned', finished: 'Finished',
+  ready: 'Ready', active: 'Active', inactive: 'Inactive', archived: 'Archived', stolen: 'Stolen', lost: 'Lost', broken: 'Broken', planned: 'Planned', finished: 'Finished',
 }
 const STATUS_HINTS: Record<string, string> = {
-  active: 'In use.', inactive: 'Not going to the field.', retired: 'No longer used.', stolen: 'Taken away.', lost: 'Can not be found.', broken: 'Does not work.', planned: 'Not started yet.', finished: 'No more fieldwork.',
+  ready: 'Available.', active: 'In use.', inactive: 'Not going to the field.', archived: 'No longer used.', stolen: 'Taken away.', lost: 'Can not be found.', broken: 'Does not work.', planned: 'Not started yet.', finished: 'No more fieldwork.',
 }
 const statusOptions = (...values: string[]) => values.map((value) => ({ value, label: STATUS_LABELS[value], hint: STATUS_HINTS[value] }))
 /** The status of an item, then — for what can stop being used — the day it did and why. */
-const statusFields = <T extends object>(values: string[], withDetails: boolean, hints: Record<string, string> = {}): ItemField<T>[] => [
+const statusFields = <T extends object>(values: string[], withDetails: boolean, hints: Record<string, string> = {}, withReason = false): ItemField<T>[] => [
   { key: 'status' as keyof T & string, label: 'Status', kind: 'select', options: statusOptions(...values).map((o) => ({ ...o, hint: hints[o.value] ?? o.hint })), hint: 'Only an active one is offered when a visit is registered.' },
   ...(withDetails ? [
     { key: 'status_date' as keyof T & string, label: 'Status since', kind: 'date' as const, hint: 'The day it stopped being active.' },
-    { key: 'status_note' as keyof T & string, label: 'Status note', placeholder: 'e.g. stolen in the visit R0004' },
+    ...(withReason ? [{ key: 'archive_reason' as keyof T & string, label: 'Reason', kind: 'select' as const, fallback: 'other', options: ARCHIVE_REASONS }] : []),
+    { key: 'status_note' as keyof T & string, label: withReason ? 'Comment' : 'Status note', placeholder: 'e.g. stolen in the visit R0004' },
   ] : []),
 ]
 
-const GEAR_STATUSES = ['active', 'lost', 'stolen', 'broken', 'retired']
-const GEAR_HINTS = { active: 'Offered when a visit is registered.', lost: 'Not offered. Past visits keep it.', stolen: 'Not offered. Past visits keep it.', broken: 'Not offered until it is repaired.', retired: 'Taken out of use for good: it never goes back to active.' }
+const GEAR_STATUSES = ['ready', 'active', 'archived']
+const ARCHIVE_REASONS = [{ value: 'lost', label: 'Lost' }, { value: 'stolen', label: 'Stolen' }, { value: 'broken', label: 'Broken' }, { value: 'other', label: 'Other' }]
+const GEAR_HINTS = { ready: 'Available, not in the field yet. Offered when a visit is registered.', active: 'In use in the field. Offered when a visit is registered.', archived: 'Out of use for good: lost, stolen, broken… It never goes back to ready or active.' }
 
 const numberRange = (min: number, max: number) => (v: string) => (v === '' || (Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max) ? null : `A number from ${min} to ${max}.`)
 
@@ -1184,7 +1222,7 @@ const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
   { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty', placeholder: 'e.g. 100', unit: 'metres', half: true, hint: 'How far off the position could be.', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
   { key: 'timezone', label: 'Time zone', placeholder: 'e.g. Europe/Madrid', section: 'Time', fixed: true, hint: "The location's own time zone: UTC unless you say another. Every visit and deployment here is read in it, so it cannot be changed once the location is created.", validate: (v) => (v === '' || isValidTimezone(v) ? null : 'Not a known IANA time zone (e.g. Europe/Madrid).') },
   { key: 'ignore_dst', label: 'The cameras here ignore summer time', kind: 'bool', fixed: true, hint: 'Turn it on if their clocks stay the same all year. Like the time zone, it cannot be changed once the location is created.' },
-  ...statusFields<LocationDraft>(['active', 'planned', 'retired'], true, { active: 'Offered when a visit is registered.', planned: 'Not set up yet.', retired: 'Taken out of use for good: it never goes back to active.' }),
+  ...statusFields<LocationDraft>(['active', 'planned', 'archived'], true, { active: 'It has a camera installed.', planned: 'Available, but with no camera yet.', archived: 'Taken out of use for good: it never goes back to active.' }),
 ]
 
 /** What a research project is when it is added by hand, or read from a CSV file: its acronym and name, and the fields free text. */
@@ -1433,7 +1471,7 @@ function ProjectsTab({ projects, onChanged, onDetail, owned }: {
 }
 
 /** The locations of one research project, kept in its folder of the collections folder: listed, added, edited, read from a CSV file or taken from Trapper. */
-function LocationsTab({ project, onDetail, used }: { project: LocalResearchProject; onDetail?: (open: boolean) => void; used?: (locationId: string) => number | undefined }) {
+function LocationsTab({ project, onDetail, used, openItem }: { project: LocalResearchProject; onDetail?: (open: boolean) => void; used?: (locationId: string) => number | undefined; openItem?: string }) {
   const [locations, setLocations] = useState<LocalLocation[]>([])
   const [editing, setEditing] = useState<{ item: LocationDraft; isNew: boolean } | null>(null)
   const [trapper, setTrapper] = useState(false)
@@ -1448,6 +1486,13 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
   useEffect(() => { setLocations([]); setError(null); setResult(null); setTrapper(false); load() }, [project.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const there = (id: string) => locations.find((l) => l.location_id.toLowerCase() === id.toLowerCase())
+  // The location asked for (a link from another page) is opened once, when the list has been read.
+  const openedItem = useRef(false)
+  useEffect(() => {
+    if (!openItem || openedItem.current) return
+    const found = there(openItem)
+    if (found) { openedItem.current = true; setEditing({ item: locationDraft(found), isNew: false }) }
+  }, [openItem, locations]) // eslint-disable-line react-hooks/exhaustive-deps
   const keep = (d: LocationDraft, trapperPk: number | null = null) => api.saveLocalLocation(project.acronym, { location_id: d.location_id.trim(), ...locationFields(d), trapper_pk: trapperPk })
 
   async function done() {
@@ -1482,7 +1527,7 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
   }
 
   const where = (l: LocationDraft) => [l.latitude && l.longitude && `${l.latitude}, ${l.longitude}`, l.timezone].filter(Boolean).join(' · ')
-  const meta = (l: LocationDraft) => [where(l), usedIn(used?.(l.location_id)), l.status && l.status !== 'active' && l.status_date && `${STATUS_LABELS[l.status] ?? l.status} since ${fmtDay(l.status_date)}`].filter(Boolean).join(' · ') || undefined
+  const meta = (l: LocationDraft) => [where(l), usedIn(used?.(l.location_id)), l.status && l.status !== 'active' && l.status !== 'ready' && l.status_date && `${STATUS_LABELS[l.status] ?? l.status} since ${fmtDay(l.status_date)}`].filter(Boolean).join(' · ') || undefined
 
   const deleteDialog = deleting && (
       <DialogShell label="Delete location" title={`Delete ${deleting}?`} onClose={() => setDeleting(null)}>
@@ -1499,9 +1544,9 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
       <div className="space-y-3">
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <ItemForm<LocationDraft>
-          noun="location" styled qr={editing.isNew ? undefined : qrPayload('location', project.acronym, editing.item.location_id)} backLabel={`Locations of ${project.acronym}`} fields={LOCATION_FIELDS} item={editing.item} others={editing.isNew ? locations.map(locationDraft) : []} isNew={editing.isNew} lockFirst={!editing.isNew}
-          badges={editing.isNew ? undefined : [...unusualStatus(editing.item), ...(stored?.trapper_pk != null ? [originBadge(stored.trapper_pk)] : [])]} readOnly={stored?.trapper_pk != null || stored?.status === 'retired'}
-          notice={stored?.trapper_pk != null ? <TrapperNotice noun="location" /> : stored?.status === 'retired' ? <Notice kind="info">This location is retired for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined}
+          noun="location" styled qr={editing.isNew ? undefined : qrPayload('location', project.acronym, editing.item.location_id)} backLabel={`Locations of ${project.acronym}`} fields={LOCATION_FIELDS} item={editing.item} others={editing.isNew ? locations.map(locationDraft) : []} isNew={editing.isNew} lockFirst={!editing.isNew} confirmArchive
+          badges={editing.isNew ? undefined : [...unusualStatus(editing.item), ...(stored?.trapper_pk != null ? [originBadge(stored.trapper_pk)] : [])]} readOnly={stored?.trapper_pk != null || stored?.status === 'archived'}
+          notice={stored?.trapper_pk != null ? <TrapperNotice noun="location" /> : stored?.status === 'archived' ? <Notice kind="info">This location is archived for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined}
           onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))} onClose={() => { setEditing(null); setError(null) }} onDone={() => void done()} doneLabel={editing.isNew ? 'Add' : 'Save changes'}
           onRemove={editing.isNew ? undefined : () => setDeleting(editing.item.location_id)}
         />
@@ -1548,13 +1593,13 @@ function LocationsTab({ project, onDetail, used }: { project: LocalResearchProje
         {locations.length === 0 && <p className={hintClass}>{project.acronym} has no locations yet.</p>}
         {locations.length > 0 && shown.length === 0 && <p className={hintClass}>Nothing matches “{search}”.</p>}
         {shown.map((l) => (
-          <ItemCard key={l.location_id} icon={<PinIcon />} title={l.location_id} badges={[...unusualStatus(l), ...(l.trapper_pk != null ? [originBadge(l.trapper_pk)] : [])]} subtitle={l.name ?? ''} meta={meta(locationDraft(l))} readOnly={l.trapper_pk != null || l.status === 'retired'} editLabel={`Edit ${l.location_id}`}
+          <ItemCard key={l.location_id} icon={<PinIcon />} title={l.location_id} badges={[...unusualStatus(l), ...(l.trapper_pk != null ? [originBadge(l.trapper_pk)] : [])]} subtitle={l.name ?? ''} meta={meta(locationDraft(l))} readOnly={l.trapper_pk != null || l.status === 'archived'} editLabel={`Edit ${l.location_id}`}
                     onEdit={() => setEditing({ item: locationDraft(l), isNew: false })}
                     onDelete={l.trapper_pk != null ? undefined : () => setDeleting(l.location_id)} deleteDisabled={used?.(l.location_id) ? used(l.location_id)! > 0 : false} />
         ))}
       </div>
       <p className={`${hintClass} mt-4 max-w-prose`}>
-        Locations that come from Trapper are read-only here. Change them in Trapper and import them again. A location that already has visits can't be deleted; mark it as retired instead and it stops being offered for new visits.
+        Locations that come from Trapper are read-only here. Change them in Trapper and import them again. A location that already has visits can't be deleted; mark it as archived instead and it stops being offered for new visits.
       </p>
       {deleteDialog}
     </div>
@@ -1570,9 +1615,9 @@ const fmtDay = (day: string | null | undefined) => {
 const usedIn = (n: number | undefined) => (n === undefined ? undefined : n === 0 ? 'No visits yet' : `Used in ${n} visit${n === 1 ? '' : 's'}`)
 /** What a camera or an SD card says of itself under its name: since when it is in production, where it was used, and what became of it. */
 const gearMeta = (item: { in_service?: string | null; status?: string; status_date?: string | null }, used: number | undefined) =>
-  [item.in_service && `In production since ${fmtDay(item.in_service)}`, usedIn(used), item.status && item.status !== 'active' && item.status_date && `${STATUS_LABELS[item.status] ?? item.status} since ${fmtDay(item.status_date)}`].filter(Boolean).join(' · ') || undefined
+  [item.in_service && `In production since ${fmtDay(item.in_service)}`, usedIn(used), item.status && item.status !== 'active' && item.status !== 'ready' && item.status_date && `${STATUS_LABELS[item.status] ?? item.status} since ${fmtDay(item.status_date)}`].filter(Boolean).join(' · ') || undefined
 /** A badge only for what is not the usual: a status other than active. */
-const unusualStatus = (item: { status?: string | null; status_date?: string | null; status_note?: string | null }): BadgeSpec[] => (item.status && item.status !== 'active' ? [statusBadge(item.status, item.status_date, item.status_note)] : [])
+const unusualStatus = (item: { status?: string | null; status_date?: string | null; status_note?: string | null }): BadgeSpec[] => (item.status && item.status !== 'active' && item.status !== 'ready' ? [statusBadge(item.status, item.status_date, item.status_note)] : [])
 
 /** The letters in the tile of a person: the first of the first and of the last name. */
 const initialsOf = (name: string) => {
@@ -1582,11 +1627,13 @@ const initialsOf = (name: string) => {
 
 /** Research projects, trappers, locations, cameras and SD cards: a settings screen of their own. The trappers are the project's own people
  * but can be in several; the locations, the cameras and the SD cards belong each to a research project. */
-function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, onSdCards, initialTab, initialProject, onDetail }: {
+function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, onSdCards, initialTab, initialProject, initialItem, onDetail }: {
   trappers: Trapper[]; cameras: Camera[]; sdCards: SdCard[]
   onTrappers: (v: Trapper[]) => void; onCameras: (v: Camera[]) => void; onSdCards: (v: SdCard[]) => void
   initialTab: EntityTab
   initialProject?: string
+  /** The SD card or camera whose page opens at once. */
+  initialItem?: string
   /** Told whether a form is open in place of a list, which takes the title of the page away too. */
   onDetail?: (open: boolean) => void
 }) {
@@ -1685,46 +1732,46 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
         />
       )}
 
-      {tab === 'locations' && (project ? <LocationsTab project={project} onDetail={setDetail} used={(id) => countVisits((v, p) => same(p, project.acronym) && same(v.location_id, id))} /> : <p className={hintClass}>Pick a research project to see its locations.</p>)}
+      {tab === 'locations' && (project ? <LocationsTab project={project} onDetail={setDetail} openItem={initialItem} used={(id) => countVisits((v, p) => same(p, project.acronym) && same(v.location_id, id))} /> : <p className={hintClass}>Pick a research project to see its locations.</p>)}
 
       {tab === 'sdcards' && (!projectId ? <p className={hintClass}>Pick a research project to see its SD cards.</p> : (
-        <ItemsEditor<SdCard>
+        <ItemsEditor<SdCard> openItem={initialItem}
           heading={`SD cards${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('sdcard', owner, c.label) : undefined)} noun="SD card" fileName={`${owner ?? 'unassigned'}_sd_cards`} icon={<SdCardIcon />} onDetail={setDetail} styled
           items={sdCards.filter((c) => belongs(c.research_project))}
           onChange={(v) => onSdCards([...sdCards.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
           blank={{ label: '', brand: null, capacity: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
-          badges={unusualStatus} readOnly={(c) => c.status === 'retired'} notice={(c) => (c.status === 'retired' ? <Notice kind="info">This one is retired for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.brand, c.capacity].filter(Boolean).join(' · ')}
+          badges={unusualStatus} readOnly={(c) => c.status === 'archived'} notice={(c) => (c.status === 'archived' ? <Notice kind="info">This one is archived for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.brand, c.capacity].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && same(v.sd, c.label)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && same(v.sd, c.label)) === 0}
-          footnote="An SD card that already has visits can't be deleted; mark it as retired instead and it stops being offered for new visits."
+          footnote="An SD card that already has visits can't be deleted; mark it as archived instead and it stops being offered for new visits."
           empty="No SD card yet." searchLabel="Search by label, brand or size"
           fields={[
             { key: 'label', label: 'Label', placeholder: 'e.g. SD-014', hint: 'The number or the label written on the card.', section: 'Which card is it?' },
             { key: 'brand', label: 'Brand', kind: 'suggest', suggestions: SD_CARD_BRANDS, placeholder: 'e.g. SanDisk', hint: 'Who makes it. The usual ones are suggested, but any other can be typed.' },
             { key: 'capacity', label: 'Capacity', kind: 'suggest', suggestions: SD_CARD_CAPACITIES, placeholder: 'e.g. 64 GB', hint: 'What is written on the card. The usual ones are suggested, but any other can be typed.' },
             { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the card was put into production.', section: 'When did it start?' },
-            ...statusFields<SdCard>(GEAR_STATUSES, true, GEAR_HINTS),
+            ...statusFields<SdCard>(GEAR_STATUSES, true, GEAR_HINTS, true),
           ]}
         />
       ))}
 
       {tab === 'cameras' && (!projectId ? <p className={hintClass}>Pick a research project to see its cameras.</p> : (
-        <ItemsEditor<Camera>
+        <ItemsEditor<Camera> openItem={initialItem}
           heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('camera', owner, c.label) : undefined)} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />} onDetail={setDetail} styled
           items={cameras.filter((c) => belongs(c.research_project))}
           onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
           blank={{ label: '', camera_id: null, camera_model: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
-          badges={unusualStatus} readOnly={(c) => c.status === 'retired'} notice={(c) => (c.status === 'retired' ? <Notice kind="info">This one is retired for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.camera_model, c.camera_id].filter(Boolean).join(' · ')}
+          badges={unusualStatus} readOnly={(c) => c.status === 'archived'} notice={(c) => (c.status === 'archived' ? <Notice kind="info">This one is archived for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.camera_model, c.camera_id].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)) === 0}
-          footnote="A camera that already has visits can't be deleted; mark it as retired instead and it stops being offered for new visits."
+          footnote="A camera that already has visits can't be deleted; mark it as archived instead and it stops being offered for new visits."
           empty="No camera yet." searchLabel="Search by label, serial number or model"
           fields={[
             { key: 'label', label: 'Label', placeholder: 'e.g. CAM-014', hint: 'What the camera is called in the field. No two cameras in a project have the same.', section: 'Which camera is it?' },
             { key: 'camera_id', label: 'Camera id', placeholder: 'e.g. P800HG08192031', hint: "The camera's serial number, if it is known." },
             { key: 'camera_model', label: 'Camera model', placeholder: 'e.g. Reconyx-PC800', hint: 'Manufacturer and model, written as manufacturer-model.' },
             { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the camera was put into production.', section: 'When did it start?' },
-            ...statusFields<Camera>(GEAR_STATUSES, true, GEAR_HINTS),
+            ...statusFields<Camera>(GEAR_STATUSES, true, GEAR_HINTS, true),
           ]}
         />
       ))}
@@ -1738,6 +1785,8 @@ interface Props {
   initialSection?: SectionId | 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations'
   /** The research project the entities are shown for, when opened on its locations. */
   initialProject?: string
+  /** The SD card or the camera (by its label) whose page opens at once, on its tab. */
+  initialItem?: string
 }
 
 type UpdateState =
@@ -1991,7 +2040,7 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
 /** Edits the app's own settings.toml, one section at a time: the folder the
  * images are kept in and the log, the Trapper account, which validation
  * and postvalidation checks the wizard shows, and how the images are preprocessed. One Save saves every section. */
-export default function SettingsPage({ onClose, initialSection, initialProject }: Props) {
+export default function SettingsPage({ onClose, initialSection, initialProject, initialItem }: Props) {
   const [uploadDestination, setUploadDestination] = useState<UploadDestinationId>('trapper')
   const [visitSource, setVisitSource] = useState<VisitSourceId>(initialSection === ('epicollect' as string) ? 'epicollect' : 'wildintel')
   const [section, setSection] = useState<SectionId>(initialSection && initialSection in ENTITY_SECTIONS ? 'entities' : initialSection === ('epicollect' as string) ? 'sources' : (initialSection as SectionId | undefined) ?? 'general')
@@ -2566,7 +2615,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject }
           <EntitiesSection
             trappers={draft.trappers} cameras={draft.cameras} sdCards={draft.sdCards}
             onTrappers={(v) => set('trappers', v)} onCameras={(v) => set('cameras', v)} onSdCards={(v) => set('sdCards', v)}
-            initialTab={initialSection && initialSection in ENTITY_SECTIONS ? ENTITY_SECTIONS[initialSection] : 'projects'} initialProject={initialProject} onDetail={setEntityDetail}
+            initialTab={initialSection && initialSection in ENTITY_SECTIONS ? ENTITY_SECTIONS[initialSection] : 'projects'} initialProject={initialProject} initialItem={initialItem} onDetail={setEntityDetail}
           />
         )}
 
