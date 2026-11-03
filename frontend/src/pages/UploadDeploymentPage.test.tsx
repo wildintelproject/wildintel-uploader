@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
 import UploadDeploymentPage from './UploadDeploymentPage'
@@ -213,7 +213,10 @@ describe('UploadDeploymentPage', () => {
     expect(screen.getByText('120 images in 1 package.')).toBeInTheDocument()
     expect(screen.getByText('120 images sent')).toBeInTheDocument()
     expect(screen.getByText('What was set up in Trapper')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Upload more deployments' })).toBeInTheDocument()
+    // what next is asked as when a visit or a deployment is added: the question, then the options, the main one being to go on uploading
+    const next = within(screen.getByRole('group', { name: 'What next' }))
+    expect(next.getByText('Do you want to upload more deployments?')).toBeInTheDocument()
+    expect(next.getByRole('button', { name: 'Upload more deployments' })).toHaveClass('bg-blue-600')
   })
 
   it('shows how much has gone up while it does, and can be stopped', async () => {

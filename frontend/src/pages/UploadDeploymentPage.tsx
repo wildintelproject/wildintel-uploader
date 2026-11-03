@@ -579,7 +579,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
             <UploadingToTrapper items={uploadItems} startedAt={startedAt} target={`${trapper?.base_url ?? 'Trapper'}${trapper?.user_name ? ` as ${trapper.user_name}` : ''}`} onStop={() => abortRef.current?.abort()} />
           ) : (
             <UploadedToTrapper collection={collection.name} researchProject={projectId} items={uploadItems} startedAt={startedAt} finishedAt={finishedAt} reportId={reportId}
-                               filesNote={filesNote}
+                               filesNote={filesNote} onBack={onBack}
                                onMore={() => { setRuns({}); setOrder([]); setFinished(false); setPrepared(null); setModeChosen(false); setChosen(false) }} />
           )}
         </WizardStep>
