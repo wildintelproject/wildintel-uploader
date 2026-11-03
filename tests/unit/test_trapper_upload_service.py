@@ -315,6 +315,16 @@ def test_a_deployment_trapper_does_not_have_is_created_from_its_details(tmp_path
     assert not list(tmp_path.glob("*.csv"))
 
 
+def test_a_deployment_names_its_location_as_trapper_has_it_in_lower_case(tmp_path: Path):
+    # Trapper keeps the ids of its locations in lower case and refuses a deployment whose location it does not find as it is written
+    fake = FakeTrapper(locations=["dona_0006_b"])
+    with _with(fake):
+        up.ensure_deployment(CREDENTIALS, 2, _deployment(), timezone_name="UTC", ignore_dst=False, work_dir=tmp_path)
+
+    [call] = fake.imported_deployments
+    assert call["rows"][1].startswith(f'"{DEPLOYMENT_ID}","dona_0006_b"')
+
+
 def test_a_deployment_trapper_already_has_is_left_alone(tmp_path: Path):
     fake = FakeTrapper(deployments=[DEPLOYMENT_ID.lower()])
     with _with(fake):

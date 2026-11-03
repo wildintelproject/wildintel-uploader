@@ -428,6 +428,10 @@ def ensure_deployment(credentials: tuple[str, str, str], research_project_pk: in
     """Creates the deployment in Trapper if the research project doesn't have it yet. True if it was created."""
     if deployment_exists(credentials, research_project_pk, deployment):
         return False
+    # Trapper keeps the ids of its locations in lower case and looks them up as they are: the deployment names its location as Trapper has it.
+    location = find_location(credentials, research_project_pk, deployment)
+    if location and location["location_id"] != deployment.location_id:
+        deployment = deployment.model_copy(update={"location_id": location["location_id"]})
     csv_path = work_dir / f"{deployment.deployment_id}_deployment.csv"
     try:
         trapper_service.import_deployment(*credentials, research_project_pk, None, deployment, timezone_name, csv_path, ignore_dst=ignore_dst)
