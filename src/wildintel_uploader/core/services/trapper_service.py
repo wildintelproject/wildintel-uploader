@@ -20,6 +20,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from trapper_client import TrapperClient
+from trapper_client.err import BadRequestError
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import DeploymentFields
@@ -165,7 +166,13 @@ def list_deployments(url: str, username: str, password: str, research_project_pk
     the plain deployments list/get API doesn't carry camera/location
     details. Used by the "use an existing deployment" wizard branch, so the
     picked deployment can go straight into the deployment-details step."""
-    exports = _client(url, username, password).deployments.export(query={"research_project": research_project_pk})
+    try:
+        exports = _client(url, username, password).deployments.export(query={"research_project": research_project_pk})
+    except BadRequestError as exc:
+        # a research project with no deployments (or none this account can see) is answered with an error, not with an empty list
+        if "Empty queryset" not in str(exc):
+            raise
+        return []
     deployments = [
         {"pk": export.pk, **{attr: _plain_value(getattr(export, attr, None)) for attr, _ in _CSV_COLUMNS}}
         for export in exports
