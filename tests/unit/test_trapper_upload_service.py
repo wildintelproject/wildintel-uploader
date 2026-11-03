@@ -317,8 +317,8 @@ def test_a_deployment_trapper_does_not_have_is_created_from_its_details(tmp_path
 
 def test_a_revision_has_the_acronym_of_its_research_project_before_it_in_trapper():
     # Trapper compares the names of its collections across research projects: R0001 of one would be R0001 of all
-    assert up.trapper_collection_name({"acronym": "WICP_02"}, "R0001") == "WICP_02_R0001"
-    assert up.trapper_collection_name({"acronym": "WICP_02"}, "wicp_02_R0001") == "wicp_02_R0001"   # not twice
+    assert up.trapper_collection_name({"acronym": "WICP_02"}, "R0001") == "WICP_02-R0001"
+    assert up.trapper_collection_name({"acronym": "WICP_02"}, "wicp_02-R0001") == "wicp_02-R0001"   # not twice
     assert up.trapper_collection_name({}, "R0001") == "R0001"
 
 
@@ -371,8 +371,8 @@ def test_the_upload_creates_the_location_and_the_deployment_then_packs_uploads_a
     assert len(fake.imported_locations) == 1 and len(fake.imported_deployments) == 1  # both created, the location first (it has to exist)
     # the revision goes to Trapper with the acronym of its research project before its name
     [trigger] = fake.triggered
-    assert "_DONA_R0003_" in trigger["zip_file"] and "_DONA_R0003_" in trigger["yaml_file"]
-    assert next(e for e in events if e.get("step") == "wait" and e["status"] == "done")["message"] == "Revision DONA_R0003 is in Trapper."
+    assert "_DONA-R0003_" in trigger["zip_file"] and "_DONA-R0003_" in trigger["yaml_file"]
+    assert next(e for e in events if e.get("step") == "wait" and e["status"] == "done")["message"] == "Revision DONA-R0003 is in Trapper."
 
 
 def test_the_yaml_names_the_classification_project_and_not_the_research_project(tmp_path: Path, fake_uploader):
@@ -542,7 +542,7 @@ def test_once_uploaded_the_local_packages_are_removed_and_the_deployment_is_mark
     assert not list((tmp_path / "packages").rglob("*.zip")) and not list((tmp_path / "packages").rglob("*.yaml"))
     assert not list((tmp_path / "packages").rglob("*.uploadmeta.json"))
     log = json.loads((collection / DEPLOYMENT_ID / "upload.json").read_text())
-    assert log["research_project_pk"] == 2 and log["collection"] == "R0003" and log["trapper_collection"] == "DONA_R0003" and log["parts"] == 1
+    assert log["research_project_pk"] == 2 and log["collection"] == "R0003" and log["trapper_collection"] == "DONA-R0003" and log["parts"] == 1
     assert log["location_created"] is True and datetime.fromisoformat(log["uploaded_at"])
     assert len(list((collection / DEPLOYMENT_ID).glob("*.JPEG"))) == 2  # the images themselves stay
 
@@ -554,7 +554,7 @@ def test_the_package_files_are_kept_when_they_are_not_to_be_deleted_and_the_depl
 
     packages = tmp_path / "packages" / "DONA" / "R0003"
     assert len(list(packages.glob("*.zip"))) == 1 and len(list(packages.glob("*.yaml"))) == 1
-    csv_file = packages / "DONA_R0003_deployments.csv"
+    csv_file = packages / "DONA-R0003_deployments.csv"
     assert DEPLOYMENT_ID in csv_file.read_text(encoding="utf-8")
     done = events[-1]
     assert done["files_deleted"] is False and done["output_dir"] == str(packages)
@@ -564,7 +564,7 @@ def test_the_package_files_are_kept_when_they_are_not_to_be_deleted_and_the_depl
 
 def test_deleting_the_files_takes_the_deployments_row_out_of_the_csv_and_leaves_the_others(tmp_path: Path, fake_uploader):
     collection = _imported(tmp_path, 2)
-    csv_file = tmp_path / "packages" / "DONA" / "R0003" / "DONA_R0003_deployments.csv"
+    csv_file = tmp_path / "packages" / "DONA" / "R0003" / "DONA-R0003_deployments.csv"
     csv_file.parent.mkdir(parents=True)
     csv_file.write_text("deploymentID,locationID,deploymentStart,deploymentEnd,cameraModel,longitude,latitude\nR0003-OTHER,OTHER,a,b,c,1,2\n", encoding="utf-8")
 
@@ -817,7 +817,7 @@ def test_generating_writes_the_zip_the_yaml_and_the_deployments_csv_and_leaves_t
     assert events[-1]["type"] == "done" and events[-1]["mode"] == "generate"
     assert events[-1]["output_dir"] == str(out) and events[-1]["parts"] == 1
     assert sorted(events[-1]["files"]) == sorted(p.name for p in out.iterdir())
-    assert "DONA_R0003_deployments.csv" in events[-1]["files"]
+    assert "DONA-R0003_deployments.csv" in events[-1]["files"]
     assert events[-1]["images"] == 3
     assert events[-1]["file_sizes"] == {p.name: p.stat().st_size for p in out.iterdir()}
     progress = [e for e in events if e["type"] == "pack_progress"]

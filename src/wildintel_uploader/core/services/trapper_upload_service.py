@@ -226,12 +226,12 @@ def remove_from_deployments_csv(path: Path, deployment_id: str) -> None:
 
 
 def trapper_collection_name(research_project: dict, collection: str) -> str:
-    """The name a revision has in Trapper: the research project's acronym before it (WICP_02_R0001). Trapper compares the names of its collections
-    across every research project, so R0001 of one project would be R0001 of all of them."""
+    """The name a revision has in Trapper: the research project's acronym before it, joined with a hyphen (WICP_02-R0001). Trapper compares the names of its
+    collections across every research project, so R0001 of one project would be R0001 of all of them."""
     acronym = (research_project.get("acronym") or "").strip()
-    if not acronym or collection.lower().startswith(f"{acronym.lower()}_"):
+    if not acronym or collection.lower().startswith(f"{acronym.lower()}-"):
         return collection
-    return f"{acronym}_{collection}"
+    return f"{acronym}-{collection}"
 
 
 def build_packages(
