@@ -225,6 +225,15 @@ def remove_from_deployments_csv(path: Path, deployment_id: str) -> None:
         writer.writerows(rows)
 
 
+def trapper_collection_name(research_project: dict, collection: str) -> str:
+    """The name a revision has in Trapper: the research project's acronym before it (WICP_02_R0001). Trapper compares the names of its collections
+    across every research project, so R0001 of one project would be R0001 of all of them."""
+    acronym = (research_project.get("acronym") or "").strip()
+    if not acronym or collection.lower().startswith(f"{acronym.lower()}_"):
+        return collection
+    return f"{acronym}_{collection}"
+
+
 def build_packages(
     deployment_dir: Path, collection: str, deployment_id: str, log: dict, *, project_id: int, timezone_name: str, ignore_dst: bool,
     output_dir: Path, max_zip_bytes: int | None = DEFAULT_MAX_ZIP_BYTES, stamp: str | None = None, trapper_deployment_id: str | None = None,
@@ -629,13 +638,14 @@ def check_selection(credentials: tuple[str, str, str], research_project: dict, c
         message = describe(exc)
         return [{"check": "research_project", "ok": False, "message": message}, {"check": "collection", "ok": False, "message": "Not checked: the research project couldn't be found."}]
     checks.append({"check": "research_project", "ok": True, "message": f"You have access to the research project {research_project.get('acronym')} (#{project_pk}) in Trapper."})
+    named = trapper_collection_name(research_project, collection)
     try:
         client = trapper_service.client(*credentials)
-        found = [c for c in client.collections.where(research_projects=project_pk, search=collection) if c.name == collection]
+        found = [c for c in client.collections.where(research_projects=project_pk, search=named) if c.name == named]
         if found:
-            message = f"You have access to the revision {collection} (#{found[0].pk}): it is already in Trapper, so the upload adds to it."
+            message = f"You have access to the revision {named} (#{found[0].pk}): it is already in Trapper, so the upload adds to it."
         else:
-            message = f"You can read the revisions of the research project; {collection} isn't in Trapper yet, so the upload creates it."
+            message = f"You can read the revisions of the research project; {named} isn't in Trapper yet, so the upload creates it."
         checks.append({"check": "collection", "ok": True, "found": bool(found), "message": message})
     except Exception as exc:
         checks.append({"check": "collection", "ok": False, "message": describe(exc)})
@@ -692,6 +702,7 @@ def upload_stream(
     poll_seconds = POLL_SECONDS if poll_seconds is None else poll_seconds
     deployment_dir = collection_dir / deployment_id
     collection = collection_dir.name
+    trapper_collection = trapper_collection_name(research_project, collection)  # what Trapper calls it: the packages, the csv and the search of it are by this name
     metadata = _read_json(deployment_dir / local_folder_service.DEPLOYMENT_METADATA_FILE)
     log = _read_json(deployment_dir / preprocessing_service.PREPROCESSING_LOG_FILE)
     if not isinstance(metadata, dict):
@@ -830,7 +841,7 @@ def upload_stream(
                 report({"type": "pack_progress", "index": done, "total": total})
 
         built.append(build_packages(
-            deployment_dir, collection, deployment_id, log, project_id=classification_pk, timezone_name=timezone_name, ignore_dst=ignore_dst,
+            deployment_dir, trapper_collection, deployment_id, log, project_id=classification_pk, timezone_name=timezone_name, ignore_dst=ignore_dst,
             trapper_deployment_id=trapper_deployment_id, output_dir=output_dir, max_zip_bytes=max_zip_bytes, progress=on_packed,
         ))
 
@@ -842,7 +853,7 @@ def upload_stream(
 
     if mode == "generate":
         yield step("csv", "running", f"Writing the deployments of {collection}…")
-        csv_result = upsert_deployments_csv(output_dir / f"{collection}{DEPLOYMENTS_CSV_SUFFIX}", deployment, log)
+        csv_result = upsert_deployments_csv(output_dir / f"{trapper_collection}{DEPLOYMENTS_CSV_SUFFIX}", deployment, log)
         yield step("csv", "done", f"{Path(csv_result['path']).name}: {csv_result['action']} {deployment_id} ({csv_result['rows']} deployment(s)).")
         written = [p[k] for p in packages for k in ("zip", "yaml")] + [Path(csv_result["path"])]
         yield {
@@ -866,14 +877,14 @@ def upload_stream(
             raise TrapperUploadError(f"Trapper refused to process the package: {_trapper_message(exc)}") from exc
         yield step("process", "done", "Trapper is processing the package.")
 
-    yield step("wait", "running", f"Waiting for the revision {collection} to appear in Trapper…")
-    found_collection = _wait_for_collection(client, project_pk, collection, timeout=wait_seconds, poll=poll_seconds)
+    yield step("wait", "running", f"Waiting for the revision {trapper_collection} to appear in Trapper…")
+    found_collection = _wait_for_collection(client, project_pk, trapper_collection, timeout=wait_seconds, poll=poll_seconds)
     if found_collection is None:
-        raise TrapperUploadError(f"The revision {collection} didn't appear in Trapper within {int(wait_seconds)} seconds — it may still be processing.")
+        raise TrapperUploadError(f"The revision {trapper_collection} didn't appear in Trapper within {int(wait_seconds)} seconds — it may still be processing.")
     collection_url = trapper_link(credentials, "collection", getattr(found_collection, "pk", None))
-    yield step("wait", "done", f"Revision {collection} is in Trapper.", collection_url)
+    yield step("wait", "done", f"Revision {trapper_collection} is in Trapper.", collection_url)
 
-    csv_path = output_dir / f"{collection}{DEPLOYMENTS_CSV_SUFFIX}"
+    csv_path = output_dir / f"{trapper_collection}{DEPLOYMENTS_CSV_SUFFIX}"
     kept: list[Path] = []
     if delete_after_upload:  # what went up is on Trapper now
         for package in packages:
@@ -888,7 +899,7 @@ def upload_stream(
         upsert_deployments_csv(csv_path, deployment, log)
         kept = [p[k] for p in packages for k in ("zip", "yaml")] + [csv_path]
     (deployment_dir / UPLOAD_LOG_FILE).write_text(json.dumps({
-        "uploaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "research_project_pk": project_pk, "classification_project_pk": classification_pk, "collection": collection,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "research_project_pk": project_pk, "classification_project_pk": classification_pk, "collection": collection, "trapper_collection": trapper_collection,
         "parts": len(packages), "location_created": location_created, "deployment_created": deployment_created,
         "deployment_url": deployment_url, "collection_url": collection_url,
     }, indent=2), encoding="utf-8")
