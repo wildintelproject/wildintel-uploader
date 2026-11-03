@@ -64,14 +64,16 @@ export function CamtrapDpTag() {
   )
 }
 
-function FieldLabel({ id, label, required }: { id: string; label: string; required?: boolean }) {
+function FieldLabel({ id, label, required, inline = false }: { id: string; label: string; required?: boolean; inline?: boolean }) {
+  const tag = required && <span className="text-[11px] uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>
+  // inline: "Required" follows the tag, as in the fields that have buttons beside them
   return (
-    <div className="flex items-baseline justify-between mb-1.5">
+    <div className={`flex items-baseline mb-1.5 ${inline ? 'gap-2' : 'justify-between'}`}>
       <span className="flex items-baseline gap-2">
         <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
         <CamtrapDpTag />
       </span>
-      {required && <span className="text-[11px] uppercase tracking-wide text-blue-600 dark:text-blue-400">Required</span>}
+      {tag}
     </div>
   )
 }
@@ -96,17 +98,22 @@ export function Field({ label, value, onChange, type = 'text', min, max, step, h
 /** A date-and-time field with the browser's own calendar picker. Values
  * travel as ISO local timestamps ("2024-09-04T13:10:00"), the format the
  * scan and the API already use. */
-export function DateTimeField({ label, value, onChange, hint, required, error }: {
+export function DateTimeField({ label, value, onChange, hint, required, error, extra }: {
   label: string; value: string; onChange: (v: string) => void; hint?: string; required?: boolean; error?: string
+  /** Beside the input: shortcuts to fill it. */
+  extra?: ReactNode
 }) {
   const id = fieldId(label)
   const shown = value.slice(0, 19) // a timezone suffix would make the input reject it
   return (
     <div>
-      <FieldLabel id={id} label={label} required={required} />
-      <input id={id} type="datetime-local" step={1} className={`${inputClass} [color-scheme:light] dark:[color-scheme:dark]`}
-             aria-invalid={error ? true : undefined}
-             value={shown} onChange={(e) => onChange(e.target.value.length === 16 ? `${e.target.value}:00` : e.target.value)} />
+      <FieldLabel id={id} label={label} required={required} inline={!!extra} />
+      <div className={extra ? 'flex items-center gap-2 flex-wrap' : undefined}>
+        <input id={id} type="datetime-local" step={1} className={`${inputClass} [color-scheme:light] dark:[color-scheme:dark] ${extra ? '!w-72 max-w-full flex-none' : ''}`}
+               aria-invalid={error ? true : undefined}
+               value={shown} onChange={(e) => onChange(e.target.value.length === 16 ? `${e.target.value}:00` : e.target.value)} />
+        {extra}
+      </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
       {value.length > 19 && <p className="text-xs font-mono text-zinc-500 dark:text-zinc-400 mt-1">Saved as {value}</p>}
       {hint && <p className={hintClass}>{hint}</p>}
@@ -157,11 +164,11 @@ function CheckboxField({ label, checked, onChange, hint }: { label: string; chec
 }
 
 /** A yes/no field as a card with a switch — off means "not recorded", not "no". */
-export function SwitchRow({ label, hint, checked, onChange, disabled = false }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+export function SwitchRow({ label, hint, checked, onChange, disabled = false, required = false }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; required?: boolean }) {
   return (
     <div className={`flex items-center gap-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-5 py-4 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex-1 min-w-0">
-        <p className="flex items-baseline gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">{label}<CamtrapDpTag /></p>
+        <p className="flex items-baseline gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">{label}<CamtrapDpTag />{required && <span className="text-[11px] uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>}</p>
         <p className={`${hintClass} mt-0.5`}>{hint}</p>
       </div>
       <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
@@ -639,7 +646,7 @@ export function statParamsValid(p: ReturnType<typeof statParamsOf>): StatisticsP
 }
 
 // Camtrap DP's own "featureType" enum — deployments-table-schema.json.
-const FEATURE_TYPE_OPTIONS: { value: FeatureType; label: string }[] = [
+export const FEATURE_TYPE_OPTIONS: { value: FeatureType; label: string }[] = [
   { value: 'roadPaved', label: 'Road (paved)' },
   { value: 'roadDirt', label: 'Road (dirt)' },
   { value: 'trailHiking', label: 'Trail (hiking)' },
@@ -747,7 +754,7 @@ export function LocationTimeNote({ locationId, latitude, longitude, timezone, ig
 type DetailsSection = 'camera' | 'site' | 'notes'
 
 /** Line icons (24×24, stroke — lucide's shapes, as the settings page's), in the colour of the text. */
-const DETAILS_SECTIONS: { id: DetailsSection; label: string; icon: ReactNode }[] = [
+export const DETAILS_SECTIONS: { id: DetailsSection; label: string; icon: ReactNode }[] = [
   { id: 'camera', label: 'Camera', icon: <><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></> },
   { id: 'site', label: 'Site', icon: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></> },
   { id: 'notes', label: 'Grouping and notes', icon: <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" x2="8" y1="13" y2="13" /><line x1="16" x2="8" y1="17" y2="17" /><line x1="10" x2="8" y1="9" y2="9" /></> },
@@ -826,7 +833,7 @@ const HEADINGS: { label: string; degrees: number }[] = [
   { label: 'N', degrees: 0 }, { label: 'NE', degrees: 45 }, { label: 'E', degrees: 90 }, { label: 'SE', degrees: 135 },
   { label: 'S', degrees: 180 }, { label: 'SW', degrees: 225 }, { label: 'W', degrees: 270 }, { label: 'NW', degrees: 315 },
 ]
-const roundPill = (active: boolean) => `px-4 py-2 text-sm font-medium rounded-full border transition-colors ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
+export const roundPill = (active: boolean) => `px-4 py-2 text-sm font-medium rounded-full border transition-colors ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
 
 /** An angle in degrees: its label, a short input with the degree sign, the quick picks beside it, and one line on what it means. */
 function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, required, children, unit = '°', step = 1, width = 'w-32' }: {
@@ -841,7 +848,7 @@ function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, 
       <div className="flex items-baseline gap-2 mb-1.5">
         <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
         <CamtrapDpTag />
-        {required && <span className="text-[11px] uppercase tracking-wide text-blue-600 dark:text-blue-400">Required</span>}
+        {required && <span className="text-[11px] uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         <div className={`relative ${width}`}>
@@ -874,7 +881,7 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
   afterCamera?: ReactNode
   /** Tags each field of the form as one of Camtrap DP's — for a page that asks for fields that are not, beside them. */
   camtrapTags?: boolean
-  /** The fields (of the deployment) the page asks for: marked as required, and bait is answered with yes or no instead of a switch. */
+  /** The fields (of the deployment) the page asks for: marked as required, and bait is then answered with its switch, off being "no". */
   requiredKeys?: string[]
   /** How many required fields the page asks for in the Camera card that are still empty, besides the ones of the deployment — the camera the page picks. */
   cameraMissing?: number
@@ -985,19 +992,8 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
                  value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />
         </div>
         <div className="mt-4 space-y-3">
-          {ask('bait_use') ? (
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-5 py-4" role="group" aria-label="Bait was used">
-              <p className="flex items-baseline gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">Bait was used<CamtrapDpTag /><span className="text-[11px] uppercase tracking-wide text-blue-600 dark:text-blue-400">Required</span></p>
-              <p className={`${hintClass} mt-0.5`}>Say what it was in the tags or comments below.</p>
-              <div className="flex gap-2 mt-2">
-                <button type="button" aria-pressed={deployment.bait_use === true} className={pill(deployment.bait_use === true)} onClick={() => onField('bait_use', true)}>Yes</button>
-                <button type="button" aria-pressed={deployment.bait_use === false} className={pill(deployment.bait_use === false)} onClick={() => onField('bait_use', false)}>No</button>
-              </div>
-              {errors.bait_use && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.bait_use}</p>}
-            </div>
-          ) : (
-            <SwitchRow label="Bait was used" hint="Say what it was in the tags or comments below." checked={!!deployment.bait_use} onChange={(v) => onField('bait_use', v || null)} />
-          )}
+          <SwitchRow label="Bait was used" hint="Say what it was in the tags or comments below." required={ask('bait_use')} checked={!!deployment.bait_use}
+                     onChange={(v) => onField('bait_use', ask('bait_use') ? v : v || null)} />
           <SwitchRow label="Photo dates may be wrong" hint="Turn on if the dates in the photos are known to be off and can’t be fixed, for example an unknown or wrong camera clock." checked={!!deployment.timestamp_issues} onChange={(v) => onField('timestamp_issues', v || null)} />
         </div>
       </SectionCard>
@@ -2936,7 +2932,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                   <div>
                     <div className="flex items-baseline gap-3 mb-1.5">
                       <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="field-revision">Revision</label>
-                      <span className="text-xs text-blue-600 dark:text-blue-400">Required</span>
+                      <span className="text-xs text-red-600 dark:text-red-400">Required</span>
                     </div>
                     <div className="inline-flex items-stretch rounded-lg border border-zinc-300 dark:border-zinc-600 overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                       <button type="button" aria-label="Lower the revision number" disabled={!revisionValid || Number(revision) <= 1}

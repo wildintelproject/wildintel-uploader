@@ -10,7 +10,9 @@ import DefaultResearchProject, { useDefaultResearchProject } from '../components
 import ChoiceCards from '../components/ChoiceCards'
 import Notice from '../components/Notice'
 import WizardStep from '../components/WizardStep'
-import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, SwitchRow, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
+import IconButton from '../components/IconButton'
+import VisitSummary, { type SummaryRow, type SummaryTone, type VisitSummaryData } from '../components/VisitSummary'
+import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, DETAILS_SECTIONS, FEATURE_TYPE_OPTIONS, SwitchRow, roundPill, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
 import { shownErrors, validateDeployment } from '../deploymentValidation'
 import { availabilityErrors, cameraAtSite, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
@@ -115,8 +117,8 @@ export function fieldsFor(actions: string[], notVisited = false): ActionFields {
 /** The tag beside a field's label: what is asked of it. */
 function AskTag({ ask }: { ask: Ask }) {
   const text = ask === 'required' ? 'required' : ask === 'optional' ? 'optional' : 'not for this visit'
-  // as the other pages tag what is required: blue — red is for what is wrong
-  const colour = ask === 'required' ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 dark:text-zinc-400'
+  // what is required is tagged in red, in every form
+  const colour = ask === 'required' ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400'
   return <span className={`ml-2 text-[11px] font-normal uppercase tracking-wide ${colour}`}>{text}</span>
 }
 
@@ -199,7 +201,9 @@ export function withoutWhatIsNotAsked(v: Visit): Visit {
     ...v,
     sd: asked.sdLeft === 'off' ? '' : v.sd, numPhotos: asked.photos === 'off' ? '' : v.numPhotos, status: asked.status === 'off' && !notVisited ? '' : v.status,
     card: asked.card === 'off' ? 'OK' : v.card, batteries: asked.batteries === 'off' ? 'OK' : v.batteries, dateTimeOK: asked.dateTime === 'off' ? 'Yes' : v.dateTimeOK,
-    details: asked.camera === 'off' ? { ...v.details, camera_id: null, camera_model: null } : v.details,
+    details: { ...(asked.camera === 'off' ? { ...v.details, camera_id: null, camera_model: null } : v.details),
+               // the switch of the bait is off — "no" — until it is turned on: an Installation always has the answer
+               ...(v.actions.includes('Installation') && v.details.bait_use == null ? { bait_use: false } : {}) },
   }
 }
 
@@ -252,7 +256,6 @@ export function installationErrors(v: Visit): Record<string, string> {
   if (d.camera_interval == null) errors.camera_interval = 'Camera delay is required for Installation.'
   if (d.camera_tilt == null) errors.camera_tilt = 'Tilt is required for Installation.'
   if (d.camera_heading == null) errors.camera_heading = 'Heading is required for Installation.'
-  if (d.bait_use == null) errors.bait_use = 'Say whether bait was used (required for Installation).'
   return errors
 }
 
@@ -292,6 +295,78 @@ export function toStored(v: Visit): StoredVisit {
     num_photos: asked.photos !== 'off' ? number(v.numPhotos) : null, sd: asked.sdLeft !== 'off' ? text(v.sd) : null, date_time_ok: asked.dateTime !== 'off' ? text(v.dateTimeOK) : null,
     calibration: asked.calibration !== 'off' ? v.calibration ?? null : null,
     latitude: number(v.latitude), longitude: number(v.longitude),
+  }
+}
+
+/** The wall clock of a timezone `minutes` ago, as the date and time of a visit (YYYY-MM-DDTHH:mm:ss) — the browser's own when the timezone is not known. */
+export function wallClockAgo(timezone: string | null | undefined, minutes: number, now = new Date()): string {
+  const at = new Date(now.getTime() - minutes * 60000)
+  let parts: Intl.DateTimeFormatPart[]
+  try {
+    parts = new Intl.DateTimeFormat('en-GB', { timeZone: timezone || undefined, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(at)
+  } catch {
+    parts = new Intl.DateTimeFormat('en-GB', { hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(at)
+  }
+  const get = (t: string) => parts.find((p) => p.type === t)!.value
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`
+}
+
+/** What a visit says, in the groups of cards to read before it is kept: only what was filled in. */
+export function visitSummary(v: Visit, session: string, timezone?: string | null): VisitSummaryData {
+  const asked = askedOf(v)
+  const d = v.details
+  const notVisitedVisit = isNotVisited(v.status)
+  type Cell = [string, string | null | undefined | false, SummaryTone?]
+  const rows = (cells: Cell[]): SummaryRow[] => cells
+    .filter((c): c is [string, string, SummaryTone?] => typeof c[1] === 'string' && c[1] !== '')
+    .map(([label, value, tone]) => ({ label, value, tone }))
+  const yes = (on: boolean): SummaryTone => (on ? 'good' : 'bad')
+  const tilt = d.camera_tilt != null ? `${d.camera_tilt}°` : ''
+  const heading = d.camera_heading != null ? `${d.camera_heading}°` : ''
+  const feature = FEATURE_TYPE_OPTIONS.find((o) => o.value === d.feature_type)?.label
+  const groups = (d.deployment_groups ?? '').split('|').map((g) => g.trim()).filter(Boolean).join(', ')
+  const [camera, site, notes] = DETAILS_SECTIONS
+  return {
+    overview: rows([
+      ['Location', v.site.trim()],
+      ['Revision code', session, 'code'],
+      ['When', v.when ? `${v.when.replace('T', ' ')}${timezone ? ` (${timezone})` : ''}` : ''],
+      ['Who went', namesOf(v.trappers).join(', ')],
+      ['Action performed', notVisitedVisit ? 'Not visited' : v.actions.join(' + ')],
+    ]),
+    gps: v.latitude && v.longitude ? `${v.latitude}, ${v.longitude}` : '',
+    sections: [
+      { key: 'camera', title: camera.label, icon: camera.icon, rows: rows([
+        ['Camera id', d.camera_id, 'code'],
+        ['Camera model', d.camera_model],
+        ['State of the camera', asked.status !== 'off' && !notVisitedVisit && v.status.trim()],
+        ['Batteries condition', asked.batteries !== 'off' && v.batteries, yes(v.batteries === 'OK')],
+        ['Camera time synced', asked.dateTime !== 'off' && v.dateTimeOK, yes(v.dateTimeOK === 'Yes')],
+        ['Calibration', v.calibration === true && 'Done', 'good'],
+        [d.camera_depth != null && d.camera_height == null ? 'Depth below the surface' : 'Mounting height', d.camera_height != null ? `${d.camera_height} m` : d.camera_depth != null ? `${d.camera_depth} m` : ''],
+        ['Tilt', tilt],
+        ['Heading', heading],
+        ['Camera trigger delay', d.camera_interval != null && `${d.camera_interval} s`],
+        ['Detection distance', d.detection_distance != null && `${d.detection_distance} m`],
+      ]) },
+      { key: 'sd', title: 'SD card', icon: SD_ICON, rows: rows([
+        ['SD card left', asked.sdLeft !== 'off' && v.sd.trim()],
+        ['Photos collected', asked.photos !== 'off' && v.numPhotos.trim()],
+        ['Card condition', asked.card !== 'off' && v.card, yes(v.card === 'OK')],
+      ]) },
+      { key: 'site', title: site.label, icon: site.icon, rows: rows([
+        ['Feature type', feature],
+        ['Habitat', d.habitat],
+        ['Set up by', d.setup_by],
+        ['Bait used', v.actions.includes('Installation') && d.bait_use != null && (d.bait_use ? 'Yes' : 'No'), 'neutral'],
+        ['Photo dates may be wrong', d.timestamp_issues === true && 'Yes', 'bad'],
+      ]) },
+      { key: 'notes', title: notes.label, icon: notes.icon, optional: true, rows: rows([
+        ['Groups', groups],
+        ['Tags', d.tags.length > 0 && d.tags.join(', ')],
+        ['Notes', d.comments],
+      ]) },
+    ],
   }
 }
 
@@ -444,6 +519,31 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     : seeCamera === 'yes' ? (!visit.status ? [] : afterRevision === 'replace' ? ['Revision', 'Installation'] : afterRevision === 'take' ? ['Revision', 'Desinstallation'] : afterRevision === 'remove' ? ['Revision', 'Desinstallation', 'Archive'] : ['Revision'])
     : seeCamera === 'stolen' ? (afterTheft === 'replace' ? ['Stolen', 'Installation'] : afterTheft === 'archive' ? ['Stolen', 'Archive'] : ['Stolen'])
     : []
+  // The coordinates of where the user is now, asked of the browser — which asks the user for permission.
+  const [locating, setLocating] = useState<'idle' | 'asking' | string>('idle')
+  const useMyPosition = () => {
+    if (!navigator.geolocation) { setLocating('This browser cannot tell where you are.'); return }
+    setLocating('asking')
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setVisit((v) => ({ ...v, latitude: p.coords.latitude.toFixed(6), longitude: p.coords.longitude.toFixed(6) }))
+        setLocating('idle')
+      },
+      (e) => setLocating(e.code === e.PERMISSION_DENIED ? 'The browser was not allowed to tell where you are: allow it for this page, or type the coordinates.' : 'The browser could not get where you are: try again, or type the coordinates.'),
+      { enableHighAccuracy: true, timeout: 15000 },
+    )
+  }
+  // "Set up by" is who went (step 3) until it is written over: it follows the trappers as they are chosen, and what was typed there is left alone.
+  const setupFrom = useRef('')
+  useEffect(() => {
+    const who = namesOf(visit.trappers).join(', ')
+    const before = setupFrom.current   // read now: the update below runs later
+    setVisit((v) => {
+      const now = v.details.setup_by ?? ''
+      return now === '' || now === before ? { ...v, details: { ...v.details, setup_by: who || null } } : v
+    })
+    setupFrom.current = who
+  }, [visit.trappers])
   const guidedKey = guidedActions?.join('+')
   // What a theft takes: the camera at the site, and the card that was left in it — which are marked as not available when the visit is kept.
   const theft = guided && !noCamera && seeCamera === 'stolen' && siteCamera ? siteCamera.camera : null
@@ -850,7 +950,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             n={3} title="Who went, and when?" status={!whereDone ? 'locked' : whenDone ? 'done' : 'open'} canEdit onEdit={() => setWhenConfirmed(false)}
             description={!location?.timezone
               ? 'Who made the visit, and the day and the time of it.'
-              : <>Who made the visit, and the day and the time of it. Times are in <strong>{location.timezone}</strong>, which {location.ignore_dst ? 'has no daylight saving time' : 'follows daylight saving time'}.</>}
+              : <>Who made the visit, and the day and the time of it. Times are in <strong>{location.timezone}</strong>, which <strong>{location.ignore_dst ? 'has no daylight saving time' : 'follows daylight saving time'}</strong>.</>}
             summary={visit.when && <>{visit.trappers.trim() ? `${visit.trappers.trim()} · ` : ''}{visit.when.replace('T', ' ')}</>}
           >
             <FormCard title="Who" description="The trappers kept in the settings.">
@@ -888,21 +988,29 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               })()}
             </FormCard>
             <FormCard title="When">
-              <div className="max-w-xs">
-                <DateTimeField label="Date and time of the visit" required value={visit.when} onChange={(v) => set('when', v)} error={shown('when')} />
+              <div className="max-w-2xl">
+                <DateTimeField label="Date and time of the visit" required value={visit.when} onChange={(v) => set('when', v)} error={shown('when')}
+                               extra={<div className="contents" role="group" aria-label="Quick times">
+                                 {[[0, 'Now'], [5, '5 min ago'], [10, '10 min ago']].map(([min, text]) => (
+                                   <button key={min} type="button" className={roundPill(false)} onClick={() => set('when', wallClockAgo(location?.timezone, min as number))}>{text}</button>
+                                 ))}
+                               </div>} />
               </div>
             </FormCard>
             {visit.site && (
               <div className="mt-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5">
                 <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">GPS where the note was taken <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">to check the location</span></h5>
                 <p className={hintClass}>The coordinates of the GPS where the note was taken. They start as those of the location, and are compared with those of {visit.site}{location?.latitude != null && location?.longitude != null ? ` (${location.latitude}, ${location.longitude})` : ''}.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 max-w-xl">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-end gap-4 mt-3 max-w-xl">
                   <Field id="visit-latitude" label="Latitude"><input id="visit-latitude" type="number" step="any" min={-90} max={90} className={inputClass} value={visit.latitude} onChange={(e) => set('latitude', e.target.value)} /></Field>
                   <Field id="visit-longitude" label="Longitude"><input id="visit-longitude" type="number" step="any" min={-180} max={180} className={inputClass} value={visit.longitude} onChange={(e) => set('longitude', e.target.value)} /></Field>
+                  <IconButton label="Use my current position" title={locating === 'asking' ? 'Asking the browser…' : 'Use my current position'} disabled={locating === 'asking'} onClick={useMyPosition}
+                              path={<><circle cx="12" cy="12" r="3" className={locating === 'asking' ? 'animate-pulse' : ''} /><circle cx="12" cy="12" r="8" /><path d="M12 1v4M12 19v4M1 12h4M19 12h4" /></>} />
                 </div>
+                {locating !== 'idle' && locating !== 'asking' && <Notice kind="error" role="alert" className="mt-3">{locating}</Notice>}
                 {gapM != null && (gapM > GPS_TOLERANCE_M
                   ? <Notice kind="error" role="alert" className="mt-3">These coordinates are {gapM < 1000 ? `${gapM} m` : `${(gapM / 1000).toFixed(1)} km`} from {visit.site}, more than {GPS_TOLERANCE_M / 1000} km: check that the location is the right one, or the coordinates.</Notice>
-                  : <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">{gapM} m from {visit.site}: the location matches.</p>)}
+                  : <Notice kind="success" className="mt-3">{gapM} m from {visit.site}: the location matches.</Notice>)}
               </div>
             )}
             <div className="flex justify-between items-center mt-4">
@@ -911,7 +1019,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             </div>
           </WizardStep>
 
-          <WizardStep n={4} title="Enter the visit" status={whenDone ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description={<>What was done at this visit. The fields tagged <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Camtrap DP</span> are those of the deployments table of the Camtrap Data Package; the others are the visit&rsquo;s own.</>}>
+          <WizardStep n={4} title="Enter the visit" status={confirming ? 'done' : whenDone ? 'open' : 'locked'} canEdit={confirming} onEdit={() => setConfirming(false)} summary="What was entered is in the next step." description={<>What was done at this visit. The fields tagged <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Camtrap DP</span> are those of the deployments table of the Camtrap Data Package; the others are the visit&rsquo;s own.</>}>
             <form noValidate onSubmit={(e) => { e.preventDefault(); review() }}>
               {lastVisit && (
                 <div className="mb-4">
@@ -1017,14 +1125,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   <textarea id="not-visited-reason" rows={3} className={inputClass} placeholder="e.g. the road was flooded" value={visit.details.comments ?? ''} onChange={(e) => setDetail('comments', e.target.value || null)} />
                 </FormCard>
               ) : (
-              <MoreDetailsForm deployment={visit.details} errors={moreErrors} onField={setDetail} camtrapTags requiredKeys={Object.keys(installationErrors(visit))} cameraMissing={errors.camera ? 1 : 0}
+              <MoreDetailsForm deployment={visit.details} errors={{ ...detailsErrors(visit.details), ...Object.fromEntries(Object.keys(installationErrors(visit)).map((k) => [k, ''])) }} onField={setDetail} camtrapTags requiredKeys={[...Object.keys(installationErrors(visit)), ...(visit.actions.includes('Installation') ? ['bait_use'] : [])]} cameraMissing={errors.camera ? 1 : 0}
                 afterCamera={(
               <SectionCard
                 title="SD card" icon={SD_ICON} total={sdValues.length} filled={sdValues.filter((v) => v.trim()).length} missing={(errors.sd ? 1 : 0) + (errors.numPhotos === 'Required.' ? 1 : 0)}
                 summary={[on(asked.sdLeft) && visit.sd.trim() && `left ${visit.sd.trim()}`, on(asked.photos) && visit.numPhotos.trim() && `${visit.numPhotos.trim()} photos`, on(asked.card) && `card ${visit.card === 'Full' ? 'full' : 'OK'}`].filter(Boolean).join(' · ')}
               >
                 {stolenCard && <Notice kind="info" className="mb-4">The SD card <strong>{stolenCard}</strong>, which was in the camera, was stolen with it: it will be marked as not available because it was stolen.</Notice>}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 max-w-xl">
                   <div>
                     <div className="flex items-baseline"><label htmlFor="visit-sd" className={labelClass}>SD card left in the camera</label><AskTag ask={asked.sdLeft} /></div>
                     <Combobox
@@ -1032,7 +1140,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       value={visit.sd} onChange={(label) => set('sd', label)} disabled={asked.sdLeft === 'off'} invalid={asked.sdLeft === 'required' && !visit.sd.trim()}
                       placeholder={sdCards.length === 0 ? 'No SD cards yet' : 'Select an SD card…'} clearLabel="Clear SD card"
                     />
-                    {(conflicts.sd || shown('sd')) && <p role={conflicts.sd ? 'alert' : undefined} className="text-xs text-red-600 dark:text-red-400 mt-1">{conflicts.sd ?? shown('sd')}</p>}
+                    {conflicts.sd ? <Notice kind="error" role="alert" className="mt-2">{conflicts.sd}</Notice> : shown('sd') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('sd')}</p>}
                     {asked.sdLeft !== 'off' && sdCards.length === 0 && <p className={hintClass}>The settings have no SD cards yet.</p>}
                     {asked.sdLeft !== 'off' && onOpenSettings && (
                       <p className={`${hintClass} mt-3`}>
@@ -1068,7 +1176,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       value={cameras.find((c) => cameraKey(c) === visit.details.camera_id)?.label ?? ''} onChange={pickCamera} disabled={asked.camera === 'off'} invalid={asked.camera === 'required' && !visit.details.camera_id}
                       placeholder={cameras.length === 0 ? 'No cameras yet' : 'Select a camera…'} clearLabel="Clear camera"
                     />
-                    {(conflicts.camera || shown('camera')) && <p role={conflicts.camera ? 'alert' : undefined} className="text-xs text-red-600 dark:text-red-400 mt-1">{conflicts.camera ?? shown('camera')}</p>}
+                    {conflicts.camera ? <Notice kind="error" role="alert" className="mt-2">{conflicts.camera}</Notice> : shown('camera') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('camera')}</p>}
                     {ofTheSiteCamera && siteCamera && <p className={hintClass}>The camera at {visit.site.trim()} since {siteCamera.date}. To use another, add an Installation to the visit.</p>}
                     {visit.details.camera_model && <p className={hintClass}>Model: {visit.details.camera_model}</p>}
                     {cameras.length === 0 && <p className={hintClass}>The settings have no cameras yet.</p>}
@@ -1108,22 +1216,23 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 </p>
               )}
               {saveError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{saveError}</p>}
-              {confirming ? (
-                <Notice kind="warning" role="status" className="mt-4" action={(
-                  <span className="flex gap-2">
-                    <button type="button" className={btnOutline} onClick={() => setConfirming(false)}>Back to the form</button>
-                    <button type="button" className={btnPrimary} onClick={() => void add()}>Yes, add the visit</button>
-                  </span>
-                )}>
-                  A visit cannot be changed once it is created. Do you want to add the {notVisited ? 'visit that could not be made' : 'visit'} to <strong>{visit.site}</strong> ({kept ? sessionOf(kept.length) : ''}, {visit.when.replace('T', ' ')})?
-                </Notice>
-              ) : (
               <div className="mt-4 flex justify-end gap-2">
                 <button type="button" className={btnOutline} onClick={() => { setVisit({ ...EMPTY_VISIT, site: visit.site, latitude: visit.latitude, longitude: visit.longitude, when: visit.when }); setTried(false); setFilledFrom(null) }}>Clear</button>
-                <button type="submit" className={btnPrimary} disabled={!kept}>Add visit</button>
+                <button type="submit" className={btnPrimary} disabled={!kept}>Review the visit<span aria-hidden="true"> →</span></button>
               </div>
-              )}
             </form>
+          </WizardStep>
+
+          <WizardStep n={5} title="Check and add the visit" status={confirming ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What is going to be kept, before it is.">
+            <VisitSummary data={visitSummary(visit, kept ? sessionOf(kept.length) : '', location?.timezone)} />
+            <Notice kind="warning" role="status" action={(
+              <span className="flex gap-2">
+                <button type="button" className={btnOutline} onClick={() => setConfirming(false)}>Back to the form</button>
+                <button type="button" className={btnPrimary} onClick={() => void add()}>Yes, add the visit</button>
+              </span>
+            )}>
+              A visit cannot be changed once it is created. Do you want to add the {notVisited ? 'visit that could not be made' : 'visit'} to <strong>{visit.site}</strong> ({kept ? sessionOf(kept.length) : ''}, {visit.when.replace('T', ' ')})?
+            </Notice>
           </WizardStep>
 
           </>

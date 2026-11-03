@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import VisitsPage, { detailsErrors, addName, namesOf, removeName, sessionName, sessionOf, toStored, visitErrors, cardBatteriesCode, fieldsFor, installationErrors } from './VisitsPage'
+import VisitsPage, { detailsErrors, addName, namesOf, removeName, sessionName, sessionOf, toStored, visitErrors, cardBatteriesCode, fieldsFor, installationErrors, wallClockAgo, visitSummary } from './VisitsPage'
 import { APP_SETTINGS } from '../test/fixtures'
 import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
@@ -28,9 +28,9 @@ beforeEach(() => {
   mockedApi.listLocalLocations.mockResolvedValue({ results: [location('TATR_0001', { name: 'Ridge', latitude: 49.2, longitude: 20.1 })] })
 })
 
-// A visit cannot be changed once it is created: pressing Add visit asks again — a visit that is not complete is not asked about.
+// A visit cannot be changed once it is created: pressing Review the visit goes to the last step, which asks again — a visit that is not complete is not asked about.
 async function addVisit() {
-  await userEvent.click(screen.getByRole('button', { name: 'Add visit' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Review the visit' }))
   const yes = screen.queryByRole('button', { name: 'Yes, add the visit' })
   if (yes) await userEvent.click(yes)
 }
@@ -93,7 +93,6 @@ async function fillInstallation() {
   fireEvent.change(screen.getByLabelText('Camera delay (s)'), { target: { value: '30' } })
   fireEvent.change(screen.getByLabelText('Tilt'), { target: { value: '-10' } })
   fireEvent.change(screen.getByLabelText('Heading'), { target: { value: '90' } })
-  await userEvent.click(within(screen.getByRole('group', { name: 'Bait was used' })).getByRole('button', { name: 'No' }))
 }
 
 // The camera of the visit is one of the settings, and what is collected at a revision is counted.
@@ -515,8 +514,9 @@ describe('VisitsPage', () => {
     await pickAction('Installation')
     await openSection('Camera'); await openSection('Site')
     for (const label of ['Camera delay (s)', 'Tilt', 'Heading']) expect(screen.getByText(label).closest('div')!.parentElement!.textContent).toMatch(/Required/)
-    expect(within(screen.getByRole('group', { name: 'Bait was used' })).getByRole('button', { name: 'Yes' })).toHaveAttribute('aria-pressed', 'false')
-    expect(Object.keys(installationErrors({ ...BLANK, actions: ['Installation'] }))).toEqual(['camera_height', 'camera_interval', 'camera_tilt', 'camera_heading', 'bait_use'])
+    expect(screen.getByRole('switch', { name: 'Bait was used' })).toHaveAttribute('aria-checked', 'false') // off is "no"
+    expect(screen.getByText('Bait was used').closest('div')!.parentElement!.textContent).toMatch(/Required/)
+    expect(Object.keys(installationErrors({ ...BLANK, actions: ['Installation'] }))).toEqual(['camera_height', 'camera_interval', 'camera_tilt', 'camera_heading'])
     expect(installationErrors({ ...BLANK, actions: ['Revision'] })).toEqual({})
   })
 
@@ -537,7 +537,7 @@ describe('VisitsPage', () => {
 
     const next = within(await screen.findByRole('group', { name: 'What next' }))
     expect(next.getByText('Do you want to add another visit?')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Add visit' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Review the visit' })).not.toBeInTheDocument()
     await userEvent.click(next.getByRole('button', { name: 'Back to the start' }))
     expect(onBack).toHaveBeenCalled()
   })
@@ -635,6 +635,75 @@ describe('VisitsPage', () => {
     expect(who.getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Luis×'])
     await userEvent.click(screen.getByLabelText('Trappers'))
     expect(await screen.findByRole('option', { name: 'Ana Pérez' })).toBeInTheDocument()
+  })
+
+  it('fills "Set up by" with who went, follows them as they change, and leaves alone what was typed there', async () => {
+    await chooseByHand()
+    await pickWhere()
+    await pickTrapper('Ana Pérez')
+    await pickWhen()
+    await pickAction('Installation')
+    await openSection('Camera'); await openSection('Site')
+    expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit Who went, and when?' }))
+    await pickTrapper('Luis')
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to the visit' }))
+    await openSection('Camera'); await openSection('Site')
+    expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez, Luis')
+
+    fireEvent.change(screen.getByLabelText('Set up by'), { target: { value: 'Someone else' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Edit Who went, and when?' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Luis' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to the visit' }))
+    await openSection('Camera'); await openSection('Site')
+    expect(screen.getByLabelText('Set up by')).toHaveValue('Someone else')
+  })
+
+  it('asks the browser for the current position, and puts it in the GPS coordinates — or says why it could not', async () => {
+    const getCurrentPosition = vi.fn()
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } })
+    await chooseByHand()
+    await pickWhere()
+    await pickTrapper('Ana Pérez')
+
+    getCurrentPosition.mockImplementationOnce((ok: (p: unknown) => void) => ok({ coords: { latitude: 37.0123456, longitude: -6.4412 } }))
+    await userEvent.click(screen.getByRole('button', { name: 'Use my current position' }))
+    expect(screen.getByLabelText('Latitude', { selector: '#visit-latitude' })).toHaveValue(37.012346)
+    expect(screen.getByLabelText('Longitude', { selector: '#visit-longitude' })).toHaveValue(-6.4412)
+
+    getCurrentPosition.mockImplementationOnce((_: unknown, fail: (e: unknown) => void) => fail({ code: 1, PERMISSION_DENIED: 1 }))
+    await userEvent.click(screen.getByRole('button', { name: 'Use my current position' }))
+    expect(await screen.findByText(/was not allowed to tell where you are/)).toBeInTheDocument()
+  })
+
+  it('has buttons to put the time of the visit as now or a few minutes ago, on the clock of the location', async () => {
+    expect(wallClockAgo('UTC', 0, new Date('2026-11-03T22:48:05Z'))).toBe('2026-11-03T22:48:05')
+    expect(wallClockAgo('UTC', 15, new Date('2026-11-03T22:48:05Z'))).toBe('2026-11-03T22:33:05')
+    expect(wallClockAgo('Europe/Madrid', 5, new Date('2026-11-03T22:48:05Z'))).toBe('2026-11-03T23:43:05') // one hour on in winter
+    expect(wallClockAgo('UTC', 10, new Date('2026-01-01T00:05:00Z'))).toBe('2025-12-31T23:55:00')   // across midnight and the year
+
+    await chooseByHand()
+    await pickWhere()
+    await userEvent.click(screen.getByRole('button', { name: '10 min ago' }))
+    const filled = (screen.getByLabelText(/date and time of the visit/i) as HTMLInputElement).value
+    expect(filled).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/)   // the input drops the seconds when they are 00
+    const was = new Date(filled.slice(0, 19)).getTime()   // the location of the tests has no timezone: it is the clock of the browser
+    expect(Math.abs(Date.now() - 10 * 60000 - was)).toBeLessThan(60000)
+  })
+
+  it('summarises a visit in groups: the visit, the hardware and where the camera is — only what was filled in', () => {
+    const v = { ...BLANK, site: 'TATR_0001', trappers: 'Ana Pérez', when: '2026-11-03T22:19:48', actions: ['Installation'], sd: '2', card: 'OK', batteries: 'OK', dateTimeOK: 'Yes', latitude: '37.0258', longitude: '-6.4527',
+      details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: 'RE5699252753', camera_model: 'Reconyx-PC800', setup_by: 'Ana Pérez', camera_height: 1, camera_interval: 20, camera_tilt: 0, camera_heading: 45, bait_use: false } }
+    const summary = visitSummary(v as never, 'R0001', 'Europe/Madrid')
+    const of = (rows: { label: string; value: string }[]) => Object.fromEntries(rows.map((r) => [r.label, r.value]))
+    const section = (key: string) => of(summary.sections.find((x) => x.key === key)!.rows)
+    expect(of(summary.overview)).toEqual({ Location: 'TATR_0001', 'Revision code': 'R0001', When: '2026-11-03 22:19:48 (Europe/Madrid)', 'Who went': 'Ana Pérez', 'Action performed': 'Installation' })
+    expect(summary.gps).toBe('37.0258, -6.4527')
+    expect(section('camera')).toMatchObject({ 'Camera id': 'RE5699252753', 'Camera model': 'Reconyx-PC800', 'Batteries condition': 'OK', 'Mounting height': '1 m', Tilt: '0°', Heading: '45°', 'Camera trigger delay': '20 s' })
+    expect(section('sd')).toMatchObject({ 'SD card left': '2' })
+    expect(section('site')).toEqual({ 'Set up by': 'Ana Pérez', 'Bait used': 'No' })
+    expect(section('notes')).toEqual({})
   })
 
   it('says there are no trappers yet when the settings have none, and has a button to add a new one there', async () => {
@@ -1132,14 +1201,22 @@ describe('By hand: do you see the camera?', () => {
     expect(screen.getByText(/The visit is kept as/).closest('p')).toHaveTextContent('not visited')
     expect(screen.queryByRole('radio', { name: 'OK' })).not.toBeInTheDocument()   // nothing is asked of the camera
     await userEvent.type(screen.getByLabelText('Reason'), 'the road was flooded')
-    await userEvent.click(screen.getByRole('button', { name: 'Add visit' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review the visit' }))
 
     // a visit cannot be changed once it is created: it is asked again
     expect(await screen.findByText(/A visit cannot be changed once it is created/)).toBeInTheDocument()
     expect(mockedApi.saveVisit).not.toHaveBeenCalled()
+    // step 5 says what is going to be kept
+    const summary = within(screen.getByRole('group', { name: 'The visit' }))
+    expect(summary.getByRole('region', { name: 'Visit overview' })).toBeInTheDocument()
+    for (const name of ['Camera', 'SD card', 'Site', 'Grouping and notes']) expect(summary.getByRole('region', { name })).toBeInTheDocument()
+    expect(summary.getByText('Location').nextElementSibling).toHaveTextContent('TATR_0001')
+    expect(summary.getByText('Revision code').nextElementSibling).toHaveTextContent('R0002')   // the one the notice names
+    expect(summary.getByText('Action performed').nextElementSibling).toHaveTextContent('Not visited')
+    expect(screen.getByRole('button', { name: 'Edit Enter the visit' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Back to the form' }))
-    expect(screen.getByRole('button', { name: 'Add visit' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Add visit' }))
+    expect(screen.getByRole('button', { name: 'Review the visit' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Review the visit' }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes, add the visit' }))
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalledTimes(1))
