@@ -1317,7 +1317,7 @@ describe('ImportDeploymentPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates'])
+      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates'], 'DONA', null)
       expect(await screen.findByText(/1 corrupted image\(s\): IMG_0002\.jpg/)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
     })
@@ -1329,7 +1329,7 @@ describe('ImportDeploymentPage', () => {
       for (const check of [0, 1, 3, 4, 5]) await chooseStrictness(check, 'Skip')
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['structure'])
+      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['structure'], 'DONA', null)
     })
 
     describe('the EXIF fields the wizard needs', () => {
@@ -1410,6 +1410,32 @@ describe('ImportDeploymentPage', () => {
         expect(await screen.findByText(/2 group\(s\) of duplicate images \(3 extra copies\)/)).toBeInTheDocument()
         expect(screen.getByText('IMG_0001.jpg = IMG_0001 (copy).jpg = sub/IMG_0001.jpg')).toBeInTheDocument()
         expect(screen.getByText('IMG_0005.jpg = IMG_0006.jpg')).toBeInTheDocument()
+      })
+
+      it('lists the images that were imported before into the research project, and where', async () => {
+        mockedApi.validateImages.mockResolvedValue({
+          checked_count: 3, duplicates: [],
+          duplicates_in_project: [{ file: 'IMG_0002.jpg', deployment_id: 'R0001-DONA_01', collection: 'R0001', original: 'IMG_0007.JPG' }],
+        })
+        await goToValidateStep()
+        await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
+
+        expect(await screen.findByText(/1 image\(s\) already imported into the research project/)).toBeInTheDocument()
+        expect(screen.getByText('IMG_0002.jpg — in R0001-DONA_01 (R0001) as IMG_0007.JPG')).toBeInTheDocument()
+        expect(screen.getByText('No duplicate images.')).toBeInTheDocument()   // the folder itself has none
+      })
+
+      it('says no image was imported before when none was, and blocks when it is required and one was', async () => {
+        mockedApi.validateImages.mockResolvedValue({ checked_count: 2, duplicates: [], duplicates_in_project: [] })
+        await goToValidateStep()
+        await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
+        expect(await screen.findByText('No image was imported before into the research project.')).toBeInTheDocument()
+
+        mockedApi.validateImages.mockResolvedValue({ checked_count: 2, duplicates: [], duplicates_in_project: [{ file: 'a.jpg', deployment_id: 'R0001-DONA_01', collection: 'R0001', original: null }] })
+        await chooseStrictness(5, 'Must pass')
+        await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
+        await screen.findByText(/1 image\(s\) already imported into the research project/)
+        expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
       })
 
       it('blocks continuing when it is required and there are duplicates', async () => {
@@ -1897,7 +1923,7 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getAllByRole('radiogroup')).toHaveLength(4) // and the question of where the images are
 
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
-      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'camera'])
+      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'camera'], 'DONA', null)
     })
 
     it('says there is nothing to run when every validation check is turned off, and lets the user go on', async () => {

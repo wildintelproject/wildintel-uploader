@@ -221,8 +221,9 @@ export const api = {
     post<{ results: LocalDeployment[] }>('/api/deployment-import/list-local-deployments', { path: collectionDir }),
 
   // checks omitted (or undefined) runs every check.
-  validateImages: (path: string, checks?: ImageCheck[]) =>
-    post<ValidationResult>('/api/deployment-import/validate-images', { path, checks: checks ?? null }),
+  // researchProjectId: the duplicates check also looks for images imported before into it; deploymentId: the one being imported again, left out of that.
+  validateImages: (path: string, checks?: ImageCheck[], researchProjectId?: string | null, deploymentId?: string | null) =>
+    post<ValidationResult>('/api/deployment-import/validate-images', { path, checks: checks ?? null, research_project_id: researchProjectId || null, deployment_id: deploymentId || null }),
 
   // collectionName: the collection folder's name (Local folder) — omitted for Trapper, whose collection is the id's own prefix.
   validateDeployment: (

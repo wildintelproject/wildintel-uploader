@@ -518,6 +518,30 @@ def test_validate_images_accepts_the_exif_and_duplicates_checks(tmp_path: Path):
     assert body["exif_missing"]["date"]["count"] == 0 and body["exif_missing"]["camera_model"]["count"] == 2
 
 
+def test_validate_images_looks_for_the_images_imported_before_into_the_research_project(tmp_path: Path):
+    import hashlib
+    import json
+    data_dir = tmp_path / "collections"
+    kept = data_dir / "DONA" / "R0001" / "R0001-DONA_01"
+    kept.mkdir(parents=True)
+    (kept / "preprocessing.json").write_text(json.dumps({"images": [{"original": "IMG_0001.JPG", "source_hash": hashlib.sha1(b"seen before").hexdigest()}]}), encoding="utf-8")
+    folder = tmp_path / "card"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"seen before")
+    (folder / "b.jpg").write_bytes(b"new")
+    payload = {"path": str(folder), "checks": ["duplicates"], "research_project_id": "DONA"}
+
+    with patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=data_dir):
+        response = _client().post("/api/deployment-import/validate-images", json=payload)
+        elsewhere = _client().post("/api/deployment-import/validate-images", json={**payload, "deployment_id": "R0001-DONA_01"})
+        alone = _client().post("/api/deployment-import/validate-images", json={"path": str(folder), "checks": ["duplicates"]})
+
+    assert response.status_code == 200
+    assert response.json()["duplicates_in_project"] == [{"file": "a.jpg", "deployment_id": "R0001-DONA_01", "collection": "R0001", "original": "IMG_0001.JPG"}]
+    assert elsewhere.json()["duplicates_in_project"] == []   # that deployment is the one imported again
+    assert "duplicates_in_project" not in alone.json()       # no research project, nothing to look in
+
+
 def test_validate_deployment_takes_the_collection_the_location_and_the_tolerance(tmp_path: Path):
     _make_jpeg(tmp_path / "IMG_0001.jpg", "2024:09:04 12:00:00")  # 2 hours after the start
     payload = {

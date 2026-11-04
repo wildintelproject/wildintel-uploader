@@ -718,7 +718,7 @@ export function imageCheckPassed(check: ImageCheck, result: ValidationResult | n
   if (check === 'corrupted') return result.corrupted !== undefined ? result.corrupted.length === 0 : null
   if (check === 'sequence') return result.sequence_issues !== undefined ? result.sequence_issues.length === 0 : null
   if (check === 'exif') return result.exif_missing !== undefined ? Object.values(result.exif_missing).every((m) => m.count === 0) : null
-  if (check === 'duplicates') return result.duplicates !== undefined ? result.duplicates.length === 0 : null
+  if (check === 'duplicates') return result.duplicates !== undefined ? result.duplicates.length === 0 && (result.duplicates_in_project ?? []).length === 0 : null
   if (check === 'camera') return result.cameras !== undefined ? result.cameras.length === 1 && (result.cameras_without_info ?? 0) === 0 : null
   return result.subdirectories !== undefined ? result.subdirectories.length === 0 : null
 }
@@ -1239,6 +1239,23 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
           )}
         </div>
       )}
+      {validation.duplicates_in_project !== undefined && (
+        <div className={validation.duplicates_in_project.length ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
+          {validation.duplicates_in_project.length === 0 ? (
+            <p><Mark kind="success" />No image was imported before into the research project.</p>
+          ) : (
+            <>
+              <p><Mark kind="warning" />{validation.duplicates_in_project.length} image(s) already imported into the research project:</p>
+              <ul className="list-disc ml-6">
+                {validation.duplicates_in_project.slice(0, 20).map((d, i) => (
+                  <li key={i} className="font-mono">{d.file} — in {d.deployment_id} ({d.collection}){d.original ? ` as ${d.original}` : ''}</li>
+                ))}
+                {validation.duplicates_in_project.length > 20 && <li>… and {validation.duplicates_in_project.length - 20} more</li>}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
       {validation.subdirectories !== undefined && (
         <p className={validation.subdirectories.length ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
           {validation.subdirectories.length
@@ -1706,7 +1723,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   async function handleValidate() {
     setValidating(true); setValidationError(null); setValidation(null)
     try {
-      setValidation(await api.validateImages(sourceDir, runnableImageChecks))
+      setValidation(await api.validateImages(sourceDir, runnableImageChecks, researchProjectId, deployment.deployment_id || null))
     } catch (e) {
       setValidationError(e instanceof Error ? e.message : 'Could not validate the images.')
     } finally {

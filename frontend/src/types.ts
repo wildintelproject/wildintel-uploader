@@ -109,6 +109,14 @@ export interface DuplicateGroup {
   files: string[]
 }
 
+/** An image of the folder that was imported before into the research project, and where. */
+export interface ProjectDuplicate {
+  file: string
+  deployment_id: string
+  collection: string
+  original: string | null
+}
+
 /** One camera (model and id) among a folder's images, and how many of them it took. */
 export interface CameraGroup {
   model: string | null
@@ -133,6 +141,8 @@ export interface ValidationResult {
   /** Images lacking the capture date, the camera model or the camera id. */
   exif_missing?: Record<ExifField, MissingExif>
   duplicates?: DuplicateGroup[]
+  /** The images already imported into another deployment of the research project — only when the research project was given. */
+  duplicates_in_project?: ProjectDuplicate[]
   /** The report this validation was kept in — see ReportPanel. Null if it couldn't be written. */
   report_id?: string | null
 }

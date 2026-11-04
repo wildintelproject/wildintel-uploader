@@ -132,6 +132,9 @@ def validation_report(found: dict, source: Path, checks: Iterable[str] | None = 
                     tags={name: ", ".join(f"No {field}" if i == 0 else f"no {field}" for i, field in enumerate(fields)) for name, fields in missing.items()})
     if "duplicates" in ran:
         problems = {name: "same content as " + ", ".join(f for f in g["files"] if f != name) for g in found.get("duplicates", []) for name in g["files"]}
+        for before in found.get("duplicates_in_project", []):   # the images imported before into the research project
+            there = f"already imported into {before['deployment_id']}" + (f" as {before['original']}" if before.get("original") else "")
+            problems[before["file"]] = f"{problems[before['file']]}; {there}" if before["file"] in problems else there
         b.per_image("duplicates", images, problems, "no other image has the same content", tag="Duplicate")
     if "structure" in ran:
         folders = found.get("subdirectories", [])

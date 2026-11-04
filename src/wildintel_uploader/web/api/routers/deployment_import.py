@@ -263,8 +263,11 @@ def validate_images(req: ValidateImagesRequest) -> dict:
     checks = frozenset(req.checks) if req.checks is not None else None
     try:
         source = Path(req.path).expanduser()
-        result = deployment_import_service.validate_images(source, checks, detail=True)
-    except deployment_import_service.DeploymentImportError as exc:
+        imported = None
+        if req.research_project_id and (checks is None or "duplicates" in checks):
+            imported = local_folder_service.imported_source_hashes(config.collections_dir(), req.research_project_id, req.deployment_id)
+        result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported)
+    except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
         raise HTTPException(400, str(exc)) from exc
     return {**result, "report_id": _keep(lambda: report_service.validation_report(result, source, checks))}
 

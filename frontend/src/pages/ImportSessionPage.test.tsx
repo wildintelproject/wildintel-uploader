@@ -197,6 +197,7 @@ describe('ImportSessionPage', () => {
 
     await screen.findByText(/1 corrupted image/)
     expect(mockedApi.validateImages.mock.calls.map((c) => c[0])).toEqual(['/s/DONA_01', '/s/DONA_02'])
+    expect(mockedApi.validateImages.mock.calls.map((c) => c[2])).toEqual(['DONA', 'DONA'])   // the images are also looked for in what the research project already has
     expect(screen.getByRole('status')).toHaveTextContent('1 folder fails a check set to Must pass')
     expect(screen.getByRole('button', { name: /DONA_02/ })).toHaveTextContent('left out')
     await userEvent.click(screen.getByRole('button', { name: 'Continue with 1 folder' }))

@@ -469,7 +469,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     setValidating(true); setValidations({})
     for (const d of candidates) {
       try {
-        const result = await api.validateImages(d.path, runnableImageChecks)
+        const result = await api.validateImages(d.path, runnableImageChecks, projectId)
         setValidations((v) => ({ ...v, [d.name]: { result } }))
       } catch (e) {
         setValidations((v) => ({ ...v, [d.name]: { error: e instanceof Error ? e.message : 'Could not validate the images.' } }))

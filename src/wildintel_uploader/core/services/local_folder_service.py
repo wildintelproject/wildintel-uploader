@@ -147,6 +147,26 @@ def project_dir(root: Path, research_project_id: str) -> Path:
     return root / research_project_id
 
 
+def imported_source_hashes(root: Path, research_project_id: str, exclude_deployment: str | None = None) -> dict[str, list[dict]]:
+    """The images already imported into a research project's collections, by the SHA-1 of the original that was imported (what its
+    preprocessing.json keeps as "source_hash") — each with {"deployment_id", "collection", "original"}. `exclude_deployment` leaves one
+    deployment out (the one being imported again). Empty when the research project has no folder or nothing was preprocessed in it."""
+    project = project_dir(root, research_project_id)
+    found: dict[str, list[dict]] = {}
+    if not project.is_dir():
+        return found
+    for log in sorted(project.glob("*/*/preprocessing.json")):
+        deployment_id, collection = log.parent.name, log.parent.parent.name
+        if exclude_deployment and deployment_id.lower() == exclude_deployment.lower():
+            continue
+        body = _read_json(log)
+        for image in (body.get("images") if isinstance(body, dict) else None) or []:
+            digest = image.get("source_hash") if isinstance(image, dict) else None
+            if digest:
+                found.setdefault(digest, []).append({"deployment_id": deployment_id, "collection": collection, "original": image.get("original")})
+    return found
+
+
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))

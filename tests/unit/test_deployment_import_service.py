@@ -857,6 +857,54 @@ def test_validate_images_duplicates_is_empty_when_every_image_is_different(tmp_p
     assert svc.validate_images(folder, frozenset({"duplicates"}))["duplicates"] == []
 
 
+def _kept_deployment(root: Path, project: str, collection: str, deployment: str, originals: dict[str, bytes]) -> None:
+    """A deployment already imported into a research project: its preprocessing.json says the SHA-1 of each original."""
+    import hashlib
+    import json
+    folder = root / project / collection / deployment
+    folder.mkdir(parents=True)
+    images = [{"original": name, "name": f"{deployment}__{i}.JPEG", "source_hash": hashlib.sha1(content).hexdigest()} for i, (name, content) in enumerate(originals.items(), 1)]
+    (folder / "preprocessing.json").write_text(json.dumps({"options": {}, "images": images}), encoding="utf-8")
+
+
+def test_validate_images_duplicates_finds_the_images_imported_before_into_the_research_project(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service
+    root = tmp_path / "collections"
+    _kept_deployment(root, "DONA", "R0001", "R0001-DONA_01", {"IMG_0001.JPG": b"first", "IMG_0002.JPG": b"second"})
+    _kept_deployment(root, "OTHER", "R0001", "R0001-OTHER_01", {"IMG_0009.JPG": b"third"})   # another research project: not looked at
+    folder = tmp_path / "card"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"second")   # imported before, as IMG_0002.JPG
+    (folder / "b.jpg").write_bytes(b"third")    # only the other research project has it
+    (folder / "c.jpg").write_bytes(b"new")
+
+    imported = local_folder_service.imported_source_hashes(root, "DONA")
+    result = svc.validate_images(folder, frozenset({"duplicates"}), imported=imported)
+
+    assert result["duplicates_in_project"] == [{"file": "a.jpg", "deployment_id": "R0001-DONA_01", "collection": "R0001", "original": "IMG_0002.JPG"}]
+    assert result["duplicates"] == []   # the folder itself has none
+
+
+def test_validate_images_duplicates_leaves_out_the_deployment_that_is_imported_again(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service
+    root = tmp_path / "collections"
+    _kept_deployment(root, "DONA", "R0001", "R0001-DONA_01", {"IMG_0001.JPG": b"first"})
+    folder = tmp_path / "card"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"first")
+
+    again = local_folder_service.imported_source_hashes(root, "DONA", exclude_deployment="r0001-dona_01")
+
+    assert svc.validate_images(folder, frozenset({"duplicates"}), imported=again)["duplicates_in_project"] == []
+
+
+def test_validate_images_duplicates_says_nothing_of_the_project_without_its_images(tmp_path: Path):
+    (tmp_path / "a.jpg").write_bytes(b"x")
+
+    assert "duplicates_in_project" not in svc.validate_images(tmp_path, frozenset({"duplicates"}))
+    assert svc.validate_images(tmp_path, frozenset({"duplicates"}), imported={})["duplicates_in_project"] == []
+
+
 def test_validate_images_duplicates_only_hashes_files_of_the_same_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (tmp_path / "small.jpg").write_bytes(b"1")
     (tmp_path / "medium.jpg").write_bytes(b"22")

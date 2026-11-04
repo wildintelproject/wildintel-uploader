@@ -469,7 +469,32 @@ def _duplicate_groups(images: list[Path], source_dir: Path) -> list[dict]:
     return sorted(groups, key=lambda g: g["files"][0])
 
 
-def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, detail: bool = False) -> dict:
+def _sha1_of(path: Path) -> str | None:
+    digest = hashlib.sha1()  # noqa: S324 — the identifier the preprocessing keeps of an original (its "source_hash"), not a security measure
+    try:
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        logger.debug("Could not read %s to look for images imported before: %s", path, exc)
+        return None
+    return digest.hexdigest()
+
+
+def _imported_before(images: list[Path], source_dir: Path, imported: dict[str, list[dict]]) -> list[dict]:
+    """The images of the folder that were already imported into the research project — by the SHA-1 of the file, as the preprocessing kept it —
+    each with where: {"file", "deployment_id", "collection", "original"}."""
+    if not imported:
+        return []
+    ordered = sorted(images)
+    found = []
+    for path, digest in zip(ordered, parallel.pmap(_sha1_of, ordered)):
+        for before in imported.get(digest or "", []):
+            found.append({"file": str(path.relative_to(source_dir)), **before})
+    return found
+
+
+def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, detail: bool = False, imported: dict[str, list[dict]] | None = None) -> dict:
     """Independent, opt-in checks over a scanned folder's images — only
     "checked_count" plus whichever of these were asked for are present in
     the result:
@@ -499,6 +524,10 @@ def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, d
         content (a card copied twice, a file renamed and kept), each with
         the size and the files. Only files of the same size are compared,
         so a big folder isn't hashed in full.
+        With `imported` (what the research project already has — see
+        local_folder_service.imported_source_hashes) it also says, in
+        "duplicates_in_project", which images were imported before into
+        another deployment of the project, and where.
     With detail, exif_missing also lists in "files" every image that lacks each field, not just examples.
 
     Raises:
@@ -543,6 +572,8 @@ def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, d
 
     if "duplicates" in checks:
         result["duplicates"] = _duplicate_groups(images, source_dir)
+        if imported is not None:
+            result["duplicates_in_project"] = _imported_before(images, source_dir, imported)
 
     if "camera" in checks:
         groups: dict[tuple[str | None, str | None], list[Path]] = defaultdict(list)
