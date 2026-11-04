@@ -760,8 +760,20 @@ export interface VisitsCsvColumns {
   columns: string[]
   sample: string[][]
   mapping: Record<string, string>
-  fields: { field: string; label: string; required: boolean }[]
+  fields: {
+    field: string; label: string; required: boolean
+    /** The entity this field is of, when it is not a visit's: only asked for when that entity is created (locations, cameras, sd_cards). */
+    entity?: CsvEntity | null
+    /** The entities that make this field required when they are created. */
+    required_with?: CsvEntity[]
+  }[]
 }
+
+/** What the import of visits can create when a visit names one that does not exist. */
+export type CsvEntity = 'locations' | 'cameras' | 'sd_cards'
+export type CsvCreate = Record<CsvEntity, boolean>
+/** What is asked of the import besides the file: the entities to create, and the value of the fields the file has no column for. */
+export interface ImportCsvOptions { create?: CsvCreate; defaults?: Record<string, string> }
 
 /** What reading a CSV file of visits gave: the visits that can be kept, the rows that cannot (numbered as in the file, the header being 1),
  * those already kept, and how many were kept when asked to. */
@@ -769,6 +781,10 @@ export interface VisitsCsvResult {
   visits: StoredVisit[]
   problems: { row: number; message: string; /** The row is of the history of visits, not of the file. */ history?: boolean }[]
   skipped: number
+  /** What the visits to add create: the locations, cameras and SD cards that do not exist and the file was asked to create. */
+  create?: Record<CsvEntity, Record<string, unknown>[]>
+  /** What became of each row of the file, numbered as in it: kept to add (ok), a problem, already kept, held for a site that is not a location, or ignored. */
+  rows?: { row: number; site: string; session?: string; result: 'ok' | 'problem' | 'already_kept' | 'new_site' | 'ignored'; label?: string; message: string }[]
   /** How many of the visits come from the history, which are the first ones. */
   history?: number
   /** What is worth knowing of the visits, without being wrong (the sites of the trip before not visited on this one…). */

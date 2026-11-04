@@ -2447,7 +2447,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
             </div>
             {visitSource === 'wildintel' && (
               <div className="space-y-5">
-                <ToggleCard title="Use WildINTEL Epicollect" checked={draft.wildintelEnabled} onChange={(v) => set('wildintelEnabled', v)}
+                <ToggleCard title="Use WildINTEL Epicollect Legacy" checked={draft.wildintelEnabled} onChange={(v) => set('wildintelEnabled', v)}
                             description="Offers to read the visits from the CSV of the WildINTEL Epicollect project, with the datasheet of visits if you have it. Turned off, it is not offered in Register visits." />
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">The visits are read from the CSV file downloaded from the WildINTEL Epicollect project: no connection to Epicollect is needed. Here is how the file is read.</p>
                 <SettingsCard>

@@ -355,18 +355,30 @@ def not_visited_records(previous: int, visits: list[dict], locations: list[dict]
     return records
 
 
+def revision_missing(number: int, visits: list[dict], locations: list[dict], day: str = "") -> list[str]:
+    """The locations still to be visited in revision `number`: those that are not archived when it starts (the day of its first visit, or `day` if it has none)
+    and have no visit in it. Empty when the revision is complete — closed."""
+    of = [v for v in visits if _session_number(v.get("session")) == number]
+    start = min((str(v["date"]) for v in of), default=day)
+    expected = [str(l["location_id"]) for l in locations
+                if l.get("location_id") and not (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start))]
+    visited = {str(v["location_id"]).lower() for v in of}
+    return sorted(s for s in expected if s.lower() not in visited)
+
+
+def is_closed_revision(session: str | None, visits: list[dict], locations: list[dict]) -> bool:
+    """Whether the revision has a visit — kept — and every location that is not archived has its visit in it: nothing new can be added to it."""
+    number = _session_number(session)
+    return number is not None and any(_session_number(v.get("session")) == number for v in visits) and not revision_missing(number, visits, locations)
+
+
 def unfinished_revision(number: int, visits: list[dict], locations: list[dict], floor: int, day: str = "") -> str | None:
     """Why revision `number` cannot be started: the one before it is not finished. A revision is one visit to each of the locations that are not archived
     when it starts (the day of its first visit; an archived location with no date is archived for good); the first revision of the visits (`floor`) has none before it."""
     previous = number - 1
     if previous < floor:
         return None
-    of = [v for v in visits if _session_number(v.get("session")) == previous]
-    start = min((str(v["date"]) for v in of), default=day)
-    expected = [str(l["location_id"]) for l in locations
-                if l.get("location_id") and not (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start))]
-    visited = {str(v["location_id"]).lower() for v in of}
-    missing = sorted(s for s in expected if s.lower() not in visited)
+    missing = revision_missing(previous, visits, locations, day)
     if not missing:
         return None
     return f"R{number:04d} cannot start: R{previous:04d} is not finished, {len(missing)} location(s) still to be visited in it: {', '.join(missing)}."

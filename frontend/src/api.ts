@@ -3,7 +3,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, CardCopyEvent, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent } from './types'
+  ClosedVisit, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, ImportCsvOptions, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
 async function errorMessage(r: Response): Promise<string> {
@@ -158,6 +158,10 @@ export const api = {
   listVisits: (researchProjectId: string, locationId?: string) =>
     post<{ results: StoredVisit[] }>('/api/visits/list', { research_project_id: researchProjectId, location_id: locationId ?? null }),
 
+  // The visits of a research project as a CSV the import of visits reads back.
+  exportVisitsCsv: (researchProjectId: string) =>
+    post<{ csv: string; filename: string; count: number }>('/api/visits/export-csv', { research_project_id: researchProjectId }),
+
   saveVisit: (researchProjectId: string, visit: StoredVisit) =>
     post<StoredVisit & { field_logs?: FieldLogsResult }>('/api/visits/save', { research_project_id: researchProjectId, visit }),
 
@@ -174,8 +178,11 @@ export const api = {
 
   // The visits of a CSV file for a research project: what can be kept and what is wrong with the rest — kept too when `save` is set.
   /** Reads the visits of a CSV file — with, optionally, a history of visits (the fieldwork datasheet, an .xlsx, as base64) that completes the ones kept first. */
-  importVisitsCsv: (researchProjectId: string, csv: string, save = false, format: VisitsCsvFormat = 'mapped', mapping?: Record<string, string>, historyXlsx?: string) =>
-    post<VisitsCsvResult>('/api/visits/import-csv', { research_project_id: researchProjectId, csv, save, format, mapping: mapping ?? null, ...(historyXlsx ? { history_xlsx: historyXlsx } : {}) }),
+  importVisitsCsv: (researchProjectId: string, csv: string, save = false, format: VisitsCsvFormat = 'mapped', mapping?: Record<string, string>, historyXlsx?: string, options?: ImportCsvOptions) =>
+    post<VisitsCsvResult>('/api/visits/import-csv', {
+      research_project_id: researchProjectId, csv, save, format, mapping: mapping ?? null, ...(historyXlsx ? { history_xlsx: historyXlsx } : {}),
+      ...(options?.create ? { create: options.create } : {}), ...(options?.defaults ? { defaults: options.defaults } : {}),
+    }),
 
   // The columns of a CSV file, a few of its rows, the fields of a visit it can give and the column that most likely gives each.
   visitsCsvColumns: (csv: string) => post<VisitsCsvColumns>('/api/visits/csv-columns', { csv }),

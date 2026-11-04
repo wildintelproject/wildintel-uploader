@@ -269,8 +269,8 @@ describe('SettingsPage', () => {
       await section('Visit sources')
 
       expect(screen.getByRole('heading', { name: 'Visit sources' })).toBeInTheDocument()
-      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['WildINTEL Epicollect', 'Epicollect', 'Custom CSV'])
-      expect(screen.getByRole('tab', { name: 'WildINTEL Epicollect' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['WildINTEL Epicollect Legacy', 'Epicollect', 'Custom CSV'])
+      expect(screen.getByRole('tab', { name: 'WildINTEL Epicollect Legacy' })).toHaveAttribute('aria-selected', 'true')
       expect(screen.getByLabelText('The time of a visit is')).toBeInTheDocument()
       await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
       expect(screen.getByRole('switch', { name: 'Use Epicollect' })).toBeInTheDocument()
@@ -1586,8 +1586,8 @@ describe('SettingsPage — which sources and uploaders are used', () => {
     render(<SettingsPage onClose={vi.fn()} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Visit sources' }))
 
-    expect(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect' })).toHaveAttribute('aria-checked', 'true')
-    await userEvent.click(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect' }))
+    expect(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect Legacy' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect Legacy' }))
     await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
     expect(screen.getByRole('switch', { name: 'Use Epicollect' })).toHaveAttribute('aria-checked', 'false')
     await userEvent.click(screen.getByRole('switch', { name: 'Use Epicollect' }))

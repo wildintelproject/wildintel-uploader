@@ -464,6 +464,11 @@ class ImportVisitsCsvRequest(LocalLocationsRequest):
     mapping: Optional[dict[str, str]] = None
     # The history of visits — the fieldwork datasheet, an .xlsx workbook, base64 — that completes the visits kept before the file's are applied.
     history_xlsx: Optional[str] = None
+    # What to create when the file names a location, a camera or an SD card that does not exist: {"locations": bool, "cameras": bool, "sd_cards": bool}. The fields each one
+    # needs become required (see visits_csv.CREATABLE).
+    create: Optional[dict[str, bool]] = None
+    # The value of a field that the file has no column for, or whose cell is empty: {field: value}.
+    defaults: Optional[dict[str, str]] = None
 
 
 class VisitsCsvColumnsRequest(BaseModel):

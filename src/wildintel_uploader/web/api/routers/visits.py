@@ -158,6 +158,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
         locations = local_folder_service.list_locations(root, req.research_project_id)
         kept = local_folder_service.list_visits(root, req.research_project_id)
         cards = local_folder_service.list_field_items(root, req.research_project_id, "sd_cards")
+        cameras = local_folder_service.list_field_items(root, req.research_project_id, "cameras")
         prefix = f"{req.research_project_id}_"
         history = None
         if req.history_xlsx:
@@ -178,7 +179,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             except epicollect_service.EpicollectError as exc:
                 raise HTTPException(400, str(exc)) from exc
             fmt, mapping, time_source = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}, "hour"
-        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards})
+        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults})
         if history:
             seen = {s["site"].lower() for s in result["new_sites"]}
             result = {
@@ -190,6 +191,12 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             }
         saved = field_logs = report = None
         if req.save:
+            # what the visits need is created first: their locations, cameras and SD cards
+            for location in result["create"]["locations"]:
+                local_folder_service.write_location(root, req.research_project_id, location)
+            for kind, kept_items in (("cameras", cameras), ("sd_cards", cards)):
+                if result["create"][kind]:
+                    local_folder_service.write_field_items(root, req.research_project_id, kind, [*kept_items, *result["create"][kind]])
             saved = local_folder_service.write_visits(root, req.research_project_id, result["visits"])
             _archive_locations(root, req.research_project_id, result["visits"])
             _refresh_states(root, req.research_project_id)
@@ -200,11 +207,25 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
     return {**result, "saved": saved, "field_logs": field_logs, "report": report}
 
 
+@router.post("/export-csv")
+def export_visits_csv(req: ListVisitsRequest) -> dict:
+    """The visits kept to a research project as a CSV that /import-csv reads back (every visit, or those to one location when it is given): {"csv", "filename", "count"}."""
+    try:
+        visits = local_folder_service.list_visits(config.collections_dir(), req.research_project_id)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if req.location_id:
+        visits = [v for v in visits if str(v.get("location_id", "")).lower() == req.location_id.lower()]
+    return {"csv": visits_csv.export_visits(visits), "filename": f"{req.research_project_id}_visits.csv", "count": len(visits)}
+
+
 @router.post("/csv-columns")
 def csv_columns(req: VisitsCsvColumnsRequest) -> dict:
     """The columns of a CSV file, a few of its rows, the fields of a visit it can give and the column that most likely gives each."""
     try:
-        return {**visits_csv.suggest_mapping(req.csv), "fields": [{"field": f, "label": label, "required": required} for f, label, required in visits_csv.FIELDS]}
+        needed_by = {f: [e for e, spec in visits_csv.CREATABLE.items() if f in spec["required"]] for f, _, _ in visits_csv.FIELDS}
+        return {**visits_csv.suggest_mapping(req.csv), "fields": [
+            {"field": f, "label": label, "required": required, "entity": visits_csv.ENTITY_ONLY.get(f), "required_with": needed_by[f]} for f, label, required in visits_csv.FIELDS]}
     except visits_csv.VisitsCsvError as exc:
         raise HTTPException(400, str(exc)) from exc
 

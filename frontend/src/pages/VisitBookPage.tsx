@@ -9,6 +9,7 @@ import LinkButton from '../components/LinkButton'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { BookVisit, ClosedVisitTarget } from '../types'
 import { btnOutline, inputClass } from './ImportDeploymentPage'
+import { download } from '../csvFile'
 
 interface Props {
   onBack: () => void
@@ -123,7 +124,23 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest revision first.
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const error = projectError ?? loadError
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const error = projectError ?? loadError ?? exportError
+
+  /** The visits of the research project as a CSV file that Register visits › CSV reads back. */
+  async function exportVisits() {
+    if (!project) return
+    setExporting(true); setExportError(null)
+    try {
+      const { csv, filename } = await api.exportVisitsCsv(project.acronym)
+      download(filename, csv)
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Could not export the visits.')
+    } finally {
+      setExporting(false)
+    }
+  }
   useEffect(() => {
     setVisits(null); setLoadError(null); setPage(1); setOpened(null); setRevision('')
     if (!project) return
@@ -200,7 +217,15 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
             <p className="text-zinc-500 dark:text-zinc-400 text-sm">The visits kept to a research project.</p>
           </div>
         </div>
-        <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The book" onOpenSettings={onOpenSettings} />
+        <div className="flex flex-wrap items-center gap-3">
+          <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The book" onOpenSettings={onOpenSettings} />
+          {project && visits !== null && visits.length > 0 && (
+            <button type="button" className={btnOutline} disabled={exporting} onClick={() => void exportVisits()}
+                    title="Download the visits of this research project as a CSV file, to import them again in Register visits › CSV file">
+              {exporting ? 'Exporting…' : 'Export visits (CSV)'}
+            </button>
+          )}
+        </div>
       </header>
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}

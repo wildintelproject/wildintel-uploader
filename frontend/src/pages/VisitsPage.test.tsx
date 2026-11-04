@@ -128,8 +128,17 @@ describe('VisitsPage', () => {
     expect(screen.queryByRole('button', { name: /custom csv/i })).not.toBeInTheDocument()
   })
 
-  it('first asks where the visits come from, with by hand, WildINTEL Epicollect and Custom CSV', () => {
+  it('first asks where the visits come from: by hand, Custom CSV, WildINTEL Epicollect Legacy, and the new WildINTEL Epicollect that cannot be chosen yet', () => {
     render(<VisitsPage onBack={vi.fn()} />)
+
+    const titles = within(screen.getByText('Where do the visits come from?').closest('section')!).getAllByRole('button').map((b) => b.textContent ?? '')
+    expect(titles.findIndex((t) => /^By hand/.test(t))).toBe(0)
+    expect(titles.findIndex((t) => /^Custom CSV/.test(t))).toBe(1)
+    expect(titles.findIndex((t) => /^WildINTEL Epicollect Legacy/.test(t))).toBe(2)
+    const coming = screen.getByLabelText('WildINTEL Epicollect, coming soon')
+    expect(coming).toHaveAttribute('aria-disabled', 'true')
+    expect(coming).toHaveTextContent('Coming soon')
+    expect(screen.queryByRole('button', { name: /^WildINTEL Epicollect, coming soon/ })).not.toBeInTheDocument()   // it is not a button: nothing to press
 
     expect(screen.getByText('Where do the visits come from?')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^by hand/i })).toBeEnabled()
@@ -864,6 +873,7 @@ describe('VisitsPage from a CSV file', () => {
     ],
   }
   const MAPPING = { location_id: 'Lugar', date: 'Dia', time: 'Hora', actions: 'Tarea', num_photos: 'Fotos' }
+  const MAPPING_WITHOUT_PHOTOS = { location_id: 'Lugar', date: 'Dia', time: 'Hora', actions: 'Tarea' }   // what the file matched by itself
 
   async function start(option = /custom csv/i) {
     mockedApi.visitsCsvColumns.mockResolvedValue(COLUMNS)
@@ -882,6 +892,48 @@ describe('VisitsPage from a CSV file', () => {
     expect(screen.getByLabelText('Photos on the card collected')).toHaveValue('')
     expect(screen.getByLabelText('Example of Date')).toHaveTextContent('02/10/2026')
     expect(mockedApi.importVisitsCsv).not.toHaveBeenCalled()
+  })
+
+  it('asks for more fields when what does not exist is to be created, takes a default for a field with no column, and sends both', async () => {
+    mockedApi.visitsCsvColumns.mockResolvedValue({
+      ...COLUMNS, fields: [...COLUMNS.fields,
+        { field: 'latitude', label: 'Latitude', required: false, required_with: ['locations'] }, { field: 'longitude', label: 'Longitude', required: false, required_with: ['locations'] },
+        { field: 'timezone', label: 'Timezone of the location (IANA, e.g. Europe/Madrid)', required: false, entity: 'locations', required_with: ['locations'] },
+        { field: 'camera_model', label: 'Camera model', required: false, required_with: ['cameras'] }, { field: 'sd_brand', label: 'Brand of the SD card', required: false, entity: 'sd_cards', required_with: ['sd_cards'] },
+      ],
+    } as never)
+    mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /custom csv/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+
+    // what is only the entity's is not asked until it is created
+    await screen.findByLabelText('Site (a location of the research project)')
+    expect(screen.queryByLabelText('Timezone of the location (IANA, e.g. Europe/Madrid)')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Brand of the SD card')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeEnabled()
+
+    await userEvent.click(screen.getByLabelText(/Create the locations that do not exist/))
+    expect(screen.getByLabelText('Timezone of the location (IANA, e.g. Europe/Madrid)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // coordinates and timezone are required now
+    expect(screen.getByRole('status')).toHaveTextContent('match also latitude, longitude, timezone of the location')
+
+    // a default is as good as a column
+    await userEvent.type(screen.getByLabelText('Default for Latitude'), '40.1')
+    await userEvent.type(screen.getByLabelText('Default for Longitude'), '-3.2')
+    await userEvent.type(screen.getByLabelText('Default for Timezone of the location (IANA, e.g. Europe/Madrid)'), 'Europe/Madrid')
+    await userEvent.click(screen.getByLabelText(/Create the cameras that do not exist/))
+    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // the camera model is required now
+    await userEvent.type(screen.getByLabelText('Default for Camera model'), 'Browning-BTC-8E')
+    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeEnabled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Read the visits' }))
+    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.any(String), false, 'mapped', MAPPING_WITHOUT_PHOTOS, undefined, {
+      create: { locations: true, cameras: true, sd_cards: false },
+      defaults: { latitude: '40.1', longitude: '-3.2', timezone: 'Europe/Madrid', camera_model: 'Browning-BTC-8E' },
+    }))
   })
 
   it('reads the visits straight from Epicollect, with no file, when that source is used', async () => {
@@ -1040,6 +1092,22 @@ describe('VisitsPage from a CSV file', () => {
     expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0050', latitude: 37.1, longitude: -6.4, timezone: 'UTC' }))
     expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0051' }))
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(2)) // the file is read again
+  })
+
+  it('checks the file again from the button of the step, with the same options', async () => {
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [], problems: [], skipped: 1, ignored: 0, saved: null, new_sites: [], warnings: [] })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    expect(await screen.findByText(/to add/)).toHaveTextContent('0 visits to add · 1 already kept')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Check again' }))
+    expect(await screen.findByText(/to add/)).toHaveTextContent('1 visit to add')
+    expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(2)
+    expect(mockedApi.importVisitsCsv.mock.calls[1].slice(0, 4)).toEqual(mockedApi.importVisitsCsv.mock.calls[0].slice(0, 4))   // the same file and format
   })
 
   it('forgets what the file before said when another is chosen — even one with the same name, edited', async () => {

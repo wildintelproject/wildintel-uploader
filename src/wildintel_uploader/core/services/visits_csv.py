@@ -16,7 +16,8 @@ import re
 
 from pydantic import ValidationError
 
-from wildintel_uploader.core.schemas.requests import VisitRecord
+from wildintel_uploader.core import config
+from wildintel_uploader.core.schemas.requests import LocationRecord, VisitRecord
 from wildintel_uploader.core.services import visit_rules, visit_time
 
 # What each column of an Epicollect download may be called — compared without case, spaces, dashes, underscores or a number in front.
@@ -89,8 +90,24 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("habitat", "Habitat", False),
     ("deployment_groups", "Deployment groups", False),
     ("tags", "Tags (separated by |)", False),
+    # what a row says of the entities it may create (see CREATABLE): they are not fields of the visit
+    ("location_name", "Name of the location", False),
+    ("timezone", "Timezone of the location (IANA, e.g. Europe/Madrid)", False),
+    ("coordinate_uncertainty", "Coordinate uncertainty of the location (m)", False),
+    ("sd_brand", "Brand of the SD card", False),
+    ("sd_capacity", "Capacity of the SD card (e.g. 64 GB)", False),
 )
 REQUIRED = tuple(f for f, _, required in FIELDS if required)
+# What the import can create when a visit names a location, a camera or an SD card that does not exist: each one's fields that a row must give — by a column or
+# by a default — and the ones that are only asked for when it is created. The fields of the visit that appear here (latitude, longitude, camera_id, camera_model, sd)
+# become required when it is.
+CREATABLE: dict[str, dict] = {
+    "locations": {"required": ["latitude", "longitude", "timezone"], "extra": ["location_name", "coordinate_uncertainty"]},
+    "cameras": {"required": ["camera_id", "camera_model"], "extra": []},
+    "sd_cards": {"required": ["sd", "sd_brand"], "extra": ["sd_capacity"]},
+}
+# The fields that are not a visit's but an entity's.
+ENTITY_ONLY = {f: entity for entity, spec in CREATABLE.items() for f in [*spec["required"], *spec["extra"]] if f in ("location_name", "timezone", "coordinate_uncertainty", "sd_brand", "sd_capacity")}
 EPICOLLECT_NUMBER = re.compile(r"^\s*(\d+)\s*([bB]?)\s*$")
 ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation", "Stolen", "Archive")} | {
     # as the datasheets of the field work write them
@@ -99,6 +116,26 @@ ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation",
 YES = {"yes", "true", "1", "y", "si", "sí"}
 NO = {"no", "false", "0", "n"}
 CODES = {c.lower(): c for c in ("OK", "CarFull", "SinPilas", "CarFullSinPilas")}
+
+
+# What kind of error a problem is, from what it says — the rows with the same kind are told together. The first pattern that matches wins.
+ERROR_KINDS: tuple[tuple[str, str], ...] = (
+    (r"^The actions", "Actions not valid"),
+    (r"is not OK, CarFull", "Card and batteries not valid"),
+    (r"is not yes or no", "Not yes or no"),
+    (r"is not a session", "Session not valid"),
+    (r"cannot start:", "Revision started before the one before is finished"),
+    (r"is closed:", "Revision closed"),
+    (r"time data|does not match format|not a date|Invalid isoformat|unconverted data", "Date or time not valid"),
+    (r"could not convert|invalid literal|not a whole number|not a number", "Number not valid"),
+    (r"^To create the", "Data to create it is missing"),
+    (r"^The visit time|^Field required|^Value error|^Input should", "Value not valid"),
+)
+
+
+def error_kind(message: str) -> str:
+    """The kind of error a message says — see ERROR_KINDS."""
+    return next((label for pattern, label in ERROR_KINDS if re.search(pattern, message)), "Other problem")
 
 
 class VisitsCsvError(Exception):
@@ -145,17 +182,23 @@ def suggest_mapping(text: str) -> dict:
     return {"columns": header, "sample": table[1:4], "mapping": mapping}
 
 
-def _rows(text: str, fmt: str, mapping: dict[str, str] | None) -> tuple[dict[str, str], list[dict[str, str]]]:
-    """The file's columns, as the visit's fields they are, and its rows keyed by those fields."""
+def _rows(text: str, fmt: str, mapping: dict[str, str] | None, defaults: dict[str, str] | None = None,
+          create: dict[str, bool] | None = None) -> tuple[dict[str, str], list[dict[str, str]]]:
+    """The file's columns, as the visit's fields they are, and its rows keyed by those fields.
+
+    `defaults` ({field: value}) is what a field is when its column is not in the file or a cell of it is empty; a field with a default counts as given. `create` ({locations, cameras,
+    sd_cards}: bool) says which entities are created when they do not exist: the fields they need (see CREATABLE) are required too."""
     table = _table(text)
     fields = _fields(table[0], fmt, mapping)
-    present = {f for f in fields if f}
+    defaults = {f: v.strip() for f, v in (defaults or {}).items() if f and str(v).strip()}
+    present = {f for f in fields if f} | set(defaults)
     missing = [f for f in REQUIRED if f not in present]
+    missing += [f for entity, on in (create or {}).items() if on and entity in CREATABLE for f in CREATABLE[entity]["required"] if f not in present and f not in missing]
     if not present & {"created_at", "when"} and not {"date", "time"} <= present:
         missing.append("the date and the time (or created_at)")
     if missing:
         raise VisitsCsvError(f"The file has no column for: {', '.join(missing)}. Columns found: {', '.join(c.strip() for c in table[0])}.")
-    rows = [{f: cell.strip() for f, cell in zip(fields, row) if f and cell.strip()} for row in table[1:]]
+    rows = [{**defaults, **{f: cell.strip() for f, cell in zip(fields, row) if f and cell.strip()}} for row in table[1:]]
     return {f: c for f, c in zip(fields, table[0]) if f}, rows
 
 
@@ -212,7 +255,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     kept — what their actions ask and they lack, a camera or a card where it cannot be, two Revisions in a session… — comes back in "warnings": the
     visits are kept as the field wrote them and questioned, as the field records are.
 
-    `options` are the settings of the field records: "time_source" ("created_at", or "hour" to read the date and the hour typed) and "cards" (the SD cards of the settings, to tell which are archived). A row whose session, site, camera and actions are those of a visit already
+    `options` are the settings of the field records: "time_source" ("created_at", or "hour" to read the date and the hour typed) and "cards" (the SD cards of the settings, to tell which are archived). A row whose session and site are those of a visit already
     kept is that visit: left as it is, and counted as skipped.
 
     Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "ignored": int, "new_sites": [...], "warnings": [str], "notes": [str]} — the rows
@@ -224,9 +267,16 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     """
     options = options or {}
     time_source = options.get("time_source") or "created_at"
-    columns, rows = _rows(text, fmt, mapping)
+    create = {entity: bool(on) for entity, on in (options.get("create") or {}).items() if entity in CREATABLE}
+    columns, rows = _rows(text, fmt, mapping, options.get("defaults"), create)
     epicollect = fmt == "epicollect" and "created_at" in columns
     known = {str(l.get("location_id", "")).lower(): l for l in locations}
+    # What a row creates when its location, camera or SD card does not exist and it is asked to: {row: {"locations": [...], "cameras": [...], "sd_cards": [...]}}, and the
+    # locations made from the first row that gave each site (the other rows of it are read in its timezone).
+    cameras_known = {str(c.get(k) or "").lower() for c in options.get("cameras") or [] for k in ("camera_id", "label")} - {""}
+    cards_known = {str(c.get("label") or "").lower() for c in options.get("cards") or []} - {""}
+    made_by_row: dict[int, dict[str, list[dict]]] = {}
+    new_locations: dict[str, dict] = {}
     already = {(str(v.get("location_id", "")).lower(), v.get("date"), v.get("time")) for v in kept}
     problems: list[dict] = []
     parsed: list[tuple[int, dict]] = []
@@ -234,18 +284,35 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     ignored = 0
     held: dict[str, list[dict]] = {}  # the visits to sites that are not locations of the research project, by site
     date_warnings: list[str] = []
-    same_visit = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower(), str(v.get("camera_id") or "").strip().lower(), tuple(v.get("actions") or [])) for v in kept if v.get("session")}
+    # A revision is one visit to each site: the session and the site of a visit already kept are taken, whatever its camera or its actions
+    same_visit = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in kept if v.get("session")}
+
+    # What became of each row of the file: {row: {"row", "site", "result", "message"}} — result is ok, problem, already_kept, new_site or ignored.
+    report: dict[int, dict] = {}
 
     def problem(n: int, message: str) -> None:
         problems.append({"row": n, "message": message})
+        report[n] = {**report.get(n, {"row": n, "site": ""}), "result": "problem", "label": error_kind(message), "message": message}
 
     for n, row in enumerate(rows, start=2):
+        found = re.search(r"\d+", row.get("session", ""))
+        report[n] = {"row": n, "site": row.get("location_id", ""), "session": f"R{int(found.group(0)):04d}" if found else "", "result": "ok", "label": "", "message": ""}
         if epicollect and ("session" not in row or "location_id" not in row):
             ignored += 1
+            report[n] |= {"result": "ignored", "label": "Entry of an old form", "message": "It has no session or no site: it is an entry of an old version of the form."}
             continue
         site = _site(row.get("location_id", ""), site_prefix) if fmt == "epicollect" else row.get("location_id", "")
-        location = known.get(site.lower())
+        location = known.get(site.lower()) or new_locations.get(site.lower())
         unknown = location is None
+        made: dict[str, list[dict]] = {"locations": [], "cameras": [], "sd_cards": []}
+        try:
+            if unknown and create.get("locations"):
+                location = _new_location(site, row)
+                made["locations"].append(location)
+                unknown = False
+        except ValueError as exc:
+            problem(n, str(exc))
+            continue
         if unknown:
             location = {}  # held with its site apart: the time is read as UTC, as nothing says better
         try:
@@ -259,8 +326,15 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                 except ValueError:
                     pass
             actions = [ACTIONS.get(a.strip().lower()) for a in re.split(r"[+;/|&,]", row.get("actions", "")) if a.strip()]
-            if not actions or None in actions:
+            # a visit that could not be made has no action: it is exported so, and read back so
+            if None in actions or (not actions and not visit_rules.is_not_revised({"status": row.get("status")})):
                 raise ValueError(f"The actions '{row.get('actions', '')}' are not Installation, Revision, Desinstallation, Stolen or Archive.")
+            if create.get("cameras") and row.get("camera_id"):
+                camera = _new_camera(re.sub(r"\.0+$", "", row["camera_id"]), row)
+                if camera["camera_id"].lower() not in cameras_known:
+                    made["cameras"].append(camera)
+            if create.get("sd_cards") and row.get("sd") and row["sd"].lower() not in cards_known:
+                made["sd_cards"].append(_new_card(row["sd"], row))
             data: dict = {
                 f: row[f] for f in ("trappers", "status", "sd", "date_time_ok", "camera_id", "camera_model", "comments", "setup_by", "session") if f in row
             }
@@ -313,13 +387,25 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             continue
         if unknown:
             held.setdefault(site, []).append(record)
+            report[n] |= {"result": "new_site", "label": "Site is not a location", "message": f"{site} is not a location of the research project: the visit is held until the site is added or the file corrected."}
             continue
-        again = (str(record["session"]).upper(), record["location_id"].lower(), str(record.get("camera_id") or "").strip().lower(), tuple(record["actions"]))
+        again = (str(record["session"]).upper(), record["location_id"].lower())
         if (record["location_id"].lower(), record["date"], record["time"]) in already or ("session" in row and again in same_visit):
             skipped += 1
+            closed = visit_rules.is_closed_revision(record["session"], kept, locations)
+            same_time = (record["location_id"].lower(), record["date"], record["time"]) in already
+            report[n] |= {"result": "already_kept", "label": "Already kept", "message": (f"A visit to {record['location_id']} on {record['date']} at {record['time']} is already kept: it is not imported again." if same_time
+                                                              else f"The {record['session']} visit of {record['location_id']} is already kept: it is not imported again."
+                                                                 + (f" {record['session']} is closed — every location has its visit — so nothing new can be imported in it." if closed else ""))}
+            continue
+        if visit_rules.is_closed_revision(record["session"], kept, locations):
+            problem(n, f"{record['session']} is closed: every location has its visit in it, so nothing new can be imported in it.")
             continue
         already.add((record["location_id"].lower(), record["date"], record["time"]))
         parsed.append((n, record | {"_given": "session" in row}))
+        if made["locations"]:
+            new_locations[site.lower()] = made["locations"][0]
+        made_by_row[n] = made
 
     row_of = {id(r): n for n, r in parsed}
     count: dict[str, int] = {}
@@ -342,12 +428,96 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     warnings = [*date_warnings, *visit_rules.session_jump(visits, kept), *visit_rules.history_warnings(visits, kept, options.get("cards"))]
     notes = visit_rules.history_notes(visits, kept)
     # a revision is not started before the one before it is finished: its visits are refused, with the rows they come from
-    refused = visit_rules.revision_gate(visits, kept, locations)
+    refused = visit_rules.revision_gate(visits, kept, [*locations, *new_locations.values()])
     for visit, why in refused:
         problem(row_of[id(visit)], why)
     visits = [v for v in visits if id(v) not in {id(r) for r, _ in refused}]
-    return {"visits": visits, "problems": problems, "skipped": skipped, "ignored": ignored, "new_sites": new_sites,
-            "warnings": list(dict.fromkeys(warnings)), "notes": notes}
+    # what is created is what the visits that are kept need: a location, a camera or an SD card that only a refused visit named is not
+    kept_rows = {row_of[id(v)] for v in visits}
+    sites = {v["location_id"].lower() for v in visits}
+    create_out: dict[str, list[dict]] = {"locations": [l for site, l in new_locations.items() if site in sites], "cameras": [], "sd_cards": []}
+    for n in sorted(kept_rows):
+        for kind in ("cameras", "sd_cards"):
+            for entity in made_by_row.get(n, {}).get(kind, []):
+                key = str(entity.get("camera_id") or entity.get("label")).lower()
+                if key not in {str(e.get("camera_id") or e.get("label")).lower() for e in create_out[kind]}:
+                    create_out[kind].append(entity)
+    for n in sorted(kept_rows):
+        names = [f"the location {l['location_id']}" for l in made_by_row.get(n, {}).get("locations", [])]
+        names += [f"the camera {c['camera_id']}" for c in made_by_row.get(n, {}).get("cameras", [])]
+        names += [f"the SD card {c['label']}" for c in made_by_row.get(n, {}).get("sd_cards", [])]
+        if names and n in report and report[n]["result"] == "ok":
+            report[n]["message"] = f"The visit is added, and creates {', '.join(names)}."
+    return {"visits": visits, "problems": problems, "rows": [report[n] for n in sorted(report)], "skipped": skipped, "ignored": ignored, "new_sites": new_sites,
+            "create": create_out, "warnings": list(dict.fromkeys(warnings)), "notes": notes}
+
+
+# The columns of an export: the fields of a visit a CSV can give, by their names — which the import finds by themselves — less the two that are worked out
+# from the others (the instant of the visit and the time of the entry) and what the visit gets once it is kept (its state and its deployment).
+EXPORT_FIELDS = tuple(f for f, _, _ in FIELDS if f not in ("when", "created_at") and f not in ENTITY_ONLY)
+
+
+def export_visits(visits: list[dict]) -> str:
+    """The visits as CSV text that the import reads back as they are: a column for each field of EXPORT_FIELDS, the actions joined with +, the tags with |,
+    the yes/no fields as yes or no, and the visits from the oldest. It starts with a byte order mark, so that a spreadsheet reads the accents."""
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\r\n")
+    writer.writerow(EXPORT_FIELDS)
+
+    def cell(visit: dict, field: str) -> str:
+        value = visit.get(field)
+        if value is None:
+            return ""
+        if field == "actions":
+            return "+".join(value)
+        if field == "tags":
+            return "|".join(value)
+        if isinstance(value, bool):
+            return "yes" if value else "no"
+        return str(value)
+
+    for visit in sorted(visits, key=lambda v: (str(v.get("date")), str(v.get("time")))):
+        writer.writerow([cell(visit, f) for f in EXPORT_FIELDS])
+    return "\ufeff" + out.getvalue()
+
+
+def _new_location(site: str, row: dict[str, str]) -> dict:
+    """The location a row creates: its id, its coordinates and its timezone are the row's.
+
+    Raises:
+        ValueError: the row has no coordinates or timezone, or they are not valid."""
+    try:
+        latitude, longitude = float(row["latitude"]), float(row["longitude"])
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"To create the location {site} the row needs its coordinates: a latitude and a longitude.") from exc
+    if not row.get("timezone"):
+        raise ValueError(f"To create the location {site} the row needs its timezone (e.g. Europe/Madrid).")
+    try:
+        uncertainty = int(float(row["coordinate_uncertainty"])) if row.get("coordinate_uncertainty") else None
+        return LocationRecord(location_id=site, name=row.get("location_name") or None, latitude=latitude, longitude=longitude, timezone=row["timezone"],
+                              coordinate_uncertainty=uncertainty).model_dump(mode="json")
+    except (ValidationError, ValueError) as exc:
+        raise ValueError(f"To create the location {site}: {_first(exc) if isinstance(exc, ValidationError) else exc}") from exc
+
+
+def _new_camera(camera_id: str, row: dict[str, str]) -> dict:
+    """The camera a row creates: called by its id, with the model of the row.
+
+    Raises:
+        ValueError: the row has no model."""
+    if not row.get("camera_model"):
+        raise ValueError(f"To create the camera {camera_id} the row needs its model.")
+    return config.Camera(label=camera_id, camera_id=camera_id, camera_model=row["camera_model"]).model_dump(mode="json")
+
+
+def _new_card(label: str, row: dict[str, str]) -> dict:
+    """The SD card a row creates: its id is its label, with the brand — and the capacity — of the row.
+
+    Raises:
+        ValueError: the row has no brand."""
+    if not row.get("sd_brand"):
+        raise ValueError(f"To create the SD card {label} the row needs its brand.")
+    return config.SdCard(label=label, brand=row["sd_brand"], capacity=row.get("sd_capacity") or None).model_dump(mode="json")
 
 
 def _first(exc: ValidationError) -> str:

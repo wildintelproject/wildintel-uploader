@@ -3,8 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
 import VisitBookPage from './VisitBookPage'
+import { download } from '../csvFile'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), getSettings: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), getSettings: vi.fn(), exportVisitsCsv: vi.fn() } }))
+vi.mock('../csvFile', () => ({ download: vi.fn() }))
 const mockedApi = vi.mocked(api)
 
 const visit = (over: object) => ({
@@ -31,6 +33,14 @@ async function pickProject() {
 }
 
 describe('VisitBookPage', () => {
+  it('exports the visits of the research project as a CSV file', async () => {
+    mockedApi.exportVisitsCsv.mockResolvedValue({ csv: 'location_id,actions\r\n', filename: 'TATR_visits.csv', count: 3 })
+    await pickProject()
+    await userEvent.click(await screen.findByRole('button', { name: 'Export visits (CSV)' }))
+    expect(mockedApi.exportVisitsCsv).toHaveBeenCalledWith('TATR')
+    expect(download).toHaveBeenCalledWith('TATR_visits.csv', 'location_id,actions\r\n')
+  })
+
   it('lists the visits of a research project, the newest first, and filters them', async () => {
     await pickProject()
 

@@ -4,10 +4,11 @@ import BackButton from '../components/BackButton'
 import Combobox from '../components/Combobox'
 import LocationPicker from '../components/LocationPicker'
 import type { ReactNode } from 'react'
-import TaskCard, { PageHeader } from '../components/TaskCard'
+import TaskCard, { LineIcon, PageHeader } from '../components/TaskCard'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import ChoiceCards from '../components/ChoiceCards'
+import FileRowResults from '../components/FileRowResults'
 import Notice from '../components/Notice'
 import WizardStep from '../components/WizardStep'
 import IconButton from '../components/IconButton'
@@ -16,16 +17,19 @@ import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, DE
 import { shownErrors, validateDeployment } from '../deploymentValidation'
 import { availabilityErrors, cameraAtSite, cardBlock, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
-import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
+import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, ImportCsvOptions } from '../types'
 
 export type VisitSource = 'manual' | 'epicollect' | 'wildintel' | 'csv'
 
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
   { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself, following the field flow: the site, when, who went and what was done.' },
-  { value: 'epicollect', icon: <><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></>, title: 'Epicollect', description: 'Read the visits straight from the Epicollect5 project of the settings, with no file.' },
-  { value: 'wildintel', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect', description: 'Read the visits of a field trip from the CSV downloaded from the WildINTEL Epicollect project.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'Custom CSV', description: 'A CSV of any shape: say which column gives each field of a visit.' },
+  { value: 'wildintel', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect Legacy', description: 'Read the visits of a field trip from the CSV downloaded from the original WildINTEL Epicollect project.' },
+  { value: 'epicollect', icon: <><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></>, title: 'Epicollect', description: 'Read the visits straight from the Epicollect5 project of the settings, with no file.' },
 ]
+
+/** The source that is still to be made: it is shown, with the others, so that it is known it is coming — and cannot be chosen. */
+const COMING_SOURCE = { icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect', description: 'Read the visits straight from the new WildINTEL Epicollect project.' }
 
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
 const SD_ICON = <><path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" /><path d="M8 6v3M11 6v3M14 7v2" /></>
@@ -487,6 +491,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // From a CSV file: its text, what reading it gave, and what was kept of it.
   const [csvName, setCsvName] = useState<string | null>(null)
   const [csvText, setCsvText] = useState('')
+  // Whether the file is being checked again — with the visits kept now, the locations now, the settings now.
+  const [rechecking, setRechecking] = useState(false)
   const [csvResult, setCsvResult] = useState<VisitsCsvResult | null>(null)
   const [csvError, setCsvError] = useState<string | null>(null)
   const [csvSaved, setCsvSaved] = useState<number | null>(null)
@@ -496,6 +502,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // From a CSV file: its columns, and the one that gives each field of a visit.
   const [csvColumns, setCsvColumns] = useState<VisitsCsvColumns | null>(null)
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
+  // What to create when the file names a location, a camera or an SD card that does not exist, and the value of a field the file has no column for.
+  const [csvCreate, setCsvCreate] = useState<CsvCreate>({ locations: false, cameras: false, sd_cards: false })
+  const [csvDefaults, setCsvDefaults] = useState<Record<string, string>>({})
   const csvFormat: VisitsCsvFormat = source === 'wildintel' ? 'epicollect' : source === 'epicollect' ? 'epicollect-api' : 'mapped'
   const chosen = SOURCE_OPTIONS.find((o) => o.value === source)
   // A camera put up while it is somewhere else, or a card left while it is in another camera, cannot be kept — said as soon as it is chosen.
@@ -647,10 +656,15 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
 
   // What goes after the mapping of a call to read the file: the history, when there is one.
   const withHistory = historyXlsx ? ([historyXlsx] as const) : ([] as const)
+  // What a custom CSV is asked besides its columns — the entities to create and the defaults —, said only when there is something.
+  const defaultsGiven = Object.fromEntries(Object.entries(csvDefaults).filter(([, v]) => v.trim()).map(([f, v]) => [f, v.trim()]))
+  const csvOptions: ImportCsvOptions | undefined = source === 'csv' && (Object.values(csvCreate).some(Boolean) || Object.keys(defaultsGiven).length > 0)
+    ? { ...(Object.values(csvCreate).some(Boolean) ? { create: csvCreate } : {}), ...(Object.keys(defaultsGiven).length > 0 ? { defaults: defaultsGiven } : {}) } : undefined
+  const readTail = csvOptions ? ([historyXlsx || undefined, csvOptions] as const) : withHistory
   const csvReading = useRef(0)
   function forgetCsv() {
     csvReading.current++ // what an older file is still being answered is left out
-    setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({})
+    setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({}); setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({})
   }
 
   async function readCsv(file: File | undefined) {
@@ -699,7 +713,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     if (!project || !csvText) return
     setCsvError(null)
     try {
-      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, source === 'csv' ? 'mapped' : csvFormat, source === 'csv' ? csvMapping : undefined, encoded))
+      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, source === 'csv' ? 'mapped' : csvFormat, source === 'csv' ? csvMapping : undefined, encoded, csvOptions))
     } catch (e) {
       setCsvError(e instanceof Error ? e.message : 'Could not read the history.')
     }
@@ -708,13 +722,19 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   /** Reads the file again with the same options — after the settings were open, where the missing locations may have been added. */
   async function recheckCsv() {
     if (!project || !csvText) return
+    setRechecking(true)
     try {
-      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, source === 'csv' ? 'mapped' : csvFormat, source === 'csv' ? csvMapping : undefined, ...withHistory))
+      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, source === 'csv' ? 'mapped' : csvFormat, source === 'csv' ? csvMapping : undefined, ...readTail))
+      setCsvError(null)
     } catch (e) {
       setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
+    } finally {
+      setRechecking(false)
     }
   }
   const missingLocations = (csvResult?.new_sites.length ?? 0) > 0
+  // The rows of the file are told by the row-by-row results; the problems of a history of visits, which are not rows of the file, are listed beside.
+  const listedProblems = (csvResult?.rows?.length ?? 0) > 0 ? (csvResult?.problems ?? []).filter((p) => p.history) : (csvResult?.problems ?? [])
   useEffect(() => { if (!settingsOpen && missingLocations) void recheckCsv() }, [settingsOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Keeps a new site of the file as a location of the research project, with the coordinates of its first visit, and reads the file again. */
@@ -748,7 +768,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     if (!project) return
     setCsvError(null)
     try {
-      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, 'mapped', csvMapping, ...withHistory))
+      setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, 'mapped', csvMapping, ...readTail))
     } catch (e) {
       setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
     }
@@ -758,7 +778,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     if (!project) return
     setCsvError(null)
     try {
-      const done = await api.importVisitsCsv(project.acronym, csvText, true, csvFormat, source === 'csv' ? csvMapping : undefined, ...withHistory)
+      const done = await api.importVisitsCsv(project.acronym, csvText, true, csvFormat, source === 'csv' ? csvMapping : undefined, ...readTail)
       setCsvResult(done); setCsvSaved(done.saved)
       void findClosed(done.visits)
     } catch (e) {
@@ -767,12 +787,17 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   }
 
   // A visit needs a site, what was done, and when: a date and a time, the two in one column, or the time the entry was created.
-  const mappedEnough = !!csvMapping.location_id && !!csvMapping.actions && (!!csvMapping.when || !!csvMapping.created_at || (!!csvMapping.date && !!csvMapping.time))
+  // A field is given by a column or by a default value.
+  const given = (field: string) => !!csvMapping[field] || !!csvDefaults[field]?.trim()
+  // What creating asks for: the fields each entity that is created needs.
+  const createdNeeds = (csvColumns?.fields ?? []).filter((f) => (f.required_with ?? []).some((e) => csvCreate[e]))
+  const mappedEnough = given('location_id') && given('actions') && (given('when') || given('created_at') || (given('date') && given('time'))) && createdNeeds.every((f) => given(f.field))
   // What is still to be matched before the visits can be read: the site, the actions and when — a date and a time, or one column with both, or the time the entry was created.
-  const inOneColumn = !!csvMapping.when || !!csvMapping.created_at
+  const inOneColumn = given('when') || given('created_at')
   const stillToMap = [
-    !csvMapping.location_id && 'the site', !csvMapping.actions && 'the actions',
-    ...(inOneColumn ? [] : !csvMapping.date && !csvMapping.time ? ['the date and the time (or one column with both)'] : [!csvMapping.date && 'the date', !csvMapping.time && 'the time']),
+    !given('location_id') && 'the site', !given('actions') && 'the actions',
+    ...(inOneColumn ? [] : !given('date') && !given('time') ? ['the date and the time (or one column with both)'] : [!given('date') && 'the date', !given('time') && 'the time']),
+    ...createdNeeds.filter((f) => !given(f.field) && !['location_id', 'actions', 'date', 'time'].includes(f.field)).map((f) => f.label.replace(/ \(.*$/, '').toLowerCase()),
   ].filter(Boolean) as string[]
 
   // The revision of the visit is the next of its location; it cannot start while the one before it has locations still to be visited.
@@ -917,6 +942,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {SOURCE_OPTIONS.filter((o) => (o.value === 'wildintel' ? sourcesUsed.wildintel : o.value === 'csv' ? sourcesUsed.csv : o.value === 'epicollect' ? sourcesUsed.epicollect : true)).map((o) => <TaskCard key={o.value} icon={o.icon} title={o.title} description={o.description} selected={source === o.value} onClick={() => setSource(o.value)} />)}
+          <div aria-disabled="true" aria-label={`${COMING_SOURCE.title}, coming soon`} className="flex flex-col items-stretch gap-3 rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 p-5 text-left opacity-70">
+            <span className="flex items-center justify-between">
+              <span className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"><LineIcon>{COMING_SOURCE.icon}</LineIcon></span>
+              <span className="rounded-full border border-zinc-300 dark:border-zinc-600 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">Coming soon</span>
+            </span>
+            <strong className="text-base text-zinc-900 dark:text-zinc-100">{COMING_SOURCE.title}</strong>
+            <span className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{COMING_SOURCE.description}</span>
+          </div>
         </div>
       </WizardStep>
 
@@ -1351,14 +1384,32 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             >
               {csvColumns && (
                 <>
+                  <fieldset className="mb-5 rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3">
+                    <legend className="px-1 text-sm font-semibold">Create what does not exist yet</legend>
+                    <p className={`${hintClass} mb-2`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it can be created from the file. Each one asks for more fields below, and a field is given by a column or by a default value.</p>
+                    {([
+                      ['locations', 'Create the locations that do not exist', 'Needs its coordinates (latitude and longitude) and its timezone; its name is optional.'],
+                      ['cameras', 'Create the cameras that do not exist', 'Needs the camera id and its model.'],
+                      ['sd_cards', 'Create the SD cards that do not exist', 'Needs the SD card id and its brand; its capacity is optional.'],
+                    ] as const).map(([entity, label, hint]) => (
+                      <label key={entity} className="flex items-start gap-2 py-1 text-sm text-zinc-800 dark:text-zinc-200">
+                        <input type="checkbox" className="mt-1" checked={csvCreate[entity]} onChange={(e) => setCsvCreate((c) => ({ ...c, [entity]: e.target.checked }))} />
+                        <span>{label}<span className="block text-xs text-zinc-500 dark:text-zinc-400">{hint}</span></span>
+                      </label>
+                    ))}
+                  </fieldset>
+                  <div className="hidden sm:grid sm:grid-cols-[1fr_16rem_10rem_12rem] gap-2 pb-1 text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-hidden="true">
+                    <span>Field</span><span>Column of the file</span><span>Example</span><span>Default value</span>
+                  </div>
                   <div className="space-y-2">
-                    {csvColumns.fields.map(({ field, label, required }) => {
+                    {csvColumns.fields.filter((f) => !f.entity || csvCreate[f.entity]).map(({ field, label, required, required_with }) => {
                       const at = csvColumns.columns.indexOf(csvMapping[field] ?? '')
+                      const needed = required || (required_with ?? []).some((e) => csvCreate[e]) || (!inOneColumn && (field === 'date' || field === 'time'))
                       return (
-                        <div key={field} className="grid grid-cols-1 sm:grid-cols-[1fr_16rem_10rem] gap-2 items-center">
+                        <div key={field} className="grid grid-cols-1 sm:grid-cols-[1fr_16rem_10rem_12rem] gap-2 items-center">
                           <div>
                             <label htmlFor={`map-${field}`} className="text-sm text-zinc-800 dark:text-zinc-200">{label}</label>
-                            {(required || (!inOneColumn && (field === 'date' || field === 'time'))) && <span className="ml-2 text-xs text-red-600 dark:text-red-400">required</span>}
+                            {needed && <span className="ml-2 text-xs text-red-600 dark:text-red-400">required</span>}
                           </div>
                           <select
                             id={`map-${field}`} className={inputClass} value={csvMapping[field] ?? ''}
@@ -1368,10 +1419,13 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                             {csvColumns.columns.map((c, i) => <option key={i} value={c}>{c}</option>)}
                           </select>
                           <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate" aria-label={`Example of ${label}`}>{at >= 0 ? csvColumns.sample[0]?.[at] ?? '' : ''}</span>
+                          <input className={inputClass} aria-label={`Default for ${label}`} placeholder="Default value" value={csvDefaults[field] ?? ''}
+                                 onChange={(e) => setCsvDefaults((d) => ({ ...d, [field]: e.target.value }))} />
                         </div>
                       )
                     })}
                   </div>
+                  <p className={hintClass}>A default value is what the field is when the file has no column for it, and in the rows where its cell is empty.</p>
                   <p className={hintClass}>A visit needs the site, the actions and when: a date and a time, the two in one column, or the time the entry was created.</p>
                   {stillToMap.length > 0 && <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-400">To read the visits, match also {stillToMap.join(', ')}.</p>}
                   <div className="mt-4 flex justify-end">
@@ -1382,7 +1436,14 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             </WizardStep>
           )}
 
-          <WizardStep n={source === 'csv' ? 5 : 4} title="Check and add the visits" status={csvResult ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept.">
+          <WizardStep n={source === 'csv' ? 5 : 4} title="Check and add the visits" status={csvResult ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept."
+                      action={csvResult && csvSaved == null && (
+                        <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={rechecking} onClick={() => void recheckCsv()}
+                                title="Check the file again against what is kept now: the visits, the locations and the settings">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 fill-none stroke-current ${rechecking ? 'animate-spin' : ''}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5" /></svg>
+                          {rechecking ? 'Checking…' : 'Check again'}
+                        </button>
+                      )}>
             {csvResult && (
               <>
                 <p className="text-base">
@@ -1392,11 +1453,24 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   {csvResult.ignored > 0 && <> · {csvResult.ignored} {csvResult.ignored === 1 ? 'entry' : 'entries'} from an old version of the form, ignored</>}
                   {csvResult.problems.length > 0 && <> · <span className="text-red-600 dark:text-red-400">{csvResult.problems.length} {csvResult.problems.length === 1 ? 'row' : 'rows'} with a problem</span></>}
                 </p>
-                {csvResult.problems.length > 0 && (
+                {listedProblems.length > 0 && (
                   <ul className="mt-4 mb-5 space-y-2 text-base text-red-600 dark:text-red-400 list-disc pl-6" aria-label="Rows with a problem">
-                    {csvResult.problems.map((p) => <li key={`${p.history ? 'h' : 'f'}${p.row}`}>{p.history ? 'History row' : 'Row'} {p.row}: {p.message}</li>)}
+                    {listedProblems.map((p) => <li key={`${p.history ? 'h' : 'f'}${p.row}`}>{p.history ? 'History row' : 'Row'} {p.row}: {p.message}</li>)}
                   </ul>
                 )}
+                {csvResult.create && (csvResult.create.locations.length + csvResult.create.cameras.length + csvResult.create.sd_cards.length) > 0 && (
+                  <Notice kind="info" className="mt-3 !items-start" role="status">
+                    <div>
+                      <strong className="font-semibold">Adding the visits also creates</strong>
+                      <ul aria-label="What is created" className="mt-1 list-disc pl-6">
+                        {csvResult.create.locations.length > 0 && <li>{csvResult.create.locations.length === 1 ? '1 location' : `${csvResult.create.locations.length} locations`}: {csvResult.create.locations.map((l) => String(l.location_id)).join(', ')}</li>}
+                        {csvResult.create.cameras.length > 0 && <li>{csvResult.create.cameras.length === 1 ? '1 camera' : `${csvResult.create.cameras.length} cameras`}: {csvResult.create.cameras.map((c) => String(c.camera_id)).join(', ')}</li>}
+                        {csvResult.create.sd_cards.length > 0 && <li>{csvResult.create.sd_cards.length === 1 ? '1 SD card' : `${csvResult.create.sd_cards.length} SD cards`}: {csvResult.create.sd_cards.map((c) => String(c.label)).join(', ')}</li>}
+                      </ul>
+                    </div>
+                  </Notice>
+                )}
+                {(csvResult.rows?.length ?? 0) > 0 && <FileRowResults rows={csvResult.rows!} />}
                 {(csvResult.notes?.length ?? 0) > 0 && (
                   <Notice kind="info" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed" role="status">
                     <div>

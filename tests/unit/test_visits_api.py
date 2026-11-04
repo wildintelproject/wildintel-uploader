@@ -968,3 +968,28 @@ def test_a_visit_that_finds_the_camera_stolen_and_puts_up_another_opens_a_deploy
     assert (by_id["R0001-DONA_01"]["status"], by_id["R0001-DONA_01"]["no_images"]) == ("closed", "stolen")       # the first camera went with its card
     assert by_id["R0002-DONA_01"]["status"] == "open" and by_id["R0002-DONA_01"]["camera_id"] == "P900"          # the new one is out
     assert [(v["session"], v["state"]) for v in listed] == [("R0001", "stolen"), ("R0002", "deployed")]
+
+
+def test_importing_a_csv_creates_the_locations_cameras_and_sd_cards_it_is_asked_to_and_keeps_them(tmp_path: Path):
+    csv = ("site,what,day,hour,lat,lon,tz,cam,model,sd,brand\n"
+           "DONA_09,Installation,2026-09-14,11:40,37.1,-6.4,Europe/Madrid,CAM9,Browning,S9,SanDisk\n")
+    body = {"research_project_id": "DONA", "csv": csv, "format": "mapped", "create": {"locations": True, "cameras": True, "sd_cards": True},
+            "mapping": {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "latitude": "lat", "longitude": "lon", "timezone": "tz",
+                        "camera_id": "cam", "camera_model": "model", "sd": "sd", "sd_brand": "brand"}}
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        shown = _client().post("/api/visits/import-csv", json=body).json()
+        before = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
+        kept = _client().post("/api/visits/import-csv", json={**body, "save": True}).json()
+        locations = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
+        cameras = (tmp_path / "DONA" / "cameras.json").read_text(encoding="utf-8")
+        cards = (tmp_path / "DONA" / "sd_cards.json").read_text(encoding="utf-8")
+        columns = _client().post("/api/visits/csv-columns", json={"csv": csv}).json()
+
+    assert shown["saved"] is None and before == [] and len(shown["create"]["locations"]) == 1   # reading creates nothing
+    assert kept["saved"] == 1
+    assert [(l["location_id"], l["timezone"]) for l in locations] == [("DONA_09", "Europe/Madrid")]
+    assert "CAM9" in cameras and "Browning" in cameras and "S9" in cards and "SanDisk" in cards
+    sd_brand = next(f for f in columns["fields"] if f["field"] == "sd_brand")
+    assert sd_brand["entity"] == "sd_cards" and sd_brand["required_with"] == ["sd_cards"]
+    assert next(f for f in columns["fields"] if f["field"] == "latitude")["required_with"] == ["locations"]
