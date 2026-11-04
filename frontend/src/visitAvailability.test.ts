@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { availabilityErrors, cameraAt, cardAt, unfinishedRevision } from './visitAvailability'
+import { availabilityErrors, cameraAt, cardAt, cardBlock, unfinishedRevision } from './visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from './types'
 import type { StoredVisit } from './types'
 import type { Visit } from './pages/VisitsPage'
@@ -101,5 +101,24 @@ describe('when a revision can start', () => {
     expect(unfinishedRevision(2, first, [{ location_id: 'WICP_0001' }, { location_id: 'WICP_0002', status: 'archived', status_date: '2026-06-01' }])).toBeNull()
     // archived after the revision started: it was still to be visited
     expect(unfinishedRevision(2, first, [{ location_id: 'WICP_0001' }, { location_id: 'WICP_0002', status: 'archived', status_date: '2026-12-01' }])?.missing).toContain('WICP_0002')
+  })
+})
+
+describe('cardBlock', () => {
+  const cards = [
+    { label: 'Z1', status: 'archived', status_date: '2026-10-01', archive_reason: 'lost' },
+    { label: 'Z2', status: 'archived', status_date: null },
+  ] as never[]
+  it('refuses a card archived from the day it was, not before', () => {
+    expect(cardBlock(KEPT, 'Z1', visit({ when: '2026-12-01T09:00:00' }), { cards })).toMatch(/not available since 2026-10-01/)
+    expect(cardBlock(KEPT, 'Z1', visit({ when: '2026-09-30T09:00:00' }), { cards })).toBeUndefined()
+    expect(cardBlock(KEPT, 'Z2', visit({}), { cards })).toMatch(/not available: it is archived/)
+  })
+  it('refuses a card collected in the same revision, not in another', () => {
+    const kept = [...KEPT, stored({ location_id: 'DONA_05', session: 'R0002', date: '2026-11-01', actions: ['Revision'], camera_id: 'C5', sd: 'Q1' })]
+    const taken = [...kept, stored({ location_id: 'DONA_01', session: 'R0003', date: '2026-11-02', actions: ['Revision'], camera_id: 'C1', num_photos: 1 })]
+    // A2 is in the camera at DONA_01 and collected there by R0003: it cannot be left elsewhere in R0003.
+    expect(cardBlock(taken, 'A2', visit({ site: 'DONA_02', when: '2026-11-03T09:00:00' }), { session: 'R0003' })).toMatch(/collected at DONA_01 in this revision \(R0003\)/)
+    expect(cardBlock(taken, 'A2', visit({ site: 'DONA_02', when: '2026-11-03T09:00:00' }), { session: 'R0004' })).toBeUndefined()
   })
 })

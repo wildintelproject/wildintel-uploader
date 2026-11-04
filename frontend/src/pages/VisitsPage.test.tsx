@@ -202,7 +202,8 @@ describe('VisitsPage', () => {
 
     await openSection('SD card')
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
-    await userEvent.click(await screen.findByRole('option', { name: 'A13 — SanDisk 64 GB' }))
+    expect(screen.queryByRole('option', { name: 'A13 — SanDisk 64 GB' })).not.toBeInTheDocument() // the one this revision collects cannot be left
+    await userEvent.click(await screen.findByRole('option', { name: 'B2' }))
     await userEvent.type(screen.getByLabelText('Photos on the card collected'), '1620')
     await userEvent.click(screen.getByRole('switch', { name: 'Card OK' }))
     expect(screen.getByRole('switch', { name: 'Card OK' })).toHaveAttribute('aria-checked', 'false')
@@ -443,9 +444,8 @@ describe('VisitsPage', () => {
     await pickCamera()
     await typePhotos('') // opens the SD card section
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
-    await userEvent.click(await screen.findByRole('option', { name: 'A13 — SanDisk 64 GB' }))
-
-    expect(screen.getByText('SD card A13 is in the camera at TATR_0002 (left on 2026-06-10): it has to be collected before it is left here.')).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'A13 — SanDisk 64 GB' })).not.toBeInTheDocument() // it is in the camera at another site: not offered
+    await userEvent.keyboard('{Escape}')
     await userEvent.click(screen.getByLabelText('Camera id'))
     await userEvent.click(await screen.findByRole('option', { name: 'X1' }))
     expect(screen.getByText('Camera X1 is installed at TATR_0002 (since 2026-06-10): it has to be uninstalled there before it is installed here.')).toBeInTheDocument()

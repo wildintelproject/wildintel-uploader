@@ -14,7 +14,7 @@ import IconButton from '../components/IconButton'
 import VisitSummary, { type SummaryRow, type SummaryTone, type VisitSummaryData } from '../components/VisitSummary'
 import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, DETAILS_SECTIONS, FEATURE_TYPE_OPTIONS, SwitchRow, roundPill, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
 import { shownErrors, validateDeployment } from '../deploymentValidation'
-import { availabilityErrors, cameraAtSite, unfinishedRevision } from '../visitAvailability'
+import { availabilityErrors, cameraAtSite, cardBlock, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult } from '../types'
 
@@ -483,7 +483,6 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const ofProject = (rp: string | null) => !!project && (rp ?? '').toLowerCase() === project.acronym.toLowerCase()
   // ...and only those still in use: an archived one (lost, stolen, broken…) is not offered, unless the visit already has it.
   const inUse = (status: string | undefined) => !status || status === 'active' || status === 'ready'
-  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (inUse(c.status) || c.label === visit.sd))
   const cameras = allCameras.filter((c) => ofProject(c.research_project) && (inUse(c.status) || cameraKey(c) === visit.details.camera_id))
   // From a CSV file: its text, what reading it gave, and what was kept of it.
   const [csvName, setCsvName] = useState<string | null>(null)
@@ -500,7 +499,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const csvFormat: VisitsCsvFormat = source === 'wildintel' ? 'epicollect' : source === 'epicollect' ? 'epicollect-api' : 'mapped'
   const chosen = SOURCE_OPTIONS.find((o) => o.value === source)
   // A camera put up while it is somewhere else, or a card left while it is in another camera, cannot be kept — said as soon as it is chosen.
-  const conflicts = allVisits ? availabilityErrors(allVisits, visit) : {}
+  const cardOptions = { cards: allSdCards, session: visit.session || (kept ? sessionOf(kept.length) : undefined) }
+  const conflicts = allVisits ? availabilityErrors(allVisits, visit, cardOptions) : {}
+  // Only the cards that can be left: not archived (from its day), not in another camera, not collected by this revision. The one already chosen stays, to show why it cannot be.
+  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (c.label === visit.sd || !cardBlock(allVisits ?? [], c.label, visit, cardOptions)))
   // A Revision, a Desinstallation or a stolen camera is of the camera that is at the site: it comes chosen, and no other is offered unless the visit also installs one.
   const siteCamera = allVisits && visit.site.trim() ? cameraAtSite(allVisits, visit.site.trim(), visit.when || '9999-12-31T23:59:59') : null
   const ofTheSiteCamera = Boolean(siteCamera) && !visit.actions.includes('Installation') && visit.actions.some((x) => ['Revision', 'Desinstallation', 'Stolen'].includes(x))
@@ -1137,15 +1139,13 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 summary={[on(asked.sdLeft) && visit.sd.trim() && `left ${visit.sd.trim()}`, on(asked.photos) && visit.numPhotos.trim() && `${visit.numPhotos.trim()} photos`, on(asked.card) && `card ${visit.card === 'Full' ? 'full' : 'OK'}`].filter(Boolean).join(' · ')}
               >
                 {stolenCard && <Notice kind="info" className="mb-4">The SD card <strong>{stolenCard}</strong>, which was in the camera, was stolen with it: it will be marked as not available because it was stolen.</Notice>}
-                <div className="grid grid-cols-1 gap-4 max-w-xl">
-                  <div>
                 {on(asked.card) || on(asked.photos) ? (inCamera && cardVisit
                   ? <Notice kind="info" className="mb-4">Tell the state and the number of photos obtained when removing the SD card <strong>{inCamera}</strong> from the camera (it was left there on {cardVisit.date}).</Notice>
                   : <Notice kind="info" className="mb-4">Tell the state and the number of photos obtained when removing the SD card from the camera (no card is known to have been left in it).</Notice>) : null}
                 <div className="space-y-3 mb-4">
                   <SwitchRow label="Card OK" hint="Off if the card was full." checked={visit.card === 'OK'} disabled={asked.card === 'off'} onChange={(on) => set('card', on ? 'OK' : 'Full')} />
                 </div>
-                    <div className="flex items-baseline"><label htmlFor="visit-sd" className={labelClass}>SD card left in the camera</label><AskTag ask={asked.sdLeft} /></div>
+                <div className="grid grid-cols-1 gap-4 max-w-xl">
                   <Field id="visit-photos" label="Photos on the card collected" ask={asked.photos} error={shown('numPhotos')}>
                     <input id="visit-photos" inputMode="numeric" className={`${inputClass} ${err('numPhotos') || (asked.photos === 'required' && !visit.numPhotos.trim() ? red : '')}`} value={visit.numPhotos} disabled={asked.photos === 'off'} onChange={(e) => set('numPhotos', e.target.value)} />
                     {asked.photos !== 'off' && (
@@ -1154,13 +1154,16 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       </p>
                     )}
                   </Field>
+                  <div>
+                    <div className="flex items-baseline"><label htmlFor="visit-sd" className={labelClass}>SD card left in the camera</label><AskTag ask={asked.sdLeft} /></div>
                     <Combobox
                       id="visit-sd" options={sdCards.filter((c) => !stolenCard || !visit.actions.includes('Installation') || c.label.toLowerCase() !== stolenCard.toLowerCase()).map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
                       value={visit.sd} onChange={(label) => set('sd', label)} disabled={asked.sdLeft === 'off'} invalid={asked.sdLeft === 'required' && !visit.sd.trim()}
                       placeholder={sdCards.length === 0 ? 'No SD cards yet' : 'Select an SD card…'} clearLabel="Clear SD card"
                     />
                     {conflicts.sd ? <Notice kind="error" role="alert" className="mt-2">{conflicts.sd}</Notice> : shown('sd') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('sd')}</p>}
-                    {asked.sdLeft !== 'off' && sdCards.length === 0 && <p className={hintClass}>The settings have no SD cards yet.</p>}
+                    {asked.sdLeft !== 'off' && allSdCards.every((c) => !ofProject(c.research_project)) && <p className={hintClass}>The settings have no SD cards yet.</p>}
+                    {asked.sdLeft !== 'off' && sdCards.length === 0 && allSdCards.some((c) => ofProject(c.research_project)) && <p className={hintClass}>No SD card is available: they are archived, in a camera or were collected in this revision.</p>}
                     {asked.sdLeft !== 'off' && onOpenSettings && (
                       <p className={`${hintClass} mt-3`}>
                         The SD card is not here? A new SD card is created in the settings:{' '}
