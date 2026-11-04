@@ -425,11 +425,12 @@ def test_a_camera_and_a_card_cannot_be_in_two_places_at_once(tmp_path: Path):
         camera = _save({**install, "location_id": "DONA_02", "date": "2026-10-03", "sd": "B2"})       # the camera is at DONA_01
         card = _save({**install, "location_id": "DONA_02", "date": "2026-10-03", "camera_id": "99"})  # the card is in the camera at DONA_01
         after_collecting = _save({**VISIT, "actions": ["Desinstallation"], "date": "2026-10-05", "num_photos": 10})
-        moved = _save({**install, "location_id": "DONA_02", "date": "2026-10-06"})
+        same_revision = _save({**install, "location_id": "DONA_02", "date": "2026-10-06"})   # collected in R0013: not left again in R0013
 
     assert "installed at DONA_01" in camera.json()["detail"]
     assert "is in the camera at DONA_01" in card.json()["detail"]
-    assert after_collecting.status_code == 200 and moved.status_code == 200
+    assert same_revision.status_code == 422 and "in this revision (R0013)" in same_revision.json()["detail"]
+    assert after_collecting.status_code == 200
 
 
 def test_a_csv_keeps_the_visits_that_break_the_rules_and_says_what_is_odd(tmp_path: Path):

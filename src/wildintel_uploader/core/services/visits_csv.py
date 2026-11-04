@@ -212,7 +212,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     kept — what their actions ask and they lack, a camera or a card where it cannot be, two Revisions in a session… — comes back in "warnings": the
     visits are kept as the field wrote them and questioned, as the field records are.
 
-    `options` are the settings of the field records: "time_source" ("created_at", or "hour" to read the date and the hour typed). A row whose session, site, camera and actions are those of a visit already
+    `options` are the settings of the field records: "time_source" ("created_at", or "hour" to read the date and the hour typed) and "cards" (the SD cards of the settings, to tell which are archived). A row whose session, site, camera and actions are those of a visit already
     kept is that visit: left as it is, and counted as skipped.
 
     Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "ignored": int, "new_sites": [...], "warnings": [str], "notes": [str]} — the rows
@@ -339,7 +339,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         count[loc] += 1
         visits.append(record)
     new_sites = [visit_rules.new_site(site, records, locations) for site, records in sorted(held.items())]
-    warnings = [*date_warnings, *visit_rules.session_jump(visits, kept), *visit_rules.history_warnings(visits, kept)]
+    warnings = [*date_warnings, *visit_rules.session_jump(visits, kept), *visit_rules.history_warnings(visits, kept, options.get("cards"))]
     notes = visit_rules.history_notes(visits, kept)
     # a revision is not started before the one before it is finished: its visits are refused, with the rows they come from
     refused = visit_rules.revision_gate(visits, kept, locations)

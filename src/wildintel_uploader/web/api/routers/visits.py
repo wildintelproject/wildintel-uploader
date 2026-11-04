@@ -113,7 +113,8 @@ def save_visit(req: SaveVisitRequest) -> dict:
         # the rules compare instants: the day and the time are the wall clock of the location
         location = next((l for l in locations if str(l.get("location_id", "")).lower() == visit["location_id"].lower()), None)
         visit["when"] = visit_time.to_when(visit["date"], visit["time"], location)
-        reasons = visit_rules.refusals(visit, local_folder_service.list_visits(root, req.research_project_id), locations)
+        reasons = visit_rules.refusals(visit, local_folder_service.list_visits(root, req.research_project_id), locations,
+                                       local_folder_service.list_field_items(root, req.research_project_id, "sd_cards"))
         if reasons:
             raise HTTPException(422, " ".join(reasons))
         kept = local_folder_service.write_visit(root, req.research_project_id, visit)
@@ -156,6 +157,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
     try:
         locations = local_folder_service.list_locations(root, req.research_project_id)
         kept = local_folder_service.list_visits(root, req.research_project_id)
+        cards = local_folder_service.list_field_items(root, req.research_project_id, "sd_cards")
         prefix = f"{req.research_project_id}_"
         history = None
         if req.history_xlsx:
@@ -164,7 +166,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             except (visits_xlsx.VisitsXlsxError, ValueError) as exc:
                 raise HTTPException(400, f"The history of visits: {exc}") from exc
             try:
-                history = visits_csv.parse_visits(text, locations, kept, prefix, "epicollect", None)
+                history = visits_csv.parse_visits(text, locations, kept, prefix, "epicollect", None, {"cards": cards})
             except visits_csv.VisitsCsvError as exc:
                 raise HTTPException(400, f"The history of visits: {exc}") from exc
         field_options = config.load_settings().FIELDLOG
@@ -176,7 +178,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             except epicollect_service.EpicollectError as exc:
                 raise HTTPException(400, str(exc)) from exc
             fmt, mapping, time_source = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}, "hour"
-        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source})
+        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards})
         if history:
             seen = {s["site"].lower() for s in result["new_sites"]}
             result = {
