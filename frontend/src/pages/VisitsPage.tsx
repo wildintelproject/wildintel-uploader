@@ -1139,7 +1139,21 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 {stolenCard && <Notice kind="info" className="mb-4">The SD card <strong>{stolenCard}</strong>, which was in the camera, was stolen with it: it will be marked as not available because it was stolen.</Notice>}
                 <div className="grid grid-cols-1 gap-4 max-w-xl">
                   <div>
+                {on(asked.card) || on(asked.photos) ? (inCamera && cardVisit
+                  ? <Notice kind="info" className="mb-4">Tell the state and the number of photos obtained when removing the SD card <strong>{inCamera}</strong> from the camera (it was left there on {cardVisit.date}).</Notice>
+                  : <Notice kind="info" className="mb-4">Tell the state and the number of photos obtained when removing the SD card from the camera (no card is known to have been left in it).</Notice>) : null}
+                <div className="space-y-3 mb-4">
+                  <SwitchRow label="Card OK" hint="Off if the card was full." checked={visit.card === 'OK'} disabled={asked.card === 'off'} onChange={(on) => set('card', on ? 'OK' : 'Full')} />
+                </div>
                     <div className="flex items-baseline"><label htmlFor="visit-sd" className={labelClass}>SD card left in the camera</label><AskTag ask={asked.sdLeft} /></div>
+                  <Field id="visit-photos" label="Photos on the card collected" ask={asked.photos} error={shown('numPhotos')}>
+                    <input id="visit-photos" inputMode="numeric" className={`${inputClass} ${err('numPhotos') || (asked.photos === 'required' && !visit.numPhotos.trim() ? red : '')}`} value={visit.numPhotos} disabled={asked.photos === 'off'} onChange={(e) => set('numPhotos', e.target.value)} />
+                    {asked.photos !== 'off' && (
+                      <p className={hintClass}>
+                        {inCamera && cardVisit ? <>SD card collected: <strong>{inCamera}</strong> (left on {cardVisit.date}).</> : 'No card is known to have been left in the camera.'}
+                      </p>
+                    )}
+                  </Field>
                     <Combobox
                       id="visit-sd" options={sdCards.filter((c) => !stolenCard || !visit.actions.includes('Installation') || c.label.toLowerCase() !== stolenCard.toLowerCase()).map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
                       value={visit.sd} onChange={(label) => set('sd', label)} disabled={asked.sdLeft === 'off'} invalid={asked.sdLeft === 'required' && !visit.sd.trim()}
@@ -1154,17 +1168,6 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       </p>
                     )}
                   </div>
-                  <Field id="visit-photos" label="Photos on the card collected" ask={asked.photos} error={shown('numPhotos')}>
-                    <input id="visit-photos" inputMode="numeric" className={`${inputClass} ${err('numPhotos') || (asked.photos === 'required' && !visit.numPhotos.trim() ? red : '')}`} value={visit.numPhotos} disabled={asked.photos === 'off'} onChange={(e) => set('numPhotos', e.target.value)} />
-                    {asked.photos !== 'off' && (
-                      <p className={hintClass}>
-                        {inCamera && lastVisit ? `Card collected: ${inCamera} (left on ${lastVisit.date}).` : 'No card is known to have been left in the camera.'}
-                      </p>
-                    )}
-                  </Field>
-                </div>
-                <div className="mt-4 space-y-3">
-                  <SwitchRow label="Card OK" hint="Off if the card was full." checked={visit.card === 'OK'} disabled={asked.card === 'off'} onChange={(on) => set('card', on ? 'OK' : 'Full')} />
                 </div>
               </SectionCard>
                 )}
