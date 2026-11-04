@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Added
+- **Import deployment**: the memory card is ejected once it has been copied (Windows, macOS and Linux — only a removable drive), so it can be taken out at once; when it cannot be ejected, the page says so. Endpoint `POST /api/deployment-import/eject-card`.
 - **Registering a visit**: an Installation now requires the camera's height (or depth), delay, tilt, heading and whether bait was used, as the field form does. The GPS where the note was taken is asked (it starts as the location's) and an error is shown, and the visit is not added, when it is more than 1 km from the location; the visits read from a file or Epicollect get a warning for the same.
 - **Epicollect** as a source of visits: the entries of the Epicollect5 project of the settings are read directly, with no file, and become visits (an inspection is of the camera at the site); it appears in *Register visits* once it is used in *Settings › Visit sources*.
 - **Backup and restore** (*Utils*): the global settings (without passwords or secrets) and the data of a research project — its locations, cameras, SD cards, visits and the deployments chosen, with or without their images — in one `.zip` that says what it holds (`manifest.json`), and the restoration of what is picked from it: what is there is not overwritten unless asked to, and what is retired stays retired. Endpoints `/api/backup/*`.

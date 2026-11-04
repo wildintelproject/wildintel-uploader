@@ -1410,6 +1410,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const [copyError, setCopyError] = useState<string | null>(null)
   const [cardCopy, setCardCopy] = useState<string | null>(null)
   const cardCopyRef = useRef<string | null>(null)
+  // What happened when the card was ejected after its copy.
+  const [ejected, setEjected] = useState<{ ejected: boolean; message: string } | null>(null)
   const [browsing, setBrowsing] = useState(false)
   const [browseError, setBrowseError] = useState<string | null>(null)
   const [scan, setScan] = useState<ScanResult | null>(null)
@@ -1660,13 +1662,13 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     discardCardCopy()
     setImageSource(next)
     setSourceDir(''); setScan(null); setValidation(null); setValidationError(null); setScanError(null)
-    setCardDir(''); setCopyError(null); setCopyProgress(null)
+    setCardDir(''); setCopyError(null); setCopyProgress(null); setEjected(null)
   }
 
   /** The card is copied to a temporary folder — it is only read — and, once it is there, the process goes on with the copy as with any local folder. */
   async function copyCard(path: string = cardDir) {
     discardCardCopy()
-    setCopying(true); setCopyError(null); setCopyProgress(null); setScan(null); setValidation(null); setValidationError(null); setSourceDir('')
+    setCopying(true); setCopyError(null); setCopyProgress(null); setEjected(null); setScan(null); setValidation(null); setValidationError(null); setSourceDir('')
     try {
       let copy = ''
       await api.copyCard(path, (event) => {
@@ -1676,6 +1678,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
       })
       cardCopyRef.current = copy; setCardCopy(copy)
       setSourceDir(copy)
+      // The card was only read and it is all on this computer now: it is ejected so it can be taken out.
+      try { setEjected(await api.ejectCard(path)) } catch { setEjected({ ejected: false, message: 'Eject the card from the system before taking it out.' }) }
       await handleScan(copy)
     } catch (e) {
       setCopyError(e instanceof Error ? e.message : 'Could not copy the memory card.')
@@ -2539,7 +2543,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                   </div>
                 )}
                 {copyError && <p role="alert" className="text-sm text-red-600 dark:text-red-400 mt-2">{copyError}</p>}
-                {cardCopy && !copying && <p className={`${hintClass} mt-2`}>Copied to a temporary folder, which is removed when the import is over. The card itself was not changed.</p>}
+                {cardCopy && !copying && <p className={`${hintClass} mt-2`}>Copied to a temporary folder, which is removed when the import is over. The card itself was not changed.{ejected && ` ${ejected.message}`}</p>}
               </div>
             )}
             {imageSource === 'folder' && (

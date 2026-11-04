@@ -47,6 +47,12 @@ def copy_card(req: CardRequest) -> StreamingResponse:
     return _stream(card_copy_service.copy_card(req.path), "The memory card could not be copied")
 
 
+@router.post("/eject-card")
+def eject_card(req: CardRequest) -> dict:
+    """Ejects the removable drive a memory card was copied from, so it can be taken out: {"ejected": bool, "message"}."""
+    return card_copy_service.eject(req.path)
+
+
 @router.post("/discard-card-copy")
 def discard_card_copy(req: CardRequest) -> dict:
     """Removes the temporary copy of a memory card — only one made by /copy-card. {"removed": bool}"""

@@ -266,6 +266,9 @@ export const api = {
   copyCard: (path: string, onEvent: (event: CardCopyEvent) => void) =>
     streamNdjson<CardCopyEvent>('/api/deployment-import/copy-card', { path }, onEvent, 'The copy of the memory card ended unexpectedly.'),
 
+  // Ejects the removable drive the memory card was copied from, so it can be taken out.
+  ejectCard: (path: string) => post<{ ejected: boolean; message: string }>('/api/deployment-import/eject-card', { path }),
+
   // Removes the temporary copy of a memory card once the import is over.
   discardCardCopy: (path: string) => post<{ removed: boolean }>('/api/deployment-import/discard-card-copy', { path }),
 

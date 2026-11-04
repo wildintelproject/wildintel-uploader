@@ -21,7 +21,7 @@ vi.mock('../api', () => ({
     trapperClassificationProjects: vi.fn(),
     trapperLocations: vi.fn(),
     trapperDeployments: vi.fn(),
-    browseFolder: vi.fn(), copyCard: vi.fn(), discardCardCopy: vi.fn(),
+    browseFolder: vi.fn(), copyCard: vi.fn(), ejectCard: vi.fn(), discardCardCopy: vi.fn(),
     scanFolder: vi.fn(), guessDetails: vi.fn(),
     importDeployment: vi.fn(),
     importLocal: vi.fn(), preprocess: vi.fn(), consolidate: vi.fn(),
@@ -1251,6 +1251,7 @@ describe('ImportDeploymentPage', () => {
       onEvent({ type: 'done', path: '/tmp/wildintel-sd/card-x/CARD_A', files: 12, bytes: 1200 })
     })
     mockedApi.discardCardCopy.mockResolvedValue({ removed: true })
+    mockedApi.ejectCard.mockResolvedValue({ ejected: true, message: 'CARD_A ejected: you can take the card out.' })
     await goToImagesStep()
     await userEvent.click(screen.getByRole('radio', { name: /^Yes, they are on the SD card/ }))
 
@@ -1262,6 +1263,8 @@ describe('ImportDeploymentPage', () => {
     await waitFor(() => expect(mockedApi.scanFolder).toHaveBeenCalledWith('/tmp/wildintel-sd/card-x/CARD_A'))   // the copy is what is scanned
     expect(await screen.findByText(/12 images found/)).toBeInTheDocument()
     expect(screen.getByText(/Copied to a temporary folder/)).toBeInTheDocument()
+    expect(mockedApi.ejectCard).toHaveBeenCalledWith('/run/media/me/CARD_A')        // the card is ejected once copied
+    expect(screen.getByText(/CARD_A ejected: you can take the card out/)).toBeInTheDocument()
 
     // another answer discards the copy
     await userEvent.click(screen.getByRole('radio', { name: /^No, they are in a folder/ }))

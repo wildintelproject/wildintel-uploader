@@ -78,3 +78,50 @@ def test_the_api_copies_a_card_as_a_stream_and_discards_the_copy(tmp_path: Path)
     with client.stream("POST", "/api/deployment-import/copy-card", json={"path": str(tmp_path / "nowhere")}) as response:
         failed = [json.loads(line) for line in response.iter_lines() if line]
     assert failed[-1]["type"] == "error" and "not a folder" in failed[-1]["detail"]
+
+
+# ── ejecting the card ───────────────────────────────────────────────────────
+
+class _Done:
+    def __init__(self, stdout="", returncode=0, stderr=""):
+        self.stdout, self.returncode, self.stderr = stdout, returncode, stderr
+
+
+def _fake_linux(monkeypatch, answers: list, calls: list):
+    """The system commands answer in order: findmnt, lsblk (parent disk), lsblk (flags), then udisksctl."""
+    queue = iter(answers)
+    monkeypatch.setattr(card_copy_service.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(card_copy_service, "_run", lambda command: (calls.append(command), next(queue, _Done()))[1])
+
+
+def test_eject_unmounts_and_powers_off_a_removable_drive(tmp_path, monkeypatch):
+    calls: list = []
+    _fake_linux(monkeypatch, [_Done("/dev/sdb1 /run/media/me/CARD_A\n"), _Done("sdb\n"), _Done("1 1\n")], calls)
+    result = card_copy_service.eject(str(tmp_path))
+    assert result["ejected"] is True and "CARD_A" in result["message"]
+    assert ["udisksctl", "unmount", "-b", "/dev/sdb1"] in calls and ["udisksctl", "power-off", "-b", "/dev/sdb"] in calls
+
+
+def test_eject_leaves_a_fixed_disk_alone(tmp_path, monkeypatch):
+    calls: list = []
+    # lsblk answers PKNAME with a disk, then the flags "0 0" (not removable, not hotplug)
+    answers = iter([_Done("/dev/nvme0n1p2 /\n"), _Done("nvme0n1\n"), _Done("0 0\n")])
+    monkeypatch.setattr(card_copy_service.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(card_copy_service, "_run", lambda command: (calls.append(command), next(answers))[1])
+    result = card_copy_service.eject(str(tmp_path))
+    assert result["ejected"] is False
+    assert not any(c[0] == "udisksctl" for c in calls)
+
+
+def test_eject_says_why_it_could_not(tmp_path, monkeypatch):
+    answers = iter([_Done("/dev/sdb1 /run/media/me/CARD_A\n"), _Done("sdb\n"), _Done("1 1\n"), _Done(returncode=1, stderr="target is busy")])
+    monkeypatch.setattr(card_copy_service.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(card_copy_service, "_run", lambda command: next(answers))
+    result = card_copy_service.eject(str(tmp_path))
+    assert result["ejected"] is False and "busy" in result["message"]
+
+
+def test_eject_endpoint(tmp_path, monkeypatch):
+    monkeypatch.setattr(card_copy_service, "eject", lambda path: {"ejected": True, "message": f"{path} ejected"})
+    response = TestClient(app).post("/api/deployment-import/eject-card", json={"path": "/run/media/me/CARD_A"})
+    assert response.status_code == 200 and response.json() == {"ejected": True, "message": "/run/media/me/CARD_A ejected"}
