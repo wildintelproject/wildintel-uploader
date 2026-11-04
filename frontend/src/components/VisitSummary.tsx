@@ -68,7 +68,7 @@ export default function VisitSummary({ data }: { data: VisitSummaryData }) {
       {data.sections.map((section) => (
         <section key={section.key} className={`${CARD} px-5 py-4`} aria-label={section.title}>
           <div className="flex items-center gap-3">
-            <span className="text-zinc-500 dark:text-zinc-400"><Icon path={section.icon} className="h-5 w-5" /></span>
+            <span className="text-blue-600 dark:text-blue-400"><Icon path={section.icon} className="h-5 w-5" /></span>
             <h5 className="flex-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">
               {section.title}{section.optional && <span className="ml-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">optional</span>}
             </h5>
