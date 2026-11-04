@@ -295,7 +295,10 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                       {COLUMNS.map(([key, label]) => (
                         <th key={key} scope="col" aria-sort={sort?.key === key ? (sort.descending ? 'descending' : 'ascending') : 'none'} className="px-3 py-2.5 text-left font-medium">
                           <button type="button" className="inline-flex items-center gap-1 font-medium hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => { setSort(sort?.key === key ? { key, descending: !sort.descending } : { key, descending: false }); setPage(1); setOpened(null) }}>
-                            {label}<span aria-hidden="true" className="text-[10px]">{sort?.key === key ? (sort.descending ? '▼' : '▲') : ''}</span>
+                            {label}
+                            <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-3.5 w-3.5 fill-none stroke-current ${sort?.key === key ? 'text-blue-500' : 'text-zinc-400 dark:text-zinc-600'}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              {sort?.key === key ? (sort.descending ? <path d="M12 5v14M6 13l6 6 6-6" /> : <path d="M12 19V5M6 11l6-6 6 6" />) : <path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" />}
+                            </svg>
                           </button>
                         </th>
                       ))}
