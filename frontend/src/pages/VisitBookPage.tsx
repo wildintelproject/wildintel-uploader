@@ -289,7 +289,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 ? <LinkButton title={`Show the details of the location ${v.location_id}`} className="font-mono" onClick={() => onOpenSettings('locations', project.acronym, v.location_id)}>{v.location_id}</LinkButton>
                                 : v.location_id}
                             </td>
-                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.not_done ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
+                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.not_done || phaseOf(v) === 'not_visited' ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
                             <td className="px-3 py-2">{v.actions.length === 0 && !v.not_done ? '—' : v.actions.join(' + ')}</td>
                             <td className="px-3 py-2">
                               {phaseOf(v)
