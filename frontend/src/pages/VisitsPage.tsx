@@ -458,6 +458,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const [whenConfirmed, setWhenConfirmed] = useState(false)
   // The visits already kept to the location: the one being registered is the next.
   const [kept, setKept] = useState<StoredVisit[] | null>(null)
+  // The visits to the location that were made: one that could not be made does not count — with none made, this is the first time at the site.
+  const made = kept?.filter((w) => !isNotVisited(w.status) && w.actions.length > 0) ?? null
   // Every visit kept to the research project: where its cameras and its SD cards are is worked out from them.
   const [allVisits, setAllVisits] = useState<StoredVisit[] | null>(null)
   // The locations of the research project: a revision is one visit to each of them, and cannot start before the one before it is finished.
@@ -578,7 +580,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     </div>
   )
   const gapM = gpsDistance(visit, location)
-  const errors = { ...visitErrors(visit, kept?.length === 0), ...conflicts, ...(gapM != null && gapM > GPS_TOLERANCE_M ? { latitude: `The GPS is ${gapM} m from the location.` } : {}) }
+  const errors = { ...visitErrors(visit, made?.length === 0), ...conflicts, ...(gapM != null && gapM > GPS_TOLERANCE_M ? { latitude: `The GPS is ${gapM} m from the location.` } : {}) }
   const moreErrors = { ...detailsErrors(visit.details), ...installationErrors(visit) }
   const shown = (field: ErrorKey) => (tried ? errors[field] : undefined)
   // What the visit needs and does not have yet is in red from the start, not only once adding it was tried.
@@ -795,8 +797,11 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const whenDone = whereDone && whenConfirmed && !!visit.when
   const asked = askedOf(visit)
   // What the last visit to the location left in the camera: the card the one that is collected now was.
-  const lastVisit = kept ? latest(kept) : undefined
-  const inCamera = lastVisit?.sd ?? null
+  // A visit that could not be made says nothing of the camera, the site or the card: the last one that was made is the one that does.
+  const lastVisit = made ? latest(made) : undefined
+  // The card in the camera is the one the latest visit that left one says — a later visit that left none (or could not be made) does not take it out.
+  const cardVisit = kept ? latest(kept.filter((w) => w.sd?.trim())) : undefined
+  const inCamera = cardVisit?.sd ?? null
   const on = (ask: Ask) => ask !== 'off'
   const sdValues = [...(on(asked.sdLeft) ? [visit.sd] : []), ...(on(asked.photos) ? [visit.numPhotos] : []), ...(on(asked.card) ? [visit.card] : [])]
   const cameraValues = [...(on(asked.batteries) ? [visit.batteries] : []), ...(on(asked.status) ? [visit.status] : []), ...(on(asked.dateTime) ? [visit.dateTimeOK] : [])]
@@ -924,7 +929,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               : 'The research project and the location of the visit. They are kept in the collections folder — pick one that is already there, or add a new research project.'}
             summary={project && <>
               {project.acronym} · {visit.site}{location?.name ? `, ${location.name}` : ''}
-              {kept && <><br />Visit no. {kept.length + 1} · {sessionOf(kept.length)}{latest(kept) && <> — the last was on {latest(kept)!.date} ({actionsText(latest(kept)!.actions)})</>}</>}
+              {kept && <><br />Visit no. {kept.length + 1} · {sessionOf(kept.length)}{latest(made!) && <> — the last was on {latest(made!)!.date} ({actionsText(latest(made!)!.actions)})</>}</>}
             </>}
           >
             {!defaultProject && <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={selectProject} />}
@@ -1112,7 +1117,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   </fieldset>
                   )}
                 </div>
-                {kept && kept.length === 0 && !notVisited && (
+                {made && made.length === 0 && !notVisited && (
                   <p role="status" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                     This is the first visit to {visit.site}: it can only be an Installation, as no camera is known to be there yet.
                   </p>
