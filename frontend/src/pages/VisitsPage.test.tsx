@@ -7,7 +7,7 @@ import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
 import type { ClosedVisit, StoredVisit } from '../types'
 
-vi.mock('../api', () => ({ api: { markNotVisited: vi.fn(), listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn(), updateLocalLocation: vi.fn(), setFieldItemStatus: vi.fn() } }))
+vi.mock('../api', () => ({ api: { markNotVisited: vi.fn(), listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(), listVisits: vi.fn(), saveVisit: vi.fn(), importVisitsCsv: vi.fn(), visitsCsvColumns: vi.fn(), closedVisits: vi.fn(), getSettings: vi.fn(), updateLocalLocation: vi.fn(), setFieldItemStatus: vi.fn(), reportUrl: (id: string, format: string) => `/api/reports/${id}/download?format=${format}` } }))
 const mockedApi = vi.mocked(api, true)
 
 const location = (location_id: string, over: Record<string, unknown> = {}) => ({
@@ -915,7 +915,7 @@ describe('VisitsPage from a CSV file', () => {
     expect(screen.queryByLabelText('Brand of the SD card')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeEnabled()
 
-    await userEvent.click(screen.getByLabelText(/Create the locations that do not exist/))
+    await userEvent.click(screen.getByRole('switch', { name: 'Create the locations that do not exist' }))
     expect(screen.getByLabelText('Timezone of the location (IANA, e.g. Europe/Madrid)')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // coordinates and timezone are required now
     expect(screen.getByRole('status')).toHaveTextContent('match also latitude, longitude, timezone of the location')
@@ -924,7 +924,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.type(screen.getByLabelText('Default for Latitude'), '40.1')
     await userEvent.type(screen.getByLabelText('Default for Longitude'), '-3.2')
     await userEvent.type(screen.getByLabelText('Default for Timezone of the location (IANA, e.g. Europe/Madrid)'), 'Europe/Madrid')
-    await userEvent.click(screen.getByLabelText(/Create the cameras that do not exist/))
+    await userEvent.click(screen.getByRole('switch', { name: 'Create the cameras that do not exist' }))
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // the camera model is required now
     await userEvent.type(screen.getByLabelText('Default for Camera model'), 'Browning-BTC-8E')
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeEnabled()
@@ -959,12 +959,11 @@ describe('VisitsPage from a CSV file', () => {
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.stringContaining('TATR_0001,02/10/2026'), false, 'mapped', MAPPING))
     expect(await screen.findByText(/to add/)).toHaveTextContent('2 visits to add · 1 already kept · 1 row with a problem')
     expect(screen.getByRole('list', { name: 'Rows with a problem' })).toHaveTextContent("Row 4: 'many' is not a whole number.")
-    expect(screen.getByText('Revision + Installation')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Add 2 visits' }))
     expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', expect.any(String), true, 'mapped', MAPPING)
     expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to TATR. The deployments will be worked out from them.')
-    expect(screen.queryByRole('table')).not.toBeInTheDocument() // the visits are kept: the list of them goes
+    expect(screen.getAllByRole('table').map((t) => t.getAttribute('aria-label'))).toEqual(['Column mapping']) // the visits are kept: the list of them goes, the mapping stays
     expect(screen.getByRole('button', { name: 'Back to the menu' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Register more visits' }))
@@ -1062,7 +1061,7 @@ describe('VisitsPage from a CSV file', () => {
 
   it('tells what is worth knowing of the visits and names the report of the import', async () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [], notes: ['R0004: sites visited in R0003 and not on this trip, their cameras still out: TATR_0002.'] })
-    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 1, new_sites: [], warnings: [], report: '/c/TATR/visits_import_20241012_090000.txt' })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 1, new_sites: [], warnings: [], report: '20241012-090000_visits_TATR' })
     render(<VisitsPage onBack={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
@@ -1071,7 +1070,7 @@ describe('VisitsPage from a CSV file', () => {
 
     expect(await screen.findByRole('list', { name: 'Notes on the visits' })).toHaveTextContent('their cameras still out: TATR_0002')
     await userEvent.click(screen.getByRole('button', { name: 'Add 1 visit' }))
-    expect(await screen.findByText(/visits_import_20241012_090000\.txt/)).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Download report' })).toHaveAttribute('href', '/api/reports/20241012-090000_visits_TATR/download?format=csv')
   })
 
   it('adds at once the new sites that have the coordinates of their first visit, and leaves the ones that look like a misprint', async () => {

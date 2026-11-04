@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, MarkNotVisitedRequest, SaveVisitRequest, VisitRecord, VisitsCsvColumnsRequest
-from wildintel_uploader.core.services import epicollect_service, local_folder_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
+from wildintel_uploader.core.services import epicollect_service, local_folder_service, report_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
 
@@ -145,6 +145,14 @@ def mark_not_visited(req: MarkNotVisitedRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
+def _save_report(research_project_id: str, result: dict, saved: int) -> str | None:
+    """The report of an import, kept with the other reports (see report_service) — its id; None when it could not be written."""
+    try:
+        return report_service.save(report_service.visits_import_report(research_project_id, result, saved))
+    except OSError:
+        return None
+
+
 @router.post("/import-csv")
 def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
     """Reads the visits of a CSV file for a research project: what can be kept and what is wrong with the rest — kept when `save` is set.
@@ -201,7 +209,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             _archive_locations(root, req.research_project_id, result["visits"])
             _refresh_states(root, req.research_project_id)
             field_logs = _write_logs(root, req.research_project_id, result["visits"])
-            report = visits_csv.write_report(root, req.research_project_id, result, saved)
+            report = _save_report(req.research_project_id, result, saved)
     except (local_folder_service.LocalFolderError, visits_csv.VisitsCsvError) as exc:
         raise HTTPException(400, str(exc)) from exc
     return {**result, "saved": saved, "field_logs": field_logs, "report": report}

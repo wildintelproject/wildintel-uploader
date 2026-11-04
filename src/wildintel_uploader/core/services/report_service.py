@@ -3,7 +3,7 @@ screen shows of it and what can be downloaded to look at it in detail afterwards
 
 A report is a JSON file in config.reports_dir():
 
-    {"id", "kind": "validation" | "postvalidation" | "preprocessing" | "repair" | "upload", "title", "created_at", "source_dir",
+    {"id", "kind": "validation" | "postvalidation" | "preprocessing" | "repair" | "upload" | "visits", "title", "created_at", "source_dir",
      "deployment_id", "parameters", "checked",
      "checks": {check: {"label", "scope": "images" | "deployment", "ok", "failed"}},
      "totals": {"entries", "ok", "failed", "images_with_issues"},
@@ -26,11 +26,11 @@ from typing import Iterable
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.core.services import deployment_import_service as dis
 
-KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload")
+KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload", "visits")
 DEPLOYMENT = "(deployment)"
 CSV_COLUMNS = ("identifier", "check", "status", "message")
 
-_ID = re.compile(r"^\d{8}-\d{6}_(validation|postvalidation|preprocessing|repair|upload)_[0-9A-Za-z_.-]*$")
+_ID = re.compile(r"^\d{8}-\d{6}_(validation|postvalidation|preprocessing|repair|upload|visits)_[0-9A-Za-z_.-]*$")
 
 LABELS = {
     "corrupted": "Corrupted images", "sequence": "Shooting order vs. filename sequence", "structure": "Folder structure",
@@ -226,6 +226,36 @@ def upload_report(collection: str, research_project: str, items: list[dict], *, 
     return b.build()
 
 
+def visits_import_report(research_project_id: str, result: dict, saved: int) -> dict:
+    """The report of an import of visits: an entry for each row of the file — what became of it, and why — then what was odd about the visits, what was worth knowing,
+    what the import created and the sites that are not locations. `result` is what visits_csv.parse_visits gave (with the folder's changes told by `saved`)."""
+    b = _Builder("visits", f"Visits imported to {research_project_id}", source_dir=None, deployment_id=None,
+                 parameters={"research_project": research_project_id, "saved": saved, "skipped": result.get("skipped", 0), "history": result.get("history", 0)})
+    rows = result.get("rows", [])
+    b.checked = len(rows)
+    for r in rows:
+        where = " · ".join(str(x) for x in (r.get("site"), r.get("session"), f"{r['date']} {r['time']}" if r.get("date") else None) if x)
+        label = r.get("label") or "Visit to add"
+        b.add(f"Row {r['row']}" + (f" · {where}" if where else ""), label, r["result"] in ("ok", "already_kept", "ignored"), r.get("message") or "The visit is added.", scope="deployment")
+    for p in result.get("problems", []):
+        if p.get("history"):
+            b.add(f"History row {p['row']}", "History of visits", False, p["message"], scope="deployment")
+    for site in result.get("new_sites", []):
+        near = site.get("nearest")
+        b.add(site["site"], "Site is not a location", False,
+              f"{site['visits']} visit(s) held; nearest location {near['location_id'] + ' at ' + str(near['distance_m']) + ' m' if near else 'unknown'}"
+              f"{'; one character apart from ' + ', '.join(site['similar']) if site.get('similar') else ''}.", scope="deployment")
+    for warning in result.get("warnings", []):
+        b.add("(import)", "Things to check", False, warning, scope="deployment")
+    for note in result.get("notes", []):
+        b.add("(import)", "Worth knowing", True, note, scope="deployment")
+    made = result.get("create") or {}
+    for kind, name, key in (("locations", "location", "location_id"), ("cameras", "camera", "camera_id"), ("sd_cards", "SD card", "label")):
+        for entity in made.get(kind, []):
+            b.add(f"{name} {entity.get(key)}", "Created", True, f"The {name} {entity.get(key)} was created with the visits." if saved else f"The {name} {entity.get(key)} would be created.", scope="deployment")
+    return b.build()
+
+
 # ── keeping ──────────────────────────────────────────────────────────────────
 
 def _slug(text: str) -> str:
@@ -237,7 +267,7 @@ def save(report: dict, root: Path | None = None) -> str:
     root = root or config.reports_dir()
     root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    name = _slug(report.get("deployment_id") or Path(report.get("source_dir") or "").name or report["kind"])
+    name = _slug(report.get("deployment_id") or Path(report.get("source_dir") or "").name or (report["parameters"]["research_project"] if report["kind"] == "visits" else report["kind"]))
     report_id, n = f"{stamp}_{report['kind']}_{name}", 1
     while (root / f"{report_id}.json").exists():
         n += 1

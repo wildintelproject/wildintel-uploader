@@ -36,6 +36,8 @@ def test_every_row_says_what_became_of_it():
     result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping)
     by_row = {r["row"]: r for r in result["rows"]}
     assert [by_row[n]["result"] for n in (2, 3, 4, 5)] == ["already_kept", "problem", "new_site", "ok"]
+    assert (by_row[5]["date"], by_row[5]["time"]) == ("2026-10-20", "11:40")   # the day and the time of the visit the row says
+    assert by_row[5]["actions"] == "Revision" and by_row[3]["actions"] == "Flying"   # as the dashboard says them; as the file wrote them when they are not valid
     assert "already kept" in by_row[2]["message"] and "Flying" in by_row[3]["message"] and by_row[4]["site"] == "WICP_0009"
 
 

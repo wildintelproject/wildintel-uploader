@@ -296,7 +296,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
 
     for n, row in enumerate(rows, start=2):
         found = re.search(r"\d+", row.get("session", ""))
-        report[n] = {"row": n, "site": row.get("location_id", ""), "session": f"R{int(found.group(0)):04d}" if found else "", "result": "ok", "label": "", "message": ""}
+        report[n] = {"row": n, "site": row.get("location_id", ""), "session": f"R{int(found.group(0)):04d}" if found else "", "actions": row.get("actions", ""), "result": "ok", "label": "", "message": "", "data": dict(row)}
         if epicollect and ("session" not in row or "location_id" not in row):
             ignored += 1
             report[n] |= {"result": "ignored", "label": "Entry of an old form", "message": "It has no session or no site: it is an entry of an old version of the form."}
@@ -317,6 +317,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             location = {}  # held with its site apart: the time is read as UTC, as nothing says better
         try:
             date, time = _when(row, location, time_source)
+            report[n] |= {"date": date, "time": time[:5]}
             if fmt == "epicollect" and "created_at" in row and "date" in row and time_source != "hour":
                 try:
                     created_day = _when({"created_at": row["created_at"]}, location)[0]
@@ -329,6 +330,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             # a visit that could not be made has no action: it is exported so, and read back so
             if None in actions or (not actions and not visit_rules.is_not_revised({"status": row.get("status")})):
                 raise ValueError(f"The actions '{row.get('actions', '')}' are not Installation, Revision, Desinstallation, Stolen or Archive.")
+            report[n]["actions"] = " + ".join(actions)  # as the dashboard of visits says them
             if create.get("cameras") and row.get("camera_id"):
                 camera = _new_camera(re.sub(r"\.0+$", "", row["camera_id"]), row)
                 if camera["camera_id"].lower() not in cameras_known:
@@ -524,24 +526,3 @@ def _first(exc: ValidationError) -> str:
     error = exc.errors()[0]
     where = ".".join(str(p) for p in error["loc"])
     return f"{where}: {error['msg']}" if where else error["msg"]
-
-
-def write_report(root, research_project_id: str, result: dict, saved: int) -> str | None:
-    """The report of an import of visits, beside the visits of the research project (`visits_import_<day>_<time>.txt`): how many were kept, and what was
-    wrong, odd or worth knowing. Returns its path — None when it could not be written."""
-    from pathlib import Path  # noqa: PLC0415
-    lines = [f"Visits kept to {research_project_id}: {saved} ({result.get('history', 0)} from the history)", f"Already kept: {result.get('skipped', 0)}"]
-    for p in result.get("problems", []):
-        lines.append(f"PROBLEM {'history ' if p.get('history') else ''}row {p['row']}: {p['message']}")
-    for s in result.get("new_sites", []):
-        lines.append(f"NEW SITE {s['site']}: {s['visits']} visit(s) held; nearest location {s['nearest']['location_id'] + ' at ' + str(s['nearest']['distance_m']) + ' m' if s['nearest'] else 'unknown'}"
-                     f"{'; one character apart from ' + ', '.join(s['similar']) if s['similar'] else ''}")
-    lines += [f"WARNING: {w}" for w in result.get("warnings", [])]
-    lines += result.get("notes", [])
-    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = Path(root) / research_project_id / f"visits_import_{stamp}.txt"
-    try:
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    except OSError:
-        return None
-    return str(path)

@@ -3,13 +3,14 @@ import { api } from '../api'
 import ReportPanel from './ReportPanel'
 import type { ReportKind, ReportSummary } from '../types'
 
-const KIND_LABELS: Record<ReportKind, string> = { validation: 'Validation', postvalidation: 'Postvalidation', preprocessing: 'Preprocessing', repair: 'Repair', upload: 'Upload' }
+const KIND_LABELS: Record<ReportKind, string> = { validation: 'Validation', postvalidation: 'Postvalidation', preprocessing: 'Preprocessing', repair: 'Repair', upload: 'Upload', visits: 'Visits' }
 const KIND_TONES: Record<ReportKind, string> = {
   validation: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   postvalidation: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
   preprocessing: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
   repair: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
   upload: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300',
+  visits: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
 }
 const PAGE = 6
 
@@ -84,7 +85,7 @@ export default function ReportsList() {
                   <span className={`mr-2 text-xs font-medium px-1.5 py-0.5 rounded ${KIND_TONES[r.kind]}`}>{KIND_LABELS[r.kind]}</span>{r.title}
                 </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                  {formatDate(r.created_at)} · {r.checked} {r.kind === 'upload' ? 'deployment(s)' : 'image(s)'} · {r.totals.failed === 0 ? 'nothing failed' : <span className="text-amber-600 dark:text-amber-400 font-medium">{r.totals.failed} problem(s)</span>}
+                  {formatDate(r.created_at)} · {r.checked} {r.kind === 'upload' ? 'deployment(s)' : r.kind === 'visits' ? 'row(s)' : 'image(s)'} · {r.totals.failed === 0 ? 'nothing failed' : <span className="text-amber-600 dark:text-amber-400 font-medium">{r.totals.failed} problem(s)</span>}
                 </p>
                 {r.source_dir && <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono break-all mt-1">{r.source_dir}</p>}
               </div>

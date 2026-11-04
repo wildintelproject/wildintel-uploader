@@ -784,7 +784,7 @@ export interface VisitsCsvResult {
   /** What the visits to add create: the locations, cameras and SD cards that do not exist and the file was asked to create. */
   create?: Record<CsvEntity, Record<string, unknown>[]>
   /** What became of each row of the file, numbered as in it: kept to add (ok), a problem, already kept, held for a site that is not a location, or ignored. */
-  rows?: { row: number; site: string; session?: string; result: 'ok' | 'problem' | 'already_kept' | 'new_site' | 'ignored'; label?: string; message: string }[]
+  rows?: { row: number; site: string; session?: string; date?: string; time?: string; actions?: string; result: 'ok' | 'problem' | 'already_kept' | 'new_site' | 'ignored'; label?: string; message: string; data?: Record<string, string> }[]
   /** How many of the visits come from the history, which are the first ones. */
   history?: number
   /** What is worth knowing of the visits, without being wrong (the sites of the trip before not visited on this one…). */
@@ -967,7 +967,7 @@ export type UploadEvent =
 // ── Reports ─────────────────────────────────────────────────────────────
 
 /** What a report was made of: a validation, a postvalidation or a preprocessing. */
-export type ReportKind = 'validation' | 'postvalidation' | 'preprocessing' | 'repair' | 'upload'
+export type ReportKind = 'validation' | 'postvalidation' | 'preprocessing' | 'repair' | 'upload' | 'visits'
 
 /** One check of one image — or of the whole deployment, "(deployment)". */
 export interface ReportEntry {

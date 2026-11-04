@@ -3,10 +3,20 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 PROJECT = {"name": "Doñana", "acronym": "DONA"}
 VISIT = {"location_id": "DONA_01", "session": "R0013", "date": "2026-10-02", "time": "08:14:05", "actions": ["Revision"], "camera_id": "12", "num_photos": 1620, "trappers": "Ana, Luis", "setup_by": "Ana", "comments": "pilas cambiadas"}
+
+
+@pytest.fixture(autouse=True)
+def reports(tmp_path_factory, monkeypatch) -> Path:
+    """The reports an import leaves go to a folder of the test, never to the one of the user."""
+    from wildintel_uploader.core import config
+    folder = tmp_path_factory.mktemp("reports")
+    monkeypatch.setattr(config, "reports_dir", lambda settings=None: folder)
+    return folder
 
 
 def _client() -> TestClient:
@@ -660,7 +670,7 @@ def test_a_row_that_is_a_visit_kept_already_by_its_session_site_camera_and_actio
     assert result["visits"] == [] and result["skipped"] == 1
 
 
-def test_the_seconds_are_cut_from_the_logs_unless_they_are_kept_and_an_import_leaves_its_report(tmp_path: Path):
+def test_the_seconds_are_cut_from_the_logs_unless_they_are_kept_and_an_import_leaves_its_report(tmp_path: Path, reports: Path):
     from unittest.mock import patch
 
     from wildintel_uploader.core import config
@@ -674,8 +684,12 @@ def test_the_seconds_are_cut_from_the_logs_unless_they_are_kept_and_an_import_le
             body = _import(root, text, save=True).json()
         stamp = (root / "DONA" / "R0003" / "R0003_FileTimestampLog.csv").read_text(encoding="utf-8-sig").splitlines()[1]
         assert stamp.endswith(expected), (keep, stamp)
-    report = Path(body["report"])
-    assert report.parent == root / "DONA" and report.name.startswith("visits_import_") and "Visits kept to DONA: 2" in report.read_text(encoding="utf-8")
+    # the report is kept with the other reports, with an entry for each row of the file
+    from wildintel_uploader.core.services import report_service
+    report = report_service.read(body["report"], reports)
+    assert report["kind"] == "visits" and report["title"] == "Visits imported to DONA" and report["checked"] == 2 and report["parameters"]["saved"] == 2
+    assert [e["identifier"] for e in report["entries"]][:2] == ["Row 2 · DONA_01 · R0003 · 2024-09-04 09:00", "Row 3 · DONA_01 · R0004 · 2024-10-12 09:05"]
+    assert not list(root.glob("DONA/visits_import_*"))                                          # nothing is left beside the visits
 
 
 def test_a_revision_is_of_the_camera_that_is_at_the_site_unless_the_visit_also_installs_another(tmp_path: Path):
