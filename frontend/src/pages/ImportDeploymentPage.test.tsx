@@ -234,9 +234,11 @@ async function addLocationByHand(locationId = 'DONA_01', name = 'Doñana site 1'
   await userEvent.type(screen.getByLabelText('Location name (optional)'), name)
   await userEvent.type(screen.getByLabelText('Latitude'), '37.0')
   await userEvent.type(screen.getByLabelText('Longitude'), '-6.5')
-  // a new location starts as UTC, following summer time: another timezone replaces it, and a blank one leaves none
-  await userEvent.clear(screen.getByLabelText('Timezone (IANA)'))
-  if (timezone) await userEvent.type(screen.getByLabelText('Timezone (IANA)'), timezone)
+  // a new location starts as UTC, following summer time: another timezone is picked from the list
+  if (timezone !== 'UTC') {
+    await userEvent.type(screen.getByLabelText('Timezone (IANA)'), timezone)
+    await userEvent.click(screen.getByRole('option', { name: timezone }))
+  }
   await userEvent.click(screen.getByRole('button', { name: 'Save location' }))
   await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
 }
@@ -896,16 +898,14 @@ describe('ImportDeploymentPage', () => {
         expect(screen.getByRole('button', { name: 'Save location' })).toBeDisabled()
       })
 
-      it('by hand: a timezone, if given, has to be a known one', async () => {
+      it('by hand: only a timezone of the list can be picked', async () => {
         await withDonaPicked()
         await userEvent.click(screen.getByRole('button', { name: /add a new location/i }))
         await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
         await userEvent.type(screen.getByLabelText('Location id'), 'DONA_02')
-        await userEvent.clear(screen.getByLabelText('Timezone (IANA)'))
         await userEvent.type(screen.getByLabelText('Timezone (IANA)'), 'Mars/Olympus')
 
-        expect(screen.getByText('Not a known IANA timezone (e.g. Europe/Madrid).')).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Save location' })).toBeDisabled()
+        expect(screen.getByText('No matches')).toBeInTheDocument()
       })
 
       it('from Trapper: starts from the Trapper project the research project came from, and a ticked location is simply added', async () => {
@@ -2681,16 +2681,6 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getByText(/Tell us when the images of/)).toBeInTheDocument()
       expect(screen.getByText(/which follows daylight saving time/)).toBeInTheDocument()
       for (const bold of ['DONA_01', 'Europe/Madrid']) expect(screen.getAllByText(bold).some((el) => el.tagName === 'STRONG')).toBe(true)
-    })
-
-    it('says when the location has no timezone', async () => {
-      await goToOriginStep()
-      await addProjectByHand()
-      await addLocationByHand('DONA_01', 'Doñana site 1', '')
-      await continueToDates()
-      await screen.findByText('When was it collected?')
-
-      expect(screen.getByText(/has no timezone, and a deployment needs it/)).toBeInTheDocument()
     })
   })
 })

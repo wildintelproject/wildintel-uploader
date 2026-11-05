@@ -1,4 +1,6 @@
 import QrCode, { qrPayload } from '../components/QrCode'
+import LocationMap from '../components/LocationMap'
+import TimezoneCombobox from '../components/TimezoneCombobox'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
@@ -6,7 +8,7 @@ import CheckboxList from '../components/CheckboxList'
 import Combobox from '../components/Combobox'
 import { download, itemsToCsv, readItems } from '../csvFile'
 import { defaultResearchProject } from '../defaultResearchProject'
-import { NO_CREDENTIALS } from './ImportDeploymentPage'
+import { ANIMAL_TYPES_OPTIONS, BAIT_USE_OPTIONS, NO_CREDENTIALS, SAMPLING_DESIGN_OPTIONS, SENSOR_METHOD_OPTIONS } from './ImportDeploymentPage'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
 import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS, SD_CARD_CAPACITIES } from '../entities'
 import Notice from '../components/Notice'
@@ -43,6 +45,10 @@ function Icon({ children, size = 20 }: { children: ReactNode; size?: number }) {
   )
 }
 
+const MapPinIcon = () => (<Icon size={18}><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" /></Icon>)
+const CompassIcon = () => (<Icon size={18}><circle cx="12" cy="12" r="10" /><path d="M16.2 7.8l-2.1 6.3-6.3 2.1 2.1-6.3z" /></Icon>)
+const ClockIcon = () => (<Icon size={18}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></Icon>)
+const ActivityIcon = () => (<Icon size={18}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></Icon>)
 const PencilIcon = () => (<Icon size={16}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></Icon>)
 const TrashIcon = () => (<Icon size={16}><path d="M3 6h18" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></Icon>)
 const EyeIcon = () => (<Icon size={16}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></Icon>)
@@ -212,7 +218,10 @@ interface LocationDraft {
   timezone: string | null
   /** 'yes' when its cameras ignore summer time. */
   ignore_dst: string | null
+  in_service: string | null
 }
+/** Today, as YYYY-MM-DD in the local time: what "in production since" starts as. */
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 const text = (n: number | null) => (n === null ? null : String(n))
 
@@ -722,7 +731,7 @@ function EntityHeader({ heading, count, noun, onFile, onExport, exportDisabled, 
 function StatusChoice({ options, value, onChange }: { options: { value: string; label: string; hint: string }[]; value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1.5">
-      <span id="status-choice" className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">Status</span>
+      <span id="status-choice" className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100"><ActivityIcon />Status</span>
       <div role="radiogroup" aria-labelledby="status-choice" className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {options.map((o) => (
           <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)}
@@ -748,11 +757,37 @@ function LabelledField({ label, required, hint, error, htmlFor, children }: { la
   return (
     <div className="space-y-1.5">
       <label htmlFor={htmlFor} className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-        {label} <span className="ml-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">{required ? 'Required' : 'Optional'}</span>
+        {label} {required
+          ? <span className="ml-1 text-[11px] font-normal uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>
+          : <span className="ml-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">Optional</span>}
       </label>
       {children}
-      {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : hint && <p className={hintClass}>{hint}</p>}
+      {error && !/^(Required|An? .+ is required)\.?$/.test(error) ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : hint && <p className={hintClass}>{hint}</p>}
     </div>
+  )
+}
+
+/** A card of a form of the settings: an icon, a title and a paragraph on what goes in it. */
+function ProjectSection({ icon, title, hint, children }: { icon?: ReactNode; title?: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-5 space-y-4">
+      {title && <div><h5 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{icon}{title}</h5>{hint && <p className={hintClass}>{hint}</p>}</div>}
+      {children}
+    </div>
+  )
+}
+
+/** A choice among Trapper's options, as the buttons the other forms use. */
+function ProjectChoice({ label, hint, options, value, onChange }: { label: string; hint: string; options: { value: string; label: string }[]; value: number; onChange: (v: number) => void }) {
+  return (
+    <LabelledField label={label} hint={hint}>
+      <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
+        {options.map((o) => (
+          <button key={o.value} type="button" aria-pressed={String(value) === o.value} onClick={() => onChange(Number(o.value))}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${String(value) === o.value ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{o.label}</button>
+        ))}
+      </div>
+    </LabelledField>
   )
 }
 
@@ -777,6 +812,7 @@ function ProjectForm({ item, others, isNew, onChange, onClose, onDone, doneLabel
       region="Research project" backLabel="Research projects" onBack={onClose} title={isNew ? 'New research project' : `Edit ${acronym}`}
       onCancel={onClose} onSave={onDone} saveLabel={doneLabel} saveDisabled={!!acronymError || !!nameError} onRemove={onRemove} removeLabel="Remove research project"
     >
+      <ProjectSection icon={<FolderIcon />} title="Which project is it?" hint="Its acronym, which names its folder, its name, and a few words about it.">
       <LabelledField label="Acronym" required htmlFor="rp-acronym" hint="3 to 10 characters: letters, numbers, _ . or -. It is also the name of the project’s folder." error={acronymError && acronym ? acronymError : null}>
         <input id="rp-acronym" aria-label="Acronym" className={fieldBox} value={item.acronym} disabled={!isNew} placeholder="e.g. DONA" autoComplete="off" onChange={(e) => onChange({ acronym: e.target.value })} />
       </LabelledField>
@@ -803,7 +839,30 @@ function ProjectForm({ item, others, isNew, onChange, onClose, onDone, doneLabel
           <button type="button" aria-label="Add keyword" className={`${btnOutline} h-12 shrink-0`} onClick={addWord}>Add</button>
         </div>
       </LabelledField>
-      <StatusChoice options={PROJECT_STATUSES} value={status} onChange={(v) => onChange({ status: v })} />
+      </ProjectSection>
+      <ProjectSection icon={<SlidersIcon />} title="How was it done?" hint="The design of the study, as Trapper asks for it. It goes into the metadata of the deployments.">
+        <ProjectChoice label="Sampling design" hint="How the places of the cameras were chosen." options={SAMPLING_DESIGN_OPTIONS} value={item.sampling_design} onChange={(v) => onChange({ sampling_design: v })} />
+        <ProjectChoice label="Sensor method" hint="What makes the camera take a picture." options={SENSOR_METHOD_OPTIONS} value={item.sensor_method} onChange={(v) => onChange({ sensor_method: v })} />
+        <ProjectChoice label="Animal types" hint="Whether the animals are marked, so they can be told apart." options={ANIMAL_TYPES_OPTIONS} value={item.animal_types} onChange={(v) => onChange({ animal_types: v })} />
+        <ProjectChoice label="Bait use" hint="What was used to attract the animals, if anything." options={BAIT_USE_OPTIONS} value={item.bait_use} onChange={(v) => onChange({ bait_use: v })} />
+        <LabelledField label="Event interval" htmlFor="rp-interval" hint="The minutes between two pictures that still belong to the same event. 0 if it does not apply.">
+          <div className="relative">
+            <input id="rp-interval" aria-label="Event interval" type="number" min={0} step={1} className={`${fieldBox} pr-20`} value={item.event_interval} onChange={(e) => onChange({ event_interval: e.target.value })} />
+            <span className="absolute inset-y-0 right-4 flex items-center text-sm text-zinc-500 dark:text-zinc-400">minutes</span>
+          </div>
+        </LabelledField>
+      </ProjectSection>
+      <ProjectSection icon={<FileIcon />} title="What is it about?" hint="The abstract and the methods of the study, free text of up to 2000 characters each.">
+        <LabelledField label="Abstract" htmlFor="rp-abstract">
+          <textarea id="rp-abstract" aria-label="Abstract" rows={4} maxLength={2000} className={`${fieldBox} resize-y`} value={item.abstract ?? ''} onChange={(e) => onChange({ abstract: e.target.value || null })} />
+        </LabelledField>
+        <LabelledField label="Methods" htmlFor="rp-methods">
+          <textarea id="rp-methods" aria-label="Methods" rows={4} maxLength={2000} className={`${fieldBox} resize-y`} value={item.methods ?? ''} onChange={(e) => onChange({ methods: e.target.value || null })} />
+        </LabelledField>
+      </ProjectSection>
+      <ProjectSection>
+        <StatusChoice options={PROJECT_STATUSES} value={status} onChange={(v) => onChange({ status: v })} />
+      </ProjectSection>
     </FormPage>
   )
 }
@@ -845,7 +904,13 @@ const matches = (search: string, ...texts: (string | null | undefined)[]) => {
 interface ItemField<T> {
   key: keyof T & string; label: string; placeholder?: string; hint?: string
   /** A text (the default), a day, or a text that suggests values — as a research project is picked from a list, but any other can be typed. */
-  kind?: 'text' | 'date' | 'suggest' | 'bool' | 'select'
+  /** Beside the fields of its section, a column of its own — a map, say. */
+  sectionAside?: (item: T, change: (patch: Partial<T>) => void) => ReactNode
+  /** An icon beside the title of its section. */
+  sectionIcon?: ReactNode
+  /** Has to be given, though it is not the first field. */
+  required?: boolean
+  kind?: 'text' | 'date' | 'suggest' | 'bool' | 'select' | 'timezone'
   /** What is wrong with a value, if anything: it is said under the field, and the item cannot be done with until it is put right. */
   validate?: (value: string) => string | null
   suggestions?: string[]
@@ -965,7 +1030,7 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
         const control = (f: ItemField<T>, i: number) => {
           const value = textOf(item, f.key)
           const label = (child: ReactNode) => (
-            <LabelledField key={f.key} label={f.label} required={i === 0} hint={f.hint} error={fieldError(f, i)} htmlFor={`item-${f.key}`}>{child}</LabelledField>
+            <LabelledField key={f.key} label={f.label} required={i === 0 || f.required} hint={f.hint} error={fieldError(f, i)} htmlFor={`item-${f.key}`}>{child}</LabelledField>
           )
           if (f.kind === 'bool') {
             return (
@@ -989,6 +1054,9 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
                 ))}
               </div>,
             )
+          }
+          if (f.kind === 'timezone') {
+            return label(<TimezoneCombobox id={`item-${f.key}`} value={value} invalid={!!fieldError(f, i)} disabled={Boolean(f.fixed) && !isNew} onChange={change(f, i)} />)
           }
           if (f.kind === 'date') {
             return label(<input id={`item-${f.key}`} type="date" aria-label={f.label} className={`${fieldBox} sm:max-w-60 [color-scheme:light] dark:[color-scheme:dark]`} value={value} onChange={(e) => change(f, i)(e.target.value)} />)
@@ -1021,19 +1089,19 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
           return out
         }
         const card = 'rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-5 space-y-4'
-        const groups: { title?: string; hint?: string; fields: { f: ItemField<T>; i: number }[] }[] = []
+        const groups: { title?: string; hint?: string; icon?: ReactNode; aside?: ReactNode; fields: { f: ItemField<T>; i: number }[] }[] = []
         fields.forEach((f, i) => {
           if (f.kind === 'select' || ofStatus(f)) return
           const last = groups[groups.length - 1]
           if (last && (f.section === undefined || f.section === last.title)) last.fields.push({ f, i })
-          else groups.push({ title: f.section, hint: f.sectionHint, fields: [{ f, i }] })
+          else groups.push({ title: f.section, hint: f.sectionHint, icon: f.sectionIcon, aside: f.sectionAside?.(item, onChange), fields: [{ f, i }] })
         })
         return (
           <>
             {groups.map((g, k) => (
               <div key={k} className={card}>
-                {g.title && <div><h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{g.title}</h5>{g.hint && <p className={hintClass}>{g.hint}</p>}</div>}
-                {lines(g.fields)}
+                {g.title && <div><h5 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{g.icon}{g.title}</h5>{g.hint && <p className={hintClass}>{g.hint}</p>}</div>}
+                {g.aside ? <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="space-y-4">{lines(g.fields)}</div><div className="min-h-56">{g.aside}</div></div> : lines(g.fields)}
               </div>
             ))}
             {choice >= 0 && (
@@ -1211,22 +1279,43 @@ const ARCHIVE_REASONS = [{ value: 'lost', label: 'Lost' }, { value: 'stolen', la
 const GEAR_HINTS = { ready: 'Available, not in the field yet. Offered when a visit is registered.', active: 'In use in the field. Offered when a visit is registered.', archived: 'Out of use for good: lost, stolen, broken… It never goes back to ready or active.' }
 
 const numberRange = (min: number, max: number) => (v: string) => (v === '' || (Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max) ? null : `A number from ${min} to ${max}.`)
+/** A number that has to be given: the coordinates of a location. */
+const requiredNumberRange = (min: number, max: number) => (v: string) => (v === '' ? 'Required.' : numberRange(min, max)(v))
 
 /** The fields of a location of the settings, the first naming it. */
 const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
-  { key: 'location_id', label: 'Location id', placeholder: 'e.g. DONA_0001', hint: 'Unique within this research project. It is how visits refer to this place.', section: 'Which place is it?' },
+  { key: 'location_id', label: 'Location id', placeholder: 'e.g. DONA_0001', hint: 'Unique within this research project. It is how visits refer to this place.', section: 'Which place is it?', sectionIcon: <MapPinIcon />, sectionHint: 'The name the location is known by. Visits and deployments refer to it by its id.' },
   { key: 'name', label: 'Name', placeholder: 'e.g. Doñana site 1' },
-  { key: 'latitude', label: 'Latitude', placeholder: 'e.g. 37.0123', half: true, section: 'Where is it?', sectionHint: 'Decimal degrees (WGS84), like 37.0123 and -6.4412.', validate: numberRange(-90, 90) },
-  { key: 'longitude', label: 'Longitude', placeholder: 'e.g. -6.4412', half: true, validate: numberRange(-180, 180) },
-  { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty', placeholder: 'e.g. 100', unit: 'metres', half: true, hint: 'How far off the position could be.', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
-  { key: 'timezone', label: 'Time zone', placeholder: 'e.g. Europe/Madrid', section: 'Time', fixed: true, hint: "The location's own time zone: UTC unless you say another. Every visit and deployment here is read in it, so it cannot be changed once the location is created.", validate: (v) => (v === '' || isValidTimezone(v) ? null : 'Not a known IANA time zone (e.g. Europe/Madrid).') },
-  { key: 'ignore_dst', label: 'The cameras here ignore summer time', kind: 'bool', fixed: true, hint: 'Turn it on if their clocks stay the same all year. Like the time zone, it cannot be changed once the location is created.' },
+  { key: 'latitude', label: 'Latitude', required: true, placeholder: 'e.g. 37.0123', section: 'Where is it?', sectionIcon: <CompassIcon />, sectionAside: (l, change) => <LocationMap latitude={l.latitude} longitude={l.longitude} onChange={(latitude, longitude) => change({ latitude, longitude })} />, sectionHint: 'Decimal degrees (WGS84), like 37.0123 and -6.4412. Both are required.', validate: requiredNumberRange(-90, 90) },
+  { key: 'longitude', label: 'Longitude', required: true, placeholder: 'e.g. -6.4412', validate: requiredNumberRange(-180, 180) },
+  { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty', placeholder: 'e.g. 100', unit: 'metres', hint: 'How far off the position could be.', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
+  { key: 'timezone', label: 'Time zone', required: true, placeholder: 'e.g. Europe/Madrid', section: 'Time', sectionIcon: <ClockIcon />, sectionHint: 'The time zone the location is in, and whether its cameras follow summer time. Every visit and deployment here is read with them.', kind: 'timezone', fixed: true, hint: "The location's own time zone, required. Every visit and deployment here is read in it, so it cannot be changed once the location is created.", validate: (v) => (!v ? 'Required.' : isValidTimezone(v) ? null : 'Not a known IANA time zone (e.g. Europe/Madrid).') },
+  { key: 'ignore_dst', label: 'The cameras here ignore summer time', kind: 'bool', fixed: true, hint: 'Turn it on if their clocks stay the same all year; off, they follow summer time. Like the time zone, it cannot be changed once the location is created.' },
   ...statusFields<LocationDraft>(['active', 'planned', 'archived'], true, { active: 'It has a camera installed.', planned: 'Available, but with no camera yet.', archived: 'Taken out of use for good: it never goes back to active.' }),
 ]
 
 /** What a research project is when it is added by hand, or read from a CSV file: its acronym and name, and the fields free text. */
-interface ProjectDraft { acronym: string; name: string | null; description: string | null; keywords: string | null; status: string | null }
-const BLANK_PROJECT: ProjectDraft = { acronym: '', name: null, description: null, keywords: null, status: 'active' }
+interface ProjectDraft {
+  acronym: string; name: string | null; description: string | null; keywords: string | null; status: string | null
+  /** Trapper's option numbers of its "Add research project" form. */
+  sampling_design: number; sensor_method: number; animal_types: number; bait_use: number
+  /** A whole number of minutes, as it is typed. */
+  event_interval: string
+  abstract: string | null; methods: string | null
+}
+const BLANK_PROJECT: ProjectDraft = { acronym: '', name: null, description: null, keywords: null, status: 'active', sampling_design: 1, sensor_method: 1, animal_types: 1, bait_use: 1, event_interval: '0', abstract: null, methods: null }
+/** What a research project of the settings says of how it was done and what it is about. */
+const projectDraftOf = (p: LocalResearchProject): ProjectDraft => ({
+  acronym: p.acronym, name: p.name, description: p.description || null, keywords: p.keywords || null, status: p.status ?? 'active',
+  sampling_design: p.sampling_design, sensor_method: p.sensor_method, animal_types: p.animal_types, bait_use: p.bait_use, event_interval: String(p.event_interval ?? 0),
+  abstract: p.abstract || null, methods: p.methods || null,
+})
+/** What is kept of a project when it is saved, besides its acronym. */
+const projectFields = (p: ProjectDraft) => ({
+  name: (p.name ?? '').trim(), description: p.description ?? '', keywords: p.keywords ?? '', status: (p.status ?? 'active') as ResearchProjectStatus,
+  sampling_design: p.sampling_design, sensor_method: p.sensor_method, animal_types: p.animal_types, bait_use: p.bait_use, event_interval: Number(p.event_interval) || 0,
+  abstract: p.abstract ?? '', methods: p.methods ?? '',
+})
 const PROJECT_FIELDS: ItemField<ProjectDraft>[] = [
   { key: 'acronym', label: 'Acronym', placeholder: 'e.g. DONA', hint: 'From 3 to 10 letters, digits, _, . or -; it names the research project’s folder.',
     validate: (v) => (/^[0-9A-Za-z][0-9A-Za-z_.-]{2,9}$/.test(v) ? null : 'From 3 to 10 letters, digits, _, . or -.') },
@@ -1238,17 +1327,17 @@ const PROJECT_FIELDS: ItemField<ProjectDraft>[] = [
 
 const locationDraft = (l: LocalLocation): LocationDraft => ({
   location_id: l.location_id, name: l.name, latitude: text(l.latitude), longitude: text(l.longitude),
-  coordinate_uncertainty: text(l.coordinate_uncertainty), timezone: l.timezone, ignore_dst: l.ignore_dst ? 'yes' : null,
+  coordinate_uncertainty: text(l.coordinate_uncertainty), timezone: l.timezone, ignore_dst: l.ignore_dst ? 'yes' : null, in_service: l.in_service ?? null,
   status: l.status ?? 'active', status_date: l.status_date ?? null, status_note: l.status_note ?? null,
 })
-const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: 'UTC', ignore_dst: null, status: 'active', status_date: null, status_note: null }
+const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: 'UTC', ignore_dst: null, in_service: null, status: 'active', status_date: null, status_note: null }
 const numberOrNull = (t: string | null) => (t === null ? null : Number(t))
 /** What can change of a location kept: its time zone and its summer-time setting are fixed when it is created, so they are not sent. */
 const locationChanges = ({ timezone, ignore_dst, ...rest }: ReturnType<typeof locationFields>) => { void timezone; void ignore_dst; return rest }
 /** The fields of a location as they are kept — the numbers as numbers. */
 const locationFields = (d: LocationDraft) => ({
   name: d.name, latitude: numberOrNull(d.latitude), longitude: numberOrNull(d.longitude), coordinate_uncertainty: numberOrNull(d.coordinate_uncertainty),
-  timezone: d.timezone, ignore_dst: d.ignore_dst ? true : null,
+  timezone: d.timezone, ignore_dst: d.ignore_dst === 'yes', in_service: d.in_service,
   status: (d.status ?? 'active') as LocationStatus, status_date: d.status_date, status_note: d.status_note,
 })
 
@@ -1345,7 +1434,7 @@ function ProjectsTab({ projects, onChanged, onDetail, owned }: {
   useEffect(() => () => onDetail?.(false), []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const keep = (p: ProjectDraft, trapperPk: number | null = null) =>
-    api.saveResearchProject({ ...EMPTY_RESEARCH_PROJECT, acronym: p.acronym.trim(), name: (p.name ?? '').trim(), description: p.description ?? '', keywords: p.keywords ?? '', status: (p.status ?? 'active') as ResearchProjectStatus, trapper_pk: trapperPk })
+    api.saveResearchProject({ ...EMPTY_RESEARCH_PROJECT, ...projectFields(p), acronym: p.acronym.trim(), trapper_pk: trapperPk })
 
   async function addByHand() {
     if (!adding) return
@@ -1357,9 +1446,7 @@ function ProjectsTab({ projects, onChanged, onDetail, owned }: {
     if (!editing) return
     setError(null)
     try {
-      await api.updateResearchProject(editing.acronym, {
-        name: (editing.name ?? '').trim(), description: editing.description ?? '', keywords: editing.keywords ?? '', status: (editing.status ?? 'active') as ResearchProjectStatus,
-      })
+      await api.updateResearchProject(editing.acronym, projectFields(editing))
       setEditing(null); onChanged()
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the research project.') }
   }
@@ -1451,7 +1538,7 @@ function ProjectsTab({ projects, onChanged, onDetail, owned }: {
         {projects.length > 0 && shown.length === 0 && <p className={hintClass}>Nothing matches “{search}”.</p>}
         {shown.map((p) => (
           <ItemCard key={p.acronym} icon={<ReportIcon />} title={p.acronym} badges={[statusBadge(p.status), originBadge(p.trapper_pk)]} subtitle={p.name} readOnly={p.trapper_pk != null}
-                    editLabel={`Edit ${p.acronym}`} onEdit={() => setEditing({ acronym: p.acronym, name: p.name, description: p.description || null, keywords: p.keywords || null, status: p.status ?? 'active' })} />
+                    editLabel={`Edit ${p.acronym}`} onEdit={() => setEditing(projectDraftOf(p))} />
         ))}
       </div>
       {deleting && (
@@ -1560,7 +1647,7 @@ function LocationsTab({ project, onDetail, used, openItem }: { project: LocalRes
       <EntityHeader
         heading={`Locations of ${project.acronym}`} count={locations.length} noun="location" onFile={(f) => void importFile(f)} exportDisabled={locations.length === 0} onTrapper={() => setTrapper(true)}
         onExport={() => download(`${project.acronym}_locations.csv`, itemsToCsv(locations.map(locationDraft), LOCATION_FIELDS))}
-        onAdd={() => setEditing({ item: { ...BLANK_LOCATION }, isNew: true })}
+        onAdd={() => setEditing({ item: { ...BLANK_LOCATION, in_service: today() }, isNew: true })}
       />
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {result && <ImportResult message={result.message} problems={result.problems} />}
@@ -1579,7 +1666,7 @@ function LocationsTab({ project, onDetail, used, openItem }: { project: LocalRes
               if (there(t.location_id)) { problems.push(`${t.location_id} is already there.`); continue }
               if (t.latitude == null || t.longitude == null) { problems.push(`“${t.location_id}” has no coordinates in Trapper, and a deployment needs them. Add it by hand instead.`); continue }
               try {
-                await keep({ ...BLANK_LOCATION, location_id: t.location_id, name: t.name, latitude: String(t.latitude), longitude: String(t.longitude), timezone: t.timezone && isValidTimezone(t.timezone) ? t.timezone : null, ignore_dst: t.ignore_dst ? 'yes' : null }, t.pk)
+                await keep({ ...BLANK_LOCATION, in_service: today(), location_id: t.location_id, name: t.name, latitude: String(t.latitude), longitude: String(t.longitude), timezone: t.timezone && isValidTimezone(t.timezone) ? t.timezone : null, ignore_dst: t.ignore_dst ? 'yes' : null }, t.pk)
                 added++
               } catch (e) { problems.push(`“${t.location_id}”: ${e instanceof Error ? e.message : 'could not be saved.'}`) }
             }
@@ -1726,7 +1813,7 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
           footnote="Trappers that come from Trapper are read-only here. Change them in Trapper and import them again. If someone no longer goes to the field, mark them as inactive instead of deleting them."
           empty="No trapper yet — a visit will have none to pick as who went."
           searchLabel="Search by name or affiliation"
-          fields={[{ key: 'name', label: 'Full name', section: 'Who is it?' }, { key: 'affiliation', label: 'Affiliation', placeholder: 'e.g. University of Huelva', hint: 'Where the trapper works. Free text.' },
+          fields={[{ key: 'name', label: 'Full name', section: 'Who is it?', sectionIcon: <UsersIcon />, sectionHint: 'The name of the person, and where they work. It is how a visit says who went to the field.' }, { key: 'affiliation', label: 'Affiliation', placeholder: 'e.g. University of Huelva', hint: 'Where the trapper works. Free text.' },
             ...statusFields<Trapper>(['active', 'inactive'], false, { active: 'Offered when a visit is registered.', inactive: 'Not offered when a visit is registered. Past visits keep their name.' })]}
         />
       )}
@@ -1738,17 +1825,16 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
           heading={`SD cards${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('sdcard', owner, c.label) : undefined)} noun="SD card" fileName={`${owner ?? 'unassigned'}_sd_cards`} icon={<SdCardIcon />} onDetail={setDetail} styled
           items={sdCards.filter((c) => belongs(c.research_project))}
           onChange={(v) => onSdCards([...sdCards.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
-          blank={{ label: '', brand: null, capacity: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
+          blank={{ label: '', brand: null, capacity: null, in_service: today(), research_project: owner, status: 'active', status_date: null, status_note: null }}
           badges={unusualStatus} readOnly={(c) => c.status === 'archived'} notice={(c) => (c.status === 'archived' ? <Notice kind="info">This one is archived for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.brand, c.capacity].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && same(v.sd, c.label)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && same(v.sd, c.label)) === 0}
           footnote="An SD card that already has visits can't be deleted; mark it as archived instead and it stops being offered for new visits."
           empty="No SD card yet." searchLabel="Search by label, brand or size"
           fields={[
-            { key: 'label', label: 'Label', placeholder: 'e.g. SD-014', hint: 'The number or the label written on the card.', section: 'Which card is it?' },
+            { key: 'label', label: 'Label', placeholder: 'e.g. SD-014', hint: 'The number or the label written on the card.', section: 'Which card is it?', sectionIcon: <SdCardIcon />, sectionHint: 'The label written on the card, and optionally who makes it and how much it holds. Visits refer to the card by its label.' },
             { key: 'brand', label: 'Brand', kind: 'suggest', suggestions: SD_CARD_BRANDS, placeholder: 'e.g. SanDisk', hint: 'Who makes it. The usual ones are suggested, but any other can be typed.' },
             { key: 'capacity', label: 'Capacity', kind: 'suggest', suggestions: SD_CARD_CAPACITIES, placeholder: 'e.g. 64 GB', hint: 'What is written on the card. The usual ones are suggested, but any other can be typed.' },
-            { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the card was put into production.', section: 'When did it start?' },
             ...statusFields<SdCard>(GEAR_STATUSES, true, GEAR_HINTS, true),
           ]}
         />
@@ -1759,17 +1845,16 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
           heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('camera', owner, c.label) : undefined)} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />} onDetail={setDetail} styled
           items={cameras.filter((c) => belongs(c.research_project))}
           onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
-          blank={{ label: '', camera_id: null, camera_model: null, in_service: null, research_project: owner, status: 'active', status_date: null, status_note: null }}
+          blank={{ label: '', camera_id: null, camera_model: null, in_service: today(), research_project: owner, status: 'active', status_date: null, status_note: null }}
           badges={unusualStatus} readOnly={(c) => c.status === 'archived'} notice={(c) => (c.status === 'archived' ? <Notice kind="info">This one is archived for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.camera_model, c.camera_id].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)) === 0}
           footnote="A camera that already has visits can't be deleted; mark it as archived instead and it stops being offered for new visits."
           empty="No camera yet." searchLabel="Search by label, serial number or model"
           fields={[
-            { key: 'label', label: 'Label', placeholder: 'e.g. CAM-014', hint: 'What the camera is called in the field. No two cameras in a project have the same.', section: 'Which camera is it?' },
+            { key: 'label', label: 'Label', placeholder: 'e.g. CAM-014', hint: 'What the camera is called in the field. No two cameras in a project have the same.', section: 'Which camera is it?', sectionIcon: <CameraIcon />, sectionHint: 'What the camera is called in the field, its serial number and its model. Visits refer to the camera by its label.' },
             { key: 'camera_id', label: 'Camera id', placeholder: 'e.g. P800HG08192031', hint: "The camera's serial number, if it is known." },
             { key: 'camera_model', label: 'Camera model', placeholder: 'e.g. Reconyx-PC800', hint: 'Manufacturer and model, written as manufacturer-model.' },
-            { key: 'in_service', label: 'In production since', kind: 'date', hint: 'The day the camera was put into production.', section: 'When did it start?' },
             ...statusFields<Camera>(GEAR_STATUSES, true, GEAR_HINTS, true),
           ]}
         />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import TimezoneCombobox from './TimezoneCombobox'
 import { api } from '../api'
 import TrapperAccountNotice, { trapperAccountReady } from './TrapperAccountNotice'
 import type { TrapperAccount, TrapperConnection } from './TrapperAccountNotice'
@@ -8,7 +9,7 @@ import OptionCards from './OptionCards'
 import { isValidTimezone, knownTimezones } from '../deploymentValidation'
 import type { Location, LocalLocation, ResearchProject } from '../types'
 import {
-  DESCRIPTIONS, EMPTY_LOCATION_DRAFT, Field, FormCard, NO_CREDENTIALS, ORIGIN_SOURCE_OPTIONS, SmallSpinner, btnOutline, btnPrimary, hintClass,
+  DESCRIPTIONS, DstSelect, FieldLabel, EMPTY_LOCATION_DRAFT, Field, FormCard, NO_CREDENTIALS, ORIGIN_SOURCE_OPTIONS, SmallSpinner, btnOutline, btnPrimary, hintClass,
   labelClass, rangeError,
 } from '../pages/ImportDeploymentPage'
 import type { OriginSource } from '../pages/ImportDeploymentPage'
@@ -72,7 +73,8 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
 
   const errors = {
     location_id: draft.location_id.trim() ? undefined : 'Required',
-    timezone: draft.timezone && !isValidTimezone(draft.timezone) ? 'Not a known IANA timezone (e.g. Europe/Madrid).' : undefined,
+    ignore_dst: draft.ignore_dst ? undefined : 'Required',
+    timezone: !draft.timezone.trim() ? 'Required' : !isValidTimezone(draft.timezone) ? 'Not a known IANA timezone (e.g. Europe/Madrid).' : undefined,
     latitude: rangeError(draft.latitude, -90, 90, true),
     longitude: rangeError(draft.longitude, -180, 180, true),
     coordinate_uncertainty: draft.coordinate_uncertainty.trim() === ''
@@ -152,7 +154,7 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
   function handleSave() {
     return add({
       location_id: draft.location_id.trim(), name: draft.name.trim() || null,
-      timezone: draft.timezone.trim() || null, ignore_dst: draft.ignore_dst, trapper_pk: null,
+      timezone: draft.timezone.trim(), ignore_dst: draft.ignore_dst === 'yes', trapper_pk: null,
       latitude: Number(draft.latitude), longitude: Number(draft.longitude),
       coordinate_uncertainty: draft.coordinate_uncertainty.trim() ? Number(draft.coordinate_uncertainty) : null,
     })
@@ -177,7 +179,7 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
       try {
         const saved = await api.saveLocalLocation(researchProjectId, {
           location_id: loc.location_id, name: loc.name || null,
-          timezone: loc.timezone && isValidTimezone(loc.timezone) ? loc.timezone : null, ignore_dst: loc.ignore_dst ?? null, trapper_pk: loc.pk,
+          timezone: loc.timezone && isValidTimezone(loc.timezone) ? loc.timezone : 'UTC', ignore_dst: loc.ignore_dst ?? false, trapper_pk: loc.pk,
           latitude: loc.latitude, longitude: loc.longitude, coordinate_uncertainty: null,
         })
         added.push(saved); chosen.push(saved)
@@ -221,7 +223,8 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
         </>
       ) : (
         <div>
-          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">New location</p>
+          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">New location</p>
+          <p className={`${hintClass} mb-3`}>Create a new location linked to the research project {researchProjectId}.</p>
           <OptionCards options={ORIGIN_SOURCE_OPTIONS} selected={source} onChoose={changeSource} />
 
           {source === 'trapper' && (
@@ -269,13 +272,12 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
               <Field label="Coordinate uncertainty (m)" type="number" min={1} step={1} placeholder="e.g. 100"
                      hint={DESCRIPTIONS.coordinateUncertainty} error={errors.coordinate_uncertainty} value={draft.coordinate_uncertainty}
                      onChange={(v) => setDraft((d) => ({ ...d, coordinate_uncertainty: v }))} />
-              <Field label="Timezone (IANA)" placeholder="e.g. Europe/Madrid" list="timezone-options" error={errors.timezone}
-                     hint="The location's own — every deployment there is read in it." value={draft.timezone}
-                     onChange={(v) => setDraft((d) => ({ ...d, timezone: v }))} />
-              <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer mt-7">
-                <input type="checkbox" className="mt-1" checked={draft.ignore_dst} onChange={(e) => setDraft((d) => ({ ...d, ignore_dst: e.target.checked }))} />
-                The location’s cameras ignore summer time (DST)
-              </label>
+              <div>
+                <FieldLabel id="location-timezone" label="Timezone (IANA)" required />
+                <TimezoneCombobox id="location-timezone" value={draft.timezone} invalid={!draft.timezone} onChange={(v) => setDraft((d) => ({ ...d, timezone: v }))} />
+                <p className={hintClass}>The location's own — every deployment there is read in it.</p>
+              </div>
+              <DstSelect value={draft.ignore_dst} error={draft.ignore_dst ? undefined : errors.ignore_dst} onChange={(v) => setDraft((d) => ({ ...d, ignore_dst: v }))} />
               <datalist id="timezone-options">
                 {knownTimezones().map((tz) => <option key={tz} value={tz} />)}
               </datalist>

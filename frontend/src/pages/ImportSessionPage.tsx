@@ -1,4 +1,5 @@
 import ReportPanel from '../components/ReportPanel'
+import TimezoneCombobox from '../components/TimezoneCombobox'
 import DeploymentResults from '../components/DeploymentResults'
 import SessionResults from '../components/SessionResults'
 import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react'
@@ -26,8 +27,8 @@ import {
   ALL_DEPLOYMENT_CHECKS, DEFAULT_CHECK_SETTINGS, DEPLOYMENT_CHECK_DISPLAY, DEPLOYMENT_CHECK_OPTIONS, DeploymentCheckReport, Field,
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
   DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
-  inputClass, labelClass, statParamsOf, statParamsValid, toggled, fillFromClosedVisit, visitKey, visitLabel,
-  FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound, fieldworkVisits, revisionOfVisit,
+  inputClass, labelClass, hintClass, statParamsOf, statParamsValid, toggled, fillFromClosedVisit, visitKey, visitLabel,
+  DstSelect, FieldLabel, FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound, fieldworkVisits, revisionOfVisit,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
 
@@ -57,7 +58,7 @@ interface Outcome<T> { result?: T; error?: string }
 
 interface ImportRun { events: ImportEvent[]; done: boolean; error?: string; destDir?: string }
 
-const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: 'UTC', ignore_dst: false, latitude: '', longitude: '' }
+const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: 'UTC', ignore_dst: 'no', latitude: '', longitude: '' }
 
 /** The location a subfolder is named after — "DONA_01" for the folder "DONA_01", "R0003-DONA_01" or "dona_01 (2)" —
  * when there is exactly one such. */
@@ -732,7 +733,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   const locationErrors = {
     location_id: locationDraft.location_id.trim() ? undefined : 'Required',
-    timezone: locationDraft.timezone && !isValidTimezone(locationDraft.timezone) ? 'Not a known IANA timezone (e.g. Europe/Madrid).' : undefined,
+    timezone: !locationDraft.timezone.trim() ? 'Required' : !isValidTimezone(locationDraft.timezone) ? 'Not a known IANA timezone (e.g. Europe/Madrid).' : undefined,
+    ignore_dst: locationDraft.ignore_dst ? undefined : 'Required',
     latitude: coordinateError(locationDraft.latitude, 90),
     longitude: coordinateError(locationDraft.longitude, 180),
   }
@@ -742,7 +744,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     setLocationError(null)
     try {
       const saved = await api.saveLocalLocation(projectId, {
-        location_id: locationDraft.location_id.trim(), name: locationDraft.name.trim() || null, timezone: locationDraft.timezone.trim() || null, ignore_dst: locationDraft.ignore_dst,
+        location_id: locationDraft.location_id.trim(), name: locationDraft.name.trim() || null, timezone: locationDraft.timezone.trim(), ignore_dst: locationDraft.ignore_dst === 'yes',
         trapper_pk: null, latitude: Number(locationDraft.latitude), longitude: Number(locationDraft.longitude), coordinate_uncertainty: null,
       })
       setLocalLocations((list) => [...list, saved])
@@ -1373,15 +1375,16 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                             <tr><td /><td colSpan={3} className="px-3 pb-4">
                 
       <div className="mt-4 p-4 rounded border border-zinc-200 dark:border-zinc-700">
-        <h6 className="text-sm font-semibold mb-3">New location</h6>
+        <h6 className="text-sm font-semibold mb-1">New location</h6>
+        <p className={`${hintClass} mb-3`}>Create a new location linked to the research project {projectId}.</p>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Location id" required value={locationDraft.location_id} onChange={(v) => setLocationDraft((l) => ({ ...l, location_id: v }))} />
           <Field label="Location name" value={locationDraft.name} onChange={(v) => setLocationDraft((l) => ({ ...l, name: v }))} />
-          <Field label="Location timezone" value={locationDraft.timezone} error={locationErrors.timezone} placeholder="Europe/Madrid" onChange={(v) => setLocationDraft((l) => ({ ...l, timezone: v }))} />
-          <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer mt-7">
-            <input type="checkbox" className="mt-1" checked={locationDraft.ignore_dst} onChange={(e) => setLocationDraft((l) => ({ ...l, ignore_dst: e.target.checked }))} />
-            The location’s cameras ignore summer time (DST)
-          </label>
+          <div>
+            <FieldLabel id="location-timezone" label="Location timezone" required />
+            <TimezoneCombobox id="location-timezone" value={locationDraft.timezone} invalid={!locationDraft.timezone} onChange={(v) => setLocationDraft((d) => ({ ...d, timezone: v }))} />
+            <p className={hintClass}>The location's own — every deployment there is read in it.</p>
+          </div>
           <Field label="Location latitude" required type="number" step="any" value={locationDraft.latitude} error={shown(locationErrors.latitude)} onChange={(v) => setLocationDraft((l) => ({ ...l, latitude: v }))} />
           <Field label="Location longitude" required type="number" step="any" value={locationDraft.longitude} error={shown(locationErrors.longitude)} onChange={(v) => setLocationDraft((l) => ({ ...l, longitude: v }))} />
         </div>

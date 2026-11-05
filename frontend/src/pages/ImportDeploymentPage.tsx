@@ -1,4 +1,5 @@
 import ValidationDashboard, { formatRun } from '../components/ValidationDashboard'
+import TimezoneCombobox from '../components/TimezoneCombobox'
 import WizardStep from '../components/WizardStep'
 import { formatDay, formatPeriod } from '../dateFormat'
 import TrapperAccountNotice, { trapperAccountReady } from '../components/TrapperAccountNotice'
@@ -64,7 +65,7 @@ export function CamtrapDpTag() {
   )
 }
 
-function FieldLabel({ id, label, required, inline = false }: { id: string; label: string; required?: boolean; inline?: boolean }) {
+export function FieldLabel({ id, label, required, inline = true }: { id: string; label: string; required?: boolean; inline?: boolean }) {
   const tag = required && <span className="text-[11px] uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>
   // inline: "Required" follows the tag, as in the fields that have buttons beside them
   return (
@@ -89,8 +90,24 @@ export function Field({ label, value, onChange, type = 'text', min, max, step, h
       <FieldLabel id={id} label={label} required={required} />
       <input id={id} className={`${inputClass} ${error ? 'border-red-500 dark:border-red-500' : ''} ${readOnly ? 'bg-zinc-100 dark:bg-zinc-900 cursor-default' : ''}`} type={type} min={min} max={max} step={step} value={value}
              placeholder={placeholder} list={list} maxLength={maxLength} readOnly={readOnly} aria-invalid={error ? true : undefined} onChange={(e) => onChange(e.target.value)} />
-      {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
+      {error && error !== 'Required' && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
       {hint && <p className={hintClass}>{hint}</p>}
+    </div>
+  )
+}
+
+/** Whether the cameras of a location ignore summer time: it has no default, it has to be chosen. */
+export function DstSelect({ value, onChange, error }: { value: string; onChange: (v: string) => void; error?: string }) {
+  const id = fieldId('Summer time')
+  return (
+    <div>
+      <FieldLabel id={id} label="Summer time" required />
+      <select id={id} className={`${inputClass} ${error ? 'border-red-500 dark:border-red-500' : ''}`} value={value} aria-invalid={error ? true : undefined} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Choose…</option>
+        <option value="no">The cameras follow summer time</option>
+        <option value="yes">The cameras ignore summer time</option>
+      </select>
+      {error && error !== 'Required' && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
     </div>
   )
 }
@@ -531,7 +548,7 @@ export const visitKey = (c: ClosedVisit) => `${c.visit.location_id}|${c.visit.da
 export const visitLabel = (c: ClosedVisit) =>
   `${c.visit.date} ${c.visit.time} · ${c.visit.location_id} · ${c.visit.session} · ${c.visit.actions.join(' + ')}${c.visit.sd ? ` · card ${c.visit.sd}` : ''} · collected on ${c.end.date}${c.end.num_photos != null ? ` (${c.end.num_photos} photos)` : ''}`
 
-export const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: 'UTC', ignore_dst: false, latitude: '', longitude: '', coordinate_uncertainty: '' }
+export const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: 'UTC', ignore_dst: 'no', latitude: '', longitude: '', coordinate_uncertainty: '' }
 
 export const ORIGIN_SOURCE_OPTIONS: Option<OriginSource>[] = [
   { value: 'trapper', emoji: '🪤', title: 'From Trapper', description: 'Connect to Trapper and pick one — its fields fill in the form.', available: true },
@@ -1773,7 +1790,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   const originReady = Boolean(selectedProjectId && origin.locationId.trim()) && !locationLacksCoordinates && !addingProject && !addingLocation
   const locationErrors = {
     location_id: locationDraft.location_id.trim() ? undefined : 'Required',
-    timezone: locationDraft.timezone && !isValidTimezone(locationDraft.timezone) ? 'Not a known IANA timezone (e.g. Europe/Madrid).' : undefined,
+    timezone: !locationDraft.timezone.trim() ? 'Required' : !isValidTimezone(locationDraft.timezone) ? 'Not a known IANA timezone (e.g. Europe/Madrid).' : undefined,
+    ignore_dst: locationDraft.ignore_dst ? undefined : 'Required',
     latitude: rangeError(locationDraft.latitude, -90, 90, true),
     longitude: rangeError(locationDraft.longitude, -180, 180, true),
     coordinate_uncertainty: locationDraft.coordinate_uncertainty.trim() === ''
@@ -2006,7 +2024,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
   function handleSaveLocation() {
     return addLocation({
       location_id: locationDraft.location_id.trim(), name: locationDraft.name.trim() || null,
-      timezone: locationDraft.timezone.trim() || null, ignore_dst: locationDraft.ignore_dst, trapper_pk: null,
+      timezone: locationDraft.timezone.trim(), ignore_dst: locationDraft.ignore_dst === 'yes', trapper_pk: null,
       latitude: Number(locationDraft.latitude), longitude: Number(locationDraft.longitude),
       coordinate_uncertainty: locationDraft.coordinate_uncertainty.trim() ? Number(locationDraft.coordinate_uncertainty) : null,
     })
@@ -2850,7 +2868,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                 </>
               ) : (
                 <div>
-                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">New location</p>
+                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">New location</p>
+                  <p className={`${hintClass} mb-3`}>Create a new location linked to the research project {selectedProjectId}.</p>
                   <OptionCards options={ORIGIN_SOURCE_OPTIONS} selected={locationSource} onChoose={handleLocationSourceChange} />
 
                   {locationSource === 'trapper' && (
@@ -2898,13 +2917,12 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                       <Field label="Coordinate uncertainty (m)" type="number" min={1} step={1} placeholder="e.g. 100"
                              hint={DESCRIPTIONS.coordinateUncertainty} error={locationErrors.coordinate_uncertainty} value={locationDraft.coordinate_uncertainty}
                              onChange={(v) => setLocationDraft((d) => ({ ...d, coordinate_uncertainty: v }))} />
-                      <Field label="Timezone (IANA)" placeholder="e.g. Europe/Madrid" list="timezone-options" error={locationErrors.timezone}
-                             hint="The location's own — every deployment there is read in it." value={locationDraft.timezone}
-                             onChange={(v) => setLocationDraft((d) => ({ ...d, timezone: v }))} />
-                      <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer mt-7">
-                        <input type="checkbox" className="mt-1" checked={locationDraft.ignore_dst} onChange={(e) => setLocationDraft((d) => ({ ...d, ignore_dst: e.target.checked }))} />
-                        The location’s cameras ignore summer time (DST)
-                      </label>
+                      <div>
+                        <FieldLabel id="location-timezone" label="Timezone (IANA)" required />
+                        <TimezoneCombobox id="location-timezone" value={locationDraft.timezone} invalid={!locationDraft.timezone} onChange={(v) => setLocationDraft((d) => ({ ...d, timezone: v }))} />
+                        <p className={hintClass}>The location's own — every deployment there is read in it.</p>
+                      </div>
+                      <DstSelect value={locationDraft.ignore_dst} error={locationDraft.ignore_dst ? undefined : locationErrors.ignore_dst} onChange={(v) => setLocationDraft((d) => ({ ...d, ignore_dst: v }))} />
                       <datalist id="timezone-options">
                         {knownTimezones().map((tz) => <option key={tz} value={tz} />)}
                       </datalist>

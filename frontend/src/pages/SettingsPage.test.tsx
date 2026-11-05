@@ -947,7 +947,7 @@ describe('SettingsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
       const name = screen.getByLabelText('Full name')
       await userEvent.clear(name)
-      expect(screen.getByText('A full name is required.')).toBeInTheDocument()
+      expect(screen.queryByText('A full name is required.')).not.toBeInTheDocument() // the label already says Required
       expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
 
       await userEvent.type(name, 'ana pérez')
@@ -999,11 +999,11 @@ describe('SettingsPage', () => {
       await userEvent.type(dialog.getByLabelText('Label'), 'C7')
       await userEvent.click(dialog.getByRole('button', { name: 'Kingston' }))
       await userEvent.type(dialog.getByLabelText('Capacity'), '128 GB')
-      fireEvent.change(dialog.getByLabelText('In production since'), { target: { value: '2026-05-20' } })
+      expect(dialog.queryByLabelText('In production since')).not.toBeInTheDocument() // it is kept as the day it is created
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: '2026-05-20', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
     })
 
     it('shows the QR code of an SD card in its page', async () => {
@@ -1034,7 +1034,7 @@ describe('SettingsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
       const label = screen.getByLabelText('Label')
       await userEvent.clear(label)
-      expect(screen.getByText('A label is required.')).toBeInTheDocument()
+      expect(screen.queryByText('A label is required.')).not.toBeInTheDocument() // the label already says Required
       expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
 
       await userEvent.type(label, 'a12')
@@ -1079,11 +1079,11 @@ describe('SettingsPage', () => {
       await userEvent.type(dialog.getByLabelText('Label'), 'North gate')
       await userEvent.type(dialog.getByLabelText('Camera id'), 'P800HG08192031')
       await userEvent.type(dialog.getByLabelText('Camera model'), 'Reconyx-PC800')
-      fireEvent.change(dialog.getByLabelText('In production since'), { target: { value: '2025-11-12' } })
+      expect(dialog.queryByLabelText('In production since')).not.toBeInTheDocument() // it is kept as the day it is created
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
     })
 
     it('gives a camera a status — and, once archived, the day, why and a comment — and says it on its card', async () => {
@@ -1138,7 +1138,7 @@ describe('SettingsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Edit X2' }))
       const id = screen.getByLabelText('Label')
       await userEvent.clear(id)
-      expect(screen.getByText('A label is required.')).toBeInTheDocument()
+      expect(screen.queryByText('A label is required.')).not.toBeInTheDocument() // the label already says Required
       expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
 
       await userEvent.type(id, 'x1')
@@ -1354,10 +1354,14 @@ describe('SettingsPage — Entities', () => {
       await userEvent.type(dialog.getByPlaceholderText('e.g. camera traps'), 'camera traps')
       await userEvent.click(dialog.getByRole('button', { name: 'Add keyword' }))
       expect(dialog.getByRole('button', { name: 'Remove doñana' })).toBeInTheDocument()
+      await userEvent.click(within(dialog.getByRole('group', { name: 'Sensor method' })).getByRole('button', { name: 'timeLapse' }))
+      await userEvent.type(dialog.getByLabelText('Abstract'), 'Cameras in the park')
       await userEvent.click(dialog.getByRole('radio', { name: /Finished/ }))
       await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
 
-      await waitFor(() => expect(mockedApi.updateResearchProject).toHaveBeenCalledWith('DONA', { name: 'Doñana NP', description: 'Spring 2024', keywords: 'doñana, camera traps', status: 'finished' }))
+      await waitFor(() => expect(mockedApi.updateResearchProject).toHaveBeenCalledWith('DONA', expect.objectContaining({
+        name: 'Doñana NP', description: 'Spring 2024', keywords: 'doñana, camera traps', status: 'finished', sensor_method: 2, abstract: 'Cameras in the park',
+      })))
       expect(mockedApi.saveSettings).not.toHaveBeenCalled()
     })
 
@@ -1454,15 +1458,18 @@ describe('SettingsPage — Entities', () => {
       await userEvent.clear(dialog.getByLabelText('Latitude'))
       await userEvent.type(dialog.getByLabelText('Latitude'), '37.01')
       await userEvent.type(dialog.getByLabelText('Longitude'), '-6.44')
-      await userEvent.type(dialog.getByLabelText('Time zone'), 'Mars/Base')
-      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
-      await userEvent.clear(dialog.getByLabelText('Time zone'))
-      await userEvent.type(dialog.getByLabelText('Time zone'), 'Europe/Madrid')
+      // it starts as UTC, and only a zone of the list can be picked
+      expect(dialog.getByRole('combobox')).toHaveValue('UTC')
+      await userEvent.type(dialog.getByRole('combobox'), 'Mars/Base')
+      expect(dialog.getByText('No matches')).toBeInTheDocument()
+      await userEvent.clear(dialog.getByRole('combobox'))
+      await userEvent.type(dialog.getByRole('combobox'), 'Europe/Madrid')
+      await userEvent.click(dialog.getByRole('option', { name: 'Europe/Madrid' }))
       await userEvent.click(dialog.getByLabelText('The cameras here ignore summer time'))
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
 
       await waitFor(() => expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
-        location_id: 'DONA_02', name: null, latitude: 37.01, longitude: -6.44, coordinate_uncertainty: null, timezone: 'Europe/Madrid', ignore_dst: true, trapper_pk: null, status: 'active', status_date: null, status_note: null,
+        location_id: 'DONA_02', name: null, latitude: 37.01, longitude: -6.44, coordinate_uncertainty: null, timezone: 'Europe/Madrid', ignore_dst: true, in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), trapper_pk: null, status: 'active', status_date: null, status_note: null,
       }))
     })
 
@@ -1497,7 +1504,7 @@ describe('SettingsPage — Entities', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
       const dialog = within(screen.getByRole('region', { name: 'Location' }))
       expect(dialog.getByLabelText('Location id')).toBeDisabled()
-      expect(dialog.getByLabelText('Time zone')).toBeDisabled() // set when the location was created
+      expect(dialog.getByRole('combobox')).toBeDisabled() // set when the location was created
       expect(dialog.getByRole('switch', { name: 'The cameras here ignore summer time' })).toBeDisabled()
       await userEvent.clear(dialog.getByLabelText('Name'))
       await userEvent.type(dialog.getByLabelText('Name'), 'Ridge top')
