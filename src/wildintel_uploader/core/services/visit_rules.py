@@ -311,6 +311,7 @@ def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[d
         reasons.append(f"The site '{visit['location_id']}' is not a location of the research project.")
     if any(_same(v["location_id"], visit["location_id"]) and v.get("date") == visit["date"] and v.get("time") == visit["time"] for v in kept):
         reasons.append(f"There is already a visit to {visit['location_id']} on {visit['date']} at {visit['time']}.")
+    reasons += order_errors(visit, kept)
     # The first visit to a site puts the camera up: nothing else can be done where no camera is known to be.
     if not is_not_revised(visit) and not any(_same(v["location_id"], visit["location_id"]) and _stamp(v) < _stamp(visit) for v in kept) and list(visit.get("actions") or []) != ["Installation"]:
         reasons.append(f"The first visit to {visit['location_id']} can only be an Installation.")
@@ -319,6 +320,25 @@ def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[d
     reasons += archive_errors(visit, kept, next((l for l in locations if _same(l.get("location_id"), visit["location_id"])), None))
     reasons += [why for _, why in revision_gate([visit], kept, locations)]
     return reasons
+
+
+def order_errors(visit: dict, kept: list[dict]) -> list[str]:
+    """What stops a visit for when it was: a site has one visit in a revision, and a visit is after the last one to its site and after every visit of the revisions
+    before its own — a revision starts when the one before it is finished (see revision_gate)."""
+    errors: list[str] = []
+    number = _session_number(visit.get("session"))
+    site = str(visit["location_id"]).strip()
+    if number is not None and any(_same(v["location_id"], site) and _session_number(v.get("session")) == number for v in kept):
+        errors.append(f"{site} already has a visit in R{number:04d}: a revision is one visit to each site.")
+    last = max((v for v in kept if _same(v["location_id"], site)), key=_stamp, default=None)
+    if last is not None and _stamp(last) >= _stamp(visit):
+        errors.append(f"The visit to {site} has to be after the last one, on {last['date']} at {last['time']} ({last.get('session')}).")
+    if number is not None:
+        before = [v for v in kept if (_session_number(v.get("session")) or number) < number]
+        latest = max(before, key=_stamp, default=None)
+        if latest is not None and _stamp(latest) >= _stamp(visit) and not (last is not None and latest is last):
+            errors.append(f"R{number:04d} has to be after R{_session_number(latest.get('session')):04d}: its last visit was to {latest['location_id']} on {latest['date']} at {latest['time']}.")
+    return errors
 
 
 def _session_number(session) -> int | None:

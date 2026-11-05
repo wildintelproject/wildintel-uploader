@@ -38,9 +38,9 @@ def _project(archived: tuple[int, ...] = ()) -> None:
         _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"DONA_0{n}", "name": f"Site {n}", "timezone": "UTC", "latitude": 37.0 + n / 100, "longitude": -6.5, "status": "archived" if n in archived else "active"}})
 
 
-def _installed() -> None:
+def _installed(sites: tuple[int, ...] = (1, 2, 3)) -> None:
     """The first visit of the sites the tests visit: it can only be an Installation."""
-    for n in (1, 2, 3):
+    for n in sites:
         install = {**VISIT, "location_id": f"DONA_0{n}", "session": "R0012", "date": "2026-01-10", "actions": ["Installation"], "num_photos": None, "sd": f"S{n}", "camera_id": "12" if n == 1 else f"C{n}"}
         assert _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": install}).status_code == 200
 
@@ -63,10 +63,10 @@ def test_visits_are_registered_and_listed_with_those_to_one_location_apart(tmp_p
 
 def test_how_the_card_and_the_batteries_were_is_one_of_the_codes_of_the_datasheet(tmp_path: Path):
     with _in(tmp_path):
-        _project()
-        _installed()
+        _project(archived=(2, 3))   # no revision waits for the other sites
+        _installed((1,))
         for hour, code in enumerate(("OK", "CarFull", "SinPilas", "CarFullSinPilas")):
-            visit = {**VISIT, "time": f"0{hour}:00:00", "card_batteries_ok": code}
+            visit = {**VISIT, "session": f"R{13 + hour:04d}", "time": f"0{hour}:00:00", "card_batteries_ok": code}
             assert _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit}).status_code == 200
         bad = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "card_batteries_ok": "Yes"}})
 
@@ -109,10 +109,10 @@ def test_the_optional_details_of_a_deployment_are_kept_with_the_visit(tmp_path: 
 
 def test_whether_the_camera_was_calibrated_is_kept_with_the_visit(tmp_path: Path):
     with _in(tmp_path):
-        _project()
-        _installed()
+        _project(archived=(2, 3))   # no revision waits for the other sites
+        _installed((1,))
         calibrated = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "calibration": True}})
-        silent = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "time": "09:00:00"}})
+        silent = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "session": "R0014", "time": "09:00:00"}})
 
     assert calibrated.status_code == 200 and calibrated.json()["calibration"] is True
     assert silent.status_code == 200 and silent.json()["calibration"] is None
@@ -390,11 +390,11 @@ def test_a_visit_by_hand_has_to_be_of_a_location_of_the_project_and_not_be_kept_
 
 def test_the_first_visit_to_a_site_can_only_be_an_installation(tmp_path: Path):
     with _in(tmp_path):
-        _project()
+        _project(archived=(2, 3))
         revision = _save(VISIT)
         both = _save({**VISIT, "actions": ["Installation", "Revision"], "sd": "A13"})
         installation = _save({**VISIT, "actions": ["Installation"], "sd": "A13", "num_photos": None})
-        later = _save({**VISIT, "date": "2026-10-05"})
+        later = _save({**VISIT, "session": "R0014", "date": "2026-10-05"})
 
     assert revision.status_code == both.status_code == 422 and "first visit to DONA_01 can only be an Installation" in revision.json()["detail"]
     assert installation.status_code == later.status_code == 200
@@ -402,12 +402,12 @@ def test_the_first_visit_to_a_site_can_only_be_an_installation(tmp_path: Path):
 
 def test_the_photos_of_a_revision_are_not_required_when_the_card_was_full(tmp_path: Path):
     with _in(tmp_path):
-        _project()
-        _installed()
+        _project(archived=(2, 3))   # no revision waits for the other sites
+        _installed((1,))
         counted = _save({**VISIT, "num_photos": None})
-        full = _save({**VISIT, "num_photos": None, "card_batteries_ok": "CarFull", "date": "2026-10-03"})
-        full_no_batteries = _save({**VISIT, "num_photos": None, "card_batteries_ok": "CarFullSinPilas", "date": "2026-10-04"})
-        written = _save({**VISIT, "num_photos": 12, "card_batteries_ok": "CarFull", "date": "2026-10-05"})
+        full = _save({**VISIT, "session": "R0013", "num_photos": None, "card_batteries_ok": "CarFull", "date": "2026-10-03"})
+        full_no_batteries = _save({**VISIT, "num_photos": None, "card_batteries_ok": "CarFullSinPilas", "session": "R0014", "date": "2026-10-04"})
+        written = _save({**VISIT, "session": "R0015", "num_photos": 12, "card_batteries_ok": "CarFull", "date": "2026-10-05"})
 
     assert counted.status_code == 422 and "photos" in counted.json()["detail"]
     assert full.status_code == full_no_batteries.status_code == written.status_code == 200  # not asked, but it may be given
@@ -428,14 +428,16 @@ def test_a_visit_by_hand_lacks_nothing_its_actions_ask(tmp_path: Path):
 
 
 def test_a_camera_and_a_card_cannot_be_in_two_places_at_once(tmp_path: Path):
-    install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13"}
+    install = {**VISIT, "session": "R0012", "date": "2026-01-10", "actions": ["Installation"], "num_photos": None, "sd": "A13"}
     with _in(tmp_path):
-        _project()
+        _project(archived=(3,))
         _save(install)
-        camera = _save({**install, "location_id": "DONA_02", "date": "2026-10-03", "sd": "B2"})       # the camera is at DONA_01
-        card = _save({**install, "location_id": "DONA_02", "date": "2026-10-03", "camera_id": "99"})  # the card is in the camera at DONA_01
+        _save({**install, "location_id": "DONA_02", "camera_id": "77", "sd": "Z9"})   # the revision before is finished: each site has its visit
+        later = {**install, "session": "R0013", "location_id": "DONA_02", "date": "2026-10-03"}
+        camera = _save({**later, "sd": "B2"})                       # the camera is at DONA_01
+        card = _save({**later, "camera_id": "99"})                  # the card is in the camera at DONA_01
         after_collecting = _save({**VISIT, "actions": ["Desinstallation"], "date": "2026-10-05", "num_photos": 10})
-        same_revision = _save({**install, "location_id": "DONA_02", "date": "2026-10-06"})   # collected in R0013: not left again in R0013
+        same_revision = _save({**later, "date": "2026-10-06"})      # collected in R0013: not left again in R0013
 
     assert "installed at DONA_01" in camera.json()["detail"]
     assert "is in the camera at DONA_01" in card.json()["detail"]
@@ -1014,3 +1016,29 @@ def test_the_entries_of_epicollect_are_downloaded_as_a_csv(monkeypatch):
     monkeypatch.setattr(epicollect_service, "visits_csv", lambda settings=None: "location_id,date\nA,2026-01-01\n")
     body = _client().post("/api/visits/epicollect-download").json()
     assert body == {"csv": "location_id,date\nA,2026-01-01\n", "count": 1}
+
+
+def test_a_visit_by_hand_is_after_the_last_one_to_its_site_and_after_the_revisions_before_its_own(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "session": "R0012", "date": "2026-01-10", "actions": ["Installation"], "num_photos": None, "sd": "A13"})
+        same_revision = _save({**VISIT, "session": "R0012", "date": "2026-02-10"})            # a revision is one visit to each site
+        before = _save({**VISIT, "session": "R0013", "date": "2026-01-05"})                   # not after the last visit to the site
+        after = _save({**VISIT, "session": "R0013", "date": "2026-02-10"})
+
+    assert same_revision.status_code == 422 and "already has a visit in R0012" in same_revision.json()["detail"]
+    assert before.status_code == 422 and "has to be after the last one, on 2026-01-10" in before.json()["detail"]
+    assert after.status_code == 200
+
+
+def test_a_revision_starts_after_the_last_visit_of_the_one_before(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(3,))
+        first = {**VISIT, "session": "R0012", "actions": ["Installation"], "num_photos": None, "sd": "A13"}
+        _save({**first, "date": "2026-01-10"})
+        _save({**first, "location_id": "DONA_02", "date": "2026-01-20", "camera_id": "77", "sd": "Z9"})
+        too_early = _save({**VISIT, "session": "R0013", "date": "2026-01-15"})   # after its own site's visit, before the last of R0012
+        in_time = _save({**VISIT, "session": "R0013", "date": "2026-01-21"})
+
+    assert too_early.status_code == 422 and "R0013 has to be after R0012" in too_early.json()["detail"]
+    assert in_time.status_code == 200
