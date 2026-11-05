@@ -1087,7 +1087,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               </div>
             </FormCard>
             {visit.site && (
-              <div className="mt-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5">
+              <div className="mt-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-6 py-5">
                 <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">GPS where the note was taken <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">to check the location</span></h5>
                 <p className={hintClass}>The coordinates of the GPS where the note was taken. They start as those of the location, and are compared with those of {visit.site}{location?.latitude != null && location?.longitude != null ? ` (${location.latitude}, ${location.longitude})` : ''}.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-end gap-4 mt-3 max-w-xl">
@@ -1388,7 +1388,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               : 'Any spreadsheet file with a row per visit. Next, you say which column gives each field of a visit.'}
             summary={csvName}
           >
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3 mb-4">
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-6 py-5 space-y-3 mb-4">
               <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">History of visits <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">optional</span></h5>
               <div className="flex items-center gap-4 flex-wrap">
                 <label htmlFor="visits-history" className="inline-flex items-center gap-2 px-5 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer">
@@ -1410,7 +1410,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               </div>
             )}
             {source === 'csv' && sourcesUsed.epicollect && csvOrigin === 'epicollect' ? (
-              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-6 py-5 space-y-3">
                 <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Epicollect5 project</h5>
                 <div className="flex items-center gap-4 flex-wrap">
                   <button type="button" className={btnPrimary} disabled={downloading} onClick={() => void downloadEpicollect()}>{downloading ? 'Downloading…' : csvColumns ? 'Download again' : 'Download the entries'}</button>
@@ -1419,7 +1419,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 <p className={hintClass}>The entries of the project and the connection set in Settings › Visit sources are downloaded as a CSV with a row per entry. Next, you say which column gives each field of a visit.</p>
               </div>
             ) : (
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-6 py-5 space-y-3">
               <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Spreadsheet file</h5>
               <div className="flex items-center gap-4 flex-wrap">
                 <label htmlFor="visits-csv" className={`inline-flex items-center gap-2 px-5 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-sm font-medium text-zinc-800 dark:text-zinc-200 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer`}>
@@ -1433,7 +1433,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             </div>
             )}
             {(source === 'wildintel' || source === 'csv') && (
-              <fieldset className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 mt-4">
+              <fieldset className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-6 py-5 mt-4">
                 <legend className="px-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">Create what does not exist yet <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">optional</span></legend>
                 {source === 'csv'
                   ? <p className={`${hintClass} mb-3`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. Each one asks for more fields in the matching of the columns, where a default value can also be given for a field the file has no column for. After changing it, check the file again.</p>
@@ -1471,10 +1471,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       if (shown.length === 0) return null
                       const folded = foldedGroups.includes(group)
                       return (
-                        <section key={group} aria-label={group} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700">
-                          <header className={`${folded ? '' : 'border-b border-zinc-200 dark:border-zinc-700'}`}>
+                        <section key={group} aria-label={group} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent shadow-sm dark:shadow-none">
+                          <header className={`bg-zinc-100/70 dark:bg-transparent ${folded ? '' : 'border-b border-zinc-200 dark:border-zinc-700'}`}>
                             <button type="button" aria-expanded={!folded} aria-label={`${group}, ${shown.filter((f) => given(f.field)).length} of ${shown.length} matched`} onClick={() => setFoldedGroups((g) => (g.includes(group) ? g.filter((x) => x !== group) : [...g, group]))}
-                                    className="flex w-full items-center gap-3 px-6 py-4 text-left">
+                                    className="flex w-full items-center gap-3 px-6 py-4 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800/50">
                               <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-blue-600 dark:text-blue-400">{MAPPING_ICONS[group]}</svg>
                               <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{group}</h5>
                               <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-400">{shown.filter((f) => given(f.field)).length} of {shown.length} matched</span>
