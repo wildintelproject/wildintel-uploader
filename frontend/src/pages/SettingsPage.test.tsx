@@ -269,24 +269,24 @@ describe('SettingsPage', () => {
       await section('Visit sources')
 
       expect(screen.getByRole('heading', { name: 'Visit sources' })).toBeInTheDocument()
-      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['WildINTEL Epicollect Legacy', 'Epicollect', 'Custom CSV'])
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['WildINTEL Epicollect Legacy', 'WildINTEL Epicollect', 'Custom CSV'])
       expect(screen.getByRole('tab', { name: 'WildINTEL Epicollect Legacy' })).toHaveAttribute('aria-selected', 'true')
       expect(screen.getByLabelText('The time of a visit is')).toBeInTheDocument()
-      await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
-      expect(screen.getByRole('switch', { name: 'Use Epicollect' })).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('tab', { name: 'WildINTEL Epicollect' }))
+      expect(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect' })).toBeInTheDocument()
     })
 
     it('is opened on Epicollect5 when a page asks for the Epicollect5 settings', async () => {
       render(<SettingsPage onClose={vi.fn()} initialSection="epicollect" />)
 
-      expect(await screen.findByRole('tab', { name: 'Epicollect' })).toHaveAttribute('aria-selected', 'true')
+      expect(await screen.findByRole('tab', { name: 'WildINTEL Epicollect' })).toHaveAttribute('aria-selected', 'true')
     })
 
     it('tests the project with what is typed, and says what it found', async () => {
       mockedApi.epicollectTestConnection.mockResolvedValue({ ok: true, project: 'Doñana cameras', slug: 'donana', forms: 1, inputs: 5 })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'WildINTEL Epicollect' }))
       await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
@@ -298,7 +298,7 @@ describe('SettingsPage', () => {
       mockedApi.epicollectTestConnection.mockRejectedValue(new Error('Epicollect5 refused the client id and secret.'))
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'WildINTEL Epicollect' }))
       expect(screen.getByRole('button', { name: 'Test connection' })).toBeDisabled()
 
       await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
@@ -388,8 +388,8 @@ describe('SettingsPage', () => {
     it('turns the use of Epicollect5 and the unmapped answers into comments on, and saves them', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
-      const use = screen.getByRole('switch', { name: 'Use Epicollect' })
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'WildINTEL Epicollect' }))
+      const use = screen.getByRole('switch', { name: 'Use WildINTEL Epicollect' })
       const unmapped = screen.getByRole('switch', { name: /^Add answers with no place to go/ })
       expect(use).toHaveAttribute('aria-checked', 'false')
       expect(unmapped).toHaveAttribute('aria-checked', 'false')
@@ -1588,9 +1588,9 @@ describe('SettingsPage — which sources and uploaders are used', () => {
 
     expect(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect Legacy' })).toHaveAttribute('aria-checked', 'true')
     await userEvent.click(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect Legacy' }))
-    await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
-    expect(screen.getByRole('switch', { name: 'Use Epicollect' })).toHaveAttribute('aria-checked', 'false')
-    await userEvent.click(screen.getByRole('switch', { name: 'Use Epicollect' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'WildINTEL Epicollect' }))
+    expect(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect' })).toHaveAttribute('aria-checked', 'false')
+    await userEvent.click(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect' }))
     await userEvent.click(screen.getByRole('tab', { name: 'Custom CSV' }))
     await userEvent.click(screen.getByRole('switch', { name: 'Use Custom CSV' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))

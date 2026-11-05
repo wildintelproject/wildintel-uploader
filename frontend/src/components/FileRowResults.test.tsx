@@ -93,6 +93,32 @@ describe('FileRowResults', () => {
     expect(screen.queryByRole('navigation', { name: 'Pages' })).not.toBeInTheDocument()      // one page: nothing to turn
   })
 
+  it('tells what is odd in a row that is added, in that row: an amber pill and its own errors', async () => {
+    const odd: FileRow[] = [
+      { row: 2, site: 'WICP_0001', session: 'R0002', result: 'ok', label: '', message: '', warnings: ['R0002 WICP_0001: SD card 1 was collected at WICP_0002 in this revision (R0002).', 'R0002: card 1 is at 2 sites (WICP_0001, WICP_0002).'] },
+      { row: 3, site: 'WICP_0002', session: 'R0002', result: 'ok', label: '', message: '' },
+    ]
+    render(<FileRowResults rows={odd} />)
+    const table = screen.getByRole('table', { name: 'Rows of the file' })
+    expect(within(table).getByRole('button', { name: 'View the contents of Row 2' }).closest('tr')).toHaveTextContent('Add · to check')
+    expect(within(table).getByRole('button', { name: 'View the contents of Row 3' }).closest('tr')).not.toHaveTextContent('to check')
+    expect(screen.queryByRole('button', { name: 'View the errors of Row 3' })).not.toBeInTheDocument()     // nothing odd in it
+
+    // it starts open, with each thing to check
+    const problems = screen.getByRole('table', { name: 'Problems of Row 2' })
+    expect(within(problems).getAllByRole('row').slice(1).map((r) => r.textContent)).toEqual([
+      'To checkR0002 WICP_0001: SD card 1 was collected at WICP_0002 in this revision (R0002).', 'To checkR0002: card 1 is at 2 sites (WICP_0001, WICP_0002).',
+    ])
+    // it is still a row to add: counted as ready, and found by what is odd in it
+    expect(screen.getByRole('button', { name: 'Ready' })).toHaveTextContent('2')
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search the rows' }), '2 sites')
+    expect(within(screen.getByRole('table', { name: 'Rows of the file' })).getAllByRole('button', { name: /^View the contents of Row/ })).toHaveLength(1)
+
+    // and told by its error: To check
+    await userEvent.click(screen.getByRole('tab', { name: 'By reason / error' }))
+    expect(within(screen.getByRole('table', { name: 'Errors of the file' })).getByText('To check').closest('tr')).toHaveTextContent('1 row')
+  })
+
   it('sorts the rows by a column, and turns the order round when it is pressed again', async () => {
     render(<FileRowResults rows={rows} />)
     const order = () => within(screen.getByRole('table', { name: 'Rows of the file' })).getAllByRole('button', { name: /^View the contents of Row/ }).map((b) => b.getAttribute('aria-label')!.replace(/^.* Row /, ''))

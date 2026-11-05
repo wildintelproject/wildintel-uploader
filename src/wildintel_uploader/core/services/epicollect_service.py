@@ -361,13 +361,17 @@ def _label(text: str) -> str:
 def visit_actions(status: str | None, action: str | None, action_after_theft: str | None) -> str:
     """What a visit did, from what the form answers — one simple rule: an Installation if the status says it is a new site; the action after a theft if the camera was
     stolen; the action otherwise. As the visit keeps them: a camera inspected is a Revision, replaced is a Revision and an Installation (after a theft, a Stolen and an
-    Installation), a site removed is a Revision and a Desinstallation (after a theft, a Stolen)."""
+    Installation), a camera removed is a Revision and a Desinstallation, and a site removed is those two and an Archive — the location is given up — (after a theft, a
+    Stolen and an Archive)."""
     status = (status or "").strip().lower()
     if status == "new site":
         return "Installation"
     if status == "stolen":
-        return {"camera replacement": "Stolen + Installation", "site removal": "Stolen"}.get((action_after_theft or "").strip().lower(), "")
-    return {"camera inspection": "Revision", "camera replacement": "Revision + Installation", "site removal": "Revision + Desinstallation"}.get((action or "").strip().lower(), "")
+        return {"camera replacement": "Stolen + Installation", "site removal": "Stolen + Archive"}.get((action_after_theft or "").strip().lower(), "")
+    return {
+        "camera inspection": "Revision", "camera replacement": "Revision + Installation", "camera removal": "Revision + Desinstallation",
+        "site removal": "Revision + Desinstallation + Archive",
+    }.get((action or "").strip().lower(), "")
 
 
 def visit_row(entry: dict, refs: dict[str, str]) -> dict[str, str]:
@@ -445,4 +449,57 @@ def visits_csv(settings: config.Settings | None = None) -> str:
     writer.writeheader()
     for entry in entries:
         writer.writerow(visit_row(entry, refs))
+    return out.getvalue()
+
+
+def _header_key(header: str) -> tuple[str, str | None]:
+    """A column of the CSV Epicollect5 gives, as the question it answers: its label with no number in front and no marks, and which part of a place it is, if it is one
+    (`lat_26_Coordinates`, `long_26_Coordinates`)."""
+    part = None
+    match = re.match(r"(?i)^(lat|long|accuracy)_(.*)$", header.strip())
+    if match:
+        part, header = match.group(1).lower(), match.group(2)
+    header = re.sub(r"^\d+_", "", header.strip())
+    return re.sub(r"[\W_]+", "", header).lower(), part
+
+
+def visits_from_csv(text: str) -> str:
+    """The CSV downloaded from the new Epicollect5 project (the form of the field flow), as the text of a CSV with a row per visit and the columns a visit has. Its
+    columns are found by the label of their question, ignoring the number in front, the case and the marks.
+
+    Raises:
+        EpicollectError: the file has no rows, or it is not the form of a visit.
+    """
+    import csv  # noqa: PLC0415
+    import io  # noqa: PLC0415
+    reader = csv.DictReader(io.StringIO(text.lstrip("﻿")))
+    headers = reader.fieldnames or []
+    questions = {re.sub(r"[\W_]+", "", k).lower(): v for k, v in VISIT_QUESTIONS.items()} | {"npicturescollected": "num_photos"}
+    refs: dict[str, str] = {}
+    place: dict[str, str] = {}
+    for header in headers:
+        key, part = _header_key(header)
+        if key == "coordinates" and part in ("lat", "long"):
+            place[part] = header
+        elif key in questions and part is None:
+            refs[questions[key]] = header
+    missing = [name for name, field in (("locationID", "location_id"), ("Date", "date"), ("Status of the camera", "status")) if field not in refs]
+    if missing:
+        raise EpicollectError(f"The file is not the download of the form of a visit: it has no column for {', '.join(missing)}.")
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=list(VISIT_COLUMNS), lineterminator="\n")
+    writer.writeheader()
+    for line in reader:
+        entry: dict[str, Any] = {ref: line.get(header) for ref, header in ((h, h) for h in refs.values())}
+        entry["created_at"] = line.get("created_at")
+        if "trappers" in refs and (names := _text(line.get(refs["trappers"]))):
+            entry[refs["trappers"]] = [n.strip() for n in names.split(",")]
+        if place:
+            lat, lon = _text(line.get(place.get("lat", ""))), _text(line.get(place.get("long", "")))
+            if lat:
+                entry["__place"] = {"latitude": lat, "longitude": lon or ""}
+        refs_now = dict(refs)
+        if "__place" in entry:
+            refs_now["coordinates"] = "__place"
+        writer.writerow(visit_row(entry, refs_now))
     return out.getvalue()

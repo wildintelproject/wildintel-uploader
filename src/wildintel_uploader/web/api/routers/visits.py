@@ -187,6 +187,13 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             except epicollect_service.EpicollectError as exc:
                 raise HTTPException(400, str(exc)) from exc
             fmt, mapping, time_source = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}, "hour"
+        if fmt == "epicollect-csv":
+            # the download of the new Epicollect5 project: its questions are found by their labels, and the day and the hour typed in the form are the time of the visit
+            try:
+                text = epicollect_service.visits_from_csv(text)
+            except epicollect_service.EpicollectError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            fmt, mapping, time_source = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}, "hour"
         result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults})
         if history:
             seen = {s["site"].lower() for s in result["new_sites"]}
@@ -194,7 +201,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
                 **result, "visits": history["visits"] + result["visits"], "history": len(history["visits"]),
                 "problems": [{**p, "history": True} for p in history["problems"]] + result["problems"],
                 "new_sites": result["new_sites"] + [s for s in history["new_sites"] if s["site"].lower() not in seen],
-                "warnings": list(dict.fromkeys([*history["warnings"], *result["warnings"]])), "notes": list(dict.fromkeys([*history["notes"], *result["notes"]])),
+                "warnings": list(dict.fromkeys([*history["warnings"], *result["warnings"]])), "loose_warnings": list(dict.fromkeys([*history["warnings"], *result["loose_warnings"]])), "notes": list(dict.fromkeys([*history["notes"], *result["notes"]])),
                 "skipped": result["skipped"] + history["skipped"],
             }
         saved = field_logs = report = None

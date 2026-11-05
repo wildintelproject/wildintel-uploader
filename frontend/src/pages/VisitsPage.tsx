@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton'
 import Combobox from '../components/Combobox'
 import LocationPicker from '../components/LocationPicker'
 import type { ReactNode } from 'react'
-import TaskCard, { LineIcon, PageHeader } from '../components/TaskCard'
+import TaskCard, { PageHeader } from '../components/TaskCard'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import ChoiceCards from '../components/ChoiceCards'
@@ -14,10 +14,10 @@ import WizardStep from '../components/WizardStep'
 import IconButton from '../components/IconButton'
 import VisitSummary, { type SummaryRow, type SummaryTone, type VisitSummaryData } from '../components/VisitSummary'
 import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, DETAILS_SECTIONS, FEATURE_TYPE_OPTIONS, SwitchRow, roundPill, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
-import { shownErrors, validateDeployment } from '../deploymentValidation'
+import { isValidTimezone, knownTimezones, shownErrors, validateDeployment } from '../deploymentValidation'
 import { availabilityErrors, cameraAtSite, cardBlock, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
-import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, ImportCsvOptions } from '../types'
+import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, CsvEntity, ImportCsvOptions } from '../types'
 
 export type VisitSource = 'manual' | 'epicollect' | 'wildintel' | 'csv'
 
@@ -25,11 +25,8 @@ const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; desc
   { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself, following the field flow: the site, when, who went and what was done.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'Custom CSV', description: 'A CSV of any shape: say which column gives each field of a visit.' },
   { value: 'wildintel', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect Legacy', description: 'Read the visits of a field trip from the CSV downloaded from the original WildINTEL Epicollect project.' },
-  { value: 'epicollect', icon: <><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></>, title: 'Epicollect', description: 'Read the visits straight from the Epicollect5 project of the settings, with no file.' },
+  { value: 'epicollect', icon: <><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></>, title: 'WildINTEL Epicollect', description: 'Read the visits of a field trip from the CSV downloaded from the new WildINTEL Epicollect project.' },
 ]
-
-/** The source that is still to be made: it is shown, with the others, so that it is known it is coming — and cannot be chosen. */
-const COMING_SOURCE = { icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect', description: 'Read the visits straight from the new WildINTEL Epicollect project.' }
 
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
 const SD_ICON = <><path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" /><path d="M8 6v3M11 6v3M14 7v2" /></>
@@ -482,7 +479,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // And the cameras, to pick the one of the visit from.
   const [allCameras, setCameras] = useState<Camera[]>([])
   // Which sources of visits are used, as the settings say: one that is not, is not offered.
-  const [sourcesUsed, setSourcesUsed] = useState({ wildintel: true, csv: true, epicollect: false })
+  const [sourcesUsed, setSourcesUsed] = useState({ wildintel: true, csv: true })
   // Only those of the research project: each belongs to one.
   const ofProject = (rp: string | null) => !!project && (rp ?? '').toLowerCase() === project.acronym.toLowerCase()
   // ...and only those still in use: an archived one (lost, stolen, broken…) is not offered, unless the visit already has it.
@@ -505,7 +502,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // What to create when the file names a location, a camera or an SD card that does not exist, and the value of a field the file has no column for.
   const [csvCreate, setCsvCreate] = useState<CsvCreate>({ locations: false, cameras: false, sd_cards: false })
   const [csvDefaults, setCsvDefaults] = useState<Record<string, string>>({})
-  const csvFormat: VisitsCsvFormat = source === 'wildintel' ? 'epicollect' : source === 'epicollect' ? 'epicollect-api' : 'mapped'
+  const csvFormat: VisitsCsvFormat = source === 'wildintel' ? 'epicollect' : source === 'epicollect' ? 'epicollect-csv' : 'mapped'
   const chosen = SOURCE_OPTIONS.find((o) => o.value === source)
   // A camera put up while it is somewhere else, or a card left while it is in another camera, cannot be kept — said as soon as it is chosen.
   const cardOptions = { cards: allSdCards, session: visit.session || (kept ? sessionOf(kept.length) : undefined) }
@@ -606,7 +603,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         setTrappers((settings.FIELDWORK?.trappers ?? []).filter((t) => !t.status || t.status === 'active').map((t) => t.name))
         setSdCards(settings.FIELDWORK?.sd_cards ?? [])
         setCameras(settings.FIELDWORK?.cameras ?? [])
-        setSourcesUsed({ wildintel: settings.FIELDLOG?.enabled ?? true, csv: settings.CUSTOMCSV?.enabled ?? true, epicollect: settings.EPICOLLECT5?.enabled ?? false })
+        setSourcesUsed({ wildintel: settings.FIELDLOG?.enabled ?? true, csv: settings.CUSTOMCSV?.enabled ?? true })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -652,19 +649,21 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   }
 
   // Another way to read the visits starts again from the file.
-  useEffect(() => { forgetCsv(); setCsvName(null); setHistoryName(null); setHistoryXlsx('') }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { forgetCsv(); setCsvName(null); setHistoryName(null); setHistoryXlsx(''); setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({}) }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // What goes after the mapping of a call to read the file: the history, when there is one.
   const withHistory = historyXlsx ? ([historyXlsx] as const) : ([] as const)
   // What a custom CSV is asked besides its columns — the entities to create and the defaults —, said only when there is something.
   const defaultsGiven = Object.fromEntries(Object.entries(csvDefaults).filter(([, v]) => v.trim()).map(([f, v]) => [f, v.trim()]))
-  const csvOptions: ImportCsvOptions | undefined = source === 'csv' && (Object.values(csvCreate).some(Boolean) || Object.keys(defaultsGiven).length > 0)
+  const csvOptions: ImportCsvOptions | undefined = (source === 'csv' || source === 'wildintel') && (Object.values(csvCreate).some(Boolean) || Object.keys(defaultsGiven).length > 0)
     ? { ...(Object.values(csvCreate).some(Boolean) ? { create: csvCreate } : {}), ...(Object.keys(defaultsGiven).length > 0 ? { defaults: defaultsGiven } : {}) } : undefined
   const readTail = csvOptions ? ([historyXlsx || undefined, csvOptions] as const) : withHistory
   const csvReading = useRef(0)
   function forgetCsv() {
     csvReading.current++ // what an older file is still being answered is left out
-    setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({}); setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({})
+    setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({})
+    // what to create and the defaults go with the columns they are for — except those of the legacy download, which are chosen before its file is read
+    if (source !== 'wildintel') { setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({}) }
   }
 
   async function readCsv(file: File | undefined) {
@@ -680,25 +679,11 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         const found = await api.visitsCsvColumns(text)
         if (reading === csvReading.current) { setCsvColumns(found); setCsvMapping(found.mapping) }
       } else {
-        const result = historyXlsx ? await api.importVisitsCsv(project.acronym, text, false, csvFormat, undefined, historyXlsx) : await api.importVisitsCsv(project.acronym, text, false, csvFormat)
+        const result = await api.importVisitsCsv(project.acronym, text, false, csvFormat, ...(csvOptions ? ([undefined, historyXlsx || undefined, csvOptions] as const) : historyXlsx ? ([undefined, historyXlsx] as const) : ([] as const)))
         if (reading === csvReading.current) setCsvResult(result)
       }
     } catch (e) {
       if (reading === csvReading.current) setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
-    }
-  }
-
-  /** The visits straight from the Epicollect5 project of the settings: nothing is sent, the entries are read there. */
-  async function readEpicollect() {
-    forgetCsv()
-    if (!project) return
-    const reading = ++csvReading.current
-    setCsvName('Epicollect5'); setCsvText('Epicollect5')
-    try {
-      const result = historyXlsx ? await api.importVisitsCsv(project.acronym, '', false, 'epicollect-api', undefined, historyXlsx) : await api.importVisitsCsv(project.acronym, '', false, 'epicollect-api')
-      if (reading === csvReading.current) setCsvResult(result)
-    } catch (e) {
-      if (reading === csvReading.current) setCsvError(e instanceof Error ? e.message : 'Could not read Epicollect5.')
     }
   }
 
@@ -733,6 +718,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     }
   }
   const missingLocations = (csvResult?.new_sites.length ?? 0) > 0
+  // What is odd in the visits is told in the rows it is about; the notice keeps what no row has (the history of visits).
+  const noticeWarnings = (csvResult?.rows?.length ?? 0) > 0 ? (csvResult?.loose_warnings ?? []) : (csvResult?.warnings ?? [])
   // The rows of the file are told by the row-by-row results; the problems of a history of visits, which are not rows of the file, are listed beside.
   const listedProblems = (csvResult?.rows?.length ?? 0) > 0 ? (csvResult?.problems ?? []).filter((p) => p.history) : (csvResult?.problems ?? [])
   useEffect(() => { if (!settingsOpen && missingLocations) void recheckCsv() }, [settingsOpen]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -793,6 +780,28 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // The fields that are asked: those of an entity only when it is created.
   const fieldsShown = (csvColumns?.fields ?? []).filter((f) => !f.entity || csvCreate[f.entity])
   const createdNeeds = (csvColumns?.fields ?? []).filter((f) => (f.required_with ?? []).some((e) => csvCreate[e]))
+  // The download of the Epicollect form has the coordinates, the camera and the SD card, but not the timezone of a location, the model of a camera nor the brand of a card:
+  // when what does not exist is created, they are asked — for all of them — before the file is read.
+  const legacyAsked: { field: string; entity: CsvEntity; label: string; placeholder: string; required: boolean }[] = [
+    { field: 'timezone', entity: 'locations', label: 'Timezone of the new locations (IANA)', placeholder: 'e.g. Europe/Madrid', required: true },
+    { field: 'location_name', entity: 'locations', label: 'Name of the new locations', placeholder: 'optional', required: false },
+    { field: 'camera_model', entity: 'cameras', label: 'Model of the new cameras', placeholder: 'e.g. Browning-BTC-8E', required: true },
+    { field: 'sd_brand', entity: 'sd_cards', label: 'Brand of the new SD cards', placeholder: 'e.g. SanDisk', required: true },
+    { field: 'sd_capacity', entity: 'sd_cards', label: 'Capacity of the new SD cards', placeholder: 'optional, e.g. 64 GB', required: false },
+  ].filter((f) => csvCreate[f.entity as CsvEntity]) as typeof legacyAsked
+  const legacyMissing = legacyAsked.filter((f) => f.required && !csvDefaults[f.field]?.trim()).map((f) => f.label.toLowerCase())
+  const legacyBadTimezone = csvCreate.locations && !!csvDefaults.timezone?.trim() && !isValidTimezone(csvDefaults.timezone.trim())
+  const createSwitches = (
+    <div className="space-y-2">
+      {([
+        ['locations', 'Create the locations that do not exist', 'Needs its coordinates (latitude and longitude) and its timezone; its name is optional.'],
+        ['cameras', 'Create the cameras that do not exist', 'Needs the camera id and its model.'],
+        ['sd_cards', 'Create the SD cards that do not exist', 'Needs the SD card id and its brand; its capacity is optional.'],
+      ] as const).map(([entity, label, hint]) => (
+        <SwitchRow key={entity} label={label} hint={hint} checked={csvCreate[entity]} onChange={(on) => setCsvCreate((c) => ({ ...c, [entity]: on }))} />
+      ))}
+    </div>
+  )
   const mappedEnough = given('location_id') && given('actions') && (given('when') || given('created_at') || (given('date') && given('time'))) && createdNeeds.every((f) => given(f.field))
   // What is still to be matched before the visits can be read: the site, the actions and when — a date and a time, or one column with both, or the time the entry was created.
   const inOneColumn = given('when') || given('created_at')
@@ -943,15 +952,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         summary={chosen?.title}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {SOURCE_OPTIONS.filter((o) => (o.value === 'wildintel' ? sourcesUsed.wildintel : o.value === 'csv' ? sourcesUsed.csv : o.value === 'epicollect' ? sourcesUsed.epicollect : true)).map((o) => <TaskCard key={o.value} icon={o.icon} title={o.title} description={o.description} selected={source === o.value} onClick={() => setSource(o.value)} />)}
-          <div aria-disabled="true" aria-label={`${COMING_SOURCE.title}, coming soon`} className="flex flex-col items-stretch gap-3 rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 p-5 text-left opacity-70">
-            <span className="flex items-center justify-between">
-              <span className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"><LineIcon>{COMING_SOURCE.icon}</LineIcon></span>
-              <span className="rounded-full border border-zinc-300 dark:border-zinc-600 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">Coming soon</span>
-            </span>
-            <strong className="text-base text-zinc-900 dark:text-zinc-100">{COMING_SOURCE.title}</strong>
-            <span className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{COMING_SOURCE.description}</span>
-          </div>
+          {SOURCE_OPTIONS.filter((o) => (o.value === 'wildintel' ? sourcesUsed.wildintel : o.value === 'csv' ? sourcesUsed.csv : true)).map((o) => <TaskCard key={o.value} icon={o.icon} title={o.title} description={o.description} selected={source === o.value} onClick={() => setSource(o.value)} />)}
         </div>
       </WizardStep>
 
@@ -1332,12 +1333,12 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
           </WizardStep>
 
           <WizardStep
-            n={3} title={source === 'epicollect' ? 'Read the visits from Epicollect' : 'Choose the spreadsheet file'} status={!project ? 'locked' : csvResult || csvColumns ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
+            n={3} title={'Choose the spreadsheet file'} status={!project ? 'locked' : csvResult || csvColumns ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
             description={source === 'wildintel'
               ? <>The Epicollect download of the field trip. Its columns are found by their names ({['1_Responsable', '2_Collection', '4_Location', '5_Camera', '6_Action', '7_Status_of_the_camera', 'created_at'].map((c, i, all) => (
                 <span key={c}><code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-xs font-mono">{c}</code>{i < all.length - 2 ? ', ' : i === all.length - 2 ? ', and ' : ''}</span>
               ))}), whatever the case or the number in front. So are those of the Doñana form. The time of a visit is when its entry was created, put in the timezone of the location.</>
-              : source === 'epicollect' ? 'Every entry of the Epicollect5 project of the settings is a visit. Its questions are found by their labels.'
+              : source === 'epicollect' ? 'The CSV downloaded from the new WildINTEL Epicollect project: a row is a visit. Its columns are found by the label of their question, whatever the case or the number in front. The time of a visit is the day and the hour typed in the form.'
               : 'Any spreadsheet file with a row per visit. Next, you say which column gives each field of a visit.'}
             summary={csvName}
           >
@@ -1354,28 +1355,39 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               </div>
               <p className={hintClass}>The fieldwork datasheet (an .xlsx workbook): its visits complete the ones kept first, and then those of the file are applied on top of both.</p>
             </div>
-            {source === 'epicollect' ? (
-              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
-                <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Entries of the project</h5>
-                <div className="flex items-center gap-4 flex-wrap">
-                  <button type="button" className={btnPrimary} onClick={() => void readEpicollect()}>{csvResult ? 'Read them again' : 'Read the entries'}</button>
-                </div>
-                <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (same site, day and time) is left as it is.</p>
-              </div>
-            ) : (
+            {source === 'wildintel' && (
+              <fieldset className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 mb-4">
+                <legend className="px-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">Create what does not exist yet <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">optional</span></legend>
+                <p className={`${hintClass} mb-3`}>When an entry names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. The coordinates of a location, the camera and the card are those of the entry; what the form does not have is asked here, once for all of them. Choose it before the file: to change it afterwards, check the file again.</p>
+                {createSwitches}
+                {legacyAsked.length > 0 && (
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3" role="group" aria-label="Values of what is created">
+                    {legacyAsked.map((f) => (
+                      <div key={f.field}>
+                        <label htmlFor={`legacy-${f.field}`} className={labelClass}>{f.label}{f.required && <span className="ml-2 text-xs text-red-600 dark:text-red-400">required</span>}</label>
+                        <input id={`legacy-${f.field}`} className={inputClass} placeholder={f.placeholder} value={csvDefaults[f.field] ?? ''} list={f.field === 'timezone' ? 'legacy-timezones' : undefined}
+                               onChange={(e) => setCsvDefaults((d) => ({ ...d, [f.field]: e.target.value }))} />
+                      </div>
+                    ))}
+                    <datalist id="legacy-timezones">{knownTimezones().map((tz) => <option key={tz} value={tz} />)}</datalist>
+                  </div>
+                )}
+                {legacyBadTimezone && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">Not a known IANA timezone (e.g. Europe/Madrid).</p>}
+                {legacyMissing.length > 0 && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">Before choosing the file, give: {legacyMissing.join(', ')}.</p>}
+              </fieldset>
+            )}
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
               <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Spreadsheet file</h5>
               <div className="flex items-center gap-4 flex-wrap">
-                <label htmlFor="visits-csv" className="inline-flex items-center gap-2 px-5 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors">
+                <label htmlFor="visits-csv" aria-disabled={source === 'wildintel' && (legacyMissing.length > 0 || legacyBadTimezone)} className={`inline-flex items-center gap-2 px-5 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-sm font-medium text-zinc-800 dark:text-zinc-200 transition-colors ${source === 'wildintel' && (legacyMissing.length > 0 || legacyBadTimezone) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer'}`}>
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
                   Choose file
                 </label>
                 <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">{csvName ?? 'No file chosen'}</span>
-                <input id="visits-csv" aria-label="CSV file" type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; void readCsv(file) }} />
+                <input id="visits-csv" aria-label="CSV file" type="file" accept=".csv,text/csv" className="sr-only" disabled={source === 'wildintel' && (legacyMissing.length > 0 || legacyBadTimezone)} onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; void readCsv(file) }} />
               </div>
               <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (same site, day and time) is left as it is.</p>
             </div>
-            )}
             {csvError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{csvError}</p>}
           </WizardStep>
 
@@ -1389,15 +1401,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   <fieldset className="mb-5 rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3">
                     <legend className="px-1 text-sm font-semibold">Create what does not exist yet</legend>
                     <p className={`${hintClass} mb-2`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it can be created from the file. Each one asks for more fields below, and a field is given by a column or by a default value.</p>
-                    <div className="space-y-2">
-                      {([
-                        ['locations', 'Create the locations that do not exist', 'Needs its coordinates (latitude and longitude) and its timezone; its name is optional.'],
-                        ['cameras', 'Create the cameras that do not exist', 'Needs the camera id and its model.'],
-                        ['sd_cards', 'Create the SD cards that do not exist', 'Needs the SD card id and its brand; its capacity is optional.'],
-                      ] as const).map(([entity, label, hint]) => (
-                        <SwitchRow key={entity} label={label} hint={hint} checked={csvCreate[entity]} onChange={(on) => setCsvCreate((c) => ({ ...c, [entity]: on }))} />
-                      ))}
-                    </div>
+                    {createSwitches}
                   </fieldset>
                   <section aria-label="Columns of the file and fields of the visit" className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700">
                     <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
@@ -1498,11 +1502,11 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     </div>
                   </Notice>
                 )}
-                {csvResult.warnings.length > 0 && (
+                {noticeWarnings.length > 0 && (
                   <Notice kind="warning" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed" role="status">
                     <div>
-                      <strong className="font-semibold">{csvResult.warnings.length === 1 ? 'One thing' : `${csvResult.warnings.length} things`} to check in the field data.</strong> The visits are kept as the field wrote them.
-                      <ul aria-label="What to check" className="mt-2 list-disc pl-6 space-y-1">{csvResult.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                      <strong className="font-semibold">{noticeWarnings.length === 1 ? 'One thing' : `${noticeWarnings.length} things`} to check in the field data.</strong> The visits are kept as the field wrote them.
+                      <ul aria-label="What to check" className="mt-2 list-disc pl-6 space-y-1">{noticeWarnings.map((w) => <li key={w}>{w}</li>)}</ul>
                     </div>
                   </Notice>
                 )}

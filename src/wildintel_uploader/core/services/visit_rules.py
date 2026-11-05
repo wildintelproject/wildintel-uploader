@@ -196,61 +196,69 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
     return errors
 
 
-def history_warnings(new: list[dict], kept: list[dict], cards: list[dict] | None = None) -> list[str]:
-    """What is odd in the visits of a file, among them and with the ones already kept — each said once, with the session and the site. They are
-    questions for the one who knows the field, not reasons to refuse a visit."""
-    warnings: list[str] = []
+def history_warning_items(new: list[dict], kept: list[dict], cards: list[dict] | None = None) -> list[tuple[str, list[dict]]]:
+    """What is odd in the visits of a file, among them and with the ones already kept — each said once, with the session and the site, and with the visits of the
+    file that it is about (the ones that make it odd). They are questions for the one who knows the field, not reasons to refuse a visit."""
+    items: dict[str, list[dict]] = {}
     everything = sorted([*kept, *new], key=_stamp)
+
+    def say(message: str, *visits: dict) -> None:
+        about = items.setdefault(message, [])
+        about += [v for v in visits if not any(v is w for w in about)]
 
     def label(v: dict) -> str:
         return f"{v.get('session')} {v['location_id']}"
 
     # Per session and site: the same thing done twice.
-    count: dict[tuple, int] = {}
+    count: dict[tuple, list[dict]] = {}
     for v in new:
         for action in ("Installation", "Revision"):
             if action in v["actions"]:
-                key = (v["session"], v["location_id"].lower(), action)
-                count[key] = count.get(key, 0) + 1
-    for (session, site, action), n in sorted(count.items()):
-        if n > 1:
+                count.setdefault((v["session"], v["location_id"].lower(), action), []).append(v)
+    for (session, site, action), of in sorted(count.items(), key=lambda kv: kv[0]):
+        if len(of) > 1:
             hint = " (typo in the site number?)" if action == "Installation" else ""
-            warnings.append(f"{session}: {site} has {n} \"{action}\" entries in the same session{hint}.")
+            say(f"{session}: {site} has {len(of)} \"{action}\" entries in the same session{hint}.", *of)
 
     for v in new:
         before = [e for e in everything if e is not v]
         # Not after the visit of an earlier session.
         older = [e for e in before if _same(e["location_id"], v["location_id"]) and str(e.get("session", "")) < str(v.get("session", "")) and _stamp(e) >= _stamp(v)]
         if older:
-            warnings.append(f"{label(v)}: the visit time {v['date']} {v['time']} is not after the visit of {older[0].get('session')} ({older[0]['date']} {older[0]['time']}).")
+            say(f"{label(v)}: the visit time {v['date']} {v['time']} is not after the visit of {older[0].get('session')} ({older[0]['date']} {older[0]['time']}).", v)
         if "Revision" in v["actions"] and v.get("num_photos") is not None and v["num_photos"] <= 0:
-            warnings.append(f"{label(v)}: Revision with 0 photos; no deployment will be produced for it.")
+            say(f"{label(v)}: Revision with 0 photos; no deployment will be produced for it.", v)
         for message in required_errors(v).values():
-            warnings.append(f"{label(v)}: {message}")
+            say(f"{label(v)}: {message}", v)
         # Where its camera and its card are, with what came before it — the visits of the file included.
         for message in availability_errors(before, v, cards).values():
-            warnings.append(f"{label(v)}: {message}")
+            say(f"{label(v)}: {message}", v)
         # An Installation while the card left at the visit before was not collected: nothing closes that deployment.
         if "Installation" in v["actions"] and "Revision" not in v["actions"]:
             last = max((e for e in before if _same(e["location_id"], v["location_id"]) and _stamp(e) < _stamp(v)
                         and str(e.get("status") or "").lower() not in NOT_REVISED), key=_stamp, default=None)
             if last and _leaves_card(last) and not _takes_away(last) and last.get("sd") and _seconds(v) - _seconds(last) >= 86400:
-                warnings.append(
-                    f"{label(v)}: Installation on {v['date']} while the card left there on {last['date']} ({last.get('session')} {' + '.join(last['actions'])}) "
-                    "was not collected — no Revision or Desinstallation before it, so that card has no deployment. Check the field data.")
+                say(f"{label(v)}: Installation on {v['date']} while the card left there on {last['date']} ({last.get('session')} {' + '.join(last['actions'])}) "
+                    "was not collected — no Revision or Desinstallation before it, so that card has no deployment. Check the field data.", v)
 
     # A camera or a card at more than one site in a session.
     for what, key in (("Camera", "camera_id"), ("Card", "sd")):
-        by: dict[tuple, set] = {}
+        by: dict[tuple, list[dict]] = {}
         for v in new:
             value = v.get(key)
             if value in (None, ""):
                 continue
-            by.setdefault((v["session"], str(value).strip().lower(), str(value).strip()), set()).add(v["location_id"])
-        for (session, _, shown), sites in sorted(by.items()):
+            by.setdefault((v["session"], str(value).strip().lower(), str(value).strip()), []).append(v)
+        for (session, _, shown), of in sorted(by.items(), key=lambda kv: kv[0]):
+            sites = {v["location_id"] for v in of}
             if len(sites) > 1:
-                warnings.append(f"{session}: {what.lower()} {shown} is at {len(sites)} sites ({', '.join(sorted(sites))}).")
-    return list(dict.fromkeys(warnings))
+                say(f"{session}: {what.lower()} {shown} is at {len(sites)} sites ({', '.join(sorted(sites))}).", *of)
+    return list(items.items())
+
+
+def history_warnings(new: list[dict], kept: list[dict], cards: list[dict] | None = None) -> list[str]:
+    """What is odd in the visits of a file — see history_warning_items — as the messages only."""
+    return [message for message, _ in history_warning_items(new, kept, cards)]
 
 
 # The farthest the GPS of a note may be from its location before the site is doubted.
@@ -401,13 +409,18 @@ def revision_gate(new: list[dict], kept: list[dict], locations: list[dict]) -> l
     return refused
 
 
-def session_jump(new: list[dict], kept: list[dict]) -> list[str]:
-    """A warning when the sessions of the visits of a file start after the one next to the last kept: a trip is missing."""
+def session_jump_items(new: list[dict], kept: list[dict]) -> list[tuple[str, list[dict]]]:
+    """A warning when the sessions of the visits of a file start after the one next to the last kept: a trip is missing — with the visits of the session that starts after the gap."""
     last = max((n for n in (_session_number(v.get("session")) for v in kept) if n is not None), default=None)
     first = min((n for n in (_session_number(v.get("session")) for v in new) if n is not None), default=None)
     if last is not None and first is not None and first > last + 1:
-        return [f"Session numbers jump from R{last:04d} to R{first:04d}."]
+        return [(f"Session numbers jump from R{last:04d} to R{first:04d}.", [v for v in new if _session_number(v.get("session")) == first])]
     return []
+
+
+def session_jump(new: list[dict], kept: list[dict]) -> list[str]:
+    """A warning when the sessions of the visits of a file start after the one next to the last kept: a trip is missing."""
+    return [message for message, _ in session_jump_items(new, kept)]
 
 
 def history_notes(new: list[dict], kept: list[dict]) -> list[str]:

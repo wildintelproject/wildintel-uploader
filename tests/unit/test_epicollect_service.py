@@ -320,3 +320,33 @@ def test_a_kept_token_that_epicollect5_no_longer_takes_is_replaced_once():
         epicollect_service.fetch_form(settings)  # "old" is kept, but refused: "new" is asked for, once
         assert request_token.call_count == 2
         assert get_project.call_args.args[1] == "new"
+
+
+def test_what_a_visit_did_is_told_by_the_status_and_the_action_of_the_form_of_the_field_flow():
+    actions = epicollect_service.visit_actions
+    assert actions("New site", "Camera inspection", None) == "Installation"
+    assert actions("OK", "Camera inspection", None) == "Revision"
+    assert actions("Altered", "Camera replacement", None) == "Revision + Installation"
+    assert actions("OK", "Camera removal", None) == "Revision + Desinstallation"                  # the location goes on
+    assert actions("OK", "Site removal", None) == "Revision + Desinstallation + Archive"          # the location is given up
+    assert actions("Stolen", None, "Camera replacement") == "Stolen + Installation"
+    assert actions("Stolen", None, "Site removal") == "Stolen + Archive"
+    assert actions("OK", None, None) == ""                                                         # nothing was answered
+
+
+def test_the_csv_downloaded_from_the_new_project_becomes_the_visits_it_has():
+    import csv
+    import io
+    text = (
+        "ec5_uuid,created_at,title,1_Setup_by,2_Collection,3_Date,4_locationID,5_Status_of_the_camera,6_Action,"
+        "lat_26_Coordinates,long_26_Coordinates,7_Time\n"
+        "u1,2026-09-14T11:40:00.000Z,t,\"Ana, Luis\",R0042,14/09/2026,WICP_02_003,Stolen,,37.1,-6.2,11:40\n"
+    )
+    row = next(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+    assert row["location_id"] == "WICP_02_003" and row["date"] == "2026-09-14" and row["time"] == "11:40:00"
+    assert row["trappers"] == "Ana, Luis" and row["latitude"] == "37.1" and row["session"] == "R0042"
+
+
+def test_a_csv_that_is_not_the_form_of_a_visit_is_refused():
+    with pytest.raises(epicollect_service.EpicollectError):
+        epicollect_service.visits_from_csv("a,b\n1,2\n")

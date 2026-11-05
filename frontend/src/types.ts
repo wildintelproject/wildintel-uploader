@@ -752,7 +752,7 @@ export interface ClosedVisitTarget {
 }
 
 /** How a CSV file of visits is read: as an Epicollect download, or with the column of each field said. */
-export type VisitsCsvFormat = 'epicollect' | 'mapped' | 'epicollect-api'
+export type VisitsCsvFormat = 'epicollect' | 'mapped' | 'epicollect-api' | 'epicollect-csv'
 
 /** The columns of a CSV file, a few of its rows, the fields of a visit it can give (those a visit needs marked) and the column that most
  * likely gives each. */
@@ -784,7 +784,7 @@ export interface VisitsCsvResult {
   /** What the visits to add create: the locations, cameras and SD cards that do not exist and the file was asked to create. */
   create?: Record<CsvEntity, Record<string, unknown>[]>
   /** What became of each row of the file, numbered as in it: kept to add (ok), a problem, already kept, held for a site that is not a location, or ignored. */
-  rows?: { row: number; site: string; session?: string; date?: string; time?: string; actions?: string; result: 'ok' | 'problem' | 'already_kept' | 'new_site' | 'ignored'; label?: string; message: string; data?: Record<string, string> }[]
+  rows?: { row: number; site: string; session?: string; date?: string; time?: string; actions?: string; result: 'ok' | 'problem' | 'already_kept' | 'new_site' | 'ignored'; label?: string; message: string; warnings?: string[]; data?: Record<string, string> }[]
   /** How many of the visits come from the history, which are the first ones. */
   history?: number
   /** What is worth knowing of the visits, without being wrong (the sites of the trip before not visited on this one…). */
@@ -800,6 +800,8 @@ export interface VisitsCsvResult {
   new_sites: NewSite[]
   /** What is odd in the visits — their camera or card, what their actions ask, two Revisions in a session… — said, not refused. */
   warnings: string[]
+  /** The warnings that are not about a row of the file — told in the rows otherwise — such as those of the history of visits. */
+  loose_warnings?: string[]
 }
 
 /** A visit as the visit book shows it: with the deployment it started — closed once a later visit collected its card, open while the camera is still out — and neither when it left no camera. */

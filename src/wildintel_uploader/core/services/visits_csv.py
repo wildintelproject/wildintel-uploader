@@ -14,7 +14,8 @@ import datetime as dt
 import io
 import re
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import LocationRecord, VisitRecord
@@ -118,24 +119,148 @@ NO = {"no", "false", "0", "n"}
 CODES = {c.lower(): c for c in ("OK", "CarFull", "SinPilas", "CarFullSinPilas")}
 
 
-# What kind of error a problem is, from what it says — the rows with the same kind are told together. The first pattern that matches wins.
-ERROR_KINDS: tuple[tuple[str, str], ...] = (
-    (r"^The actions", "Actions not valid"),
-    (r"is not OK, CarFull", "Card and batteries not valid"),
-    (r"is not yes or no", "Not yes or no"),
-    (r"is not a session", "Session not valid"),
-    (r"cannot start:", "Revision started before the one before is finished"),
-    (r"is closed:", "Revision closed"),
-    (r"time data|does not match format|not a date|Invalid isoformat|unconverted data", "Date or time not valid"),
-    (r"could not convert|invalid literal|not a whole number|not a number", "Number not valid"),
-    (r"^To create the", "Data to create it is missing"),
-    (r"^The visit time|^Field required|^Value error|^Input should", "Value not valid"),
-)
+# What kind of error a problem is, by its code — the rows with the same code are told together. The codes are those of the errors the row raises (RowError, or
+# the custom errors of CsvVisit): they do not change when a message is reworded.
+ERROR_LABELS: dict[str, str] = {
+    "actions_invalid": "Actions not valid",
+    "card_batteries_invalid": "Card and batteries not valid",
+    "yes_no_invalid": "Not yes or no",
+    "session_invalid": "Session not valid",
+    "revision_not_finished": "Revision started before the one before is finished",
+    "revision_closed": "Revision closed",
+    "date_invalid": "Date or time not valid",
+    "number_invalid": "Number not valid",
+    "create_missing": "Data to create it is missing",
+    "create_invalid": "Data to create it is not valid",
+    "visit_invalid": "Value not valid",
+}
 
 
-def error_kind(message: str) -> str:
-    """The kind of error a message says — see ERROR_KINDS."""
-    return next((label for pattern, label in ERROR_KINDS if re.search(pattern, message)), "Other problem")
+def error_label(code: str) -> str:
+    """The kind of error a code says — see ERROR_LABELS."""
+    return ERROR_LABELS.get(code, "Other problem")
+
+
+class RowError(ValueError):
+    """What is wrong with a row of the file, with the code of the kind of error it is (see ERROR_LABELS)."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def _custom(code: str, message: str, value) -> PydanticCustomError:
+    return PydanticCustomError(code, message, {"value": value})
+
+
+class CsvVisit(BaseModel):
+    """The cells of a row of the file, read as what they say of a visit — all text, as the file has it. A cell that is not what its field takes raises an error with
+    its code (see ERROR_LABELS); what the row does not say is left unset, so that only what it says is kept (`model_dump(exclude_unset=True)`)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    actions: list[str] = []
+    session: str | None = None
+    status: str | None = None
+    trappers: str | None = None
+    sd: str | None = None
+    date_time_ok: str | None = None
+    camera_id: str | None = None
+    camera_model: str | None = None
+    comments: str | None = None
+    setup_by: str | None = None
+    card_batteries_ok: str | None = None
+    num_photos: int | None = None
+    camera_interval: int | None = None
+    camera_tilt: int | None = None
+    camera_heading: int | None = None
+    camera_height: float | None = None
+    camera_depth: float | None = None
+    detection_distance: float | None = None
+    timestamp_issues: bool | None = None
+    bait_use: bool | None = None
+    calibration: bool | None = None
+    feature_type: str | None = None
+    habitat: str | None = None
+    deployment_groups: str | None = None
+    tags: list[str] | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+    @field_validator("actions", mode="before")
+    @classmethod
+    def _actions(cls, value):
+        names = [ACTIONS.get(a.strip().lower()) for a in re.split(r"[+;/|&,]", str(value)) if a.strip()]
+        if None in names:
+            raise _custom("actions_invalid", "The actions '{value}' are not Installation, Revision, Desinstallation, Stolen or Archive.", value)
+        return names
+
+    @field_validator("session", mode="before")
+    @classmethod
+    def _session(cls, value):
+        m = re.search(r"\d+", str(value))
+        if not m:
+            raise _custom("session_invalid", "'{value}' is not a session (R0013, or its number).", value)
+        return f"R{int(m.group(0)):04d}"
+
+    @field_validator("camera_id", mode="before")
+    @classmethod
+    def _camera(cls, value):
+        return re.sub(r"\.0+$", "", str(value))
+
+    @field_validator("card_batteries_ok", mode="before")
+    @classmethod
+    def _card_batteries(cls, value):
+        code = CODES.get(str(value).lower())
+        if code is None:
+            raise _custom("card_batteries_invalid", "'{value}' is not OK, CarFull, SinPilas or CarFullSinPilas.", value)
+        return code
+
+    @field_validator("num_photos", "camera_interval", "camera_tilt", "camera_heading", mode="before")
+    @classmethod
+    def _whole(cls, value):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError, OverflowError):
+            raise _custom("number_invalid", "'{value}' is not a whole number.", value) from None
+
+    @field_validator("camera_height", "camera_depth", "detection_distance", "latitude", "longitude", mode="before")
+    @classmethod
+    def _number(cls, value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            raise _custom("number_invalid", "'{value}' is not a number.", value) from None
+
+    @field_validator("timestamp_issues", "bait_use", "calibration", mode="before")
+    @classmethod
+    def _yes_no(cls, value):
+        word = str(value).lower()
+        if word not in YES | NO:
+            raise _custom("yes_no_invalid", "'{value}' is not yes or no.", value)
+        return word in YES
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _tags(cls, value):
+        return [t.strip() for t in re.split(r"[|;]", str(value)) if t.strip()]
+
+    @model_validator(mode="after")
+    def _something_was_done(self):
+        # a visit that could not be made has no action: it is exported so, and read back so
+        if not self.actions and not visit_rules.is_not_revised({"status": self.status}):
+            raise _custom("actions_invalid", "The actions '{value}' are not Installation, Revision, Desinstallation, Stolen or Archive.", "")
+        return self
+
+
+def _problem_of(exc: ValidationError) -> tuple[str, str]:
+    """The code and the message of the first error of a validation: those of a custom error of CsvVisit as they are, the others — a value the model of the visit
+    refuses — as "visit_invalid", with the field they are of."""
+    error = exc.errors()[0]
+    where = ".".join(str(p) for p in error["loc"])
+    code = error["type"] if error["type"] in ERROR_LABELS else "visit_invalid"
+    # the actions, the session and the card already say what they are of; the rest are told with their field
+    return code, error["msg"] if not where or code in ("actions_invalid", "session_invalid", "card_batteries_invalid") else f"{where}: {error['msg']}"
 
 
 class VisitsCsvError(Exception):
@@ -207,6 +332,16 @@ def _local(created: dt.datetime, location: dict) -> dt.datetime:
     return visit_time.utc_to_local(created, location)
 
 
+def _real(date: str, time: str) -> tuple[str, str]:
+    """The day and the time, once they are known to be a day and a time that exist (the 13th month, the 25th hour)."""
+    try:
+        dt.date.fromisoformat(date)
+        dt.time.fromisoformat(time)
+    except ValueError:
+        raise RowError("date_invalid", f"'{date} {time}' is not a date and a time that exist.") from None
+    return date, time
+
+
 def _when(row: dict[str, str], location: dict, time_source: str = "created_at") -> tuple[str, str]:
     """The day and the time of a visit: when its entry was created (created_at, UTC, as Epicollect writes it), else its date and time — or, when `time_source`
     is "hour", the date and the hour typed in the form (the wall clock of its location) when the row has them, else the time its entry was created."""
@@ -214,7 +349,7 @@ def _when(row: dict[str, str], location: dict, time_source: str = "created_at") 
         try:
             created = dt.datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
         except ValueError as exc:
-            raise ValueError(f"'{row['created_at']}' is not a created_at (2026-09-04T10:16:31.000Z).") from exc
+            raise RowError("date_invalid", f"'{row['created_at']}' is not a created_at (2026-09-04T10:16:31.000Z).") from exc
         if created.tzinfo is not None:
             created = (created - created.utcoffset()).replace(tzinfo=None)
         local = _local(created.replace(microsecond=0), location)
@@ -222,15 +357,15 @@ def _when(row: dict[str, str], location: dict, time_source: str = "created_at") 
     if "when" in row:
         m = re.fullmatch(r"(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)", row["when"])
         if not m:
-            raise ValueError(f"'{row['when']}' is not a date and time (YYYY-MM-DD HH:MM:SS).")
-        return m.group(1), m.group(2) if m.group(2).count(":") == 2 else f"{m.group(2)}:00"
+            raise RowError("date_invalid", f"'{row['when']}' is not a date and time (YYYY-MM-DD HH:MM:SS).")
+        return _real(m.group(1), m.group(2) if m.group(2).count(":") == 2 else f"{m.group(2)}:00")
     if "date" not in row or "time" not in row:
-        raise ValueError("The date and the time are required.")
+        raise RowError("date_invalid", "The date and the time are required.")
     day = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", row["date"]) or re.fullmatch(r"(\d{2})/(\d{2})/(\d{4})", row["date"])
     if not day:
-        raise ValueError(f"'{row['date']}' is not a date (YYYY-MM-DD or DD/MM/YYYY).")
+        raise RowError("date_invalid", f"'{row['date']}' is not a date (YYYY-MM-DD or DD/MM/YYYY).")
     date = row["date"] if "-" in row["date"] else f"{day.group(3)}-{day.group(2)}-{day.group(1)}"
-    return date, row["time"] if row["time"].count(":") == 2 else f"{row['time']}:00"
+    return _real(date, row["time"] if row["time"].count(":") == 2 else f"{row['time']}:00")
 
 
 def _site(text: str, prefix: str) -> str:
@@ -283,16 +418,16 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     skipped = 0
     ignored = 0
     held: dict[str, list[dict]] = {}  # the visits to sites that are not locations of the research project, by site
-    date_warnings: list[str] = []
+    row_warnings: list[tuple[int, str]] = []  # what is odd in a row by itself: its row, and what
     # A revision is one visit to each site: the session and the site of a visit already kept are taken, whatever its camera or its actions
     same_visit = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in kept if v.get("session")}
 
     # What became of each row of the file: {row: {"row", "site", "result", "message"}} — result is ok, problem, already_kept, new_site or ignored.
     report: dict[int, dict] = {}
 
-    def problem(n: int, message: str) -> None:
+    def problem(n: int, message: str, code: str = "other") -> None:
         problems.append({"row": n, "message": message})
-        report[n] = {**report.get(n, {"row": n, "site": ""}), "result": "problem", "label": error_kind(message), "message": message}
+        report[n] = {**report.get(n, {"row": n, "site": ""}), "result": "problem", "label": error_label(code), "message": message}
 
     for n, row in enumerate(rows, start=2):
         found = re.search(r"\d+", row.get("session", ""))
@@ -310,8 +445,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                 location = _new_location(site, row)
                 made["locations"].append(location)
                 unknown = False
-        except ValueError as exc:
-            problem(n, str(exc))
+        except RowError as exc:
+            problem(n, str(exc), exc.code)
             continue
         if unknown:
             location = {}  # held with its site apart: the time is read as UTC, as nothing says better
@@ -323,69 +458,41 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                     created_day = _when({"created_at": row["created_at"]}, location)[0]
                     typed_day = _when({"date": row["date"], "time": "00:00"}, location)[0]
                     if created_day != typed_day:
-                        date_warnings.append(f"Row {n} ({site}): the date typed, {typed_day}, differs from the day of the entry, {created_day}; the time of the entry was used.")
-                except ValueError:
+                        row_warnings.append((n, f"Row {n} ({site}): the date typed, {typed_day}, differs from the day of the entry, {created_day}; the time of the entry was used."))
+                except RowError:
                     pass
-            actions = [ACTIONS.get(a.strip().lower()) for a in re.split(r"[+;/|&,]", row.get("actions", "")) if a.strip()]
-            # a visit that could not be made has no action: it is exported so, and read back so
-            if None in actions or (not actions and not visit_rules.is_not_revised({"status": row.get("status")})):
-                raise ValueError(f"The actions '{row.get('actions', '')}' are not Installation, Revision, Desinstallation, Stolen or Archive.")
+            # what the cells say of the visit — each one read as its field takes it, or refused with the code of what is wrong
+            cells = CsvVisit.model_validate(row)
+            actions = cells.actions
             report[n]["actions"] = " + ".join(actions)  # as the dashboard of visits says them
             if create.get("cameras") and row.get("camera_id"):
-                camera = _new_camera(re.sub(r"\.0+$", "", row["camera_id"]), row)
+                camera = _new_camera(cells.camera_id, row)
                 if camera["camera_id"].lower() not in cameras_known:
                     made["cameras"].append(camera)
             if create.get("sd_cards") and row.get("sd") and row["sd"].lower() not in cards_known:
                 made["sd_cards"].append(_new_card(row["sd"], row))
-            data: dict = {
-                f: row[f] for f in ("trappers", "status", "sd", "date_time_ok", "camera_id", "camera_model", "comments", "setup_by", "session") if f in row
-            }
-            if "card_batteries_ok" in row:
-                code = CODES.get(row["card_batteries_ok"].lower())
-                if code is None:
-                    raise ValueError(f"'{row['card_batteries_ok']}' is not OK, CarFull, SinPilas or CarFullSinPilas.")
-                data["card_batteries_ok"] = code
-            if "num_photos" in row:
-                data["num_photos"] = int(row["num_photos"])
-            for f in ("camera_interval", "camera_tilt", "camera_heading"):
-                if f in row:
-                    data[f] = int(float(row[f]))
-            for f in ("camera_height", "camera_depth", "detection_distance"):
-                if f in row:
-                    data[f] = float(row[f])
-            for f in ("timestamp_issues", "bait_use", "calibration"):
-                if f in row:
-                    word = row[f].lower()
-                    if word not in YES | NO:
-                        raise ValueError(f"'{row[f]}' is not yes or no.")
-                    data[f] = word in YES
-            for f in ("feature_type", "habitat", "deployment_groups"):
-                if f in row:
-                    data[f] = row[f]
-            if "tags" in row:
-                data["tags"] = [t.strip() for t in re.split(r"[|;]", row["tags"]) if t.strip()]
+            data = cells.model_dump(exclude_unset=True, exclude={"actions"})
             # the GPS of the note is compared with the location's, to check that the site is the right one
-            if row.get("latitude") and row.get("longitude") and location.get("latitude") is not None and location.get("longitude") is not None:
-                gap = visit_rules.distance_m(float(row["latitude"]), float(row["longitude"]), float(location["latitude"]), float(location["longitude"]))
+            if data.get("latitude") is not None and data.get("longitude") is not None and location.get("latitude") is not None and location.get("longitude") is not None:
+                gap = visit_rules.distance_m(data["latitude"], data["longitude"], float(location["latitude"]), float(location["longitude"]))
                 if gap > visit_rules.GPS_TOLERANCE_M:
-                    date_warnings.append(f"Row {n} ({site}): the GPS of the note is {round(gap)} m from the location; check that the site is the right one.")
+                    row_warnings.append((n, f"Row {n} ({site}): the GPS of the note is {round(gap)} m from the location; check that the site is the right one."))
             for f in ("latitude", "longitude"):
-                value = row.get(f) or location.get(f)
-                if value not in (None, ""):
-                    data[f] = float(value)
-            if "camera_id" in data:
-                data["camera_id"] = re.sub(r"\.0+$", "", data["camera_id"])
-            if "session" in data:
-                m = re.search(r"\d+", data["session"])
-                if not m:
-                    raise ValueError(f"'{data['session']}' is not a session (R0013, or its number).")
-                data["session"] = f"R{int(m.group(0)):04d}"
+                if f not in data and location.get(f) not in (None, ""):
+                    data[f] = float(location[f])
             visit = {"location_id": location.get("location_id", site), "date": date, "time": time, "actions": actions, **data}
             visit.setdefault("session", "R0000")  # worked out below, when the order of the visits is known
             record = VisitRecord.model_validate(visit).model_dump(mode="json")
             record["when"] = visit_time.to_when(record["date"], record["time"], location)
-        except (ValueError, ValidationError) as exc:
-            problem(n, _first(exc) if isinstance(exc, ValidationError) else str(exc))
+        except RowError as exc:
+            problem(n, str(exc), exc.code)
+            continue
+        except ValidationError as exc:
+            code, message = _problem_of(exc)
+            problem(n, message, code)
+            continue
+        except ValueError as exc:
+            problem(n, str(exc))
             continue
         if unknown:
             held.setdefault(site, []).append(record)
@@ -401,7 +508,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                                                                  + (f" {record['session']} is closed — every location has its visit — so nothing new can be imported in it." if closed else ""))}
             continue
         if visit_rules.is_closed_revision(record["session"], kept, locations):
-            problem(n, f"{record['session']} is closed: every location has its visit in it, so nothing new can be imported in it.")
+            problem(n, f"{record['session']} is closed: every location has its visit in it, so nothing new can be imported in it.", "revision_closed")
             continue
         already.add((record["location_id"].lower(), record["date"], record["time"]))
         parsed.append((n, record | {"_given": "session" in row}))
@@ -427,12 +534,16 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         count[loc] += 1
         visits.append(record)
     new_sites = [visit_rules.new_site(site, records, locations) for site, records in sorted(held.items())]
-    warnings = [*date_warnings, *visit_rules.session_jump(visits, kept), *visit_rules.history_warnings(visits, kept, options.get("cards"))]
+    # what is odd, said once and told in the rows it is about: the visits that make it odd are rows of the file
+    said: list[tuple[str, list[int]]] = [(message, [n]) for n, message in row_warnings]
+    for message, about in [*visit_rules.session_jump_items(visits, kept), *visit_rules.history_warning_items(visits, kept, options.get("cards"))]:
+        said.append((message, sorted({row_of[id(v)] for v in about if id(v) in row_of})))
+    warnings = list(dict.fromkeys(message for message, _ in said))
     notes = visit_rules.history_notes(visits, kept)
     # a revision is not started before the one before it is finished: its visits are refused, with the rows they come from
     refused = visit_rules.revision_gate(visits, kept, [*locations, *new_locations.values()])
     for visit, why in refused:
-        problem(row_of[id(visit)], why)
+        problem(row_of[id(visit)], why, "revision_not_finished")
     visits = [v for v in visits if id(v) not in {id(r) for r, _ in refused}]
     # what is created is what the visits that are kept need: a location, a camera or an SD card that only a refused visit named is not
     kept_rows = {row_of[id(v)] for v in visits}
@@ -444,6 +555,15 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                 key = str(entity.get("camera_id") or entity.get("label")).lower()
                 if key not in {str(e.get("camera_id") or e.get("label")).lower() for e in create_out[kind]}:
                     create_out[kind].append(entity)
+    # a warning goes to the rows that are added; one about no row, or only about rows that are not added, is said apart
+    loose: list[str] = []
+    for message, rows_about in said:
+        added = [n for n in rows_about if n in kept_rows]
+        if not added:
+            loose.append(message)
+        for n in added:
+            if message not in report[n].setdefault("warnings", []):
+                report[n]["warnings"].append(message)
     for n in sorted(kept_rows):
         names = [f"the location {l['location_id']}" for l in made_by_row.get(n, {}).get("locations", [])]
         names += [f"the camera {c['camera_id']}" for c in made_by_row.get(n, {}).get("cameras", [])]
@@ -451,7 +571,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         if names and n in report and report[n]["result"] == "ok":
             report[n]["message"] = f"The visit is added, and creates {', '.join(names)}."
     return {"visits": visits, "problems": problems, "rows": [report[n] for n in sorted(report)], "skipped": skipped, "ignored": ignored, "new_sites": new_sites,
-            "create": create_out, "warnings": list(dict.fromkeys(warnings)), "notes": notes}
+            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes}
 
 
 # The columns of an export: the fields of a visit a CSV can give, by their names — which the import finds by themselves — less the two that are worked out
@@ -487,28 +607,28 @@ def _new_location(site: str, row: dict[str, str]) -> dict:
     """The location a row creates: its id, its coordinates and its timezone are the row's.
 
     Raises:
-        ValueError: the row has no coordinates or timezone, or they are not valid."""
+        RowError: the row has no coordinates or timezone, or they are not valid."""
     try:
         latitude, longitude = float(row["latitude"]), float(row["longitude"])
     except (KeyError, ValueError) as exc:
-        raise ValueError(f"To create the location {site} the row needs its coordinates: a latitude and a longitude.") from exc
+        raise RowError("create_missing", f"To create the location {site} the row needs its coordinates: a latitude and a longitude.") from exc
     if not row.get("timezone"):
-        raise ValueError(f"To create the location {site} the row needs its timezone (e.g. Europe/Madrid).")
+        raise RowError("create_missing", f"To create the location {site} the row needs its timezone (e.g. Europe/Madrid).")
     try:
         uncertainty = int(float(row["coordinate_uncertainty"])) if row.get("coordinate_uncertainty") else None
         return LocationRecord(location_id=site, name=row.get("location_name") or None, latitude=latitude, longitude=longitude, timezone=row["timezone"],
                               coordinate_uncertainty=uncertainty).model_dump(mode="json")
     except (ValidationError, ValueError) as exc:
-        raise ValueError(f"To create the location {site}: {_first(exc) if isinstance(exc, ValidationError) else exc}") from exc
+        raise RowError("create_invalid", f"To create the location {site}: {_first(exc) if isinstance(exc, ValidationError) else exc}") from exc
 
 
 def _new_camera(camera_id: str, row: dict[str, str]) -> dict:
     """The camera a row creates: called by its id, with the model of the row.
 
     Raises:
-        ValueError: the row has no model."""
+        RowError: the row has no model."""
     if not row.get("camera_model"):
-        raise ValueError(f"To create the camera {camera_id} the row needs its model.")
+        raise RowError("create_missing", f"To create the camera {camera_id} the row needs its model.")
     return config.Camera(label=camera_id, camera_id=camera_id, camera_model=row["camera_model"]).model_dump(mode="json")
 
 
@@ -516,9 +636,9 @@ def _new_card(label: str, row: dict[str, str]) -> dict:
     """The SD card a row creates: its id is its label, with the brand — and the capacity — of the row.
 
     Raises:
-        ValueError: the row has no brand."""
+        RowError: the row has no brand."""
     if not row.get("sd_brand"):
-        raise ValueError(f"To create the SD card {label} the row needs its brand.")
+        raise RowError("create_missing", f"To create the SD card {label} the row needs its brand.")
     return config.SdCard(label=label, brand=row["sd_brand"], capacity=row.get("sd_capacity") or None).model_dump(mode="json")
 
 

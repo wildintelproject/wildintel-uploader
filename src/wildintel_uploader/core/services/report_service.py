@@ -236,7 +236,10 @@ def visits_import_report(research_project_id: str, result: dict, saved: int) -> 
     for r in rows:
         where = " · ".join(str(x) for x in (r.get("site"), r.get("session"), f"{r['date']} {r['time']}" if r.get("date") else None) if x)
         label = r.get("label") or "Visit to add"
-        b.add(f"Row {r['row']}" + (f" · {where}" if where else ""), label, r["result"] in ("ok", "already_kept", "ignored"), r.get("message") or "The visit is added.", scope="deployment")
+        identifier = f"Row {r['row']}" + (f" · {where}" if where else "")
+        b.add(identifier, label, r["result"] in ("ok", "already_kept", "ignored"), r.get("message") or "The visit is added.", scope="deployment")
+        for warning in r.get("warnings", []):  # what is odd in the row, told in it
+            b.add(identifier, "Things to check", False, warning, scope="deployment")
     for p in result.get("problems", []):
         if p.get("history"):
             b.add(f"History row {p['row']}", "History of visits", False, p["message"], scope="deployment")
@@ -245,7 +248,8 @@ def visits_import_report(research_project_id: str, result: dict, saved: int) -> 
         b.add(site["site"], "Site is not a location", False,
               f"{site['visits']} visit(s) held; nearest location {near['location_id'] + ' at ' + str(near['distance_m']) + ' m' if near else 'unknown'}"
               f"{'; one character apart from ' + ', '.join(site['similar']) if site.get('similar') else ''}.", scope="deployment")
-    for warning in result.get("warnings", []):
+    # what is odd and is not about a row of the file — all of it, when the result does not tell the rows
+    for warning in (result.get("loose_warnings", []) if rows else result.get("warnings", [])):
         b.add("(import)", "Things to check", False, warning, scope="deployment")
     for note in result.get("notes", []):
         b.add("(import)", "Worth knowing", True, note, scope="deployment")

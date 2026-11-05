@@ -19,12 +19,16 @@ export interface FileRow {
   /** The kind of error — what the rows that share it have in common. Empty for a row that is fine. */
   label?: string
   message: string
+  /** What is odd in a row that is added — said, not refused: the visit is kept as the file wrote it. */
+  warnings?: string[]
   /** What the row says, by the field of a visit each cell is of — with the defaults filled in. */
   data?: Record<string, string>
 }
 
 /** What the pill of a row says, and its colours: ready to add, skipped (already kept, or ignored) or an error — which one it is, its errors tell. */
-const badgeOf = (r: FileRow) => (r.result === 'ok' ? 'Add' : r.result === 'already_kept' ? 'Skipped / Existing' : r.result === 'ignored' ? 'Skipped / Ignored' : 'Error')
+/** A row that is added, with something odd in it to check. */
+const warned = (r: FileRow) => r.result === 'ok' && (r.warnings?.length ?? 0) > 0
+const badgeOf = (r: FileRow) => (r.result === 'ok' ? (warned(r) ? 'Add · to check' : 'Add') : r.result === 'already_kept' ? 'Skipped / Existing' : r.result === 'ignored' ? 'Skipped / Ignored' : 'Error')
 /** One colour for each thing a row can be, the same in the figures, the filters, the pills and the tables: ready is green, skipped (already kept, ignored) is amber and an error is red. */
 type Tone = 'ready' | 'skipped' | 'errors'
 const toneKey = (r: FileRow): Tone => (r.result === 'ok' ? 'ready' : r.result === 'already_kept' || r.result === 'ignored' ? 'skipped' : 'errors')
@@ -33,8 +37,12 @@ const TONES: Record<Tone, { text: string; pill: string; row: string }> = {
   skipped: { text: 'text-amber-700 dark:text-amber-400', pill: 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300', row: 'bg-amber-50 dark:bg-amber-950/30' },
   errors: { text: 'text-red-700 dark:text-red-400', pill: 'border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300', row: 'bg-red-50 dark:bg-red-950/30' },
 }
-const toneOf = (r: FileRow) => TONES[toneKey(r)].pill
-const kindOf = (r: FileRow) => r.label || 'Problem'
+/** The colour a row is told in: what it is, but amber for a row that is added with something to check. */
+const shownTone = (r: FileRow): Tone => (warned(r) ? 'skipped' : toneKey(r))
+const toneOf = (r: FileRow) => TONES[shownTone(r)].pill
+const kindOf = (r: FileRow) => (warned(r) ? 'To check' : r.label || 'Problem')
+/** What is wrong with a row, as it is said of it: its message, or what is odd in it. */
+const saidOf = (r: FileRow) => (warned(r) ? r.warnings!.join(' ') : r.message)
 
 /** How many rows a page of the table has. */
 const PER_PAGE = 10
@@ -69,7 +77,8 @@ export default function FileRowResults({ rows, labels = {} }: {
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
-  const flagged = rows.filter((r) => r.result !== 'ok')
+  const isFlagged = (r: FileRow) => r.result !== 'ok' || warned(r)
+  const flagged = rows.filter(isFlagged)
   // The row that is open, and what is shown of it: what it says (its contents) or what is wrong with it (its errors). The first row with errors starts open.
   const [opened, setOpened] = useState<{ row: number; panel: 'contents' | 'errors' } | null>(flagged[0] ? { row: flagged[0].row, panel: 'errors' } : null)
   const [picked, setPicked] = useState<string | null>(null)
@@ -79,7 +88,7 @@ export default function FileRowResults({ rows, labels = {} }: {
   // The search: every word typed is somewhere in the row — its number, site, visit, actions, when, what became of it, or what is wrong with it.
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   const matches = (r: FileRow) => {
-    const text = [r.row, r.site, r.session, r.actions, r.date, r.time, badgeOf(r), r.result !== 'ok' ? kindOf(r) : '', r.message].join(' ').toLowerCase()
+    const text = [r.row, r.site, r.session, r.actions, r.date, r.time, badgeOf(r), isFlagged(r) ? kindOf(r) : '', r.message, ...(r.warnings ?? [])].join(' ').toLowerCase()
     return words.every((w) => text.includes(w))
   }
   const shown = rows.filter(keeps).filter(matches)
@@ -95,8 +104,8 @@ export default function FileRowResults({ rows, labels = {} }: {
   const current = Math.min(page, pages)
   const onPage = sorted.slice((current - 1) * PER_PAGE, current * PER_PAGE)
   const goTo = (n: number) => { setPage(n); setOpened(null) }
-  const shownFlagged = shown.filter((r) => r.result !== 'ok')
-  const kinds = [...new Set(shownFlagged.map(kindOf))].map((kind) => { const of = shownFlagged.filter((r) => kindOf(r) === kind); return { kind, rows: of, tone: toneKey(of[0]) } })
+  const shownFlagged = shown.filter(isFlagged)
+  const kinds = [...new Set(shownFlagged.map(kindOf))].map((kind) => { const of = shownFlagged.filter((r) => kindOf(r) === kind); return { kind, rows: of, tone: shownTone(of[0]) } })
 
   const count = (tone: Tone) => rows.filter((r) => toneKey(r) === tone).length
   // The figures of the top: what was read, and what became of it — the colours of the filters and the pills.
@@ -182,7 +191,7 @@ export default function FileRowResults({ rows, labels = {} }: {
                       <td className="px-3 py-2 font-mono">{r.row}</td>
                       <td className="px-3 py-2 font-mono">{r.session || '—'}</td>
                       <td className="px-3 py-2 font-mono">{r.site || '—'}</td>
-                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{r.message}</td>
+                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{saidOf(r)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -230,7 +239,7 @@ export default function FileRowResults({ rows, labels = {} }: {
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5" role="group" aria-label={`Options of ${name}`}>
                           <IconButton label={`View the contents of ${name}`} title="View what the row says" expanded={panel === 'contents'} onClick={() => toggle('contents')} path={ICON_PATHS.view} />
-                          {r.result !== 'ok' && <IconButton label={`View the errors of ${name}`} title="View what is wrong with the row" expanded={panel === 'errors'} onClick={() => toggle('errors')} path={ALERT_PATH} />}
+                          {isFlagged(r) && <IconButton label={`View the errors of ${name}`} title="View what is wrong with the row" expanded={panel === 'errors'} onClick={() => toggle('errors')} path={ALERT_PATH} />}
                         </div>
                       </td>
                     </tr>
@@ -243,11 +252,14 @@ export default function FileRowResults({ rows, labels = {} }: {
                                 <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
                                   <tr>{['Error', 'What went wrong'].map((h) => <th key={h} scope="col" className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
                                 </thead>
-                                <tbody>
-                                  <tr className="align-top">
-                                    <td className={`px-3 py-2 font-medium ${TONES[toneKey(r)].text}`}>{kindOf(r)}</td>
-                                    <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{r.message}</td>
-                                  </tr>
+                                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                                  {/* a row that is not added says what is wrong; one that is, each thing to check in it */}
+                                  {(warned(r) ? r.warnings! : [r.message]).map((message, i) => (
+                                    <tr key={i} className="align-top">
+                                      <td className={`px-3 py-2 font-medium ${TONES[shownTone(r)].text}`}>{kindOf(r)}</td>
+                                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{message}</td>
+                                    </tr>
+                                  ))}
                                 </tbody>
                               </table>
                             </div>

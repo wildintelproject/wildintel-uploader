@@ -2468,7 +2468,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
             )}
             {visitSource === 'epicollect' && (
               <div className="space-y-5">
-              <ToggleCard title="Use Epicollect" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)}
+              <ToggleCard title="Use WildINTEL Epicollect" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)}
                               description="Offers Epicollect as a source: of the visits of a research project, and of the details of a deployment — its dates, camera, site and notes — when it is imported. Turned off, nothing is read from Epicollect." />
               <SettingsCard>
                 <CardBlock title="Project" description="The Epicollect5 project the information is imported from.">
