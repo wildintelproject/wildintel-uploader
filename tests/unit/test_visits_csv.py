@@ -208,3 +208,12 @@ def test_how_the_card_and_the_batteries_were_is_read_as_the_form_says_it_in_engl
     from wildintel_uploader.core.services import visits_csv
     assert [visits_csv.card_code(v) for v in ("OK", "Card full", "No batteries", "CarFull and No batteries", "Card full and no batteries", "SinPilas", "Full")] == [
         "OK", "CarFull", "SinPilas", "CarFullSinPilas", "CarFullSinPilas", "SinPilas", None]
+
+
+def test_what_a_card_cell_says_besides_its_id_goes_to_the_comments():
+    from wildintel_uploader.core.services import visits_csv
+    row = {"location_id": "A", "actions": "Revision", "session": "2", "sd": "68 now. Before 26", "comments": "Cloudy"}
+    visit = visits_csv.CsvVisit.model_validate(row)
+    assert visit.sd == "68" and visit.comments == "Cloudy | SD card: 68 now. Before 26"
+    plain = visits_csv.CsvVisit.model_validate({**row, "sd": "42b", "comments": ""})
+    assert plain.sd == "42b" and not plain.comments

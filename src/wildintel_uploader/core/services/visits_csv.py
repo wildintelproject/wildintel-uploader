@@ -207,6 +207,18 @@ class CsvVisit(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _what_a_cell_says_besides_its_id(cls, data):
+        """A camera or a card cell that says more than the id (see id_of) keeps what it said in the comments of the visit."""
+        if not isinstance(data, dict):
+            return data
+        notes = [f"{what}: {str(data[key]).strip()}" for key, what in (("camera_id", "Camera"), ("sd", "SD card"))
+                 if data.get(key) is not None and str(data[key]).strip() and id_of(data[key]) != str(data[key]).strip()]
+        if not notes:
+            return data
+        return {**data, "comments": " | ".join([str(data["comments"]).strip(), *notes]) if str(data.get("comments") or "").strip() else " | ".join(notes)}
+
     @field_validator("actions", mode="before")
     @classmethod
     def _actions(cls, value):
