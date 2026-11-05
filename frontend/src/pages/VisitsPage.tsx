@@ -23,12 +23,11 @@ export type VisitSource = 'manual' | 'wildintel' | 'wildintel-new' | 'csv'
 
 /** The fields of a visit as the matching of the columns groups them: as the form of a visit entered by hand does, in its order. */
 const MAPPING_FIELDS: Record<string, string[]> = {
-  'Who': ['trappers', 'setup_by'],
+  'Who and what was done': ['trappers', 'actions'],
   'Where': ['location_id', 'location_name', 'latitude', 'longitude', 'coordinate_uncertainty', 'timezone'],
   'When': ['session', 'date', 'time', 'when', 'created_at'],
-  'The visit': ['status', 'actions', 'date_time_ok'],
   'SD card': ['sd', 'card_batteries_ok', 'num_photos', 'sd_brand', 'sd_capacity'],
-  'Camera': ['camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
+  'Camera': ['status', 'date_time_ok', 'camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
   'Site': ['feature_type', 'habitat', 'bait_use', 'timestamp_issues'],
   'Grouping and notes': ['deployment_groups', 'tags', 'comments'],
 }
@@ -36,10 +35,9 @@ const MAPPING_GROUPS = [...Object.keys(MAPPING_FIELDS), 'Other']
 const MAPPING_GROUP_OF: Record<string, string> = Object.fromEntries(Object.entries(MAPPING_FIELDS).flatMap(([g, fs]) => fs.map((f) => [f, g])))
 const mappingRank = (field: string) => (MAPPING_FIELDS[MAPPING_GROUP_OF[field]] ?? []).indexOf(field)
 const MAPPING_ICONS: Record<string, ReactNode> = {
-  'Who': <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+  'Who and what was done': <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
   'Where': <><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></>,
   'When': <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-  'The visit': <><path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></>,
   'SD card': <><path d="M6 2h9l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" /><path d="M9 6v3M12 6v3M15 6v3" /></>,
   'Camera': <><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></>,
   'Site': <><path d="M3 20l5-9 4 6 3-4 6 7z" /><circle cx="17" cy="6" r="2" /></>,
@@ -826,7 +824,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const given = (field: string) => !!csvMapping[field] || !!csvDefaults[field]?.trim()
   // What creating asks for: the fields each entity that is created needs.
   // The fields that are asked: those of an entity only when it is created.
-  const fieldsShown = (csvColumns?.fields ?? []).filter((f) => !f.entity || csvCreate[f.entity])
+  const fieldsShown = (csvColumns?.fields ?? []).filter((f) => f.field !== 'setup_by' && (!f.entity || csvCreate[f.entity])) // who set up is who went: one field
   const createdNeeds = (csvColumns?.fields ?? []).filter((f) => (f.required_with ?? []).some((e) => csvCreate[e]))
   // The download of the Epicollect form has the coordinates, the camera and the SD card, but not the timezone of a location, the model of a camera nor the brand of a card:
   // when what does not exist is created, they are asked — for all of them — before the file is read.
