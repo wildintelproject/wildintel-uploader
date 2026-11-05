@@ -900,6 +900,19 @@ describe('VisitsPage from a CSV file', () => {
     expect(mockedApi.visitsCsvColumns).toHaveBeenCalledWith('Lugar,Dia\nTATR_01,02/10/2026\n')
   })
 
+  it('groups the fields of the matching, and each group can be folded away', async () => {
+    await start()
+
+    expect(await screen.findByLabelText('Site (a location of the research project)')).toBeInTheDocument()
+    const where = screen.getByRole('button', { name: /^Where, \d+ of \d+ matched$/ })
+    expect(where).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.click(where)
+    expect(where).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByLabelText('Site (a location of the research project)')).not.toBeInTheDocument()
+    await userEvent.click(where)
+    expect(screen.getByLabelText('Site (a location of the research project)')).toBeInTheDocument()
+  })
+
   it('asks for more fields when what does not exist is to be created, takes a default for a field with no column, and sends both', async () => {
     mockedApi.visitsCsvColumns.mockResolvedValue({
       ...COLUMNS, fields: [...COLUMNS.fields,
@@ -966,7 +979,8 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add 2 visits' }))
     expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', expect.any(String), true, 'mapped', MAPPING)
     expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to TATR. The deployments will be worked out from them.')
-    expect(screen.getAllByRole('table').map((t) => t.getAttribute('aria-label'))).toEqual(['Column mapping']) // the visits are kept: the list of them goes, the mapping stays
+    expect(screen.queryAllByRole('table').map((t) => t.getAttribute('aria-label'))).toEqual([]) // no table of rows is shown: just the matching, in groups
+    expect(screen.getByRole('region', { name: 'Where' })).toHaveTextContent('of') // the visits are kept: the list of them goes, the mapping stays
     expect(screen.getByRole('button', { name: 'Back to the menu' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Register more visits' }))

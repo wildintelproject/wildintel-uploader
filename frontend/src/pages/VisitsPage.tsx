@@ -21,6 +21,27 @@ import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchPro
 
 export type VisitSource = 'manual' | 'wildintel' | 'wildintel-new' | 'csv'
 
+/** The fields of a visit as the matching of the columns groups them. */
+const MAPPING_GROUPS = ['Where', 'When', 'What was done', 'Camera', 'SD card', 'Other'] as const
+const MAPPING_GROUP_OF: Record<string, (typeof MAPPING_GROUPS)[number]> = {
+  location_id: 'Where', location_name: 'Where', latitude: 'Where', longitude: 'Where', coordinate_uncertainty: 'Where', timezone: 'Where',
+  date: 'When', time: 'When', when: 'When', created_at: 'When', session: 'When',
+  actions: 'What was done', status: 'What was done', trappers: 'What was done', setup_by: 'What was done', card_batteries_ok: 'What was done', num_photos: 'What was done',
+  date_time_ok: 'What was done', comments: 'What was done',
+  camera_id: 'Camera', camera_model: 'Camera', camera_interval: 'Camera', camera_height: 'Camera', camera_depth: 'Camera', camera_tilt: 'Camera', camera_heading: 'Camera',
+  detection_distance: 'Camera', calibration: 'Camera', timestamp_issues: 'Camera', bait_use: 'Camera', feature_type: 'Camera', habitat: 'Camera',
+  sd: 'SD card', sd_brand: 'SD card', sd_capacity: 'SD card',
+}
+
+const MAPPING_ICONS: Record<(typeof MAPPING_GROUPS)[number], ReactNode> = {
+  'Where': <><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></>,
+  'When': <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  'What was done': <><path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></>,
+  'Camera': <><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></>,
+  'SD card': <><path d="M6 2h9l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" /><path d="M9 6v3M12 6v3M15 6v3" /></>,
+  'Other': <><circle cx="12" cy="12" r="1" /><circle cx="5" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+}
+
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
   { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself, following the field flow: the site, when, who went and what was done.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'Custom CSV', description: 'A CSV of any shape: say which column gives each field of a visit.' },
@@ -487,6 +508,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const cameras = allCameras.filter((c) => ofProject(c.research_project) && (inUse(c.status) || cameraKey(c) === visit.details.camera_id))
   // From a CSV file: its text, what reading it gave, and what was kept of it.
   const [csvName, setCsvName] = useState<string | null>(null)
+  // The groups of the matching that are folded away, as there are many fields.
+  const [foldedGroups, setFoldedGroups] = useState<string[]>([])
   // Custom CSV: where the file is — on this computer, or in the Epicollect5 project of the settings.
   const [csvOrigin, setCsvOrigin] = useState<'file' | 'epicollect'>('file')
   const [downloading, setDownloading] = useState(false)
@@ -1439,51 +1462,55 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             >
               {csvColumns && (
                 <>
-                  <section aria-label="Columns of the file and fields of the visit" className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700">
-                    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
-                      <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Mapping of the columns of the file to the fields of a visit</h5>
-                      <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{fieldsShown.filter((f) => given(f.field)).length} fields configured</span>
-                    </header>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[46rem] text-sm" aria-label="Column mapping">
-                        <thead>
-                          <tr className="border-b border-zinc-200 dark:border-zinc-700 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                            {['Target field', 'Column of the CSV file', 'CSV example', 'Default value'].map((h) => <th key={h} scope="col" className="px-6 py-4">{h}</th>)}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                          {fieldsShown.map(({ field, label, required, required_with }) => {
-                            const at = csvColumns.columns.indexOf(csvMapping[field] ?? '')
-                            const needed = required || (required_with ?? []).some((e) => csvCreate[e]) || (!inOneColumn && (field === 'date' || field === 'time'))
-                            const [, title, hint] = /^(.*?)\s*\((.*)\)\s*$/.exec(label) ?? [label, label, '']
-                            return (
-                              <tr key={field} className="align-middle">
-                                <td className="px-6 py-4">
-                                  <label htmlFor={`map-${field}`} className="flex flex-wrap items-center gap-2 font-semibold text-zinc-900 dark:text-zinc-100">
-                                    {title}
-                                    {needed && <span className="rounded-md border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300">required</span>}
-                                  </label>
-                                  {hint && <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>}
-                                </td>
-                                <td className="px-6 py-4">
-                                  <select id={`map-${field}`} aria-label={label} className={inputClass} value={csvMapping[field] ?? ''}
-                                          onChange={(e) => setCsvMapping((m) => ({ ...m, [field]: e.target.value }))}>
-                                    <option value="">—</option>
-                                    {csvColumns.columns.map((c, i) => <option key={i} value={c}>{c}</option>)}
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4 font-mono text-xs text-zinc-600 dark:text-zinc-400" aria-label={`Example of ${label}`}>{at >= 0 ? csvColumns.sample[0]?.[at] ?? '' : ''}</td>
-                                <td className="px-6 py-4">
-                                  <input className={inputClass} aria-label={`Default for ${label}`} placeholder="Default value if missing…" value={csvDefaults[field] ?? ''}
-                                         onChange={(e) => setCsvDefaults((d) => ({ ...d, [field]: e.target.value }))} />
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
+                  <div aria-label="Columns of the file and fields of the visit" className="space-y-5">
+                    {MAPPING_GROUPS.map((group) => {
+                      const shown = fieldsShown.filter((f) => (MAPPING_GROUP_OF[f.field] ?? 'Other') === group)
+                      if (shown.length === 0) return null
+                      const folded = foldedGroups.includes(group)
+                      return (
+                        <section key={group} aria-label={group} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700">
+                          <header className={`${folded ? '' : 'border-b border-zinc-200 dark:border-zinc-700'}`}>
+                            <button type="button" aria-expanded={!folded} aria-label={`${group}, ${shown.filter((f) => given(f.field)).length} of ${shown.length} matched`} onClick={() => setFoldedGroups((g) => (g.includes(group) ? g.filter((x) => x !== group) : [...g, group]))}
+                                    className="flex w-full items-center gap-3 px-6 py-4 text-left">
+                              <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-blue-600 dark:text-blue-400">{MAPPING_ICONS[group]}</svg>
+                              <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{group}</h5>
+                              <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-400">{shown.filter((f) => given(f.field)).length} of {shown.length} matched</span>
+                              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 text-zinc-500 transition-transform ${folded ? '-rotate-90' : ''}`}><path d="M6 9l6 6 6-6" /></svg>
+                            </button>
+                          </header>
+                          {!folded && <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                            {shown.map(({ field, label, required, required_with }) => {
+                              const at = csvColumns.columns.indexOf(csvMapping[field] ?? '')
+                              const example = at >= 0 ? csvColumns.sample[0]?.[at] ?? '' : ''
+                              const needed = required || (required_with ?? []).some((e) => csvCreate[e]) || (!inOneColumn && (field === 'date' || field === 'time'))
+                              const [, title, hint] = /^(.*?)\s*\((.*)\)\s*$/.exec(label) ?? [label, label, '']
+                              return (
+                                <div key={field} className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 px-6 py-4 items-center">
+                                  <div>
+                                    <label htmlFor={`map-${field}`} className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                                      {title}
+                                      {needed && <span className="rounded-md border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300">required</span>}
+                                    </label>
+                                    {hint && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{hint}</p>}
+                                    {example !== '' && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">e.g. <span className="font-mono" aria-label={`Example of ${label}`}>{example}</span></p>}
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <select id={`map-${field}`} aria-label={label} className={inputClass} value={csvMapping[field] ?? ''}
+                                            onChange={(e) => setCsvMapping((m) => ({ ...m, [field]: e.target.value }))}>
+                                      <option value="">Not matched</option>
+                                      {csvColumns.columns.map((c, i) => <option key={i} value={c}>{c}</option>)}
+                                    </select>
+                                    <input className={inputClass} aria-label={`Default for ${label}`} placeholder="Default value if missing…" value={csvDefaults[field] ?? ''}
+                                           onChange={(e) => setCsvDefaults((d) => ({ ...d, [field]: e.target.value }))} />
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>}
+                        </section>
+                      )
+                    })}
+                  </div>
                   <p className={hintClass}>A default value is what the field is when the file has no column for it, and in the rows where its cell is empty.</p>
                   <p className={hintClass}>A visit needs the site, the actions and when: a date and a time, the two in one column, or the time the entry was created.</p>
                   {stillToMap.length > 0 && <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-400">To read the visits, match also {stillToMap.join(', ')}.</p>}
