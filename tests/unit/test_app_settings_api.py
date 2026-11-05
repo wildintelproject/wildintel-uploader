@@ -49,7 +49,7 @@ def test_the_defaults_have_every_section_and_every_check_shown():
 
 
 def test_the_trappers_start_empty_and_are_saved_clean():
-    assert _client().get("/api/settings").json()["FIELDWORK"] == {"trappers": [], "sd_cards": [], "cameras": []}
+    assert _client().get("/api/settings").json()["FIELDWORK"] == {"trappers": [], "sd_cards": [], "cameras": [], "roles": []}
 
     saved = _put(FIELDWORK={"trappers": [
         {"name": "  Ana   Pérez ", "affiliation": " University of Huelva "}, {"name": "Luis", "affiliation": "  "}, {"name": "ana pérez"},
@@ -504,3 +504,13 @@ def test_what_an_upload_to_agouti_needs_is_kept_and_its_key_is_not_shown(tmp_pat
     again = _put(AGOUTI={"enabled": True, "base_url": "https://api.agouti.eu", "api_key": "", "project_id": "42"})
     assert again["AGOUTI"]["has_api_key"] is True
     assert config.load_settings().AGOUTI.api_key == "secret-key"
+
+
+def test_a_trapper_can_have_several_roles_in_a_project_but_not_the_same_one_twice():
+    from wildintel_uploader.core.config import FieldworkSettings
+    roles = FieldworkSettings(roles=[
+        {"research_project": "DONA", "trapper": "Ana Pérez", "role": "contact"},
+        {"research_project": "DONA", "trapper": "Ana Pérez", "role": "principalInvestigator"},
+        {"research_project": "dona", "trapper": "ana pérez", "role": "contact"},
+    ]).roles
+    assert [(r.trapper, r.role) for r in roles] == [("Ana Pérez", "contact"), ("Ana Pérez", "principalInvestigator")]

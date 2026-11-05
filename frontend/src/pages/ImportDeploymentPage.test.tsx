@@ -231,7 +231,7 @@ async function addLocationByHand(locationId = 'DONA_01', name = 'Doñana site 1'
   await userEvent.click(await screen.findByRole('button', { name: /add a new location/i }))
   await userEvent.click(screen.getByRole('button', { name: /by hand/i }))
   await userEvent.type(screen.getByLabelText('Location id'), locationId)
-  await userEvent.type(screen.getByLabelText('Location name (optional)'), name)
+  await userEvent.type(screen.getByLabelText('Location name'), name)
   await userEvent.type(screen.getByLabelText('Latitude'), '37.0')
   await userEvent.type(screen.getByLabelText('Longitude'), '-6.5')
   // a new location starts as UTC, following summer time: another timezone is picked from the list
@@ -1135,7 +1135,7 @@ describe('ImportDeploymentPage', () => {
       await goToNewDetailsStep()
 
       expect(screen.queryByLabelText('Location id (optional)')).not.toBeInTheDocument()
-      expect(screen.queryByLabelText('Location name (optional)')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Location name')).not.toBeInTheDocument()
       expect(screen.queryByLabelText('Latitude')).not.toBeInTheDocument() // it has its coordinates
       expect(screen.queryByLabelText('Coordinate uncertainty (m)')).not.toBeInTheDocument()
 

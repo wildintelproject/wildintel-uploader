@@ -878,13 +878,13 @@ describe('SettingsPage', () => {
       expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([{ name: 'ana pérez', affiliation: 'CSIC', status: 'active' }, { name: 'Luis', affiliation: null, status: 'active' }])
     })
 
-    it('gives a trapper a status picked from cards, with Required and Optional on its fields', async () => {
+    it('gives a trapper a status picked from cards, with Required on the fields that are', async () => {
       await open([LUIS])
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
       const page = within(screen.getByRole('region', { name: 'Trapper' }))
       expect(page.getByText('Required')).toBeInTheDocument()
-      expect(page.getByText('Optional')).toBeInTheDocument()
+      expect(page.queryByText('Optional')).not.toBeInTheDocument() // only what is required says so
       expect(page.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
       await userEvent.click(page.getByRole('radio', { name: /Inactive/ }))
       await userEvent.click(page.getByRole('button', { name: 'Save changes' }))
@@ -953,6 +953,43 @@ describe('SettingsPage', () => {
       await userEvent.type(name, 'ana pérez')
       expect(screen.getByText('ana pérez is already in the list.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    })
+  })
+
+  describe('Roles', () => {
+    it('gives a trapper a role of Camtrap DP in a research project, and keeps it', async () => {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ name: 'Ana Pérez', affiliation: null }] } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('Roles')
+      await pickProject()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Add role' }))
+      const dialog = within(screen.getByRole('region', { name: 'Role' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Ana Pérez' }))
+      expect(dialog.getByRole('button', { name: 'Contributor' })).toHaveAttribute('aria-pressed', 'true')
+      await userEvent.click(dialog.getByRole('button', { name: 'Principal investigator' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.roles).toEqual([{ research_project: 'DONA', trapper: 'Ana Pérez', role: 'principalInvestigator' }])
+    })
+
+    it('lets a trapper have several roles in a project, but not the same one twice', async () => {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ name: 'Ana Pérez', affiliation: null }], roles: [{ research_project: 'DONA', trapper: 'Ana Pérez', role: 'contact' }] } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('Roles')
+      await pickProject()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Add role' }))
+      const dialog = within(screen.getByRole('region', { name: 'Role' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Ana Pérez' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Contact' }))
+      expect(dialog.getByText('This one is already in the list.')).toBeInTheDocument()
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.click(dialog.getByRole('button', { name: 'Publisher' }))
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeEnabled()
     })
   })
 
@@ -1286,11 +1323,11 @@ describe('SettingsPage — Entities', () => {
   }
   const file = (text: string) => new File([text], 'f.csv', { type: 'text/csv' })
 
-  it('has a tab for the research projects, the trappers, the locations, the cameras and the SD cards, and takes the old sections to their tab', async () => {
+  it('has a tab for the research projects, the trappers, their roles, the locations, the cameras and the SD cards, and takes the old sections to their tab', async () => {
     render(<SettingsPage onClose={vi.fn()} initialSection="sdcards" />)
     await screen.findByRole('tablist', { name: 'Entities' })
 
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Research projects', 'Trappers', 'Locations', 'Cameras', 'SD cards'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Research projects', 'Trappers', 'Roles', 'Locations', 'Cameras', 'SD cards'])
     expect(screen.getByRole('tab', { name: 'SD cards' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByRole('button', { name: 'Trappers' })).not.toBeInTheDocument() // no longer a section of its own
   })

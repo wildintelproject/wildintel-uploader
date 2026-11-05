@@ -294,6 +294,21 @@ def migrate_gear(data):
     return data
 
 
+TRAPPER_ROLES = ("contact", "principalInvestigator", "rightsHolder", "publisher", "contributor")
+
+
+class TrapperRole(BaseModel):
+    """What a trapper is in a research project — one of the roles of a contributor in Camtrap DP (contributors.role)."""
+    research_project: str = Field(min_length=1, description="The acronym of the research project.")
+    trapper: str = Field(min_length=1, description="The name of the trapper, as it is in the list of trappers.")
+    role: Literal["contact", "principalInvestigator", "rightsHolder", "publisher", "contributor"] = Field(default="contributor", description="Its role in the research project.")
+
+    @field_validator("trapper")
+    @classmethod
+    def _trapper(cls, value: str) -> str:
+        return " ".join(value.split())
+
+
 class SdCard(BaseModel):
     """One of the SD cards of the field work — its label, as it is written on it, and optionally its brand, its capacity and the
     day it was put into production."""
@@ -392,6 +407,7 @@ class FieldworkSettings(BaseModel):
     )
     sd_cards: list[SdCard] = Field(default_factory=list, description="The SD cards of the field work. (FIELDWORK.sd_cards)")
     cameras: list[Camera] = Field(default_factory=list, description="The camera traps of the field work. (FIELDWORK.cameras)")
+    roles: list[TrapperRole] = Field(default_factory=list, description="What each trapper is in each research project: a trapper can have several in the same project, one entry for each. (FIELDWORK.roles)")
 
     @field_validator("trappers", mode="before")
     @classmethod
@@ -403,6 +419,14 @@ class FieldworkSettings(BaseModel):
     @classmethod
     def _unique_trappers(cls, trappers: list[Trapper]) -> list[Trapper]:
         return _unique(trappers, "name")
+
+    @field_validator("roles")
+    @classmethod
+    def _unique_roles(cls, roles: list[TrapperRole]) -> list[TrapperRole]:
+        kept: dict[tuple, TrapperRole] = {}
+        for r in roles:
+            kept.setdefault((r.research_project.lower(), r.trapper.lower(), r.role), r)
+        return list(kept.values())
 
     @field_validator("sd_cards")
     @classmethod

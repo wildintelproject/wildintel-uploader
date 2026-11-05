@@ -261,7 +261,7 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
             <div className="grid grid-cols-2 gap-4 mt-4">
               <Field label="Location id" required placeholder="e.g. DONA_01" hint={DESCRIPTIONS.locationID} value={draft.location_id}
                      onChange={(v) => setDraft((d) => ({ ...d, location_id: v }))} />
-              <Field label="Location name (optional)" placeholder="e.g. Doñana site 1" hint={DESCRIPTIONS.locationName} value={draft.name}
+              <Field label="Location name" placeholder="e.g. Doñana site 1" hint={DESCRIPTIONS.locationName} value={draft.name}
                      onChange={(v) => setDraft((d) => ({ ...d, name: v }))} />
               <Field label="Latitude" type="number" required min={-90} max={90} step="any" placeholder="e.g. 52.70442"
                      hint={DESCRIPTIONS.latitude} error={draft.latitude ? errors.latitude : undefined} value={draft.latitude}

@@ -18,7 +18,7 @@ import ReportsList from '../components/ReportsList'
 import { isValidTimezone } from '../deploymentValidation'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { Location, LocationStatus, ResearchProject, ResearchProjectStatus } from '../types'
-import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, ImageCheck, Camera, LocalLocation, LocalResearchProject, LogLevel, SdCard, SimilarityMethod, StoredVisit, Trapper, UpdateCheck } from '../types'
+import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, ImageCheck, Camera, LocalLocation, LocalResearchProject, LogLevel, SdCard, SimilarityMethod, StoredVisit, Trapper, TrapperRole, TrapperRoleName, UpdateCheck } from '../types'
 
 const hintClass = 'text-xs text-zinc-500 dark:text-zinc-400'
 const btnPrimary = 'px-6 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -202,6 +202,7 @@ interface Draft {
   convertToUtc: boolean
   trappers: Trapper[]
   sdCards: SdCard[]
+  roles: TrapperRole[]
   cameras: Camera[]
 }
 
@@ -275,6 +276,7 @@ function toDraft(s: AppSettings): Draft {
     convertToUtc: s.PREPROCESSING.convert_to_utc,
     trappers: s.FIELDWORK.trappers.map((t) => ({ ...t })),
     sdCards: s.FIELDWORK.sd_cards.map((c) => ({ ...c })),
+    roles: (s.FIELDWORK.roles ?? []).map((r) => ({ ...r })),
     cameras: s.FIELDWORK.cameras.map((c) => ({ ...c })),
   }
 }
@@ -322,7 +324,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
       ignore_dst: d.ignoreDst, convert_to_utc: d.convertToUtc,
     },
     FIELDWORK: {
-      trappers: d.trappers, sd_cards: d.sdCards, cameras: d.cameras,
+      trappers: d.trappers, sd_cards: d.sdCards, cameras: d.cameras, roles: d.roles,
     },
     FIELDLOG: {
       enabled: d.wildintelEnabled, time_source: d.fieldlogTimeSource, keep_seconds: d.fieldlogKeepSeconds,
@@ -348,8 +350,8 @@ const FOLDERS: { draftKey: 'collectionsDir' | 'reportsDir' | 'packagesDir'; labe
 type SectionId = 'general' | 'uploader' | 'sources' | 'validation' | 'postvalidation' | 'preprocessing' | 'entities' | 'reports' | 'config'
 
 /** The lists of the entities, each with its own tab. The sections of the settings that used to be one each open the entities on their tab. */
-type EntityTab = 'projects' | 'trappers' | 'locations' | 'cameras' | 'sdcards'
-const ENTITY_SECTIONS: Record<string, EntityTab> = { trappers: 'trappers', sdcards: 'sdcards', cameras: 'cameras', locations: 'locations' }
+type EntityTab = 'projects' | 'trappers' | 'roles' | 'locations' | 'cameras' | 'sdcards'
+const ENTITY_SECTIONS: Record<string, EntityTab> = { trappers: 'trappers', roles: 'roles', sdcards: 'sdcards', cameras: 'cameras', locations: 'locations' }
 
 /** The platforms a deployment can be uploaded to, each set up in the Uploader section. */
 
@@ -757,9 +759,7 @@ function LabelledField({ label, required, hint, error, htmlFor, children }: { la
   return (
     <div className="space-y-1.5">
       <label htmlFor={htmlFor} className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-        {label} {required
-          ? <span className="ml-1 text-[11px] font-normal uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>
-          : <span className="ml-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">Optional</span>}
+        {label}{required && <span className="ml-2 text-[11px] font-normal uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>}
       </label>
       {children}
       {error && !/^(Required|An? .+ is required)\.?$/.test(error) ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : hint && <p className={hintClass}>{hint}</p>}
@@ -768,9 +768,9 @@ function LabelledField({ label, required, hint, error, htmlFor, children }: { la
 }
 
 /** A card of a form of the settings: an icon, a title and a paragraph on what goes in it. */
-function ProjectSection({ icon, title, hint, children }: { icon?: ReactNode; title?: string; hint?: string; children: ReactNode }) {
+function ProjectSection({ icon, title, hint, spacious = false, children }: { icon?: ReactNode; title?: string; hint?: string; spacious?: boolean; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-5 space-y-4">
+    <div className={`rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-5 ${spacious ? 'space-y-8' : 'space-y-4'}`}>
       {title && <div><h5 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{icon}{title}</h5>{hint && <p className={hintClass}>{hint}</p>}</div>}
       {children}
     </div>
@@ -840,15 +840,22 @@ function ProjectForm({ item, others, isNew, onChange, onClose, onDone, doneLabel
         </div>
       </LabelledField>
       </ProjectSection>
-      <ProjectSection icon={<SlidersIcon />} title="How was it done?" hint="The design of the study, as Trapper asks for it. It goes into the metadata of the deployments.">
+      <ProjectSection spacious icon={<SlidersIcon />} title="How was it done?" hint="The design of the study, as Trapper asks for it. It goes into the metadata of the deployments.">
         <ProjectChoice label="Sampling design" hint="How the places of the cameras were chosen." options={SAMPLING_DESIGN_OPTIONS} value={item.sampling_design} onChange={(v) => onChange({ sampling_design: v })} />
         <ProjectChoice label="Sensor method" hint="What makes the camera take a picture." options={SENSOR_METHOD_OPTIONS} value={item.sensor_method} onChange={(v) => onChange({ sensor_method: v })} />
         <ProjectChoice label="Animal types" hint="Whether the animals are marked, so they can be told apart." options={ANIMAL_TYPES_OPTIONS} value={item.animal_types} onChange={(v) => onChange({ animal_types: v })} />
         <ProjectChoice label="Bait use" hint="What was used to attract the animals, if anything." options={BAIT_USE_OPTIONS} value={item.bait_use} onChange={(v) => onChange({ bait_use: v })} />
         <LabelledField label="Event interval" htmlFor="rp-interval" hint="The minutes between two pictures that still belong to the same event. 0 if it does not apply.">
-          <div className="relative">
-            <input id="rp-interval" aria-label="Event interval" type="number" min={0} step={1} className={`${fieldBox} pr-20`} value={item.event_interval} onChange={(e) => onChange({ event_interval: e.target.value })} />
-            <span className="absolute inset-y-0 right-4 flex items-center text-sm text-zinc-500 dark:text-zinc-400">minutes</span>
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 max-w-xs">
+              <input id="rp-interval" aria-label="Event interval" type="number" min={0} step={1} className={`${fieldBox} pr-28 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`} value={item.event_interval} onChange={(e) => onChange({ event_interval: e.target.value })} />
+              <span className="absolute inset-y-0 right-4 flex items-center text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">minutes</span>
+            </div>
+            {([['Decrease the event interval', '−', -1], ['Increase the event interval', '+', 1]] as const).map(([name, sign, step]) => (
+              <button key={name} type="button" aria-label={name} disabled={step < 0 && (Number(item.event_interval) || 0) <= 0}
+                      onClick={() => onChange({ event_interval: String(Math.max(0, (Number(item.event_interval) || 0) + step)) })}
+                      className="h-12 w-12 shrink-0 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-lg text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors">{sign}</button>
+            ))}
           </div>
         </LabelledField>
       </ProjectSection>
@@ -971,7 +978,9 @@ function DateBox({ label, value, onChange }: { label: string; value: string; onC
   )
 }
 
-function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isNew, onChange, onRemove, onClose, onDone, doneLabel = 'Save changes', lockFirst = false, badges, readOnly = false, notice, extraRows = [], styled = false, qr, confirmArchive = false }: {
+function ItemForm<T extends object>({ same, noun, backLabel, fields, item, others, isNew, onChange, onRemove, onClose, onDone, doneLabel = 'Save changes', lockFirst = false, badges, readOnly = false, notice, extraRows = [], styled = false, qr, confirmArchive = false }: {
+  /** When two items are the same one, if it is not that they have the same first field. */
+  same?: (a: T, b: T) => boolean
   noun: string; backLabel: string; fields: ItemField<T>[]; item: T; others: T[]; isNew: boolean; onChange: (patch: Partial<T>) => void; onClose: () => void
   /** Without it the item cannot be removed from here. */
   onRemove?: () => void
@@ -994,12 +1003,12 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
 }) {
   const [first] = fields
   const name = textOf(item, first.key).trim()
-  const statusKey = fields.find((f) => f.kind === 'select')?.key
+  const statusKey = fields.find((f) => f.kind === 'select' && f.key === 'status')?.key
   const [wasArchived] = useState(statusKey ? textOf(item, statusKey) === 'archived' : false)
   const [typed, setTyped] = useState('')
   const archiving = confirmArchive && !isNew && !wasArchived && !!statusKey && textOf(item, statusKey) === 'archived'
   const unconfirmed = archiving && typed.trim() !== name
-  const error = !name ? `A ${first.label.toLowerCase()} is required.` : others.some((o) => textOf(o, first.key).trim().toLowerCase() === name.toLowerCase()) ? `${name} is already in the list.` : null
+  const error = !name ? `A ${first.label.toLowerCase()} is required.` : others.some((o) => (same ? same(o, item) : textOf(o, first.key).trim().toLowerCase() === name.toLowerCase())) ? (same ? 'This one is already in the list.' : `${name} is already in the list.`) : null
   const fieldError = (f: ItemField<T>, i: number) => (i === 0 ? error : null) ?? f.validate?.(textOf(item, f.key).trim()) ?? null
   const invalid = fields.some((f, i) => !!fieldError(f, i)) || unconfirmed
   const Noun = noun[0].toUpperCase() + noun.slice(1)
@@ -1023,7 +1032,7 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
         </dl>
       ) : styled ? (() => {
         const change = (f: ItemField<T>, i: number) => (v: string) => onChange({ [f.key]: i === 0 ? v : (v || null) } as Partial<T>)
-        const choice = fields.findIndex((f) => f.kind === 'select')
+        const choice = fields.findIndex((f) => f.kind === 'select' && f.key === 'status')
         const stateOf = choice >= 0 ? textOf(item, fields[choice].key) || fields[choice].options?.[0]?.value || '' : ''
         // The day and the reason of a status are asked once it is not the active one.
         const ofStatus = (f: ItemField<T>) => f.key === 'status_date' || f.key === 'status_note' || f.key === 'archive_reason'
@@ -1091,7 +1100,7 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
         const card = 'rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-5 space-y-4'
         const groups: { title?: string; hint?: string; icon?: ReactNode; aside?: ReactNode; fields: { f: ItemField<T>; i: number }[] }[] = []
         fields.forEach((f, i) => {
-          if (f.kind === 'select' || ofStatus(f)) return
+          if ((f.kind === 'select' && f.key === 'status') || ofStatus(f)) return
           const last = groups[groups.length - 1]
           if (last && (f.section === undefined || f.section === last.title)) last.fields.push({ f, i })
           else groups.push({ title: f.section, hint: f.sectionHint, icon: f.sectionIcon, aside: f.sectionAside?.(item, onChange), fields: [{ f, i }] })
@@ -1140,9 +1149,11 @@ function ItemForm<T extends object>({ noun, backLabel, fields, item, others, isN
 }
 
 /** A list kept in the settings: a card for each, with the way to edit it or delete it, and to add one. Adding or editing is a page of its own, kept with Done. */
-function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, fields, subtitle, empty, fileName, badges, onDetail, icon, styled, searchLabel, canDelete, plain, dim, meta, readOnly, notice, footnote, qr, openItem }: {
+function ItemsEditor<T extends object>({ same, heading, noun, items, onChange, blank, fields, subtitle, empty, fileName, badges, onDetail, icon, styled, searchLabel, canDelete, plain, dim, meta, readOnly, notice, footnote, qr, openItem }: {
   /** What the QR code of an item says, shown on its page. */
   qr?: (item: T) => string | undefined
+  /** When two items are the same one, if it is not that they have the same first field. */
+  same?: (a: T, b: T) => boolean
   heading: string; noun: string; items: T[]; onChange: (v: T[]) => void
   /** What an item is when it is added, before it is edited. */
   blank: T
@@ -1218,7 +1229,7 @@ function ItemsEditor<T extends object>({ heading, noun, items, onChange, blank, 
     const kept = editing.index === null ? editing.item : items[editing.index]
     return (
       <ItemForm
-        noun={noun} backLabel={heading} fields={fields} item={editing.item} others={items.filter((_, i) => i !== editing.index)} isNew={editing.index === null}
+        same={same} noun={noun} backLabel={heading} fields={fields} item={editing.item} others={items.filter((_, i) => i !== editing.index)} isNew={editing.index === null}
         onChange={(patch) => setEditing((e) => (e ? { ...e, item: { ...e.item, ...patch } } : e))}
         onRemove={editing.index === null ? undefined : () => { onChange(items.filter((_, i) => i !== editing.index)); setEditing(null) }}
         onClose={() => setEditing(null)} onDone={done} doneLabel={styled ? (editing.index === null ? 'Add' : 'Save changes') : 'Done'} badges={badges?.(editing.item)} styled={styled} qr={qr?.(editing.item)} readOnly={readOnly?.(kept)} notice={notice?.(kept)}
@@ -1703,6 +1714,8 @@ const usedIn = (n: number | undefined) => (n === undefined ? undefined : n === 0
 const gearMeta = (item: { in_service?: string | null; status?: string; status_date?: string | null }, used: number | undefined) =>
   [item.in_service && `In production since ${fmtDay(item.in_service)}`, usedIn(used), item.status && item.status !== 'active' && item.status !== 'ready' && item.status_date && `${STATUS_LABELS[item.status] ?? item.status} since ${fmtDay(item.status_date)}`].filter(Boolean).join(' · ') || undefined
 /** A badge only for what is not the usual: a status other than active. */
+const ROLE_LABELS: Record<TrapperRoleName, string> = { contact: 'Contact', principalInvestigator: 'Principal investigator', rightsHolder: 'Rights holder', publisher: 'Publisher', contributor: 'Contributor' }
+const ROLE_HINTS: Record<string, string> = { contact: 'Who to ask about the data.', principalInvestigator: 'Leads the research.', rightsHolder: 'Owns the rights on the data.', publisher: 'Makes the data available.', contributor: 'Takes part in the work.' }
 const unusualStatus = (item: { status?: string | null; status_date?: string | null; status_note?: string | null }): BadgeSpec[] => (item.status && item.status !== 'active' && item.status !== 'ready' ? [statusBadge(item.status, item.status_date, item.status_note)] : [])
 
 /** The letters in the tile of a person: the first of the first and of the last name. */
@@ -1713,8 +1726,9 @@ const initialsOf = (name: string) => {
 
 /** Research projects, trappers, locations, cameras and SD cards: a settings screen of their own. The trappers are the project's own people
  * but can be in several; the locations, the cameras and the SD cards belong each to a research project. */
-function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, onSdCards, initialTab, initialProject, initialItem, onDetail }: {
-  trappers: Trapper[]; cameras: Camera[]; sdCards: SdCard[]
+function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRoles, onCameras, onSdCards, initialTab, initialProject, initialItem, onDetail }: {
+  trappers: Trapper[]; roles: TrapperRole[]; cameras: Camera[]; sdCards: SdCard[]
+  onRoles: (v: TrapperRole[]) => void
   onTrappers: (v: Trapper[]) => void; onCameras: (v: Camera[]) => void; onSdCards: (v: SdCard[]) => void
   initialTab: EntityTab
   initialProject?: string
@@ -1763,14 +1777,24 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
   const TAB_INTRO: Record<EntityTab, string> = {
     projects: 'The research projects the field work belongs to. Each one keeps its own locations, cameras and SD cards.',
     trappers: 'The people who go to the field — one can be in several research projects. When a visit is registered, they are the ones to pick as who went.',
+    roles: 'What each trapper is in a research project, with the roles of the contributors of Camtrap DP. They go into the metadata of the datasets.',
     locations: 'The places where cameras are set up. Each research project has its own locations, cameras and SD cards.',
     cameras: 'The camera traps. Each one is called by its label, so no two of a project have the same; its serial number is kept when it is known.',
     sdcards: 'The SD cards used to collect images. Each research project keeps its own.',
   }
   const tabs: { id: EntityTab; label: string }[] = [
-    { id: 'projects', label: 'Research projects' }, { id: 'trappers', label: 'Trappers' }, { id: 'locations', label: 'Locations' },
+    { id: 'projects', label: 'Research projects' }, { id: 'trappers', label: 'Trappers' }, { id: 'roles', label: 'Roles' }, { id: 'locations', label: 'Locations' },
     { id: 'cameras', label: 'Cameras' }, { id: 'sdcards', label: 'SD cards' },
   ]
+  // A role follows its trapper when it is renamed, and goes with it when it is deleted.
+  const changeTrappers = (next: Trapper[]) => {
+    const gone = trappers.filter((t) => !next.some((n) => n.name === t.name))
+    const added = next.filter((n) => !trappers.some((t) => t.name === n.name))
+    const renamed = new Map<string, string>()
+    if (gone.length === 1 && added.length === 1) renamed.set(gone[0].name, added[0].name)
+    onTrappers(next)
+    if (gone.length > 0) onRoles(roles.filter((r) => !gone.some((g) => g.name === r.trapper) || renamed.has(r.trapper)).map((r) => (renamed.has(r.trapper) ? { ...r, trapper: renamed.get(r.trapper)! } : r)))
+  }
   const belongs = (rp: string | null) => (projectId === NOT_ASSIGNED ? !rp : !!project && (rp ?? '').toLowerCase() === project.acronym.toLowerCase())
   const owner = projectId === NOT_ASSIGNED ? null : project?.acronym ?? null
 
@@ -1786,24 +1810,42 @@ function EntitiesSection({ trappers, cameras, sdCards, onTrappers, onCameras, on
         ))}
       </div>}
 
-      {!detail && (tab === 'locations' || tab === 'cameras' || tab === 'sdcards') && (
+      {!detail && (tab === 'roles' || tab === 'locations' || tab === 'cameras' || tab === 'sdcards') && (
         <div className="max-w-md">
           <label className={`${hintClass} block mb-1`} htmlFor="entities-project">Research project</label>
           <Combobox
             id="entities-project" value={projectId} onChange={setProjectId}
-            options={[...(tab === 'locations' ? [] : [{ value: NOT_ASSIGNED, label: 'Not assigned to a project' }]), ...projects.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))]}
+            options={[...(tab === 'locations' || tab === 'roles' ? [] : [{ value: NOT_ASSIGNED, label: 'Not assigned to a project' }]), ...projects.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))]}
             placeholder={projects.length === 0 ? 'No research projects yet' : 'Select a research project…'} clearLabel="Clear research project"
           />
-          <p className={`${hintClass} mt-2`}>Locations, cameras and SD cards belong to one research project. Changing it here changes all three tabs.</p>
+          <p className={`${hintClass} mt-2`}>Roles, locations, cameras and SD cards belong to one research project. Changing it here changes all four tabs.</p>
         </div>
       )}
 
       {tab === 'projects' && <ProjectsTab projects={projects} onChanged={loadProjects} onDetail={setDetail}
         owned={(a) => ({ cameras: cameras.filter((c) => (c.research_project ?? '').toLowerCase() === a.toLowerCase()).length, sdCards: sdCards.filter((c) => (c.research_project ?? '').toLowerCase() === a.toLowerCase()).length })} />}
 
+      {tab === 'roles' && (
+        <ItemsEditor<TrapperRole>
+          heading={`Roles${owner ? ` in ${owner}` : ''}`} noun="role" fileName={`${owner ?? 'unassigned'}_roles`} styled plain onDetail={setDetail}
+          items={roles.filter((r) => !!project && r.research_project.toLowerCase() === project.acronym.toLowerCase())}
+          onChange={(v) => onRoles([...roles.filter((r) => !project || r.research_project.toLowerCase() !== project.acronym.toLowerCase()), ...v.map((r) => ({ ...r, research_project: project?.acronym ?? r.research_project }))])}
+          icon={(r) => initialsOf(r.trapper)} same={(a, b) => same(a.trapper, b.trapper) && a.role === b.role}
+          blank={{ research_project: owner ?? '', trapper: '', role: 'contributor' }}
+          subtitle={(r) => ROLE_LABELS[r.role] ?? r.role}
+          footnote="A trapper can have several roles in a research project: add one for each. Deleting a trapper deletes its roles."
+          empty={project ? 'No role yet in this research project.' : 'Select a research project to see its roles.'} searchLabel="Search by trapper or role"
+          fields={[
+            { key: 'trapper', label: 'Trapper', placeholder: 'Pick or type a trapper', suggestions: trappers.map((t) => t.name), kind: 'suggest', required: true, section: 'Who is it?', sectionIcon: <UsersIcon />, sectionHint: 'The trapper that has the role, from the list of trappers.',
+              validate: (v) => (trappers.some((t) => t.name === v) ? null : 'Pick one of the trappers.') },
+            { key: 'role', label: 'Role', kind: 'select', required: true, options: Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label, hint: ROLE_HINTS[value] })), hint: 'The role of the contributor in Camtrap DP.', section: 'What does it do?', sectionIcon: <ShieldIcon />, sectionHint: 'The part this trapper takes in the research project.' },
+          ]}
+        />
+      )}
+
       {tab === 'trappers' && (
         <ItemsEditor<Trapper>
-          heading="Trappers" noun="trapper" fileName="trappers" styled plain onDetail={setDetail} items={trappers} onChange={onTrappers}
+          heading="Trappers" noun="trapper" fileName="trappers" styled plain onDetail={setDetail} items={trappers} onChange={changeTrappers}
           icon={(t) => initialsOf(t.name)} dim={(t) => t.status === 'inactive'} readOnly={(t) => t.trapper_pk != null}
           notice={(t) => (t.trapper_pk != null ? <TrapperNotice noun="trapper" /> : undefined)}
           blank={{ name: 'New trapper', affiliation: null, status: 'active' }}
@@ -2697,8 +2739,8 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
 
         {draft && saved && section === 'entities' && (
           <EntitiesSection
-            trappers={draft.trappers} cameras={draft.cameras} sdCards={draft.sdCards}
-            onTrappers={(v) => set('trappers', v)} onCameras={(v) => set('cameras', v)} onSdCards={(v) => set('sdCards', v)}
+            trappers={draft.trappers} roles={draft.roles} cameras={draft.cameras} sdCards={draft.sdCards}
+            onTrappers={(v) => set('trappers', v)} onRoles={(v) => set('roles', v)} onCameras={(v) => set('cameras', v)} onSdCards={(v) => set('sdCards', v)}
             initialTab={initialSection && initialSection in ENTITY_SECTIONS ? ENTITY_SECTIONS[initialSection] : 'projects'} initialProject={initialProject} initialItem={initialItem} onDetail={setEntityDetail}
           />
         )}

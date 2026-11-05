@@ -20,9 +20,9 @@ describe('FileRowResults', () => {
     expect(card('With problems')).toHaveTextContent('With problems1needs attention')
     const table = screen.getByRole('table', { name: 'Rows of the file' })
     const line = (n: number) => within(table).getByRole('button', { name: `View the contents of Row ${n}` }).closest('tr')!
-    expect(line(4)).toHaveTextContent('4WICP_0003———Add')
-    expect(line(3)).toHaveTextContent('3WICP_0002———Error')                  // an error says only that: which one is told by its errors
-    expect(line(2)).toHaveTextContent('2WICP_0001R0001Revision + Desinstallation2026-09-14 11:40Skipped / Existing')   // the row, the location, the revision and what became of it
+    expect(line(4)).toHaveTextContent('4—WICP_0003——Add')
+    expect(line(3)).toHaveTextContent('3—WICP_0002——Error')                  // an error says only that: which one is told by its errors
+    expect(line(2)).toHaveTextContent('2R0001WICP_0001Revision + Desinstallation2026-09-14 11:40Skipped / Existing')   // the row, the revision, the location and what became of it
     expect(within(table).queryByText('Diagnosis')).not.toBeInTheDocument()
 
     // the figures are the filters: the one pressed keeps its rows, and pressed again lets them all be seen

@@ -2906,7 +2906,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
                     <div className="grid grid-cols-2 gap-4 mt-4">
                       <Field label="Location id" required placeholder="e.g. DONA_01" hint={DESCRIPTIONS.locationID} value={locationDraft.location_id}
                              onChange={(v) => setLocationDraft((d) => ({ ...d, location_id: v }))} />
-                      <Field label="Location name (optional)" placeholder="e.g. Doñana site 1" hint={DESCRIPTIONS.locationName} value={locationDraft.name}
+                      <Field label="Location name" placeholder="e.g. Doñana site 1" hint={DESCRIPTIONS.locationName} value={locationDraft.name}
                              onChange={(v) => setLocationDraft((d) => ({ ...d, name: v }))} />
                       <Field label="Latitude" type="number" required min={-90} max={90} step="any" placeholder="e.g. 52.70442"
                              hint={DESCRIPTIONS.latitude} error={locationDraft.latitude ? locationErrors.latitude : undefined} value={locationDraft.latitude}

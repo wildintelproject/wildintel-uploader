@@ -597,8 +597,19 @@ export interface FieldlogSettings {
 }
 
 /** The people, the SD cards and the cameras of the field work, kept in the settings. */
+/** The roles of a contributor in Camtrap DP. */
+export type TrapperRoleName = 'contact' | 'principalInvestigator' | 'rightsHolder' | 'publisher' | 'contributor'
+
+/** What a trapper is in a research project. */
+export interface TrapperRole {
+  research_project: string
+  trapper: string
+  role: TrapperRoleName
+}
+
 export interface FieldworkSettings {
   trappers: Trapper[]
+  roles?: TrapperRole[]
   sd_cards: SdCard[]
   cameras: Camera[]
 }
