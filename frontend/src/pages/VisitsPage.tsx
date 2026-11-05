@@ -23,13 +23,13 @@ export type VisitSource = 'manual' | 'wildintel' | 'wildintel-new' | 'csv'
 
 /** The fields of a visit as the matching of the columns groups them: as the form of a visit entered by hand does, in its order. */
 const MAPPING_FIELDS: Record<string, string[]> = {
-  'Who': ['trappers'],
+  'Who': ['trappers', 'setup_by'],
   'Where': ['location_id', 'location_name', 'latitude', 'longitude', 'coordinate_uncertainty', 'timezone'],
   'When': ['date', 'time', 'when', 'created_at', 'session'],
   'The visit': ['status', 'actions', 'date_time_ok'],
   'SD card': ['sd', 'card_batteries_ok', 'num_photos', 'sd_brand', 'sd_capacity'],
   'Camera': ['camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
-  'Site': ['feature_type', 'habitat', 'setup_by', 'bait_use', 'timestamp_issues'],
+  'Site': ['feature_type', 'habitat', 'bait_use', 'timestamp_issues'],
   'Grouping and notes': ['deployment_groups', 'tags', 'comments'],
 }
 const MAPPING_GROUPS = [...Object.keys(MAPPING_FIELDS), 'Other']
