@@ -913,24 +913,21 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(screen.getByRole('button', { name: /custom csv/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    // what to create is chosen with the file, before it is read
+    await userEvent.click(screen.getByRole('switch', { name: 'Create the locations that do not exist' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Create the cameras that do not exist' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
 
-    // what is only the entity's is not asked until it is created
     await screen.findByLabelText('Site (a location of the research project)')
-    expect(screen.queryByLabelText('Timezone of the location (IANA, e.g. Europe/Madrid)')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Brand of the SD card')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeEnabled()
-
-    await userEvent.click(screen.getByRole('switch', { name: 'Create the locations that do not exist' }))
     expect(screen.getByLabelText('Timezone of the location (IANA, e.g. Europe/Madrid)')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // coordinates and timezone are required now
+    expect(screen.queryByLabelText('Brand of the SD card')).not.toBeInTheDocument()          // the SD cards are not created
+    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // coordinates, timezone and camera model are required now
     expect(screen.getByRole('status')).toHaveTextContent('match also latitude, longitude, timezone of the location')
 
     // a default is as good as a column
     await userEvent.type(screen.getByLabelText('Default for Latitude'), '40.1')
     await userEvent.type(screen.getByLabelText('Default for Longitude'), '-3.2')
     await userEvent.type(screen.getByLabelText('Default for Timezone of the location (IANA, e.g. Europe/Madrid)'), 'Europe/Madrid')
-    await userEvent.click(screen.getByRole('switch', { name: 'Create the cameras that do not exist' }))
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // the camera model is required now
     await userEvent.type(screen.getByLabelText('Default for Camera model'), 'Browning-BTC-8E')
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeEnabled()

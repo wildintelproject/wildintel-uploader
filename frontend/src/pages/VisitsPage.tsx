@@ -666,7 +666,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     csvReading.current++ // what an older file is still being answered is left out
     setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({})
     // what to create and the defaults go with the columns they are for — except those of the legacy download, which are chosen before its file is read
-    if (source !== 'wildintel') { setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({}) }
+    if (source !== 'wildintel' && source !== 'csv') { setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({}) }
   }
 
   async function readCsv(file: File | undefined) {
@@ -1375,10 +1375,12 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               </div>
               <p className={hintClass}>The fieldwork datasheet (an .xlsx workbook): its visits complete the ones kept first, and then those of the file are applied on top of both.</p>
             </div>
-            {source === 'wildintel' && (
+            {(source === 'wildintel' || source === 'csv') && (
               <fieldset className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 mb-4">
                 <legend className="px-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">Create what does not exist yet <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">optional</span></legend>
-                <p className={`${hintClass} mb-3`}>When an entry names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. The coordinates of a location, the camera and the card are those of the entry; what the form does not have is asked here, once for all of them. Choose it before the file: to change it afterwards, check the file again.</p>
+                {source === 'csv'
+                  ? <p className={`${hintClass} mb-3`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. Each one asks for more fields in the matching of the columns, where a default value can also be given for a field the file has no column for. Choose it before the file: to change it afterwards, check the file again.</p>
+                  : <p className={`${hintClass} mb-3`}>When an entry names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. The coordinates of a location, the camera and the card are those of the entry; what the form does not have is asked here, once for all of them. Choose it before the file: to change it afterwards, check the file again.</p>}
                 {createSwitches}
                 {legacyAsked.length > 0 && (
                   <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3" role="group" aria-label="Values of what is created">
@@ -1392,8 +1394,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     <datalist id="legacy-timezones">{knownTimezones().map((tz) => <option key={tz} value={tz} />)}</datalist>
                   </div>
                 )}
-                {legacyBadTimezone && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">Not a known IANA timezone (e.g. Europe/Madrid).</p>}
-                {legacyMissing.length > 0 && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">Before choosing the file, give: {legacyMissing.join(', ')}.</p>}
+                {source === 'wildintel' && legacyBadTimezone && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">Not a known IANA timezone (e.g. Europe/Madrid).</p>}
+                {source === 'wildintel' && legacyMissing.length > 0 && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">Before choosing the file, give: {legacyMissing.join(', ')}.</p>}
               </fieldset>
             )}
             {source === 'csv' && sourcesUsed.epicollect && (
@@ -1437,11 +1439,6 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             >
               {csvColumns && (
                 <>
-                  <fieldset className="mb-5 rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3">
-                    <legend className="px-1 text-sm font-semibold">Create what does not exist yet</legend>
-                    <p className={`${hintClass} mb-2`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it can be created from the file. Each one asks for more fields below, and a field is given by a column or by a default value.</p>
-                    {createSwitches}
-                  </fieldset>
                   <section aria-label="Columns of the file and fields of the visit" className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700">
                     <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
                       <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Mapping of the columns of the file to the fields of a visit</h5>
