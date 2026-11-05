@@ -1007,3 +1007,10 @@ def test_importing_a_csv_creates_the_locations_cameras_and_sd_cards_it_is_asked_
     sd_brand = next(f for f in columns["fields"] if f["field"] == "sd_brand")
     assert sd_brand["entity"] == "sd_cards" and sd_brand["required_with"] == ["sd_cards"]
     assert next(f for f in columns["fields"] if f["field"] == "latitude")["required_with"] == ["locations"]
+
+
+def test_the_entries_of_epicollect_are_downloaded_as_a_csv(monkeypatch):
+    from wildintel_uploader.core.services import epicollect_service
+    monkeypatch.setattr(epicollect_service, "visits_csv", lambda settings=None: "location_id,date\nA,2026-01-01\n")
+    body = _client().post("/api/visits/epicollect-download").json()
+    assert body == {"csv": "location_id,date\nA,2026-01-01\n", "count": 1}

@@ -119,12 +119,12 @@ class AgoutiSettings(BaseModel):
         return (value.strip() or None) if isinstance(value, str) else value
 
 
-class CustomCsvSettings(BaseModel):
-    enabled: bool = Field(default=True, description="Whether a CSV file of any shape can be read for visits, saying which column gives each field. (CUSTOMCSV.enabled)")
+class EpicollectCsvSettings(BaseModel):
+    enabled: bool = Field(default=True, description="Whether the CSV downloaded from the new WildINTEL Epicollect project can be read for visits. (EPICOLLECTCSV.enabled)")
 
 
 class Epicollect5Settings(BaseModel):
-    enabled: bool = Field(default=False, description="Whether Epicollect5 is used as a source: of visits, and of the details of a deployment when it is imported. (EPICOLLECT5.enabled)")
+    enabled: bool = Field(default=False, description="Whether Epicollect5 is used as a source: of visits (its entries are downloaded as a CSV), and of the details of a deployment when it is imported. (EPICOLLECT5.enabled)")
     unmapped_to_comments: bool = Field(
         default=False,
         description="What an entry says in an input that is not mapped to any field goes to the comments of the deployment. (EPICOLLECT5.unmapped_to_comments)",
@@ -434,7 +434,7 @@ class Settings(BaseModel):
     TRAPPER: TrapperSettings = Field(default_factory=TrapperSettings)
     EPICOLLECT5: Epicollect5Settings = Field(default_factory=Epicollect5Settings)
     AGOUTI: AgoutiSettings = Field(default_factory=AgoutiSettings)
-    CUSTOMCSV: CustomCsvSettings = Field(default_factory=CustomCsvSettings)
+    EPICOLLECTCSV: EpicollectCsvSettings = Field(default_factory=EpicollectCsvSettings)
     DATA: DataSettings = Field(default_factory=DataSettings)
     VALIDATION: ValidationSettings = Field(default_factory=ValidationSettings)
     POSTVALIDATION: PostvalidationSettings = Field(default_factory=PostvalidationSettings)

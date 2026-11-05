@@ -552,7 +552,7 @@ export interface AppSettings {
   /** What an upload to Agouti needs — kept; nothing is uploaded to Agouti yet. */
   AGOUTI: { enabled: boolean; base_url: string | null; has_api_key: boolean; project_id: string | null }
   /** Whether a CSV of any shape can be read for visits. */
-  CUSTOMCSV: { enabled: boolean }
+  EPICOLLECTCSV: { enabled: boolean }
   /** mapping: the ref of the Epicollect5 input that gives each field of a deployment (deployment field → ref). */
   EPICOLLECT5: { enabled: boolean; unmapped_to_comments: boolean; project_slug: string | null; client_id: string | null; has_secret: boolean; mapping: Record<string, string> }
   /** The folder where the app keeps what it makes — its collections, reports and packages go in folders inside it, unless each has one of its own. */
@@ -576,7 +576,7 @@ export interface AppSettingsUpdate {
   GENERAL: { log_level: LogLevel; workers: number; default_research_project: string | null }
   TRAPPER: { enabled: boolean; base_url: string | null; user_name: string | null; user_password: string; max_zip_mb: number }
   AGOUTI: { enabled: boolean; base_url: string | null; api_key: string; project_id: string | null }
-  CUSTOMCSV: { enabled: boolean }
+  EPICOLLECTCSV: { enabled: boolean }
   EPICOLLECT5: { enabled: boolean; unmapped_to_comments: boolean; project_slug: string | null; client_id: string | null; client_secret: string; mapping: Record<string, string> }
   DATA: { dir: string | null; collections_dir: string | null; reports_dir: string | null; packages_dir: string | null }
   VALIDATION: ValidationSettings

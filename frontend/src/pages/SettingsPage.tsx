@@ -160,7 +160,7 @@ interface Draft {
   packagesDir: string
   /** Which of the sources of visits and of the places to upload to are used. */
   wildintelEnabled: boolean
-  customCsvEnabled: boolean
+  wildintelNewEnabled: boolean
   trapperEnabled: boolean
   agoutiEnabled: boolean
   agoutiUrl: string
@@ -234,7 +234,7 @@ function toDraft(s: AppSettings): Draft {
     collectionsDir: s.DATA.collections_dir ?? '',
     reportsDir: s.DATA.reports_dir ?? '',
     packagesDir: s.DATA.packages_dir ?? '',
-    wildintelEnabled: s.FIELDLOG.enabled ?? true, customCsvEnabled: s.CUSTOMCSV?.enabled ?? true, trapperEnabled: s.TRAPPER.enabled ?? true,
+    wildintelEnabled: s.FIELDLOG.enabled ?? true, wildintelNewEnabled: s.EPICOLLECTCSV?.enabled ?? true, trapperEnabled: s.TRAPPER.enabled ?? true,
     agoutiEnabled: s.AGOUTI?.enabled ?? false, agoutiUrl: s.AGOUTI?.base_url ?? '', agoutiKey: '', agoutiProject: s.AGOUTI?.project_id ?? '',
     trapperUrl: s.TRAPPER.base_url ?? '',
     maxZipMb: String(s.TRAPPER.max_zip_mb),
@@ -300,7 +300,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
     TRAPPER: { enabled: d.trapperEnabled, base_url: d.trapperUrl.trim() || null, user_name: d.trapperUser.trim() || null, user_password: d.trapperPassword, max_zip_mb: Number(d.maxZipMb) },
     EPICOLLECT5: { enabled: d.epicollectEnabled, unmapped_to_comments: d.epicollectUnmappedToComments, project_slug: d.epicollectSlug.trim() || null, client_id: d.epicollectClientId.trim() || null, client_secret: d.epicollectClientSecret, mapping: d.epicollectMapping },
     AGOUTI: { enabled: d.agoutiEnabled, base_url: d.agoutiUrl.trim() || null, api_key: d.agoutiKey, project_id: d.agoutiProject.trim() || null },
-    CUSTOMCSV: { enabled: d.customCsvEnabled },
+    EPICOLLECTCSV: { enabled: d.wildintelNewEnabled },
     DATA: { dir: d.dataDir.trim() || null, collections_dir: d.collectionsDir.trim() || null, reports_dir: d.reportsDir.trim() || null, packages_dir: d.packagesDir.trim() || null },
     VALIDATION: d.validation,
     POSTVALIDATION: {
@@ -2435,7 +2435,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
             <p className="text-sm text-zinc-500 dark:text-zinc-400">The places the visits of a research project can be taken from, besides entering them by hand. Pick one to set it up. Others may come in a future version.</p>
             <div role="tablist" aria-label="Visit sources" className="flex flex-wrap gap-2">
               {VISIT_SOURCES.map((d) => {
-                const used = d.id === 'wildintel' ? draft.wildintelEnabled : d.id === 'epicollect' ? draft.epicollectEnabled : draft.customCsvEnabled
+                const used = d.id === 'wildintel' ? draft.wildintelEnabled : d.id === 'wildintel-new' ? draft.wildintelNewEnabled : d.id === 'epicollect' ? draft.epicollectEnabled : true
                 return (
                   <button key={d.id} type="button" role="tab" aria-selected={visitSource === d.id} onClick={() => setVisitSource(d.id)}
                           className={`inline-flex items-center gap-2 px-4 h-10 rounded-lg border text-sm font-medium ${visitSource === d.id ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>
@@ -2447,7 +2447,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
             </div>
             {visitSource === 'wildintel' && (
               <div className="space-y-5">
-                <ToggleCard title="Use WildINTEL Epicollect Legacy" checked={draft.wildintelEnabled} onChange={(v) => set('wildintelEnabled', v)}
+                <ToggleCard title="Use WildINTEL Epicollect Legacy CSV" checked={draft.wildintelEnabled} onChange={(v) => set('wildintelEnabled', v)}
                             description="Offers to read the visits from the CSV of the WildINTEL Epicollect project, with the datasheet of visits if you have it. Turned off, it is not offered in Register visits." />
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">The visits are read from the CSV file downloaded from the WildINTEL Epicollect project: no connection to Epicollect is needed. Here is how the file is read.</p>
                 <SettingsCard>
@@ -2459,17 +2459,22 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
                 </SettingsCard>
               </div>
             )}
+            {visitSource === 'wildintel-new' && (
+              <div className="space-y-5">
+                <ToggleCard title="Use WildINTEL Epicollect CSV" checked={draft.wildintelNewEnabled} onChange={(v) => set('wildintelNewEnabled', v)}
+                            description="Offers to read the visits from the CSV downloaded from the new WildINTEL Epicollect project (the form of the field flow). Turned off, it is not offered in Register visits." />
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">There is nothing else to set up: the columns are found by the label of their question, and the time of a visit is the day and the hour typed in the form.</p>
+              </div>
+            )}
             {visitSource === 'csv' && (
               <div className="space-y-5">
-                <ToggleCard title="Use Custom CSV" checked={draft.customCsvEnabled} onChange={(v) => set('customCsvEnabled', v)}
-                            description="Offers to read the visits from a CSV file of any shape, saying which column gives each field of a visit. Turned off, it is not offered in Register visits." />
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">There is nothing else to set up: the columns are matched when each file is read.</p>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">Custom CSV is always offered in Register visits, and cannot be turned off. There is nothing to set up: the columns are matched when each file is read.</p>
               </div>
             )}
             {visitSource === 'epicollect' && (
               <div className="space-y-5">
-              <ToggleCard title="Use WildINTEL Epicollect" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)}
-                              description="Offers Epicollect as a source: of the visits of a research project, and of the details of a deployment — its dates, camera, site and notes — when it is imported. Turned off, nothing is read from Epicollect." />
+              <ToggleCard title="Use Epicollect" checked={draft.epicollectEnabled} onChange={(v) => set('epicollectEnabled', v)}
+                              description="Offers Epicollect as a source: of the visits of a research project — its entries are downloaded as a CSV, read as a Custom CSV — and of the details of a deployment — its dates, camera, site and notes — when it is imported. Turned off, nothing is read from Epicollect." />
               <SettingsCard>
                 <CardBlock title="Project" description="The Epicollect5 project the information is imported from.">
                   <PlainField label="Project name in its web address" hint={`It is the last part of the project's address: five.epicollect.net/project/${draft.epicollectSlug.trim() || 'my-project'}`}>

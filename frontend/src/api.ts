@@ -185,6 +185,7 @@ export const api = {
     }),
 
   // The columns of a CSV file, a few of its rows, the fields of a visit it can give and the column that most likely gives each.
+  epicollectVisitsDownload: () => post<{ csv: string; count: number }>('/api/visits/epicollect-download', {}),
   visitsCsvColumns: (csv: string) => post<VisitsCsvColumns>('/api/visits/csv-columns', { csv }),
 
   // The revision a new deployment at this location is expected to have: one after the highest kept for it, or 1.

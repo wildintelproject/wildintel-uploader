@@ -86,7 +86,7 @@ export const APP_SETTINGS: AppSettings = {
   EPICOLLECT5: { enabled: false, unmapped_to_comments: false, project_slug: null, client_id: null, has_secret: false, mapping: {} },
   TRAPPER: { enabled: true, base_url: 'https://trapper.example.org', user_name: 'alice', has_password: true, max_zip_mb: 500 },
   AGOUTI: { enabled: false, base_url: null, has_api_key: false, project_id: null },
-  CUSTOMCSV: { enabled: true },
+  EPICOLLECTCSV: { enabled: true },
   DATA: { dir: '/home/me/Documents/wildintel-uploader', collections_dir: null, reports_dir: null, packages_dir: null,
     default_collections_dir: '/home/me/Documents/wildintel-uploader/collections', default_reports_dir: '/home/me/Documents/wildintel-uploader/reports', default_packages_dir: '/home/me/Documents/wildintel-uploader/packages' },
   VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },

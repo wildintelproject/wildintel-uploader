@@ -19,13 +19,13 @@ import { availabilityErrors, cameraAtSite, cardBlock, unfinishedRevision } from 
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, CsvEntity, ImportCsvOptions } from '../types'
 
-export type VisitSource = 'manual' | 'epicollect' | 'wildintel' | 'csv'
+export type VisitSource = 'manual' | 'wildintel' | 'wildintel-new' | 'csv'
 
 const SOURCE_OPTIONS: { value: VisitSource; icon: ReactNode; title: string; description: string }[] = [
   { value: 'manual', icon: <><path d="M18 11V6a2 2 0 0 0-4 0v4" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></>, title: 'By hand', description: 'Enter each visit yourself, following the field flow: the site, when, who went and what was done.' },
   { value: 'csv', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>, title: 'Custom CSV', description: 'A CSV of any shape: say which column gives each field of a visit.' },
-  { value: 'wildintel', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect Legacy', description: 'Read the visits of a field trip from the CSV downloaded from the original WildINTEL Epicollect project.' },
-  { value: 'epicollect', icon: <><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></>, title: 'WildINTEL Epicollect', description: 'Read the visits of a field trip from the CSV downloaded from the new WildINTEL Epicollect project.' },
+  { value: 'wildintel', icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M12 18h.01" /></>, title: 'WildINTEL Epicollect Legacy CSV', description: 'Read the visits of a field trip from the CSV downloaded from the original WildINTEL Epicollect project.' },
+  { value: 'wildintel-new', icon: <><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></>, title: 'WildINTEL Epicollect CSV', description: 'Read the visits of a field trip from the CSV downloaded from the new WildINTEL Epicollect project.' },
 ]
 
 /** The icon of the SD card section, drawn as those of the sections of the details are. */
@@ -479,7 +479,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // And the cameras, to pick the one of the visit from.
   const [allCameras, setCameras] = useState<Camera[]>([])
   // Which sources of visits are used, as the settings say: one that is not, is not offered.
-  const [sourcesUsed, setSourcesUsed] = useState({ wildintel: true, csv: true })
+  const [sourcesUsed, setSourcesUsed] = useState({ wildintel: true, wildintelNew: true, epicollect: false })
   // Only those of the research project: each belongs to one.
   const ofProject = (rp: string | null) => !!project && (rp ?? '').toLowerCase() === project.acronym.toLowerCase()
   // ...and only those still in use: an archived one (lost, stolen, broken…) is not offered, unless the visit already has it.
@@ -487,6 +487,9 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const cameras = allCameras.filter((c) => ofProject(c.research_project) && (inUse(c.status) || cameraKey(c) === visit.details.camera_id))
   // From a CSV file: its text, what reading it gave, and what was kept of it.
   const [csvName, setCsvName] = useState<string | null>(null)
+  // Custom CSV: where the file is — on this computer, or in the Epicollect5 project of the settings.
+  const [csvOrigin, setCsvOrigin] = useState<'file' | 'epicollect'>('file')
+  const [downloading, setDownloading] = useState(false)
   const [csvText, setCsvText] = useState('')
   // Whether the file is being checked again — with the visits kept now, the locations now, the settings now.
   const [rechecking, setRechecking] = useState(false)
@@ -502,7 +505,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // What to create when the file names a location, a camera or an SD card that does not exist, and the value of a field the file has no column for.
   const [csvCreate, setCsvCreate] = useState<CsvCreate>({ locations: false, cameras: false, sd_cards: false })
   const [csvDefaults, setCsvDefaults] = useState<Record<string, string>>({})
-  const csvFormat: VisitsCsvFormat = source === 'wildintel' ? 'epicollect' : source === 'epicollect' ? 'epicollect-csv' : 'mapped'
+  const csvFormat: VisitsCsvFormat = source === 'wildintel' ? 'epicollect' : source === 'wildintel-new' ? 'epicollect-csv' : 'mapped'
   const chosen = SOURCE_OPTIONS.find((o) => o.value === source)
   // A camera put up while it is somewhere else, or a card left while it is in another camera, cannot be kept — said as soon as it is chosen.
   const cardOptions = { cards: allSdCards, session: visit.session || (kept ? sessionOf(kept.length) : undefined) }
@@ -603,7 +606,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         setTrappers((settings.FIELDWORK?.trappers ?? []).filter((t) => !t.status || t.status === 'active').map((t) => t.name))
         setSdCards(settings.FIELDWORK?.sd_cards ?? [])
         setCameras(settings.FIELDWORK?.cameras ?? [])
-        setSourcesUsed({ wildintel: settings.FIELDLOG?.enabled ?? true, csv: settings.CUSTOMCSV?.enabled ?? true })
+        setSourcesUsed({ wildintel: settings.FIELDLOG?.enabled ?? true, wildintelNew: settings.EPICOLLECTCSV?.enabled ?? true, epicollect: settings.EPICOLLECT5?.enabled ?? false })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -685,6 +688,23 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     } catch (e) {
       if (reading === csvReading.current) setCsvError(e instanceof Error ? e.message : 'Could not read the file.')
     }
+  }
+
+  /** Custom CSV, from Epicollect: the entries of the project of the settings are downloaded as a CSV and go on as any file does — its columns are matched next. */
+  async function downloadEpicollect() {
+    forgetCsv()
+    if (!project) return
+    const reading = ++csvReading.current
+    setCsvName('Epicollect5'); setDownloading(true)
+    try {
+      const { csv } = await api.epicollectVisitsDownload()
+      if (reading !== csvReading.current) return
+      setCsvText(csv)
+      const found = await api.visitsCsvColumns(csv)
+      if (reading === csvReading.current) { setCsvColumns(found); setCsvMapping(found.mapping) }
+    } catch (e) {
+      if (reading === csvReading.current) setCsvError(e instanceof Error ? e.message : 'Could not read Epicollect5.')
+    } finally { setDownloading(false) }
   }
 
   /** The history of visits: kept as base64, and the file read again with it when one is already chosen — the history goes before it. */
@@ -952,7 +972,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
         summary={chosen?.title}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {SOURCE_OPTIONS.filter((o) => (o.value === 'wildintel' ? sourcesUsed.wildintel : o.value === 'csv' ? sourcesUsed.csv : true)).map((o) => <TaskCard key={o.value} icon={o.icon} title={o.title} description={o.description} selected={source === o.value} onClick={() => setSource(o.value)} />)}
+          {SOURCE_OPTIONS.filter((o) => (o.value === 'wildintel' ? sourcesUsed.wildintel : o.value === 'wildintel-new' ? sourcesUsed.wildintelNew : true)).map((o) => <TaskCard key={o.value} icon={o.icon} title={o.title} description={o.description} selected={source === o.value} onClick={() => setSource(o.value)} />)}
         </div>
       </WizardStep>
 
@@ -1338,7 +1358,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               ? <>The Epicollect download of the field trip. Its columns are found by their names ({['1_Responsable', '2_Collection', '4_Location', '5_Camera', '6_Action', '7_Status_of_the_camera', 'created_at'].map((c, i, all) => (
                 <span key={c}><code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-xs font-mono">{c}</code>{i < all.length - 2 ? ', ' : i === all.length - 2 ? ', and ' : ''}</span>
               ))}), whatever the case or the number in front. So are those of the Doñana form. The time of a visit is when its entry was created, put in the timezone of the location.</>
-              : source === 'epicollect' ? 'The CSV downloaded from the new WildINTEL Epicollect project: a row is a visit. Its columns are found by the label of their question, whatever the case or the number in front. The time of a visit is the day and the hour typed in the form.'
+              : source === 'wildintel-new' ? 'The CSV downloaded from the new WildINTEL Epicollect project: a row is a visit. Its columns are found by the label of their question, whatever the case or the number in front. The time of a visit is the day and the hour typed in the form.'
               : 'Any spreadsheet file with a row per visit. Next, you say which column gives each field of a visit.'}
             summary={csvName}
           >
@@ -1376,6 +1396,24 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 {legacyMissing.length > 0 && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">Before choosing the file, give: {legacyMissing.join(', ')}.</p>}
               </fieldset>
             )}
+            {source === 'csv' && sourcesUsed.epicollect && (
+              <div role="radiogroup" aria-label="Where the CSV is" className="flex gap-2 mb-4">
+                {([['file', 'A file on this computer'], ['epicollect', 'Epicollect5 project']] as const).map(([v, label]) => (
+                  <button key={v} type="button" role="radio" aria-checked={csvOrigin === v} onClick={() => { setCsvOrigin(v); forgetCsv(); setCsvName(null) }}
+                          className={`px-4 h-10 rounded-lg border text-sm font-medium ${csvOrigin === v ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>{label}</button>
+                ))}
+              </div>
+            )}
+            {source === 'csv' && sourcesUsed.epicollect && csvOrigin === 'epicollect' ? (
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
+                <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Epicollect5 project</h5>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <button type="button" className={btnPrimary} disabled={downloading} onClick={() => void downloadEpicollect()}>{downloading ? 'Downloading…' : csvColumns ? 'Download again' : 'Download the entries'}</button>
+                  {csvName && <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">{csvName}</span>}
+                </div>
+                <p className={hintClass}>The entries of the project and the connection set in Settings › Visit sources are downloaded as a CSV with a row per entry. Next, you say which column gives each field of a visit.</p>
+              </div>
+            ) : (
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
               <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Spreadsheet file</h5>
               <div className="flex items-center gap-4 flex-wrap">
@@ -1388,6 +1426,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               </div>
               <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (same site, day and time) is left as it is.</p>
             </div>
+            )}
             {csvError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{csvError}</p>}
           </WizardStep>
 

@@ -234,6 +234,16 @@ def export_visits_csv(req: ListVisitsRequest) -> dict:
     return {"csv": visits_csv.export_visits(visits), "filename": f"{req.research_project_id}_visits.csv", "count": len(visits)}
 
 
+@router.post("/epicollect-download")
+def epicollect_download() -> dict:
+    """The entries of the Epicollect5 project of the settings, as the text of a CSV with a row per visit and the columns a visit has: {"csv", "count"}."""
+    try:
+        text = epicollect_service.visits_csv(config.load_settings())
+    except epicollect_service.EpicollectError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"csv": text, "count": max(text.count("\n") - 1, 0)}
+
+
 @router.post("/csv-columns")
 def csv_columns(req: VisitsCsvColumnsRequest) -> dict:
     """The columns of a CSV file, a few of its rows, the fields of a visit it can give and the column that most likely gives each."""
