@@ -105,12 +105,12 @@ def test_eject_unmounts_and_powers_off_a_removable_drive(tmp_path, monkeypatch):
 def test_eject_leaves_a_fixed_disk_alone(tmp_path, monkeypatch):
     calls: list = []
     # lsblk answers PKNAME with a disk, then the flags "0 0" (not removable, not hotplug)
-    answers = iter([_Done("/dev/nvme0n1p2 /\n"), _Done("nvme0n1\n"), _Done("0 0\n")])
+    answers = iter([_Done("/dev/nvme0n1p2 /\n"), _Done("nvme0n1\n"), _Done("0 0\n"), _Done("  HintSystem:  true\n")])
     monkeypatch.setattr(card_copy_service.platform, "system", lambda: "Linux")
     monkeypatch.setattr(card_copy_service, "_run", lambda command: (calls.append(command), next(answers))[1])
     result = card_copy_service.eject(str(tmp_path))
     assert result["ejected"] is False
-    assert not any(c[0] == "udisksctl" for c in calls)
+    assert not any(c[:2] in (["udisksctl", "unmount"], ["udisksctl", "power-off"]) for c in calls)
 
 
 def test_eject_says_why_it_could_not(tmp_path, monkeypatch):
@@ -125,3 +125,12 @@ def test_eject_endpoint(tmp_path, monkeypatch):
     monkeypatch.setattr(card_copy_service, "eject", lambda path: {"ejected": True, "message": f"{path} ejected"})
     response = TestClient(app).post("/api/deployment-import/eject-card", json={"path": "/run/media/me/CARD_A"})
     assert response.status_code == 200 and response.json() == {"ejected": True, "message": "/run/media/me/CARD_A ejected"}
+
+
+def test_eject_takes_the_reader_of_a_laptop_that_udisks_says_is_not_a_system_drive(tmp_path, monkeypatch):
+    calls: list = []
+    # lsblk says "0 0" for an mmcblk, but udisks knows the card is not a system drive
+    _fake_linux(monkeypatch, [_Done("/dev/mmcblk0p1 /run/media/me/CARD_B\n"), _Done("mmcblk0\n"), _Done("0 0\n"), _Done("  HintSystem:  false\n")], calls)
+    result = card_copy_service.eject(str(tmp_path))
+    assert result["ejected"] is True
+    assert ["udisksctl", "unmount", "-b", "/dev/mmcblk0p1"] in calls

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -133,6 +134,14 @@ def _eject_macos(path: Path) -> dict:
     return {"ejected": True, "message": f"{volume.name} ejected: you can take the card out."}
 
 
+def _udisks_removable(disk: str) -> bool:
+    """Whether udisks does not take the drive for a system one — the reader of a laptop (an mmcblk) is neither removable nor hotplug for lsblk, yet it holds cards."""
+    info = _run(["udisksctl", "info", "-b", disk]).stdout.lower()
+    hint = re.search(r"hintsystem:\s*(\w+)", info)
+    removable = re.search(r"\bremovable:\s*(\w+)", info)
+    return bool((hint and hint.group(1) == "false") or (removable and removable.group(1) == "true"))
+
+
 def _eject_linux(path: Path) -> dict:
     """Unmounts the partition the folder is on and powers the drive off, with udisks — only when the system says the drive is removable."""
     mount = _run(["findmnt", "-n", "-o", "SOURCE,TARGET", "--target", str(path.resolve())])
@@ -143,7 +152,7 @@ def _eject_linux(path: Path) -> dict:
     parent = _run(["lsblk", "-no", "PKNAME", device]).stdout.strip().splitlines()
     disk = f"/dev/{parent[0].strip()}" if parent and parent[0].strip() else device
     flags = _run(["lsblk", "-dno", "RM,HOTPLUG", disk]).stdout.split()
-    if "1" not in flags:
+    if "1" not in flags and not _udisks_removable(disk):
         return {"ejected": False, "message": f"{target} is not on a removable drive: nothing ejected."}
     unmounted = _run(["udisksctl", "unmount", "-b", device])
     if unmounted.returncode != 0:
