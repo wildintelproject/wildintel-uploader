@@ -359,7 +359,7 @@ def test_a_research_project_starts_with_no_locations_and_gets_them_added(tmp_pat
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         empty = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"})
         saved = _client().post("/api/deployment-import/locations/save", json={
-            "research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Doñana site 1", "timezone": "Europe/Madrid", "trapper_pk": 5},
+            "research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Doñana site 1", "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5, "trapper_pk": 5},
         })
         listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"})
 
@@ -367,13 +367,13 @@ def test_a_research_project_starts_with_no_locations_and_gets_them_added(tmp_pat
     assert saved.status_code == 200
     [location] = listed.json()["results"]
     assert (location["location_id"], location["name"], location["timezone"], location["trapper_pk"]) == ("DONA_01", "Doñana site 1", "Europe/Madrid", 5)
-    assert location["latitude"] is None and location["longitude"] is None  # not known yet
+    assert (location["latitude"], location["longitude"], location["ignore_dst"]) == (37.0, -6.5, False)
 
 
 def test_a_locations_timezone_and_summer_time_are_fixed_when_it_is_created(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "Europe/Madrid", "ignore_dst": False}})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
         update = lambda **changes: _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "dona_01", **changes})  # noqa: E731
         zone = update(timezone="UTC")
         summer = update(ignore_dst=True)
@@ -390,7 +390,7 @@ def test_a_locations_timezone_and_summer_time_are_fixed_when_it_is_created(tmp_p
 def test_a_location_can_be_renamed_moved_and_cleared_of_what_is_not_known_any_more(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "latitude": 37.0, "longitude": -6.5, "coordinate_uncertainty": 50}})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5, "coordinate_uncertainty": 50}})
         changed = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "name": "Site 1", "latitude": 37.1, "coordinate_uncertainty": None})
         bad = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "latitude": 95})
 
@@ -412,7 +412,7 @@ def test_a_location_is_deleted_unless_it_has_visits_or_comes_from_trapper(tmp_pa
     visit = {"location_id": "DONA_02", "session": "R0001", "date": "2026-10-02", "time": "08:14:05", "actions": ["Installation"], "camera_id": "12", "sd": "A13"}
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        for location in ({"location_id": "DONA_01"}, {"location_id": "DONA_02"}, {"location_id": "DONA_03", "trapper_pk": 7}):
+        for location in ({"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_02", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_03", "trapper_pk": 7, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}):
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": location})
         _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit})
         free = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "dona_01"})
@@ -442,30 +442,43 @@ def test_the_next_revision_is_asked_by_research_project_and_location(tmp_path: P
 def test_a_location_id_is_unique_within_its_research_project(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        body = {"research_project_id": "DONA", "location": {"location_id": "DONA_01"}}
+        body = {"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}}
         assert _client().post("/api/deployment-import/locations/save", json=body).status_code == 200
-        again = _client().post("/api/deployment-import/locations/save", json={**body, "location": {"location_id": "dona_01"}})
+        again = _client().post("/api/deployment-import/locations/save", json={**body, "location": {"location_id": "dona_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
 
     assert again.status_code == 409
 
 
 def test_a_location_needs_its_research_project_to_be_there(tmp_path: Path):
     with _in(tmp_path):
-        response = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "NOPE", "location": {"location_id": "X_01"}})
+        response = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "NOPE", "location": {"location_id": "X_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
 
     assert response.status_code == 400
     assert "isn't in the collections folder" in response.json()["detail"]
 
 
-def test_a_location_timezone_must_be_a_known_one_and_a_blank_one_is_utc_following_summer_time(tmp_path: Path):
+def test_a_location_timezone_must_be_a_known_one_and_cannot_be_left_blank(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        bad = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_01", "timezone": "Mars/Olympus"}})
-        blank = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_02", "timezone": ""}})
+        place = {"ignore_dst": False, "latitude": 37.0, "longitude": -6.5}
+        bad = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_01", "timezone": "Mars/Olympus", **place}})
+        blank = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_02", "timezone": "", **place}})
+        absent = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_03", **place}})
 
-    assert bad.status_code == 422
-    # a location says nothing of its clock: its cameras are taken as UTC, with summer time followed (as the field records assume)
-    assert blank.status_code == 200 and (blank.json()["timezone"], blank.json()["ignore_dst"]) == ("UTC", False)
+    # a location always says its clock: the timezone, the summer time and where it is
+    assert bad.status_code == blank.status_code == absent.status_code == 422
+
+
+def test_a_location_always_says_where_it_is_and_if_its_cameras_follow_summer_time(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        full = {"location_id": "A_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}
+        refused = [
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {k: v for k, v in full.items() if k != missing}}).status_code
+            for missing in ("latitude", "longitude", "ignore_dst")
+        ]
+
+    assert refused == [422, 422, 422]
 
 
 def test_locations_of_a_research_project_id_that_is_not_a_folder_name_are_refused(tmp_path: Path):
@@ -480,11 +493,11 @@ def test_a_location_keeps_its_coordinates_within_the_standards_ranges(tmp_path: 
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         saved = _client().post("/api/deployment-import/locations/save", json={
             "research_project_id": "DONA",
-            "location": {"location_id": "DONA_01", "latitude": 37.0, "longitude": -6.5, "coordinate_uncertainty": 100},
+            "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5, "coordinate_uncertainty": 100},
         })
         listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"})
         bad = [
-            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"X_{i}", **coords}}).status_code
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"X_{i}", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5, **coords}}).status_code
             for i, coords in enumerate([{"latitude": 91}, {"longitude": -181}, {"coordinate_uncertainty": 0}])
         ]
 
@@ -993,7 +1006,7 @@ def test_preprocess_needs_to_be_told_what_to_do_and_consolidate_needs_something_
 def test_the_status_of_a_location_and_of_a_research_project_is_kept_and_defaults_to_active(tmp_path: Path):
     with _in(tmp_path):
         project = _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "status": "planned"})
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01"}})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
         archived = _client().post("/api/deployment-import/locations/update", json={
             "research_project_id": "DONA", "location_id": "DONA_01", "status": "archived", "status_date": "2026-06-01", "status_note": "the road was closed",
         })
@@ -1011,7 +1024,7 @@ def test_the_status_of_a_location_and_of_a_research_project_is_kept_and_defaults
 def test_a_location_and_a_research_project_start_active(tmp_path: Path):
     with _in(tmp_path):
         project = _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        location = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01"}})
+        location = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
 
     assert project.json()["status"] == "active" and location.json()["status"] == "active"
 
@@ -1033,7 +1046,7 @@ def test_a_research_project_is_deleted_with_its_locations_unless_it_holds_collec
     with _in(tmp_path):
         for acronym in ("DONA", "TATR"):
             _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "acronym": acronym})
-            _client().post("/api/deployment-import/locations/save", json={"research_project_id": acronym, "location": {"location_id": f"{acronym}_01"}})
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": acronym, "location": {"location_id": f"{acronym}_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
         (tmp_path / "TATR" / "R0001").mkdir()
         kept = _client().post("/api/deployment-import/research-projects/delete", json={"research_project_id": "TATR"})
         gone = _client().post("/api/deployment-import/research-projects/delete", json={"research_project_id": "DONA"})
@@ -1083,7 +1096,7 @@ def test_log_entry_gives_what_the_collections_logs_say_of_a_deployment(tmp_path:
 def test_a_archived_location_never_goes_back_to_active_or_planned(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01"}})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
         archived = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "archived", "status_note": "Repeated thefts"})
         back = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "active"})
         planned = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "planned"})

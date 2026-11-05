@@ -91,7 +91,7 @@ def test_locations_cameras_and_sd_cards_that_do_not_exist_are_created_when_asked
     text = ("site,what,day,hour,lat,lon,cam,sd,model,brand,tz\n"
             "WICP_0001,Installation,2026-09-14,11:40,40.1,-3.2,CAM9,S9,Browning,SanDisk,Europe/Madrid\n"
             "WICP_0001,Revision,2026-10-14,11:40,,,CAM9,S9,Browning,SanDisk,\n")        # the site is created from the first row
-    options = {"create": {"locations": True, "cameras": True, "sd_cards": True}}
+    options = {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"}}
     result = visits_csv.parse_visits(text, [], [], "", "mapped", mapping, options)
     assert not result["problems"] and len(result["visits"]) == 2 and result["new_sites"] == []
     made = result["create"]
@@ -110,13 +110,14 @@ def test_a_row_that_would_create_something_without_what_it_needs_is_a_problem_an
     from wildintel_uploader.core.services import visits_csv
     mapping = {**_MAP, "camera_model": "model", "sd_brand": "brand", "timezone": "tz"}
     text = ("site,what,day,hour,lat,lon,cam,sd,model,brand,tz\n"
-            "WICP_0001,Installation,2026-09-14,11:40,40.1,-3.2,CAM9,S9,,SanDisk,UTC\n"        # no camera model
-            "WICP_0002,Installation,2026-09-14,12:40,40.1,-3.2,CAM8,S8,Browning,,UTC\n"       # no SD brand
             "WICP_0003,Installation,2026-09-14,13:40,40.1,-3.2,CAM7,S7,Browning,SanDisk,\n")  # no timezone
-    result = visits_csv.parse_visits(text, [], [], "", "mapped", mapping, {"create": {"locations": True, "cameras": True, "sd_cards": True}})
+    result = visits_csv.parse_visits(text, [], [], "", "mapped", mapping, {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"}})
     assert result["visits"] == [] and result["create"] == {"locations": [], "cameras": [], "sd_cards": []}
-    assert [(r["row"], r["label"]) for r in result["rows"]] == [(2, "Data to create it is missing"), (3, "Data to create it is missing"), (4, "Data to create it is missing")]
-    assert "model" in result["rows"][0]["message"] and "brand" in result["rows"][1]["message"] and "timezone" in result["rows"][2]["message"]
+    assert [(r["row"], r["label"]) for r in result["rows"]] == [(2, "Data to create it is missing")]
+    assert "timezone" in result["rows"][0]["message"]
+    # neither the model of a camera nor the brand of an SD card is needed: only their ids
+    ok = visits_csv.parse_visits("site,what,day,hour,lat,lon,cam,sd,model,brand,tz\nWICP_0002,Installation,2026-09-14,12:40,40.1,-3.2,CAM8,S8,,,UTC\n", [], [], "", "mapped", mapping, {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"}})
+    assert len(ok["visits"]) == 1 and ok["create"]["sd_cards"][0]["brand"] is None and ok["create"]["cameras"][0]["camera_model"] is None
 
 
 def test_creating_asks_for_the_columns_it_needs():
@@ -188,7 +189,7 @@ def test_what_does_not_exist_is_created_from_an_epicollect_download_too_with_wha
     from wildintel_uploader.core.services import visits_csv
     text = ("2_Collection,4_Location,5_Camera,6_Action,10_SD,created_at,lat_13_Coordenates,long_13_Coordenates\n"
             "1,9,CAM9,Installation,S9,2026-09-14T11:40:00.000Z,40.1,-3.2\n")
-    options = {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"timezone": "Europe/Madrid", "camera_model": "Browning", "sd_brand": "SanDisk"}}
+    options = {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"timezone": "Europe/Madrid", "daylight_saving": "yes", "camera_model": "Browning", "sd_brand": "SanDisk"}}
     result = visits_csv.parse_visits(text, [], [], "WICP_", "epicollect", None, options)
     assert not result["problems"] and len(result["visits"]) == 1
     made = result["create"]
@@ -206,8 +207,8 @@ def test_the_id_of_a_camera_or_a_card_is_the_number_a_cell_starts_or_says_now():
 
 def test_how_the_card_and_the_batteries_were_is_read_as_the_form_says_it_in_english():
     from wildintel_uploader.core.services import visits_csv
-    assert [visits_csv.card_code(v) for v in ("OK", "Card full", "No batteries", "CarFull and No batteries", "Card full and no batteries", "SinPilas", "Full")] == [
-        "OK", "CarFull", "SinPilas", "CarFullSinPilas", "CarFullSinPilas", "SinPilas", None]
+    assert [visits_csv.card_code(v) for v in ("OK", "Card full", "No batteries", "CarFull and No batteries", "Card full and no batteries", "NoBatteries", "CarFullNoBatteries", "SinPilas", "CarFullSinPilas", "Full")] == [
+        "OK", "CarFull", "NoBatteries", "CarFullNoBatteries", "CarFullNoBatteries", "NoBatteries", "CarFullNoBatteries", "NoBatteries", "CarFullNoBatteries", None]
 
 
 def test_what_a_card_cell_says_besides_its_id_goes_to_the_comments():
@@ -217,3 +218,12 @@ def test_what_a_card_cell_says_besides_its_id_goes_to_the_comments():
     assert visit.sd == "68" and visit.comments == "Cloudy | SD card: 68 now. Before 26"
     plain = visits_csv.CsvVisit.model_validate({**row, "sd": "42b", "comments": ""})
     assert plain.sd == "42b" and not plain.comments
+
+
+def test_a_location_is_created_only_when_the_row_says_if_its_cameras_follow_daylight_saving_time():
+    from wildintel_uploader.core.services import visits_csv
+    text = "site,what,day,hour,lat,lon,tz,dst\nWICP_0001,Installation,2026-09-14,11:40,40.1,-3.2,Europe/Madrid,no\nWICP_0002,Installation,2026-09-14,12:40,40.1,-3.2,Europe/Madrid,\n"
+    mapping = {**_MAP, "timezone": "tz", "daylight_saving": "dst"}
+    result = visits_csv.parse_visits(text, [], [], "", "mapped", mapping, {"create": {"locations": True}})
+    assert [(l["location_id"], l["ignore_dst"]) for l in result["create"]["locations"]] == [("WICP_0001", True)]       # "no": the cameras ignore it
+    assert "daylight saving" in result["rows"][1]["message"] and len(result["visits"]) == 1

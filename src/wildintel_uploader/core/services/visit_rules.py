@@ -31,6 +31,10 @@ def _same(a, b) -> bool:
     return str(a or "").strip().lower() == str(b or "").strip().lower()
 
 
+# The codes of a card that was full — as the datasheet wrote the last (SinPilas) is still read.
+FULL_CARD = ("CarFull", "CarFullNoBatteries", "CarFullSinPilas")
+
+
 def _stamp(v: dict) -> str:
     """When a visit was, to order visits: its instant (`when`, ISO 8601 UTC) — the wall clock of its location only when it has none."""
     return v.get("when") or f"{v.get('date')}T{v.get('time')}"
@@ -75,7 +79,7 @@ def required_errors(visit: dict) -> dict[str, str]:
     actions = visit.get("actions") or []
     value = {"camera": visit.get("camera_id"), "sd": visit.get("sd"), "photos": visit.get("num_photos"), "status": visit.get("status")}
     # With the card full the photos are not counted: the count is not asked (it may still be given).
-    full_card = visit.get("card_batteries_ok") in ("CarFull", "CarFullSinPilas")
+    full_card = visit.get("card_batteries_ok") in FULL_CARD
     for field, how in asked(actions).items():
         if field == "photos" and full_card:
             continue
@@ -459,7 +463,7 @@ def history_notes(new: list[dict], kept: list[dict]) -> list[str]:
         if skipped:
             notes.append(f"R{session:04d}: {len(skipped)} visit(s) with status \"Not revised\", ignored (no card collected): {', '.join(skipped)}.")
         nocount = sorted(v["location_id"] for v in current if {"Revision", "Desinstallation"} & set(v["actions"]) and v.get("num_photos") is None
-                         and v.get("card_batteries_ok") not in ("CarFull", "CarFullSinPilas") and str(v.get("status") or "").lower() not in NOT_REVISED)
+                         and v.get("card_batteries_ok") not in FULL_CARD and str(v.get("status") or "").lower() not in NOT_REVISED)
         if nocount:
             notes.append(f"R{session:04d}: {len(nocount)} visit(s) without photo count (count forgotten), counted as the end of the collection: {', '.join(nocount)}.")
     return notes

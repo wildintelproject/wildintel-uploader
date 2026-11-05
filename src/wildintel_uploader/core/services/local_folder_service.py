@@ -274,6 +274,8 @@ def write_location(root: Path, research_project_id: str, location: dict) -> dict
     locations = list_locations(root, research_project_id)
     if any(l.get("location_id", "").lower() == location["location_id"].lower() for l in locations):
         raise LocalFolderError(f"The location '{location['location_id']}' already exists in {research_project_id}.")
+    # the day it was put into production is the day it was created, when it is not said
+    location = {**location, "in_service": location.get("in_service") or datetime.now().date().isoformat()}
     locations.append(location)
     (folder / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
     return location
@@ -381,8 +383,14 @@ def _kept(visit: dict, locations: list[dict]) -> dict:
     return out
 
 
+_CARD_CODES_BEFORE = {"SinPilas": "NoBatteries", "CarFullSinPilas": "CarFullNoBatteries"}
+
+
 def _told(visit: dict, locations: list[dict]) -> dict:
-    """A visit as it is told: with the day and the time of the wall clock of its location, from its instant, beside it."""
+    """A visit as it is told: with the day and the time of the wall clock of its location, from its instant, beside it. The card and the batteries are told as they
+    are written now: a visit kept with SinPilas or CarFullSinPilas says NoBatteries or CarFullNoBatteries."""
+    if visit.get("card_batteries_ok") in _CARD_CODES_BEFORE:
+        visit = {**visit, "card_batteries_ok": _CARD_CODES_BEFORE[visit["card_batteries_ok"]]}
     if not visit.get("when"):
         return dict(visit)
     date, time = visit_time.to_wall(visit["when"], _location_of(locations, visit.get("location_id")))

@@ -698,6 +698,8 @@ export interface LocalLocation {
   latitude: number | null
   longitude: number | null
   coordinate_uncertainty: number | null
+  /** YYYY-MM-DD: the day it was put into production. */
+  in_service?: string | null
   trapper_pk: number | null
   status?: LocationStatus
   /** YYYY-MM-DD */
@@ -723,8 +725,8 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
   /** Who went on the visit. */
   trappers: string | null
   status: string | null
-  /** How the card and the batteries were, as the datasheet writes it: OK, CarFull (card full), SinPilas (no batteries) or both. */
-  card_batteries_ok: 'OK' | 'CarFull' | 'SinPilas' | 'CarFullSinPilas' | null
+  /** How the card and the batteries were: OK, CarFull (card full), NoBatteries or both (CarFullNoBatteries). A visit kept with the datasheet's SinPilas or CarFullSinPilas is told as those. */
+  card_batteries_ok: 'OK' | 'CarFull' | 'NoBatteries' | 'CarFullNoBatteries' | null
   num_photos: number | null
   sd: string | null
   date_time_ok: string | null

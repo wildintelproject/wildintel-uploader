@@ -68,7 +68,7 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("session", "Session (R0013, or its number)", False),
     ("trappers", "Who went", False),
     ("status", "Status of the camera", False),
-    ("card_batteries_ok", "Card and batteries (OK, CarFull, SinPilas, CarFullSinPilas)", False),
+    ("card_batteries_ok", "Card and batteries (OK, CarFull, NoBatteries, CarFullNoBatteries)", False),
     ("num_photos", "Photos on the card collected", False),
     ("sd", "SD card left", False),
     ("date_time_ok", "Date and time of the camera OK", False),
@@ -94,6 +94,7 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     # what a row says of the entities it may create (see CREATABLE): they are not fields of the visit
     ("location_name", "Name of the location", False),
     ("timezone", "Timezone of the location (IANA, e.g. Europe/Madrid)", False),
+    ("daylight_saving", "Daylight saving time of the location (yes if its cameras follow it, no if they do not)", False),
     ("coordinate_uncertainty", "Coordinate uncertainty of the location (m)", False),
     ("sd_brand", "Brand of the SD card", False),
     ("sd_capacity", "Capacity of the SD card (e.g. 64 GB)", False),
@@ -103,12 +104,12 @@ REQUIRED = tuple(f for f, _, required in FIELDS if required)
 # by a default — and the ones that are only asked for when it is created. The fields of the visit that appear here (latitude, longitude, camera_id, camera_model, sd)
 # become required when it is.
 CREATABLE: dict[str, dict] = {
-    "locations": {"required": ["latitude", "longitude", "timezone"], "extra": ["location_name", "coordinate_uncertainty"]},
-    "cameras": {"required": ["camera_id", "camera_model"], "extra": []},
-    "sd_cards": {"required": ["sd", "sd_brand"], "extra": ["sd_capacity"]},
+    "locations": {"required": ["latitude", "longitude", "timezone", "daylight_saving"], "extra": ["location_name", "coordinate_uncertainty"]},
+    "cameras": {"required": ["camera_id"], "extra": ["camera_model"]},
+    "sd_cards": {"required": ["sd"], "extra": ["sd_brand", "sd_capacity"]},
 }
 # The fields that are not a visit's but an entity's.
-ENTITY_ONLY = {f: entity for entity, spec in CREATABLE.items() for f in [*spec["required"], *spec["extra"]] if f in ("location_name", "timezone", "coordinate_uncertainty", "sd_brand", "sd_capacity")}
+ENTITY_ONLY = {f: entity for entity, spec in CREATABLE.items() for f in [*spec["required"], *spec["extra"]] if f in ("location_name", "timezone", "daylight_saving", "coordinate_uncertainty", "sd_brand", "sd_capacity")}
 EPICOLLECT_NUMBER = re.compile(r"^\s*(\d+)\s*([bB]?)\s*$")
 ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation", "Stolen", "Archive")} | {
     # as the datasheets of the field work write them
@@ -116,15 +117,17 @@ ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation",
 }
 YES = {"yes", "true", "1", "y", "si", "sí"}
 NO = {"no", "false", "0", "n"}
-CODES = {c.lower(): c for c in ("OK", "CarFull", "SinPilas", "CarFullSinPilas")}
-# ...and as the form says them in English: "Card full", "No batteries", "Card full and no batteries" (written without spaces, case or the s of the card)
-CODES_ENGLISH = {"cardfull": "CarFull", "nobatteries": "SinPilas", "cardfullandnobatteries": "CarFullSinPilas", "carfullandnobatteries": "CarFullSinPilas"}
+CODES = {c.lower(): c for c in ("OK", "CarFull", "NoBatteries", "CarFullNoBatteries")}
+# ...and as the datasheet writes them (SinPilas, CarFullSinPilas) and as the form says them in English ("Card full", "No batteries", "Card full and no batteries"),
+# compared without spaces, case or the s of the card
+CODES_OTHER = {"cardfull": "CarFull", "sinpilas": "NoBatteries", "carfullsinpilas": "CarFullNoBatteries", "cardfullandnobatteries": "CarFullNoBatteries", "carfullandnobatteries": "CarFullNoBatteries"}
 
 
 def card_code(value) -> str | None:
-    """The code of how the card and the batteries were, from the code itself or from its English wording; None when it is neither."""
-    text = str(value).strip().lower()
-    return CODES.get(text) or CODES_ENGLISH.get(re.sub(r"[\s_-]+", "", text))
+    """The code of how the card and the batteries were (OK, CarFull, NoBatteries or CarFullNoBatteries), from the code itself or from the other ways it is written;
+    None when it is none of them."""
+    text = re.sub(r"[\s_-]+", "", str(value).strip().lower())
+    return CODES.get(text) or CODES_OTHER.get(text)
 
 
 def id_of(value) -> str:
@@ -250,7 +253,7 @@ class CsvVisit(BaseModel):
     def _card_batteries(cls, value):
         code = card_code(value)
         if code is None:
-            raise _custom("card_batteries_invalid", "'{value}' is not OK, Card full, No batteries or Card full and no batteries (or CarFull, SinPilas, CarFullSinPilas).", value)
+            raise _custom("card_batteries_invalid", "'{value}' is not OK, Card full, No batteries or Card full and no batteries (CarFull, NoBatteries and CarFullNoBatteries are the codes).", value)
         return code
 
     @field_validator("num_photos", "camera_interval", "camera_tilt", "camera_heading", mode="before")
@@ -651,32 +654,25 @@ def _new_location(site: str, row: dict[str, str]) -> dict:
         raise RowError("create_missing", f"To create the location {site} the row needs its coordinates: a latitude and a longitude.") from exc
     if not row.get("timezone"):
         raise RowError("create_missing", f"To create the location {site} the row needs its timezone (e.g. Europe/Madrid).")
+    saving = str(row.get("daylight_saving") or "").strip().lower()
+    if saving not in YES | NO:
+        raise RowError("create_missing", f"To create the location {site} the row needs to say if its cameras follow daylight saving time (yes or no).")
     try:
         uncertainty = int(float(row["coordinate_uncertainty"])) if row.get("coordinate_uncertainty") else None
         return LocationRecord(location_id=site, name=row.get("location_name") or None, latitude=latitude, longitude=longitude, timezone=row["timezone"],
-                              coordinate_uncertainty=uncertainty).model_dump(mode="json")
+                              ignore_dst=saving in NO, coordinate_uncertainty=uncertainty).model_dump(mode="json")
     except (ValidationError, ValueError) as exc:
         raise RowError("create_invalid", f"To create the location {site}: {_first(exc) if isinstance(exc, ValidationError) else exc}") from exc
 
 
 def _new_camera(camera_id: str, row: dict[str, str]) -> dict:
-    """The camera a row creates: called by its id, with the model of the row.
-
-    Raises:
-        RowError: the row has no model."""
-    if not row.get("camera_model"):
-        raise RowError("create_missing", f"To create the camera {camera_id} the row needs its model.")
-    return config.Camera(label=camera_id, camera_id=camera_id, camera_model=row["camera_model"]).model_dump(mode="json")
+    """The camera a row creates: called by its id, with the model of the row when it has one."""
+    return config.Camera(label=camera_id, camera_id=camera_id, camera_model=row.get("camera_model") or None).model_dump(mode="json")
 
 
 def _new_card(label: str, row: dict[str, str]) -> dict:
-    """The SD card a row creates: its id is its label, with the brand — and the capacity — of the row.
-
-    Raises:
-        RowError: the row has no brand."""
-    if not row.get("sd_brand"):
-        raise RowError("create_missing", f"To create the SD card {label} the row needs its brand.")
-    return config.SdCard(label=label, brand=row["sd_brand"], capacity=row.get("sd_capacity") or None).model_dump(mode="json")
+    """The SD card a row creates: its id is its label, with the brand and the capacity of the row, when it has them."""
+    return config.SdCard(label=label, brand=row.get("sd_brand") or None, capacity=row.get("sd_capacity") or None).model_dump(mode="json")
 
 
 def _first(exc: ValidationError) -> str:

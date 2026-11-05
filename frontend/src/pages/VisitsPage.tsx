@@ -24,7 +24,7 @@ export type VisitSource = 'manual' | 'wildintel' | 'wildintel-new' | 'csv'
 /** The fields of a visit as the matching of the columns groups them: as the form of a visit entered by hand does, in its order. */
 const MAPPING_FIELDS: Record<string, string[]> = {
   'Who and what was done': ['trappers', 'actions'],
-  'Where': ['location_id', 'location_name', 'latitude', 'longitude', 'coordinate_uncertainty', 'timezone'],
+  'Where': ['location_id', 'location_name', 'latitude', 'longitude', 'coordinate_uncertainty', 'timezone', 'daylight_saving'],
   'When': ['session', 'date', 'time', 'when', 'created_at'],
   'SD card': ['sd', 'card_batteries_ok', 'num_photos', 'sd_brand', 'sd_capacity'],
   'Camera': ['status', 'date_time_ok', 'camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
@@ -162,11 +162,11 @@ const CAMERA_STATUSES = ['OK', 'Altered', 'Knocked down', 'Damaged']
 export type CardState = '' | 'OK' | 'Full'
 export type BatteriesState = '' | 'OK' | 'Missing'
 
-/** How the card and the batteries were, in the one code the datasheet has for both: OK, CarFull, SinPilas or CarFullSinPilas — nothing when neither is said. */
+/** How the card and the batteries were, in one code for both: OK, CarFull, NoBatteries or CarFullNoBatteries — nothing when neither is said. */
 export function cardBatteriesCode(card: CardState, batteries: BatteriesState): StoredVisit['card_batteries_ok'] {
-  if (card === 'Full' && batteries === 'Missing') return 'CarFullSinPilas'
+  if (card === 'Full' && batteries === 'Missing') return 'CarFullNoBatteries'
   if (card === 'Full') return 'CarFull'
-  if (batteries === 'Missing') return 'SinPilas'
+  if (batteries === 'Missing') return 'NoBatteries'
   return card || batteries ? 'OK' : null
 }
 
@@ -213,7 +213,7 @@ export function visitFrom(previous: StoredVisit, now: Visit): Visit {
   }
   return {
     ...now,
-    status: previous.status ?? '', batteries: card === 'SinPilas' || card === 'CarFullSinPilas' ? 'Missing' : 'OK', dateTimeOK: previous.date_time_ok ?? 'Yes', details,
+    status: previous.status ?? '', batteries: card === 'NoBatteries' || card === 'CarFullNoBatteries' ? 'Missing' : 'OK', dateTimeOK: previous.date_time_ok ?? 'Yes', details,
   }
 }
 
@@ -531,6 +531,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // What to create when the file names a location, a camera or an SD card that does not exist, and the value of a field the file has no column for.
   const [csvCreate, setCsvCreate] = useState<CsvCreate>({ locations: false, cameras: false, sd_cards: false })
   const [csvDefaults, setCsvDefaults] = useState<Record<string, string>>({})
+  // A location that is created starts as UTC, following summer time, unless the file or the defaults say otherwise.
+  useEffect(() => {
+    if (csvCreate.locations) setCsvDefaults((d) => ({ timezone: 'UTC', daylight_saving: 'yes', ...Object.fromEntries(Object.entries(d).filter(([, v]) => v !== '')) }))
+  }, [csvCreate.locations]) // eslint-disable-line react-hooks/exhaustive-deps
   const csvFormat: VisitsCsvFormat = source === 'wildintel' ? 'epicollect' : source === 'wildintel-new' ? 'epicollect-csv' : 'mapped'
   const chosen = SOURCE_OPTIONS.find((o) => o.value === source)
   // A camera put up while it is somewhere else, or a card left while it is in another camera, cannot be kept — said as soon as it is chosen.
@@ -830,9 +834,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // when what does not exist is created, they are asked — for all of them — before the file is read.
   const legacyAsked: { field: string; entity: CsvEntity; label: string; placeholder: string; required: boolean }[] = [
     { field: 'timezone', entity: 'locations', label: 'Timezone of the new locations (IANA)', placeholder: 'e.g. Europe/Madrid', required: true },
+    { field: 'daylight_saving', entity: 'locations', label: 'Daylight saving time of the new locations', placeholder: '', required: true },
     { field: 'location_name', entity: 'locations', label: 'Name of the new locations', placeholder: 'optional', required: false },
-    { field: 'camera_model', entity: 'cameras', label: 'Model of the new cameras', placeholder: 'e.g. Browning-BTC-8E', required: true },
-    { field: 'sd_brand', entity: 'sd_cards', label: 'Brand of the new SD cards', placeholder: 'e.g. SanDisk', required: true },
+    { field: 'camera_model', entity: 'cameras', label: 'Model of the new cameras', placeholder: 'e.g. Browning-BTC-8E', required: false },
+    { field: 'sd_brand', entity: 'sd_cards', label: 'Brand of the new SD cards', placeholder: 'e.g. SanDisk', required: false },
     { field: 'sd_capacity', entity: 'sd_cards', label: 'Capacity of the new SD cards', placeholder: 'optional, e.g. 64 GB', required: false },
   ].filter((f) => csvCreate[f.entity as CsvEntity]) as typeof legacyAsked
   const legacyMissing = legacyAsked.filter((f) => f.required && !csvDefaults[f.field]?.trim()).map((f) => f.label.toLowerCase())
@@ -1439,24 +1444,56 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   ? <p className={`${hintClass} mb-3`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. Each one asks for more fields in the matching of the columns, where a default value can also be given for a field the file has no column for. After changing it, check the file again.</p>
                   : <p className={`${hintClass} mb-3`}>When an entry names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. The coordinates of a location, the camera and the card are those of the entry; what the form does not have is asked here, once for all of them. After changing it, check the file again.</p>}
                 {createSwitches}
-                {legacyAsked.length > 0 && (
-                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3" role="group" aria-label="Values of what is created">
-                    {legacyAsked.map((f) => (
-                      <div key={f.field}>
-                        <label htmlFor={`legacy-${f.field}`} className={labelClass}>{f.label}{f.required && <span className="ml-2 text-xs text-red-600 dark:text-red-400">required</span>}</label>
-                        <input id={`legacy-${f.field}`} className={inputClass} placeholder={f.placeholder} value={csvDefaults[f.field] ?? ''} list={f.field === 'timezone' ? 'legacy-timezones' : undefined}
-                               onChange={(e) => setCsvDefaults((d) => ({ ...d, [f.field]: e.target.value }))} />
-                      </div>
-                    ))}
-                    <datalist id="legacy-timezones">{knownTimezones().map((tz) => <option key={tz} value={tz} />)}</datalist>
-                  </div>
-                )}
-                {source === 'wildintel' && legacyBadTimezone && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">Not a known IANA timezone (e.g. Europe/Madrid).</p>}
-                {source === 'wildintel' && legacyMissing.length > 0 && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">Give {legacyMissing.join(', ')}, and check the file again.</p>}
               </fieldset>
             )}
             {csvError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{csvError}</p>}
           </WizardStep>
+
+          {source === 'wildintel' && legacyAsked.length > 0 && (
+            <WizardStep
+              n={4} title="Values of what is created" status={legacyMissing.length === 0 && !legacyBadTimezone ? 'done' : 'open'} canEdit={false} onEdit={() => {}}
+              description="The file does not have these: they are given once, for everything that is created. What is required has to be given before the file is checked again."
+            >
+              <div aria-label="Values of what is created" className="space-y-5">
+                {(['Where', 'SD card', 'Camera'] as const).map((group) => {
+                  const shown = legacyAsked.filter((f) => MAPPING_GROUP_OF[f.field] === group)
+                  if (shown.length === 0) return null
+                  return (
+                    <section key={group} aria-label={group} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent shadow-sm dark:shadow-none">
+                      <header className="flex items-center gap-3 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100/70 dark:bg-transparent px-6 py-4">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-blue-600 dark:text-blue-400">{MAPPING_ICONS[group]}</svg>
+                        <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{group}</h5>
+                        <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-400">{shown.filter((f) => csvDefaults[f.field]?.trim()).length} of {shown.length} given</span>
+                      </header>
+                      <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                        {shown.map((f) => (
+                          <div key={f.field} className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 px-6 py-4 items-center">
+                            <label htmlFor={`legacy-${f.field}`} className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                              {f.label}
+                              {f.required && <span className="rounded-md border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300">required</span>}
+                            </label>
+                            {f.field === 'daylight_saving' ? (
+                              <select id={`legacy-${f.field}`} className={inputClass} value={csvDefaults[f.field] ?? ''} onChange={(e) => setCsvDefaults((d) => ({ ...d, [f.field]: e.target.value }))}>
+                                <option value="">Choose…</option>
+                                <option value="yes">Yes: the cameras follow it</option>
+                                <option value="no">No: the cameras ignore it</option>
+                              </select>
+                            ) : (
+                              <input id={`legacy-${f.field}`} className={inputClass} placeholder={f.placeholder} value={csvDefaults[f.field] ?? ''} list={f.field === 'timezone' ? 'legacy-timezones' : undefined}
+                                     onChange={(e) => setCsvDefaults((d) => ({ ...d, [f.field]: e.target.value }))} />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )
+                })}
+                <datalist id="legacy-timezones">{knownTimezones().map((tz) => <option key={tz} value={tz} />)}</datalist>
+              </div>
+              {legacyBadTimezone && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">Not a known IANA timezone (e.g. Europe/Madrid).</p>}
+              {legacyMissing.length > 0 && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">Give {legacyMissing.join(', ')}, and check the file again.</p>}
+            </WizardStep>
+          )}
 
           {source === 'csv' && (
             <WizardStep
@@ -1525,7 +1562,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             </WizardStep>
           )}
 
-          <WizardStep n={source === 'csv' ? 5 : 4} title="Check and add the visits" status={csvResult ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept."
+          <WizardStep n={source === 'csv' ? 5 : source === 'wildintel' && legacyAsked.length > 0 ? 5 : 4} title="Check and add the visits" status={csvResult ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept."
                       action={csvResult && csvSaved == null && (
                         <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={rechecking} onClick={() => void recheckCsv()}
                                 title="Check the file again against what is kept now: the visits, the locations and the settings">

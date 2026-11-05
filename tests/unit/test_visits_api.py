@@ -35,7 +35,7 @@ def _project(archived: tuple[int, ...] = ()) -> None:
     """The research project, with the locations the tests visit — the numbers `archived` out of use, so that no revision waits for them."""
     _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
     for n in (1, 2, 3):
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"DONA_0{n}", "name": f"Site {n}", "timezone": "UTC", "latitude": 37.0 + n / 100, "longitude": -6.5, "status": "archived" if n in archived else "active"}})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"DONA_0{n}", "name": f"Site {n}", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0 + n / 100, "longitude": -6.5, "status": "archived" if n in archived else "active"}})
 
 
 def _installed(sites: tuple[int, ...] = (1, 2, 3)) -> None:
@@ -65,7 +65,7 @@ def test_how_the_card_and_the_batteries_were_is_one_of_the_codes_of_the_datashee
     with _in(tmp_path):
         _project(archived=(2, 3))   # no revision waits for the other sites
         _installed((1,))
-        for hour, code in enumerate(("OK", "CarFull", "SinPilas", "CarFullSinPilas")):
+        for hour, code in enumerate(("OK", "CarFull", "NoBatteries", "CarFullNoBatteries", "SinPilas")):
             visit = {**VISIT, "session": f"R{13 + hour:04d}", "time": f"0{hour}:00:00", "card_batteries_ok": code}
             assert _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit}).status_code == 200
         bad = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "card_batteries_ok": "Yes"}})
@@ -141,8 +141,8 @@ def _import(tmp_path: Path, text: str, save: bool = False, fmt: str = "mapped", 
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         # DONA_0001 is only there to be mistaken for DONA_01, and DONA_02 is a site with one visit: both are out of use, so no revision waits for them
         archived = {"DONA_0001": {"status": "archived"}, "DONA_02": {"status": "archived"}}
-        for site, lat in (("DONA_01", 37.1), ("DONA_02", None), ("DONA_0001", 37.1)):
-            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": site, "latitude": lat, "longitude": -6.4 if lat else None, **location, **archived.get(site, {})}})
+        for site, lat in (("DONA_01", 37.1), ("DONA_02", 37.2), ("DONA_0001", 37.1)):
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": site, "timezone": "UTC", "ignore_dst": False, "latitude": lat, "longitude": -6.4, **location, **archived.get(site, {})}})
         if mapping is AUTO:
             mapping = _client().post("/api/visits/csv-columns", json={"csv": text}).json().get("mapping") if fmt == "mapped" else None
         return _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "save": save, "format": fmt, "mapping": mapping})
@@ -159,7 +159,7 @@ def test_visits_are_read_from_a_csv_and_only_kept_when_asked(tmp_path: Path):
     first, third, second = body["visits"]  # by the day of the visit
     assert (first["location_id"], first["session"], first["actions"], first["latitude"]) == ("DONA_01", "R0001", ["Installation"], 37.1)
     assert (second["session"], second["actions"], second["card_batteries_ok"], second["num_photos"], second["time"]) == ("R0002", ["Revision", "Installation"], "CarFull", 1620, "09:00:00")
-    assert (third["location_id"], third["session"], third["actions"], third["latitude"]) == ("DONA_02", "R0001", ["Stolen"], None)
+    assert (third["location_id"], third["session"], third["actions"], third["latitude"]) == ("DONA_02", "R0001", ["Stolen"], 37.2)
 
 
 def test_the_visits_of_a_csv_are_added_to_the_ones_kept_without_repeating_any(tmp_path: Path):
@@ -199,7 +199,7 @@ def test_what_a_visit_has_of_a_deployment_is_read_too(tmp_path: Path):
     )
     visit = _import(tmp_path, text).json()["visits"][0]
 
-    assert (visit["session"], visit["actions"], visit["card_batteries_ok"], visit["num_photos"], visit["date_time_ok"], visit["comments"]) == ("R0013", ["Revision"], "SinPilas", 1620, "Yes", "pilas cambiadas")
+    assert (visit["session"], visit["actions"], visit["card_batteries_ok"], visit["num_photos"], visit["date_time_ok"], visit["comments"]) == ("R0013", ["Revision"], "NoBatteries", 1620, "Yes", "pilas cambiadas")
     assert (visit["longitude"], visit["latitude"]) == (-6.4, 37.1)
     assert (visit["camera_model"], visit["camera_interval"], visit["camera_height"], visit["camera_tilt"], visit["camera_heading"], visit["detection_distance"]) == ("Reconyx-PC800", 120, 1.2, -90, 45, 9.5)
     assert (visit["timestamp_issues"], visit["bait_use"], visit["feature_type"], visit["habitat"], visit["deployment_groups"], visit["tags"]) == (False, True, "trailHiking", "forest", "north", ["forest edge", "oak"])
@@ -249,7 +249,7 @@ def test_the_donana_form_is_read_too_with_its_spanish_headers_and_codes(tmp_path
 
     assert body["problems"] == []
     assert [(v["location_id"], v["session"], v["actions"]) for v in body["visits"]] == [("DONA_02", "R0012", ["Stolen"]), ("DONA_0001", "R0012", ["Installation"])]
-    assert body["visits"][1]["card_batteries_ok"] == "SinPilas" and body["visits"][1]["date_time_ok"] == "No"
+    assert body["visits"][1]["card_batteries_ok"] == "NoBatteries" and body["visits"][1]["date_time_ok"] == "No"
 
 
 MAPPED = (
@@ -406,7 +406,7 @@ def test_the_photos_of_a_revision_are_not_required_when_the_card_was_full(tmp_pa
         _installed((1,))
         counted = _save({**VISIT, "num_photos": None})
         full = _save({**VISIT, "session": "R0013", "num_photos": None, "card_batteries_ok": "CarFull", "date": "2026-10-03"})
-        full_no_batteries = _save({**VISIT, "num_photos": None, "card_batteries_ok": "CarFullSinPilas", "session": "R0014", "date": "2026-10-04"})
+        full_no_batteries = _save({**VISIT, "num_photos": None, "card_batteries_ok": "CarFullNoBatteries", "session": "R0014", "date": "2026-10-04"})
         written = _save({**VISIT, "session": "R0015", "num_photos": 12, "card_batteries_ok": "CarFull", "date": "2026-10-05"})
 
     assert counted.status_code == 422 and "photos" in counted.json()["detail"]
@@ -734,7 +734,7 @@ def test_the_visit_book_says_a_visit_that_could_not_be_made_is_not_visited(tmp_p
 def test_the_visit_book_has_a_row_for_each_location_that_was_not_visited_in_a_session(tmp_path: Path):
     with _in(tmp_path):
         _field_visits()   # DONA_01 and DONA_02 are visited in R0003, DONA_01 alone in R0004; the project has DONA_01, DONA_02 and DONA_03
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_04", "status": "archived"}})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_04", "timezone": "UTC", "ignore_dst": False, "latitude": 37.4, "longitude": -6.5, "status": "archived"}})
         book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
 
     not_done = sorted((v["session"], v["location_id"]) for v in book if v["not_done"])
@@ -989,7 +989,7 @@ def test_a_visit_that_finds_the_camera_stolen_and_puts_up_another_opens_a_deploy
 def test_importing_a_csv_creates_the_locations_cameras_and_sd_cards_it_is_asked_to_and_keeps_them(tmp_path: Path):
     csv = ("site,what,day,hour,lat,lon,tz,cam,model,sd,brand\n"
            "DONA_09,Installation,2026-09-14,11:40,37.1,-6.4,Europe/Madrid,CAM9,Browning,S9,SanDisk\n")
-    body = {"research_project_id": "DONA", "csv": csv, "format": "mapped", "create": {"locations": True, "cameras": True, "sd_cards": True},
+    body = {"research_project_id": "DONA", "csv": csv, "format": "mapped", "create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"},
             "mapping": {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "latitude": "lat", "longitude": "lon", "timezone": "tz",
                         "camera_id": "cam", "camera_model": "model", "sd": "sd", "sd_brand": "brand"}}
     with _in(tmp_path):
@@ -1007,7 +1007,7 @@ def test_importing_a_csv_creates_the_locations_cameras_and_sd_cards_it_is_asked_
     assert [(l["location_id"], l["timezone"]) for l in locations] == [("DONA_09", "Europe/Madrid")]
     assert "CAM9" in cameras and "Browning" in cameras and "S9" in cards and "SanDisk" in cards
     sd_brand = next(f for f in columns["fields"] if f["field"] == "sd_brand")
-    assert sd_brand["entity"] == "sd_cards" and sd_brand["required_with"] == ["sd_cards"]
+    assert sd_brand["entity"] == "sd_cards" and sd_brand["required_with"] == []
     assert next(f for f in columns["fields"] if f["field"] == "latitude")["required_with"] == ["locations"]
 
 

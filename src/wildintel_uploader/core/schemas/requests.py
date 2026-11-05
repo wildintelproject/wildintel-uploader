@@ -301,14 +301,16 @@ class LocationRecord(BaseModel):
     location_id: str = Field(min_length=1, max_length=100)
     name: Optional[str] = None
     # IANA timezone and whether its cameras ignore summer time. Both belong to the location — never to a deployment: every deployment there uses them,
-    # and Trapper only accepts a package that declares the same. A location is UTC, with summer time followed, unless it says otherwise: the cameras'
-    # clocks are taken as UTC, and the time of a field visit is read in the timezone of its location.
-    timezone: Optional[str] = DEFAULT_TIMEZONE
-    ignore_dst: Optional[bool] = False
-    # Where it is — WGS84 decimal degrees, as in Camtrap DP's deployments table.
-    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
-    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    # and Trapper only accepts a package that declares the same. They are always said when a location is made: the cameras' clocks are taken as UTC, and the
+    # time of a field visit is read in the timezone of its location.
+    timezone: str = Field(min_length=1)
+    ignore_dst: bool
+    # Where it is — WGS84 decimal degrees, as in Camtrap DP's deployments table. Always said.
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
     coordinate_uncertainty: Optional[int] = Field(default=None, ge=1)
+    # The day it was put into production (YYYY-MM-DD).
+    in_service: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     trapper_pk: Optional[int] = None
     # Whether it is in use; an archived or a planned one is not offered for a visit. When it changed (YYYY-MM-DD) and why are free to leave out.
     status: Literal["active", "archived", "planned"] = "active"
@@ -318,21 +320,9 @@ class LocationRecord(BaseModel):
     # what was kept as "retired" is archived now
     _legacy_status = field_validator("status", mode="before")(lambda cls, v: "archived" if v == "retired" else v)
 
-    @field_validator("ignore_dst", mode="before")
-    @classmethod
-    def _dst_unknown_is_followed(cls, value):
-        return False if value is None else value
-
-    @field_validator("timezone", mode="before")
-    @classmethod
-    def _unset_timezone_is_the_default(cls, value):
-        return value or DEFAULT_TIMEZONE
-
     @field_validator("timezone")
     @classmethod
-    def _known_timezone(cls, value: Optional[str]) -> Optional[str]:
-        if not value:
-            return DEFAULT_TIMEZONE
+    def _known_timezone(cls, value: str) -> str:
         try:
             ZoneInfo(value)
         except (ZoneInfoNotFoundError, ValueError) as exc:
@@ -371,8 +361,8 @@ class VisitRecord(BaseModel):
     actions: list[Literal["Installation", "Revision", "Desinstallation", "Stolen", "Archive"]] = Field(default_factory=list)
     trappers: Optional[str] = None
     status: Optional[str] = None
-    # How the card and the batteries were, as the datasheet writes it: OK, CarFull (card full), SinPilas (no batteries) or both.
-    card_batteries_ok: Optional[Literal["OK", "CarFull", "SinPilas", "CarFullSinPilas"]] = None
+    # How the card and the batteries were: OK, CarFull (card full), NoBatteries or both (CarFullNoBatteries). The datasheet writes SinPilas and CarFullSinPilas: they are read as those.
+    card_batteries_ok: Optional[Literal["OK", "CarFull", "NoBatteries", "CarFullNoBatteries"]] = None
     num_photos: Optional[int] = Field(default=None, ge=0)
     sd: Optional[str] = None
     date_time_ok: Optional[str] = None
@@ -402,6 +392,11 @@ class VisitRecord(BaseModel):
     deployment_groups: Optional[str] = None
     comments: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
+
+    @field_validator("card_batteries_ok", mode="before")
+    @classmethod
+    def _spanish_codes(cls, value):
+        return {"SinPilas": "NoBatteries", "CarFullSinPilas": "CarFullNoBatteries"}.get(value, value)
 
     @field_validator("actions")
     @classmethod
@@ -488,6 +483,7 @@ class UpdateLocationRequest(LocalLocationsRequest):
     coordinate_uncertainty: Optional[int] = Field(default=None, ge=1)
     timezone: Optional[str] = None
     ignore_dst: Optional[bool] = None
+    in_service: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     status: Optional[Literal["active", "archived", "planned"]] = None
     status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     status_note: Optional[str] = None

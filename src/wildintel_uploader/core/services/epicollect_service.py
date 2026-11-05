@@ -347,7 +347,7 @@ VISIT_QUESTIONS: dict[str, str] = {
     "detectiondistance": "detection_distance", "baituse": "bait_use", "featuretype": "feature_type", "habitat": "habitat", "sdtoinsert": "sd",
     "calibration": "calibration", "observations": "comments", "coordinates": "coordinates", "time": "time",
 }
-_CARD_CODES = {"ok": "OK", "card full": "CarFull", "no batteries": "SinPilas", "card full and no batteries": "CarFullSinPilas"}
+_CARD_CODES = {"ok": "OK", "card full": "CarFull", "no batteries": "NoBatteries", "card full and no batteries": "CarFullNoBatteries"}
 VISIT_COLUMNS = (
     "location_id", "session", "date", "time", "created_at", "actions", "trappers", "setup_by", "status", "card_batteries_ok", "num_photos", "date_time_ok", "camera_id", "camera_model",
     "camera_height", "camera_interval", "camera_tilt", "camera_heading", "detection_distance", "bait_use", "feature_type", "habitat", "sd", "calibration", "comments", "latitude", "longitude",

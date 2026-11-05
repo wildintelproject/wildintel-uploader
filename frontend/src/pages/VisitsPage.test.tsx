@@ -307,7 +307,7 @@ describe('VisitsPage', () => {
     await addVisit()
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalled())
-    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ card_batteries_ok: 'SinPilas', date_time_ok: 'No' })
+    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ card_batteries_ok: 'NoBatteries', date_time_ok: 'No' })
   })
 
   it('asks for what is missing and adds nothing', async () => {
@@ -761,8 +761,8 @@ describe('cardBatteriesCode', () => {
     expect(cardBatteriesCode('OK', 'OK')).toBe('OK')
     expect(cardBatteriesCode('Full', 'OK')).toBe('CarFull')
     expect(cardBatteriesCode('Full', '')).toBe('CarFull')
-    expect(cardBatteriesCode('OK', 'Missing')).toBe('SinPilas')
-    expect(cardBatteriesCode('Full', 'Missing')).toBe('CarFullSinPilas')
+    expect(cardBatteriesCode('OK', 'Missing')).toBe('NoBatteries')
+    expect(cardBatteriesCode('Full', 'Missing')).toBe('CarFullNoBatteries')
   })
 })
 
@@ -836,7 +836,7 @@ describe('the visit filled in from the last one', () => {
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalled())
     expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({
-      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: 'P800HG08192031', camera_height: 1.2, card_batteries_ok: 'SinPilas', date_time_ok: 'No', comments: null,
+      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: 'P800HG08192031', camera_height: 1.2, card_batteries_ok: 'NoBatteries', date_time_ok: 'No', comments: null,
     })
   })
 
@@ -918,7 +918,7 @@ describe('VisitsPage from a CSV file', () => {
       ...COLUMNS, fields: [...COLUMNS.fields,
         { field: 'latitude', label: 'Latitude', required: false, required_with: ['locations'] }, { field: 'longitude', label: 'Longitude', required: false, required_with: ['locations'] },
         { field: 'timezone', label: 'Timezone of the location (IANA, e.g. Europe/Madrid)', required: false, entity: 'locations', required_with: ['locations'] },
-        { field: 'camera_model', label: 'Camera model', required: false, required_with: ['cameras'] }, { field: 'sd_brand', label: 'Brand of the SD card', required: false, entity: 'sd_cards', required_with: ['sd_cards'] },
+        { field: 'camera_model', label: 'Camera model', required: false, entity: 'cameras', required_with: [] }, { field: 'sd_brand', label: 'Brand of the SD card', required: false, entity: 'sd_cards', required_with: [] },
       ],
     } as never)
     mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
@@ -934,21 +934,20 @@ describe('VisitsPage from a CSV file', () => {
     await screen.findByLabelText('Site (a location of the research project)')
     expect(screen.getByLabelText('Timezone of the location (IANA, e.g. Europe/Madrid)')).toBeInTheDocument()
     expect(screen.queryByLabelText('Brand of the SD card')).not.toBeInTheDocument()          // the SD cards are not created
-    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // coordinates, timezone and camera model are required now
-    expect(screen.getByRole('status')).toHaveTextContent('match also latitude, longitude, timezone of the location')
+    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // the coordinates are required
+    expect(screen.getByRole('status')).toHaveTextContent('match also latitude, longitude')
 
     // a default is as good as a column
     await userEvent.type(screen.getByLabelText('Default for Latitude'), '40.1')
     await userEvent.type(screen.getByLabelText('Default for Longitude'), '-3.2')
-    await userEvent.type(screen.getByLabelText('Default for Timezone of the location (IANA, e.g. Europe/Madrid)'), 'Europe/Madrid')
-    expect(screen.getByRole('button', { name: 'Read the visits' })).toBeDisabled()               // the camera model is required now
-    await userEvent.type(screen.getByLabelText('Default for Camera model'), 'Browning-BTC-8E')
+    // the timezone and the summer time start as UTC, following summer time; the model of a camera is not needed
+    expect(screen.getByLabelText('Default for Timezone of the location (IANA, e.g. Europe/Madrid)')).toHaveValue('UTC')
     expect(screen.getByRole('button', { name: 'Read the visits' })).toBeEnabled()
 
     await userEvent.click(screen.getByRole('button', { name: 'Read the visits' }))
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.any(String), false, 'mapped', MAPPING_WITHOUT_PHOTOS, undefined, {
       create: { locations: true, cameras: true, sd_cards: false },
-      defaults: { latitude: '40.1', longitude: '-3.2', timezone: 'Europe/Madrid', camera_model: 'Browning-BTC-8E' },
+      defaults: { latitude: '40.1', longitude: '-3.2', timezone: 'UTC', daylight_saving: 'yes' },
     }))
   })
 
@@ -1142,19 +1141,23 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Create the locations that do not exist' }))
     await userEvent.click(screen.getByRole('switch', { name: 'Create the cameras that do not exist' }))
     await userEvent.click(screen.getByRole('switch', { name: 'Create the SD cards that do not exist' }))
-    expect(screen.getAllByRole('status')[0]).toHaveTextContent('Give timezone of the new locations (iana), model of the new cameras, brand of the new sd cards, and check the file again.')
+    // a new location starts as UTC, following summer time: nothing is missing
+    expect(screen.getByLabelText(/Timezone of the new locations/)).toHaveValue('UTC')
+    expect(screen.getByLabelText(/Daylight saving time of the new locations/)).toHaveValue('yes')
 
+    await userEvent.clear(screen.getByLabelText(/Timezone of the new locations/))
     await userEvent.type(screen.getByLabelText(/Timezone of the new locations/), 'Europe/Nowhere')
     expect(screen.getByRole('alert')).toHaveTextContent('Not a known IANA timezone')
     await userEvent.clear(screen.getByLabelText(/Timezone of the new locations/))
     await userEvent.type(screen.getByLabelText(/Timezone of the new locations/), 'Europe/Madrid')
+    await userEvent.selectOptions(screen.getByLabelText(/Daylight saving time of the new locations/), 'yes')
     await userEvent.type(screen.getByLabelText(/Model of the new cameras/), 'Browning-BTC-8E')
     await userEvent.type(screen.getByLabelText(/Brand of the new SD cards/), 'SanDisk')
 
     await userEvent.click(screen.getByRole('button', { name: 'Check again' }))
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', expect.any(String), false, 'epicollect', undefined, undefined, {
       create: { locations: true, cameras: true, sd_cards: true },
-      defaults: { timezone: 'Europe/Madrid', camera_model: 'Browning-BTC-8E', sd_brand: 'SanDisk' },
+      defaults: { timezone: 'Europe/Madrid', daylight_saving: 'yes', camera_model: 'Browning-BTC-8E', sd_brand: 'SanDisk' },
     }))
     // what was chosen stays
     expect(screen.getByRole('switch', { name: 'Create the locations that do not exist' })).toHaveAttribute('aria-checked', 'true')
