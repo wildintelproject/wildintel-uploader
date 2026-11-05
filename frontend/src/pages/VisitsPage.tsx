@@ -1375,29 +1375,6 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               </div>
               <p className={hintClass}>The fieldwork datasheet (an .xlsx workbook): its visits complete the ones kept first, and then those of the file are applied on top of both.</p>
             </div>
-            {(source === 'wildintel' || source === 'csv') && (
-              <fieldset className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 mb-4">
-                <legend className="px-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">Create what does not exist yet <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">optional</span></legend>
-                {source === 'csv'
-                  ? <p className={`${hintClass} mb-3`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. Each one asks for more fields in the matching of the columns, where a default value can also be given for a field the file has no column for. Choose it before the file: to change it afterwards, check the file again.</p>
-                  : <p className={`${hintClass} mb-3`}>When an entry names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. The coordinates of a location, the camera and the card are those of the entry; what the form does not have is asked here, once for all of them. Choose it before the file: to change it afterwards, check the file again.</p>}
-                {createSwitches}
-                {legacyAsked.length > 0 && (
-                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3" role="group" aria-label="Values of what is created">
-                    {legacyAsked.map((f) => (
-                      <div key={f.field}>
-                        <label htmlFor={`legacy-${f.field}`} className={labelClass}>{f.label}{f.required && <span className="ml-2 text-xs text-red-600 dark:text-red-400">required</span>}</label>
-                        <input id={`legacy-${f.field}`} className={inputClass} placeholder={f.placeholder} value={csvDefaults[f.field] ?? ''} list={f.field === 'timezone' ? 'legacy-timezones' : undefined}
-                               onChange={(e) => setCsvDefaults((d) => ({ ...d, [f.field]: e.target.value }))} />
-                      </div>
-                    ))}
-                    <datalist id="legacy-timezones">{knownTimezones().map((tz) => <option key={tz} value={tz} />)}</datalist>
-                  </div>
-                )}
-                {source === 'wildintel' && legacyBadTimezone && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">Not a known IANA timezone (e.g. Europe/Madrid).</p>}
-                {source === 'wildintel' && legacyMissing.length > 0 && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">Before choosing the file, give: {legacyMissing.join(', ')}.</p>}
-              </fieldset>
-            )}
             {source === 'csv' && sourcesUsed.epicollect && (
               <div role="radiogroup" aria-label="Where the CSV is" className="flex gap-2 mb-4">
                 {([['file', 'A file on this computer'], ['epicollect', 'Epicollect5 project']] as const).map(([v, label]) => (
@@ -1419,15 +1396,38 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 space-y-3">
               <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Spreadsheet file</h5>
               <div className="flex items-center gap-4 flex-wrap">
-                <label htmlFor="visits-csv" aria-disabled={source === 'wildintel' && (legacyMissing.length > 0 || legacyBadTimezone)} className={`inline-flex items-center gap-2 px-5 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-sm font-medium text-zinc-800 dark:text-zinc-200 transition-colors ${source === 'wildintel' && (legacyMissing.length > 0 || legacyBadTimezone) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer'}`}>
+                <label htmlFor="visits-csv" className={`inline-flex items-center gap-2 px-5 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-sm font-medium text-zinc-800 dark:text-zinc-200 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer`}>
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
                   Choose file
                 </label>
                 <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">{csvName ?? 'No file chosen'}</span>
-                <input id="visits-csv" aria-label="CSV file" type="file" accept=".csv,text/csv" className="sr-only" disabled={source === 'wildintel' && (legacyMissing.length > 0 || legacyBadTimezone)} onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; void readCsv(file) }} />
+                <input id="visits-csv" aria-label="CSV file" type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; void readCsv(file) }} />
               </div>
               <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (same site, day and time) is left as it is.</p>
             </div>
+            )}
+            {(source === 'wildintel' || source === 'csv') && (
+              <fieldset className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 px-6 py-5 mt-4">
+                <legend className="px-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">Create what does not exist yet <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">optional</span></legend>
+                {source === 'csv'
+                  ? <p className={`${hintClass} mb-3`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. Each one asks for more fields in the matching of the columns, where a default value can also be given for a field the file has no column for. After changing it, check the file again.</p>
+                  : <p className={`${hintClass} mb-3`}>When an entry names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. The coordinates of a location, the camera and the card are those of the entry; what the form does not have is asked here, once for all of them. After changing it, check the file again.</p>}
+                {createSwitches}
+                {legacyAsked.length > 0 && (
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3" role="group" aria-label="Values of what is created">
+                    {legacyAsked.map((f) => (
+                      <div key={f.field}>
+                        <label htmlFor={`legacy-${f.field}`} className={labelClass}>{f.label}{f.required && <span className="ml-2 text-xs text-red-600 dark:text-red-400">required</span>}</label>
+                        <input id={`legacy-${f.field}`} className={inputClass} placeholder={f.placeholder} value={csvDefaults[f.field] ?? ''} list={f.field === 'timezone' ? 'legacy-timezones' : undefined}
+                               onChange={(e) => setCsvDefaults((d) => ({ ...d, [f.field]: e.target.value }))} />
+                      </div>
+                    ))}
+                    <datalist id="legacy-timezones">{knownTimezones().map((tz) => <option key={tz} value={tz} />)}</datalist>
+                  </div>
+                )}
+                {source === 'wildintel' && legacyBadTimezone && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">Not a known IANA timezone (e.g. Europe/Madrid).</p>}
+                {source === 'wildintel' && legacyMissing.length > 0 && <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">Give {legacyMissing.join(', ')}, and check the file again.</p>}
+              </fieldset>
             )}
             {csvError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{csvError}</p>}
           </WizardStep>

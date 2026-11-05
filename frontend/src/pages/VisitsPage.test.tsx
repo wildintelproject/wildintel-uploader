@@ -1112,38 +1112,37 @@ describe('VisitsPage from a CSV file', () => {
     expect(mockedApi.importVisitsCsv.mock.calls[1].slice(0, 4)).toEqual(mockedApi.importVisitsCsv.mock.calls[0].slice(0, 4))   // the same file and format
   })
 
-  it('creates what does not exist from the legacy download too: it asks what the form does not have before the file, and reads the file with it', async () => {
+  it('creates what does not exist from the legacy download too: it asks, after the file, what the form does not have, and checks the file again with it', async () => {
     mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
     render(<VisitsPage onBack={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect legacy csv/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
 
-    // nothing is asked until something is to be created
+    // nothing is asked until something is to be created, and the file is chosen first
     expect(screen.queryByLabelText(/Timezone of the new locations/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('CSV file')).toBeEnabled()
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(1))
 
     await userEvent.click(screen.getByRole('switch', { name: 'Create the locations that do not exist' }))
     await userEvent.click(screen.getByRole('switch', { name: 'Create the cameras that do not exist' }))
     await userEvent.click(screen.getByRole('switch', { name: 'Create the SD cards that do not exist' }))
-    expect(screen.getByLabelText('CSV file')).toBeDisabled()                                       // the file is read with what is asked: it is asked first
-    expect(screen.getByRole('status')).toHaveTextContent('Before choosing the file, give: timezone of the new locations (iana), model of the new cameras, brand of the new sd cards.')
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent('Give timezone of the new locations (iana), model of the new cameras, brand of the new sd cards, and check the file again.')
 
     await userEvent.type(screen.getByLabelText(/Timezone of the new locations/), 'Europe/Nowhere')
     expect(screen.getByRole('alert')).toHaveTextContent('Not a known IANA timezone')
-    expect(screen.getByLabelText('CSV file')).toBeDisabled()
     await userEvent.clear(screen.getByLabelText(/Timezone of the new locations/))
     await userEvent.type(screen.getByLabelText(/Timezone of the new locations/), 'Europe/Madrid')
     await userEvent.type(screen.getByLabelText(/Model of the new cameras/), 'Browning-BTC-8E')
     await userEvent.type(screen.getByLabelText(/Brand of the new SD cards/), 'SanDisk')
-    expect(screen.getByLabelText('CSV file')).toBeEnabled()
 
-    await userEvent.upload(screen.getByLabelText('CSV file'), file)
-    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.any(String), false, 'epicollect', undefined, undefined, {
+    await userEvent.click(screen.getByRole('button', { name: 'Check again' }))
+    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', expect.any(String), false, 'epicollect', undefined, undefined, {
       create: { locations: true, cameras: true, sd_cards: true },
       defaults: { timezone: 'Europe/Madrid', camera_model: 'Browning-BTC-8E', sd_brand: 'SanDisk' },
     }))
-    // what was chosen stays, to check the file again with it
+    // what was chosen stays
     expect(screen.getByRole('switch', { name: 'Create the locations that do not exist' })).toHaveAttribute('aria-checked', 'true')
   })
 

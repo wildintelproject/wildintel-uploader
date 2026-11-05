@@ -7,7 +7,6 @@ import Combobox from '../components/Combobox'
 import { download, itemsToCsv, readItems } from '../csvFile'
 import { defaultResearchProject } from '../defaultResearchProject'
 import { NO_CREDENTIALS } from './ImportDeploymentPage'
-import EpicollectMapping from '../components/EpicollectMapping'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
 import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS, SD_CARD_CAPACITIES } from '../entities'
 import Notice from '../components/Notice'
@@ -2516,11 +2515,6 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
               </SettingsCard>
               <ToggleCard title="Add answers with no place to go to the comments" checked={draft.epicollectUnmappedToComments} onChange={(v) => set('epicollectUnmappedToComments', v)}
                           description="An entry may answer questions that no field of a deployment is matched to. Each one is added as a line, “question: answer”, after the comments of the entry. Photos are left out." />
-              <EpicollectMapping
-                mapping={draft.epicollectMapping} onChange={(m) => set('epicollectMapping', m)}
-                projectSaved={Boolean(saved.EPICOLLECT5.project_slug)}
-                unsavedProject={draft.epicollectSlug.trim() !== (saved.EPICOLLECT5.project_slug ?? '') || draft.epicollectClientId.trim() !== (saved.EPICOLLECT5.client_id ?? '') || draft.epicollectClientSecret !== ''}
-              />
               </div>
             )}
           </div>
