@@ -21,24 +21,29 @@ import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchPro
 
 export type VisitSource = 'manual' | 'wildintel' | 'wildintel-new' | 'csv'
 
-/** The fields of a visit as the matching of the columns groups them. */
-const MAPPING_GROUPS = ['Where', 'When', 'What was done', 'Camera', 'SD card', 'Other'] as const
-const MAPPING_GROUP_OF: Record<string, (typeof MAPPING_GROUPS)[number]> = {
-  location_id: 'Where', location_name: 'Where', latitude: 'Where', longitude: 'Where', coordinate_uncertainty: 'Where', timezone: 'Where',
-  date: 'When', time: 'When', when: 'When', created_at: 'When', session: 'When',
-  actions: 'What was done', status: 'What was done', trappers: 'What was done', setup_by: 'What was done', card_batteries_ok: 'What was done', num_photos: 'What was done',
-  date_time_ok: 'What was done', comments: 'What was done',
-  camera_id: 'Camera', camera_model: 'Camera', camera_interval: 'Camera', camera_height: 'Camera', camera_depth: 'Camera', camera_tilt: 'Camera', camera_heading: 'Camera',
-  detection_distance: 'Camera', calibration: 'Camera', timestamp_issues: 'Camera', bait_use: 'Camera', feature_type: 'Camera', habitat: 'Camera',
-  sd: 'SD card', sd_brand: 'SD card', sd_capacity: 'SD card',
+/** The fields of a visit as the matching of the columns groups them: as the form of a visit entered by hand does, in its order. */
+const MAPPING_FIELDS: Record<string, string[]> = {
+  'Who': ['trappers'],
+  'Where': ['location_id', 'location_name', 'latitude', 'longitude', 'coordinate_uncertainty', 'timezone'],
+  'When': ['date', 'time', 'when', 'created_at', 'session'],
+  'The visit': ['status', 'actions', 'date_time_ok'],
+  'SD card': ['sd', 'card_batteries_ok', 'num_photos', 'sd_brand', 'sd_capacity'],
+  'Camera': ['camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
+  'Site': ['feature_type', 'habitat', 'setup_by', 'bait_use', 'timestamp_issues'],
+  'Grouping and notes': ['deployment_groups', 'tags', 'comments'],
 }
-
-const MAPPING_ICONS: Record<(typeof MAPPING_GROUPS)[number], ReactNode> = {
+const MAPPING_GROUPS = [...Object.keys(MAPPING_FIELDS), 'Other']
+const MAPPING_GROUP_OF: Record<string, string> = Object.fromEntries(Object.entries(MAPPING_FIELDS).flatMap(([g, fs]) => fs.map((f) => [f, g])))
+const mappingRank = (field: string) => (MAPPING_FIELDS[MAPPING_GROUP_OF[field]] ?? []).indexOf(field)
+const MAPPING_ICONS: Record<string, ReactNode> = {
+  'Who': <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
   'Where': <><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></>,
   'When': <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-  'What was done': <><path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></>,
-  'Camera': <><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></>,
+  'The visit': <><path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></>,
   'SD card': <><path d="M6 2h9l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" /><path d="M9 6v3M12 6v3M15 6v3" /></>,
+  'Camera': <><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></>,
+  'Site': <><path d="M3 20l5-9 4 6 3-4 6 7z" /><circle cx="17" cy="6" r="2" /></>,
+  'Grouping and notes': <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><path d="M14 2v6h6M8 13h8M8 17h6" /></>,
   'Other': <><circle cx="12" cy="12" r="1" /><circle cx="5" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
 }
 
@@ -1464,7 +1469,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 <>
                   <div aria-label="Columns of the file and fields of the visit" className="space-y-5">
                     {MAPPING_GROUPS.map((group) => {
-                      const shown = fieldsShown.filter((f) => (MAPPING_GROUP_OF[f.field] ?? 'Other') === group)
+                      const shown = fieldsShown.filter((f) => (MAPPING_GROUP_OF[f.field] ?? 'Other') === group).sort((x, y) => mappingRank(x.field) - mappingRank(y.field))
                       if (shown.length === 0) return null
                       const folded = foldedGroups.includes(group)
                       return (
