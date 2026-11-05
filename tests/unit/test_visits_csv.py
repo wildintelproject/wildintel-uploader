@@ -144,7 +144,7 @@ def test_a_cell_that_is_not_what_its_field_takes_is_refused_with_the_code_of_the
     by_row = {r["row"]: r for r in result["rows"]}
     assert [by_row[n]["label"] for n in range(2, 9)] == ["Number not valid", "Not yes or no", "Session not valid", "Card and batteries not valid", "Number not valid", "Actions not valid", "Date or time not valid"]
     assert by_row[2]["message"] == "num_photos: 'many' is not a whole number." and by_row[6]["message"] == "camera_height: 'tall' is not a number."
-    assert by_row[5]["message"].startswith("'Full' is not OK, CarFull") and by_row[7]["message"].startswith("The actions 'Flying'")
+    assert by_row[5]["message"].startswith("'Full' is not OK, Card full") and by_row[7]["message"].startswith("The actions 'Flying'")
 
 
 def test_a_cell_is_read_as_its_field_takes_it():
@@ -196,3 +196,15 @@ def test_what_does_not_exist_is_created_from_an_epicollect_download_too_with_wha
     assert [(c["camera_id"], c["camera_model"]) for c in made["cameras"]] == [("CAM9", "Browning")]
     assert [(c["label"], c["brand"]) for c in made["sd_cards"]] == [("S9", "SanDisk")]
     assert result["visits"][0]["time"] == "13:40:00"      # the entry is read in the timezone of the location that was created (Madrid, summer time)
+
+
+def test_the_id_of_a_camera_or_a_card_is_the_number_a_cell_starts_or_says_now():
+    from wildintel_uploader.core.services import visits_csv
+    cases = {"68 now. Before 26": "68", "Now 17, before 09": "17", "25. Before was 34": "25", "72 now. It was 27": "72", "42b": "42b", "22Bb": "22Bb", "12.0": "12.0", " 7 ": "7"}
+    assert {text: visits_csv.id_of(text) for text in cases} == cases
+
+
+def test_how_the_card_and_the_batteries_were_is_read_as_the_form_says_it_in_english():
+    from wildintel_uploader.core.services import visits_csv
+    assert [visits_csv.card_code(v) for v in ("OK", "Card full", "No batteries", "CarFull and No batteries", "Card full and no batteries", "SinPilas", "Full")] == [
+        "OK", "CarFull", "SinPilas", "CarFullSinPilas", "CarFullSinPilas", "SinPilas", None]

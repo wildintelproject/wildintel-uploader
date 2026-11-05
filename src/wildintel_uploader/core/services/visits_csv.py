@@ -117,6 +117,26 @@ ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation",
 YES = {"yes", "true", "1", "y", "si", "sí"}
 NO = {"no", "false", "0", "n"}
 CODES = {c.lower(): c for c in ("OK", "CarFull", "SinPilas", "CarFullSinPilas")}
+# ...and as the form says them in English: "Card full", "No batteries", "Card full and no batteries" (written without spaces, case or the s of the card)
+CODES_ENGLISH = {"cardfull": "CarFull", "nobatteries": "SinPilas", "cardfullandnobatteries": "CarFullSinPilas", "carfullandnobatteries": "CarFullSinPilas"}
+
+
+def card_code(value) -> str | None:
+    """The code of how the card and the batteries were, from the code itself or from its English wording; None when it is neither."""
+    text = str(value).strip().lower()
+    return CODES.get(text) or CODES_ENGLISH.get(re.sub(r"[\s_-]+", "", text))
+
+
+def id_of(value) -> str:
+    """The id of a camera or an SD card from a cell that may say more than it: "68 now. Before 26" is 68, "Now 17, before 09" is 17, "42b" stays as it is. What a cell
+    says after the id is left out; an id of letters and digits with no spaces is taken as it is."""
+    text = str(value).strip()
+    if re.fullmatch(r"[\w.-]+", text):
+        return text
+    now = re.search(r"\bnow\b\W*(\d+[A-Za-z]?)\b", text, re.IGNORECASE)
+    first = re.search(r"\b\d+[A-Za-z]?\b", text)
+    found = now or first
+    return found.group(1 if now else 0) if found else text
 
 
 # What kind of error a problem is, by its code — the rows with the same code are told together. The codes are those of the errors the row raises (RowError, or
@@ -206,14 +226,19 @@ class CsvVisit(BaseModel):
     @field_validator("camera_id", mode="before")
     @classmethod
     def _camera(cls, value):
-        return re.sub(r"\.0+$", "", str(value))
+        return re.sub(r"\.0+$", "", id_of(value))
+
+    @field_validator("sd", mode="before")
+    @classmethod
+    def _sd(cls, value):
+        return id_of(value)
 
     @field_validator("card_batteries_ok", mode="before")
     @classmethod
     def _card_batteries(cls, value):
-        code = CODES.get(str(value).lower())
+        code = card_code(value)
         if code is None:
-            raise _custom("card_batteries_invalid", "'{value}' is not OK, CarFull, SinPilas or CarFullSinPilas.", value)
+            raise _custom("card_batteries_invalid", "'{value}' is not OK, Card full, No batteries or Card full and no batteries (or CarFull, SinPilas, CarFullSinPilas).", value)
         return code
 
     @field_validator("num_photos", "camera_interval", "camera_tilt", "camera_heading", mode="before")
