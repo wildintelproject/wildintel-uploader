@@ -449,6 +449,43 @@ def unknown_records(new: list[dict], kept: list[dict], unknown: list[dict] | Non
     return sorted(made.values(), key=lambda u: (u["session"], u["location_id"].lower()))
 
 
+def revision_order_conflicts(new: list[dict], kept: list[dict]) -> list[tuple[dict, str]]:
+    """The visits of `new` that are out of the order of the revisions — each with why: every visit of a revision is after all those of the revisions before it and before
+    all those of the revisions after it, whichever the site. When two visits of a file are at odds, both are told."""
+    out = []
+    for v in new:
+        number = _session_number(v.get("session"))
+        if number is None:
+            continue
+        for other in (w for w in [*kept, *new] if w is not v):
+            n = _session_number(other.get("session"))
+            if n is None or n == number:
+                continue
+            if n < number and _stamp(other) >= _stamp(v):
+                out.append((v, f"R{number:04d} has to be after R{n:04d}: its visit to {other['location_id']} was on {other['date']} at {other['time']}, and this one is on {v['date']} at {v['time']}."))
+                break
+            if n > number and _stamp(other) <= _stamp(v):
+                out.append((v, f"R{number:04d} has to be before R{n:04d}: its visit to {other['location_id']} was on {other['date']} at {other['time']}, and this one is on {v['date']} at {v['time']}."))
+                break
+    return out
+
+
+def unknown_installation_warnings(new: list[dict], kept: list[dict], unknown: list[dict] | None) -> list[str]:
+    """A warning for each site that has no visit in a revision the file gives — it is still unknown there: the site had no visit in it — and whose visit in the next
+    revision does not put a camera up. The revision before it says nothing of the site, so the camera has to be put up in that one (an Installation)."""
+    given = {n for n in (_session_number(v.get("session")) for v in new) if n is not None}
+    everything = [*kept, *new]
+    said = []
+    for u in sorted(unknown or [], key=lambda u: (str(u["session"]), str(u["location_id"]).lower())):
+        number = _session_number(u.get("session"))
+        if number not in given or any(_same(v["location_id"], u["location_id"]) and _session_number(v.get("session")) == number for v in new):
+            continue
+        for after in (v for v in everything if _same(v["location_id"], u["location_id"]) and _session_number(v.get("session")) == number + 1):
+            if "Installation" not in (after.get("actions") or []) and not is_not_revised(after):
+                said.append(f"R{number + 1:04d} {u['location_id']}: the site has no visit in R{number:04d}, so the camera has to be put up in R{number + 1:04d} (an Installation), and this visit does not.")
+    return list(dict.fromkeys(said))
+
+
 def revision_missing(number: int, visits: list[dict], locations: list[dict], day: str = "", unknown: list[dict] | None = None) -> list[str]:
     """The locations still to be visited in revision `number`: those that are not archived when it starts (the day of its first visit, or `day` if it has none)
     and have no visit in it. Empty when the revision is complete — closed."""

@@ -151,6 +151,7 @@ ERROR_LABELS: dict[str, str] = {
     "session_invalid": "Session not valid",
     "revision_not_finished": "Revision started before the one before is finished",
     "revision_closed": "Revision closed",
+    "revision_order": "Revision out of order",
     "visit_repeated": "Site visited twice in a revision",
     "date_invalid": "Date or time not valid",
     "number_invalid": "Number not valid",
@@ -581,6 +582,11 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             record["session"] = f"R{count[loc] + 1:04d}"
         count[loc] += 1
         visits.append(record)
+    # every visit of a revision is after those of the revisions before it and before those of the revisions after it, whichever the site
+    disordered = visit_rules.revision_order_conflicts(visits, kept)
+    for visit, why in disordered:
+        problem(row_of[id(visit)], why, "revision_order")
+    visits = [v for v in visits if id(v) not in {id(r) for r, _ in disordered}]
     new_sites = [visit_rules.new_site(site, records, locations) for site, records in sorted(held.items())]
     # what is odd, said once and told in the rows it is about: the visits that make it odd are rows of the file
     said: list[tuple[str, list[int]]] = [(message, [n]) for n, message in row_warnings]
@@ -597,6 +603,9 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         problem(row_of[id(visit)], why, "revision_not_finished")
     visits = [v for v in visits if id(v) not in {id(r) for r, _ in refused}]
     unknown = visit_rules.unknown_records(visits, kept, unknown_kept)
+    # a site that has no visit in a revision the file gives was not there: the revision after it has to put its camera up
+    upwards = visit_rules.unknown_installation_warnings(visits, kept, [*unknown_kept, *unknown])
+    warnings += [m for m in upwards if m not in warnings]
     if unknown:
         by_revision: dict[str, list[str]] = {}
         for u in unknown:
@@ -621,6 +630,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         for n in added:
             if message not in report[n].setdefault("warnings", []):
                 report[n]["warnings"].append(message)
+    loose += upwards
     for n in sorted(kept_rows):
         names = [f"the location {l['location_id']}" for l in made_by_row.get(n, {}).get("locations", [])]
         names += [f"the camera {c['camera_id']}" for c in made_by_row.get(n, {}).get("cameras", [])]

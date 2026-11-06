@@ -1178,3 +1178,42 @@ def test_an_edit_cannot_take_a_visit_past_those_of_another_revision_nor_leave_a_
         assert refused.status_code == 422 and "R0012 has to be before R0013" in refused.text
         # and past the revision of its own site, which would lose the camera it needed
         assert "DONA_01" in refused.text
+
+
+
+_COLUMNS = ("location_id", "actions", "date", "time", "session", "camera_id", "sd", "num_photos")
+
+
+def _read(text: str, save: bool = False) -> dict:
+    csv = ",".join(_COLUMNS) + "\n" + text
+    return _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": csv, "save": save, "format": "mapped", "mapping": {c: c for c in _COLUMNS}}).json()
+
+
+def test_a_site_that_the_revision_given_later_does_not_have_is_put_up_in_the_next_one_and_nothing_is_said_when_it_is(tmp_path: Path):
+    with _in(tmp_path):
+        _project()
+        _read("DONA_01,Revision,2026-03-01,10:00:00,R0002,C1,S2,100\nDONA_02,Revision,2026-03-01,11:00:00,R0002,C2,S2b,100\nDONA_03,Installation,2026-03-01,12:00:00,R0002,C3,S2c,\n", save=True)
+        # R1 has two of the three sites: the third is the one that R2 puts up
+        said = _read("DONA_01,Installation,2026-01-10,10:00:00,R0001,C1,S1,\nDONA_02,Installation,2026-01-10,11:00:00,R0001,C2,S1b,\n")
+        assert not any("DONA_03" in w for w in said["warnings"])
+
+
+def test_a_site_that_the_revision_given_later_does_not_have_and_the_next_one_only_revises_is_told(tmp_path: Path):
+    with _in(tmp_path):
+        _project()
+        _read("DONA_01,Revision,2026-03-01,10:00:00,R0002,C1,S2,100\nDONA_03,Revision,2026-03-01,12:00:00,R0002,C3,S2c,100\n", save=True)
+        said = _read("DONA_01,Installation,2026-01-10,10:00:00,R0001,C1,S1,\n")
+        assert any("R0002 DONA_03" in w and "Installation" in w for w in said["warnings"]), said["warnings"]
+        assert not any("DONA_01" in w and "has to be put up" in w for w in said["warnings"])
+
+
+def test_a_visit_of_a_revision_is_after_those_of_the_revisions_before_it_and_before_those_after_it_in_a_file_too(tmp_path: Path):
+    with _in(tmp_path):
+        _project()
+        _read("DONA_01,Revision,2026-03-01,10:00:00,R0002,C1,S2,100\n", save=True)
+        late = _read("DONA_02,Installation,2026-05-10,10:00:00,R0001,C2,S1b,\nDONA_03,Installation,2026-01-10,10:00:00,R0001,C3,S1c,\n")
+        assert [(p["row"], "R0001 has to be before R0002" in p["message"]) for p in late["problems"]] == [(2, True)]
+        assert [v["location_id"] for v in late["visits"]] == ["DONA_03"]
+        # in the same file, when two visits are at odds both are told
+        both = _read("DONA_02,Installation,2026-05-10,10:00:00,R0001,C2,S1b,\nDONA_03,Revision,2026-04-01,10:00:00,R0002,C3,S2c,5\n")
+        assert sorted(p["row"] for p in both["problems"]) == [2, 3]
