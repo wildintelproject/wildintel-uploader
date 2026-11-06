@@ -151,6 +151,7 @@ ERROR_LABELS: dict[str, str] = {
     "session_invalid": "Session not valid",
     "revision_not_finished": "Revision started before the one before is finished",
     "revision_closed": "Revision closed",
+    "visit_repeated": "Site visited twice in a revision",
     "date_invalid": "Date or time not valid",
     "number_invalid": "Number not valid",
     "create_missing": "Data to create it is missing",
@@ -460,6 +461,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     held: dict[str, list[dict]] = {}  # the visits to sites that are not locations of the research project, by site
     row_warnings: list[tuple[int, str]] = []  # what is odd in a row by itself: its row, and what
     # A revision is one visit to each site: the session and the site of a visit already kept are taken, whatever its camera or its actions
+    in_file: dict[tuple[str, str], int] = {}
     same_visit = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in kept if v.get("session")}
 
     # What became of each row of the file: {row: {"row", "site", "result", "message"}} — result is ok, problem, already_kept, new_site or ignored.
@@ -550,6 +552,12 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         if visit_rules.is_closed_revision(record["session"], kept, locations):
             problem(n, f"{record['session']} is closed: every location has its visit in it, so nothing new can be imported in it.", "revision_closed")
             continue
+        # the key of a visit is its site and its revision: a site is visited once in a revision, whatever the day
+        if "session" in row and again in in_file:
+            problem(n, f"{record['location_id']} has already a visit in {record['session']} in row {in_file[again]} of the file: a revision is one visit to each site.", "visit_repeated")
+            continue
+        if "session" in row:
+            in_file[again] = n
         already.add((record["location_id"].lower(), record["date"], record["time"]))
         parsed.append((n, record | {"_given": "session" in row}))
         if made["locations"]:
@@ -581,10 +589,19 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     warnings = list(dict.fromkeys(message for message, _ in said))
     notes = visit_rules.history_notes(visits, kept)
     # a revision is not started before the one before it is finished: its visits are refused, with the rows they come from
-    refused = visit_rules.revision_gate(visits, kept, [*locations, *new_locations.values()])
+    # a site that has no visit in the revisions before the first of its visits has them unknown: nothing was checked against them, and they finish their revision
+    unknown_kept = options.get("unknown") or []
+    unknown = visit_rules.unknown_records(visits, kept, unknown_kept)
+    refused = visit_rules.revision_gate(visits, kept, [*locations, *new_locations.values()], [*unknown_kept, *unknown])
     for visit, why in refused:
         problem(row_of[id(visit)], why, "revision_not_finished")
     visits = [v for v in visits if id(v) not in {id(r) for r, _ in refused}]
+    unknown = visit_rules.unknown_records(visits, kept, unknown_kept)
+    if unknown:
+        by_revision: dict[str, list[str]] = {}
+        for u in unknown:
+            by_revision.setdefault(u["session"], []).append(u["location_id"])
+        notes += [f"{session}: no visit kept to {len(sites)} site(s), it is unknown — nothing could be checked against it: {', '.join(sites)}." for session, sites in by_revision.items()]
     # what is created is what the visits that are kept need: a location, a camera or an SD card that only a refused visit named is not
     kept_rows = {row_of[id(v)] for v in visits}
     sites = {v["location_id"].lower() for v in visits}
@@ -611,7 +628,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         if names and n in report and report[n]["result"] == "ok":
             report[n]["message"] = f"The visit is added, and creates {', '.join(names)}."
     return {"visits": visits, "problems": problems, "rows": [report[n] for n in sorted(report)], "skipped": skipped, "ignored": ignored, "new_sites": new_sites,
-            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes}
+            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes, "unknown": unknown}
 
 
 # The columns of an export: the fields of a visit a CSV can give, by their names — which the import finds by themselves — less the two that are worked out

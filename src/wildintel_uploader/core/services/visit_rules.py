@@ -307,7 +307,7 @@ def new_site(site: str, visits: list[dict], known: list[dict]) -> dict:
     }
 
 
-def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[dict] | None = None) -> list[str]:
+def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[dict] | None = None, unknown: list[dict] | None = None) -> list[str]:
     """Why a visit made by hand cannot be kept: its site is not a location of the research project, it is already kept (the same site, day and time),
     it is the first to its site and not an Installation, it lacks what its actions ask, or its camera or card are not where it says. Empty when it can be kept."""
     reasons = []
@@ -322,7 +322,7 @@ def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[d
     reasons += required_errors(visit).values()
     reasons += availability_errors(kept, visit, cards).values()
     reasons += archive_errors(visit, kept, next((l for l in locations if _same(l.get("location_id"), visit["location_id"])), None))
-    reasons += [why for _, why in revision_gate([visit], kept, locations)]
+    reasons += [why for _, why in revision_gate([visit], kept, locations, unknown)]
     return reasons
 
 
@@ -387,14 +387,35 @@ def not_visited_records(previous: int, visits: list[dict], locations: list[dict]
     return records
 
 
-def revision_missing(number: int, visits: list[dict], locations: list[dict], day: str = "") -> list[str]:
+def _unknown_keys(unknown: list[dict] | None) -> set[tuple[int | None, str]]:
+    return {(_session_number(u.get("session")), str(u["location_id"]).lower()) for u in unknown or []}
+
+
+def unknown_records(new: list[dict], kept: list[dict], unknown: list[dict] | None = None) -> list[dict]:
+    """The visits that are unknown: for each visit of `new` to a site, every revision before its own — back to R0001 — in which that site has no visit, kept, new or
+    unknown already. Nothing is known of them — no day, no camera, no card —, so nothing is checked against them, but they count as visits to finish a revision:
+    {"location_id", "session"}. A real visit that comes later takes the place of its unknown one."""
+    have = {(_session_number(v.get("session")), str(v["location_id"]).lower()) for v in [*kept, *new]} | _unknown_keys(unknown)
+    made: dict[tuple[int, str], dict] = {}
+    for v in new:
+        number = _session_number(v.get("session"))
+        if number is None:
+            continue
+        for before in range(1, number):
+            key = (before, str(v["location_id"]).lower())
+            if key not in have and key not in made:
+                made[key] = {"location_id": str(v["location_id"]), "session": f"R{before:04d}"}
+    return sorted(made.values(), key=lambda u: (u["session"], u["location_id"].lower()))
+
+
+def revision_missing(number: int, visits: list[dict], locations: list[dict], day: str = "", unknown: list[dict] | None = None) -> list[str]:
     """The locations still to be visited in revision `number`: those that are not archived when it starts (the day of its first visit, or `day` if it has none)
     and have no visit in it. Empty when the revision is complete — closed."""
     of = [v for v in visits if _session_number(v.get("session")) == number]
     start = min((str(v["date"]) for v in of), default=day)
     expected = [str(l["location_id"]) for l in locations
                 if l.get("location_id") and not (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start))]
-    visited = {str(v["location_id"]).lower() for v in of}
+    visited = {str(v["location_id"]).lower() for v in of} | {site for n, site in _unknown_keys(unknown) if n == number}
     return sorted(s for s in expected if s.lower() not in visited)
 
 
@@ -404,19 +425,19 @@ def is_closed_revision(session: str | None, visits: list[dict], locations: list[
     return number is not None and any(_session_number(v.get("session")) == number for v in visits) and not revision_missing(number, visits, locations)
 
 
-def unfinished_revision(number: int, visits: list[dict], locations: list[dict], floor: int, day: str = "") -> str | None:
+def unfinished_revision(number: int, visits: list[dict], locations: list[dict], floor: int, day: str = "", unknown: list[dict] | None = None) -> str | None:
     """Why revision `number` cannot be started: the one before it is not finished. A revision is one visit to each of the locations that are not archived
     when it starts (the day of its first visit; an archived location with no date is archived for good); the first revision of the visits (`floor`) has none before it."""
     previous = number - 1
     if previous < floor:
         return None
-    missing = revision_missing(previous, visits, locations, day)
+    missing = revision_missing(previous, visits, locations, day, unknown)
     if not missing:
         return None
     return f"R{number:04d} cannot start: R{previous:04d} is not finished, {len(missing)} location(s) still to be visited in it: {', '.join(missing)}."
 
 
-def revision_gate(new: list[dict], kept: list[dict], locations: list[dict]) -> list[tuple[dict, str]]:
+def revision_gate(new: list[dict], kept: list[dict], locations: list[dict], unknown: list[dict] | None = None) -> list[tuple[dict, str]]:
     """The visits of `new` that cannot be kept because the revision before theirs is not finished — each with why. The revisions are taken in order, so a
     revision that is refused does not finish the one after it."""
     numbers = [n for n in (_session_number(v.get("session")) for v in [*kept, *new]) if n is not None]
@@ -425,7 +446,7 @@ def revision_gate(new: list[dict], kept: list[dict], locations: list[dict]) -> l
     floor, accepted, refused = min(numbers), list(kept), []
     for number in sorted({n for n in (_session_number(v.get("session")) for v in new) if n is not None}):
         group = [v for v in new if _session_number(v.get("session")) == number]
-        reason = unfinished_revision(number, accepted, locations, floor, min(str(v["date"]) for v in group))
+        reason = unfinished_revision(number, accepted, locations, floor, min(str(v["date"]) for v in group), unknown)
         if reason:
             refused += [(v, reason) for v in group]
         else:

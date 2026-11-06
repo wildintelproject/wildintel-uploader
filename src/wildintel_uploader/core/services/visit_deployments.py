@@ -217,7 +217,7 @@ def refresh_states(root: Path, research_project_id: str, keep_seconds: bool = Tr
     return local_folder_service.write_states(root, research_project_id, visit_states(local_folder_service.list_visits(root, research_project_id), keep_seconds))
 
 
-def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[dict] | None = None) -> list[dict]:
+def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[dict] | None = None, unknown: list[dict] | None = None) -> list[dict]:
     """The visits as the visit book shows them, each with the deployment it started — `deployment` (its id) and `deployment_status` ("closed" once a later visit collected
     its card, "open" while the camera it left is still out) — and neither for a visit that left no camera.
 
@@ -231,8 +231,12 @@ def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[di
         out.append({**v, "deployment": d["deployment_id"] if d else None, "deployment_status": d["status"] if d else None,
                     "deployment_no_images": d["no_images"] if d else None, "not_done": False, "not_visited": _not_revised(v),
                     "state": states[(str(v.get("location_id", "")).lower(), str(v.get("when") or ""))]})
+    # a visit of which nothing is known: it has no day, no time and no actions, and it cannot be edited — only a known one takes its place
+    for u in unknown or []:
+        out.append({"location_id": u["location_id"], "session": str(u["session"]).upper(), "date": "", "time": "", "when": None, "actions": [], "deployment": None, "deployment_status": None,
+                    "not_done": False, "not_visited": False, "unknown": True, "state": "unknown"})
     if locations:
-        visited = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in visits}
+        visited = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in visits} | {(str(u["session"]).upper(), str(u["location_id"]).lower()) for u in unknown or []}
         sessions = sorted({str(v["session"]).upper() for v in visits if v.get("session")})
         for session in sessions:
             for location in locations:

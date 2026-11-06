@@ -227,3 +227,51 @@ def test_a_location_is_created_only_when_the_row_says_if_its_cameras_follow_dayl
     result = visits_csv.parse_visits(text, [], [], "", "mapped", mapping, {"create": {"locations": True}})
     assert [(l["location_id"], l["ignore_dst"]) for l in result["create"]["locations"]] == [("WICP_0001", True)]       # "no": the cameras ignore it
     assert "daylight saving" in result["rows"][1]["message"] and len(result["visits"]) == 1
+
+
+# ── what has no visit before the first one of a site is unknown ──────────────────────────
+
+_LOCS = [{"location_id": f"WICP_000{n}", "latitude": 40.0 + n / 100, "longitude": -3.0, "timezone": "UTC"} for n in (1, 2)]
+
+
+def test_the_revisions_before_the_first_visit_of_a_site_are_unknown_all_the_way_back():
+    from wildintel_uploader.core.services import visit_rules
+    new = [{"location_id": "WICP_0001", "session": "R0003", "date": "2026-10-19", "time": "11:40:00", "actions": ["Installation"], "camera_id": "C1"}]
+    kept = [{"location_id": "WICP_0001", "session": "R0001", "date": "2026-08-01", "time": "10:00:00", "actions": ["Installation"], "camera_id": "C1"}]
+    assert visit_rules.unknown_records(new, kept) == [{"location_id": "WICP_0001", "session": "R0002"}]
+    assert visit_rules.unknown_records(new, []) == [{"location_id": "WICP_0001", "session": "R0001"}, {"location_id": "WICP_0001", "session": "R0002"}]
+    # what is unknown already is not made again
+    assert visit_rules.unknown_records(new, [], [{"location_id": "wicp_0001", "session": "R0001"}]) == [{"location_id": "WICP_0001", "session": "R0002"}]
+
+
+def test_an_unknown_revision_is_a_finished_one_for_the_next_to_start():
+    from wildintel_uploader.core.services import visit_rules
+    kept = [{"location_id": "WICP_0002", "session": "R0001", "date": "2026-08-01", "time": "10:00:00", "actions": ["Installation"], "camera_id": "C2"}]
+    new = [{"location_id": "WICP_0001", "session": "R0002", "date": "2026-10-19", "time": "11:40:00", "actions": ["Installation"], "camera_id": "C1"},
+           {"location_id": "WICP_0002", "session": "R0002", "date": "2026-10-19", "time": "12:40:00", "actions": ["Revision"], "camera_id": "C2", "sd": "5"}]
+    assert visit_rules.revision_gate(new, kept, _LOCS)   # WICP_0001 has no visit in R0001
+    assert not visit_rules.revision_gate(new, kept, _LOCS, visit_rules.unknown_records(new, kept))
+
+
+def test_a_file_says_what_it_leaves_unknown_and_creates_nothing_else_of_it():
+    from wildintel_uploader.core.services import visits_csv
+    text = ("location_id,actions,date,time,session,camera_id\n"
+            "WICP_0001,Installation,2026-10-19,11:40:00,R0003,CAM1\n")
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, _LOCS, [], "", "mapped", mapping)
+    assert not result["problems"] and len(result["visits"]) == 1
+    assert [u["session"] for u in result["unknown"]] == ["R0001", "R0002"]
+    assert any("R0001" in n and "unknown" in n for n in result["notes"])
+
+
+def test_a_site_is_visited_once_in_a_revision_even_on_another_day_in_the_same_file():
+    from wildintel_uploader.core.services import visits_csv
+    text = ("location_id,actions,date,time,session,camera_id\n"
+            "WICP_0001,Installation,2026-10-19,11:40:00,R0001,C1\n"
+            "WICP_0001,Revision,2026-10-20,11:40:00,R0001,C1\n"
+            "WICP_0002,Installation,2026-10-20,12:40:00,R0001,C2\n")
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, _LOCS, [], "", "mapped", mapping)
+    assert [(v["location_id"], v["session"]) for v in result["visits"]] == [("WICP_0001", "R0001"), ("WICP_0002", "R0001")]
+    assert [(p["row"], "row 2" in p["message"]) for p in result["problems"]] == [(3, True)]
+    assert {r["row"]: r["result"] for r in result["rows"]}[3] == "problem"

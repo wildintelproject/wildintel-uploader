@@ -114,7 +114,7 @@ def save_visit(req: SaveVisitRequest) -> dict:
         location = next((l for l in locations if str(l.get("location_id", "")).lower() == visit["location_id"].lower()), None)
         visit["when"] = visit_time.to_when(visit["date"], visit["time"], location)
         reasons = visit_rules.refusals(visit, local_folder_service.list_visits(root, req.research_project_id), locations,
-                                       local_folder_service.list_field_items(root, req.research_project_id, "sd_cards"))
+                                       local_folder_service.list_field_items(root, req.research_project_id, "sd_cards"), local_folder_service.list_unknown(root, req.research_project_id))
         if reasons:
             raise HTTPException(422, " ".join(reasons))
         kept = local_folder_service.write_visit(root, req.research_project_id, visit)
@@ -194,7 +194,8 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             except epicollect_service.EpicollectError as exc:
                 raise HTTPException(400, str(exc)) from exc
             fmt, mapping, time_source = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}, "hour"
-        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults})
+        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults,
+                                                                                                                                  "unknown": local_folder_service.list_unknown(root, req.research_project_id)})
         if history:
             seen = {s["site"].lower() for s in result["new_sites"]}
             result = {
@@ -203,6 +204,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
                 "new_sites": result["new_sites"] + [s for s in history["new_sites"] if s["site"].lower() not in seen],
                 "warnings": list(dict.fromkeys([*history["warnings"], *result["warnings"]])), "loose_warnings": list(dict.fromkeys([*history["warnings"], *result["loose_warnings"]])), "notes": list(dict.fromkeys([*history["notes"], *result["notes"]])),
                 "skipped": result["skipped"] + history["skipped"],
+                "unknown": result["unknown"] + [u for u in history["unknown"] if (u["location_id"].lower(), u["session"]) not in {(r["location_id"].lower(), r["session"]) for r in result["unknown"]}],
             }
         saved = field_logs = report = None
         if req.save:
@@ -213,6 +215,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
                 if result["create"][kind]:
                     local_folder_service.write_field_items(root, req.research_project_id, kind, [*kept_items, *result["create"][kind]])
             saved = local_folder_service.write_visits(root, req.research_project_id, result["visits"])
+            local_folder_service.write_unknown(root, req.research_project_id, result["unknown"])
             _archive_locations(root, req.research_project_id, result["visits"])
             _refresh_states(root, req.research_project_id)
             field_logs = _write_logs(root, req.research_project_id, result["visits"])
@@ -324,7 +327,8 @@ def visit_book(req: ListVisitsRequest) -> dict:
         _refresh_states(root, req.research_project_id)  # what was kept before the states were is given its own
         visits = local_folder_service.list_visits(root, req.research_project_id, req.location_id)
         locations = local_folder_service.list_locations(root, req.research_project_id) if req.location_id is None else None
-        book = visit_deployments.visit_book(visits, config.load_settings().FIELDLOG.keep_seconds, locations)
+        book = visit_deployments.visit_book(visits, config.load_settings().FIELDLOG.keep_seconds, locations,
+                                            [u for u in local_folder_service.list_unknown(root, req.research_project_id) if req.location_id is None or u["location_id"].lower() == req.location_id.lower()])
         for visit in book:
             visit["uploaded_at"], visit["on_trapper"] = _trapper_state(root, req.research_project_id, visit.get("deployment_id"))
         return {"results": book}

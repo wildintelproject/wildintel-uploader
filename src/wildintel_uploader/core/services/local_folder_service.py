@@ -28,6 +28,7 @@ IMAGES_FILE = "images.json"
 RESEARCH_PROJECT_METADATA_FILE = "research_project.json"
 LOCATIONS_FILE = "locations.json"
 VISITS_FILE = "visits.json"
+UNKNOWN_FILE = "unknown_visits.json"
 # The uploads that were tried and failed — one record for each deployment and destination: an upload is planned until it is done, and a failed one is tried again.
 UPLOAD_FAILURES_FILE = "upload_failures.json"
 CAMERAS_FILE = "cameras.json"
@@ -235,7 +236,7 @@ def delete_research_project(root: Path, research_project_id: str) -> dict:
         LocalFolderError: the research project isn't there, or it holds more than its own files.
     """
     folder = project_dir(root, research_project_id)
-    own = {RESEARCH_PROJECT_METADATA_FILE, LOCATIONS_FILE, VISITS_FILE, UPLOAD_FAILURES_FILE}
+    own = {RESEARCH_PROJECT_METADATA_FILE, LOCATIONS_FILE, VISITS_FILE, UNKNOWN_FILE, UPLOAD_FAILURES_FILE}
     if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
     others = sorted(e.name for e in folder.iterdir() if e.name not in own)
@@ -442,6 +443,34 @@ def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
     return _told(_kept(visit, locations), locations)
 
 
+def list_unknown(root: Path, research_project_id: str) -> list[dict]:
+    """The visits that are unknown — {"location_id", "session"}: the revisions before the first one kept to a site, of which nothing is known (see visit_rules.unknown_records)."""
+    found = _read_json(project_dir(root, research_project_id) / UNKNOWN_FILE)
+    return [u for u in found if isinstance(u, dict) and u.get("location_id") and u.get("session")] if isinstance(found, list) else []
+
+
+def _write_unknown(root: Path, research_project_id: str, unknown: list[dict]) -> None:
+    path = project_dir(root, research_project_id) / UNKNOWN_FILE
+    if unknown:
+        path.write_text(json.dumps(unknown, indent=2, ensure_ascii=False), encoding="utf-8")
+    elif path.exists():
+        path.unlink()
+
+
+def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
+    """Keeps more unknown visits — those already kept are not repeated; returns how many were added.
+
+    Raises:
+        LocalFolderError: the research project isn't there."""
+    require_research_project(root, research_project_id)
+    have = list_unknown(root, research_project_id)
+    keys = {(u["location_id"].lower(), u["session"].upper()) for u in have}
+    added = [{"location_id": u["location_id"], "session": u["session"].upper()} for u in new if (u["location_id"].lower(), u["session"].upper()) not in keys]
+    if added:
+        _write_unknown(root, research_project_id, [*have, *added])
+    return len(added)
+
+
 def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
     """Registers several visits at once to a research project that's already kept here; returns how many.
 
@@ -453,6 +482,12 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
         locations = list_locations(root, research_project_id)
         list_visits(root, research_project_id)  # an earlier file is moved to instants first
         _write_raw_visits(root, research_project_id, _raw_visits(root, research_project_id) + [_kept(v, locations) for v in new])
+        # a visit that is known takes the place of the unknown one of its site in its revision
+        known = {(str(v.get("location_id", "")).lower(), str(v.get("session") or "").upper()) for v in new}
+        unknown = list_unknown(root, research_project_id)
+        left = [u for u in unknown if (u["location_id"].lower(), u["session"].upper()) not in known]
+        if len(left) != len(unknown):
+            _write_unknown(root, research_project_id, left)
     return len(new)
 
 

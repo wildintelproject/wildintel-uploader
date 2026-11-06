@@ -1042,3 +1042,25 @@ def test_a_revision_starts_after_the_last_visit_of_the_one_before(tmp_path: Path
 
     assert too_early.status_code == 422 and "R0013 has to be after R0012" in too_early.json()["detail"]
     assert in_time.status_code == 200
+
+
+def test_a_file_that_starts_after_the_first_revision_leaves_the_ones_before_unknown_and_a_known_visit_takes_the_place(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service
+    with _in(tmp_path):
+        _project(archived=(3,))
+        text = ("location_id,actions,date,time,session,camera_id\n"
+                "DONA_01,Installation,2026-10-19,11:40:00,R0003,C1\n"
+                "DONA_02,Installation,2026-10-19,12:40:00,R0003,C2\n")
+        mapping = {"location_id": "location_id", "actions": "actions", "date": "date", "time": "time", "session": "session", "camera_id": "camera_id"}
+        body = {"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping}
+        shown = _client().post("/api/visits/import-csv", json=body).json()
+        assert [(u["location_id"], u["session"]) for u in shown["unknown"]] == [("DONA_01", "R0001"), ("DONA_02", "R0001"), ("DONA_01", "R0002"), ("DONA_02", "R0002")]
+        assert local_folder_service.list_unknown(tmp_path, "DONA") == []   # reading keeps nothing
+        kept = _client().post("/api/visits/import-csv", json={**body, "save": True}).json()
+        assert kept["saved"] == 2 and not kept["problems"]
+        assert len(local_folder_service.list_unknown(tmp_path, "DONA")) == 4
+        # a visit that is known takes the place of the unknown one of its site in its revision
+        local_folder_service.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0001", "date": "2026-08-01", "time": "10:00:00", "when": "2026-08-01T10:00:00Z", "actions": ["Installation"], "camera_id": "C0"}])
+        left = local_folder_service.list_unknown(tmp_path, "DONA")
+        assert ("DONA_01", "R0001") not in {(u["location_id"], u["session"]) for u in left} and len(left) == 3
+
