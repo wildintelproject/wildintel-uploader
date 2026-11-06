@@ -421,6 +421,10 @@ describe('VisitBookPage', () => {
       visit({ session: 'R0002', deployment_status: 'open' }),
     ] })
     mockedApi.saveVisit.mockResolvedValue({} as never)
+    mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'TATR' }, FIELDWORK: {
+      cameras: [{ label: 'P800', camera_id: 'P800', camera_model: 'Reconyx-PC800', research_project: 'TATR', status: 'active' }, { label: 'OTHER', camera_id: 'OTHER', research_project: 'DONA', status: 'active' }],
+      sd_cards: [{ label: 'A13', research_project: 'TATR', status: 'active' }], trappers: [{ name: 'Ana', affiliation: null }],
+    } } as never)
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
@@ -430,8 +434,15 @@ describe('VisitBookPage', () => {
     const dialog = within(screen.getByRole('dialog', { name: 'Fill in R0001 of TATR_0001' }))
     await userEvent.type(dialog.getByLabelText('Day'), '2024-06-01')
     await userEvent.type(dialog.getByLabelText('Time'), '10:00:00')
+    // the camera, the SD card and who went are the ones of the settings, of this research project: another one cannot be typed
+    await userEvent.type(dialog.getByLabelText('Camera'), 'OTHER')
+    expect(dialog.getByText('No matches')).toBeInTheDocument()
+    await userEvent.clear(dialog.getByLabelText('Camera'))
     await userEvent.type(dialog.getByLabelText('Camera'), 'P800')
+    await userEvent.click(dialog.getByRole('option', { name: 'P800' }))
+    expect(dialog.getByText('Model: Reconyx-PC800')).toBeInTheDocument()
+    await userEvent.click(dialog.getByRole('button', { name: 'Ana' }))
     await userEvent.click(dialog.getByRole('button', { name: 'Fill in' }))
-    expect(mockedApi.saveVisit).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0001', session: 'R0001', date: '2024-06-01', time: '10:00:00', actions: ['Installation'], camera_id: 'P800' }))
+    expect(mockedApi.saveVisit).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0001', session: 'R0001', date: '2024-06-01', time: '10:00:00', actions: ['Installation'], camera_id: 'P800', trappers: 'Ana' }))
   })
 })

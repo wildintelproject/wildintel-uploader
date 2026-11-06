@@ -354,13 +354,25 @@ def _replay(visit: dict, others: list[dict], locations: list[dict], cards: list[
     if number is not None and any(_same(v["location_id"], visit["location_id"]) and _session_number(v.get("session")) == number for v in others):
         found.append((None, f"{visit['location_id']} already has a visit in R{number:04d}: a revision is one visit to each site."))
     found += [(None, why) for why in refusals(visit, [v for v in others if _stamp(v) < stamp], locations, cards, unknown)]
-    for later in sorted((v for v in others if _stamp(v) >= stamp), key=_stamp):
-        if not ({str(later["location_id"]).lower(), str(later.get("camera_id") or "").lower(), str(later.get("sd") or "").lower()} - {""}) & touched:
+    # a revision is after the one before it and before the one after it, whichever the site: a visit cannot go past the visits of another revision
+    if number is not None:
+        for other in others:
+            n = _session_number(other.get("session"))
+            if n is None or n == number:
+                continue
+            if n < number and _stamp(other) >= stamp:
+                found.append((None, f"R{number:04d} has to be after R{n:04d}: its visit to {other['location_id']} was on {other['date']} at {other['time']}."))
+            elif n > number and _stamp(other) <= stamp:
+                found.append((None, f"R{number:04d} has to be before R{n:04d}: its visit to {other['location_id']} was on {other['date']} at {other['time']}."))
+    # the visits it touches — to its site, with its camera or with its card — are checked again with it where it is, those after it and those before it too: one that
+    # was after it may be before it now, and has lost what it needed
+    for other in sorted(others, key=_stamp):
+        if not ({str(other["location_id"]).lower(), str(other.get("camera_id") or "").lower(), str(other.get("sd") or "").lower()} - {""}) & touched:
             continue
-        earlier = [v for v in [*others, visit] if v is not later and _stamp(v) < _stamp(later)]
-        key = (str(later["location_id"]).lower(), str(later.get("session") or "").upper())
-        found += [(key, f"{later.get('session')} {later['location_id']} on {later['date']} at {later['time']} would no longer be possible: {why}")
-                  for why in refusals(later, earlier, locations, cards, unknown)]
+        earlier = [v for v in [*others, visit] if v is not other and _stamp(v) < _stamp(other)]
+        key = (str(other["location_id"]).lower(), str(other.get("session") or "").upper())
+        found += [(key, f"{other.get('session')} {other['location_id']} on {other['date']} at {other['time']} would no longer be possible: {why}")
+                  for why in refusals(other, earlier, locations, cards, unknown)]
     return found
 
 

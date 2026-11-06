@@ -119,7 +119,7 @@ def save_visit(req: SaveVisitRequest) -> dict:
         # a visit that takes the place of an unknown one is put where its instant says, among the visits that are kept
         fills = any(u["location_id"].lower() == visit["location_id"].lower() and u["session"].upper() == str(visit["session"]).upper() for u in unknown)
         if fills:
-            reasons = visit_rules.edit_errors(None, visit, kept_visits, locations, cards, unknown)
+            reasons = _not_entities(root, req.research_project_id, None, visit) + visit_rules.edit_errors(None, visit, kept_visits, locations, cards, unknown)
         else:
             reasons = visit_rules.refusals(visit, kept_visits, locations, cards, unknown)
         if reasons:
@@ -130,6 +130,24 @@ def save_visit(req: SaveVisitRequest) -> dict:
         return {**kept, "field_logs": _write_logs(root, req.research_project_id, [kept])}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+def _not_entities(root, research_project_id: str, old: dict | None, visit: dict) -> list[str]:
+    """What a visit says that is not an entity: a camera or an SD card that is not one of the research project's, a trapper that is not in the settings. Only what
+    changed from `old` is said — what the visit already had stays, as it may have been kept without being listed."""
+    reasons = []
+    cameras = {str(x).lower() for c in local_folder_service.list_field_items(root, research_project_id, "cameras") for x in (c.get("camera_id"), c.get("label")) if x}
+    cards = {str(c.get("label")).lower() for c in local_folder_service.list_field_items(root, research_project_id, "sd_cards")}
+    trappers = {t.name.lower() for t in config.load_settings().FIELDWORK.trappers}
+    names = lambda text: [n.strip() for n in str(text or "").split(",") if n.strip()]  # noqa: E731
+    camera, card = visit.get("camera_id"), visit.get("sd")
+    if camera and str(camera).lower() not in cameras and str(camera).lower() != str((old or {}).get("camera_id") or "").lower():
+        reasons.append(f"The camera {camera} is not one of the cameras of {research_project_id}.")
+    if card and str(card).lower() not in cards and str(card).lower() != str((old or {}).get("sd") or "").lower():
+        reasons.append(f"The SD card {card} is not one of the SD cards of {research_project_id}.")
+    before = {n.lower() for n in names((old or {}).get("trappers"))}
+    reasons += [f"{n} is not one of the trappers." for n in names(visit.get("trappers")) if n.lower() not in trappers and n.lower() not in before]
+    return reasons
 
 
 @router.post("/update")
@@ -152,7 +170,7 @@ def update_visit(req: UpdateVisitRequest) -> dict:
         location = next((l for l in locations if str(l.get("location_id", "")).lower() == visit["location_id"].lower()), None)
         visit["when"] = visit_time.to_when(visit["date"], visit["time"], location)
         others = [v for v in kept_visits if v is not old]
-        reasons = visit_rules.edit_errors(old, visit, others, locations, local_folder_service.list_field_items(root, req.research_project_id, "sd_cards"),
+        reasons = _not_entities(root, req.research_project_id, old, visit) + visit_rules.edit_errors(old, visit, others, locations, local_folder_service.list_field_items(root, req.research_project_id, "sd_cards"),
                                           local_folder_service.list_unknown(root, req.research_project_id))
         if reasons:
             raise HTTPException(422, " ".join(reasons))

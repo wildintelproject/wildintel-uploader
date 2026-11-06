@@ -6,6 +6,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from wildintel_uploader.core.config import load_settings as _real_load_settings  # noqa: E402
+
 PROJECT = {"name": "Doñana", "acronym": "DONA"}
 VISIT = {"location_id": "DONA_01", "session": "R0013", "date": "2026-10-02", "time": "08:14:05", "actions": ["Revision"], "camera_id": "12", "num_photos": 1620, "trappers": "Ana, Luis", "setup_by": "Ana", "comments": "pilas cambiadas"}
 
@@ -24,10 +26,25 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
+def _settings():
+    """The settings as they were, with the trappers Ana and Luis."""
+    from wildintel_uploader.core import config
+    settings = _real_load_settings()
+    settings.FIELDWORK.trappers = [config.Trapper(name="Ana"), config.Trapper(name="Luis")]
+    return settings
+
+
 @contextmanager
 def _in(tmp_path: Path):
-    with patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=tmp_path), \
-         patch("wildintel_uploader.web.api.routers.visits.config.collections_dir", return_value=tmp_path):
+    from contextlib import ExitStack
+    from unittest.mock import Mock
+
+    from wildintel_uploader.core import config
+    with ExitStack() as stack:
+        stack.enter_context(patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=tmp_path))
+        stack.enter_context(patch("wildintel_uploader.web.api.routers.visits.config.collections_dir", return_value=tmp_path))
+        if not isinstance(config.load_settings, Mock):   # a test that gives its own settings keeps them
+            stack.enter_context(patch("wildintel_uploader.web.api.routers.visits.config.load_settings", side_effect=_settings))
         yield
 
 
@@ -1079,10 +1096,10 @@ def test_a_visit_is_edited_where_it_is_and_what_does_not_matter_to_the_rules_cha
     with _in(tmp_path):
         _project(); _installed()
         assert _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()}).status_code == 200
-        edited = _edit(_revision(trappers="Marta", comments="Rained", num_photos=250))
+        edited = _edit(_revision(comments="Rained", num_photos=250))
         assert edited.status_code == 200, edited.text
         kept = next(v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA", "location_id": "DONA_01"}).json()["results"] if v["session"] == "R0013")
-        assert (kept["trappers"], kept["comments"], kept["num_photos"]) == ("Marta", "Rained", 250)
+        assert (kept["comments"], kept["num_photos"]) == ("Rained", 250)
         assert len(_client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]) == 4   # none was added
 
 
@@ -1126,6 +1143,8 @@ def test_an_unknown_visit_is_filled_by_a_known_one_where_its_day_puts_it(tmp_pat
     with _in(tmp_path):
         _project(archived=(2, 3))
         later = {**VISIT, "session": "R0002", "date": "2026-03-01", "time": "10:00:00", "when": "2026-03-01T10:00:00Z", "actions": ["Revision"], "camera_id": "C1", "sd": "S1", "num_photos": 5}
+        local_folder_service.write_field_items(tmp_path, "DONA", "cameras", [{"label": "C1", "camera_id": "C1", "camera_model": None, "research_project": "DONA"}])
+        local_folder_service.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": label, "research_project": "DONA"} for label in ("S0", "S1")])
         local_folder_service.write_visits(tmp_path, "DONA", [later])
         local_folder_service.write_unknown(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0001"}])
         book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
@@ -1135,3 +1154,27 @@ def test_an_unknown_visit_is_filled_by_a_known_one_where_its_day_puts_it(tmp_pat
         saved = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": first})
         assert saved.status_code == 200, saved.text
         assert local_folder_service.list_unknown(tmp_path, "DONA") == []
+
+
+def test_an_edit_cannot_put_a_camera_an_sd_card_or_a_trapper_that_does_not_exist(tmp_path: Path):
+    with _in(tmp_path):
+        _project(); _installed()
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()})
+        for change, said in (({"camera_id": "NOPE"}, "camera NOPE"), ({"sd": "NOPE"}, "SD card NOPE"), ({"trappers": "Nobody"}, "Nobody is not one of the trappers")):
+            refused = _edit(_revision(**change))
+            assert refused.status_code == 422 and said in refused.text, refused.text
+        # what the visit already had stays, as it may have been kept without being listed
+        assert _edit(_revision(comments="same camera, same card")).status_code == 200
+
+
+def test_an_edit_cannot_take_a_visit_past_those_of_another_revision_nor_leave_a_later_one_without_what_it_needed(tmp_path: Path):
+    with _in(tmp_path):
+        _project(); _installed()
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()})
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision(location_id="DONA_02", date="2026-02-05", camera_id="C2")})
+        install1 = next(v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA", "location_id": "DONA_01"}).json()["results"] if v["session"] == "R0012")
+        # the installation of one site goes past the revision of another: R0012 has to be before R0013
+        refused = _edit({**install1, "date": "2026-02-10"})
+        assert refused.status_code == 422 and "R0012 has to be before R0013" in refused.text
+        # and past the revision of its own site, which would lose the camera it needed
+        assert "DONA_01" in refused.text
