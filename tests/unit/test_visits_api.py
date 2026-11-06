@@ -1064,3 +1064,74 @@ def test_a_file_that_starts_after_the_first_revision_leaves_the_ones_before_unkn
         left = local_folder_service.list_unknown(tmp_path, "DONA")
         assert ("DONA_01", "R0001") not in {(u["location_id"], u["session"]) for u in left} and len(left) == 3
 
+
+# ── editing a visit ──────────────────────────────────────────────────────────
+
+def _edit(visit: dict, location_id: str = "DONA_01", session: str | None = None):
+    return _client().post("/api/visits/update", json={"research_project_id": "DONA", "location_id": location_id, "session": session or visit["session"], "visit": visit})
+
+
+def _revision(session="R0013", date="2026-02-01", **changes) -> dict:
+    return {**VISIT, "session": session, "date": date, "time": "10:00:00", "actions": ["Revision"], "camera_id": "12", "sd": "N1", "num_photos": 100, **changes}
+
+
+def test_a_visit_is_edited_where_it_is_and_what_does_not_matter_to_the_rules_changes(tmp_path: Path):
+    with _in(tmp_path):
+        _project(); _installed()
+        assert _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()}).status_code == 200
+        edited = _edit(_revision(trappers="Marta", comments="Rained", num_photos=250))
+        assert edited.status_code == 200, edited.text
+        kept = next(v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA", "location_id": "DONA_01"}).json()["results"] if v["session"] == "R0013")
+        assert (kept["trappers"], kept["comments"], kept["num_photos"]) == ("Marta", "Rained", 250)
+        assert len(_client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]) == 4   # none was added
+
+
+def test_an_edit_that_puts_the_visit_before_the_one_that_precedes_it_is_refused_and_nothing_changes(tmp_path: Path):
+    with _in(tmp_path):
+        _project(); _installed()
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()})
+        refused = _edit(_revision(date="2026-01-05"))
+        assert refused.status_code == 422 and "can only be an Installation" in refused.text and "R0012" in refused.text
+        kept = next(v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"] if v["session"] == "R0013" and v["location_id"] == "DONA_01")
+        assert kept["date"] == "2026-02-01"
+
+
+def test_an_edit_that_makes_a_later_visit_impossible_is_refused_telling_which(tmp_path: Path):
+    with _in(tmp_path):
+        _project(); _installed()
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()})
+        # the camera of the installation changes, and the revision after it is of another one
+        install = next(v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA", "location_id": "DONA_01"}).json()["results"] if v["session"] == "R0012")
+        refused = _edit({**install, "camera_id": "99"})
+        assert refused.status_code == 422 and "R0013" in refused.text and "would no longer be possible" in refused.text
+
+
+def test_a_visit_that_starts_or_closes_an_imported_deployment_cannot_be_edited(tmp_path: Path):
+    with _in(tmp_path):
+        _project(); _installed()
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()})
+        assert _edit(_revision(comments="before")).status_code == 200
+        assert _client().post("/api/visits/link", json={"research_project_id": "DONA", "location_id": "DONA_01", "date": "2026-02-01", "time": "10:00:00", "deployment_id": "R0013-DONA_01"}).status_code == 200
+        assert _edit(_revision(comments="after")).status_code == 409
+        install = next(v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA", "location_id": "DONA_01"}).json()["results"] if v["session"] == "R0012")
+        assert _edit(install).status_code == 409                       # the one that started it
+        other = next(v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA", "location_id": "DONA_02"}).json()["results"])
+        assert _edit({**other, "comments": "free"}, "DONA_02").status_code == 200   # another site is not touched
+        book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
+        assert {(v["location_id"], v["session"]): v["locked"] for v in book if not v.get("not_done")}[("DONA_01", "R0013")] is True
+
+
+def test_an_unknown_visit_is_filled_by_a_known_one_where_its_day_puts_it(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        later = {**VISIT, "session": "R0002", "date": "2026-03-01", "time": "10:00:00", "when": "2026-03-01T10:00:00Z", "actions": ["Revision"], "camera_id": "C1", "sd": "S1", "num_photos": 5}
+        local_folder_service.write_visits(tmp_path, "DONA", [later])
+        local_folder_service.write_unknown(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0001"}])
+        book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
+        assert any(v.get("unknown") and v["session"] == "R0001" and v["state"] == "unknown" for v in book)
+        # a camera put up in R0001 is the one the revision of R0002 finds: the unknown one is filled
+        first = {**VISIT, "session": "R0001", "date": "2026-01-10", "actions": ["Installation"], "camera_id": "C1", "num_photos": None, "sd": "S0"}
+        saved = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": first})
+        assert saved.status_code == 200, saved.text
+        assert local_folder_service.list_unknown(tmp_path, "DONA") == []

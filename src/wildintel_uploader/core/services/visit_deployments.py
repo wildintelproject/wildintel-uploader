@@ -217,6 +217,17 @@ def refresh_states(root: Path, research_project_id: str, keep_seconds: bool = Tr
     return local_folder_service.write_states(root, research_project_id, visit_states(local_folder_service.list_visits(root, research_project_id), keep_seconds))
 
 
+def locked(visits: list[dict], keep_seconds: bool = True) -> set[tuple[str, str]]:
+    """The visits that cannot be edited, found by their site (ignoring case) and their instant: those that start or close a deployment that is imported — the visit that
+    closes it says so, with the deployment it closed."""
+    out = set()
+    for d in deployments(visits, keep_seconds):
+        end = d["end_visit"]
+        if end and end.get("deployment_id"):
+            out |= {(str(v["location_id"]).lower(), str(v.get("when") or "")) for v in (d["start_visit"], end)}
+    return out
+
+
 def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[dict] | None = None, unknown: list[dict] | None = None) -> list[dict]:
     """The visits as the visit book shows them, each with the deployment it started — `deployment` (its id) and `deployment_status` ("closed" once a later visit collected
     its card, "open" while the camera it left is still out) — and neither for a visit that left no camera.
@@ -225,16 +236,18 @@ def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[di
     made to every location, so the one that was not visited says so, with no day, no time and no actions. The archived locations are left out."""
     started = {id(d["start_visit"]): d for d in deployments(visits, keep_seconds)}
     states = visit_states(visits, keep_seconds)
+    fixed = locked(visits, keep_seconds)
     out = []
     for v in visits:
         d = started.get(id(v))
         out.append({**v, "deployment": d["deployment_id"] if d else None, "deployment_status": d["status"] if d else None,
                     "deployment_no_images": d["no_images"] if d else None, "not_done": False, "not_visited": _not_revised(v),
+                    "locked": (str(v.get("location_id", "")).lower(), str(v.get("when") or "")) in fixed,
                     "state": states[(str(v.get("location_id", "")).lower(), str(v.get("when") or ""))]})
     # a visit of which nothing is known: it has no day, no time and no actions, and it cannot be edited — only a known one takes its place
     for u in unknown or []:
         out.append({"location_id": u["location_id"], "session": str(u["session"]).upper(), "date": "", "time": "", "when": None, "actions": [], "deployment": None, "deployment_status": None,
-                    "not_done": False, "not_visited": False, "unknown": True, "state": "unknown"})
+                    "not_done": False, "not_visited": False, "unknown": True, "locked": True, "state": "unknown"})
     if locations:
         visited = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in visits} | {(str(u["session"]).upper(), str(u["location_id"]).lower()) for u in unknown or []}
         sessions = sorted({str(v["session"]).upper() for v in visits if v.get("session")})

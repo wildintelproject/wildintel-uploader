@@ -6,6 +6,7 @@ import { Breadcrumb } from '../components/TaskCard'
 import RevisionSquares from '../components/RevisionSquares'
 import IconButton, { ICON_PATHS } from '../components/IconButton'
 import LinkButton from '../components/LinkButton'
+import EditVisitDialog from '../components/EditVisitDialog'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { BookVisit, ClosedVisitTarget } from '../types'
 import { btnOutline, inputClass } from './ImportDeploymentPage'
@@ -56,17 +57,18 @@ function sortValue(v: BookVisit, key: SortKey): string | number {
 
 /** Where a visit is in its life: planned (not made yet), deployed (it left a camera that is still out), collected (the card was collected: a later visit closed it), stolen (the camera was
  * stolen, so no images) and not visited (the visit could not be made). Whether the images are stored is told by the Images column, not by the state. A visit that left no camera has no state. */
-type Phase = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited'
+type Phase = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited' | 'unknown'
 const phaseOf = (v: BookVisit): Phase | null =>
   v.state !== undefined ? v.state : v.not_done ? 'planned' : v.not_visited ? 'not_visited' : v.deployment_status === 'open' ? 'deployed' : v.deployment_status === 'closed' ? (v.deployment_no_images ? 'stolen' : 'collected') : null
-const PHASES: Phase[] = ['collected', 'stolen', 'deployed', 'not_visited', 'planned']
-const PHASE_LABEL: Record<Phase, string> = { planned: 'Planned', deployed: 'Deployed', collected: 'Collected', stolen: 'Stolen', not_visited: 'Not visited' }
+const PHASES: Phase[] = ['collected', 'stolen', 'deployed', 'not_visited', 'unknown', 'planned']
+const PHASE_LABEL: Record<Phase, string> = { planned: 'Planned', deployed: 'Deployed', collected: 'Collected', stolen: 'Stolen', not_visited: 'Not visited', unknown: 'Unknown' }
 const PHASE_BADGE: Record<Phase, string> = {
   planned: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300',
   deployed: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300',
   collected: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
   stolen: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
   not_visited: 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200',
+  unknown: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300',
 }
 
 /** The rows the status cards show: the ones in a phase, or all. */
@@ -141,15 +143,20 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
       setExporting(false)
     }
   }
+  // The visit being edited, or the unknown one being filled in.
+  const [editing, setEditing] = useState<BookVisit | null>(null)
+  const [reloads, setReloads] = useState(0)
   useEffect(() => {
     setVisits(null); setLoadError(null); setPage(1); setOpened(null); setRevision('')
+  }, [project?.acronym])
+  useEffect(() => {
     if (!project) return
     let cancelled = false
     api.visitBook(project.acronym)
       .then(({ results }) => { if (!cancelled) setVisits(results) })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not read the visits.') })
     return () => { cancelled = true }
-  }, [project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [project?.acronym, reloads]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // How many rows each status square has — over the rows of the revision picked (all of them when none is), whatever the text filter says.
   const everyRow = visits ?? []
@@ -157,7 +164,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const rows = revision ? everyRow.filter((v) => v.session === revision) : everyRow
   const count = (f: StatusFilter) => rows.filter((v) => matches(v, f)).length
   // a visit that could not be made is settled: it counts as completed — what is pending is what is still planned
-  const made = rows.filter((v) => !v.not_done).length
+  const made = rows.filter((v) => !v.not_done && !v.unknown).length
   const percent = rows.length ? Math.round((made / rows.length) * 100) : 0
   const SQUARES: { filter: Phase; label: string; note: string; tone: string; badge: string; icon: ReactNode }[] = [
     { filter: 'planned', label: 'Planned', note: 'Not visited yet', tone: 'text-zinc-600 dark:text-zinc-300', badge: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>} className="h-5 w-5" /> },
@@ -317,7 +324,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 ? <LinkButton title={`Show the details of the location ${v.location_id}`} className="font-mono" onClick={() => onOpenSettings('locations', project.acronym, v.location_id)}>{v.location_id}</LinkButton>
                                 : v.location_id}
                             </td>
-                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.not_done || phaseOf(v) === 'not_visited' ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
+                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.not_done || v.unknown || phaseOf(v) === 'not_visited' ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
                             <td className="px-3 py-2">{v.actions.length === 0 && !v.not_done ? '—' : v.actions.join(' + ')}</td>
                             <td className="px-3 py-2">
                               {phaseOf(v)
@@ -325,7 +332,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 : <span className="text-zinc-400">—</span>}
                             </td>
                             <td className="px-3 py-2">
-                              {v.not_done ? null : v.deployment_id ? (
+                              {v.not_done || v.unknown ? null : v.deployment_id ? (
                                 <button type="button" title="Show image details" className="inline-flex rounded-full text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={`Details of the deployment ${v.deployment_id}`} onClick={() => onShowDeployment?.(v.deployment_id!)}>
                                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></svg>
                                 </button>
@@ -343,7 +350,15 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                       onClick={() => showVisit(before)} path={ICON_PATHS.before} />
                                   )
                                 })()}
-                                {!v.not_done && (
+                                {!v.not_done && !v.unknown && (
+                                  <IconButton label={`Edit the visit ${v.session} to ${v.location_id}`} title={v.locked ? 'It starts or closes an imported deployment: it cannot be edited' : 'Edit the visit'} disabled={v.locked}
+                                    onClick={() => setEditing(v)} path={<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>} />
+                                )}
+                                {v.unknown && (
+                                  <IconButton label={`Fill in the visit ${v.session} to ${v.location_id}`} title="Nothing is known of this visit: fill it in"
+                                    onClick={() => setEditing(v)} path={<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>} />
+                                )}
+                                {!v.not_done && !v.unknown && (
                                   <IconButton label={`View the visit ${v.session} to ${v.location_id}`} title="View the visit" expanded={opened === key}
                                     onClick={() => setOpened(opened === key ? null : key)} path={ICON_PATHS.view} />
                                 )}
@@ -435,6 +450,9 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>
       </div>
+      {editing && project && (
+        <EditVisitDialog projectId={project.acronym} visit={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setOpened(null); setReloads((n) => n + 1) }} />
+      )}
     </div>
   )
 }

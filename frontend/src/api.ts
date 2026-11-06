@@ -165,6 +165,10 @@ export const api = {
   saveVisit: (researchProjectId: string, visit: StoredVisit) =>
     post<StoredVisit & { field_logs?: FieldLogsResult }>('/api/visits/save', { research_project_id: researchProjectId, visit }),
 
+  // Edits a visit kept — its site and revision are its key. Refused when it starts or closes an imported deployment, or when the change makes it or a later visit impossible.
+  updateVisit: (researchProjectId: string, visit: StoredVisit) =>
+    post<StoredVisit & { field_logs?: FieldLogsResult }>('/api/visits/update', { research_project_id: researchProjectId, location_id: visit.location_id, session: visit.session, visit }),
+
   // The visits of a research project that closed a deployment — they collected the card — and have none linked yet.
   closedVisits: (researchProjectId: string) => post<{ results: ClosedVisit[] }>('/api/visits/closed', { research_project_id: researchProjectId }),
 

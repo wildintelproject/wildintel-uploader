@@ -619,7 +619,7 @@ export type CameraStatus = 'ready' | 'active' | 'archived'
 export type SdCardStatus = 'ready' | 'active' | 'archived'
 /** Why a camera or an SD card was archived. */
 /** Where a visit is in its life. */
-export type VisitState = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited'
+export type VisitState = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited' | 'unknown'
 export type ArchiveReason = 'lost' | 'stolen' | 'broken' | 'other'
 export type TrapperStatus = 'active' | 'inactive'
 export type LocationStatus = 'active' | 'archived' | 'planned'
@@ -830,6 +830,10 @@ export interface BookVisit extends StoredVisit {
   not_done: boolean
   /** The visit could not be made (its status says it was not revised): nothing was collected. */
   not_visited: boolean
+  /** Nothing is known of the visit: a revision before the first one kept to the site. It has no day, no time and no actions, and only a known visit takes its place. */
+  unknown?: boolean
+  /** The visit starts or closes a deployment that is imported: it cannot be edited. */
+  locked?: boolean
   /** Where the visit is in its life, as it is kept: kept when the visit is added, and changed when a later visit collects its card. A planned row is not a visit. */
   state?: VisitState | null
 }

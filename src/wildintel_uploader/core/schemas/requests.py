@@ -433,6 +433,14 @@ class SaveVisitRequest(LocalLocationsRequest):
     visit: VisitRecord
 
 
+class UpdateVisitRequest(LocalLocationsRequest):
+    """Edit a visit kept: its site and its revision are its key — they say which one it is, and do not change."""
+
+    location_id: str = Field(min_length=1)
+    session: str = Field(pattern=r"^R\d+$")
+    visit: VisitRecord
+
+
 class FieldLogsRequest(LocalLocationsRequest):
     """Write the logs of the collections the visits of a research project give deployments to — only the ones named, when some are."""
 

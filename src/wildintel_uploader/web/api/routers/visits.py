@@ -7,7 +7,7 @@ import base64
 from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, MarkNotVisitedRequest, SaveVisitRequest, VisitRecord, VisitsCsvColumnsRequest
+from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, MarkNotVisitedRequest, SaveVisitRequest, UpdateVisitRequest, VisitRecord, VisitsCsvColumnsRequest
 from wildintel_uploader.core.services import epicollect_service, local_folder_service, report_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
@@ -113,12 +113,50 @@ def save_visit(req: SaveVisitRequest) -> dict:
         # the rules compare instants: the day and the time are the wall clock of the location
         location = next((l for l in locations if str(l.get("location_id", "")).lower() == visit["location_id"].lower()), None)
         visit["when"] = visit_time.to_when(visit["date"], visit["time"], location)
-        reasons = visit_rules.refusals(visit, local_folder_service.list_visits(root, req.research_project_id), locations,
-                                       local_folder_service.list_field_items(root, req.research_project_id, "sd_cards"), local_folder_service.list_unknown(root, req.research_project_id))
+        kept_visits = local_folder_service.list_visits(root, req.research_project_id)
+        cards = local_folder_service.list_field_items(root, req.research_project_id, "sd_cards")
+        unknown = local_folder_service.list_unknown(root, req.research_project_id)
+        # a visit that takes the place of an unknown one is put where its instant says, among the visits that are kept
+        fills = any(u["location_id"].lower() == visit["location_id"].lower() and u["session"].upper() == str(visit["session"]).upper() for u in unknown)
+        if fills:
+            reasons = visit_rules.edit_errors(None, visit, kept_visits, locations, cards, unknown)
+        else:
+            reasons = visit_rules.refusals(visit, kept_visits, locations, cards, unknown)
         if reasons:
             raise HTTPException(422, " ".join(reasons))
         kept = local_folder_service.write_visit(root, req.research_project_id, visit)
         _archive_locations(root, req.research_project_id, [kept])
+        _refresh_states(root, req.research_project_id)
+        return {**kept, "field_logs": _write_logs(root, req.research_project_id, [kept])}
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/update")
+def update_visit(req: UpdateVisitRequest) -> dict:
+    """Edits a visit kept — its key, the site and the revision, does not change. A visit that starts or closes an imported deployment cannot be edited (409). What the
+    edit would make wrong — in the visit and in the visits after it that it touches — is told, and nothing is changed (422)."""
+    root = config.collections_dir()
+    try:
+        local_folder_service.require_research_project(root, req.research_project_id)
+        kept_visits = local_folder_service.list_visits(root, req.research_project_id)
+        old = next((v for v in kept_visits if v["location_id"].lower() == req.location_id.lower() and str(v.get("session") or "").upper() == req.session.upper()), None)
+        if old is None:
+            raise HTTPException(404, f"There is no visit to {req.location_id} in {req.session}.")
+        if (str(old["location_id"]).lower(), str(old.get("when") or "")) in visit_deployments.locked(kept_visits, config.load_settings().FIELDLOG.keep_seconds):
+            raise HTTPException(409, f"The visit to {old['location_id']} in {old['session']} starts or closes a deployment that is imported: it cannot be edited.")
+        visit = {**req.visit.model_dump(mode="json"), "location_id": old["location_id"], "session": old["session"]}
+        if ("Archive" in (old.get("actions") or [])) != ("Archive" in visit["actions"]):
+            raise HTTPException(422, "The action Archive cannot be added to a visit or taken from it by editing.")
+        locations = local_folder_service.list_locations(root, req.research_project_id)
+        location = next((l for l in locations if str(l.get("location_id", "")).lower() == visit["location_id"].lower()), None)
+        visit["when"] = visit_time.to_when(visit["date"], visit["time"], location)
+        others = [v for v in kept_visits if v is not old]
+        reasons = visit_rules.edit_errors(old, visit, others, locations, local_folder_service.list_field_items(root, req.research_project_id, "sd_cards"),
+                                          local_folder_service.list_unknown(root, req.research_project_id))
+        if reasons:
+            raise HTTPException(422, " ".join(reasons))
+        kept = local_folder_service.update_visit(root, req.research_project_id, req.location_id, req.session, visit)
         _refresh_states(root, req.research_project_id)
         return {**kept, "field_logs": _write_logs(root, req.research_project_id, [kept])}
     except local_folder_service.LocalFolderError as exc:

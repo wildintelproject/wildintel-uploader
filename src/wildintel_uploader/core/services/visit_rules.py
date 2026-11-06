@@ -345,6 +345,35 @@ def order_errors(visit: dict, kept: list[dict]) -> list[str]:
     return errors
 
 
+def _replay(visit: dict, others: list[dict], locations: list[dict], cards: list[dict] | None, unknown: list[dict] | None, touched: set[str]) -> list[tuple[tuple[str, str] | None, str]]:
+    """Why `visit` could not be where its instant puts it among `others`: what its own rules refuse, given the visits before it, and what the visits after it
+    that it touches (those to its site, with its camera or with its card) would refuse once it is there — each with the visit it is about (None for its own)."""
+    stamp = _stamp(visit)
+    number = _session_number(visit.get("session"))
+    found: list[tuple[tuple[str, str] | None, str]] = []
+    if number is not None and any(_same(v["location_id"], visit["location_id"]) and _session_number(v.get("session")) == number for v in others):
+        found.append((None, f"{visit['location_id']} already has a visit in R{number:04d}: a revision is one visit to each site."))
+    found += [(None, why) for why in refusals(visit, [v for v in others if _stamp(v) < stamp], locations, cards, unknown)]
+    for later in sorted((v for v in others if _stamp(v) >= stamp), key=_stamp):
+        if not ({str(later["location_id"]).lower(), str(later.get("camera_id") or "").lower(), str(later.get("sd") or "").lower()} - {""}) & touched:
+            continue
+        earlier = [v for v in [*others, visit] if v is not later and _stamp(v) < _stamp(later)]
+        key = (str(later["location_id"]).lower(), str(later.get("session") or "").upper())
+        found += [(key, f"{later.get('session')} {later['location_id']} on {later['date']} at {later['time']} would no longer be possible: {why}")
+                  for why in refusals(later, earlier, locations, cards, unknown)]
+    return found
+
+
+def edit_errors(old: dict | None, new: dict, others: list[dict], locations: list[dict], cards: list[dict] | None = None, unknown: list[dict] | None = None) -> list[str]:
+    """What stops a visit from being edited — or, with no `old`, from filling the place of an unknown one — to `new`, among the other visits `others`: it has to pass
+    the rules of a visit where it will be, and the visits after it that it touches have to pass them with it there. What was wrong already, in `old` and in the
+    visits after it, is not said again: only what the edit makes wrong."""
+    touched = {str(x).lower() for v in (old, new) if v for x in (v.get("location_id"), v.get("camera_id"), v.get("sd")) if x}
+    now = _replay(new, others, locations, cards, unknown, touched)
+    before = set(_replay(old, others, locations, cards, unknown, touched)) if old else set()
+    return list(dict.fromkeys(why for key, why in now if (key, why) not in before))
+
+
 def _session_number(session) -> int | None:
     import re  # noqa: PLC0415
     m = re.search(r"\d+", str(session or ""))

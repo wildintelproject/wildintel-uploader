@@ -5,7 +5,7 @@ import { api } from '../api'
 import VisitBookPage from './VisitBookPage'
 import { download } from '../csvFile'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), getSettings: vi.fn(), exportVisitsCsv: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), getSettings: vi.fn(), exportVisitsCsv: vi.fn(), updateVisit: vi.fn(), saveVisit: vi.fn() } }))
 vi.mock('../csvFile', () => ({ download: vi.fn() }))
 const mockedApi = vi.mocked(api)
 
@@ -167,7 +167,7 @@ describe('VisitBookPage', () => {
     expect(within(row('TATR_0001', 'R0002')).queryByRole('button', { name: /^Show the next visit to TATR_0001/ })).not.toBeInTheDocument()          // the last revision of the location
     expect(within(row('TATR_0002', 'R0001')).queryByRole('button', { name: /^Show the next visit to TATR_0002/ })).not.toBeInTheDocument()          // nothing after it
     // only what applies is there, View between the one before and the one after: the first revision has no one before; a visit made is not created again, its deployment is
-    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
+    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['Edit the visit R0001', 'View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
 
     await userEvent.click(within(row('TATR_0001', 'R0002')).getByRole('button', { name: 'Show the previous visit to TATR_0001 (R0001)' }))
     // the revision before is picked and its visit to the location is open
@@ -393,5 +393,45 @@ describe('VisitBookPage', () => {
     expect(within(cards).getByRole('button', { name: 'Stolen' })).toHaveTextContent('1')
     expect(within(cards).getByRole('button', { name: 'Collected' })).toHaveTextContent('0')
   })
-})
 
+  it('edits a visit that is not locked, and shows what the server refuses', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ session: 'R0001', comments: 'before', deployment_status: 'open' }),
+      visit({ session: 'R0002', location_id: 'TATR_0002', locked: true, deployment_status: 'closed' }),
+    ] })
+    mockedApi.updateVisit.mockRejectedValueOnce(new Error('R0002 TATR_0001 would no longer be possible'))
+    await pickProject()
+
+    expect(await screen.findByRole('button', { name: 'Edit the visit R0002 to TATR_0002' })).toBeDisabled()   // it closes a deployment that is imported
+    await userEvent.click(screen.getByRole('button', { name: 'Edit the visit R0001 to TATR_0001' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Edit R0001 of TATR_0001' }))
+    await userEvent.clear(dialog.getByLabelText('Notes'))
+    await userEvent.type(dialog.getByLabelText('Notes'), 'after')
+    await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('would no longer be possible')
+
+    await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+    expect(mockedApi.updateVisit).toHaveBeenLastCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0001', session: 'R0001', comments: 'after' }))
+    expect(mockedApi.visitBook).toHaveBeenCalledTimes(2)   // the book is read again
+  })
+
+  it('shows an unknown visit as Unknown, with nothing to see, and fills it in with a known one', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ session: 'R0001', date: '', time: '', actions: [], sd: null, camera_id: null, trappers: null, when: null, unknown: true, locked: true, state: 'unknown' }),
+      visit({ session: 'R0002', deployment_status: 'open' }),
+    ] })
+    mockedApi.saveVisit.mockResolvedValue({} as never)
+    await pickProject()
+
+    const table = await screen.findByRole('table', { name: 'Visits' })
+    expect(within(table).getByText('Unknown')).toBeInTheDocument()
+    expect(within(table).queryByRole('button', { name: 'View the visit R0001 to TATR_0001' })).not.toBeInTheDocument()
+    await userEvent.click(within(table).getByRole('button', { name: 'Fill in the visit R0001 to TATR_0001' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Fill in R0001 of TATR_0001' }))
+    await userEvent.type(dialog.getByLabelText('Day'), '2024-06-01')
+    await userEvent.type(dialog.getByLabelText('Time'), '10:00:00')
+    await userEvent.type(dialog.getByLabelText('Camera'), 'P800')
+    await userEvent.click(dialog.getByRole('button', { name: 'Fill in' }))
+    expect(mockedApi.saveVisit).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0001', session: 'R0001', date: '2024-06-01', time: '10:00:00', actions: ['Installation'], camera_id: 'P800' }))
+  })
+})

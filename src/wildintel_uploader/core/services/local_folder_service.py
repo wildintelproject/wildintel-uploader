@@ -471,6 +471,27 @@ def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
     return len(added)
 
 
+def update_visit(root: Path, research_project_id: str, location_id: str, session: str, visit: dict) -> dict:
+    """Replaces a visit kept — found by its site (ignoring case) and its revision, which is its key and does not change — with `visit`, given with the day and the
+    time of the wall clock of its location; the deployment it closed, when it has one, stays. Returned told.
+
+    Raises:
+        LocalFolderError: the research project isn't there, or it has no visit to that site in that revision."""
+    require_research_project(root, research_project_id)
+    locations = list_locations(root, research_project_id)
+    list_visits(root, research_project_id)  # an earlier file is moved to instants first
+    raw = _raw_visits(root, research_project_id)
+    index = next((i for i, v in enumerate(raw) if str(v.get("location_id", "")).lower() == location_id.lower() and str(v.get("session") or "").upper() == session.upper()), None)
+    if index is None:
+        raise LocalFolderError(f"There is no visit to {location_id} in {session}.")
+    kept = _kept({**visit, "location_id": raw[index]["location_id"], "session": raw[index]["session"]}, locations)
+    if raw[index].get("deployment_id"):
+        kept["deployment_id"] = raw[index]["deployment_id"]
+    raw[index] = kept
+    _write_raw_visits(root, research_project_id, raw)
+    return _told(kept, locations)
+
+
 def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
     """Registers several visits at once to a research project that's already kept here; returns how many.
 
