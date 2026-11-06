@@ -227,7 +227,7 @@ export default function FileRowResults({ rows, labels = {} }: {
                     <tr className="align-middle">
                       <td className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.row}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.session || '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-3">{r.site ? <span className="select-none rounded-md border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 font-mono text-xs text-zinc-700 dark:text-zinc-300">{r.site}</span> : '—'}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.site || '—'}</td>
                       <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.actions || '—'}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.date ? <>{r.date}{r.time && <span className="text-zinc-500 dark:text-zinc-400"> {r.time}</span>}</> : '—'}</td>
                       <td className="whitespace-nowrap px-4 py-3">
