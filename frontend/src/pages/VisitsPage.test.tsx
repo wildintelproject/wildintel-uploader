@@ -1034,13 +1034,10 @@ describe('VisitsPage from a CSV file', () => {
     await waitFor(() => expect(screen.queryByText(/You can also create the locations/)).not.toBeInTheDocument())
   })
 
-  it('says what is odd in the visits, and tells a site that may be misnamed from one that is new, to be added as a location', async () => {
-    const far = { site: 'TATR_0099', session: null, actions: ['Installation'], date: '2026-10-03', time: '08:00:00', latitude: 49.1, longitude: 20.2, visits: 2, nearest: { location_id: 'TATR_0001', distance_m: 12400 }, similar: [] }
-    const typo = { site: 'TATR_0011', session: null, actions: ['Installation'], date: '2026-10-02', time: '08:00:00', latitude: 49.0, longitude: 20.0, visits: 1, nearest: { location_id: 'TATR_0001', distance_m: 40 }, similar: ['TATR_0001'] }
-    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [typo, far],
+  it('says what is odd in the visits, and tells the sites that are not locations to create them with the option of the step, not to add them one by one', async () => {
+    const site = (id: string) => ({ site: id, session: null, actions: ['Installation'], date: '2026-10-02', time: '08:00:00', latitude: 49.1, longitude: 20.2, visits: 2, nearest: null, similar: [] })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [site('TATR_0011'), site('TATR_0099')],
       warnings: ['R0003: camera P800 is at 2 sites (TATR_0001, TATR_0002).'] })
-    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [typo], warnings: [] })
-    mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
     render(<VisitsPage onBack={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect legacy csv/i }))
     await userEvent.click(await screen.findByLabelText('Research project'))
@@ -1049,14 +1046,11 @@ describe('VisitsPage from a CSV file', () => {
 
     expect(await screen.findByRole('list', { name: 'What to check' })).toHaveTextContent('camera P800 is at 2 sites')
     expect(screen.getByText(/2 sites are not a location of TATR/)).toBeInTheDocument()
-    expect(screen.getByText(/one character apart from/)).toHaveTextContent('TATR_0001') // the first may be a misprint
-    expect(screen.getByText(/40 m from/)).toHaveTextContent('so close that it may be the same site')
-    expect(screen.getByText(/12\.4 km from/)).not.toHaveTextContent('same site') // the second is a new site
-
-    await userEvent.click(screen.getByRole('button', { name: 'Add TATR_0099 as a location' }))
-    expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0099', latitude: 49.1, longitude: 20.2 }))
-    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(2)) // the file is read again
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Add TATR_0099 as a location' })).not.toBeInTheDocument())
+    expect(screen.getByLabelText('Sites that are not locations yet')).toHaveTextContent('TATR_0011, TATR_0099')
+    expect(screen.getByText(/Create the locations that do not exist/, { selector: 'em' })).toBeInTheDocument()
+    // no site is added one by one from here: the option of the step creates them
+    expect(screen.queryByRole('button', { name: /as a location/ })).not.toBeInTheDocument()
+    expect(mockedApi.saveLocalLocation).not.toHaveBeenCalled()
   })
 
   it('completes the visits kept with a history of visits (.xlsx) first, and applies the file on top of both', async () => {
@@ -1087,26 +1081,6 @@ describe('VisitsPage from a CSV file', () => {
     expect(await screen.findByRole('list', { name: 'Notes on the visits' })).toHaveTextContent('their cameras still out: TATR_0002')
     await userEvent.click(screen.getByRole('button', { name: 'Add 1 visit' }))
     expect(await screen.findByRole('link', { name: 'Download report' })).toHaveAttribute('href', '/api/reports/20241012-090000_visits_TATR/download?format=csv')
-  })
-
-  it('adds at once the new sites that have the coordinates of their first visit, and leaves the ones that look like a misprint', async () => {
-    const site = (id: string, over: object) => ({ site: id, session: null, actions: ['Installation'], date: '2026-10-02', time: '08:00:00', latitude: 37.1, longitude: -6.4, visits: 1, nearest: null, similar: [], ...over })
-    const sites = [site('TATR_0050', {}), site('TATR_0051', { latitude: 37.2, longitude: -6.5 }), site('TATR_0011', { similar: ['TATR_0001'] }), site('TATR_0099', { latitude: null, longitude: null })]
-    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: sites, warnings: [] })
-    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: sites.slice(2), warnings: [] })
-    mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
-    render(<VisitsPage onBack={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect legacy csv/i }))
-    await userEvent.click(await screen.findByLabelText('Research project'))
-    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
-    await userEvent.upload(screen.getByLabelText('CSV file'), file)
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Add the 2 sites with coordinates as locations' }))
-
-    expect(mockedApi.saveLocalLocation).toHaveBeenCalledTimes(2)
-    expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0050', latitude: 37.1, longitude: -6.4, timezone: 'UTC' }))
-    expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('TATR', expect.objectContaining({ location_id: 'TATR_0051' }))
-    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(2)) // the file is read again
   })
 
   it('checks the file again from the button of the step, with the same options', async () => {

@@ -17,7 +17,7 @@ import { CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, DE
 import { isValidTimezone, knownTimezones, shownErrors, validateDeployment } from '../deploymentValidation'
 import { availabilityErrors, cameraAtSite, cardBlock, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
-import type { Camera, DeploymentFields, NewSite, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, CsvEntity, ImportCsvOptions } from '../types'
+import type { Camera, DeploymentFields, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, CsvEntity, ImportCsvOptions } from '../types'
 
 export type VisitSource = 'manual' | 'wildintel' | 'wildintel-new' | 'csv'
 
@@ -773,32 +773,6 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   // The rows of the file are told by the row-by-row results; the problems of a history of visits, which are not rows of the file, are listed beside.
   const listedProblems = (csvResult?.rows?.length ?? 0) > 0 ? (csvResult?.problems ?? []).filter((p) => p.history) : (csvResult?.problems ?? [])
   useEffect(() => { if (!settingsOpen && missingLocations) void recheckCsv() }, [settingsOpen]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  /** Keeps a new site of the file as a location of the research project, with the coordinates of its first visit, and reads the file again. */
-  async function addNewSite(site: NewSite) {
-    if (!project || site.latitude == null || site.longitude == null) return
-    setCsvError(null)
-    try {
-      await api.saveLocalLocation(project.acronym, { location_id: site.site, name: site.site, timezone: 'UTC', ignore_dst: false, latitude: site.latitude, longitude: site.longitude, coordinate_uncertainty: null, trapper_pk: null })
-      await recheckCsv()
-    } catch (e) {
-      setCsvError(e instanceof Error ? e.message : `Could not add ${site.site} as a location.`)
-    }
-  }
-
-  /** The sites of the file that have the coordinates of their first visit and that do not look like a misprint of a location — a close id or a location next to them —
-   * are new sites to add, as the file has enough of them to be locations. */
-  const addable = (csvResult?.new_sites ?? []).filter((s) => s.latitude != null && s.longitude != null && s.similar.length === 0 && !(s.nearest && s.nearest.distance_m < 100))
-  async function addNewSites(sites: NewSite[]) {
-    if (!project) return
-    setCsvError(null)
-    try {
-      for (const s of sites) await api.saveLocalLocation(project.acronym, { location_id: s.site, name: s.site, timezone: 'UTC', ignore_dst: false, latitude: s.latitude!, longitude: s.longitude!, coordinate_uncertainty: null, trapper_pk: null })
-      await recheckCsv()
-    } catch (e) {
-      setCsvError(e instanceof Error ? e.message : 'Could not add the locations.')
-    }
-  }
 
   /** From another CSV file: reads the visits with the columns as they are mapped. */
   async function readMapped() {
@@ -1614,31 +1588,13 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   </Notice>
                 )}
                 {csvResult.new_sites.length > 0 && (
-                  <div className="mt-4 space-y-3" role="group" aria-label="Sites that are not locations yet">
-                    <p className="text-base font-semibold">{csvResult.new_sites.length === 1 ? 'A site is' : `${csvResult.new_sites.length} sites are`} not a location of {project?.acronym}</p>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">Their visits are held. Check each one is really new and not a site misnamed in the field: if it is new, add it as a location; if not, correct its id in the file and read it again.</p>
-                    {addable.length > 0 && (
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <button type="button" className={btnPrimary} onClick={() => void addNewSites(addable)}>Add the {addable.length} {addable.length === 1 ? 'site' : 'sites'} with coordinates as {addable.length === 1 ? 'a location' : 'locations'}</button>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">The file has their coordinates, taken from their first visit; the ones that look like a misprint are left for you to decide.</span>
-                      </div>
-                    )}
-                    {csvResult.new_sites.map((s) => (
-                      <div key={s.site} className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-5 py-4 text-sm">
-                        <div className="flex items-start justify-between gap-4 flex-wrap">
-                          <div className="min-w-0">
-                            <p><span className="font-mono font-semibold">{s.site}</span> · {s.visits} {s.visits === 1 ? 'visit' : 'visits'}, the first on {s.date} ({s.actions.join(' + ')})</p>
-                            {s.similar.length > 0 && <p className="mt-1 text-amber-700 dark:text-amber-400">Its id is one character apart from <span className="font-mono">{s.similar.join(', ')}</span>: it may be a misprint.</p>}
-                            {s.nearest
-                              ? <p className="mt-1 text-zinc-600 dark:text-zinc-400">Its first visit was {s.nearest.distance_m < 1000 ? `${s.nearest.distance_m} m` : `${(s.nearest.distance_m / 1000).toFixed(1)} km`} from <span className="font-mono">{s.nearest.location_id}</span>{s.nearest.distance_m < 100 ? ' — so close that it may be the same site.' : '.'}</p>
-                              : <p className="mt-1 text-zinc-600 dark:text-zinc-400">{s.latitude == null ? 'The file has no coordinates for it.' : 'There is no location to compare it with.'}</p>}
-                          </div>
-                          <button type="button" className={btnOutline} disabled={s.latitude == null || s.longitude == null} title={s.latitude == null ? 'The file gives no coordinates for it: add the location in the settings' : undefined}
-                                  onClick={() => void addNewSite(s)}>Add {s.site} as a location</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <Notice kind="warning" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed" role="status">
+                    <div>
+                      <strong className="font-semibold">{csvResult.new_sites.length === 1 ? 'A site is' : `${csvResult.new_sites.length} sites are`} not a location of {project?.acronym}.</strong> Their visits are held.
+                      {' '}To make them locations turn on <em>Create the locations that do not exist</em> and read the file again; if one is a site misnamed in the field, correct its id in the file.
+                      <p className="mt-2 font-mono text-sm break-words" aria-label="Sites that are not locations yet">{csvResult.new_sites.map((x) => x.site).join(', ')}</p>
+                    </div>
+                  </Notice>
                 )}
                 {missingLocations && (
                   <Notice kind="info" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed">
