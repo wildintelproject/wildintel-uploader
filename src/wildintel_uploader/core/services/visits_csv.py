@@ -153,6 +153,7 @@ ERROR_LABELS: dict[str, str] = {
     "revision_closed": "Revision closed",
     "revision_order": "Revision out of order",
     "visit_repeated": "Site visited twice in a revision",
+    "visit_refused": "Breaks the rules of a visit",
     "date_invalid": "Date or time not valid",
     "number_invalid": "Number not valid",
     "create_missing": "Data to create it is missing",
@@ -587,22 +588,59 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     for visit, why in disordered:
         problem(row_of[id(visit)], why, "revision_order")
     visits = [v for v in visits if id(v) not in {id(r) for r, _ in disordered}]
+    # a visit of a file follows the rules of a visit by hand (see visit_rules.refusals): the visits are taken in the order of their instants, each against the ones kept and
+    # the ones of the file before it that were kept, and the one that breaks them is refused with the row it comes from. What cannot be checked is not: the revisions a site
+    # lacks before its first visit are unknown (nothing is known of them — no day, no camera, no card), so a first visit to a site after R0001 may be any.
+    unknown_kept = options.get("unknown") or []
+    unknown = visit_rules.unknown_records(visits, kept, unknown_kept)
+    all_locations = [*locations, *new_locations.values()]
+    numbers = [n for n in (visit_rules._session_number(v.get("session")) for v in [*kept, *visits]) if n is not None]
+    floor = min(numbers) if numbers else 1
+    accepted, gate = list(kept), {}
+
+    def fills_unknown(v: dict) -> bool:
+        """Whether the visit takes the place of an unknown one of the visits kept: its site has none in its revision, that is unknown."""
+        return any(str(u["location_id"]).lower() == v["location_id"].lower() and str(u["session"]).upper() == str(v["session"]).upper() for u in unknown_kept)
+
+    # the visits that fill an unknown one come last: each is checked with the visits after it that it touches, and those need the other visits of its revision to be there
+    for visit in sorted(visits, key=lambda v: (fills_unknown(v), visit_rules._stamp(v))):
+        number = visit_rules._session_number(visit.get("session"))
+        fills = fills_unknown(visit)
+        if number is not None and number not in gate and not fills:
+            # a revision starts when the one before it is finished — said once for the revision, with the visits that were kept before it
+            day = min(str(v["date"]) for v in visits if visit_rules._session_number(v.get("session")) == number)
+            gate[number] = visit_rules.unfinished_revision(number, accepted, all_locations, floor, day, [*unknown_kept, *unknown])
+        n = row_of[id(visit)]
+        reasons = [gate[number]] if number is not None and not fills and gate.get(number) else []
+        # a visit that takes the place of an unknown one is put where its instant says, among the visits kept (as in the form)
+        if fills:
+            reasons += visit_rules.edit_errors(None, visit, accepted, all_locations, options.get("cards"), [*unknown_kept, *unknown])
+        else:
+            reasons += visit_rules.refusals(visit, accepted, all_locations, options.get("cards"), [*unknown_kept, *unknown], gate=False, first_may_be_any=True)
+        # what the visit says that is not an entity (a camera, a card, a trapper) is refused, as in the form, unless the import creates it
+        camera, card = str(visit.get("camera_id") or "").lower(), str(visit.get("sd") or "").lower()
+        check = options.get("check_entities", True)
+        if check and camera and options.get("cameras") is not None and camera not in cameras_known and not create.get("cameras"):
+            reasons.append(f"The camera {visit['camera_id']} is not one of the cameras of the research project.")
+        if check and card and options.get("cards") is not None and card not in cards_known and not create.get("sd_cards"):
+            reasons.append(f"The SD card {visit['sd']} is not one of the SD cards of the research project.")
+        if check and options.get("trappers") is not None:
+            known_trappers = {str(t).lower() for t in options["trappers"]}
+            reasons += [f"{t} is not one of the trappers." for t in (x.strip() for x in str(visit.get("trappers") or "").split(",")) if t and t.lower() not in known_trappers]
+        if reasons:
+            problem(n, " ".join(dict.fromkeys(reasons)), "revision_not_finished" if gate.get(number) and reasons[0] == gate[number] else "visit_refused")
+        else:
+            accepted.append(visit)
+    refused_ids = {id(v) for v in visits} - {id(v) for v in accepted}
+    visits = [v for v in visits if id(v) not in refused_ids]
+    unknown = visit_rules.unknown_records(visits, kept, unknown_kept)
     new_sites = [visit_rules.new_site(site, records, locations) for site, records in sorted(held.items())]
-    # what is odd, said once and told in the rows it is about: the visits that make it odd are rows of the file
+    # what is odd and still kept, said once and told in the rows it is about: the visits that make it odd are rows of the file
     said: list[tuple[str, list[int]]] = [(message, [n]) for n, message in row_warnings]
     for message, about in [*visit_rules.session_jump_items(visits, kept), *visit_rules.history_warning_items(visits, kept, options.get("cards"))]:
         said.append((message, sorted({row_of[id(v)] for v in about if id(v) in row_of})))
     warnings = list(dict.fromkeys(message for message, _ in said))
     notes = visit_rules.history_notes(visits, kept)
-    # a revision is not started before the one before it is finished: its visits are refused, with the rows they come from
-    # a site that has no visit in the revisions before the first of its visits has them unknown: nothing was checked against them, and they finish their revision
-    unknown_kept = options.get("unknown") or []
-    unknown = visit_rules.unknown_records(visits, kept, unknown_kept)
-    refused = visit_rules.revision_gate(visits, kept, [*locations, *new_locations.values()], [*unknown_kept, *unknown])
-    for visit, why in refused:
-        problem(row_of[id(visit)], why, "revision_not_finished")
-    visits = [v for v in visits if id(v) not in {id(r) for r, _ in refused}]
-    unknown = visit_rules.unknown_records(visits, kept, unknown_kept)
     # a site that has no visit in a revision the file gives was not there: the revision after it has to put its camera up
     upwards = visit_rules.unknown_installation_warnings(visits, kept, [*unknown_kept, *unknown])
     warnings += [m for m in upwards if m not in warnings]

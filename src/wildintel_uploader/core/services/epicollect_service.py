@@ -359,15 +359,15 @@ def _label(text: str) -> str:
 
 
 def visit_actions(status: str | None, action: str | None, action_after_theft: str | None) -> str:
-    """What a visit did, from what the form answers — one simple rule: an Installation if the status says it is a new site; the action after a theft if the camera was
+    """What a visit did, from what the form answers — one simple rule: an Installation if the status says it is a new site or an inactive one (a camera is put up again); the action after a theft if the camera was
     stolen; the action otherwise. As the visit keeps them: a camera inspected is a Revision, replaced is a Revision and an Installation (after a theft, a Stolen and an
     Installation), a camera removed is a Revision and a Desinstallation, and a site removed is those two and an Archive — the location is given up — (after a theft, a
-    Stolen and an Archive)."""
+    Stolen and an Archive; after a theft a camera removed — not replaced, the site stays open — is a Stolen alone)."""
     status = (status or "").strip().lower()
-    if status == "new site":
-        return "Installation"
+    if status in ("new site", "inactive site"):
+        return "Installation"  # an inactive site — its camera was removed before — has a camera put up again: the form asks the same questions as for a new site
     if status == "stolen":
-        return {"camera replacement": "Stolen + Installation", "site removal": "Stolen + Archive"}.get((action_after_theft or "").strip().lower(), "")
+        return {"camera replacement": "Stolen + Installation", "site removal": "Stolen + Archive", "camera removal": "Stolen"}.get((action_after_theft or "").strip().lower(), "")
     return {
         "camera inspection": "Revision", "camera replacement": "Revision + Installation", "camera removal": "Revision + Desinstallation",
         "site removal": "Revision + Desinstallation + Archive",
@@ -452,6 +452,10 @@ def visits_csv(settings: config.Settings | None = None) -> str:
     return out.getvalue()
 
 
+# Epicollect5 cuts the headers of the CSV it gives at this many characters.
+_HEADER_LIMIT = 20
+
+
 def _header_key(header: str) -> tuple[str, str | None]:
     """A column of the CSV Epicollect5 gives, as the question it answers: its label with no number in front and no marks, and which part of a place it is, if it is one
     (`lat_26_Coordinates`, `long_26_Coordinates`)."""
@@ -465,7 +469,7 @@ def _header_key(header: str) -> tuple[str, str | None]:
 
 def visits_from_csv(text: str) -> str:
     """The CSV downloaded from the new Epicollect5 project (the form of the field flow), as the text of a CSV with a row per visit and the columns a visit has. Its
-    columns are found by the label of their question, ignoring the number in front, the case and the marks.
+    columns are found by the label of their question, ignoring the number in front, the case and the marks — and a header cut at 20 characters, as Epicollect5 does, by the beginning of it.
 
     Raises:
         EpicollectError: the file has no rows, or it is not the form of a visit.
@@ -481,8 +485,13 @@ def visits_from_csv(text: str) -> str:
         key, part = _header_key(header)
         if key == "coordinates" and part in ("lat", "long"):
             place[part] = header
-        elif key in questions and part is None:
+        elif part is None and key in questions:
             refs[questions[key]] = header
+        elif part is None and len(header.strip()) >= _HEADER_LIMIT:
+            # Epicollect5 cuts a header — its number, an underscore and the question — at 20 characters ("7_Status_of_the_came"): the question is then the beginning of a label
+            cut = {field for label, field in questions.items() if label.startswith(key) and len(key) >= 3}
+            if len(cut) == 1 and (field := cut.pop()) not in refs:
+                refs[field] = header
     missing = [name for name, field in (("locationID", "location_id"), ("Date", "date"), ("Status of the camera", "status")) if field not in refs]
     if missing:
         raise EpicollectError(f"The file is not the download of the form of a visit: it has no column for {', '.join(missing)}.")

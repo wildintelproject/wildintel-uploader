@@ -414,6 +414,9 @@ def test_a_location_is_deleted_unless_it_has_visits_or_comes_from_trapper(tmp_pa
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         for location in ({"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_02", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_03", "trapper_pk": 7, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}):
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": location})
+        from wildintel_uploader.core.services import local_folder_service
+        local_folder_service.write_field_items(tmp_path, "DONA", "cameras", [{"label": "12", "camera_id": "12", "camera_model": None, "research_project": "DONA"}])
+        local_folder_service.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "A13", "research_project": "DONA"}])
         _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit})
         free = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "dona_01"})
         visited = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "DONA_02"})

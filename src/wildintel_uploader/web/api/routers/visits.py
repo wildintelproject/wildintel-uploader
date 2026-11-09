@@ -121,7 +121,7 @@ def save_visit(req: SaveVisitRequest) -> dict:
         if fills:
             reasons = _not_entities(root, req.research_project_id, None, visit) + visit_rules.edit_errors(None, visit, kept_visits, locations, cards, unknown)
         else:
-            reasons = visit_rules.refusals(visit, kept_visits, locations, cards, unknown)
+            reasons = _not_entities(root, req.research_project_id, None, visit) + visit_rules.refusals(visit, kept_visits, locations, cards, unknown)
         if reasons:
             raise HTTPException(422, " ".join(reasons))
         kept = local_folder_service.write_visit(root, req.research_project_id, visit)
@@ -130,6 +130,10 @@ def save_visit(req: SaveVisitRequest) -> dict:
         return {**kept, "field_logs": _write_logs(root, req.research_project_id, [kept])}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+def _trapper_names() -> list[str]:
+    return [t.name for t in config.load_settings().FIELDWORK.trappers]
 
 
 def _not_entities(root, research_project_id: str, old: dict | None, visit: dict) -> list[str]:
@@ -231,26 +235,26 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             except (visits_xlsx.VisitsXlsxError, ValueError) as exc:
                 raise HTTPException(400, f"The history of visits: {exc}") from exc
             try:
-                history = visits_csv.parse_visits(text, locations, kept, prefix, "epicollect", None, {"cards": cards})
+                history = visits_csv.parse_visits(text, locations, kept, prefix, "epicollect", None, {"cards": cards, "cameras": cameras, "trappers": _trapper_names()})
             except visits_csv.VisitsCsvError as exc:
                 raise HTTPException(400, f"The history of visits: {exc}") from exc
         field_options = config.load_settings().FIELDLOG
         text, fmt, mapping, time_source = req.csv, req.format, req.mapping, field_options.time_source
         if fmt == "epicollect-api":
-            # the entries come from Epicollect5 as rows of a visit's columns; the day and the hour typed in the form are the time of the visit
+            # the entries come from Epicollect5 as rows of a visit's columns; the time of a visit is the one the settings say (by default when the entry was created, UTC: the Time of the form is local)
             try:
                 text = epicollect_service.visits_csv(config.load_settings())
             except epicollect_service.EpicollectError as exc:
                 raise HTTPException(400, str(exc)) from exc
-            fmt, mapping, time_source = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}, "hour"
+            fmt, mapping = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}
         if fmt == "epicollect-csv":
-            # the download of the new Epicollect5 project: its questions are found by their labels, and the day and the hour typed in the form are the time of the visit
+            # the download of the new Epicollect5 project: its questions are found by their labels, and the time of a visit is the one the settings say (by default when the entry was created, UTC)
             try:
                 text = epicollect_service.visits_from_csv(text)
             except epicollect_service.EpicollectError as exc:
                 raise HTTPException(400, str(exc)) from exc
-            fmt, mapping, time_source = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}, "hour"
-        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults,
+            fmt, mapping = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}
+        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults, "trappers": _trapper_names(),
                                                                                                                                   "unknown": local_folder_service.list_unknown(root, req.research_project_id)})
         if history:
             seen = {s["site"].lower() for s in result["new_sites"]}

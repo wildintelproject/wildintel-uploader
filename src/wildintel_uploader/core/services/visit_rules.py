@@ -1,5 +1,5 @@
-"""The rules a visit to a camera trap has to follow — the one place they live, for the form (a visit that breaks them is refused) and for a CSV
-file (the visits that break them are kept and warned of, as the field records are: what the field says is not changed, only questioned).
+"""The rules a visit to a camera trap has to follow — the one place they live, for the form and for a CSV file: a visit that breaks them is refused
+in both. The only thing a file is excused is what cannot be checked because the revisions before are unknown (see `refusals`).
 
   * what is asked of a visit depends on what was done at it (an Installation needs the camera and the card it leaves, a Revision the photos
     it collected…) — `required_errors`;
@@ -307,8 +307,10 @@ def new_site(site: str, visits: list[dict], known: list[dict]) -> dict:
     }
 
 
-def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[dict] | None = None, unknown: list[dict] | None = None) -> list[str]:
-    """Why a visit made by hand cannot be kept: its site is not a location of the research project, it is already kept (the same site, day and time),
+def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[dict] | None = None, unknown: list[dict] | None = None,
+             gate: bool = True, first_may_be_any: bool = False) -> list[str]:
+    """Why a visit made by hand cannot be kept (the same rules apply to the visits of a file; `gate` off leaves the check of the revision before to the caller, and
+    `first_may_be_any` lets the first visit to a site in a revision after R0001 be any: what came before is unknown, so it cannot be told that the camera was not put up): its site is not a location of the research project, it is already kept (the same site, day and time),
     it is the first to its site and not an Installation, it lacks what its actions ask, or its camera or card are not where it says. Empty when it can be kept."""
     reasons = []
     if not any(_same(l.get("location_id"), visit["location_id"]) for l in locations):
@@ -317,12 +319,14 @@ def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[d
         reasons.append(f"There is already a visit to {visit['location_id']} on {visit['date']} at {visit['time']}.")
     reasons += order_errors(visit, kept)
     # The first visit to a site puts the camera up: nothing else can be done where no camera is known to be.
-    if not is_not_revised(visit) and not any(_same(v["location_id"], visit["location_id"]) and _stamp(v) < _stamp(visit) for v in kept) and list(visit.get("actions") or []) != ["Installation"]:
+    unknown_before = first_may_be_any and (_session_number(visit.get("session")) or 1) > 1
+    if not unknown_before and not is_not_revised(visit) and not any(_same(v["location_id"], visit["location_id"]) and _stamp(v) < _stamp(visit) for v in kept) and list(visit.get("actions") or []) != ["Installation"]:
         reasons.append(f"The first visit to {visit['location_id']} can only be an Installation.")
     reasons += required_errors(visit).values()
     reasons += availability_errors(kept, visit, cards).values()
     reasons += archive_errors(visit, kept, next((l for l in locations if _same(l.get("location_id"), visit["location_id"])), None))
-    reasons += [why for _, why in revision_gate([visit], kept, locations, unknown)]
+    if gate:
+        reasons += [why for _, why in revision_gate([visit], kept, locations, unknown)]
     return reasons
 
 

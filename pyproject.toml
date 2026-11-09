@@ -56,3 +56,4 @@ wildintel-trapper-sdk = { path = "../wildintel-trapper-sdk", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]
+markers = ["entities: the test keeps the check that the camera, the SD card and the trappers of a visit exist (it is off in the tests of visits)"]
