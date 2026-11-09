@@ -70,4 +70,26 @@ describe('ValidationDashboard', () => {
     await userEvent.click(screen.getByRole('button', { name: '← Validation' }))
     expect(screen.queryByRole('region', { name: /Failures of/ })).not.toBeInTheDocument()
   })
+
+  it('with rows, sums the images and the checks up in two sections, each with a card for all of them and one for each state, that press the filters', async () => {
+    const seen: unknown[] = []
+    render(
+      <ValidationDashboard variant="steps" rows title="Validation" subtitle="" reportId="r1" running={false} canRun onRun={vi.fn()}>
+        {({ report, filters }) => { seen.push(filters); return <p>{report ? 'with a report' : 'no report'}</p> }}
+      </ValidationDashboard>,
+    )
+    expect(await screen.findByText('Images status & filters')).toBeInTheDocument()
+    expect(screen.getByText('Checks status & filters')).toBeInTheDocument()
+    expect(screen.getByText('Images reviewed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Without errors' })).toHaveTextContent('238')
+    expect(screen.getByRole('button', { name: 'With errors' })).toHaveTextContent('3')
+    expect(screen.getByRole('button', { name: 'Checks passed' })).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: 'Checks failed' })).toHaveTextContent('1')
+    await userEvent.click(screen.getByRole('button', { name: 'With errors' }))
+    expect(seen[seen.length - 1]).toEqual({ group: 'image', tests: 'all', images: 'issues' })
+    await userEvent.click(screen.getByRole('button', { name: 'Checks passed' }))   // the other section keeps its own
+    expect(seen[seen.length - 1]).toEqual({ group: 'test', tests: 'passed', images: 'issues' })
+    await userEvent.click(screen.getByRole('button', { name: 'Checks passed' }))   // pressed again: all of them
+    expect(seen[seen.length - 1]).toEqual({ group: 'test', tests: 'all', images: 'issues' })
+  })
 })

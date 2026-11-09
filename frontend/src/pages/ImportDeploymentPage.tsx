@@ -1,3 +1,5 @@
+import { TABLE, TableCard } from '../components/DashboardParts'
+import CheckResultsTable from '../components/CheckResultsTable'
 import ValidationDashboard, { formatRun } from '../components/ValidationDashboard'
 import TimezoneCombobox from '../components/TimezoneCombobox'
 import WizardStep from '../components/WizardStep'
@@ -375,7 +377,7 @@ export function CheckTable<T extends string>({ options, enabled, required, statu
 /** How strict a check is: it is skipped, only warns about what it finds, or must pass for the step to go on. */
 export type Strictness = 'skip' | 'warn' | 'must'
 
-const STRICTNESS_CHOICES: { value: Strictness; label: string }[] = [
+export const STRICTNESS_CHOICES: { value: Strictness; label: string }[] = [
   { value: 'skip', label: 'Skip' }, { value: 'warn', label: 'Warn' }, { value: 'must', label: 'Must pass' },
 ]
 
@@ -383,7 +385,7 @@ const STRICTNESS_CHOICES: { value: Strictness; label: string }[] = [
 const STRICTNESS_ACTIVE: Record<Strictness, string> = {
   skip: 'bg-blue-600 text-white', warn: 'bg-yellow-500 text-yellow-950', must: 'bg-red-600 text-white',
 }
-const STRICTNESS_SOFT: Record<Strictness, string> = {
+export const STRICTNESS_SOFT: Record<Strictness, string> = {
   skip: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300',
   warn: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300',
   must: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300',
@@ -412,11 +414,11 @@ export function StrictnessTable<T extends string>({ options, enabled, required, 
   note?: (value: T) => ReactNode
   onChoose?: (value: T, strictness: Strictness) => void
 }) {
-  const th = 'px-4 py-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 sticky top-0 bg-zinc-50 dark:bg-zinc-800'
+  const th = `${TABLE.th} sticky top-0 bg-zinc-100 dark:bg-zinc-900`
   return (
-    <div className="max-h-[26rem] overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 mb-3">
-      <table className="w-full text-sm">
-        <thead>
+    <div className="mb-3"><TableCard label="Checks"><div className="max-h-[26rem] overflow-y-auto">
+      <table className={TABLE.table}>
+        <thead className={TABLE.head}>
           <tr>
             {results && <th scope="col" className={`${th} w-12`}><span className="sr-only">Status</span></th>}
             <th scope="col" className={`${th} text-left`}>Check</th>
@@ -424,7 +426,7 @@ export function StrictnessTable<T extends string>({ options, enabled, required, 
             {results && <th scope="col" className={`${th} text-right`}>Result</th>}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+        <tbody className={TABLE.body}>
           {options.map((opt) => {
             const runs = enabled.has(opt.value)
             const current = strictnessOf(runs, required.has(opt.value))
@@ -433,7 +435,7 @@ export function StrictnessTable<T extends string>({ options, enabled, required, 
             const status = checkStatus(runs, running, result ? !failed : null)
             return (
               <Fragment key={opt.value}>
-              <tr>
+              <tr className={TABLE.row(false)}>
                 {results && <td className="pl-4 py-3 text-center align-middle"><CheckStatusIcon status={status} required={current === 'must'} label={opt.label} /></td>}
                 <td className="px-4 py-3 text-zinc-800 dark:text-zinc-200">
                   <span className="font-medium">{opt.label}</span>
@@ -475,7 +477,7 @@ export function StrictnessTable<T extends string>({ options, enabled, required, 
           })}
         </tbody>
       </table>
-    </div>
+    </div></TableCard></div>
   )
 }
 
@@ -2489,7 +2491,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     {fixingDates && (
       <TimeFixPage initial={{ folder: sourceDir, researchProjectId: selectedProjectId, visit: linkedVisit?.visit }} onBack={() => setFixingDates(false)} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} parent="Import deployment" />
     )}
-    <div className={fixingDates ? 'hidden' : 'mx-auto max-w-[900px] px-4 py-8'}>
+    <div className={fixingDates ? 'hidden' : 'mx-auto max-w-[1100px] px-4 py-8'}>
       <PageHeader icon={MENU_ICONS.deployment} title="Import deployment" description="Organizes a folder of camera-trap images into its revision."
         parent="Manage deployments" onParent={onBack}
         aside={defaultProject !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={defaultProject} defaultAcronym={defaultAcronym} of="This deployment" onOpenSettings={onOpenSettings} /> : undefined} />
@@ -2617,13 +2619,13 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
               <button type="button" className={btnOutline} onClick={() => handleScan()}>Scan</button>
             ) : null}
             {scan && selectedProjectId && (
-              <FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project. Optional: it is checked against the card the visit says was left in the camera.`}>
+              <div className="mt-4"><FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project. Optional: it is checked against the card the visit says was left in the camera.`}>
                 <label className="sr-only" htmlFor="images-sd-card">SD card</label>
                 <Combobox
                   id="images-sd-card" options={projectSdCards.map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
                   value={sdCard} onChange={setSdCard} placeholder={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet` : 'Select the SD card the images come from…'} clearLabel="Clear SD card"
                 />
-              </FormCard>
+              </FormCard></div>
             )}
             <div className="flex justify-end items-center mt-4">
               <button type="button" aria-label="Continue to the checks" className={btnPrimary} disabled={!scan || scanning} onClick={() => openImagesStep(2)}>Continue<span aria-hidden="true"> →</span></button>
@@ -2666,10 +2668,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                         </button>
                       ) : undefined}>
             <ValidationDashboard
-              variant="steps" onReport={setImagesReport} runLabel="Run again" runningLabel="Checking…" title={folderName} subtitle={imageCount}
+              variant="steps" rows onReport={setImagesReport} runLabel="Run again" runningLabel="Checking…" title={folderName} subtitle={imageCount}
               reportId={validation?.report_id ?? null} running={validating} canRun={runnableImageChecks.length > 0} onRun={handleValidate}
             >
-              {({ report, openCheck, open }) => {
+              {({ report, openCheck, open, filters, onFilters }) => {
                 const problems = report ? shownImageChecks.filter((o) => (report.checks[o.value]?.failed ?? 0) > 0) : []
                 const blocking = problems.filter((o) => requiredImageChecks.has(o.value) && imageChecks.has(o.value))
                 const issueImages = report?.totals.images_with_issues ?? 0
@@ -2687,10 +2689,14 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                             }</>}
                       </Notice>
                     )}
-                    <StrictnessTable options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks} running={validating} results
-                                     describe={(c) => IMAGE_CHECK_DESCRIPTIONS[c]}
-                                     outcome={(c) => { const r = report?.checks[c]; return r ? { failed: r.failed, images: r.scope === 'images' ? r.failed : null } : undefined }}
-                                     opened={openCheck as ImageCheck | null} onOpen={open} />
+                    {report ? (
+                      <CheckResultsTable report={report} options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks} describe={(c) => IMAGE_CHECK_DESCRIPTIONS[c]} filters={filters} onFilters={onFilters} />
+                    ) : (
+                      <StrictnessTable options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks} running={validating} results
+                                       describe={(c) => IMAGE_CHECK_DESCRIPTIONS[c]}
+                                       outcome={() => undefined}
+                                       opened={openCheck as ImageCheck | null} onOpen={open} />
+                    )}
                   </>
                 )
               }}
@@ -3178,11 +3184,11 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                       ) : undefined}>
             {shownDeploymentChecks.length > 0 && (
               <ValidationDashboard
-                variant="steps" onReport={setDeploymentCheckReport} title={deployment.deployment_id} subtitle={imageCount}
+                variant="steps" rows onReport={setDeploymentCheckReport} title={deployment.deployment_id} subtitle={imageCount}
                 reportId={deploymentCheck?.report_id ?? null} running={checkingDeployment} canRun={runnableDeploymentChecks.length > 0}
                 onRun={handleCheckDeployment} runLabel="Run again" runningLabel="Checking…"
               >
-                {({ report, openCheck, open }) => {
+                {({ report, openCheck, open, filters, onFilters }) => {
                   const problems = report ? shownDeploymentChecks.filter((o) => (report.checks[o.value]?.failed ?? 0) > 0) : []
                   const passed = report ? shownDeploymentChecks.filter((o) => deploymentChecks.has(o.value) && report.checks[o.value] && report.checks[o.value].failed === 0).length : 0
                   const blocking = problems.filter((o) => requiredDeploymentChecks.has(o.value) && deploymentChecks.has(o.value))
@@ -3206,13 +3212,18 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                           <button type="button" className="font-medium underline" onClick={() => setFixingDates(true)}>Fix the dates and times</button>, then run the checks again.
                         </Notice>
                       )}
-                      <StrictnessTable
-                        options={shownDeploymentChecks.map((o) => ({ value: o.value, label: DEPLOYMENT_CHECK_DISPLAY[o.value].label }))}
-                        enabled={deploymentChecks} required={requiredDeploymentChecks} running={checkingDeployment} results
-                        describe={(c) => DEPLOYMENT_CHECK_DISPLAY[c].description(deployment.location_id ?? '').replace(/\.$/, '')}
-                        outcome={(c) => { const r = report?.checks[c]; return r ? { failed: r.failed, images: r.scope === 'images' ? r.failed : null } : undefined }}
-                        note={(c) => report?.entries.find((e) => e.check === c && e.status === 'failed')?.message}
-                        opened={openCheck as DeploymentCheck | null} onOpen={open} />
+                      {report ? (
+                        <CheckResultsTable report={report} options={shownDeploymentChecks.map((o) => ({ value: o.value, label: DEPLOYMENT_CHECK_DISPLAY[o.value].label }))}
+                          enabled={deploymentChecks} required={requiredDeploymentChecks}
+                          describe={(c) => DEPLOYMENT_CHECK_DISPLAY[c].description(deployment.location_id ?? '').replace(/\.$/, '')} filters={filters} onFilters={onFilters} />
+                      ) : (
+                        <StrictnessTable
+                          options={shownDeploymentChecks.map((o) => ({ value: o.value, label: DEPLOYMENT_CHECK_DISPLAY[o.value].label }))}
+                          enabled={deploymentChecks} required={requiredDeploymentChecks} running={checkingDeployment} results
+                          describe={(c) => DEPLOYMENT_CHECK_DISPLAY[c].description(deployment.location_id ?? '').replace(/\.$/, '')}
+                          outcome={() => undefined}
+                          opened={openCheck as DeploymentCheck | null} onOpen={open} />
+                      )}
                     </>
                   )
                 }}

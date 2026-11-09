@@ -123,12 +123,12 @@ export function RevisionSelection({ open, onToggle, hint = 'Select one to filter
 }
 
 /** The section of the status cards: its title with the chevron that folds it, what to do with the cards, and the cards — or only the title when it is folded. */
-export function MetricsSection({ label, open, onToggle, hint, children }: { label: string; open: boolean; onToggle: () => void; hint: string; children: ReactNode }) {
+export function MetricsSection({ label, open, onToggle, hint, title = 'Status metrics & filters', children }: { label: string; open: boolean; onToggle: () => void; hint: string; title?: string; children: ReactNode }) {
   return (
     <section aria-label={label} className="mb-5 space-y-2">
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          <FoldButton open={open} onToggle={onToggle} name="the status metrics" />Status metrics &amp; filters
+          <FoldButton open={open} onToggle={onToggle} name={`the ${title.toLowerCase()}`} />{title}
         </span>
         {open && <span className="text-xs text-zinc-500 dark:text-zinc-400">{hint}</span>}
       </div>
@@ -138,13 +138,13 @@ export function MetricsSection({ label, open, onToggle, hint, children }: { labe
 }
 
 /** The card of the progress: how much is done of all there is, with its bar. `segments` are the parts of the bar, as percentages and the classes of their colour. */
-export function ProgressCard({ percent, done, total, segments, caption, barLabel, barMax }: {
-  percent: number; done: number; total: number; segments: { width: number; className: string }[]; caption: string; barLabel: string; barMax?: number
+export function ProgressCard({ percent, done, total, segments, caption, barLabel, barMax, title = 'Progress' }: {
+  percent: number; done: number; total: number; segments: { width: number; className: string }[]; caption: string; barLabel: string; barMax?: number; title?: string
 }) {
   return (
     <div className="flex flex-col justify-between gap-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/50 p-3.5">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-medium text-zinc-500 dark:text-zinc-400">Progress</span>
+        <span className="font-medium text-zinc-500 dark:text-zinc-400">{title}</span>
         <span className="font-bold text-emerald-600 dark:text-emerald-400">{percent}%</span>
       </div>
       <div className="flex items-baseline gap-1">
@@ -164,12 +164,19 @@ export function TableCard({ label, children }: { label: string; children: ReactN
   return <section aria-label={label} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl">{children}</section>
 }
 
+/** A choice of the toolbar of a table: a select with its options — `all` is the text of the one that keeps everything, none (null) when one of the options is always picked, as in Group by. */
+export interface ToolbarChoice { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; all?: string | null }
+
 /** The search of the table, a choice among a few of what to show (the status, the uploader), and the button that puts all the filters back. */
-export function TableToolbar({ searchLabel, placeholder, text, onText, choice, onReset }: {
+export function TableToolbar({ searchLabel, placeholder, text, onText, choice, extra, onReset }: {
   searchLabel: string; placeholder: string; text: string; onText: (text: string) => void
-  choice?: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; /** The text of the choice that keeps everything — none (null) when one of the options is always picked, as in Group by. */ all?: string | null }
+  /** One or several choices, each a select beside the others. */
+  choice?: ToolbarChoice | ToolbarChoice[]
+  /** Something more beside the choices, before the reset button — the buttons of the view, for one. */
+  extra?: ReactNode
   onReset: () => void
 }) {
+  const choices = choice === undefined ? [] : Array.isArray(choice) ? choice : [choice]
   return (
     <div role="search" className="flex flex-col items-stretch justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-4 md:flex-row md:items-center">
       <div className="relative min-w-[14rem] flex-1">
@@ -182,14 +189,15 @@ export function TableToolbar({ searchLabel, placeholder, text, onText, choice, o
         )}
       </div>
       <div className="flex items-center gap-3">
-        {choice && (
-          <label className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{choice.label}
-            <select aria-label={choice.label} className="cursor-pointer rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-white dark:bg-zinc-950 px-3 py-2 text-xs text-zinc-900 dark:text-zinc-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" value={choice.value} onChange={(e) => choice.onChange(e.target.value)}>
-              {choice.all !== null && <option value="">{choice.all ?? 'All'}</option>}
-              {choice.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {choices.map((c) => (
+          <label key={c.label} className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{c.label}
+            <select aria-label={c.label} className="cursor-pointer rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-white dark:bg-zinc-950 px-3 py-2 text-xs text-zinc-900 dark:text-zinc-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" value={c.value} onChange={(e) => c.onChange(e.target.value)}>
+              {c.all !== null && <option value="">{c.all ?? 'All'}</option>}
+              {c.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
-        )}
+        ))}
+        {extra}
         <button type="button" title="Reset the filters" aria-label="Reset the filters" className="flex items-center gap-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-200 dark:hover:bg-zinc-700" onClick={onReset}>
           <Icon path={<><path d="M21 12a9 9 0 11-3-6.700" /><path d="M21 4v5h-5" /></>} className="h-3 w-3" />
           <span className="hidden sm:inline">Reset</span>
