@@ -34,7 +34,7 @@ export default function WizardStep({ n, title, description, status, summary, can
   }[status]
   const pill = 'text-xs font-medium px-2 py-0.5 rounded-full'
   return (
-    <section className="py-5 border-t first:border-t-0 border-zinc-200 dark:border-zinc-700">
+    <section className="py-5 border-t first:border-t-0 [header+&]:border-t-0 border-zinc-200 dark:border-zinc-700">
       <div className="flex items-start gap-3">
         <span className={`w-8 h-8 rounded-full text-sm flex items-center justify-center font-bold flex-shrink-0 ${circle}`}>
           {status === 'done'

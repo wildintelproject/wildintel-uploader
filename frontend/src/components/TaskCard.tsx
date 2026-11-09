@@ -44,7 +44,7 @@ export function PageHeader({ icon, title, description, parent, onParent, aside }
   return (
     <>
       <Breadcrumb parent={parent} onParent={onParent} current={title} />
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 px-5 py-4 shadow-sm">
         <div className="flex items-center gap-4">
           <span className="w-12 h-12 flex items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 shrink-0"><LineIcon size={22}>{icon}</LineIcon></span>
           <div>
