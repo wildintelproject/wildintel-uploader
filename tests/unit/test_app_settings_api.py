@@ -84,16 +84,16 @@ ACTIVE = {"status": "active", "archive_reason": None, "status_date": None, "stat
 NO_POWER = {"connectivity": None, "power_source": None, "battery_removable": None}   # what a camera says of its connection and its power when it says nothing
 
 
-def test_a_camera_says_how_it_is_connected_and_what_it_runs_on_and_only_a_battery_pack_says_if_it_can_be_taken_out():
+def test_a_camera_says_how_it_is_connected_and_what_it_runs_on_and_only_a_battery_says_if_it_can_be_taken_out():
     saved = _put(FIELDWORK={"cameras": [
-        {"label": "A", "connectivity": "4g", "power_source": "battery_pack", "battery_removable": "yes", "research_project": "DONA"},
-        {"label": "B", "connectivity": "none", "power_source": "batteries", "battery_removable": "yes", "research_project": "DONA"},   # batteries are always taken out: nothing to say
+        {"label": "A", "connectivity": "4g", "power_source": "battery", "battery_removable": "yes", "research_project": "DONA"},
+        {"label": "B", "connectivity": "none", "power_source": "cells", "battery_removable": "yes", "research_project": "DONA"},   # cells are always taken out: nothing to say
         {"label": "C", "connectivity": "5g", "research_project": "DONA"},
     ]})["FIELDWORK"]["cameras"]
     by_label = {c["label"]: c for c in saved}
 
-    assert (by_label["A"]["connectivity"], by_label["A"]["power_source"], by_label["A"]["battery_removable"]) == ("4g", "battery_pack", "yes")
-    assert (by_label["B"]["connectivity"], by_label["B"]["power_source"], by_label["B"]["battery_removable"]) == ("none", "batteries", None)
+    assert (by_label["A"]["connectivity"], by_label["A"]["power_source"], by_label["A"]["battery_removable"]) == ("4g", "battery", "yes")
+    assert (by_label["B"]["connectivity"], by_label["B"]["power_source"], by_label["B"]["battery_removable"]) == ("none", "cells", None)
     assert (by_label["C"]["connectivity"], by_label["C"]["power_source"], by_label["C"]["battery_removable"]) == ("5g", None, None)
 
 

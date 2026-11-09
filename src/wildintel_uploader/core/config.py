@@ -351,8 +351,8 @@ class Camera(BaseModel):
     camera_id: Optional[str] = Field(default=None, description="The camera's id — its serial number. (cameraID)")
     camera_model: Optional[str] = Field(default=None, description="Manufacturer and model, written as manufacturer-model. (cameraModel)")
     connectivity: Optional[Literal["none", "4g", "5g"]] = Field(default=None, description="The mobile network the camera sends its photos through: none when it does not.")
-    power_source: Optional[Literal["batteries", "battery_pack"]] = Field(default=None, description="What it runs on: batteries (the cells, as AA, that are changed) or a battery pack.")
-    battery_removable: Optional[Literal["yes", "no"]] = Field(default=None, description="Whether the battery pack can be taken out of the camera: only said of a battery pack.")
+    power_source: Optional[Literal["cells", "battery"]] = Field(default=None, description="What it runs on: cells (AA, AAA… the ones that are changed) or a battery.")
+    battery_removable: Optional[Literal["yes", "no"]] = Field(default=None, description="Whether the battery can be taken out of the camera: only said of a battery, as cells are always taken out to be changed.")
     in_service: Optional[date] = Field(default=None, description="The day it was put into production.")
     research_project: Optional[str] = Field(default=None, description="The acronym of the research project it belongs to: every one belongs to one (a card or camera without it, as older settings had, waits to be assigned).")
     status: Literal["ready", "active", "archived"] = Field(default="active", description="Ready: available, not in the field yet. Active: in use. Archived: out of use for good (see archive_reason).")
@@ -367,9 +367,9 @@ class Camera(BaseModel):
     _migrated = model_validator(mode="before")(lambda cls, data: migrate_gear(data))
 
     @model_validator(mode="after")
-    def _removable_only_of_a_battery_pack(self) -> "Camera":
-        # batteries are always taken out to be changed: only a battery pack says whether it can be
-        if self.power_source != "battery_pack":
+    def _removable_only_of_a_battery(self) -> "Camera":
+        # cells are always taken out to be changed: only a battery says whether it can be
+        if self.power_source != "battery":
             self.battery_removable = None
         return self
 
