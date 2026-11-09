@@ -252,7 +252,7 @@ deployment form — is the command line's flow.
 
 The **timezone** is read from the location, in the research project's `locations.json`
 (`local_folder_service.location_time`), never from the request: `import-local` refuses a location
-with none. This is deliberate — see the [user manual](user-manual.md#the-location-owns-the-timezone).
+with none. This is deliberate — see the [user manual](user-manual.md#23-the-location-owns-the-timezone).
 
 ### Reports
 

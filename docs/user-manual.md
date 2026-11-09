@@ -74,17 +74,59 @@ One download gives you both the web application and the command line.
 
 ## 2. General concepts: deployments, locations, revisions and collections
 
-Before explaining how the application works, it is necessary to clarify the following concepts.
+Before explaining how the application works, it is necessary to clarify the following concepts. The visits come first, because everything else is worked out from them.
 
-A **deployment** is the set of images taken by one camera placed at a **location** — some GPS
-coordinates and a timezone — under specific configuration conditions (height, tilt, delay between
-triggers…), between the day it was set up and the day it was collected. A location is visited again
-and again. Each trip to one camera trap — when it was, who went and what was done — is a **visit**, and
-the round of visits to every location of a research project is a **revision**: *one visit to every site*,
-the 1st, the 2nd, the 3rd one. A site is visited once in a revision, and a revision does not start until
-the one before it is finished. A deployment goes from the visit that **left** a camera to the one that
-**collected** its card, and all the deployments of a revision form a **collection**: *collection* and
-*revision* are synonyms. The app names everything after that:
+### 2.1 Visits and revisions
+
+A **visit** is one trip to one camera trap, to do something with it. It is the field record: it says when it was, at which site, who went, what was done to the camera and the card, and what was found. The visits of a research project are registered in *Manage visits* — see the [web manual](user-manual-web.md#5-manage-visits) — and everything else is worked out from them.
+
+A **revision** is one visit to every site: the round of visits to all the locations of a research project that are not archived — the 1st, the 2nd, the 3rd one, called `R0001`, `R0002`, `R0003`… A site is visited **once** in a revision, and a revision does not start until the one before it is finished (every location has its visit in it). Revisions are in order: every visit of a revision is after those of the revisions before it. When nothing is known of a revision of a site — the first visit kept to it is of a later revision —, that revision is **unknown**: nothing is checked against it, and a visit that comes later can take its place.
+
+#### The actions of a visit
+
+| Action | What it is | What it asks |
+|---|---|---|
+| **Installation** | A camera is put up at the site and an SD card is left in it. The first visit to a site is always an Installation. | The camera, the card left, and how it is set up: height or depth, tilt, heading, delay and whether bait is used. |
+| **Revision** | The camera is looked at: its card is collected and another one may be left. | The camera and the photos on the card collected (not when the card was full). The card left is optional. |
+| **Desinstallation** | The camera is taken away, with its card. | The camera and the photos collected. |
+| **Stolen** | The camera is found stolen, and its card with it: there will be no images. | The camera. |
+| **Archive** | The location is given up: no visit is kept to it afterwards. The camera that is out is taken away in the same visit (a Desinstallation, or a Stolen camera), and none is put up. | Nothing else. |
+
+A visit can do several things at once: *Revision + Installation* (the camera is looked at and another put up: a replacement), *Revision + Desinstallation*, *Stolen + Installation* (stolen and replaced) or *Stolen + Archive* (stolen and the site given up). A visit that **could not be made** — the status *Not revised* — has no action: nothing was done at it.
+
+#### What a visit records
+
+| | What is recorded |
+|---|---|
+| **Who and where** | The site (a location of the research project), the revision, who went and who set the camera up. |
+| **When** | The day and the time, as the clock of the location says them; what is kept is the instant in UTC. |
+| **What was done** | The actions. |
+| **The SD card** | The card left in the camera; the photos counted on the card collected; how the card and the batteries were (*OK*, *Card full*, *No batteries*, *Card full and no batteries*). |
+| **The camera** | Its id and its model; how it is placed and set (height or depth, tilt, heading, delay, detection distance, bait use, feature type, habitat); its status (*OK*, *Altered*, *Knocked down*, *Damaged*…); whether its clock was right and whether it was calibrated. |
+| **The site and the notes** | The coordinates where the note was taken, the groups and tags of the deployment, and the notes. |
+
+Which of them are required depends on the actions: an Installation asks for the camera and the card it leaves, a Revision for the photos it collected… Nothing is asked of a visit that could not be made.
+
+#### The states of a visit
+
+A visit has a state that follows its life. A visit that left no camera has none.
+
+| State | What it says |
+|---|---|
+| **Planned** | The visit is not made yet: a location with no visit in a revision that has them. |
+| **Deployed** | It left a camera that is still out: its card has not been collected. |
+| **Collected** | A later visit collected the card it left. |
+| **Stolen** | The camera it left was stolen: its deployment is closed with no images, and there is nothing to create. |
+| **Not visited** | The visit could not be made. |
+| **Unknown** | A revision of a site of which nothing is known. |
+
+Whether the images of a visit are stored is another thing: they are once its deployment is made.
+
+### 2.2 Deployments, locations and collections
+
+A **deployment** is the set of images taken by one camera, at one **location** — some GPS coordinates and a timezone —, between two **consecutive visits** to it: the one that **left** the camera and its card, and the next one that **collected** the card. Between them the camera was set up under specific configuration conditions (height, tilt, delay between triggers…). A deployment whose camera is still out, because the card has not been collected, is *open*; when the card is collected, it is *closed* and its images can be imported. The deployment of a camera that was stolen has no images.
+
+All the deployments of a revision form a **collection**: *collection* and *revision* are synonyms. A deployment belongs to the revision of the visit that **left** the camera — the deployment from the visits of `R0001` to the visits of `R0002` is of `R0001`. The app names everything after that:
 
 | | Example | |
 |---|---|---|
@@ -96,11 +138,7 @@ the one before it is finished. A deployment goes from the visit that **left** a 
 
 The deployment id is never typed: you give the revision and the location, and the app builds it.
 
-Nothing is known of a revision of a site when the first visit kept to it is of a later one: that revision is
-**unknown**. Nothing is checked against it, and a visit that comes later can take its place. The visits are
-registered in *Manage visits* — see the [web manual](user-manual-web.md#5-manage-visits).
-
-### The location owns the timezone
+### 2.3 The location owns the timezone
 
 A camera's clock has no timezone of its own: its images say "13:10", and the same camera,
 elsewhere, would say it too. So the **timezone** (and whether the cameras there **ignore summer
