@@ -113,16 +113,16 @@ Whether the images of a visit are stored is another thing: they are once its dep
 
 #### The actions of a visit
 
-When a visit goes from one state to another, **one or several actions** are done in it, and they decide the state it takes and what happens to the visit before it:
+When a visit goes from one state to another, **one or several actions** are done in it:
 
-![The actions of a visit: what each action does to the state of the visit and of the deployed visit before it](img/visit-actions.svg)
+![The actions of a visit: a planned visit becomes deployed with an Installation or not visited with no action; a deployed visit becomes collected when the next visit does a Revision or a Desinstallation, and stolen when it does a Stolen action](img/visit-actions.svg)
 
-- With **no action** (the visit could not be made, *Not revised*) a planned visit is *Not visited*, and the visit before it stays *Deployed*: no card was collected.
-- An **Installation** leaves the visit *Deployed*: a camera is out.
-- A **Revision** closes the *Deployed* visit before it, which is *Collected*, and the visit is itself *Deployed* if it leaves a card.
-- A **Desinstallation** also closes the visit before it as *Collected*, and the visit has no state: no camera is left.
-- **Stolen** closes the visit before it as *Stolen*, and the visit has no state.
-- An **Archive** gives the site up, and goes with a Desinstallation or a Stolen visit: the visit has no state.
+- A **planned** visit (or an unknown one) becomes **Deployed** if its action is an **Installation**: a camera is out. If **no action** is done (the visit could not be made, *Not revised*) it becomes **Not visited**.
+- A **Deployed** visit becomes **Collected** when the **next visit** to the site does a **Revision** or a **Desinstallation**: the card it left is collected.
+- A **Deployed** visit becomes **Stolen** when the **next visit** does a **Stolen** action: the camera is found stolen and there are no images to import.
+- An **Archive** gives the site up, and goes with a Desinstallation or a Stolen visit.
+
+The following table sums up each action, what it is and what it asks.
 
 | Action | What it is | What it asks |
 |---|---|---|
@@ -136,22 +136,75 @@ A visit can do several things at once: *Revision + Installation* (the camera is 
 
 #### What a visit records
 
-| | What is recorded |
-|---|---|
-| **Who and where** | The site (a location of the research project), the revision, who went and who set the camera up. |
-| **When** | The day and the time, as the clock of the location says them; what is kept is the instant in UTC. |
-| **What was done** | The actions. |
-| **The SD card** | The card left in the camera; the photos counted on the card collected; how the card and the batteries were (*OK*, *Card full*, *No batteries*, *Card full and no batteries*). |
-| **The camera** | Its id and its model; how it is placed and set (height or depth, tilt, heading, delay, detection distance, bait use, feature type, habitat); its status (*OK*, *Altered*, *Knocked down*, *Damaged*…); whether its clock was right and whether it was calibrated. |
-| **The site and the notes** | The coordinates where the note was taken, the groups and tags of the deployment, and the notes. |
+A visit is kept as a **`VisitRecord`**, the Pydantic class (`core/schemas/requests.py`) that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks **each field on its own** (its type, its range, the values it may take) and a few of them **together**, and it says which field is wrong.
 
-Which of them are required depends on the actions: an Installation asks for the camera and the card it leaves, a Revision for the photos it collected… Nothing is asked of a visit that could not be made.
+Depending on the actions done during a visit, some of the fields of a visit **must be filled in**: an Installation asks for the camera, the card it leaves and how the camera is set up; a Revision or a Desinstallation, for the camera and the photos collected; a Stolen visit, for the camera… The table of the actions above says what each one asks. Nothing is asked of a visit that could not be made.
+
+The following table sums up what a visit records and what is validated in each field.
+
+| | Fields | What is validated |
+|---|---|---|
+| **Who and where** | `location_id`, `session`, `trappers`, `setup_by` | The site is a location id (1 to 100 characters); the revision is written `R` and its number (`R0003`); who went and who set the camera up are text (who went is then looked for in the settings: see below). |
+| **When** | `date`, `time`, `when` | The day and the time have to be a real date and a real time, as the clock of the location says them. `when` is the instant in UTC (ISO 8601, with a `Z`): it is worked out from them when it is left out. |
+| **What was done** | `actions` | Any of *Installation*, *Revision*, *Desinstallation*, *Stolen* and *Archive*, each one once. Only a visit that could not be made (its status is *Not revised*) has none. |
+| **The SD card** | `sd`, `num_photos`, `card_batteries_ok` | The photos counted are a whole number, zero or more. The state of the card and the batteries is one of *OK*, *CarFull*, *NoBatteries* or *CarFullNoBatteries* (the codes of the old datasheet, *SinPilas* and *CarFullSinPilas*, are read as those). |
+| **The camera** | `camera_id`, `camera_model`, `camera_interval`, `camera_height`, `camera_depth`, `camera_tilt`, `camera_heading`, `detection_distance`, `bait_use`, `feature_type`, `habitat`, `status`, `date_time_ok`, `timestamp_issues`, `calibration` | The interval, the height, the depth and the detection distance are zero or more; the tilt is between -90 and 90 degrees and the heading between 0 and 360; the bait use and the calibration are yes or no; the feature type is one of the values of Camtrap DP. |
+| **The site and the notes** | `latitude`, `longitude`, `deployment_groups`, `tags`, `comments` | The latitude is between -90 and 90 and the longitude between -180 and 180 (WGS84 decimal degrees). The groups, the tags and the notes are free text. |
+
+Two things are checked on the **whole visit**, with several fields together:
+
+- **A visit does something.** It has at least one action: only a visit that could not be made (*Not revised*) has none.
+- **Height or depth, not both.** A camera is set up at a height or at a depth: `camera_height` and `camera_depth` are mutually exclusive.
+
+Three fields are not typed, the app fills them in: `when` (see above), `state` — where the visit is in its life: *deployed*, *collected*, *stolen* or *not visited* — and `deployment_id`, the deployment that the visit closed, once its images are imported.
+
+#### What a visit is checked against
+
+`VisitRecord` looks at a visit **alone**. But the values entered in a revision can also be **validated against other visits**: those of the **same revision** and those of **other revisions**. A camera cannot be put up where it already is, a card cannot be in two cameras, a visit cannot be before the one it follows… — that is only known by looking at what was done before. The app does it with the visits kept **before the date and the time of the visit** — not only with the revision before it —, and again with those after it when a visit is edited.
+
+The rules are the same **by hand and from a file**: a visit that breaks one is refused, and it says why; what only *looks odd* is kept, with a warning. They are of five kinds.
+
+**When the visit was — the revisions**
+
+- A site has **one visit in a revision**, whatever the day, and never two at the same day and time.
+- A visit is **after the last one to its site**.
+- The revisions are **in order**: every visit of a revision is after all those of the revisions before it and before all those of the revisions after it, whichever the site.
+- A revision **starts when the one before is finished**: every location that is not archived has its visit in it. When the next revision is started, the sites with no visit are marked as *Not visited*. A revision that is finished is *closed*: nothing new is added to it.
+
+**What the site is**
+
+- The site has to be a **location of the research project**. If it is not, the app tells a really new site from a misnamed one: it shows the nearest location and the ids that are one character apart.
+- The **first visit** to a site can only be an **Installation**: it puts the camera up.
+- An **archived** location has no visits after the day it was archived. The visit that archives it (*Archive*) puts no camera up, and takes the one that is out away (*Desinstallation*) or finds it stolen (*Stolen*).
+
+**Where the camera is**
+
+A camera is at a site from the visit that puts it up (an Installation, or a Revision that leaves it out again) until a visit takes it away or finds it stolen. So:
+
+- A **Revision**, a **Desinstallation** or a **Stolen** visit is of **the camera that is at the site**. If it was replaced, the visit adds an Installation.
+- A camera is **not put up where it already is**, nor while it is at **another site**: it has to be uninstalled there first.
+
+**Where the SD card is**
+
+A card is in a camera from the visit that leaves it until a visit collects it. So the card a visit leaves cannot be **archived**, nor be **in the camera of another site** (it has to be collected first), nor be **the one the same visit collects** (the card left has to be another), nor have been **collected in the same revision**.
+
+**What exists**
+
+The camera, the SD card and who went have to **exist** in the research project and in the settings, unless the import is asked to create the camera or the card.
+
+What the app only **questions** — it asks the one who knows the field, it does not refuse the visit — is: a Revision with no photos (no deployment comes out of it); an Installation while the card left before was not collected (no Revision or Desinstallation closed that deployment); a camera or a card at two sites in the same revision; a visit whose time is not after the one of an earlier revision; and a jump in the numbers of the revisions (a trip is missing).
+
+**What cannot be known cannot be checked.** An *unknown* visit — a revision of a site of which nothing is known — has no camera, no card and no day, so nothing is checked against it. And what was left at a site before an unknown revision cannot be trusted after it: the camera or the card may have been moved in it. That is why the first visit to a site after an unknown revision may be any, and a file is only excused this: what depends on a revision that nobody knows.
 
 ### 2.2 Deployments, locations and collections
 
 A **deployment** is the set of images taken by one camera, at one **location** — some GPS coordinates and a timezone —, between two **consecutive visits** to it: the one that **left** the camera and its card, and the next one that **collected** the card. Between them the camera was set up under specific configuration conditions (height, tilt, delay between triggers…). A deployment whose camera is still out, because the card has not been collected, is *open*; when the card is collected, it is *closed* and its images can be imported. The deployment of a camera that was stolen has no images.
 
-All the deployments of a revision form a **collection**: *collection* and *revision* are synonyms. A deployment belongs to the revision of the visit that **left** the camera — the deployment from the visits of `R0001` to the visits of `R0002` is of `R0001`. The app names everything after that:
+![A deployment: the images taken by one camera at one location between the visit that left it and the next one, which collected the card; open, closed or with no images if the camera was stolen](img/deployment.svg)
+
+All the deployments of a revision form a **collection**: *collection* and *revision* are synonyms. A deployment belongs to the revision of the visit that **left** the camera — the deployment from the visits of `R0001` to the visits of `R0002` is of `R0001`. ![A collection: all the deployments of a revision, one for each site, closed when the next visit has collected the card and open while it has not](img/collection.svg)
+
+The app names everything after that:
 
 | | Example | |
 |---|---|---|
