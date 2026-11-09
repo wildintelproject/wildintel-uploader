@@ -31,8 +31,17 @@ The one to start with. Its headers are the names of the fields of a visit, so **
 - Expected: the two visits of `R0001` are kept; the two of `R0002` are **refused**, each with *"R0002 cannot start: R0001 is not finished, 2 location(s) still to be visited in it: WICP_0003, WICP_0004."*
 - In the form (By hand) the same thing shows when `R0002` is started: it offers to mark the missing locations as not visited.
 
-### `wildintel_epicollect.csv` — From WildINTEL Epicollect
-The download of the Epicollect5 project of the field flow, with its columns (`2_Collection`, `4_Location`, `6_Action`, …), with the sites as numbers (`1` is `WICP_0001`). Pick **WildINTEL Epicollect**; no mapping is asked.
+### `wildintel_epicollect.csv` — From WildINTEL Epicollect (the new form)
+The download of the project `new-cameratrap-control-test`, with the 26 questions of the form `Cameratrap visit` and the headers as Epicollect5 writes them — the number of the question, an underscore and its text, **cut at 20 characters** (`5_Status_of_the_came`, `6_Card_and_batteries`, `7_N_pictures_collect`, `10_Action_after_thef`), and the coordinates in `lat_`, `long_`, `accuracy_`, `UTM_…` columns. Pick **WildINTEL Epicollect**; no mapping is asked.
+
+- The sites are written as the locations are (`WICP_0001`), the cameras by their serial number, and who went in one cell (`Ana Pérez, Luis Gómez`).
+- The time is when the entry was created (`created_at`, UTC), not the `Time` of the form, which is local.
+- `R0001` installs the four cameras (status *New site*, no action: the form does not ask one). `R0002` has an inspection with *Card changed*, an inspection with *Card full* (the photos are not counted), a *Camera removal* with *no batteries* and a *Stolen* camera followed by *Site removal*.
+- Expected: **8 visits, no problems, no warnings.**
+- The headers of the form were read from the project; no entry has been downloaded from it yet, so the cut of `7_N_pictures_collect` is the one to check first with a real download.
+
+### `wildintel_epicollect_legacy.csv` — From WildINTEL Epicollect Legacy
+The download of the Epicollect5 project of the old field flow, with its columns (`2_Collection`, `4_Location`, `6_Action`, …), with the sites as numbers (`1` is `WICP_0001`). Pick **WildINTEL Epicollect Legacy**; no mapping is asked.
 
 - The time is when the entry was created (`created_at`, UTC), put in the timezone of the location.
 - It has a `Revision` with *Card full* (the photos are not counted), a `Revision + Desinstallation` with *no batteries*, and a last entry with no collection number (an old version of the form): it is **ignored**, and counted as such.
@@ -53,13 +62,11 @@ Auto. A site that is not a location is not thrown away as a mistake: its visits 
 - `WICP_0O01` is written with the letter O: it is one character apart from `WICP_0001`, so it looks like a misprint (fix the file).
 - Expected: **4 visits kept, 2 new sites.**
 
-### `camera_and_card_warnings.csv` — odd, but kept
-Auto. Nothing here is refused: the visits are kept as the field wrote them and **questioned** in the warnings (and in the report of the import).
+### `rules_of_a_visit.csv` — a visit follows the rules of a visit, from a file as from the form
+Auto. The visits of a file are refused for what the form refuses, each with its row; what the form only questions is kept with a warning.
 
-- The same camera installed at two sites, and the same card left in two cameras.
-- A Revision with 0 photos (no deployment will be produced for it).
-- A Revision of a camera that is not the one at the site.
-- Expected: **7 visits, 6 warnings.**
+- `R0001` installs the four cameras. In `R0002`: `WICP_0001` has a Revision with 0 photos (**kept**, with a warning: no deployment is produced for it); `WICP_0002` revises a camera that is not the one at the site (**refused**); `WICP_0003` leaves card `4`, which is still in the camera of `WICP_0004` (**refused**).
+- Expected: **6 visits, 2 problems, 1 warning.**
 
 ### `row_errors.csv` — rows that cannot be read
 Auto. The four Installations are right; the four Revisions of `R0002` each have a different mistake, so each is reported with its row of the file and **none is kept**:
