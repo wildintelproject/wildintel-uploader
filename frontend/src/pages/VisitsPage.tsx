@@ -1621,10 +1621,12 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 ) : (
                   <>
                     <Notice kind="success" role="status" className="mt-4 !items-center !rounded-2xl !px-6 !py-5 !text-base">
-                      <strong>{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added</strong> to {project?.acronym}. The deployments will be worked out from {csvSaved === 1 ? 'it' : 'them'}.
+                      <strong>{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added</strong> to {project?.acronym}.{' '}
+                      {justClosed.length > 0
+                        ? <>{justClosed.length} of them {justClosed.length === 1 ? 'is' : 'are'} closed: import their images from the Visit dashboard to make their deployments.</>
+                        : <>A deployment can be made once the card of a visit is collected.</>}
                       {csvResult?.report && <> The report of the import is with the other reports: <a className="font-medium underline" href={api.reportUrl(csvResult.report, 'csv')} download>Download report</a>.</>}
                     </Notice>
-                    {closedLinks}
                     <div className="mt-6 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
                       <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to register more visits?</p>
                       <button type="button" className={btnPrimary} onClick={() => { forgetCsv(); setCsvName(null); setProject(undefined); setSource(null) }}>Register more visits</button>

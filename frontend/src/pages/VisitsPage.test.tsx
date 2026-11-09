@@ -1004,7 +1004,7 @@ describe('VisitsPage from a CSV file', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Add 2 visits' }))
     expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', expect.any(String), true, 'mapped', MAPPING)
-    expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to TATR. The deployments will be worked out from them.')
+    expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to TATR. A deployment can be made once the card of a visit is collected.')
     expect(screen.queryAllByRole('table').map((t) => t.getAttribute('aria-label'))).toEqual([]) // no table of rows is shown: just the matching, in groups
     expect(screen.getByRole('region', { name: 'Where' })).toHaveTextContent('of') // the visits are kept: the list of them goes, the mapping stays
     expect(screen.getByRole('button', { name: 'Back to the menu' })).toBeInTheDocument()
@@ -1205,6 +1205,22 @@ describe('VisitsPage from a CSV file', () => {
     await continueFromTheFile()
     expect(await screen.findByText(/to add/)).toHaveTextContent('1 visit to add')
     expect(screen.queryByRole('list', { name: 'Rows with a problem' })).not.toBeInTheDocument()
+  })
+
+  it('says how many of the visits added are closed, and sends to the visit dashboard for their deployments, with no notice for each of them', async () => {
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 1, new_sites: [], warnings: [] })
+    mockedApi.closedVisits.mockResolvedValue({ results: [{ visit: visit({ session: 'R0001' }), end: visit() }] })
+    render(<VisitsPage onBack={vi.fn()} onImportImages={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /wildintel epicollect legacy csv/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
+    await userEvent.click(await screen.findByRole('button', { name: 'Add 1 visit' }))
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 visit added to TATR. 1 of them is closed: import their images from the Visit dashboard to make their deployments.'))
+    expect(screen.queryByRole('button', { name: /Import the images of/ })).not.toBeInTheDocument()
   })
 
   it('reads a Wildintel Epicollect download without asking for any column', async () => {
