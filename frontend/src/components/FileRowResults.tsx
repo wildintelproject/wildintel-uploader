@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { btnOutline } from '../pages/ImportDeploymentPage'
-import { pageNumbers } from './CheckFailures'
+import { ActiveFilters, ChevronCell, DetailLine, DetailsRow, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from './DashboardParts'
+import { Icon, StateCard } from './Dashboard'
 import IconButton, { ICON_PATHS } from './IconButton'
 import { plural } from './SessionResults'
 
@@ -61,19 +61,21 @@ const FILTERS: { value: Filter; keeps: (r: FileRow) => boolean }[] = [
   { value: 'errors', keeps: (r) => toneKey(r) === 'errors' },
 ]
 
-/** The icon of the button that shows what is wrong with a row. */
-const ALERT_PATH = <><circle cx="12" cy="12" r="9" /><path d="M12 7.500v5M12 16h.01" /></>
-
-const viewClass = (active: boolean) => `flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium ${active ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
+const FILTER_LABEL: Record<Filter, string> = { all: 'All rows', ready: 'Ready', skipped: 'Skipped / Existing', errors: 'With problems' }
 
 /** What became of each row of a file that is read, laid out like the results of the checks of the deployments: the figures, and the rows — each with what
  * went wrong in it — or, by error, each kind of error with the rows that have it, to pick one and see them. */
-export default function FileRowResults({ rows, labels = {} }: {
+export default function FileRowResults({ rows: allRows, labels = {} }: {
   rows: FileRow[]
   /** The name of each field of a visit, as it is shown beside what the row says of it. */
   labels?: Record<string, string>
 }) {
   const [view, setView] = useState<'row' | 'error'>('row')
+  // The revision picked, '' for all of them: the figures and the table are of its rows only.
+  const [revision, setRevision] = useState('')
+  const [revisionsOpen, setRevisionsOpen] = useState(true)
+  const [metricsOpen, setMetricsOpen] = useState(true)
+  const rows = revision ? allRows.filter((r) => r.session === revision) : allRows
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
@@ -107,203 +109,182 @@ export default function FileRowResults({ rows, labels = {} }: {
   const shownFlagged = shown.filter(isFlagged)
   const kinds = [...new Set(shownFlagged.map(kindOf))].map((kind) => { const of = shownFlagged.filter((r) => kindOf(r) === kind); return { kind, rows: of, tone: shownTone(of[0]) } })
 
+  // The revisions the file has, newest first — there may be many: the squares are the latest and the older ones are picked from a list.
+  const number = (id: string) => Number(id.replace(/\D/g, '')) || 0
+  const revisions = [...new Set(allRows.map((r) => r.session).filter((x): x is string => Boolean(x)))].sort((a, b) => number(b) - number(a) || b.localeCompare(a))
+  const spanOf = (of: FileRow[]) => { const days = of.map((r) => r.date).filter((d): d is string => Boolean(d)).sort(); return days.length === 0 ? undefined : days[0] === days[days.length - 1] ? days[0] : `${days[0]} → ${days[days.length - 1]}` }
+  const clean = (of: FileRow[]) => of.filter((r) => toneKey(r) !== 'errors').length
   const count = (tone: Tone) => rows.filter((r) => toneKey(r) === tone).length
   // The figures of the top: what was read, and what became of it — the colours of the filters and the pills.
-  const cards: { filter: Filter; title: string; value: number; note: string; text: string; border: string; icon: ReactNode }[] = [
-    { filter: 'all', title: 'Rows read', value: rows.length, note: '100%', text: 'text-zinc-700 dark:text-zinc-300', border: 'border-blue-500', icon: <><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.300 7-3V6M5 12c0 1.700 3.100 3 7 3s7-1.300 7-3" /></> },
-    { filter: 'ready', title: 'Ready', value: count('ready'), note: 'new visits', text: TONES.ready.text, border: 'border-emerald-500', icon: <><circle cx="12" cy="12" r="9" /><path d="M8 12.500l2.800 2.800L16 9.500" /></> },
-    { filter: 'skipped', title: 'Skipped / Existing', value: count('skipped'), note: 'unchanged', text: TONES.skipped.text, border: 'border-amber-500', icon: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></> },
-    { filter: 'errors', title: 'With problems', value: count('errors'), note: 'needs attention', text: TONES.errors.text, border: 'border-red-500', icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7.500v5M12 16h.01" /></> },
+  const squares: { filter: Filter; label: string; note: string; count: number; tone: string; badge: string; icon: ReactNode }[] = [
+    { filter: 'all', label: 'Rows read', note: 'Every row of the file', count: rows.length, tone: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300', icon: <Icon path={<><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" /></>} className="h-5 w-5" /> },
+    { filter: 'ready', label: 'Ready', note: 'New visits', count: count('ready'), tone: TONES.ready.text, badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></>} className="h-5 w-5" /> },
+    { filter: 'skipped', label: 'Skipped / Existing', note: 'Unchanged', count: count('skipped'), tone: TONES.skipped.text, badge: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>} className="h-5 w-5" /> },
+    { filter: 'errors', label: 'With problems', note: 'Needs attention', count: count('errors'), tone: TONES.errors.text, badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" /></>} className="h-5 w-5" /> },
   ]
+  const fine = rows.length - count('errors')
 
   return (
     <div className="mt-4 mb-5">
+      {revisions.length > 0 && (
+        <RevisionSelection open={revisionsOpen} onToggle={() => setRevisionsOpen(!revisionsOpen)} hint="Select one to filter the rows of the file"
+          all={{ label: 'All revisions', note: `${allRows.length} ${allRows.length === 1 ? 'row' : 'rows'}`, percent: allRows.length ? Math.round((clean(allRows) / allRows.length) * 100) : 0 }} value={revision}
+          revisions={revisions.map((id) => { const of = allRows.filter((r) => r.session === id); return { id, label: id, note: `${clean(of)} of ${of.length} ok`, dates: spanOf(of), complete: of.every((r) => toneKey(r) !== 'errors') } })}
+          onPick={(id) => { setRevision(id); setPage(1); setOpened(null); setPicked(null) }} />
+      )}
       {/* the figures are the filters: the one pressed keeps those rows — pressed again, all of them */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5" role="group" aria-label="Filter the rows">
-        {cards.map((c) => {
-          const on = filter === c.filter
-          return (
-            <button key={c.title} type="button" aria-pressed={on} aria-label={c.title} onClick={() => setFilter(on ? 'all' : c.filter)}
-                    className={`flex flex-col justify-between gap-3 rounded-2xl border px-5 py-4 text-left transition-colors ${on ? `${c.border} bg-zinc-50 dark:bg-zinc-900/60` : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500'}`}>
-              <span className={`flex items-center gap-2 text-sm font-semibold ${c.text}`}>
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{c.icon}</svg>{c.title}
-              </span>
-              <span className="flex items-end justify-between gap-3">
-                <span className={`text-4xl font-bold leading-none ${c.value === 0 ? 'text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'}`}>{c.value.toLocaleString('en-US')}</span>
-                <span className="text-sm text-zinc-500 dark:text-zinc-400">{c.note}</span>
-              </span>
-            </button>
-          )
-        })}
-      </div>
+      <MetricsSection label="Rows by result" open={metricsOpen} onToggle={() => setMetricsOpen(!metricsOpen)} hint="Click a card to filter the table by result">
+        <ProgressCard percent={rows.length ? Math.round((fine / rows.length) * 100) : 0} done={fine} total={rows.length} barLabel="Rows without problems"
+          caption={`${count('errors')} ${count('errors') === 1 ? 'row' : 'rows'} with problems`}
+          segments={(['ready', 'skipped', 'errors'] as Tone[]).map((t) => ({ width: rows.length ? (count(t) / rows.length) * 100 : 0, className: t === 'ready' ? 'bg-emerald-500' : t === 'skipped' ? 'bg-amber-500' : 'bg-red-500' }))} />
+        {squares.map((q) => (
+          <StateCard key={q.label} label={q.label} note={q.note} count={q.count} tone={q.tone} badge={q.badge} icon={q.icon} pressed={filter === q.filter}
+                     onPress={() => { setFilter(filter === q.filter ? 'all' : q.filter); setOpened(null) }} />
+        ))}
+      </MetricsSection>
 
-      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <div className="flex gap-1 rounded-xl border border-zinc-200 dark:border-zinc-700 p-1" role="tablist" aria-label="Rows by">
-          <button type="button" role="tab" aria-selected={view === 'row'} className={viewClass(view === 'row')} onClick={() => setView('row')}>
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>By row
-          </button>
-          <button type="button" role="tab" aria-selected={view === 'error'} className={viewClass(view === 'error')} onClick={() => setView('error')}>
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z" /><path d="M3 13l9 5 9-5" /></svg>By reason / error
-          </button>
-        </div>
-        <label className="relative block w-full sm:w-80">
-          <span className="sr-only">Search the rows</span>
-          <svg aria-hidden="true" viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 fill-none stroke-current text-zinc-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.500-3.500" /></svg>
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by row, site, visit, action…"
-                 className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 py-2 pl-9 pr-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-blue-500" />
-        </label>
-      </div>
+      <TableCard label="Results of the file">
+        <TableToolbar searchLabel="Search the rows" placeholder="Search by row, site, visit, action…" text={query} onText={(t) => { setQuery(t); setOpened(null) }}
+          choice={{ label: 'Group by', value: view, onChange: (v) => { setView(v as 'row' | 'error'); setOpened(null) }, options: [{ value: 'row', label: 'Row' }, { value: 'error', label: 'Error' }], all: null }}
+          onReset={() => { setQuery(''); setFilter('all'); setRevision(''); setView('row'); setSort({ key: 'row', descending: false }); setOpened(null); setPicked(null) }} />
+        <ActiveFilters
+          filters={[{ label: `Revision: ${revision || 'All'}`, tone: 'blue' }, { label: `Group by: ${view === 'row' ? 'Row' : 'Error'}`, tone: 'blue' }, { label: `Show: ${FILTER_LABEL[filter]}`, tone: 'green' }, ...(query.trim() ? [{ label: `Search: ${query.trim()}`, tone: 'blue' as const }] : [])]}
+          summary={`${shown.length} of ${rows.length} rows match`} />
 
-      {view === 'error' ? (
-        <>
-          {kinds.length === 0 ? <p className="text-sm text-zinc-600 dark:text-zinc-400">No row has errors.</p> : (
-            <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <table className="w-full text-sm" aria-label="Errors of the file">
-                <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
-                  <tr>{['Error', 'Rows', ''].map((h, i) => <th key={i} scope="col" className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
+        {view === 'error' ? (
+          kinds.length === 0 ? <p className="px-4 py-4 text-sm text-zinc-600 dark:text-zinc-400">No row has errors.</p> : (
+            <div className="overflow-x-auto">
+              <table className={TABLE.table} aria-label="Errors of the file">
+                <thead className={TABLE.head}>
+                  <tr>
+                    <th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>
+                    {['Error', 'Rows'].map((h) => <th key={h} scope="col" className={TABLE.th}>{h}</th>)}
+                  </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                <tbody className={TABLE.body}>
                   {kinds.map(({ kind, rows: of, tone }) => (
-                    <tr key={kind} className={`align-top ${picked === kind ? TONES[tone].row : ''}`}>
-                      <td className={`px-3 py-2 font-medium ${TONES[tone].text}`}>{kind}</td>
-                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{plural(of.length, 'row', 'rows')}</td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <div className="flex justify-end">
-                          <IconButton label={`${picked === kind ? 'Hide' : 'View'} the rows with ${kind}`} title={picked === kind ? 'Hide the rows with this error' : 'View the rows with this error'}
-                                      expanded={picked === kind} onClick={() => setPicked(picked === kind ? null : kind)} path={ALERT_PATH} />
-                        </div>
-                      </td>
-                    </tr>
+                    <Fragment key={kind}>
+                      <tr className={TABLE.row(picked === kind)}>
+                        <ChevronCell open={picked === kind} label={`the rows with ${kind}`} onToggle={() => setPicked(picked === kind ? null : kind)} />
+                        <td className={`px-4 py-3 font-semibold ${TONES[tone].text}`}>{kind}</td>
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{plural(of.length, 'row', 'rows')}</td>
+                      </tr>
+                      {picked === kind && (
+                        <DetailsRow colSpan={3}>
+                          <table className="w-full text-sm" aria-label={`Rows with ${kind}`}>
+                            <thead className="text-xs text-zinc-500 dark:text-zinc-400">
+                              <tr>{['Row', 'Revision', 'Site', 'What went wrong'].map((h) => <th key={h} scope="col" className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                              {of.map((r) => (
+                                <tr key={r.row} className="align-top">
+                                  <td className="px-3 py-2 font-mono">{r.row}</td>
+                                  <td className="px-3 py-2 font-mono">{r.session || '—'}</td>
+                                  <td className="px-3 py-2 font-mono">{r.site || '—'}</td>
+                                  <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{saidOf(r)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </DetailsRow>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-          {picked && (
-            <div className="mt-3 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <table className="w-full text-sm" aria-label={`Rows with ${picked}`}>
-                <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
-                  <tr>{['Row', 'Revision', 'Site', 'What went wrong'].map((h) => <th key={h} scope="col" className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
+          )
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className={TABLE.table} aria-label="Rows of the file">
+                <thead className={TABLE.head}>
+                  <tr>
+                    <th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>
+                    {COLUMNS.map((c) => (
+                      <th key={c.key} scope="col" aria-sort={sort.key === c.key ? (sort.descending ? 'descending' : 'ascending') : 'none'} className={TABLE.th}>
+                        <button type="button" aria-label={`Sort by ${c.label}`} className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => setSort((now) => ({ key: c.key, descending: now.key === c.key && !now.descending }))}>
+                          {c.label}
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-3.5 w-3.5 fill-none stroke-current ${sort.key === c.key ? 'text-blue-500' : 'text-zinc-400 dark:text-zinc-600'}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            {sort.key === c.key ? (sort.descending ? <path d="M12 5v14M6 13l6 6 6-6" /> : <path d="M12 19V5M6 11l6-6 6 6" />) : <path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" />}
+                          </svg>
+                        </button>
+                      </th>
+                    ))}
+                    <th scope="col" className="px-4 py-3"><span className="sr-only">Options</span></th>
+                  </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                  {shownFlagged.filter((r) => kindOf(r) === picked).map((r) => (
-                    <tr key={r.row} className="align-top">
-                      <td className="px-3 py-2 font-mono">{r.row}</td>
-                      <td className="px-3 py-2 font-mono">{r.session || '—'}</td>
-                      <td className="px-3 py-2 font-mono">{r.site || '—'}</td>
-                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{saidOf(r)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
-          <table className="w-full text-sm" aria-label="Rows of the file">
-            <thead className="bg-zinc-50 dark:bg-zinc-800/70 text-zinc-800 dark:text-zinc-200">
-              <tr>
-                {COLUMNS.map((c) => (
-                  <th key={c.key} scope="col" aria-sort={sort.key === c.key ? (sort.descending ? 'descending' : 'ascending') : 'none'} className={`px-4 py-3 text-left font-semibold ${c.key === 'actions' ? '' : 'w-px whitespace-nowrap'}`}>
-                    <button type="button" aria-label={`Sort by ${c.label}`} className="flex items-center gap-1.5 font-semibold" onClick={() => setSort((now) => ({ key: c.key, descending: now.key === c.key && !now.descending }))}>
-                      {c.label}
-                      <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-3.5 w-3.5 fill-none stroke-current ${sort.key === c.key ? 'text-blue-500' : 'text-zinc-400 dark:text-zinc-600'}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        {sort.key === c.key ? (sort.descending ? <path d="M12 5v14M6 13l6 6 6-6" /> : <path d="M12 19V5M6 11l6-6 6 6" />) : <path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" />}
-                      </svg>
-                    </button>
-                  </th>
-                ))}
-                <th scope="col" className="w-px px-4 py-3"><span className="sr-only">Options</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-              {onPage.map((r) => {
-                const panel = opened?.row === r.row ? opened.panel : null
-                const toggle = (which: 'contents' | 'errors') => setOpened(panel === which ? null : { row: r.row, panel: which })
-                const name = `Row ${r.row}`
-                return (
-                  <Fragment key={r.row}>
-                    <tr className="align-middle">
-                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.row}</td>
-                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.session || '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.site || '—'}</td>
-                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.actions || '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.date ? <>{r.date}{r.time && <span className="text-zinc-500 dark:text-zinc-400"> {r.time}</span>}</> : '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${toneOf(r)}`}>
-                          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
-                          {badgeOf(r)}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <div className="flex items-center justify-end gap-1.5" role="group" aria-label={`Options of ${name}`}>
-                          <IconButton label={`View the contents of ${name}`} title="View what the row says" expanded={panel === 'contents'} onClick={() => toggle('contents')} path={ICON_PATHS.view} />
-                          {isFlagged(r) && <IconButton label={`View the errors of ${name}`} title="View what is wrong with the row" expanded={panel === 'errors'} onClick={() => toggle('errors')} path={ALERT_PATH} />}
-                        </div>
-                      </td>
-                    </tr>
-                    {panel && (
-                      <tr>
-                        <td colSpan={COLUMNS.length + 1} className={panel === 'contents' ? 'bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4' : 'px-4 pb-4 pt-3'}>
-                          {panel === 'errors' ? (
-                            <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <tbody className={TABLE.body}>
+                  {onPage.map((r) => {
+                    const panel = opened?.row === r.row ? opened.panel : null
+                    const toggle = (which: 'contents' | 'errors') => setOpened(panel === which ? null : { row: r.row, panel: which })
+                    const name = `Row ${r.row}`
+                    return (
+                      <Fragment key={r.row}>
+                        <tr className={TABLE.row(panel !== null)}>
+                          {/* the chevron opens the list of what is wrong with the row — a row that is fine has none */}
+                          <ChevronCell open={panel === 'errors'} available={isFlagged(r)} label={`the errors of ${name}`} onToggle={() => toggle('errors')} />
+                          <td className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.row}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-zinc-200">{r.session || '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-zinc-200">{r.site || '—'}</td>
+                          <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.actions || '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.date ? <>{r.date}{r.time && <span className="text-zinc-500 dark:text-zinc-400"> {r.time}</span>}</> : '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${toneOf(r)}`}>
+                              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+                              {badgeOf(r)}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <RowOptions label={`Options of ${name}`}>
+                              <IconButton compact label={`View the contents of ${name}`} title="View what the row says" expanded={panel === 'contents'} onClick={() => toggle('contents')} path={ICON_PATHS.view} />
+                            </RowOptions>
+                          </td>
+                        </tr>
+                        {panel && (
+                          <DetailsRow colSpan={COLUMNS.length + 2}>
+                            {panel === 'errors' ? (
                               <table className="w-full text-sm" aria-label={`Problems of ${name}`}>
-                                <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
+                                <thead className="text-xs text-zinc-500 dark:text-zinc-400">
                                   <tr>{['Error', 'What went wrong'].map((h) => <th key={h} scope="col" className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
                                 </thead>
-                                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                                   {/* a row that is not added says what is wrong; one that is, each thing to check in it */}
                                   {(warned(r) ? r.warnings! : [r.message]).map((message, i) => (
                                     <tr key={i} className="align-top">
-                                      <td className={`px-3 py-2 font-medium ${TONES[shownTone(r)].text}`}>{kindOf(r)}</td>
+                                      <td className={`px-3 py-2 font-semibold ${TONES[shownTone(r)].text}`}>{kindOf(r)}</td>
                                       <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{message}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
-                            </div>
-                          ) : (
-                            <>
-                              {r.result === 'ok' && r.message && <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-400">{r.message}</p>}
-                              {Object.keys(r.data ?? {}).length > 0 ? (
-                                <dl aria-label={`Contents of ${name}`} className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
-                                  {Object.entries(r.data!).map(([field, value]) => (
-                                    <div key={field} className="flex gap-2">
-                                      <dt className="text-zinc-500 dark:text-zinc-400">{labels[field] ?? field}</dt>
-                                      <dd className="font-mono text-xs break-all self-center">{value}</dd>
-                                    </div>
-                                  ))}
-                                </dl>
-                              ) : <p className="text-sm text-zinc-600 dark:text-zinc-400">The row has no contents.</p>}
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                )
-              })}
-              {sorted.length === 0 && <tr><td colSpan={COLUMNS.length + 1} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">No row matches.</td></tr>}
-            </tbody>
-          </table>
-          {sorted.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 dark:border-zinc-700 px-4 py-3 text-sm">
-              <span role="status" className="text-zinc-500 dark:text-zinc-400">Showing {(current - 1) * PER_PAGE + 1}–{Math.min(current * PER_PAGE, sorted.length)} of {sorted.length} rows</span>
-              {pages > 1 && (
-                <nav className="flex items-center gap-1" aria-label="Pages">
-                  <button type="button" className={`${btnOutline} !px-2.5 !py-1`} aria-label="Previous page" disabled={current === 1} onClick={() => goTo(current - 1)}>‹</button>
-                  {pageNumbers(current, pages).map((n, i) => n === null
-                    ? <span key={`gap${i}`} className="px-1 text-zinc-400">…</span>
-                    : <button key={n} type="button" aria-label={`Page ${n}`} aria-current={n === current ? 'page' : undefined} onClick={() => goTo(n)}
-                              className={`px-2.5 py-1 rounded ${n === current ? 'bg-blue-600 text-white' : 'border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>{n}</button>)}
-                  <button type="button" className={`${btnOutline} !px-2.5 !py-1`} aria-label="Next page" disabled={current === pages} onClick={() => goTo(current + 1)}>›</button>
-                </nav>
-              )}
+                            ) : (
+                              <>
+                                {r.result === 'ok' && r.message && <p className="mb-3 text-xs text-zinc-600 dark:text-zinc-400">{r.message}</p>}
+                                {Object.keys(r.data ?? {}).length > 0 ? (
+                                  <dl aria-label={`Contents of ${name}`} className="grid grid-cols-1 gap-x-8 gap-y-2 text-xs md:grid-cols-2">
+                                    {Object.entries(r.data!).map(([field, value]) => (
+                                      <DetailLine key={field} name={labels[field] ?? field} kind="mono">{value}</DetailLine>
+                                    ))}
+                                  </dl>
+                                ) : <p className="text-sm text-zinc-600 dark:text-zinc-400">The row has no contents.</p>}
+                              </>
+                            )}
+                          </DetailsRow>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                  {sorted.length === 0 && <tr><td colSpan={COLUMNS.length + 2} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">No row matches.</td></tr>}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
-      )}
+            {sorted.length > 0 && (
+              <TableFooter from={(current - 1) * PER_PAGE + 1} to={Math.min(current * PER_PAGE, sorted.length)} total={sorted.length} noun="rows" page={current} pages={pages} onPage={goTo} />
+            )}
+          </>
+        )}
+      </TableCard>
     </div>
   )
 }

@@ -167,7 +167,7 @@ export function TableCard({ label, children }: { label: string; children: ReactN
 /** The search of the table, a choice among a few of what to show (the status, the uploader), and the button that puts all the filters back. */
 export function TableToolbar({ searchLabel, placeholder, text, onText, choice, onReset }: {
   searchLabel: string; placeholder: string; text: string; onText: (text: string) => void
-  choice?: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }
+  choice?: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; /** The text of the choice that keeps everything — none (null) when one of the options is always picked, as in Group by. */ all?: string | null }
   onReset: () => void
 }) {
   return (
@@ -185,7 +185,7 @@ export function TableToolbar({ searchLabel, placeholder, text, onText, choice, o
         {choice && (
           <label className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{choice.label}
             <select aria-label={choice.label} className="cursor-pointer rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-white dark:bg-zinc-950 px-3 py-2 text-xs text-zinc-900 dark:text-zinc-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" value={choice.value} onChange={(e) => choice.onChange(e.target.value)}>
-              <option value="">All</option>
+              {choice.all !== null && <option value="">{choice.all ?? 'All'}</option>}
               {choice.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
