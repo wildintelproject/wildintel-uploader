@@ -341,7 +341,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
   }) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <PageHeader icon={MENU_ICONS.upload} title="Upload deployment to Trapper" description="Sends the deployments of a revision to Trapper. Anything missing there is created, then the images are sent for Trapper to process."
         parent="Manage uploads" onParent={onBack} />
 

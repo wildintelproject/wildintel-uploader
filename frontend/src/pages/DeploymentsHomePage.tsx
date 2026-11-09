@@ -11,7 +11,7 @@ interface Props {
 /** Manage the deployments: import one from a folder of images, import one or several from the closed visits, or look at the status of the deployments. */
 export default function DeploymentsHomePage({ onBack, onChoose }: Props) {
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <SectionHeader icon={MENU_ICONS.deployment} title="Manage deployments" description="Import the images of a deployment, or see how far the deployments are." onMenu={onBack} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TaskCard icon={<><path d="M18 20V10M12 20V4M6 20v-6" /></>} title="Deployments dashboard"

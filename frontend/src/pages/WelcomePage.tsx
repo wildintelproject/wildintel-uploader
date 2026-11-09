@@ -36,7 +36,7 @@ function useStanding() {
 export default function WelcomePage({ onStart }: Props) {
   const { host, project } = useStanding()
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-10 flex flex-col items-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+    <div className="mx-auto max-w-[1100px] px-4 py-10 flex flex-col items-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
       <div className="mb-1 text-4xl">📤</div>
       <h1 className="text-2xl font-bold mb-2 text-center">WildINTEL Uploader</h1>
       <p className="text-zinc-500 dark:text-zinc-400 mb-8 text-base text-center max-w-[480px]">

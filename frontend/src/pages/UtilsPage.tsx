@@ -36,7 +36,7 @@ export default function UtilsPage({ onBack, onOpenSettings, settingsOpen }: Prop
   }
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <PageHeader icon={MENU_ICONS.utils} title="Utilities" description="Maintenance of the local collections." parent="Menu" onParent={onBack}
         aside={<ActiveProjectCard of="The utilities" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

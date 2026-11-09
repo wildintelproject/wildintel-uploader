@@ -210,7 +210,7 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
   )
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <PageHeader icon={UTIL_ICONS.backup} title="Backup and restore" parent="Utilities" onParent={onBack}
         description="Keep the settings and the data of a research project — its visits and the deployments you choose, with or without their images — in a file, and restore them from it."
         aside={<ActiveProjectCard of="The backup" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />} />

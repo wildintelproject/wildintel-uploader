@@ -11,7 +11,7 @@ interface Props {
 /** Manage the uploads to Trapper: send a deployment, or look at the status of the uploads of the deployments and the revisions. */
 export default function UploadsHomePage({ onBack, onChoose }: Props) {
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <SectionHeader icon={MENU_ICONS.upload} title="Manage uploads" description="Send a deployment to Trapper, or see how far the uploads are." onMenu={onBack} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TaskCard icon={<><path d="M18 20V10M12 20V4M6 20v-6" /></>} title="Uploads dashboard"

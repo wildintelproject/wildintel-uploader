@@ -197,7 +197,7 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
   const runCount = first ? (last ? names.indexOf(last) - names.indexOf(first) + 1 : names.length - names.indexOf(first)) : 0
 
   return (
-    <div className="max-w-screen-lg mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-[1100px] mx-auto px-4 py-8 space-y-6">
       <PageHeader icon={UTIL_ICONS.timefix} title="Check and fix dates and times" parent={parent} onParent={onBack} aside={<ActiveProjectCard of="The dates" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />}
         description={<>For the images of a card copied to a folder, whose camera clock went wrong: see where the time jumps, shift a run of images by an offset — or to match an image
           whose real time you know — and remove the images whose time can&rsquo;t be trusted. The dates are checked against the period of the visit that left the camera.

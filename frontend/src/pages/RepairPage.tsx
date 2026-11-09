@@ -157,7 +157,7 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
   const validCount = checkedList.length - notValid.length
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <PageHeader icon={UTIL_ICONS.repair} title="Repair local deployments" parent="Utilities" onParent={onBack} aside={<ActiveProjectCard of="The repair" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />}
         description={<>A deployment is <strong>valid</strong> when its <span className="font-mono">seal.json</span> still matches it. For the ones that are not, the metadata files are written again
         from what the folder holds — the dates of the images, their camera, the location&rsquo;s details — and the images are validated and postvalidated again. If the
