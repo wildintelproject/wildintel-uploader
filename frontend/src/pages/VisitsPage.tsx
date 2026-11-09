@@ -1410,7 +1410,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">{csvName ?? 'No file chosen'}</span>
                 <input id="visits-csv" aria-label="CSV file" type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; void readCsv(file) }} />
               </div>
-              <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (same site, day and time) is left as it is.</p>
+              <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (the same revision and site, whatever the day) is left as it is; one with no number, if it has the same site, day and time.</p>
             </div>
             )}
             {(source === 'wildintel' || source === 'csv') && (

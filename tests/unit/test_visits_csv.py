@@ -335,3 +335,25 @@ def test_the_rows_refused_for_a_rule_say_which_rule_in_their_label():
     mapping = visits_csv.suggest_mapping(text)["mapping"]
     labels = {r["row"]: r["label"] for r in visits_csv.parse_visits(text, locations[:1], [], "", "mapped", mapping)["rows"] if r["result"] == "problem"}
     assert labels == {3: "Something its actions ask is missing", 4: "Revision started before the one before is finished"}
+
+
+# ── two visits are the same when they are of the same revision and the same site: the day is no part of it ──────
+
+def test_a_visit_already_kept_is_the_one_of_the_same_revision_and_site_whatever_the_day_and_a_row_with_no_revision_is_told_by_its_day():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}]
+    kept = [{"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "08:30:00", "when": "2026-09-14T08:30:00Z", "actions": ["Installation"], "camera_id": "C1", "sd": "1"}]
+
+    same_revision = "location_id,actions,date,time,session,camera_id,sd\nWICP_0001,Installation,2026-09-20,10:00:00,R0001,C1,1\n"      # another day: the same visit
+    result = visits_csv.parse_visits(same_revision, locations, kept, "", "mapped", visits_csv.suggest_mapping(same_revision)["mapping"])
+    assert result["skipped"] == 1 and result["visits"] == []
+    assert "The R0001 visit of WICP_0001 is already kept" in result["rows"][0]["message"] and "2026" not in result["rows"][0]["message"]
+
+    another_revision = "location_id,actions,date,time,session,camera_id,num_photos\nWICP_0001,Revision,2026-09-14,08:30:00,R0002,C1,10\n"    # the same day and time, but another revision
+    result = visits_csv.parse_visits(another_revision, locations, kept, "", "mapped", visits_csv.suggest_mapping(another_revision)["mapping"])
+    assert result["skipped"] == 0                                                          # it is not the same visit: the rules of a visit say what is wrong with it
+    assert result["rows"][0]["result"] == "problem"
+
+    no_revision = "location_id,actions,date,time,camera_id,sd\nWICP_0001,Installation,2026-09-14,08:30:00,C1,1\n"       # no revision to compare: the day and the time say
+    result = visits_csv.parse_visits(no_revision, locations, kept, "", "mapped", visits_csv.suggest_mapping(no_revision)["mapping"])
+    assert result["skipped"] == 1 and "on 2026-09-14 at 08:30:00 is already kept" in result["rows"][0]["message"]

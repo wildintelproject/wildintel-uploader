@@ -224,8 +224,9 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
             <p className="text-zinc-500 dark:text-zinc-400 text-sm">The visits kept to a research project.</p>
           </div>
           {project && visits !== null && visits.length > 0 && (
-            <button type="button" className={`${btnOutline} ml-4`} disabled={exporting} onClick={() => void exportVisits()}
+            <button type="button" className={`${btnOutline} ml-4 inline-flex items-center gap-2`} disabled={exporting} onClick={() => void exportVisits()}
                     title="Download the visits of this research project as a CSV file, to import them again in Register visits › CSV file">
+              <Icon path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></>} className="h-4 w-4" />
               {exporting ? 'Exporting…' : 'Export visits (CSV)'}
             </button>
           )}

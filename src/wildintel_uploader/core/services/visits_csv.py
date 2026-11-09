@@ -561,11 +561,13 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             report[n] |= {"result": "new_site", "label": "Site is not a location", "message": f"{site} is not a location of the research project: the visit is held until the site is added or the file corrected."}
             continue
         again = (str(record["session"]).upper(), record["location_id"].lower())
-        if (record["location_id"].lower(), record["date"], record["time"]) in already or ("session" in row and again in same_visit):
+        # two visits are the same when they are of the same revision and the same site, whatever the day: the day is not part of it. Only a row with no revision —
+        # it gets the next of its site, so there is nothing to compare — is told by the day and the time it says.
+        by_time = (record["location_id"].lower(), record["date"], record["time"]) in already
+        if ("session" in row and again in same_visit) or ("session" not in row and by_time):
             skipped += 1
             closed = visit_rules.is_closed_revision(record["session"], kept, locations)
-            same_time = (record["location_id"].lower(), record["date"], record["time"]) in already
-            report[n] |= {"result": "already_kept", "label": "Already kept", "message": (f"A visit to {record['location_id']} on {record['date']} at {record['time']} is already kept: it is not imported again." if same_time
+            report[n] |= {"result": "already_kept", "label": "Already kept", "message": (f"A visit to {record['location_id']} on {record['date']} at {record['time']} is already kept: it is not imported again." if "session" not in row
                                                               else f"The {record['session']} visit of {record['location_id']} is already kept: it is not imported again."
                                                                  + (f" {record['session']} is closed — every location has its visit — so nothing new can be imported in it." if closed else ""))}
             continue

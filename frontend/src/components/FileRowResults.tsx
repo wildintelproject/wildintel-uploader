@@ -168,10 +168,10 @@ export default function FileRowResults({ rows, labels = {} }: {
                       <td className={`px-3 py-2 font-medium ${TONES[tone].text}`}>{kind}</td>
                       <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{plural(of.length, 'row', 'rows')}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <button type="button" aria-pressed={picked === kind} aria-label={`${picked === kind ? 'Hide' : 'View'} the rows with ${kind}`}
-                                className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => setPicked(picked === kind ? null : kind)}>
-                          {picked === kind ? 'Hide the rows' : 'View the rows'}
-                        </button>
+                        <div className="flex justify-end">
+                          <IconButton label={`${picked === kind ? 'Hide' : 'View'} the rows with ${kind}`} title={picked === kind ? 'Hide the rows with this error' : 'View the rows with this error'}
+                                      expanded={picked === kind} onClick={() => setPicked(picked === kind ? null : kind)} path={ALERT_PATH} />
+                        </div>
                       </td>
                     </tr>
                   ))}
