@@ -129,7 +129,7 @@ export default function App() {
               : deploymentsView === 'many'
                 ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setDeploymentsView(null)} />
               : deploymentsView === 'status'
-                ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onShowVisit={goToVisit} onUpload={goToUpload} onShowUploads={goToUploadStatus} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
+                ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onShowVisit={goToVisit} onUpload={goToUpload} onShowUploads={goToUploadStatus} onImportImages={goToImportOfVisit} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
                 : <DeploymentsHomePage onChoose={setDeploymentsView} onBack={() => setTask(null)} />
             : task === 'session'
               ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />

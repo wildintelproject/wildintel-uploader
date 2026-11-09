@@ -5,7 +5,7 @@ import { DashboardHeader, HelpButton } from '../components/DashboardParts'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import FieldDeployments from '../components/FieldDeployments'
 import { readDeployment } from '../deploymentDetails'
-import type { FieldDeployment, UploadTarget } from '../types'
+import type { ClosedVisitTarget, FieldDeployment, UploadTarget } from '../types'
 import { btnOutline } from './ImportDeploymentPage'
 import type { VisitFocus } from './VisitBookPage'
 
@@ -22,15 +22,28 @@ interface Props {
   onUpload?: (target: UploadTarget) => void
   /** Goes to the uploads dashboard, on the uploads of a deployment. */
   onShowUploads?: (deploymentId: string) => void
+  /** Goes to Import deployment, on the visit that left the camera: to create the deployment of a card that was collected. */
+  onImportImages?: (target: ClosedVisitTarget) => void
 }
 
 /** The dashboard of the deployments of the default research project — the statistics: which are closed with their images stored, which still have the camera out, which are not on Trapper yet. */
-export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsOpen, focus, onShowVisit, onUpload, onShowUploads }: Props) {
+export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsOpen, focus, onShowVisit, onUpload, onShowUploads, onImportImages }: Props) {
   const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const error = projectError ?? loadError
+
+  // The deployment is of the visit that left the camera: it is found in the visits of the research project.
+  async function create(d: FieldDeployment) {
+    if (!project || !onImportImages) return
+    try {
+      const { results } = await api.visitBook(project.acronym)
+      const visit = results.find((v) => !v.not_done && !v.unknown && v.session === d.start_session && v.location_id.toLowerCase() === d.site.toLowerCase())
+      if (!visit) { setLoadError(`The visit ${d.start_session ?? ''} to ${d.site}, which left the camera, was not found.`); return }
+      onImportImages({ researchProjectId: project.acronym, visit })
+    } catch (e) { setLoadError(e instanceof Error ? e.message : 'Could not read the visits.') }
+  }
 
   useEffect(() => {
     setDeployments(null); setLoadError(null)
@@ -50,7 +63,7 @@ export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsO
         aside={project !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The dashboard" onOpenSettings={onOpenSettings} /> : undefined} />
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} helpOpen={helpOpen} onCloseHelp={() => setHelpOpen(false)} onShowSd={onOpenSettings && ((label) => onOpenSettings('sdcards', project.acronym, label))} onShowLocation={onOpenSettings && ((site) => onOpenSettings('locations', project.acronym, site))} onShowUploads={onShowUploads} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
+      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} onCreate={onImportImages ? (d) => void create(d) : undefined} helpOpen={helpOpen} onCloseHelp={() => setHelpOpen(false)} onShowSd={onOpenSettings && ((label) => onOpenSettings('sdcards', project.acronym, label))} onShowLocation={onOpenSettings && ((site) => onOpenSettings('locations', project.acronym, site))} onShowUploads={onShowUploads} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
 
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>

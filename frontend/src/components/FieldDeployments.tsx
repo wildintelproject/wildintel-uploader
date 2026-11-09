@@ -31,7 +31,7 @@ const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
-export default function FieldDeployments({ deployments: every, onShowSd, onShowLocation, onShowUploads, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload, helpOpen = false, onCloseHelp }: {
+export default function FieldDeployments({ deployments: every, onShowSd, onShowLocation, onShowUploads, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload, onCreate, helpOpen = false, onCloseHelp }: {
   /** The help and the legend are open: the panel that says them is this component's, as it knows the states. */
   helpOpen?: boolean
   onCloseHelp?: () => void
@@ -46,6 +46,8 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   loadDetails?: (deploymentId: string) => Promise<DeploymentFields | null>
   /** Goes to upload the deployment — its revision is what the upload page starts from. */
   onUpload?: (deployment: FieldDeployment) => void
+  /** Goes to create the deployment — to import its images — of one that is planned and whose card was already collected. */
+  onCreate?: (deployment: FieldDeployment) => void
 }) {
   // Every card that was left is a deployment to make; the ones whose camera was stolen will not be made (Not created).
   const deployments = every
@@ -192,6 +194,11 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                             const after = neighbour(d, 1)
                             return after && <IconButton compact label={`Show the next deployment of ${d.site} (${after.collection})`} title={`The next revision of this location: ${after.collection}`} onClick={() => setJump(after.deployment_id)} path={ICON_PATHS.after} />
                           })()}
+                          {/* the card was collected and the images are not stored: the deployment can be made now */}
+                          {phaseOf(d) === 'planned' && d.status === 'closed' && onCreate && (
+                            <IconButton compact label={`Create the deployment ${d.deployment_id}`} title="Create the deployment" onClick={() => onCreate(d)}
+                                        path={<><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><circle cx="12" cy="13" r="3.5" /></>} />
+                          )}
                           {phaseOf(d) === 'created' && onUpload && statesOf(d).some((u) => u.destination === 'trapper' && u.state !== 'done') && (
                             <IconButton compact label={`Upload the deployment ${d.deployment_id}`} title={statesOf(d).some((u) => u.state === 'failed') ? 'Upload the images again' : 'Upload the images'} onClick={() => onUpload(d)} path={ICON_PATHS.upload} />
                           )}

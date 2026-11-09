@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
 import DeploymentStatusPage from './DeploymentStatusPage'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), fieldDeployments: vi.fn(), getSettings: vi.fn(), collectionPath: vi.fn(), listLocalDeployments: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), fieldDeployments: vi.fn(), getSettings: vi.fn(), collectionPath: vi.fn(), listLocalDeployments: vi.fn(), visitBook: vi.fn() } }))
 const mockedApi = vi.mocked(api)
 
 const deployment = (over: object) => ({
@@ -198,5 +198,20 @@ describe('DeploymentStatusPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Upload the deployment R0003-TATR_0002' }))
     expect(onUpload).toHaveBeenCalledWith({ researchProjectId: 'TATR', collection: 'R0003' })
     expect(screen.getByRole('button', { name: 'Upload the deployment R0003-TATR_0004' })).toHaveAttribute('title', 'Upload the images again')   // a failed one is tried again
+  })
+
+  it('has a button to create the deployment of a card that was collected and whose images are not stored, which goes to Import deployment on the visit that left the camera', async () => {
+    const visit = { location_id: 'TATR_0003', session: 'R0003', date: '2024-09-04', time: '09:00:00', actions: ['Installation'], sd: 'C8' }
+    mockedApi.visitBook.mockResolvedValue({ results: [{ ...visit, location_id: 'TATR_0001' }, visit] } as never)
+    const onImportImages = vi.fn()
+    render(<DeploymentStatusPage onBack={vi.fn()} onImportImages={onImportImages} />)
+
+    const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
+    // the one that is created, the one that is still open and the one that is planned with the card collected: only the last can be made now
+    expect(within(region).queryByRole('button', { name: 'Create the deployment R0003-TATR_0002' })).not.toBeInTheDocument()
+    expect(within(region).queryByRole('button', { name: 'Create the deployment R0004-TATR_0001' })).not.toBeInTheDocument()
+    await userEvent.click(within(region).getByRole('button', { name: 'Create the deployment R0003-TATR_0003' }))
+    await waitFor(() => expect(onImportImages).toHaveBeenCalledWith({ researchProjectId: 'TATR', visit }))
+    expect(mockedApi.visitBook).toHaveBeenCalledWith('TATR')
   })
 })

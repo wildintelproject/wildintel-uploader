@@ -128,7 +128,7 @@ export function MetricsSection({ label, open, onToggle, hint, title = 'Status me
     <section aria-label={label} className="mb-5 space-y-2">
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          <FoldButton open={open} onToggle={onToggle} name={`the ${title.toLowerCase()}`} />{title}
+          <FoldButton open={open} onToggle={onToggle} name={title === 'Status metrics & filters' ? 'the status metrics' : `the ${title.replace(/ & filters$/, '').toLowerCase()}`} />{title}
         </span>
         {open && <span className="text-xs text-zinc-500 dark:text-zinc-400">{hint}</span>}
       </div>
