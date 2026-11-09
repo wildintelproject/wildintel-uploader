@@ -1,0 +1,45 @@
+location_id,session,date,time,actions,trappers,status,camera_id,camera_model,sd,card_batteries_ok,num_photos,date_time_ok,camera_height,camera_interval,comments
+WICP_02_001,R0010,2027-02-01,08:30:00,Revision,Ana Pérez,OK,BR5071050724,,1,OK,2170,Yes,,,"Collects the card left before R0010, which is not in this file, and leaves 1"
+WICP_02_002,R0010,2027-02-01,10:05:00,Revision,Ana Pérez,OK,RE5699252753,,2,OK,2381,Yes,,,"Collects the card left before R0010, which is not in this file, and leaves 2"
+WICP_02_003,R0010,2027-02-01,11:40:00,Revision,Ana Pérez,OK,RE1161042648,,3,OK,2592,Yes,,,"Collects the card left before R0010, which is not in this file, and leaves 3"
+WICP_02_004,R0010,2027-02-01,13:15:00,Revision,Ana Pérez,OK,SP1776213899,,4,OK,2803,Yes,,,"Collects the card left before R0010, which is not in this file, and leaves 4"
+WICP_02_001,R0011,2027-02-15,08:30:00,Revision,Luis Gómez,OK,BR5071050724,,5,OK,2207,Yes,,,Collects card 1 and leaves 5
+WICP_02_002,R0011,2027-02-15,10:05:00,Revision,Luis Gómez,OK,RE5699252753,,6,OK,2418,Yes,,,Collects card 2 and leaves 6
+WICP_02_003,R0011,2027-02-15,11:40:00,Revision,Luis Gómez,OK,RE1161042648,,7,OK,2629,Yes,,,Collects card 3 and leaves 7
+WICP_02_004,R0011,2027-02-15,13:15:00,Revision,Luis Gómez,OK,SP1776213899,,8,OK,2840,Yes,,,Collects card 4 and leaves 8
+WICP_02_001,R0012,2027-03-01,08:30:00,Revision,Ana Pérez,OK,BR5071050724,,1,OK,2244,Yes,,,Collects card 5 and leaves 1
+WICP_02_002,R0012,2027-03-01,10:05:00,Revision,Ana Pérez,OK,RE5699252753,,2,OK,2455,Yes,,,Collects card 6 and leaves 2
+WICP_02_003,R0012,2027-03-01,11:40:00,Revision,Ana Pérez,OK,RE1161042648,,3,OK,2666,Yes,,,Collects card 7 and leaves 3
+WICP_02_004,R0012,2027-03-01,13:15:00,Revision,Ana Pérez,OK,SP1776213899,,4,OK,2877,Yes,,,Collects card 8 and leaves 4
+WICP_02_001,R0013,2027-03-15,08:30:00,Revision,Luis Gómez,OK,BR5071050724,,5,OK,2281,Yes,,,Collects card 1 and leaves 5
+WICP_02_002,R0013,2027-03-15,10:05:00,Revision,Luis Gómez,OK,RE5699252753,,6,OK,2492,Yes,,,Collects card 2 and leaves 6
+WICP_02_003,R0013,2027-03-15,11:40:00,Revision,Luis Gómez,OK,RE1161042648,,7,OK,2703,Yes,,,Collects card 3 and leaves 7
+WICP_02_004,R0013,2027-03-15,13:15:00,Revision,Luis Gómez,OK,SP1776213899,,8,OK,2914,Yes,,,Collects card 4 and leaves 8
+WICP_02_001,R0014,2027-03-29,08:30:00,Revision,Ana Pérez,OK,BR5071050724,,1,OK,2318,Yes,,,Collects card 5 and leaves 1
+WICP_02_002,R0014,2027-03-29,10:05:00,Revision,Ana Pérez,OK,RE5699252753,,2,OK,2529,Yes,,,Collects card 6 and leaves 2
+WICP_02_003,R0014,2027-03-29,11:40:00,Revision,Ana Pérez,OK,RE1161042648,,3,OK,2740,Yes,,,Collects card 7 and leaves 3
+WICP_02_004,R0014,2027-03-29,13:15:00,Revision,Ana Pérez,OK,SP1776213899,,4,OK,2951,Yes,,,Collects card 8 and leaves 4
+WICP_02_001,R0015,2027-04-12,08:30:00,Revision,Luis Gómez,OK,BR5071050724,,5,OK,2355,Yes,,,Collects card 1 and leaves 5
+WICP_02_002,R0015,2027-04-12,10:05:00,Revision,Luis Gómez,OK,RE5699252753,,6,OK,2566,Yes,,,Collects card 2 and leaves 6
+WICP_02_003,R0015,2027-04-12,11:40:00,Revision,Luis Gómez,OK,RE1161042648,,7,OK,2777,Yes,,,Collects card 3 and leaves 7
+WICP_02_004,R0015,2027-04-12,13:15:00,Revision,Luis Gómez,OK,SP1776213899,,8,OK,2988,Yes,,,Collects card 4 and leaves 8
+WICP_02_001,R0016,2027-04-26,08:30:00,Revision,Ana Pérez,OK,BR5071050724,,1,OK,2392,Yes,,,Collects card 5 and leaves 1
+WICP_02_002,R0016,2027-04-26,10:05:00,Revision,Ana Pérez,OK,RE5699252753,,2,OK,2603,Yes,,,Collects card 6 and leaves 2
+WICP_02_003,R0016,2027-04-26,11:40:00,Revision,Ana Pérez,OK,RE1161042648,,3,OK,2814,Yes,,,Collects card 7 and leaves 3
+WICP_02_004,R0016,2027-04-26,13:15:00,Revision,Ana Pérez,OK,SP1776213899,,4,OK,3025,Yes,,,Collects card 8 and leaves 4
+WICP_02_001,R0017,2027-05-10,08:30:00,Revision,Luis Gómez,OK,BR5071050724,,5,OK,2429,Yes,,,Collects card 1 and leaves 5
+WICP_02_002,R0017,2027-05-10,10:05:00,Revision,Luis Gómez,OK,RE5699252753,,6,OK,2640,Yes,,,Collects card 2 and leaves 6
+WICP_02_003,R0017,2027-05-10,11:40:00,Revision,Luis Gómez,OK,RE1161042648,,7,OK,2851,Yes,,,Collects card 3 and leaves 7
+WICP_02_004,R0017,2027-05-10,13:15:00,Revision,Luis Gómez,OK,SP1776213899,,8,OK,3062,Yes,,,Collects card 4 and leaves 8
+WICP_02_001,R0018,2027-05-24,08:30:00,Revision,Ana Pérez,OK,BR5071050724,,1,OK,2466,Yes,,,Collects card 5 and leaves 1
+WICP_02_002,R0018,2027-05-24,10:05:00,Revision,Ana Pérez,OK,RE5699252753,,2,OK,2677,Yes,,,Collects card 6 and leaves 2
+WICP_02_003,R0018,2027-05-24,11:40:00,Revision,Ana Pérez,OK,RE1161042648,,3,OK,2888,Yes,,,Collects card 7 and leaves 3
+WICP_02_004,R0018,2027-05-24,13:15:00,Revision,Ana Pérez,OK,SP1776213899,,4,OK,3099,Yes,,,Collects card 8 and leaves 4
+WICP_02_001,R0019,2027-06-07,08:30:00,Revision,Luis Gómez,OK,BR5071050724,,5,OK,2503,Yes,,,Collects card 1 and leaves 5
+WICP_02_002,R0019,2027-06-07,10:05:00,Revision,Luis Gómez,OK,RE5699252753,,6,OK,2714,Yes,,,Collects card 2 and leaves 6
+WICP_02_003,R0019,2027-06-07,11:40:00,Revision,Luis Gómez,OK,RE1161042648,,7,OK,2925,Yes,,,Collects card 3 and leaves 7
+WICP_02_004,R0019,2027-06-07,13:15:00,Revision,Luis Gómez,OK,SP1776213899,,8,OK,3136,Yes,,,Collects card 4 and leaves 8
+WICP_02_001,R0020,2027-06-21,08:30:00,Revision,Ana Pérez,OK,BR5071050724,,1,OK,2540,Yes,,,Collects card 5 and leaves 1
+WICP_02_002,R0020,2027-06-21,10:05:00,Revision,Ana Pérez,OK,RE5699252753,,2,OK,2751,Yes,,,Collects card 6 and leaves 2
+WICP_02_003,R0020,2027-06-21,11:40:00,Revision,Ana Pérez,OK,RE1161042648,,3,OK,2962,Yes,,,Collects card 7 and leaves 3
+WICP_02_004,R0020,2027-06-21,13:15:00,Revision,Ana Pérez,OK,SP1776213899,,4,OK,3173,Yes,,,Collects card 8 and leaves 4
