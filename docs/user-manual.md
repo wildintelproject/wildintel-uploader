@@ -98,6 +98,8 @@ The drawing reads from left to right, and the state of a visit is decided in thr
 2. **When it is registered**, what the visit did gives its state. If it **left a camera** — an Installation, or a Revision, which looks at the camera and leaves it out again — it is **Deployed**: the camera is out and its card is still to be collected. If it **could not be made** (its status is *Not revised*) it is **Not visited**: nothing was done at it. If it **left no camera** — a Desinstallation takes it away, a Stolen visit finds it gone, an Archive gives the site up — it has **no state**.
 3. **When a later visit to the site** collects the card, or finds the camera stolen, the **Deployed** visit is closed: **Collected** if its card was collected, **Stolen** if the camera was found stolen — there are no images to import. While neither happens it stays *Deployed*. A Revision does both things: it closes the visit before it and, when it leaves a card, it is itself *Deployed* until the next visit.
 
+The table sums up each state and what it means.
+
 | State | What it says |
 |---|---|
 | **Planned** | The visit is not made yet: a location with no visit in a revision that has them. |
