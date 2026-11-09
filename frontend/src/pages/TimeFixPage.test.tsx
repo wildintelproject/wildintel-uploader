@@ -42,6 +42,8 @@ beforeEach(() => {
 
 async function openFolder() {
   render(<TimeFixPage />)
+  await userEvent.click(await screen.findByLabelText('Revision'))
+  await userEvent.click(await screen.findByRole('option', { name: 'R0001' }))
   await userEvent.click(await screen.findByLabelText('Visit that left the camera'))
   await userEvent.click(await screen.findByRole('option', { name: /DONA_0011/ }))
   await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
@@ -53,9 +55,9 @@ async function openFolder() {
 describe('TimeFixPage', () => {
   it('shows the segments and shifts one by its suggested offset', async () => {
     await openFolder()
-    expect(screen.getByText('Outside its period')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Shift +2 d 1 h 1 s' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Shift the dates' }))
+    expect(screen.getAllByText('Outside its period')).toHaveLength(2)      // in the list of segments, and in the step that fixes it
+    await userEvent.click(screen.getByRole('button', { name: /^Move them into the period/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Move 1 image(s)' }))
 
     expect(mockedApi.timefixShift).toHaveBeenCalledWith(TARGET, 'IMG_0002.JPG', 'IMG_0002.JPG', OFFSET, expect.stringContaining('IMG_0002.JPG'))
     expect(await screen.findByText(/shifted \+2 d 1 h 1 s/)).toBeInTheDocument()
@@ -111,7 +113,7 @@ describe('leaving', () => {
 
   it('keeps the header short, with a Help button that opens what each option does', async () => {
     render(<TimeFixPage />)
-    expect(screen.queryByText(/time_corrections.json/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/work on the copy, never on the card/)).not.toBeInTheDocument()      // the header is short: that is in the help
     await userEvent.click(screen.getByRole('button', { name: 'Help' }))
     const help = screen.getByRole('dialog', { name: 'Dates and times: help' })
     expect(help).toHaveTextContent('never on the card')
@@ -130,5 +132,50 @@ describe('leaving', () => {
     expect(screen.getByLabelText('Folder').closest('.hidden')).toBeNull()
     expect(screen.getByLabelText('Folder')).toHaveValue(FOLDER)
     expect(screen.queryByRole('heading', { name: 'Segments' })).not.toBeInTheDocument()
+  })
+
+  it('asks for the revision first, and then for the visits to a site in that revision only', async () => {
+    mockedApi.closedVisits.mockResolvedValue({ results: [
+      CLOSED, { visit: visit({ location_id: 'DONA_0012' }), end: CLOSED.end },
+      { visit: visit({ session: 'R0002', date: '2026-10-01', location_id: 'DONA_0013' }), end: CLOSED.end },
+    ] })
+    render(<TimeFixPage />)
+    expect(await screen.findByLabelText('Visit that left the camera')).toBeDisabled()          // nothing to pick from until the revision is
+    await userEvent.click(await screen.findByLabelText('Revision'))
+    expect(await screen.findAllByRole('option')).toHaveLength(2)                               // R0002 and R0001
+    await userEvent.click(screen.getByRole('option', { name: 'R0001' }))
+    await userEvent.click(await screen.findByLabelText('Visit that left the camera'))
+    const sites = screen.getAllByRole('option').map((o) => o.textContent ?? '')
+    expect(sites).toHaveLength(2)
+    expect(sites.join(' ')).toMatch(/DONA_0011/)
+    expect(sites.join(' ')).toMatch(/DONA_0012/)
+    expect(sites.join(' ')).not.toMatch(/DONA_0013/)
+  })
+
+  it('has the five steps from the start, the last four locked', async () => {
+    render(<TimeFixPage />)
+    for (const title of ['Choose the folder and the visit', 'Check the dates', 'Fix the segments', 'Fix the dates', 'Fixes made']) expect(await screen.findByRole('heading', { name: new RegExp(`^${title}`) })).toBeInTheDocument()
+    expect(screen.getAllByRole('img', { name: 'Locked' })).toHaveLength(4)
+    expect(screen.queryByRole('heading', { name: 'Segments' })).not.toBeInTheDocument()
+  })
+
+  it('opens the steps that follow once the dates are checked', async () => {
+    await openFolder()
+    expect(screen.queryByRole('img', { name: 'Locked' })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Shift dates and times' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Fixes made' })).toBeInTheDocument()
+  })
+
+  it('asks, of each segment that is not in its period, whether to move its images into it or to remove them — and moves nothing until it is confirmed', async () => {
+    await openFolder()
+    expect(screen.getAllByText(/What do you want to do with/)).toHaveLength(1)          // the one in its period is not asked
+    expect(screen.getAllByRole('button', { name: 'Remove these images' })).toHaveLength(2)          // that segment, and the images with no date
+    await userEvent.click(screen.getByRole('button', { name: /^Move them into the period/ }))
+    const ask = screen.getByRole('alertdialog', { name: 'Move the images' })
+    expect(ask).toHaveTextContent('IMG_0002.JPG')
+    expect(ask).toHaveTextContent('+2 d 1 h 1 s')
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(mockedApi.timefixShift).not.toHaveBeenCalled()
   })
 })

@@ -95,6 +95,8 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
   const [browsing, setBrowsing] = useState(false)
   const [visits, setVisits] = useState<ClosedVisit[]>([])
   const [visitId, setVisitId] = useState('')
+  // The revision comes first: the visits to choose from are those of the one picked.
+  const [revision, setRevision] = useState('')
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -107,7 +109,7 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
   const [refImage, setRefImage] = useState('')
   const [refTime, setRefTime] = useState('')
   const [reason, setReason] = useState('')
-  const [confirm, setConfirm] = useState<null | { kind: 'remove'; names: string[] }>(null)
+  const [confirm, setConfirm] = useState<null | { kind: 'remove'; names: string[] } | { kind: 'shift'; segment: TimeSegment }>(null)
 
   const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
 
@@ -132,14 +134,17 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
       setVisits(results)
       const key = visit && visitKey({ visit, end: visit })
       const found = key ? results.find((c) => visitKey(c) === key) : undefined
-      if (found) setVisitId(key!)
+      if (found) { setVisitId(key!); setRevision(found.visit.session ?? '') }
       void check({ folder: initial.folder, ...(visit ? { research_project_id: researchProjectId, location_id: visit.location_id, date: visit.date, time: visit.time } : {}) })
     }).catch((e) => setError(message(e, 'Could not read the visits.')))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const revisions = [...new Set(visits.map((c) => c.visit.session).filter((x): x is string => Boolean(x)))].sort().reverse()
+  const visitsOfRevision = visits.filter((c) => c.visit.session === revision)
+
   async function chooseProject(id: string) {
-    setProjectId(id); setVisits([]); setVisitId(''); setTimeline(null); setError(null)
+    setProjectId(id); setVisits([]); setVisitId(''); setRevision(''); setTimeline(null); setError(null)
     if (!id) return
     try { setVisits((await api.closedVisits(id)).results) } catch (e) { setError(message(e, 'Could not read the visits.')) }
   }
@@ -178,15 +183,6 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
     return sign * (nums[0] * 86400 + nums[1] * 3600 + nums[2] * 60 + nums[3])
   }, [mode, parts, sign, refImage, refTime, timeOf])
 
-  function applySuggestion(seg: TimeSegment) {
-    if (!seg.suggestion) return
-    const total = Math.abs(seg.suggestion.offset_seconds)
-    setMode('offset'); setSign(seg.suggestion.offset_seconds < 0 ? -1 : 1)
-    setParts({ d: String(Math.floor(total / 86400)), h: String(Math.floor((total % 86400) / 3600)), m: String(Math.floor((total % 3600) / 60)), s: String(total % 60) })
-    setFirst(seg.first); setLast(seg.last === names[names.length - 1] ? '' : seg.last)
-    setReason(`Segment ${seg.first}–${seg.last} ${seg.suggestion.why}`)
-  }
-
   const [helpOpen, setHelpOpen] = useState(false)
 
   async function run(action: () => Promise<Timeline>, fallback: string) {
@@ -218,11 +214,20 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
             </button>
           </div>
         </div>
-        <div>
-          <label className={labelClass} htmlFor="tf-visit">Visit that left the camera</label>
-          <Combobox id="tf-visit" options={visits.map((c) => ({ value: visitKey(c), label: visitLabel(c) }))} value={visitId}
-                    onChange={(v) => { setVisitId(v); setTimeline(null) }} disabled={busy || !projectId}
-                    placeholder={!projectId ? 'No default research project' : !visits.length ? 'No closed visits' : 'Select…'} clearLabel="Clear visit" />
+        {/* the revision first, then the visit to a site in it */}
+        <div className="grid gap-4 sm:grid-cols-[14rem_1fr]">
+          <div>
+            <label className={labelClass} htmlFor="tf-revision">Revision</label>
+            <Combobox id="tf-revision" options={revisions.map((r) => ({ value: r, label: r }))} value={revision}
+                      onChange={(v) => { setRevision(v); setVisitId(''); setTimeline(null) }} disabled={busy || !projectId}
+                      placeholder={!projectId ? 'No default research project' : !revisions.length ? 'No closed visits' : 'Select…'} clearLabel="Clear revision" />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="tf-visit">Visit that left the camera</label>
+            <Combobox id="tf-visit" options={visitsOfRevision.map((c) => ({ value: visitKey(c), label: visitLabel(c) }))} value={visitId}
+                      onChange={(v) => { setVisitId(v); setTimeline(null) }} disabled={busy || !revision}
+                      placeholder={!revision ? 'Pick the revision first' : 'Select…'} clearLabel="Clear visit" />
+          </div>
         </div>
         <p className={hintClass}>The visit is optional: without it the time jumps are found, but the dates can&rsquo;t be checked against a period.</p>
         <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!folder.trim() || busy} onClick={() => void check()}>
@@ -234,8 +239,10 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
       {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
       {busy && !timeline && <p className="text-sm text-zinc-500 flex items-center gap-2"><SmallSpinner />Reading the images…</p>}
 
-      {timeline && (
-        <>
+      <WizardStep n={2} title="Check the dates" status={!timeline ? 'locked' : timeline.ok ? 'done' : 'open'} expanded canEdit={false} onEdit={() => {}}
+                  description="Where the time jumps, and which images are outside the period of the visit.">
+        {timeline && (
+          <div className="space-y-6">
           <section className="space-y-3" aria-label="What the images say">
             <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
@@ -257,7 +264,7 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
 
           <section aria-label="Segments">
             <h3 className="font-semibold mb-2">Segments</h3>
-            <p className={`${hintClass} mb-2`}>A new segment starts wherever the time goes backwards from one image to the next — usually the clock reset or changed.</p>
+            <p className={`${hintClass} mb-2`}>A new segment starts wherever the time goes backwards from one image to the next — usually the clock reset or changed. The next step is to fix the ones that are not in their period.</p>
             <div className="space-y-2">
               {timeline.segments.map((seg) => {
                 const [text, tone] = SEGMENT_STATE[seg.state]
@@ -266,10 +273,6 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>{text}</span>
                     <span className="text-sm"><span className="font-mono">{seg.first}</span> → <span className="font-mono">{seg.last}</span> · {seg.count} image(s)</span>
                     <span className={hintClass}>{shown(seg.first_time)} → {shown(seg.last_time)}</span>
-                    <span className="flex gap-2 ml-auto">
-                      {seg.suggestion && <button type="button" className={btnOutline} disabled={busy} onClick={() => applySuggestion(seg)}>Shift {offsetText(seg.suggestion.offset_seconds)}</button>}
-                      {seg.state !== 'ok' && <button type="button" className={btnOutline} disabled={busy} onClick={() => setConfirm({ kind: 'remove', names: runNames(seg) })}>Remove these images</button>}
-                    </span>
                   </div>
                 )
               })}
@@ -277,12 +280,59 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
                 <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 flex flex-wrap items-center gap-3">
                   <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">No date</span>
                   <span className="text-sm">{timeline.undated.length} image(s): <span className="font-mono">{timeline.undated.slice(0, 3).join(', ')}{timeline.undated.length > 3 ? '…' : ''}</span></span>
-                  <button type="button" className={`${btnOutline} ml-auto`} disabled={busy} onClick={() => setConfirm({ kind: 'remove', names: timeline.undated })}>Remove these images</button>
                 </div>
               )}
             </div>
           </section>
 
+          </div>
+        )}
+      </WizardStep>
+
+      <WizardStep n={3} title="Fix the segments" status={timeline ? 'open' : 'locked'} canEdit={false} onEdit={() => {}}
+                  description="For each segment that is not in its period: move its images into it, or remove them.">
+        {timeline && (
+          <section className="space-y-3" aria-label="Fix the segments">
+            {timeline.segments.every((seg) => seg.state === 'ok') && timeline.undated.length === 0 && (
+              <p className="text-sm text-emerald-700 dark:text-emerald-400" role="status">✔ Every segment is in its period: there is nothing to fix here.</p>
+            )}
+            {timeline.segments.filter((seg) => seg.state !== 'ok').map((seg) => {
+              const [text, tone] = SEGMENT_STATE[seg.state]
+              return (
+                <div key={seg.first} className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 flex flex-wrap items-center gap-3">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>{text}</span>
+                  <span className="text-sm"><span className="font-mono">{seg.first}</span> → <span className="font-mono">{seg.last}</span> · {seg.count} image(s)</span>
+                  <span className={hintClass}>{shown(seg.first_time)} → {shown(seg.last_time)}</span>
+                  <div className="flex basis-full flex-wrap items-center gap-2 border-t border-zinc-200 dark:border-zinc-700 pt-3">
+                    <span className="mr-auto text-sm text-zinc-700 dark:text-zinc-300">What do you want to do with {seg.count === 1 ? 'this image' : `these ${seg.count} images`}?</span>
+                    {seg.suggestion && <button type="button" className={btnOutline} disabled={busy} onClick={() => { setReason(`Segment ${seg.first}–${seg.last} ${seg.suggestion!.why}`); setConfirm({ kind: 'shift', segment: seg }) }}>Move them into the period · {offsetText(seg.suggestion.offset_seconds)}</button>}
+                    <button type="button" className={btnOutline} disabled={busy} onClick={() => { setReason(''); setConfirm({ kind: 'remove', names: runNames(seg) }) }}>Remove these images</button>
+                  </div>
+                </div>
+              )
+            })}
+            {timeline.undated.length > 0 && (
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 flex flex-wrap items-center gap-3">
+                <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">No date</span>
+                <span className="text-sm">{timeline.undated.length} image(s) with no date can’t be moved: they can only be removed.</span>
+                <button type="button" className={`${btnOutline} ml-auto`} disabled={busy} onClick={() => { setReason(''); setConfirm({ kind: 'remove', names: timeline.undated }) }}>Remove these images</button>
+              </div>
+            )}
+          {confirm?.kind === 'shift' && (
+            <div className="rounded-xl border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 p-4 space-y-3" role="alertdialog" aria-label="Move the images">
+              <p className="text-sm text-blue-900 dark:text-blue-200">
+                Move {confirm.segment.count} image(s), <span className="font-mono">{confirm.segment.first}</span> to <span className="font-mono">{confirm.segment.last}</span>, by <strong className="tabular-nums">{offsetText(confirm.segment.suggestion!.offset_seconds)}</strong> {confirm.segment.suggestion!.why}? Their dates are changed in the folder; the shift is written down and is undone by shifting back.
+              </p>
+              <input className={`${inputClass} w-full`} placeholder="Why (written down with the fix)" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Why the dates are moved" />
+              <div className="flex justify-end gap-2">
+                <button type="button" className={btnOutline} onClick={() => setConfirm(null)}>Cancel</button>
+                <button type="button" className={btnPrimary} disabled={busy}
+                        onClick={() => { const seg = confirm.segment; setConfirm(null); void run(() => api.timefixShift(target(), seg.first, seg.last === names[names.length - 1] ? null : seg.last, seg.suggestion!.offset_seconds, reason), 'Could not change the dates.') }}>
+                  Move {confirm.segment.count} image(s)
+                </button>
+              </div>
+            </div>
+          )}
           {confirm?.kind === 'remove' && (
             <div className="rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-4 space-y-3" role="alertdialog" aria-label="Remove images">
               <p className="text-sm text-red-800 dark:text-red-300">
@@ -299,7 +349,14 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
             </div>
           )}
 
-          <section className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-4" aria-label="Shift dates and times">
+          </section>
+        )}
+      </WizardStep>
+
+      <WizardStep n={4} title="Fix the dates" status={timeline ? 'open' : 'locked'} canEdit={false} onEdit={() => {}}
+                  description="Shift any run of images by hand — even one image — by an offset, or from an image whose real time you know.">
+        {timeline && (
+          <section className="space-y-4" aria-label="Shift dates and times">
             <h3 className="font-semibold">Shift dates and times</h3>
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
@@ -362,6 +419,12 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
             </div>
           </section>
 
+        )}
+      </WizardStep>
+
+      <WizardStep n={5} title="Fixes made" status={timeline ? 'open' : 'locked'} canEdit={false} onEdit={() => {}}
+                  description="Everything that was changed, written down in the folder (time_corrections.json): a shift is undone by shifting back.">
+        {timeline && (
           <section aria-label="Fixes made">
             <h3 className="font-semibold mb-2">Fixes made</h3>
             {timeline.corrections.length === 0 && <p className={hintClass}>None: the images are as they came from the card.</p>}
@@ -378,8 +441,8 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
             </ol>
           </section>
 
-        </>
-      )}
+        )}
+      </WizardStep>
       {helpOpen && (
         <HelpDrawer title="Dates and times: help" onClose={() => setHelpOpen(false)}>
           <HelpCard title="What it is for" tone="text-blue-600 dark:text-blue-400" icon={HELP_ICONS.progress}>
@@ -391,10 +454,12 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
             <p className="mt-1.5">The visit is optional: without it the jumps in the time are found, but the dates can’t be checked against a period. With it, the dates are compared with the days between the visit that left the camera and the next one, with a margin of a few hours.</p>
           </HelpCard>
           <HelpCard title="Segments" tone="text-amber-600 dark:text-amber-400" icon={HELP_ICONS.filter}>
-            <p>A new <strong>segment</strong> starts wherever the time goes backwards from one image to the next — usually the clock was reset or changed. Each one says if it is <em>In its period</em>, <em>Partly outside</em> or <em>Outside its period</em>.</p>
-            <p className="mt-1.5">Where the app can work out the shift that puts a segment in its period, the button <em>Shift …</em> applies it. The images with <em>No date</em> have none to be corrected.</p>
+            <p>A <strong>segment</strong> is a run of consecutive images taken with the camera’s clock in <strong>one setting</strong>. The images are read in the order the camera numbered them; while the time goes up they are in the same segment, and a <strong>new one starts wherever the time goes backwards</strong> from one image to the next.</p>
+            <p className="mt-1.5">With a clock that worked, all the images make one segment. With several, the clock was reset or changed: for instance, when the batteries ran out the camera went back to its factory date, so <span className="font-mono">IMG_0001</span>–<span className="font-mono">IMG_0500</span> say 2026 and <span className="font-mono">IMG_0501</span> on say 2020.</p>
+            <p className="mt-1.5">Each segment is compared with the period of the visit (with a margin of a few hours) and says if it is <em>In its period</em>, <em>Partly outside</em> or <em>Outside its period</em>.</p>
+            <p className="mt-1.5">In the step <em>Fix the segments</em>, for each one that is not in its period you choose: <strong>move its images into the period</strong> — the shift is shown and asked before it is made: the first segment is moved to start when the deployment started, and each later one to go on from where the one before ended — or <strong>remove them</strong>. The images with <em>No date</em> are not in any segment.</p>
           </HelpCard>
-          <HelpCard title="Shift dates and times" tone="text-violet-600 dark:text-violet-400" icon={HELP_ICONS.tags}>
+          <HelpCard title="Fix the dates" tone="text-violet-600 dark:text-violet-400" icon={HELP_ICONS.tags}>
             <p>Pick the run of images — <em>From image</em> and <em>To image</em>, up to the last one if none is said — and how far to move them:</p>
             <ul className="mt-1.5 list-disc space-y-1 pl-5">
               <li><strong>By an offset</strong>: forward or back, in days, hours, minutes and seconds.</li>
