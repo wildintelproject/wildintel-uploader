@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 450" width="920" height="450" role="img" aria-labelledby="t d" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="t">The actions of a visit</title>
+  <desc id="d">When a visit is registered, the actions it does change its state and the state of the deployed visit before it. With no action it is not visited. An Installation leaves it deployed. A Revision leaves it deployed and collects the visit before it. A Desinstallation collects the visit before it and leaves no state. A Stolen visit marks the visit before it as stolen and leaves no state. An Archive gives the site up.</desc>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="450" rx="18" fill="#ffffff" stroke="#d4d4d8" />
+  <text x="40" y="42" font-size="15" font-weight="700" fill="#2563eb" letter-spacing="1">THE ACTIONS OF A VISIT</text>
+
+  <text x="30" y="84" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">A VISIT IS REGISTERED</text>
+  <text x="240" y="84" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">IT DOES</text>
+  <text x="450" y="84" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">THE VISIT BECOMES</text>
+  <text x="700" y="84" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">THE VISIT BEFORE IT</text>
+
+  <rect x="30" y="104" width="150" height="324" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 5" />
+  <text x="105" y="256" font-size="17" font-weight="700" fill="#334155" text-anchor="middle">Planned</text>
+  <text x="105" y="278" font-size="13" fill="#475569" text-anchor="middle">or Unknown</text>
+
+  <path d="M180 266 C215 266 205 126 240 126" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <rect x="240" y="104" width="150" height="44" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+  <text x="315" y="123" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">No action</text>
+  <text x="315" y="139" font-size="11" fill="#1d4ed8" text-anchor="middle">not revised</text>
+  <rect x="450" y="104" width="200" height="44" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="2"  />
+  <text x="550" y="123" font-size="14" font-weight="700" fill="#334155" text-anchor="middle">Not visited</text>
+  <text x="550" y="139" font-size="11" fill="#475569" text-anchor="middle">it could not be made</text>
+  <rect x="700" y="104" width="190" height="44" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" stroke-dasharray="3 5" />
+  <text x="795" y="123" font-size="14" font-weight="700" fill="#475569" text-anchor="middle">Stays Deployed</text>
+  <text x="795" y="139" font-size="11" fill="#64748b" text-anchor="middle">nothing is collected</text>
+  <path d="M390 126 H450" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M650 126 H700" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M180 266 C215 266 205 182 240 182" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <rect x="240" y="160" width="150" height="44" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+  <text x="315" y="179" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">Installation</text>
+  <text x="315" y="195" font-size="11" fill="#1d4ed8" text-anchor="middle">a camera is put up</text>
+  <rect x="450" y="160" width="200" height="44" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"  />
+  <text x="550" y="179" font-size="14" font-weight="700" fill="#92400e" text-anchor="middle">Deployed</text>
+  <text x="550" y="195" font-size="11" fill="#b45309" text-anchor="middle">a camera is out</text>
+  <rect x="700" y="160" width="190" height="44" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" stroke-dasharray="3 5" />
+  <text x="795" y="179" font-size="14" font-weight="700" fill="#475569" text-anchor="middle">Nothing to close</text>
+  <text x="795" y="195" font-size="11" fill="#64748b" text-anchor="middle">no camera was out</text>
+  <path d="M390 182 H450" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M650 182 H700" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M180 266 C215 266 205 238 240 238" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <rect x="240" y="216" width="150" height="44" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+  <text x="315" y="235" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">Revision</text>
+  <text x="315" y="251" font-size="11" fill="#1d4ed8" text-anchor="middle">the camera is looked at</text>
+  <rect x="450" y="216" width="200" height="44" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"  />
+  <text x="550" y="235" font-size="14" font-weight="700" fill="#92400e" text-anchor="middle">Deployed</text>
+  <text x="550" y="251" font-size="11" fill="#b45309" text-anchor="middle">if it leaves a card</text>
+  <rect x="700" y="216" width="190" height="44" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2"  />
+  <text x="795" y="235" font-size="14" font-weight="700" fill="#065f46" text-anchor="middle">Collected</text>
+  <text x="795" y="251" font-size="11" fill="#047857" text-anchor="middle">its card is collected</text>
+  <path d="M390 238 H450" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M650 238 H700" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M180 266 C215 266 205 294 240 294" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <rect x="240" y="272" width="150" height="44" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+  <text x="315" y="291" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">Desinstallation</text>
+  <text x="315" y="307" font-size="11" fill="#1d4ed8" text-anchor="middle">the camera is taken away</text>
+  <rect x="450" y="272" width="200" height="44" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" stroke-dasharray="3 5" />
+  <text x="550" y="291" font-size="14" font-weight="700" fill="#475569" text-anchor="middle">No state</text>
+  <text x="550" y="307" font-size="11" fill="#64748b" text-anchor="middle">left no camera</text>
+  <rect x="700" y="272" width="190" height="44" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2"  />
+  <text x="795" y="291" font-size="14" font-weight="700" fill="#065f46" text-anchor="middle">Collected</text>
+  <text x="795" y="307" font-size="11" fill="#047857" text-anchor="middle">its card is collected</text>
+  <path d="M390 294 H450" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M650 294 H700" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M180 266 C215 266 205 350 240 350" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <rect x="240" y="328" width="150" height="44" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+  <text x="315" y="347" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">Stolen</text>
+  <text x="315" y="363" font-size="11" fill="#1d4ed8" text-anchor="middle">the camera is found stolen</text>
+  <rect x="450" y="328" width="200" height="44" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" stroke-dasharray="3 5" />
+  <text x="550" y="347" font-size="14" font-weight="700" fill="#475569" text-anchor="middle">No state</text>
+  <text x="550" y="363" font-size="11" fill="#64748b" text-anchor="middle">left no camera</text>
+  <rect x="700" y="328" width="190" height="44" rx="12" fill="#fef2f2" stroke="#ef4444" stroke-width="2"  />
+  <text x="795" y="347" font-size="14" font-weight="700" fill="#991b1b" text-anchor="middle">Stolen</text>
+  <text x="795" y="363" font-size="11" fill="#b91c1c" text-anchor="middle">no images to import</text>
+  <path d="M390 350 H450" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M650 350 H700" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M180 266 C215 266 205 406 240 406" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <rect x="240" y="384" width="150" height="44" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+  <text x="315" y="403" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">Archive</text>
+  <text x="315" y="419" font-size="11" fill="#1d4ed8" text-anchor="middle">the site is given up</text>
+  <rect x="450" y="384" width="200" height="44" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" stroke-dasharray="3 5" />
+  <text x="550" y="403" font-size="14" font-weight="700" fill="#475569" text-anchor="middle">No state</text>
+  <text x="550" y="419" font-size="11" fill="#64748b" text-anchor="middle">no visit is kept after it</text>
+  <rect x="700" y="384" width="190" height="44" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" stroke-dasharray="3 5" />
+  <text x="795" y="403" font-size="14" font-weight="700" fill="#475569" text-anchor="middle">As its other action</text>
+  <text x="795" y="419" font-size="11" fill="#64748b" text-anchor="middle">Desinstallation or Stolen</text>
+  <path d="M390 406 H450" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M650 406 H700" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+</svg>

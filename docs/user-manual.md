@@ -113,6 +113,17 @@ Whether the images of a visit are stored is another thing: they are once its dep
 
 #### The actions of a visit
 
+When a visit goes from one state to another, **one or several actions** are done in it, and they decide the state it takes and what happens to the visit before it:
+
+![The actions of a visit: what each action does to the state of the visit and of the deployed visit before it](img/visit-actions.svg)
+
+- With **no action** (the visit could not be made, *Not revised*) a planned visit is *Not visited*, and the visit before it stays *Deployed*: no card was collected.
+- An **Installation** leaves the visit *Deployed*: a camera is out.
+- A **Revision** closes the *Deployed* visit before it, which is *Collected*, and the visit is itself *Deployed* if it leaves a card.
+- A **Desinstallation** also closes the visit before it as *Collected*, and the visit has no state: no camera is left.
+- **Stolen** closes the visit before it as *Stolen*, and the visit has no state.
+- An **Archive** gives the site up, and goes with a Desinstallation or a Stolen visit: the visit has no state.
+
 | Action | What it is | What it asks |
 |---|---|---|
 | **Installation** | A camera is put up at the site and an SD card is left in it. The first visit to a site is always an Installation. | The camera, the card left, and how it is set up: height or depth, tilt, heading, delay and whether bait is used. |
