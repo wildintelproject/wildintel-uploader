@@ -92,6 +92,8 @@ When nothing is known of a revision of a site — the first visit kept to it is 
 
 A visit has a state that follows its life. A visit that left no camera has none.
 
+![The states of a visit: planned or unknown until it is registered; then deployed, not visited or no state; and, when a later visit collects its card or finds the camera stolen, collected or stolen](img/visit-states.svg)
+
 | State | What it says |
 |---|---|
 | **Planned** | The visit is not made yet: a location with no visit in a revision that has them. |
