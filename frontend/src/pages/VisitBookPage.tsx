@@ -1,15 +1,14 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { api } from '../api'
-import { pageNumbers } from '../components/CheckFailures'
-import { Icon, Ring } from '../components/Dashboard'
+import { Icon, StateCard } from '../components/Dashboard'
+import { ActiveFilters, ChevronCell, DashboardHeader, DetailLine, DetailsRow, DownloadButton, HELP_ICONS, HelpButton, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from '../components/DashboardParts'
 import { Breadcrumb } from '../components/TaskCard'
-import RevisionSquares from '../components/RevisionSquares'
 import IconButton, { ICON_PATHS } from '../components/IconButton'
 import LinkButton from '../components/LinkButton'
 import EditVisitDialog from '../components/EditVisitDialog'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { BookVisit, ClosedVisitTarget } from '../types'
-import { btnOutline, inputClass } from './ImportDeploymentPage'
+import { btnOutline } from './ImportDeploymentPage'
 import { download } from '../csvFile'
 
 interface Props {
@@ -114,6 +113,11 @@ const PER_PAGE = 10
 
 /** The visit book of a research project: the visits kept to it, and the deployments they say — closed, and the ones whose camera is still out — with the logs of their collections. */
 export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, settingsOpen, onShowDeployment, focus, onCreateVisit }: Props) {
+  // The legend and the help: a panel at the right, opened from the header.
+  const [helpOpen, setHelpOpen] = useState(false)
+  // The revisions and the status cards fold away, to leave the table alone.
+  const [revisionsOpen, setRevisionsOpen] = useState(true)
+  const [metricsOpen, setMetricsOpen] = useState(true)
   // The book is of the research project the general settings say is the default: the one that is active.
   const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
   const [visits, setVisits] = useState<BookVisit[] | null>(null)
@@ -214,94 +218,59 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8">
       <Breadcrumb parent="Manage visits" onParent={onBack} current="Visit dashboard" />
-      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-            <Icon path={<><path d="M4 5.5A2.5 2.5 0 016.5 3H19v16H6.5A2.5 2.5 0 004 21.5z" /><path d="M4 18.5A2.5 2.5 0 016.5 16H19" /></>} className="h-6 w-6" />
-          </span>
-          <div>
-            <h4 className="text-xl font-semibold leading-tight">Visit dashboard</h4>
-            <p className="text-zinc-500 dark:text-zinc-400 text-sm">The visits kept to a research project.</p>
-          </div>
+      <DashboardHeader icon={<><path d="M4 5.5A2.5 2.5 0 016.5 3H19v16H6.5A2.5 2.5 0 004 21.5z" /><path d="M4 18.5A2.5 2.5 0 016.5 16H19" /></>} title="Visit dashboard" description="The visits kept to a research project."
+        actions={<>
           {project && visits !== null && visits.length > 0 && (
-            <button type="button" className={`${btnOutline} ml-4 inline-flex items-center gap-2`} disabled={exporting} onClick={() => void exportVisits()}
-                    title="Download the visits of this research project as a CSV file, to import them again in Register visits › CSV file">
-              <Icon path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></>} className="h-4 w-4" />
-              {exporting ? 'Exporting…' : 'Export visits (CSV)'}
-            </button>
+            <DownloadButton busy={exporting} onClick={() => void exportVisits()} title="Download the visits of this research project as a CSV file, to import them again in Register visits › CSV file">{exporting ? 'Exporting…' : 'Export visits (CSV)'}</DownloadButton>
           )}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The book" onOpenSettings={onOpenSettings} />
-        </div>
-      </header>
+          <HelpButton expanded={helpOpen} onClick={() => setHelpOpen(true)} />
+        </>}
+        aside={<DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The book" onOpenSettings={onOpenSettings} />} />
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       {project && (
         <>
           {visits !== null && revisions.length > 0 && (
-            <section aria-label="Revision" className="mb-6">
-              <h5 className="text-lg font-semibold mb-1">Revision</h5>
-              <RevisionSquares description="A revision is one visit to every site. Pick one to see what is planned and what is done." all={{ label: 'All revisions', note: `${everyRow.filter((v) => !v.not_done).length} of ${everyRow.length} done` }} value={revision}
-                revisions={revisions.map((r) => { const of = everyRow.filter((v) => v.session === r); return { id: r, label: r, note: `${of.filter((v) => !v.not_done).length} of ${of.length} done`, dates: spanOf(of) } })}
-                onPick={(id) => { setRevision(id); setStatusFilter(''); setPage(1); setOpened(null) }} />
-            </section>
+            <RevisionSelection open={revisionsOpen} onToggle={() => setRevisionsOpen(!revisionsOpen)} hint="Select one to filter planned & completed visits"
+              all={{ label: 'All revisions', note: `${everyRow.filter((v) => !v.not_done).length} of ${everyRow.length} done`, percent: everyRow.length ? Math.round((everyRow.filter((v) => !v.not_done).length / everyRow.length) * 100) : 0 }} value={revision}
+              revisions={revisions.map((r) => { const of = everyRow.filter((v) => v.session === r); return { id: r, label: r, note: `${of.filter((v) => !v.not_done).length} of ${of.length} done`, dates: spanOf(of), complete: of.length > 0 && of.every((v) => !v.not_done) } })}
+              onPick={(id) => { setRevision(id); setStatusFilter(''); setPage(1); setOpened(null) }} />
           )}
           {visits !== null && (
-            <section aria-label="Visits by status" className="mb-5">
-              <p className="mb-2 text-right text-xs text-zinc-500 dark:text-zinc-400">Pick a card to show only those visits.</p>
-              <div className="grid grid-cols-2 lg:grid-cols-[1.6fr_repeat(5,1fr)] gap-3">
-                <div className="col-span-2 lg:col-span-1 flex items-center gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 px-5 py-4">
-                  <Ring percent={percent} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Visits completed</p>
-                    <p className="text-2xl font-semibold leading-tight">{made} <span className="text-zinc-400">/ {rows.length}</span></p>
-                    <div role="progressbar" aria-label="Visits done" aria-valuemin={0} aria-valuemax={rows.length} aria-valuenow={made} className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                      <div className="bg-emerald-500" style={{ width: `${rows.length ? ((count('collected') + count('stolen')) / rows.length) * 100 : 0}%` }} />
-                      <div className="bg-amber-500" style={{ width: `${rows.length ? (count('deployed') / rows.length) * 100 : 0}%` }} />
-                      <div className="bg-slate-400" style={{ width: `${rows.length ? (count('not_visited') / rows.length) * 100 : 0}%` }} />
-                    </div>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{made} of {rows.length} visits done ({percent}%) · {rows.length - made} pending</p>
-                  </div>
-                </div>
-                {SQUARES.map((s) => (
-                  <button key={s.label} type="button" aria-label={s.label} aria-pressed={statusFilter === s.filter}
-                          onClick={() => { setStatusFilter(statusFilter === s.filter ? '' : s.filter); setPage(1); setOpened(null) }}
-                          className={`rounded-2xl border px-4 py-4 text-left transition-colors ${statusFilter === s.filter ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}>
-                    <span aria-hidden="true" className={`mb-2 flex h-9 w-9 items-center justify-center rounded-full ${s.badge}`}>{s.icon}</span>
-                    <span className={`block text-3xl font-semibold leading-tight ${s.tone}`}>{count(s.filter)}</span>
-                    <span className={`block text-sm font-semibold ${s.tone}`}>{s.label}</span>
-                    <span className="block text-xs text-zinc-500 dark:text-zinc-400">{s.note}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
+            <MetricsSection label="Visits by status" open={metricsOpen} onToggle={() => setMetricsOpen(!metricsOpen)} hint="Click a card to filter the table by status">
+              <ProgressCard percent={percent} done={made} total={rows.length} barLabel="Visits done" caption={`${rows.length - made} pending ${rows.length - made === 1 ? 'visit' : 'visits'}`}
+                segments={[
+                  { width: rows.length ? ((count('collected') + count('stolen')) / rows.length) * 100 : 0, className: 'bg-emerald-500' },
+                  { width: rows.length ? (count('deployed') / rows.length) * 100 : 0, className: 'bg-amber-500' },
+                  { width: rows.length ? (count('not_visited') / rows.length) * 100 : 0, className: 'bg-slate-400' },
+                ]} />
+              {SQUARES.map((q) => (
+                <StateCard key={q.label} label={q.label} note={q.note} count={count(q.filter)} tone={q.tone} badge={q.badge} icon={q.icon} pressed={statusFilter === q.filter}
+                           onPress={() => { setStatusFilter(statusFilter === q.filter ? '' : q.filter); setPage(1); setOpened(null) }} />
+              ))}
+            </MetricsSection>
           )}
 
-          <div role="search" className="mb-2 flex flex-wrap items-center gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-700 px-3 py-2.5">
-            <div className="relative min-w-[14rem] flex-1">
-              <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"><Icon path={<><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></>} className="h-4 w-4" /></span>
-              <input aria-label="Filter the visits" className={`${inputClass} !pl-9`} placeholder="Search by site, revision, camera, card, who, deployment…" value={filter} onChange={(e) => { setFilter(e.target.value); setPage(1); setOpened(null) }} />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">Status
-              <select aria-label="Status" className={`${inputClass} !w-auto`} value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setPage(1); setOpened(null) }}>
-                <option value="">All</option>
-                {SQUARES.map((s) => <option key={s.filter} value={s.filter}>{s.label}</option>)}
-              </select>
-            </label>
-          </div>
+          <TableCard label="Visits table">
+          <TableToolbar searchLabel="Filter the visits" placeholder="Search by site, revision, camera, card, who, deployment…" text={filter} onText={(t) => { setFilter(t); setPage(1); setOpened(null) }}
+            choice={{ label: 'Status', value: statusFilter, onChange: (v) => { setStatusFilter(v as StatusFilter); setPage(1); setOpened(null) }, options: SQUARES.map((q) => ({ value: q.filter, label: q.label })) }}
+            onReset={() => { setFilter(''); setStatusFilter(''); setRevision(''); setSort(null); setPage(1); setOpened(null) }} />
+          {visits !== null && (
+            <ActiveFilters filters={[{ label: `Revision: ${revision || 'All'}`, tone: 'blue' }, { label: `Status: ${statusFilter ? PHASE_LABEL[statusFilter] : 'All'}`, tone: 'green' }]} summary={`${shown.length} of ${everyRow.length} visits match`} />
+          )}
 
           {(
             visits === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the visits…</p> : (
               <>
-              <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
-                <table className="w-full text-sm" aria-label="Visits">
-                  <thead className="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="overflow-x-auto">
+                <table className={TABLE.table} aria-label="Visits">
+                  <thead className={TABLE.head}>
                     <tr>
+                      <th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>
                       {COLUMNS.map(([key, label]) => (
-                        <th key={key} scope="col" aria-sort={sort?.key === key ? (sort.descending ? 'descending' : 'ascending') : 'none'} className="px-3 py-2.5 text-left font-medium">
-                          <button type="button" className="inline-flex items-center gap-1 font-medium hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => { setSort(sort?.key === key ? { key, descending: !sort.descending } : { key, descending: false }); setPage(1); setOpened(null) }}>
+                        <th key={key} scope="col" aria-sort={sort?.key === key ? (sort.descending ? 'descending' : 'ascending') : 'none'} className={TABLE.th}>
+                          <button type="button" className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => { setSort(sort?.key === key ? { key, descending: !sort.descending } : { key, descending: false }); setPage(1); setOpened(null) }}>
                             {label}
                             <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-3.5 w-3.5 fill-none stroke-current ${sort?.key === key ? 'text-blue-500' : 'text-zinc-400 dark:text-zinc-600'}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               {sort?.key === key ? (sort.descending ? <path d="M12 5v14M6 13l6 6 6-6" /> : <path d="M12 19V5M6 11l6-6 6 6" />) : <path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" />}
@@ -309,29 +278,30 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                           </button>
                         </th>
                       ))}
-                      <th scope="col" className="px-3 py-2.5"><span className="sr-only">What to do</span></th>
+                      <th scope="col" className="px-4 py-3"><span className="sr-only">What to do</span></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                  <tbody className={TABLE.body}>
                     {onPage.map((v) => {
                       const key = keyOf(v)
                       return (
                         <Fragment key={key}>
-                          <tr ref={focus && opened === key ? (el) => el?.scrollIntoView?.({ block: 'center' }) : undefined}>
-                            <td className="px-3 py-2 font-mono">{v.session}</td>
-                            <td className="px-3 py-2 font-mono">
+                          <tr ref={focus && opened === key ? (el) => el?.scrollIntoView?.({ block: 'center' }) : undefined} className={TABLE.row(opened === key)}>
+                            <ChevronCell open={opened === key} available={!v.not_done && !v.unknown} label={`the details of the visit ${v.session} to ${v.location_id}`} onToggle={() => setOpened(opened === key ? null : key)} />
+                            <td className="px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-zinc-200">{v.session}</td>
+                            <td className="px-4 py-3 font-mono">
                               {onOpenSettings && project
                                 ? <LinkButton title={`Show the details of the location ${v.location_id}`} className="font-mono" onClick={() => onOpenSettings('locations', project.acronym, v.location_id)}>{v.location_id}</LinkButton>
                                 : v.location_id}
                             </td>
-                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.not_done || v.unknown || phaseOf(v) === 'not_visited' ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
-                            <td className="px-3 py-2">{v.actions.length === 0 && !v.not_done ? '—' : v.actions.join(' + ')}</td>
-                            <td className="px-3 py-2">
+                            <td className="px-4 py-3 font-mono text-[11px] whitespace-nowrap text-zinc-600 dark:text-zinc-300">{v.not_done || v.unknown || phaseOf(v) === 'not_visited' ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
+                            <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{v.actions.length === 0 && !v.not_done ? '—' : v.actions.join(' + ')}</td>
+                            <td className="px-4 py-3">
                               {phaseOf(v)
-                                ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PHASE_BADGE[phaseOf(v)!]}`}>{PHASE_LABEL[phaseOf(v)!]}</span>
+                                ? <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${PHASE_BADGE[phaseOf(v)!]}`}><span aria-hidden="true" className="inline-flex [&>svg]:h-3 [&>svg]:w-3">{SQUARES.find((q) => q.filter === phaseOf(v))?.icon}</span>{PHASE_LABEL[phaseOf(v)!]}</span>
                                 : <span className="text-zinc-400">—</span>}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-4 py-3">
                               {v.not_done || v.unknown ? null : v.deployment_id ? (
                                 <button type="button" title="Show image details" className="inline-flex rounded-full text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={`Details of the deployment ${v.deployment_id}`} onClick={() => onShowDeployment?.(v.deployment_id!)}>
                                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></svg>
@@ -340,113 +310,104 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
                                 </span>}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="px-4 py-3 whitespace-nowrap">
                               {/* only what can be done with the row: the options that do not apply to it are not there */}
-                              <div className="flex items-center justify-end gap-1.5" role="group" aria-label={`Options of the visit ${v.session} to ${v.location_id}`}>
+                              <RowOptions label={`Options of the visit ${v.session} to ${v.location_id}`}>
                                 {(() => {
                                   const before = previousOf(v)
                                   return before && (
-                                    <IconButton label={`Show the previous visit to ${v.location_id} (${before.session})`} title={`The previous revision of this location: ${before.session}`}
+                                    <IconButton compact label={`Show the previous visit to ${v.location_id} (${before.session})`} title={`The previous revision of this location: ${before.session}`}
                                       onClick={() => showVisit(before)} path={ICON_PATHS.before} />
                                   )
                                 })()}
                                 {!v.not_done && !v.unknown && (
-                                  <IconButton label={`Edit the visit ${v.session} to ${v.location_id}`} title={v.locked ? 'It starts or closes an imported deployment: it cannot be edited' : 'Edit the visit'} disabled={v.locked}
+                                  <IconButton compact label={`Edit the visit ${v.session} to ${v.location_id}`} title={v.locked ? 'It starts or closes an imported deployment: it cannot be edited' : 'Edit the visit'} disabled={v.locked}
                                     onClick={() => setEditing(v)} path={<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>} />
                                 )}
                                 {v.unknown && (
-                                  <IconButton label={`Fill in the visit ${v.session} to ${v.location_id}`} title="Nothing is known of this visit: fill it in"
+                                  <IconButton compact label={`Fill in the visit ${v.session} to ${v.location_id}`} title="Nothing is known of this visit: fill it in"
                                     onClick={() => setEditing(v)} path={<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>} />
                                 )}
                                 {!v.not_done && !v.unknown && (
-                                  <IconButton label={`View the visit ${v.session} to ${v.location_id}`} title="View the visit" expanded={opened === key}
+                                  <IconButton compact label={`View the visit ${v.session} to ${v.location_id}`} title="View the visit" expanded={opened === key}
                                     onClick={() => setOpened(opened === key ? null : key)} path={ICON_PATHS.view} />
                                 )}
                                 {(() => {
                                   const after = nextOf(v)
                                   return after && (
-                                    <IconButton label={`Show the next visit to ${v.location_id} (${after.session})`} title={`The next revision of this location: ${after.session}`}
+                                    <IconButton compact label={`Show the next visit to ${v.location_id} (${after.session})`} title={`The next revision of this location: ${after.session}`}
                                       onClick={() => showVisit(after)} path={ICON_PATHS.after} />
                                   )
                                 })()}
                                 {v.not_done && onCreateVisit && (
-                                  <IconButton label={`Create the visit ${v.session} to ${v.location_id}`} title="Create the visit"
+                                  <IconButton compact label={`Create the visit ${v.session} to ${v.location_id}`} title="Create the visit"
                                     onClick={() => onCreateVisit({ researchProjectId: project!.acronym, site: v.location_id })} path={<><path d="M12 21s-7-6.2-7-11a7 7 0 1114 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></>} />
                                 )}
                                 {!v.not_done && !v.deployment_id && v.deployment_status === 'closed' && !v.deployment_no_images && onImportImages && (
-                                  <IconButton label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} title="Create the deployment"
+                                  <IconButton compact label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} title="Create the deployment"
                                     onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })} path={<><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><circle cx="12" cy="13" r="3.5" /></>} />
                                 )}
-                              </div>
+                              </RowOptions>
                             </td>
                           </tr>
                           {opened === key && (
-                            <tr>
-                              <td colSpan={7} className="bg-zinc-50 dark:bg-zinc-900/60 px-5 py-4">
-                                <dl aria-label={`Details of the visit ${v.session} to ${v.location_id}`} className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
-                                  <div className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">Actions</dt><dd>{v.actions.length === 0 ? 'None: the visit could not be made' : v.actions.join(' + ')}</dd></div>
-                                  {DETAILS.flatMap(([k, label]) => {
-                                    const row = (key: string, name: string, value: string) => <div key={key} className="flex gap-2"><dt className="text-zinc-500 dark:text-zinc-400">{name}</dt><dd className="font-mono text-xs break-all self-center">{value}</dd></div>
-                                    const photos = v.num_photos
-                                    const taken = photos !== null && photos !== undefined ? collectedCard(everyRow, v) : null
-                                    const rows: JSX.Element[] = []
-                                    // the card is the one the visit before it left: when no visit before it is known (the revisions before are unknown), it is told, not left out
-                                    if (k === 'sd' && photos !== null && photos !== undefined) rows.push(row('taken', 'SD card collected', taken ? `${taken} (${photos})` : 'unknown: no visit before it is known'))
-                                    if (k === 'num_photos' && taken) return rows
-                                    const value = v[k]
-                                    if (value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0)) rows.push(row(k, label, shownValue(value)))
-                                    return rows
-                                  })}
-                                </dl>
-                              </td>
-                            </tr>
+                            <DetailsRow colSpan={8}>
+                              <dl aria-label={`Details of the visit ${v.session} to ${v.location_id}`} className="grid grid-cols-1 gap-x-8 gap-y-2 text-xs md:grid-cols-2">
+                                <DetailLine name="Actions">{v.actions.length === 0 ? 'None: the visit could not be made' : v.actions.join(' + ')}</DetailLine>
+                                {DETAILS.flatMap(([k, label]) => {
+                                  const photos = v.num_photos
+                                  const taken = photos !== null && photos !== undefined ? collectedCard(everyRow, v) : null
+                                  const rows: JSX.Element[] = []
+                                  const line = (key: string, name: string, value: string) => {
+                                    if (key === 'comments') return <div key={key} className="pt-1 md:col-span-2"><dt className="mb-1 font-medium text-zinc-500 dark:text-zinc-400">{name}</dt><dd className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950 p-2 italic text-zinc-700 dark:text-zinc-300">{value}</dd></div>
+                                    const okay = (key === 'card_batteries_ok' || key === 'status') && value.toLowerCase() === 'ok'
+                                    const kind = okay ? 'good' : ['trappers', 'setup_by', 'status', 'card_batteries_ok', 'date_time_ok', 'camera_model'].includes(key) ? 'plain' : 'mono'
+                                    return <DetailLine key={key} name={name} kind={kind}>{key === 'trappers' && <Icon path={<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0116 0" /></>} className="mr-1.5 inline h-3 w-3 text-blue-500" />}{value}</DetailLine>
+                                  }
+                                  // the card is the one the visit before it left: when no visit before it is known (the revisions before are unknown), it is told, not left out
+                                  if (k === 'sd' && photos !== null && photos !== undefined) rows.push(line('taken', 'SD card collected', taken ? `${taken} (${photos})` : 'unknown: no visit before it is known'))
+                                  if (k === 'num_photos' && taken) return rows
+                                  const value = v[k]
+                                  if (value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0)) rows.push(line(k, label, shownValue(value)))
+                                  return rows
+                                })}
+                              </dl>
+                            </DetailsRow>
                           )}
                         </Fragment>
                       )
                     })}
-                    {shown.length === 0 && <tr><td colSpan={7} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{visits.length === 0 ? 'No visit has been registered to this research project yet.' : 'No visit matches.'}</td></tr>}
+                    {shown.length === 0 && <tr><td colSpan={8} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{visits.length === 0 ? 'No visit has been registered to this research project yet.' : 'No visit matches.'}</td></tr>}
                   </tbody>
                 </table>
               </div>
               {shown.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
-                  <span role="status" className="text-zinc-500 dark:text-zinc-400">Showing {(current - 1) * PER_PAGE + 1}–{Math.min(current * PER_PAGE, shown.length)} of {shown.length} visits</span>
-                  {pages > 1 && <nav className="flex items-center gap-1" aria-label="Pages">
-                    <button type="button" className={`${btnOutline} !px-2.5 !py-1`} aria-label="Previous page" disabled={current === 1} onClick={() => { setPage(current - 1); setOpened(null) }}>‹</button>
-                    {pageNumbers(current, pages).map((n, i) => n === null
-                      ? <span key={`gap${i}`} className="px-1 text-zinc-400">…</span>
-                      : <button key={n} type="button" aria-label={`Page ${n}`} aria-current={n === current ? 'page' : undefined} onClick={() => { setPage(n); setOpened(null) }}
-                                className={`px-2.5 py-1 rounded ${n === current ? 'bg-blue-600 text-white' : 'border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>{n}</button>)}
-                    <button type="button" className={`${btnOutline} !px-2.5 !py-1`} aria-label="Next page" disabled={current === pages} onClick={() => { setPage(current + 1); setOpened(null) }}>›</button>
-                  </nav>}
-                </div>
+                <TableFooter from={(current - 1) * PER_PAGE + 1} to={Math.min(current * PER_PAGE, shown.length)} total={shown.length} noun="visits" page={current} pages={pages} onPage={(n) => { setPage(n); setOpened(null) }} />
               )}
               </>
             )
           )}
+          </TableCard>
         </>
       )}
 
-      <section aria-label="Legend" className="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
-          <h5 className="mb-1.5 font-semibold text-blue-600 dark:text-blue-400">Overall progress</h5>
-          <p className="text-zinc-500 dark:text-zinc-400">The share of the visits done, over the revision picked or over all of them, with the ones still pending.</p>
-        </div>
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
-          <h5 className="mb-1.5 font-semibold text-emerald-600 dark:text-emerald-400">Visit states</h5>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-            {SQUARES.map((s) => <Fragment key={s.filter}><dt className={`font-medium ${s.tone}`}>{s.label}</dt><dd className="text-zinc-500 dark:text-zinc-400">{s.note}</dd></Fragment>)}
-          </dl>
-        </div>
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
-          <h5 className="mb-1.5 font-semibold text-violet-600 dark:text-violet-400">Data states</h5>
-          <p className="text-zinc-500 dark:text-zinc-400"><span className="font-medium text-zinc-700 dark:text-zinc-200">Images</span>: once the deployment of the visit is made its images are stored, whatever the state of the visit, and its tick opens the details of that deployment in the deployments dashboard. A visit whose camera was stolen is <em>Stolen</em>: there are no images, and nothing to create.</p>
-        </div>
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
-          <h5 className="mb-1.5 font-semibold text-sky-600 dark:text-sky-400">Filters and search</h5>
-          <p className="text-zinc-500 dark:text-zinc-400">Search by site, revision, camera or card, and filter by status; pick a revision above.</p>
-        </div>
-      </section>
+      {helpOpen && (
+        <HelpDrawer onClose={() => setHelpOpen(false)}>
+          <HelpCard title="Overall progress" tone="text-blue-600 dark:text-blue-400" icon={HELP_ICONS.progress}><p>The share of the visits done, over the revision picked or over all of them, with the ones still pending.</p></HelpCard>
+          <HelpCard title="Visit states" tone="text-emerald-600 dark:text-emerald-400" icon={HELP_ICONS.tags}>
+            <dl className="space-y-2">
+              {[...SQUARES.map((q) => ({ key: q.filter, label: q.label, note: q.note, badge: q.badge })), { key: 'unknown', label: 'Unknown', note: 'Nothing is known of it: a revision before the first visit kept to a site', badge: PHASE_BADGE.unknown }].map((q) => (
+                <div key={q.key} className="flex items-baseline gap-3">
+                  <dt className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${q.badge}`}>{q.label}</dt>
+                  <dd>{q.note}</dd>
+                </div>
+              ))}
+            </dl>
+          </HelpCard>
+          <HelpCard title="Data states" tone="text-violet-600 dark:text-violet-400" icon={HELP_ICONS.images}><p><span className="font-medium text-zinc-700 dark:text-zinc-200">Images</span>: once the deployment of the visit is made its images are stored, whatever the state of the visit, and its tick opens the details of that deployment in the deployments dashboard. A visit whose camera was stolen is <em>Stolen</em>: there are no images, and nothing to create.</p></HelpCard>
+          <HelpCard title="Filters and search" tone="text-sky-600 dark:text-sky-400" icon={HELP_ICONS.filter}><p>Search by site, revision, camera or card, and filter by status; pick a revision above.</p></HelpCard>
+        </HelpDrawer>
+      )}
 
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>

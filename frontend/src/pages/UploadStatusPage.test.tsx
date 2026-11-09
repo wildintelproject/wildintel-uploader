@@ -33,13 +33,13 @@ describe('UploadStatusPage', () => {
     render(<UploadStatusPage onBack={() => {}} />)
 
     const table = await screen.findByRole('table', { name: 'Uploads' })
-    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Deployment', 'Where', 'When', 'Uploader', 'Status', 'What to do'])
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Details', 'Deployment', 'Where', 'When', 'Uploader', 'Status', 'What to do'])
     const cells = (row: HTMLElement) => within(row).getAllByRole('cell').map((c) => c.textContent)
     expect(within(table).getAllByRole('row').slice(1).map(cells)).toEqual([
-      ['R0002-DONA_01', 'DONA_01', 'Visit R0002 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done20 Oct 2026', ''],
-      ['R0002-DONA_02', 'DONA_02', 'Visit R0002 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Planned', ''],
-      ['R0001-DONA_01', 'DONA_01', 'Visit R0001 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done1 Sep 2026', ''],
-      ['R0001-DONA_02', 'DONA_02', 'Visit R0001 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Failed', ''],
+      ['', 'R0002-DONA_01', 'DONA_01', 'Visit R0002 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done20 Oct 2026', ''],
+      ['', 'R0002-DONA_02', 'DONA_02', 'Visit R0002 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Planned', ''],
+      ['', 'R0001-DONA_01', 'DONA_01', 'Visit R0001 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done1 Sep 2026', ''],
+      ['', 'R0001-DONA_02', 'DONA_02', 'Visit R0001 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Failed', ''],
     ])
     expect(within(table).queryByText('R0001-DONA_03')).not.toBeInTheDocument()   // the camera was stolen: there is no deployment to upload
   })
@@ -57,7 +57,7 @@ describe('UploadStatusPage', () => {
     render(<UploadStatusPage onBack={() => {}} />)
 
     const region = await screen.findByRole('region', { name: 'Uploads by status' })
-    expect(within(region).getByText('All the uploads').parentElement).toHaveTextContent('2 / 4')
+    expect(region).toHaveTextContent('2/ 4')
     expect(within(region).getByRole('button', { name: 'Planned' })).toHaveTextContent('1')
     expect(within(region).getByRole('button', { name: 'Done' })).toHaveTextContent('2')
     expect(within(region).getByRole('button', { name: 'Failed' })).toHaveTextContent('1')
@@ -65,7 +65,7 @@ describe('UploadStatusPage', () => {
 
     await userEvent.click(within(region).getByRole('button', { name: 'Failed' }))
     const table = screen.getByRole('table', { name: 'Uploads' })
-    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0001-DONA_02'])
+    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual(['R0001-DONA_02'])
     await userEvent.click(within(region).getByRole('button', { name: 'Failed' }))
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(4)
   })
@@ -78,11 +78,11 @@ describe('UploadStatusPage', () => {
     render(<UploadStatusPage onBack={() => {}} />)
 
     const region = await screen.findByRole('region', { name: 'Uploads by status' })
-    expect(within(region).getByText('All the uploads').parentElement).toHaveTextContent('1 / 4')          // 2 deployments × 2 uploaders: the number planned from the start
+    expect(region).toHaveTextContent('1/ 4')          // 2 deployments × 2 uploaders: the number planned from the start
     await userEvent.selectOptions(screen.getByLabelText('Uploader'), 'Agouti')
-    expect(within(region).getByText(/All the uploads to Agouti/).parentElement).toHaveTextContent('0 / 2')
+    expect(region).toHaveTextContent('0/ 2'); expect(region).toHaveTextContent('to Agouti')
     const table = screen.getByRole('table', { name: 'Uploads' })
-    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[3].textContent)).toEqual(['Agouti', 'Agouti'])
+    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[4].textContent)).toEqual(['Agouti', 'Agouti'])
   })
 
   it('lets a planned upload be made once its deployment is created, and a failed one be tried again — a done one has its details instead', async () => {
@@ -107,14 +107,14 @@ describe('UploadStatusPage', () => {
     render(<UploadStatusPage onBack={() => {}} />)
 
     const revisions = await screen.findByRole('region', { name: 'Revision' })
-    expect(within(revisions).getAllByRole('button').map((b) => b.textContent)).toEqual(['All revisions4 uploads', 'R00022 uploads', 'R00012 uploads'])
+    expect(within(revisions).getAllByRole('button').slice(1).map((b) => b.textContent)).toEqual(['All revisions4 uploads50%', 'R00022 uploads', 'R00012 uploads'])   // the first button folds the section away
     await userEvent.click(within(revisions).getByRole('button', { name: /^R0002/ }))
 
     const table = screen.getByRole('table', { name: 'Uploads' })
-    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0002-DONA_01', 'R0002-DONA_02'])
+    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual(['R0002-DONA_01', 'R0002-DONA_02'])
     const progress = screen.getByRole('region', { name: 'Uploads by status' })
-    expect(progress).toHaveTextContent('Uploads of R0002')
-    expect(progress).toHaveTextContent('1 / 2')
+    expect(progress).toHaveTextContent('· R0002')
+    expect(progress).toHaveTextContent('1/ 2')
   })
 
   it('goes to the visit that started a deployment and to the details of a deployment', async () => {
@@ -128,12 +128,34 @@ describe('UploadStatusPage', () => {
     expect(onShowDeployment).toHaveBeenCalledWith('R0001-DONA_01')
   })
 
+  it('opens the legend in a panel from its button in the header, folds away the revisions and the cards, and clears the search with its cross', async () => {
+    render(<UploadStatusPage onBack={() => {}} />)
+    await screen.findByRole('table', { name: 'Uploads' })
+
+    await userEvent.click(screen.getByRole('button', { name: /Help & Legend/ }))
+    const panel = await screen.findByRole('dialog', { name: 'Dashboard legend and help' })
+    expect(within(panel).getByText('Progress')).toBeInTheDocument()
+    await userEvent.click(within(panel).getByRole('button', { name: 'Got it, close' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fold away the revision selection' }))
+    expect(screen.queryByRole('group', { name: 'Revision' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Fold away the status metrics' }))
+    expect(within(screen.getByRole('region', { name: 'Uploads by status' })).queryAllByRole('button', { name: 'Planned' })).toHaveLength(0)
+    expect(screen.getByRole('table', { name: 'Uploads' })).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Filter the uploads'), 'R0001')
+    expect(screen.getByLabelText('Active filters')).toHaveTextContent('2 of 4 uploads match')
+    await userEvent.click(screen.getByRole('button', { name: 'Reset the filters' }))
+    expect(screen.getByLabelText('Filter the uploads')).toHaveValue('')
+  })
+
   it('says so when there is no upload', async () => {
     vi.mocked(api.fieldDeployments).mockResolvedValue({ results: [] })
     render(<UploadStatusPage onBack={() => {}} />)
 
     expect(await screen.findByText('There is no upload yet: no deployment is planned, or no uploader is in use.')).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Uploads by status' })).toHaveTextContent('0 / 0')
+    expect(screen.getByRole('region', { name: 'Uploads by status' })).toHaveTextContent('0/ 0')
   })
 
   it('comes back from the breadcrumb', async () => {

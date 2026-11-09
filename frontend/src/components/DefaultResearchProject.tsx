@@ -27,38 +27,30 @@ export function useDefaultResearchProject(settingsOpen?: boolean): { project: Lo
   return { project, defaultAcronym, error }
 }
 
-/** The card that says which research project the page is of — the default one — with the link to the settings where it is changed. */
-export default function DefaultResearchProject({ project, defaultAcronym, of, onOpenSettings, compact = false }: {
-  project: LocalResearchProject | undefined; defaultAcronym: string | null; of: string; onOpenSettings?: (section?: 'general') => void
-  /** A small card to sit at the right of a page's title, instead of the full-width one. */
+const GEAR = <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>
+
+/** The card that says which research project the page is of — the default one: its label, its acronym and name, and the gear that goes to the settings where it is changed.
+ * The same card in every page: `compact` is kept for the pages that said it, and changes nothing. */
+export default function DefaultResearchProject({ project, defaultAcronym, onOpenSettings }: {
+  project: LocalResearchProject | undefined; defaultAcronym: string | null; of?: string; onOpenSettings?: (section?: 'general') => void
   compact?: boolean
 }) {
-  if (compact) return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 sm:min-w-[18rem]">
-      <p className="text-xs font-medium text-blue-600 dark:text-blue-400">Research project</p>
-      {project ? <p className="text-sm"><span className="font-mono font-semibold">{project.acronym}</span> — {project.name}</p>
-        : defaultAcronym === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the settings…</p>
-        : defaultAcronym ? <p className="text-sm text-amber-700 dark:text-amber-400">The default research project, <span className="font-mono">{defaultAcronym}</span>, is not in the collections folder.</p>
-        : <p className="text-sm text-amber-700 dark:text-amber-400">No default research project is set.</p>}
-      {onOpenSettings
-        ? <button type="button" className="mt-0.5 text-xs text-blue-600 dark:text-blue-400 hover:underline" onClick={() => onOpenSettings('general')}>Change it in the settings</button>
-        : <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Change it in Settings › General.</p>}
-    </div>
-  )
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 px-6 py-5 mb-5">
-      <h5 className="text-base font-semibold mb-2">Research project</h5>
-      {project ? (
-        <p className="text-base"><span className="font-mono font-semibold">{project.acronym}</span> — {project.name}</p>
-      ) : defaultAcronym === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the settings…</p>
-        : defaultAcronym ? <p className="text-sm text-amber-700 dark:text-amber-400">The default research project, <span className="font-mono">{defaultAcronym}</span>, is not in the collections folder.</p>
-        : <p className="text-sm text-amber-700 dark:text-amber-400">No default research project is set.</p>}
-      <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        {of} is of the default research project.{' '}
-        {onOpenSettings
-          ? <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => onOpenSettings('general')}>Change it in the settings</button>
-          : 'Change it in Settings › General.'}
-      </p>
+    <div className="flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/60 px-3 py-1.5 text-xs sm:min-w-[14rem]"
+         title={onOpenSettings ? undefined : 'Change it in Settings › General.'}>
+      <div className="flex min-w-0 flex-col">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Research project</span>
+        {project ? <span className="truncate font-bold text-zinc-900 dark:text-zinc-100"><span className="font-mono">{project.acronym}</span> <span className="font-normal text-zinc-500 dark:text-zinc-400">— {project.name}</span></span>
+          : defaultAcronym === null ? <span className="text-zinc-500 dark:text-zinc-400">Reading the settings…</span>
+          : defaultAcronym ? <span className="text-amber-700 dark:text-amber-400">The default research project, <span className="font-mono">{defaultAcronym}</span>, is not in the collections folder.</span>
+          : <span className="text-amber-700 dark:text-amber-400">No default research project is set.</span>}
+      </div>
+      {onOpenSettings && (
+        <button type="button" aria-label="Change it in the settings" title="Change it in the settings" onClick={() => onOpenSettings('general')}
+                className="ml-auto rounded p-1.5 text-blue-600 dark:text-blue-400 hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors">
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{GEAR}</svg>
+        </button>
+      )}
     </div>
   )
 }

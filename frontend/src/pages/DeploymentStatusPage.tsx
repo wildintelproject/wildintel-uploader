@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { PageHeader } from '../components/TaskCard'
+import { Breadcrumb } from '../components/TaskCard'
+import { DashboardHeader, HelpButton } from '../components/DashboardParts'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import FieldDeployments from '../components/FieldDeployments'
 import { readDeployment } from '../deploymentDetails'
@@ -28,6 +29,7 @@ export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsO
   const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
   const error = projectError ?? loadError
 
   useEffect(() => {
@@ -42,12 +44,13 @@ export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsO
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8">
-      <PageHeader icon={<path d="M18 20V10M12 20V4M6 20v-6" />} title="Deployments dashboard" description="The deployments indicated by the visits and their current status."
-        parent="Manage deployments" onParent={onBack}
+      <Breadcrumb parent="Manage deployments" onParent={onBack} current="Deployments dashboard" />
+      <DashboardHeader icon={<path d="M18 20V10M12 20V4M6 20v-6" />} title="Deployments dashboard" description="The deployments indicated by the visits and their current status."
+        actions={<HelpButton expanded={helpOpen} onClick={() => setHelpOpen(true)} />}
         aside={project !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The dashboard" onOpenSettings={onOpenSettings} /> : undefined} />
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} onShowSd={onOpenSettings && ((label) => onOpenSettings('sdcards', project.acronym, label))} onShowLocation={onOpenSettings && ((site) => onOpenSettings('locations', project.acronym, site))} onShowUploads={onShowUploads} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
+      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} helpOpen={helpOpen} onCloseHelp={() => setHelpOpen(false)} onShowSd={onOpenSettings && ((label) => onOpenSettings('sdcards', project.acronym, label))} onShowLocation={onOpenSettings && ((site) => onOpenSettings('locations', project.acronym, site))} onShowUploads={onShowUploads} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
 
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>

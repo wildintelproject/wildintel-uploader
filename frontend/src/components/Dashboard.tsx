@@ -17,17 +17,21 @@ export function Ring({ percent }: { percent: number }) {
   )
 }
 
-/** A card of a dashboard that counts one state and, pressed, shows only what is in it. */
+/** A card of a dashboard that counts one state and, pressed, shows only what is in it: its icon in a box, its name, the count and what it says. */
 export function StateCard({ label, note, count, tone, badge, icon, pressed, onPress }: {
   label: string; note: string; count: number; tone: string; badge: string; icon: ReactNode; pressed: boolean; onPress: () => void
 }) {
   return (
     <button type="button" aria-label={label} aria-pressed={pressed} onClick={onPress}
-            className={`rounded-2xl border px-4 py-4 text-left transition-colors ${pressed ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}>
-      <span aria-hidden="true" className={`mb-2 flex h-9 w-9 items-center justify-center rounded-full ${badge}`}>{icon}</span>
-      <span className={`block text-3xl font-semibold leading-tight ${tone}`}>{count}</span>
-      <span className={`block text-sm font-semibold ${tone}`}>{label}</span>
-      <span className="block text-xs text-zinc-500 dark:text-zinc-400">{note}</span>
+            className={`group flex flex-col justify-between gap-2 rounded-xl border p-3.5 text-left transition ${pressed ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20 ring-1 ring-blue-500/30' : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 hover:border-zinc-300 dark:hover:border-zinc-600'}`}>
+      <span className="flex items-center justify-between">
+        <span aria-hidden="true" className={`flex h-7 w-7 items-center justify-center rounded-lg ${badge}`}>{icon}</span>
+        <span className={`text-[10px] font-semibold uppercase ${tone}`}>{label}</span>
+      </span>
+      <span>
+        <span className={`block text-2xl font-bold ${tone}`}>{count}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-zinc-500 dark:text-zinc-400">{note}</span>
+      </span>
     </button>
   )
 }

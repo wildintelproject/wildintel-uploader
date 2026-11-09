@@ -85,7 +85,7 @@ describe('VisitBookPage', () => {
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     const [done, notDone] = within(table).getAllByRole('row').slice(1)
-    expect(within(notDone).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', '', 'Planned'])
+    expect(within(notDone).getAllByRole('cell').slice(1, 6).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', '', 'Planned'])
     // only the options that apply to the row are there: nothing to look at, and no deployment to create, where nothing was done
     expect(within(notDone).queryByRole('button', { name: /^View the visit/ })).not.toBeInTheDocument()
     expect(within(notDone).queryByRole('button', { name: /^Create the deployment/ })).not.toBeInTheDocument()
@@ -161,13 +161,13 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    const row = (site: string, session: string) => within(table).getAllByRole('row').find((r) => { const cells = within(r).queryAllByRole('cell'); return cells[0]?.textContent === session && cells[1]?.textContent === site })!
+    const row = (site: string, session: string) => within(table).getAllByRole('row').find((r) => { const cells = within(r).queryAllByRole('cell'); return cells[1]?.textContent === session && cells[2]?.textContent === site })!
     expect(within(row('TATR_0001', 'R0001')).queryByRole('button', { name: /^Show the previous visit to TATR_0001/ })).not.toBeInTheDocument()   // the first revision of the location
     expect(within(row('TATR_0003', 'R0002')).queryByRole('button', { name: /^Show the previous visit to TATR_0003/ })).not.toBeInTheDocument()   // nothing before it
     expect(within(row('TATR_0001', 'R0002')).queryByRole('button', { name: /^Show the next visit to TATR_0001/ })).not.toBeInTheDocument()          // the last revision of the location
     expect(within(row('TATR_0002', 'R0001')).queryByRole('button', { name: /^Show the next visit to TATR_0002/ })).not.toBeInTheDocument()          // nothing after it
     // only what applies is there, View between the one before and the one after: the first revision has no one before; a visit made is not created again, its deployment is
-    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['Edit the visit R0001', 'View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
+    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['Show the details of the visit R0001', 'Edit the visit R0001', 'View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
 
     await userEvent.click(within(row('TATR_0001', 'R0002')).getByRole('button', { name: 'Show the previous visit to TATR_0001 (R0001)' }))
     // the revision before is picked and its visit to the location is open
@@ -191,7 +191,7 @@ describe('VisitBookPage', () => {
     expect(within(squares).getByRole('button', { name: /^Collected/ })).toHaveTextContent('1')
     expect(within(squares).getByRole('button', { name: /^Deployed/ })).toHaveTextContent('0')
     expect(within(squares).getByRole('button', { name: /^Not visited/ })).toHaveTextContent('1')
-    expect(within(squares).getByText('Visits completed').parentElement).toHaveTextContent('2 / 2')   // a visit that could not be made counts as completed
+    expect(squares).toHaveTextContent('2/ 2')   // a visit that could not be made counts as completed
   })
 
   it('counts the visits by status in squares that filter them, with how many are done', async () => {
@@ -205,13 +205,13 @@ describe('VisitBookPage', () => {
     const squares = await screen.findByRole('region', { name: 'Visits by status' })
     const square = (name: RegExp) => within(squares).getByRole('button', { name })
 
-    expect(within(squares).getByText('Visits completed').parentElement).toHaveTextContent('3 / 4')
+    expect(squares).toHaveTextContent('3/ 4')
     expect(square(/^Planned/)).toHaveTextContent('1')
     expect(square(/^Deployed/)).toHaveTextContent('1')
     expect(square(/^Collected/)).toHaveTextContent('2')                   // the card collected, whether the deployment is made (images stored) or not
     expect(square(/^Not visited/)).toHaveTextContent('0')
     expect(within(squares).getByRole('progressbar', { name: 'Visits done' })).toHaveAttribute('aria-valuenow', '3')
-    expect(within(squares).getByText('3 of 4 visits done (75%) · 1 pending')).toBeInTheDocument()
+    expect(squares).toHaveTextContent('75%'); expect(within(squares).getByText('1 pending visit')).toBeInTheDocument()
 
     const table = screen.getByRole('table', { name: 'Visits' })
     await userEvent.click(square(/^Collected/))
@@ -233,15 +233,15 @@ describe('VisitBookPage', () => {
     const revisions = await screen.findByRole('region', { name: 'Revision' })
     const pick = (name: RegExp) => within(revisions).getByRole('button', { name })
 
-    expect(within(revisions).getAllByRole('button').map((b) => b.textContent)).toEqual(['All revisions2 of 5 done', 'R00030 of 1 done', 'R00021 of 2 done2024-09-04 → …', 'R00011 of 2 done2024-09-04 → …'])
+    expect(within(revisions).getAllByRole('button').slice(1).map((b) => b.textContent)).toEqual(['All revisions2 of 5 done40%', 'R00030 of 1 done', 'R00022024-09-04 → …1 of 2 done', 'R00012024-09-04 → …1 of 2 done'])
 
     await userEvent.click(pick(/^R0002/))
     expect(pick(/^R0002/)).toHaveAttribute('aria-pressed', 'true')
     const squares = screen.getByRole('region', { name: 'Visits by status' })
     expect(within(squares).getByRole('button', { name: /^Deployed/ })).toHaveTextContent('1')
-    expect(within(squares).getByText('1 of 2 visits done (50%) · 1 pending')).toBeInTheDocument()
+    expect(squares).toHaveTextContent('50%'); expect(within(squares).getByText('1 pending visit')).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0002', 'R0002'])
+    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual(['R0002', 'R0002'])
 
     await userEvent.click(pick(/^All revisions/))
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(5)
@@ -287,7 +287,7 @@ describe('VisitBookPage', () => {
     ] })
     await pickProject()
     const table = await screen.findByRole('table', { name: 'Visits' })
-    const where = () => within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)
+    const where = () => within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[2].textContent)
 
     await userEvent.click(within(table).getByRole('button', { name: 'Where' }))
     expect(where()).toEqual(['TATR_0001', 'TATR_0002', 'TATR_0003', 'TATR_0004'])
@@ -309,16 +309,16 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images'])
+    expect(within(table).getAllByRole('columnheader').slice(1, 7).map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12T09:00', 'Revision', 'Deployed', ''])
+    expect(within(first).getAllByRole('cell').slice(1, 7).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12T09:00', 'Revision', 'Deployed', ''])
     // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not
     expect(within(table).getAllByRole('button', { name: /^Details of the deployment/ })).toHaveLength(1) // a tick, not the id of the deployment
     expect(within(table).getByRole('button', { name: /^Details of the deployment/ })).toHaveAttribute('title', 'Show image details')
     expect(within(table).queryByText('R0003-TATR_0002')).not.toBeInTheDocument()
     // a visit that is closed and has no deployment yet has its button to store the images beside View, in the last column — not in Images, which says it is not stored
     expect(within(table).getAllByLabelText('Images not stored')).toHaveLength(2)
-    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04T09:00', 'Installation', 'Collected', ''])
+    expect(within(second).getAllByRole('cell').slice(1, 7).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04T09:00', 'Installation', 'Collected', ''])
     // the options are icons, and only the ones that apply: a closed visit without a deployment has its button to create it; the open one, nothing to create yet
     const options = (row: HTMLElement) => within(row).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.replace(/ to .*$/, '').replace(/ of the visit .*$/, '')).filter((l) => /^(View the visit|Create the visit|Create the deployment)/.test(l ?? ''))
     expect(options(second)).toEqual(['View the visit R0003', 'Create the deployment'])
@@ -377,6 +377,67 @@ describe('VisitBookPage', () => {
     const details = screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })
     expect(details).toHaveTextContent('SD card collectedA13 (241)')
     expect(details).toHaveTextContent('SD card leftB2')
+  })
+
+  it('tells the filters that are on, clears the search with its cross, and puts all of them back with Reset', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [
+      visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'closed' }),
+      visit({ session: 'R0002', deployment: 'R0002-TATR_0001', deployment_status: 'open' }),
+    ] })
+    await pickProject()
+    const active = await screen.findByLabelText('Active filters')
+    expect(active).toHaveTextContent('Revision: All'); expect(active).toHaveTextContent('Status: All'); expect(active).toHaveTextContent('2 of 2 visits match')
+
+    await userEvent.click(within(screen.getByRole('region', { name: 'Visits by status' })).getByRole('button', { name: 'Deployed' }))
+    await userEvent.type(screen.getByLabelText('Filter the visits'), 'R0002')
+    expect(active).toHaveTextContent('Status: Deployed'); expect(active).toHaveTextContent('1 of 2 visits match')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear the search' }))
+    expect(screen.getByLabelText('Filter the visits')).toHaveValue('')
+    await userEvent.click(screen.getByRole('button', { name: 'Reset the filters' }))
+    expect(screen.getByLabelText('Status')).toHaveValue('')
+    expect(active).toHaveTextContent('Status: All'); expect(active).toHaveTextContent('2 of 2 visits match')
+  })
+
+  it('folds away the revisions and the status cards with their chevron, to leave the table alone, and brings them back', async () => {
+    await pickProject()
+    await screen.findByRole('table', { name: 'Visits' })
+    expect(screen.getByRole('group', { name: 'Revision' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Visits by status' })).toHaveTextContent('Click a card')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fold away the revision selection' }))
+    expect(screen.queryByRole('group', { name: 'Revision' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Fold away the status metrics' }))
+    expect(within(screen.getByRole('region', { name: 'Visits by status' })).queryAllByRole('button', { name: 'Deployed' })).toHaveLength(0)
+    expect(screen.getByRole('table', { name: 'Visits' })).toBeInTheDocument()                    // the table stays
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show the revision selection' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Show the status metrics' }))
+    expect(screen.getByRole('group', { name: 'Revision' })).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Visits by status' })).getAllByRole('button', { name: 'Deployed' })).toHaveLength(1)
+  })
+
+  it('opens the legend and the help in a panel from the header, and closes it with its button, the one at the foot, the background or Escape', async () => {
+    await pickProject()
+    await screen.findByRole('table', { name: 'Visits' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Help & Legend/ }))
+    const panel = await screen.findByRole('dialog', { name: 'Dashboard legend and help' })
+    expect(within(panel).getByText('Visit states')).toBeInTheDocument()
+    expect(within(panel).getByText('Collected')).toBeInTheDocument()
+    expect(within(panel).getByText('Overall progress')).toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Got it, close' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Help & Legend/ }))
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Help & Legend/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Close the help' })[0])
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('says that the card a visit collects is unknown when no visit before it is known, instead of leaving it out', async () => {
