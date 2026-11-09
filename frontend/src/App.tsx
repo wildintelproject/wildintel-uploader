@@ -49,6 +49,8 @@ export default function App() {
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null)
   // The visit Import deployment starts from, when it is reached from the visits page, right after one was closed.
   const [closedVisitTarget, setClosedVisitTarget] = useState<ClosedVisitTarget | null>(null)
+  // Import deployment opened on a research project, to pick the revision whose visits were just closed.
+  const [importProjectId, setImportProjectId] = useState<string | null>(null)
   // What Manage deployments shows: its options (none), the import or the status — on a deployment when a link of the visit book sent the user to it.
   const [uploadsView, setUploadsView] = useState<UploadsView | null>(null)
   const [deploymentsView, setDeploymentsView] = useState<DeploymentsView | null>(null)
@@ -81,11 +83,15 @@ export default function App() {
   }, [])
 
   function goHome() {
-    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setClosedVisitTarget(null); setDeploymentsView(null); setUploadsView(null); setDeploymentFocus(undefined); setUploadSearch(undefined); setVisitFocus(undefined); setMenuShown(false); setHome(true)
+    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setClosedVisitTarget(null); setImportProjectId(null); setDeploymentsView(null); setUploadsView(null); setDeploymentFocus(undefined); setUploadSearch(undefined); setVisitFocus(undefined); setMenuShown(false); setHome(true)
   }
 
   function goToImportOfVisit(target: ClosedVisitTarget) {
     setClosedVisitTarget(target); setDeploymentsView('import'); setTask('deployment')
+  }
+
+  function goToImportOfProject(researchProjectId: string) {
+    setImportProjectId(researchProjectId); setDeploymentsView('import'); setTask('deployment')
   }
 
   function goToDeploymentStatus(deploymentId: string) {
@@ -118,8 +124,8 @@ export default function App() {
         <div className={settingsOpen ? 'hidden' : ''}>
           {task === 'deployment'
             ? (resumeSession || closedVisitTarget || deploymentsView === 'import')
-              ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} closedVisit={closedVisitTarget ?? undefined} onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings}
-                                      onBack={() => { setClosedVisitTarget(null); setResumeSession(null); if (closedVisitTarget || resumeSession) { setDeploymentsView(null); setTask(null) } else setDeploymentsView(null) }} />
+              ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} closedVisit={closedVisitTarget ?? undefined} researchProject={importProjectId ?? undefined} onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings}
+                                      onBack={() => { setClosedVisitTarget(null); setImportProjectId(null); setResumeSession(null); if (closedVisitTarget || importProjectId || resumeSession) { setDeploymentsView(null); setTask(null) } else setDeploymentsView(null) }} />
               : deploymentsView === 'many'
                 ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setDeploymentsView(null)} />
               : deploymentsView === 'status'
@@ -140,7 +146,7 @@ export default function App() {
               : task === 'repair'
               ? <RepairPage onBack={() => setTask(null)} />
               : task === 'visits'
-              ? <VisitsHomePage settingsOpen={settingsOpen} onOpenSettings={openSettings} onImportImages={goToImportOfVisit} onShowDeployment={goToDeploymentStatus} focusVisit={visitFocus} onBack={() => { setTask(null); setVisitFocus(undefined) }} />
+              ? <VisitsHomePage settingsOpen={settingsOpen} onOpenSettings={openSettings} onImportImages={goToImportOfVisit} onImportImagesOf={goToImportOfProject} onShowDeployment={goToDeploymentStatus} focusVisit={visitFocus} onBack={() => { setTask(null); setVisitFocus(undefined) }} />
               : showResumeScreen
                 ? (
                   <ResumeSessionsPage

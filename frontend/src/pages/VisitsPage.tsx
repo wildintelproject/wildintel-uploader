@@ -439,6 +439,8 @@ interface Props {
   settingsOpen?: boolean
   /** Goes to Import deployment for a visit that was just closed: its research project and the visit whose card was collected. */
   onImportImages?: (target: ClosedVisitTarget) => void
+  /** Goes to Import deployment on a research project: its revisions with visits closed, to import their images. */
+  onImportImagesOf?: (researchProjectId: string) => void
   /** A visit that was planned, to be created: the register opens by hand on its research project and its location. */
   start?: { researchProjectId: string; site: string }
 }
@@ -447,7 +449,7 @@ interface Props {
 /** What a visit keeps of its camera: its serial number, or its label when it has none. */
 const cameraKey = (c: Camera) => c.camera_id || c.label
 
-export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = false, onImportImages, start }: Props) {
+export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = false, onImportImages, onImportImagesOf, start }: Props) {
   const [source, setSource] = useState<VisitSource | null>(null)
   const byHand = source === 'manual'
   const [visit, setVisit] = useState<Visit>(EMPTY_VISIT)
@@ -1623,7 +1625,11 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     <Notice kind="success" role="status" className="mt-4 !items-center !rounded-2xl !px-6 !py-5 !text-base">
                       <strong>{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added</strong> to {project?.acronym}.{' '}
                       {justClosed.length > 0
-                        ? <>As a result of {csvSaved === 1 ? 'this new visit' : 'these new visits'}, {justClosed.length} other {justClosed.length === 1 ? 'visit is' : 'visits are'} now closed: import {justClosed.length === 1 ? 'its images' : 'their images'} from the Visit dashboard to make {justClosed.length === 1 ? 'its deployment' : 'their deployments'}.</>
+                        ? <>As a result of {csvSaved === 1 ? 'this new visit' : 'these new visits'}, {justClosed.length} other {justClosed.length === 1 ? 'visit is' : 'visits are'} now closed:{' '}
+                          {onImportImagesOf && project
+                            ? <button type="button" className="font-medium underline" onClick={() => onImportImagesOf(project.acronym)}>pick {justClosed.length === 1 ? 'its revision' : 'their revision'} and import {justClosed.length === 1 ? 'its images' : 'their images'}</button>
+                            : <>import {justClosed.length === 1 ? 'its images' : 'their images'} from the Visit dashboard</>}
+                          {' '}to make {justClosed.length === 1 ? 'its deployment' : 'their deployments'}.</>
                         : <>A deployment can be made once the card of a visit is collected.</>}
                       {csvResult?.report && <> The report of the import is with the other reports: <a className="font-medium underline" href={api.reportUrl(csvResult.report, 'csv')} download>Download report</a>.</>}
                     </Notice>

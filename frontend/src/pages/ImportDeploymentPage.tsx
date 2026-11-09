@@ -1388,6 +1388,8 @@ interface Props {
   resumeSession?: SessionSummary
   /** The visit this import starts from — the research project and the visit whose card was collected are chosen for you. */
   closedVisit?: ClosedVisitTarget
+  /** The research project this import starts from — chosen for you, to pick the revision of its closed visits. */
+  researchProject?: string
   /** Offered once a deployment is imported: goes to the upload page, on the collection it went into. */
   onUpload?: (target: UploadTarget) => void
   /** Opens the settings — where the owner and publisher written into the images are set — on a section when given one. */
@@ -1401,7 +1403,7 @@ interface Props {
 // Blank credentials: the backend uses the ones saved in the settings.
 export const NO_CREDENTIALS: TrapperCredentials = {}
 
-export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpload, onOpenSettings, settingsOpen = false, onBack }: Props) {
+export default function ImportDeploymentPage({ resumeSession, closedVisit, researchProject, onUpload, onOpenSettings, settingsOpen = false, onBack }: Props) {
   const [step, setStep] = useState(0)
 
   // The Trapper account is the one saved in the settings: nothing is asked for here, and the backend
@@ -1948,6 +1950,13 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
     if (project) selectProject(project)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closedVisit, localProjects, selectedProjectId])
+  // Coming with only a research project (the visits of a file were just closed): it is picked, and the revision is left to be chosen.
+  useEffect(() => {
+    if (!researchProject || closedVisit || selectedProjectId === researchProject) return
+    const project = localProjects.find((p) => p.acronym === researchProject)
+    if (project) selectProject(project)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchProject, closedVisit, localProjects])
   useEffect(() => {
     if (!closedVisit || closedVisitApplied.current || selectedProjectId !== closedVisit.researchProjectId || !closedVisits || localLocations.length === 0) return
     const wanted = visitKey({ visit: closedVisit.visit, end: closedVisit.visit })
@@ -2281,7 +2290,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, onUpl
         if (cancelled) return
         setLocalProjects(results)
         // With none picked (and no visit to take it from), the default research project of the general settings comes filled in — once.
-        if (selectedProjectId || closedVisit || resumeSession || defaultProjectApplied.current) return
+        if (selectedProjectId || closedVisit || researchProject || resumeSession || defaultProjectApplied.current) return
         defaultProjectApplied.current = true
         const wanted = await defaultResearchProject()
         const found = wanted ? results.find((p) => p.acronym.toLowerCase() === wanted.toLowerCase()) : undefined
