@@ -40,19 +40,22 @@ export function Breadcrumb({ parent, onParent, current }: { parent: string; onPa
 }
 
 /** The title of a page: the way back to the section it hangs from, the icon, the title and what it is for. */
-export function PageHeader({ icon, title, description, parent, onParent, aside }: { icon: ReactNode; title: string; description: ReactNode; parent: string; onParent?: () => void; aside?: ReactNode }) {
+export function PageHeader({ icon, title, description, parent, onParent, aside, actions }: { icon: ReactNode; title: string; description: ReactNode; parent: string; onParent?: () => void; aside?: ReactNode; actions?: ReactNode }) {
   return (
     <>
       <Breadcrumb parent={parent} onParent={onParent} current={title} />
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 px-5 py-4 shadow-sm">
-        <div className="flex items-center gap-4">
-          <span className="w-12 h-12 flex items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 shrink-0"><LineIcon size={22}>{icon}</LineIcon></span>
-          <div>
-            <h1 className="text-2xl font-bold">{title}</h1>
-            <p className="text-zinc-500 dark:text-zinc-400 text-sm">{description}</p>
+      <header className="mb-6 flex flex-col gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 px-5 py-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="flex items-center gap-4">
+            <span className="w-12 h-12 flex items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 shrink-0"><LineIcon size={22}>{icon}</LineIcon></span>
+            <div>
+              <h1 className="text-2xl font-bold">{title}</h1>
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm">{description}</p>
+            </div>
           </div>
+          {actions && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Page actions">{actions}</div>}
         </div>
-        {aside}
+        {aside && <div className="shrink-0">{aside}</div>}
       </header>
     </>
   )

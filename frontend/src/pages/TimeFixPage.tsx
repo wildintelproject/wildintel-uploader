@@ -4,9 +4,11 @@ import { defaultResearchProject } from '../defaultResearchProject'
 import Combobox from '../components/Combobox'
 import ActiveProjectCard from '../components/ActiveProjectCard'
 import BackButton from '../components/BackButton'
+import WizardStep from '../components/WizardStep'
 import { PageHeader, UTIL_ICONS } from '../components/TaskCard'
+import { HELP_ICONS, HelpButton, HelpCard, HelpDrawer } from '../components/DashboardParts'
 import { SmallSpinner, btnOutline, btnPrimary, visitKey, visitLabel } from './ImportDeploymentPage'
-import type { ClosedVisit, LocalResearchProject, StoredVisit, TimeFixTarget, TimeSegment, Timeline } from '../types'
+import type { ClosedVisit, StoredVisit, TimeFixTarget, TimeSegment, Timeline } from '../types'
 
 const labelClass = 'block text-sm font-semibold mb-1.5 text-zinc-700 dark:text-zinc-300'
 const inputClass = 'rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60'
@@ -88,7 +90,6 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
   /** The page it is reached from: Utilities, or Import deployment when the dates were found wrong there. */
   parent?: string
 } = {}) {
-  const [projects, setProjects] = useState<LocalResearchProject[]>([])
   const [projectId, setProjectId] = useState('')
   const [folder, setFolder] = useState('')
   const [browsing, setBrowsing] = useState(false)
@@ -112,7 +113,6 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
 
   useEffect(() => {
     api.listResearchProjects().then(async ({ results }) => {
-      setProjects(results)
       // Opened with no research project: the default of the general settings comes filled in.
       if (initial?.researchProjectId) return
       const wanted = await defaultResearchProject()
@@ -187,6 +187,8 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
     setReason(`Segment ${seg.first}–${seg.last} ${seg.suggestion.why}`)
   }
 
+  const [helpOpen, setHelpOpen] = useState(false)
+
   async function run(action: () => Promise<Timeline>, fallback: string) {
     setBusy(true); setError(null)
     try { const t = await action(); setTimeline(t); resetForm(t) } catch (e) { setError(message(e, fallback)) } finally { setBusy(false) }
@@ -199,12 +201,13 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
   return (
     <div className="max-w-[1100px] mx-auto px-4 py-8 space-y-6">
       <PageHeader icon={UTIL_ICONS.timefix} title="Check and fix dates and times" parent={parent} onParent={onBack} aside={<ActiveProjectCard of="The dates" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />}
-        description={<>For the images of a card copied to a folder, whose camera clock went wrong: see where the time jumps, shift a run of images by an offset — or to match an image
-          whose real time you know — and remove the images whose time can&rsquo;t be trusted. The dates are checked against the period of the visit that left the camera.
-          The images of the folder are changed, so work on the copy, never on the card; every fix is written down in the folder
-          (<span className="font-mono">time_corrections.json</span>) and a shift is undone by shifting back.</>} />
+        description="For the images of a card copied to a folder whose camera clock went wrong: see where the time jumps, shift the dates and remove the images that can’t be trusted."
+        actions={<HelpButton label="Help" expanded={helpOpen} onClick={() => setHelpOpen(true)} />} />
 
-      <div className="space-y-4">
+      <WizardStep n={1} title="Choose the folder and the visit" status={timeline ? 'done' : 'open'} canEdit={!busy} onEdit={() => setTimeline(null)}
+                  summary={<><span className="font-mono">{folder}</span>{visitId && visits.find((c) => visitKey(c) === visitId) ? <> · {visitLabel(visits.find((c) => visitKey(c) === visitId)!)}</> : ' · no visit chosen'}</>}
+                  description="The images of the card copied to a folder, and the visit that left the camera — the dates are checked against its period.">
+        <div className="space-y-4">
         <div>
           <label className={labelClass} htmlFor="tf-folder">Folder</label>
           <div className="flex gap-2">
@@ -215,24 +218,18 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
             </button>
           </div>
         </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass} htmlFor="tf-project">Research project</label>
-            <Combobox id="tf-project" options={projects.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))} value={projectId}
-                      onChange={(v) => void chooseProject(v)} disabled={busy} placeholder="Select…" clearLabel="Clear research project" />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="tf-visit">Visit that left the camera</label>
-            <Combobox id="tf-visit" options={visits.map((c) => ({ value: visitKey(c), label: visitLabel(c) }))} value={visitId}
-                      onChange={(v) => { setVisitId(v); setTimeline(null) }} disabled={busy || !projectId}
-                      placeholder={projectId && !visits.length ? 'No closed visits' : 'Select…'} clearLabel="Clear visit" />
-          </div>
+        <div>
+          <label className={labelClass} htmlFor="tf-visit">Visit that left the camera</label>
+          <Combobox id="tf-visit" options={visits.map((c) => ({ value: visitKey(c), label: visitLabel(c) }))} value={visitId}
+                    onChange={(v) => { setVisitId(v); setTimeline(null) }} disabled={busy || !projectId}
+                    placeholder={!projectId ? 'No default research project' : !visits.length ? 'No closed visits' : 'Select…'} clearLabel="Clear visit" />
         </div>
         <p className={hintClass}>The visit is optional: without it the time jumps are found, but the dates can&rsquo;t be checked against a period.</p>
         <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!folder.trim() || busy} onClick={() => void check()}>
           {busy && !timeline && <SmallSpinner />}Check the dates
         </button>
-      </div>
+        </div>
+      </WizardStep>
 
       {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
       {busy && !timeline && <p className="text-sm text-zinc-500 flex items-center gap-2"><SmallSpinner />Reading the images…</p>}
@@ -382,6 +379,36 @@ export default function TimeFixPage({ initial, onBack, onOpenSettings, settingsO
           </section>
 
         </>
+      )}
+      {helpOpen && (
+        <HelpDrawer title="Dates and times: help" onClose={() => setHelpOpen(false)}>
+          <HelpCard title="What it is for" tone="text-blue-600 dark:text-blue-400" icon={HELP_ICONS.progress}>
+            <p>The clock of a camera can go wrong — it is reset, or it was never set — and then the dates of its images are not the days they were taken. Here you find where the time jumps and fix it, for the images of a card that you <strong>copied to a folder</strong>.</p>
+            <p className="mt-1.5">The images of the folder are changed, so work on the copy, <strong>never on the card</strong>.</p>
+          </HelpCard>
+          <HelpCard title="Check the dates" tone="text-emerald-600 dark:text-emerald-400" icon={HELP_ICONS.images}>
+            <p>Say the <strong>folder</strong> and the <strong>visit that left the camera</strong> — those of the default research project, the one in the card at the top —, and press <em>Check the dates</em>.</p>
+            <p className="mt-1.5">The visit is optional: without it the jumps in the time are found, but the dates can’t be checked against a period. With it, the dates are compared with the days between the visit that left the camera and the next one, with a margin of a few hours.</p>
+          </HelpCard>
+          <HelpCard title="Segments" tone="text-amber-600 dark:text-amber-400" icon={HELP_ICONS.filter}>
+            <p>A new <strong>segment</strong> starts wherever the time goes backwards from one image to the next — usually the clock was reset or changed. Each one says if it is <em>In its period</em>, <em>Partly outside</em> or <em>Outside its period</em>.</p>
+            <p className="mt-1.5">Where the app can work out the shift that puts a segment in its period, the button <em>Shift …</em> applies it. The images with <em>No date</em> have none to be corrected.</p>
+          </HelpCard>
+          <HelpCard title="Shift dates and times" tone="text-violet-600 dark:text-violet-400" icon={HELP_ICONS.tags}>
+            <p>Pick the run of images — <em>From image</em> and <em>To image</em>, up to the last one if none is said — and how far to move them:</p>
+            <ul className="mt-1.5 list-disc space-y-1 pl-5">
+              <li><strong>By an offset</strong>: forward or back, in days, hours, minutes and seconds.</li>
+              <li><strong>From an image whose real time I know</strong>: say one image and the time it was really taken (a photo of the field team, for one), and the shift is worked out from it.</li>
+            </ul>
+            <p className="mt-1.5">Write <em>why</em>: it is kept with the fix.</p>
+          </HelpCard>
+          <HelpCard title="Remove images" tone="text-red-600 dark:text-red-400" icon={HELP_ICONS.upload}>
+            <p>The images whose time can’t be trusted, and that nothing tells when they were taken, can be removed from the folder: a segment that is outside its period, or the images with no date. They are <strong>deleted</strong> from the folder; their names are written down with the fix and the reason.</p>
+          </HelpCard>
+          <HelpCard title="Fixes made" tone="text-sky-600 dark:text-sky-400" icon={HELP_ICONS.progress}>
+            <p>Every fix is written down in the folder, in <span className="font-mono">time_corrections.json</span>, and listed under <em>Fixes made</em>. A shift is undone by shifting back by the same amount.</p>
+          </HelpCard>
+        </HelpDrawer>
       )}
       {onBack && <div className="pt-4"><BackButton onClick={onBack} disabled={busy} /></div>}
     </div>

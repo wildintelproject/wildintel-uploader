@@ -7,7 +7,7 @@ import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { ClosedVisit, Timeline } from '../types'
 
 vi.mock('../api', () => ({
-  api: { listResearchProjects: vi.fn(), closedVisits: vi.fn(), browseFolder: vi.fn(), timefixTimeline: vi.fn(), timefixShift: vi.fn(), timefixRemove: vi.fn() },
+  api: { listResearchProjects: vi.fn(), closedVisits: vi.fn(), browseFolder: vi.fn(), timefixTimeline: vi.fn(), timefixShift: vi.fn(), timefixRemove: vi.fn(), getSettings: vi.fn() },
 }))
 const mockedApi = vi.mocked(api, true)
 
@@ -31,6 +31,7 @@ const BROKEN: Timeline = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'DONA' } } as never)
   mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...EMPTY_RESEARCH_PROJECT, name: 'Doñana', acronym: 'DONA', trapper_pk: 2 }] })
   mockedApi.closedVisits.mockResolvedValue({ results: [CLOSED] })
   mockedApi.browseFolder.mockResolvedValue({ path: FOLDER })
@@ -41,8 +42,6 @@ beforeEach(() => {
 
 async function openFolder() {
   render(<TimeFixPage />)
-  await userEvent.click(await screen.findByLabelText('Research project'))
-  await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
   await userEvent.click(await screen.findByLabelText('Visit that left the camera'))
   await userEvent.click(await screen.findByRole('option', { name: /DONA_0011/ }))
   await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
@@ -108,5 +107,28 @@ describe('leaving', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Back' }))
     expect(onBack).toHaveBeenCalled()
+  })
+
+  it('keeps the header short, with a Help button that opens what each option does', async () => {
+    render(<TimeFixPage />)
+    expect(screen.queryByText(/time_corrections.json/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Help' }))
+    const help = screen.getByRole('dialog', { name: 'Dates and times: help' })
+    expect(help).toHaveTextContent('never on the card')
+    expect(help).toHaveTextContent('Segments')
+    expect(help).toHaveTextContent('time_corrections.json')
+    await userEvent.click(screen.getByRole('button', { name: 'Got it, close' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('has the folder and the visit as the first step: once checked it says what was chosen, and Edit brings the form back', async () => {
+    await openFolder()
+    expect(screen.getByText('1. Choose the folder and the visit')).toBeInTheDocument()
+    expect(screen.getByLabelText('Folder').closest('.hidden')).not.toBeNull()      // the form is folded away, and the step says what was chosen
+    expect(screen.getByText(FOLDER)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit Choose the folder and the visit' }))
+    expect(screen.getByLabelText('Folder').closest('.hidden')).toBeNull()
+    expect(screen.getByLabelText('Folder')).toHaveValue(FOLDER)
+    expect(screen.queryByRole('heading', { name: 'Segments' })).not.toBeInTheDocument()
   })
 })

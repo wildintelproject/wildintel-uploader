@@ -19,8 +19,8 @@ export function FoldButton({ open, onToggle, name }: { open: boolean; onToggle: 
 /** The head of a dashboard: its icon, its title and what it is, a line of buttons under them, and a card at the right — the research project. */
 export function DashboardHeader({ icon, title, description, actions, aside }: { icon: ReactNode; title: string; description: ReactNode; actions?: ReactNode; aside?: ReactNode }) {
   return (
-    <header className="mb-8 flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 px-5 py-4 shadow-sm">
-      <div className="flex flex-col gap-3">
+    <header className="mb-8 flex flex-col gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 px-5 py-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
         <div className="flex items-center gap-3">
           <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
             <Icon path={icon} className="h-6 w-6" />
@@ -32,17 +32,17 @@ export function DashboardHeader({ icon, title, description, actions, aside }: { 
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Dashboard actions">{actions}</div>}
       </div>
-      {aside}
+      {aside && <div className="shrink-0">{aside}</div>}
     </header>
   )
 }
 
 /** The button of the header that opens the legend and the help. */
-export function HelpButton({ onClick, expanded }: { onClick: () => void; expanded: boolean }) {
+export function HelpButton({ onClick, expanded, label = 'Help & Legend' }: { onClick: () => void; expanded: boolean; label?: string }) {
   return (
     <button type="button" className={`${btnOutline} inline-flex items-center gap-2`} aria-haspopup="dialog" aria-expanded={expanded} onClick={onClick}>
       <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M9.500 9a2.500 2.500 0 015 .5c0 1.500-2.500 2-2.500 3.500M12 17h.01" /></>} className="h-4 w-4" />
-      Help &amp; Legend
+      {label}
     </button>
   )
 }
@@ -58,21 +58,21 @@ export function DownloadButton({ onClick, busy, title, children }: { onClick: ()
 }
 
 /** The panel at the right with the legend and the help of a dashboard: it closes with its cross, the button at the foot, the background or Escape. */
-export function HelpDrawer({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+export function HelpDrawer({ onClose, children, title = 'Dashboard legend & help' }: { onClose: () => void; children: ReactNode; title?: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Dashboard legend and help">
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={title.replace(' & ', ' and ')}>
       <button type="button" aria-label="Close the help" tabIndex={-1} className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <aside className="relative flex h-full w-full max-w-md flex-col justify-between overflow-y-auto border-l border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-2xl">
         <div>
           <div className="mb-5 flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-700 pb-4">
             <h5 className="flex items-center gap-3 text-lg font-semibold">
               <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400"><Icon path={<><circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v4h1" /></>} className="h-4 w-4" /></span>
-              Dashboard legend &amp; help
+              {title}
             </h5>
             <button type="button" aria-label="Close the help" className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" onClick={onClose}>
               <Icon path={<path d="M6 6l12 12M18 6L6 18" />} className="h-5 w-5" />
