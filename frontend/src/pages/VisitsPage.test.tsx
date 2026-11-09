@@ -866,6 +866,13 @@ describe('VisitsPage from a CSV file', () => {
   const MAPPING = { location_id: 'Lugar', date: 'Dia', time: 'Hora', actions: 'Tarea', num_photos: 'Fotos' }
   const MAPPING_WITHOUT_PHOTOS = { location_id: 'Lugar', date: 'Dia', time: 'Hora', actions: 'Tarea' }   // what the file matched by itself
 
+  /** The file step stays open, with what it can create, until Continue. */
+  async function continueFromTheFile() {
+    const button = await screen.findByRole('button', { name: 'Continue' })
+    await waitFor(() => expect(button).toBeEnabled())
+    await userEvent.click(button)
+  }
+
   async function start(option = /custom csv/i) {
     mockedApi.visitsCsvColumns.mockResolvedValue(COLUMNS)
     render(<VisitsPage onBack={vi.fn()} />)
@@ -873,6 +880,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
   }
 
   it('shows the columns of the file with the ones that match already picked, and an example of each', async () => {
@@ -895,9 +903,26 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.click(await screen.findByRole('radio', { name: 'Epicollect5 project' }))
     await userEvent.click(screen.getByRole('button', { name: 'Download the entries' }))
+    await continueFromTheFile()
 
     expect(await screen.findByLabelText('Date')).toHaveValue('Dia')
     expect(mockedApi.visitsCsvColumns).toHaveBeenCalledWith('Lugar,Dia\nTATR_01,02/10/2026\n')
+  })
+
+  it('keeps the step of the file open when the file is chosen, with what can be created, until Continue — and Back goes to the research project', async () => {
+    mockedApi.visitsCsvColumns.mockResolvedValue(COLUMNS)
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /custom csv/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+
+    expect(await screen.findByText('Create what does not exist yet')).toBeVisible()      // the step did not move on
+    expect(screen.queryByLabelText('Columns of the file and fields of the visit')).not.toBeInTheDocument()   // the matching waits for Continue
+    const next = screen.getByRole('button', { name: 'Continue' })
+    await waitFor(() => expect(next).toBeEnabled())
+    await userEvent.click(next)
+    expect(await screen.findByLabelText('Columns of the file and fields of the visit')).toBeInTheDocument()
   })
 
   it('groups the fields of the matching, and each group can be folded away', async () => {
@@ -930,6 +955,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Create the locations that do not exist' }))
     await userEvent.click(screen.getByRole('switch', { name: 'Create the cameras that do not exist' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
 
     await screen.findByLabelText('Site (a location of the research project)')
     expect(screen.getByLabelText('Timezone of the location (IANA, e.g. Europe/Madrid)')).toBeInTheDocument()
@@ -959,6 +985,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), new File(['locationID,Date\n'], 'new.csv', { type: 'text/csv' }))
+    await continueFromTheFile()
 
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', 'locationID,Date\n', false, 'epicollect-csv'))
     expect(await screen.findByText(/to add/)).toBeInTheDocument()
@@ -1023,6 +1050,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
 
     expect(await screen.findByText(/You can also create the locations/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Go to the locations of TATR' }))
@@ -1043,6 +1071,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
 
     expect(await screen.findByRole('list', { name: 'What to check' })).toHaveTextContent('camera P800 is at 2 sites')
     expect(screen.getByText(/2 sites are not a location of TATR/)).toBeInTheDocument()
@@ -1062,6 +1091,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.upload(screen.getByLabelText('History of visits (.xlsx)'), new File([new Uint8Array([80, 75, 3, 4])], 'history.xlsx'))
     expect(await screen.findByText('history.xlsx')).toBeInTheDocument()
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
 
     // the history goes with the file, as base64
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.any(String), false, 'epicollect', undefined, 'UEsDBA=='))
@@ -1077,6 +1107,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
 
     expect(await screen.findByRole('list', { name: 'Notes on the visits' })).toHaveTextContent('their cameras still out: TATR_0002')
     await userEvent.click(screen.getByRole('button', { name: 'Add 1 visit' }))
@@ -1091,6 +1122,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
     expect(await screen.findByText(/to add/)).toHaveTextContent('0 visits to add · 1 already kept')
 
     await userEvent.click(screen.getByRole('button', { name: 'Check again' }))
@@ -1110,6 +1142,7 @@ describe('VisitsPage from a CSV file', () => {
     expect(screen.queryByLabelText(/Timezone of the new locations/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('CSV file')).toBeEnabled()
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(1))
 
     await userEvent.click(screen.getByRole('switch', { name: 'Create the locations that do not exist' }))
@@ -1148,6 +1181,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
 
     expect(await screen.findByRole('list', { name: 'What to check' })).toHaveTextContent('from the history of visits')
     expect(screen.getByRole('list', { name: 'What to check' })).not.toHaveTextContent('0 photos')           // that one is in its row
@@ -1163,10 +1197,12 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     const input = screen.getByLabelText('CSV file') as HTMLInputElement
     await userEvent.upload(input, file)
+    await continueFromTheFile()
     expect(await screen.findByRole('list', { name: 'Rows with a problem' })).toBeInTheDocument()
     expect(input.value).toBe('') // so that the same file, once edited, can be chosen again
 
     await userEvent.upload(input, new File(['edited'], 'visits.csv', { type: 'text/csv' }))
+    await continueFromTheFile()
     expect(await screen.findByText(/to add/)).toHaveTextContent('1 visit to add')
     expect(screen.queryByRole('list', { name: 'Rows with a problem' })).not.toBeInTheDocument()
   })
@@ -1178,6 +1214,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
 
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.any(String), false, 'epicollect'))
     expect(await screen.findByText(/to add/)).toHaveTextContent('3 entries from an old version of the form, ignored')

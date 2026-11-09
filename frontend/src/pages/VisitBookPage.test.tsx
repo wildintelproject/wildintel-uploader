@@ -379,6 +379,17 @@ describe('VisitBookPage', () => {
     expect(details).toHaveTextContent('SD card leftB2')
   })
 
+  it('says that the card a visit collects is unknown when no visit before it is known, instead of leaving it out', async () => {
+    mockedApi.visitBook.mockResolvedValue({ results: [visit({ session: 'R0006', actions: ['Revision'], num_photos: 1340, sd: '8' })] })
+    render(<VisitBookPage onBack={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: /View the visit R0006 to/ }))
+
+    const details = screen.getByLabelText(/Details of the visit R0006 to/, { selector: 'dl' })
+    expect(details).toHaveTextContent('SD card collectedunknown: no visit before it is known')
+    expect(details).toHaveTextContent('Photos counted1340')
+    expect(details).toHaveTextContent('SD card left8')
+  })
+
   it('says Stolen of the visit whose camera was stolen, with no button to create a deployment', async () => {
     mockedApi.visitBook.mockResolvedValue({ results: [
       visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'closed', deployment_no_images: 'stolen' }),

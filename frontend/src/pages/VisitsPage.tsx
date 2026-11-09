@@ -511,6 +511,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const cameras = allCameras.filter((c) => ofProject(c.research_project) && (inUse(c.status) || cameraKey(c) === visit.details.camera_id))
   // From a CSV file: its text, what reading it gave, and what was kept of it.
   const [csvName, setCsvName] = useState<string | null>(null)
+  // The file step stays open — with what it can create — until Continue: choosing the file does not move on.
+  const [fileConfirmed, setFileConfirmed] = useState(false)
   // The groups of the matching that are folded away, as there are many fields.
   const [foldedGroups, setFoldedGroups] = useState<string[]>([])
   // Custom CSV: where the file is — on this computer, or in the Epicollect5 project of the settings.
@@ -694,7 +696,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
   const csvReading = useRef(0)
   function forgetCsv() {
     csvReading.current++ // what an older file is still being answered is left out
-    setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({})
+    setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({}); setFileConfirmed(false)
     // what to create and the defaults go with the columns they are for — except those of the legacy download, which are chosen before its file is read
     if (source !== 'wildintel' && source !== 'csv') { setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({}) }
   }
@@ -1358,7 +1360,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
           </WizardStep>
 
           <WizardStep
-            n={3} title={'Choose the spreadsheet file'} status={!project ? 'locked' : csvResult || csvColumns ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
+            n={3} title={'Choose the spreadsheet file'} status={!project ? 'locked' : (csvResult || csvColumns) && fileConfirmed ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
             description={source === 'wildintel'
               ? <>The Epicollect download of the field trip. Its columns are found by their names ({['1_Responsable', '2_Collection', '4_Location', '5_Camera', '6_Action', '7_Status_of_the_camera', 'created_at'].map((c, i, all) => (
                 <span key={c}><code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-xs font-mono">{c}</code>{i < all.length - 2 ? ', ' : i === all.length - 2 ? ', and ' : ''}</span>
@@ -1421,9 +1423,13 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
               </fieldset>
             )}
             {csvError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{csvError}</p>}
+            <div className="flex justify-between items-center mt-4">
+              <button type="button" className={btnOutline} onClick={() => { forgetCsv(); setCsvName(null); if (defaultProject) setSource(null); else setProject(undefined) }}><span aria-hidden="true">← </span>Back</button>
+              <button type="button" aria-label="Continue" className={btnPrimary} disabled={!(csvResult || csvColumns) || downloading} onClick={() => setFileConfirmed(true)}>Continue<span aria-hidden="true"> →</span></button>
+            </div>
           </WizardStep>
 
-          {source === 'wildintel' && legacyAsked.length > 0 && (
+          {source === 'wildintel' && legacyAsked.length > 0 && fileConfirmed && (
             <WizardStep
               n={4} title="Values of what is created" status={legacyMissing.length === 0 && !legacyBadTimezone ? 'done' : 'open'} canEdit={false} onEdit={() => {}}
               description="The file does not have these: they are given once, for everything that is created. What is required has to be given before the file is checked again."
@@ -1471,7 +1477,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
 
           {source === 'csv' && (
             <WizardStep
-              n={4} title="Match the columns" status={!csvColumns ? 'locked' : csvResult ? 'done' : 'open'} canEdit onEdit={() => { setCsvResult(null); setCsvSaved(null) }}
+              n={4} title="Match the columns" status={!csvColumns || !fileConfirmed ? 'locked' : csvResult ? 'done' : 'open'} canEdit onEdit={() => { setCsvResult(null); setCsvSaved(null) }}
               description="For each field of a visit, the column of the file that gives it. What the file has by the names a visit uses is already matched; leave a field with no column if the file does not have it."
             >
               {csvColumns && (
@@ -1536,7 +1542,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             </WizardStep>
           )}
 
-          <WizardStep n={source === 'csv' ? 5 : source === 'wildintel' && legacyAsked.length > 0 ? 5 : 4} title="Check and add the visits" status={csvResult ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept."
+          <WizardStep n={source === 'csv' ? 5 : source === 'wildintel' && legacyAsked.length > 0 ? 5 : 4} title="Check and add the visits" status={csvResult && fileConfirmed ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept."
                       action={csvResult && csvSaved == null && (
                         <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={rechecking} onClick={() => void recheckCsv()}
                                 title="Check the file again against what is kept now: the visits, the locations and the settings">
@@ -1619,10 +1625,10 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                       {csvResult?.report && <> The report of the import is with the other reports: <a className="font-medium underline" href={api.reportUrl(csvResult.report, 'csv')} download>Download report</a>.</>}
                     </Notice>
                     {closedLinks}
-                    <div className="mt-5 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
-                      <button type="button" className="px-6 h-12 rounded-xl border border-zinc-300 dark:border-zinc-600 text-base font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                              onClick={() => { forgetCsv(); setCsvName(null); setProject(undefined); setSource(null) }}>Register more visits</button>
-                      <button type="button" className="px-6 h-12 rounded-xl bg-blue-600 text-white text-base font-medium hover:bg-blue-700 transition-colors" onClick={onBack}>Back to the menu</button>
+                    <div className="mt-6 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
+                      <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to register more visits?</p>
+                      <button type="button" className={btnPrimary} onClick={() => { forgetCsv(); setCsvName(null); setProject(undefined); setSource(null) }}>Register more visits</button>
+                      <button type="button" className={btnOutline} onClick={onBack}>Back to the menu</button>
                     </div>
                   </>
                 )}

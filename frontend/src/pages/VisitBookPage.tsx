@@ -390,7 +390,8 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                     const photos = v.num_photos
                                     const taken = photos !== null && photos !== undefined ? collectedCard(everyRow, v) : null
                                     const rows: JSX.Element[] = []
-                                    if (k === 'sd' && taken) rows.push(row('taken', 'SD card collected', `${taken} (${photos})`))
+                                    // the card is the one the visit before it left: when no visit before it is known (the revisions before are unknown), it is told, not left out
+                                    if (k === 'sd' && photos !== null && photos !== undefined) rows.push(row('taken', 'SD card collected', taken ? `${taken} (${photos})` : 'unknown: no visit before it is known'))
                                     if (k === 'num_photos' && taken) return rows
                                     const value = v[k]
                                     if (value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0)) rows.push(row(k, label, shownValue(value)))
