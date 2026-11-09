@@ -79,8 +79,12 @@ Before explaining how the application works, it is necessary to clarify the foll
 A **deployment** is the set of images taken by one camera placed at a **location** — some GPS
 coordinates and a timezone — under specific configuration conditions (height, tilt, delay between
 triggers…), between the day it was set up and the day it was collected. A location is visited again
-and again, so each visit is a **revision** — the 1st, the 2nd, the 3rd one. All the deployments of a
-revision form a **collection**: *collection* and *revision* are synonyms. The app names everything after that:
+and again. Each trip to one camera trap — when it was, who went and what was done — is a **visit**, and
+the round of visits to every location of a research project is a **revision**: *one visit to every site*,
+the 1st, the 2nd, the 3rd one. A site is visited once in a revision, and a revision does not start until
+the one before it is finished. A deployment goes from the visit that **left** a camera to the one that
+**collected** its card, and all the deployments of a revision form a **collection**: *collection* and
+*revision* are synonyms. The app names everything after that:
 
 | | Example | |
 |---|---|---|
@@ -91,6 +95,10 @@ revision form a **collection**: *collection* and *revision* are synonyms. The ap
 | Research project | `DONA` | the project they all belong to, by its acronym |
 
 The deployment id is never typed: you give the revision and the location, and the app builds it.
+
+Nothing is known of a revision of a site when the first visit kept to it is of a later one: that revision is
+**unknown**. Nothing is checked against it, and a visit that comes later can take its place. The visits are
+registered in *Manage visits* — see the [web manual](user-manual-web.md#5-manage-visits).
 
 ### The location owns the timezone
 
@@ -114,6 +122,9 @@ collections/
 └── DONA/                                   ← research project
     ├── research_project.json
     ├── locations.json                      ← its locations, with timezone and coordinates
+    ├── cameras.json, sd_cards.json         ← its cameras and its SD cards
+    ├── visits.json                         ← the visits kept
+    ├── unknown_visits.json                 ← the revisions of a site of which nothing is known
     └── R0003/                              ← collection (one revision)
         ├── collection.json
         ├── R0003_FileTimestampLog.csv      ← the start and end of each deployment

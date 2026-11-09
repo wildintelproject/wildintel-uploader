@@ -10,6 +10,12 @@ the WildINTEL project's camera-trap platform.
 It runs on your own computer, with a guided interface in your browser — and a command line for the
 quick jobs:
 
+- **Register visits** — the visits to the camera traps (who went, when, to which site and what was done), by hand
+  or from a CSV file. A **revision** is one visit to every site of a research project, and each visit is checked
+  against the rules of a field trip: a revision does not start until the one before it is finished, a camera is
+  not put up where it already is, a card is not left in two cameras… The deployments are worked out from the
+  visits (one goes from the visit that left a camera to the one that collected its card), and the **visit
+  dashboard** shows, revision by revision, what is planned and what is done.
 - **Import deployments** — one folder of images, or a session with one subfolder per deployment.
   The images are validated (corrupted, duplicated, out of order, mixed cameras…), the deployment's
   details are filled in and checked against the earlier revisions of its location, and the images
@@ -32,8 +38,8 @@ What the web app and the command line have in common: installation, the general 
 
 ### [User Manual — web app](user-manual-web.md)
 
-Settings, and a step-by-step guide to every task in the web interface: importing a
-deployment or a session, uploading to Trapper and syncing.
+Settings, and a step-by-step guide to every task in the web interface: registering and following the
+visits, importing a deployment or a session, uploading to Trapper and syncing.
 
 ### [User Manual — command line](user-manual-cli.md)
 

@@ -1,5 +1,35 @@
 # Features
 
+## Visits and revisions
+
+The visits to the camera traps are the field record the deployments are worked out from: who went, when, to
+which site and what was done (an installation, a revision, a desinstallation, a stolen camera, a site given
+up). They are entered **by hand**, or read from a **CSV file** — an Epicollect download, or any spreadsheet whose
+columns you match to the fields of a visit — and kept in the research project's folder.
+
+### Revisions
+
+A **revision** is one visit to every site of a research project. A site is visited once in each, and a
+revision does not start until the one before it is finished. A revision of a site of which nothing is known
+(the first visit kept to it is of a later one) is **unknown**: nothing is checked against it, and a later visit
+can take its place.
+
+### The rules of a visit
+
+A visit by hand and a visit in a file follow the same rules, and the one that breaks them is refused, with
+the reason — each rule has its own label in the results of a file. They compare the visit with the visits
+before it, by date: the camera and the SD card must be where the visit says (a camera is not put up where it
+already is, a card is not left in two cameras), what the actions ask must be given, the visits of a site go
+in order, the camera, the card and who went must exist, and nothing is done at a site after it was given up.
+What an unknown revision hides cannot be checked, and is not.
+
+### The visit dashboard
+
+The visits of the research project, revision by revision: what is planned and what is done, the state of
+each visit (planned, deployed, collected, stolen, not visited, unknown), the details of a visit, and the
+deployments the visits say — the closed ones, whose images can be imported, and the ones whose camera is
+still out. The deployments and the uploads have their own dashboards, with the same layout.
+
 ## Importing a deployment
 
 ### Local first
