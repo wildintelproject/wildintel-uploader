@@ -86,13 +86,19 @@ A **revision** is one visit to every site: the round of visits to all the locati
 
 ![Revisions: a row for each site and a column for each revision, with one visit in each cell](img/revision.svg)
 
-When nothing is known of a revision of a site — the first visit kept to it is of a later revision —, that revision is **unknown**: nothing is checked against it, and a visit that comes later can take its place.
-
 #### The states of a visit
 
 A visit has a state that follows its life. A visit that left no camera has none.
 
 ![The states of a visit: planned or unknown until it is registered; then deployed, not visited or no state; and, when a later visit collects its card or finds the camera stolen, collected or stolen](img/visit-states.svg)
+
+The drawing reads from left to right, and the state of a visit is decided in three moments:
+
+1. **Before it is registered**, a visit is *planned* or *unknown*. It is **planned** when the revision has visits and the site has none yet: the dashboard shows a row for it, as the visit that is expected. It is **unknown** when nothing is known of it — the first visit kept to a site is of a later revision, so the revisions before it have no visit of that site: no day, no camera, no card. Nothing is checked against an unknown visit, it counts as a visit to finish its revision, and a visit that comes later takes its place.
+2. **When it is registered**, what the visit did gives its state. If it **left a camera** — an Installation, or a Revision, which looks at the camera and leaves it out again — it is **Deployed**: the camera is out and its card is still to be collected. If it **could not be made** (its status is *Not revised*) it is **Not visited**: nothing was done at it. If it **left no camera** — a Desinstallation takes it away, a Stolen visit finds it gone, an Archive gives the site up — it has **no state**.
+3. **When a later visit to the site** collects the card, or finds the camera stolen, the **Deployed** visit is closed: **Collected** if its card was collected, **Stolen** if the camera was found stolen — there are no images to import. While neither happens it stays *Deployed*. A Revision does both things: it closes the visit before it and, when it leaves a card, it is itself *Deployed* until the next visit.
+
+The tick on the right of the drawing, *images stored*, is not a state: it is told apart, in the *Images* column of the dashboard, once the deployment of the visit is made.
 
 | State | What it says |
 |---|---|
@@ -101,7 +107,7 @@ A visit has a state that follows its life. A visit that left no camera has none.
 | **Collected** | A later visit collected the card it left. |
 | **Stolen** | The camera it left was stolen: its deployment is closed with no images, and there is nothing to create. |
 | **Not visited** | The visit could not be made. |
-| **Unknown** | A revision of a site of which nothing is known. |
+| **Unknown** | A revision of a site of which nothing is known: no visit of that site is kept to it. |
 
 Whether the images of a visit are stored is another thing: they are once its deployment is made.
 
