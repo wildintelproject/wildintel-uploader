@@ -1,0 +1,244 @@
+location_id,session,date,time,actions,trappers,status,camera_id,camera_model,sd,card_batteries_ok,num_photos,date_time_ok,latitude,longitude,comments
+PF2,R0001,2025-10-06,15:56:00,Installation,Pedro,,25,Bushnell-Core-DS,25,OK,,Yes,53.696591,14.312020,
+PE2,R0001,2025-10-06,17:01:00,Installation,Pedro,,34,Browning-BTC-8A,34,OK,,Yes,53.694305,14.356833,
+PD3,R0001,2025-10-06,17:43:00,Installation,Pedro,,31,Bushnell-Core-DS,31,OK,,Yes,53.689003,14.359890,
+PD2,R0001,2025-10-06,18:20:00,Installation,Pedro,,33,Reconyx-HC600,33,OK,,Yes,53.683590,14.309486,
+PD1,R0001,2025-10-06,18:56:00,Installation,Pedro,,27,Bushnell-Core-DS,27,OK,,Yes,53.674975,14.286970,
+PD4,R0001,2025-10-07,10:58:00,Installation,Pedro,,28,Reconyx-PC800,28,OK,,Yes,53.679709,14.331004,
+PD5,R0001,2025-10-07,11:40:00,Installation,Pedro,,40,Reconyx-HC600,40,OK,,Yes,53.678796,14.328518,
+PC5,R0001,2025-10-07,12:26:00,Installation,Pedro,,43,Browning-BTC-8A,43,OK,,Yes,53.679995,14.362122,
+PD6,R0001,2025-10-07,13:09:00,Installation,Pedro,,38,Browning-BTC-8A,38,OK,,Yes,53.694437,14.304183,
+PC6,R0001,2025-10-07,13:42:00,Installation,Pedro,,35,Reconyx-PC800,35,OK,,Yes,53.680361,14.340445,
+PC7,R0001,2025-10-07,14:56:00,Installation,Pedro,,48,Browning-BTC-8A,48,OK,,Yes,53.703875,14.316168,
+PC8,R0001,2025-10-07,15:52:00,Installation,Pedro,,61,Reconyx-HC600,61,OK,,Yes,53.689119,14.306839,
+PD8,R0001,2025-10-07,16:34:00,Installation,Pedro,,24,Bushnell-Core-DS,24,OK,,Yes,53.654897,14.352330,
+PD7,R0001,2025-10-07,17:26:00,Installation,Pedro,,55,Reconyx-HC600,55,OK,,Yes,53.663808,14.291016,
+PE8,R0001,2025-10-07,18:18:00,Installation,Pedro,,1,Bushnell-Core-DS,01b,OK,,Yes,53.673040,14.360677,
+PE7,R0001,2025-10-08,10:19:00,Installation,Pedro,,2,Reconyx-PC800,1,OK,,Yes,53.672381,14.335540,
+PF7,R0001,2025-10-08,10:48:00,Installation,Pedro,,41,Bushnell-Core-DS,41,OK,,Yes,53.682688,14.283948,
+PF6,R0001,2025-10-08,11:42:00,Installation,Pedro,,54,Reconyx-PC800,54,OK,,Yes,53.645929,14.322141,
+PE6,R0001,2025-10-08,12:13:00,Installation,Pedro,,47,Reconyx-PC800,47,OK,,Yes,53.695883,14.295481,
+PG6,R0001,2025-10-08,12:58:00,Installation,Pedro,,30,Bushnell-Core-DS,30,OK,,Yes,53.674295,14.277304,
+PH6,R0001,2025-10-08,13:25:00,Installation,Pedro,,44,Reconyx-HC600,44,OK,,Yes,53.701920,14.358434,
+PI6,R0001,2025-10-08,14:01:00,Installation,Pedro,,3,Bushnell-Core-DS,2,OK,,Yes,53.648226,14.328920,
+PI7,R0001,2025-10-08,15:14:00,Installation,Pedro,,4,Browning-BTC-8A,3,OK,,Yes,53.648734,14.318411,
+PH7,R0001,2025-10-08,15:45:00,Installation,Pedro,,37,Browning-BTC-8A,37,OK,,Yes,53.676585,14.296646,
+PG7,R0001,2025-10-08,16:15:00,Installation,Pedro,,62,Browning-BTC-8A,62,OK,,Yes,53.651101,14.330910,
+PI5,R0001,2025-10-08,17:03:00,Installation,Pedro,,59,Reconyx-PC800,59,OK,,Yes,53.686907,14.270997,
+PH5,R0001,2025-10-08,17:29:00,Installation,Pedro,,45,Reconyx-PC800,45,OK,,Yes,53.649215,14.298616,
+PG5,R0001,2025-10-08,18:00:00,Installation,Pedro,,64,Bushnell-Core-DS,64,OK,,Yes,53.687359,14.357787,
+PI4,R0001,2025-10-09,09:06:00,Installation,Pedro,,65,Reconyx-PC800,65,OK,,Yes,53.683305,14.309775,
+PI3,R0001,2025-10-09,09:49:00,Installation,Pedro,,42,Reconyx-PC800,42,OK,,Yes,53.655249,14.316070,
+PH3,R0001,2025-10-09,10:25:00,Installation,Pedro,,46,Reconyx-HC600,46,OK,,Yes,53.677342,14.283517,
+PG3,R0001,2025-10-09,11:30:00,Installation,Pedro,,5,Reconyx-PC800,4,OK,,Yes,53.686021,14.327655,
+PF3,R0001,2025-10-09,12:02:00,Installation,Pedro,,53,Reconyx-HC600,53,OK,,Yes,53.685096,14.354439,
+PE3,R0001,2025-10-09,12:37:00,Installation,Pedro,,58,Reconyx-HC600,58,OK,,Yes,53.701253,14.290053,
+PE4,R0001,2025-10-09,13:08:00,Installation,Pedro,,26,Reconyx-HC600,26,OK,,Yes,53.674150,14.340811,
+PE5,R0001,2025-10-09,13:41:00,Installation,Pedro,,39,Bushnell-Core-DS,39,OK,,Yes,53.694486,14.319635,
+PF5,R0001,2025-10-09,14:15:00,Installation,Pedro,,6,Reconyx-PC800,5,OK,,Yes,53.654624,14.355755,
+PF4,R0001,2025-10-09,15:19:00,Installation,Pedro,,60,Browning-BTC-8A,60,OK,,Yes,53.651857,14.338620,
+PG4,R0001,2025-10-09,15:52:00,Installation,Pedro,,8,Reconyx-PC800,06b,OK,,Yes,53.646145,14.330394,
+PH4,R0001,2025-10-09,16:41:00,Installation,Pedro,,29,Reconyx-HC600,29,OK,,Yes,53.703626,14.303120,
+PI2,R0001,2025-10-09,17:31:00,Installation,Pedro,,23,Bushnell-Core-DS,23,OK,,Yes,53.702975,14.321246,
+PI1,R0001,2025-10-09,18:20:00,Installation,Pedro,,32,Browning-BTC-8A,32,OK,,Yes,53.672935,14.355235,
+PH1,R0001,2025-10-10,10:00:00,Installation,Pedro,,19,Reconyx-PC800,19,OK,,Yes,53.693042,14.355406,
+PH2,R0001,2025-10-10,10:37:00,Installation,Pedro,,9,Reconyx-PC800,17,OK,,Yes,53.676489,14.303049,
+PG2,R0001,2025-10-10,11:11:00,Installation,Pedro,,18,Reconyx-HC600,18,OK,,Yes,53.683403,14.339150,
+GA8,R0001,2025-10-20,08:35:00,Installation,Pedro,,36,Reconyx-PC800,36,OK,,Yes,53.691202,14.322743,
+GB8,R0001,2025-10-20,09:18:00,Installation,Pedro,,13,Bushnell-Core-DS,13,OK,,Yes,53.663098,14.278202,
+GB7,R0001,2025-10-20,10:00:00,Installation,Pedro,,10,Reconyx-PC800,6,OK,,Yes,53.689494,14.272902,
+GB6,R0001,2025-10-20,10:37:00,Installation,Pedro,,11,Bushnell-Core-DS,8,OK,,Yes,53.694380,14.363779,
+GA6,R0001,2025-10-20,11:25:00,Installation,Pedro,,15,Browning-BTC-8A,15,OK,,Yes,53.693185,14.318833,
+GB5,R0001,2025-10-20,12:31:00,Installation,Pedro,,12,Reconyx-HC600,09,OK,,Yes,53.666697,14.363955,
+GA4,R0001,2025-10-20,13:41:00,Installation,Pedro,,21,Reconyx-PC800,21,OK,,Yes,53.699057,14.353597,
+GA3,R0001,2025-10-20,14:24:00,Installation,Pedro,,14,Bushnell-Core-DS,11,OK,,Yes,53.653210,14.314321,
+GB3,R0001,2025-10-20,15:05:00,Installation,Pedro,,16,Bushnell-Core-DS,10,OK,,Yes,53.694820,14.308781,
+GB4,R0001,2025-10-20,15:52:00,Installation,Pedro,,20,Reconyx-HC600,10b,OK,,Yes,53.686594,14.285027,
+GC4,R0001,2025-10-20,16:46:00,Installation,Pedro,,22,Reconyx-HC600,12,OK,,Yes,53.670030,14.316609,
+GB1,R0001,2025-10-21,10:20:00,Installation,Pedro,,66,Browning-BTC-8A,20,OK,,Yes,53.646296,14.272156,
+GC1,R0001,2025-10-21,11:06:00,Installation,Pedro,,67,Browning-BTC-8A,12b,OK,,Yes,53.647480,14.335050,
+GC2,R0001,2025-10-21,12:09:00,Installation,Pedro,,68,Reconyx-HC600,13b,OK,,Yes,53.673837,14.272897,
+GC3,R0001,2025-10-21,13:03:00,Installation,Pedro,,68b,Reconyx-PC800,14,OK,,Yes,53.698165,14.306681,
+PE2,R0002,2025-11-25,11:04:00,Desinstallation,Pedro,OK,34,,,NoBatteries,1247,No,53.694295,14.356676,Year wrongly set. 2023 instead of 2025. Cmaera functional until 25.11.2025
+PD1,R0002,2025-12-03,09:28:00,Desinstallation,Pedro,OK,27,,,NoBatteries,1467,No,53.674978,14.286893,Camera funtional until 03.12.2025
+PH1,R0002,2025-12-04,10:44:00,Desinstallation,Pedro,OK,19,,,NoBatteries,936,No,53.693122,14.355531,Problem with date and time. Repeated pictures taken non stop with date 01.01.2020. Camera resseted on 04.12.2025. Then kept ressetting date several times.
+PE6,R0002,2025-12-09,09:35:00,Desinstallation,Pedro,Knocked down,47,,,NoBatteries,798,Yes,53.695831,14.295820,This camera was found by foresters on the ground. Unsure who removed it. Last picture from 9 th December 2025
+PG4,R0002,2025-12-15,13:56:00,Desinstallation,Pedro,OK,8,,,OK,9834,Yes,53.646414,14.330514,After 17.12.2025 the camera started taking pictures non-stop.
+PI6,R0002,2025-12-29,13:49:00,Desinstallation,Pedro,OK,3,,,NoBatteries,605,No,53.648003,14.328566,Wrong date.Resetted to 01.01.2020. Last good photo taken on 29.12.2026. After that it resseted the date several times.
+PD4,R0002,2026-01-17,13:16:00,Desinstallation,Pedro,OK,28,,,NoBatteries,1739,No,53.679610,14.331012,Camera with lot of reseted time (01.01.2020) photos. Camera was functional until 17.01.2026 11:06 AM
+GA4,R0002,2026-01-17,16:43:00,Desinstallation,Pedro,OK,21,,,NoBatteries,1512,No,53.699116,14.353660,Funtional until 17.01.2026
+GA6,R0002,2026-02-12,09:30:00,Desinstallation,Pedro,OK,15,,,NoBatteries,5792,Yes,53.692906,14.318775,Last picture on 12.02.2026
+GA3,R0002,2026-02-16,16:36:00,Desinstallation,Pedro,OK,14,,,NoBatteries,3618,No,53.653104,14.314272,Camera functional and date ok until 16.02.2026 
+PC5,R0002,2026-02-27,14:08:00,Desinstallation,Pedro,OK,43,,,NoBatteries,8118,No,53.679757,14.362362,Camera resetted the time and date to 01.01.2020. Functional until 27.02.2026.
+PF2,R0002,2026-02-28,10:29:00,Desinstallation,Pedro,OK,25,,,NoBatteries,1254,Yes,53.696698,14.312019,Camera worked until 28.02.2026. Then battery died. Camera moved and needed recalibration. Recalibration done with date 01.01.2020.
+GB8,R0002,2026-03-01,17:24:00,Desinstallation,Pedro,OK,13,,,NoBatteries,1633,No,53.663413,14.278250,Camera re-seted time during installation to 01.01.2020. then on the camera day 12.05.2020 it re-seted and started taking photos non stop.
+GB1,R0002,2026-03-11,11:30:00,Desinstallation,Pedro,OK,66,,,OK,1695,Yes,53.646345,14.272132,This camera was (mistakenly)retrieved by ROD personal on 11.03.2026. they broke the lock
+GC4,R0002,2026-03-16,16:33:00,Desinstallation,Pedro,OK,22,,,OK,3630,Yes,53.669942,14.316644,
+GB5,R0002,2026-03-16,16:33:00,Desinstallation,Pedro,OK,12,,,OK,2646,Yes,53.666955,14.363713,
+GB6,R0002,2026-03-16,16:50:00,Desinstallation,Pedro,OK,11,,,OK,1989,Yes,53.694145,14.363927,
+GB7,R0002,2026-03-16,17:08:00,Desinstallation,Pedro,OK,10,,,OK,1098,Yes,53.689515,14.273090,
+GB4,R0002,2026-03-16,17:10:00,Desinstallation,Pedro,OK,20,,,OK,3515,Yes,53.686907,14.284952,
+GA8,R0002,2026-03-16,17:44:00,Desinstallation,Pedro,OK,36,,,OK,1191,Yes,53.690942,14.322521,
+GB3,R0002,2026-03-16,20:41:00,Desinstallation,Pedro,OK,16,,,OK,4099,Yes,53.694924,14.308898,"Display not working. Afterwards, in the computer, we got to know that the date was correct and the camera was active until deinstalation."
+GC1,R0002,2026-03-17,10:15:00,Desinstallation,Pedro,OK,67,,,OK,9837,Yes,53.647514,14.335280,
+GC2,R0002,2026-03-17,11:04:00,Desinstallation,Pedro,OK,68,,,OK,1818,Yes,53.673685,14.273146,
+GC3,R0002,2026-03-17,12:10:00,Desinstallation,Pedro,Altered,68b,,,OK,10688,Yes,53.697942,14.306636,Camera was moved. Recalibration was performed.
+PD5,R0002,2026-03-17,13:40:00,Desinstallation,Pedro,OK,40,,,OK,1910,Yes,53.678941,14.328811,
+PD3,R0002,2026-03-18,09:01:00,Desinstallation,Pedro,OK,31,,,OK,996,Yes,53.689009,14.359955,
+PD2,R0002,2026-03-18,09:50:00,Desinstallation,Pedro,OK,33,,,OK,1101,Yes,53.683719,14.309577,
+PD6,R0002,2026-03-18,11:34:00,Desinstallation,Pedro,OK,38,,,OK,1924,Yes,53.694381,14.304064,
+PC6,R0002,2026-03-18,12:13:00,Desinstallation,Pedro,OK,35,,,OK,5318,No,53.680391,14.340508,Camera time is approximately one month off (29 days more than the original)
+PC7,R0002,2026-03-18,12:48:00,Desinstallation,Pedro,OK,48,,,OK,469,Yes,53.703802,14.316436,
+PC8,R0002,2026-03-18,13:20:00,Desinstallation,Pedro,OK,61,,,OK,7000,Yes,53.689156,14.306853,
+PD8,R0002,2026-03-18,14:06:00,Desinstallation,Pedro,Altered,24,,,OK,2975,Yes,53.654853,14.352340,Camera tilted from original position. Pole and distance recalibrated at pick up
+PD7,R0002,2026-03-18,14:33:00,Desinstallation,Pedro,OK,55,,,OK,5445,Yes,53.663722,14.291088,
+PE7,R0002,2026-03-18,15:12:00,Stolen,Pedro,,2,,,,,,53.672251,14.335679,
+PE8,R0002,2026-03-18,15:31:00,Stolen,Pedro,,1,,,,,,53.673307,14.360408,
+PG2,R0002,2026-03-19,09:48:00,Desinstallation,Pedro,OK,18,,,OK,1671,Yes,53.683097,14.339230,
+PH2,R0002,2026-03-19,10:21:00,Desinstallation,Pedro,OK,9,,,OK,4332,Yes,53.676548,14.303047,
+PI1,R0002,2026-03-19,12:00:00,Desinstallation,Pedro,OK,32,,,OK,891,Yes,53.672879,14.355220,
+PI2,R0002,2026-03-19,12:21:00,Desinstallation,Pedro,OK,23,,,OK,1710,Yes,53.703092,14.320972,
+PI3,R0002,2026-03-19,12:49:00,Desinstallation,Pedro,OK,42,,,OK,10332,Yes,53.655110,14.316152,Camera has moved a bit. Recalibrated at pick up. Camera was taken photos non-stop (no date reset). It was working normaly until 02.02.2026.
+PH4,R0002,2026-03-19,13:30:00,Desinstallation,Pedro,OK,29,,,OK,1245,Yes,53.703635,14.302831,
+PF4,R0002,2026-03-19,14:12:00,Desinstallation,Pedro,OK,60,,,OK,2106,Yes,53.651702,14.338556,
+PF5,R0002,2026-03-19,14:56:00,Stolen,Pedro,,6,,,,,,53.654896,14.355766,
+PE5,R0002,2026-03-19,15:11:00,Desinstallation,Pedro,OK,39,,,OK,4287,Yes,53.694382,14.319979,
+PE4,R0002,2026-03-19,15:33:00,Desinstallation,Pedro,OK,26,,,OK,816,No,53.673860,14.340728,Camera reseted the timeand date multiple times.
+PE3,R0002,2026-03-19,15:57:00,Desinstallation,Pedro,OK,58,,,OK,1758,Yes,53.701426,14.290113,
+PF3,R0002,2026-03-19,16:17:00,Desinstallation,Pedro,OK,53,,,OK,1047,Yes,53.684820,14.354403,Possible display problem
+PG3,R0002,2026-03-19,16:42:00,Stolen,Pedro,,5,,,,,,53.686164,14.327718,
+PH3,R0002,2026-03-19,16:59:00,Desinstallation,Pedro,Altered,46,,,OK,1716,No,53.677285,14.283832,Date off by exact one day less in the camera.
+PI4,R0002,2026-03-19,17:22:00,Desinstallation,Pedro,OK,65,,,OK,4785,Yes,53.683461,14.310062,
+PI5,R0002,2026-03-20,09:39:00,Desinstallation,Pedro,OK,59,,,OK,2225,Yes,53.686628,14.270952,
+PH5,R0002,2026-03-20,09:54:00,Desinstallation,Pedro,OK,45,,,OK,2470,Yes,53.649266,14.298813,
+PG5,R0002,2026-03-20,10:16:00,Desinstallation,Pedro,OK,64,,,OK,2751,No,53.687294,14.357704,Date was 2 days more in the camera than the actual date
+PI7,R0002,2026-03-20,10:52:00,Stolen,Pedro,,4,,,,,,53.648540,14.318312,Relatively close to a road. IfI decide to put a camera here again move it further from the road
+PH7,R0002,2026-03-20,11:38:00,Desinstallation,Pedro,OK,37,,,OK,2151,Yes,53.676734,14.296741,
+PG7,R0002,2026-03-20,11:57:00,Desinstallation,Pedro,OK,62,,,OK,10388,Yes,53.650969,14.330800,Camera working until 09.03.2026 DDMMYYYY. After that it started taking photos non-stop.
+PF7,R0002,2026-03-20,12:15:00,Desinstallation,Pedro,OK,41,,,OK,750,No,53.682486,14.283796,"Camera date 29 days more than the actual date. Card error displayed on the screen, camera took pictures until  01.02.2026 (DD.MM.YYYY actual correct date) or 02.03.2026 ( camera wrong date DD.MM.YYYY) ."
+PF6,R0002,2026-03-20,12:31:00,Desinstallation,Pedro,OK,54,,,OK,488,Yes,53.645848,14.322003,Check camera. Too few pictures.
+PG6,R0002,2026-03-20,12:59:00,Desinstallation,Pedro,Altered,30,,,OK,4880,Yes,53.674514,14.277172,Camera moved a bit. Recalibrated at pick up. After 03.03.2026 camera started taking picures non-stop.
+PH6,R0002,2026-03-20,13:30:00,Desinstallation,Pedro,OK,44,,,OK,930,Yes,53.702178,14.358394,
+GA3,R0003,2026-05-28,16:03:00,Installation,Pedro,,29,Reconyx-HC600,29,OK,,Yes,53.653248,14.314405,
+GB3,R0003,2026-05-28,17:19:00,Installation,Pedro,,28,Reconyx-PC800,28,OK,,Yes,53.695163,14.308968,
+GB4,R0003,2026-05-28,18:18:00,Installation,Pedro,,58,Reconyx-HC600,58,OK,,Yes,53.686901,14.285137,
+GA4,R0003,2026-05-28,19:03:00,Installation,Pedro,,34,Browning-BTC-8A,34,OK,,Yes,53.699144,14.353548,
+GA8,R0003,2026-05-29,10:18:00,Installation,Pedro,,23,Bushnell-Core-DS,23,OK,,Yes,53.690936,14.322500,
+GA6,R0003,2026-05-29,11:59:00,Installation,Pedro,,32,Browning-BTC-8A,32,OK,,Yes,53.692899,14.318799,
+GB6,R0003,2026-05-29,12:33:00,Installation,Pedro,,1,Bushnell-Core-DS,01b,OK,,Yes,53.694435,14.363903,
+GB7,R0003,2026-05-29,13:12:00,Installation,Pedro,,43,Browning-BTC-8A,43,OK,,Yes,53.689418,14.272980,
+GB8,R0003,2026-05-29,13:47:00,Installation,Pedro,,61,Reconyx-HC600,61,OK,,Yes,53.663320,14.278007,
+GB5,R0003,2026-05-29,15:39:00,Installation,Pedro,,15,Browning-BTC-8A,15,OK,,Yes,53.666900,14.364043,
+GC4,R0003,2026-05-29,16:17:00,Installation,Pedro,,20,Reconyx-HC600,20,OK,,Yes,53.669984,14.316410,
+GC3,R0003,2026-05-29,17:00:00,Installation,Pedro,,64,Bushnell-Core-DS,64,OK,,Yes,53.697890,14.306441,
+GC2,R0003,2026-05-29,18:01:00,Installation,Pedro,,47,Reconyx-PC800,47,OK,,Yes,53.673608,14.272994,
+GC1,R0003,2026-05-29,18:40:00,Installation,Pedro,,11,Bushnell-Core-DS,11,OK,,Yes,53.647625,14.334934,
+PD3,R0003,2026-05-30,09:38:00,Installation,Pedro,,42,Reconyx-PC800,42,OK,,Yes,53.688837,14.360062,
+PD2,R0003,2026-05-30,10:19:00,Installation,Pedro,,67,Browning-BTC-8A,67,OK,,Yes,53.683404,14.309505,
+PD1,R0003,2026-05-30,10:47:00,Installation,Pedro,,8,Reconyx-PC800,8,OK,,Yes,53.675081,14.287053,
+PE2,R0003,2026-05-30,12:39:00,Installation,Pedro,,5,Reconyx-PC800,5,OK,,Yes,53.694238,14.356637,
+PF2,R0003,2026-05-30,13:24:00,Installation,Pedro,,60,Browning-BTC-8A,60,OK,,Yes,53.696393,14.311926,
+PG2,R0003,2026-05-30,14:01:00,Installation,Pedro,,19,Reconyx-PC800,19,OK,,Yes,53.683371,14.339015,
+PH2,R0003,2026-05-30,15:04:00,Installation,Pedro,,14,Bushnell-Core-DS,14,OK,,Yes,53.676527,14.303182,
+PH1,R0003,2026-05-30,15:45:00,Installation,Pedro,,35,Reconyx-PC800,35,OK,,Yes,53.693001,14.355686,
+PI1,R0003,2026-05-30,16:15:00,Installation,Pedro,,40,Reconyx-HC600,40,OK,,Yes,53.672820,14.355577,
+PI2,R0003,2026-05-30,16:47:00,Installation,Pedro,,2,Reconyx-PC800,2,OK,,Yes,53.702995,14.321179,
+PD4,R0003,2026-05-31,11:06:00,Installation,Pedro,,18,Reconyx-HC600,18,OK,,Yes,53.679533,14.330866,
+PD5,R0003,2026-05-31,11:39:00,Installation,Pedro,,37,Browning-BTC-8A,37,OK,,Yes,53.679049,14.328655,
+PC5,R0003,2026-05-31,12:18:00,Installation,Pedro,,4,Browning-BTC-8A,4,OK,,Yes,53.679816,14.362253,
+PD6,R0003,2026-05-31,12:50:00,Installation,Pedro,,22,Reconyx-HC600,22,OK,,Yes,53.694314,14.304367,
+PC6,R0003,2026-05-31,13:23:00,Installation,Pedro,,65,Reconyx-PC800,65,OK,,Yes,53.680678,14.340547,
+PC7,R0003,2026-05-31,14:04:00,Installation,Pedro,,68,Reconyx-HC600,68,OK,,Yes,53.703962,14.316419,
+PC8,R0003,2026-05-31,15:07:00,Installation,Pedro,,6,Reconyx-PC800,06b,OK,,Yes,53.689204,14.307043,
+PD8,R0003,2026-05-31,15:41:00,Installation,Pedro,,66,Browning-BTC-8A,66,OK,,Yes,53.654889,14.352379,
+PD7,R0003,2026-05-31,16:20:00,Installation,Pedro,,26,Reconyx-HC600,26,OK,,Yes,53.663772,14.290731,
+PE8,R0003,2026-05-31,17:15:00,Installation,Pedro,,13,Bushnell-Core-DS,13,OK,,Yes,53.673084,14.360491,
+PE7,R0003,2026-05-31,18:04:00,Installation,Pedro,,12,Reconyx-HC600,12,OK,,Yes,53.672444,14.335595,
+PF7,R0003,2026-05-31,18:40:00,Installation,Pedro,,21,Reconyx-PC800,21,OK,,Yes,53.682573,14.283968,
+PI7,R0003,2026-06-01,10:26:00,Installation,Pedro,,45,Reconyx-PC800,45,OK,,Yes,53.648791,14.318348,
+PG7,R0003,2026-06-01,11:16:00,Installation,Pedro,,62,Browning-BTC-8A,62,OK,,Yes,53.650930,14.330760,
+PH7,R0003,2026-06-01,12:00:00,Installation,Pedro,,25,Bushnell-Core-DS,25,OK,,Yes,53.676776,14.296847,
+PI6,R0003,2026-06-01,13:06:00,Installation,Pedro,,39,Bushnell-Core-DS,39,OK,,Yes,53.648045,14.328789,
+PH6,R0003,2026-06-01,13:39:00,Installation,Pedro,,54,Reconyx-PC800,54,OK,,Yes,53.702048,14.358353,
+PG6,R0003,2026-06-01,14:01:00,Installation,Pedro,,59,Reconyx-PC800,59,OK,,Yes,53.674501,14.277204,
+PF6,R0003,2026-06-01,14:26:00,Installation,Pedro,,16,Bushnell-Core-DS,16,OK,,Yes,53.646208,14.321972,
+PE6,R0003,2026-06-01,15:01:00,Installation,Pedro,,36,Reconyx-PC800,36,OK,,Yes,53.695921,14.295854,
+PE5,R0003,2026-06-01,15:34:00,Installation,Pedro,,48,Browning-BTC-8A,48,OK,,Yes,53.694585,14.319691,
+PF5,R0003,2026-06-01,16:03:00,Installation,Pedro,,10,Reconyx-PC800,10,OK,,Yes,53.654632,14.355600,
+PG5,R0003,2026-06-01,16:31:00,Installation,Pedro,,53,Reconyx-HC600,53,OK,,Yes,53.687333,14.357673,
+PH5,R0003,2026-06-01,17:07:00,Installation,Pedro,,41,Bushnell-Core-DS,41,OK,,Yes,53.649150,14.298884,
+PI5,R0003,2026-06-01,17:32:00,Installation,Pedro,,30,Bushnell-Core-DS,30,OK,,Yes,53.686610,14.270885,
+PI4,R0003,2026-06-01,18:02:00,Installation,Pedro,,38,Browning-BTC-8A,38,OK,,Yes,53.683422,14.310017,
+PI3,R0003,2026-06-02,10:45:00,Installation,Pedro,,55,Reconyx-HC600,55,OK,,Yes,53.655138,14.315893,
+PH3,R0003,2026-06-02,11:17:00,Installation,Pedro,,27,Bushnell-Core-DS,27,OK,,Yes,53.677289,14.283628,
+PG3,R0003,2026-06-02,12:02:00,Installation,Pedro,,46,Reconyx-HC600,46,OK,,Yes,53.685925,14.327586,
+PE4,R0003,2026-06-02,17:16:00,Installation,"Pedro, Néstor",,3,Bushnell-Core-DS,3,OK,,Yes,53.673874,14.340490,
+PF4,R0003,2026-06-02,17:42:00,Installation,"Pedro, Néstor",,31,Bushnell-Core-DS,31,OK,,Yes,53.651823,14.338562,
+PG4,R0003,2026-06-02,18:14:00,Installation,"Pedro, Néstor",,9,Reconyx-PC800,1,OK,,Yes,53.646342,14.330294,
+PH4,R0003,2026-06-02,18:45:00,Installation,"Pedro, Néstor",,44,Reconyx-HC600,44,OK,,Yes,53.703485,14.302737,
+PF3,R0003,2026-06-02,19:30:00,Installation,"Pedro, Néstor",,24,Bushnell-Core-DS,68b,OK,,Yes,53.685075,14.354159,
+PE3,R0003,2026-06-02,19:50:00,Installation,"Pedro, Néstor",,33,Reconyx-HC600,24,OK,,Yes,53.701474,14.289977,
+GB1,R0003,2026-06-02,20:44:00,Installation,Pedro,,68b,Reconyx-PC800,33,OK,,Yes,53.646130,14.272030,
+PE5,R0004,2026-06-16,03:35:00,Revision,Pedro,OK,48,,,CarFullNoBatteries,,Yes,53.694388,14.319677,"Grass in front of the camera, taking pictures non-stop.  Camera got full and stopped taking picture on 16.06.2026 at 03:05:10. I altered the entry to reflect this date and time. Cloudy 22 degrees."
+PG6,R0004,2026-06-22,13:19:00,Revision,Pedro,OK,59,,,CarFullNoBatteries,,Yes,53.674568,14.277269,"Sd card was full, no batteries. Suspect that camera was defective taking pictures non stop, or the grass was triggering the camera a lot. Camera 59 stopped working on 22.06.2026 at  13:19. I changed the date and time on this entry accordingly.camera 59 wad then replaced by 75."
+PE6,R0004,2026-06-23,05:08:00,Revision,Pedro,OK,36,,,CarFullNoBatteries,,Yes,53.695793,14.295781,"New camera location across the ferns. Close to the fence. Previous Camera (36) worked until 2026-06-23 at 05:06:22, I changed the date and time in this entry accordingly. Card got full of pictures (app 80000) probably due to wind on Ferns. We changed the camera and the camera location. Weather cloudy. 18 degrees."
+PD7,R0004,2026-06-25,15:37:00,Revision,Pedro,OK,26,,,NoBatteries,34000,No,53.663510,14.291080,"Date reseted at some point. Camera stopped working on 2026:06:25 at 15:37, I changed the dates in this entry accordingly. Cloudy. 21 degrees."
+GB3,R0004,2026-06-26,11:08:00,Revision,Pedro,Altered,28,,74,NoBatteries,404,Yes,53.694917,14.309134,Camera 28 with no batteries. Weird because it only took 400 photos. Camera stopped working on 26.06.26. Camera 28 was replaced by camera 74 and recalibrated. Sunny 24 degrees.
+GB7,R0004,2026-06-27,13:01:00,Revision,Pedro,OK,43,,,NoBatteries,12500,Yes,53.689335,14.272801,"Need to check if date and time are ok.no batteries. Camera stopped working on 27.06.26 at  13:00, i changed the date and time in this entry accordingly.. cloudy, 23 degrees."
+PG4,R0004,2026-06-29,11:48:00,Revision,Pedro,OK,9,,17,CarFullNoBatteries,,Yes,53.646402,14.330590,Stopped recording after full sd card on 29.06.26 at at 11:48. I changed the date and time in this entryaccordingly. Partly cloudy. 20 degrees. Rained last night.
+PC8,R0004,2026-07-01,05:22:00,Revision,Pedro,OK,6,,,NoBatteries,1561,No,53.688972,14.306996,"No battery, date and time are okay (checked afterwards). Camera stopped working on 2026-07-01 05:11:59, date and hour changed in this entry."
+PF7,R0004,2026-08-17,16:21:00,Revision,Pedro,OK,21,,,OK,1753,Yes,53.682669,14.283753,After rain eDNA collection
+GB1,R0004,2026-08-17,17:32:00,Desinstallation,Pedro,OK,68b,,,OK,3993,Yes,53.646097,14.271902,Lighty Rainy weather.Beaver dam. Water colect.
+PE7,R0004,2026-08-18,10:39:00,Revision,Pedro,OK,12,,,OK,1251,Yes,53.672120,14.335657,Cloudy weather 18 degrees. Rained during the night
+PD6,R0004,2026-08-18,11:18:00,Revision,Pedro,OK,22,,,OK,371,Yes,53.694468,14.304253,Cloudy weather. 19 degrees. Rained duringlas night
+PC6,R0004,2026-08-18,11:52:00,Revision,Pedro,OK,65,,,OK,811,Yes,53.680604,14.340432,Cloudy. 19 degree. Rainyed during the night.
+PC7,R0004,2026-08-18,12:34:00,Revision,Pedro,OK,68,,,OK,7212,Yes,53.703629,14.316256,Cloudy. 20 degree. Rained during the night
+PD8,R0004,2026-08-18,14:48:00,Revision,Pedro,OK,66,,,OK,3900,Yes,53.655084,14.352011,24 degrees
+PE8,R0004,2026-08-18,15:47:00,Revision,Pedro,OK,13,,,OK,4968,Yes,53.673320,14.360329,21 degrees sunny
+PG7,R0004,2026-08-18,16:29:00,Revision,Pedro,OK,62,,,OK,2639,Yes,53.651151,14.330728,20 degrees. Cloudy
+PH7,R0004,2026-08-18,17:12:00,Revision,Pedro,OK,25,,,OK,1184,Yes,53.676673,14.296593,Cloudy weather. 20 degrees
+PI7,R0004,2026-08-18,17:47:00,Revision,Pedro,OK,45,,,OK,6459,Yes,53.648851,14.318352,21 degrees. Partlya cloudy
+PF6,R0004,2026-08-19,10:35:00,Revision,Pedro,OK,16,,,OK,3096,Yes,53.646067,14.321943,Cloudy. 19 degrees
+PH6,R0004,2026-08-19,11:55:00,Revision,Pedro,OK,54,,,OK,4751,Yes,53.702208,14.358599,"Quite some false triggers because of grass moving 
+Cloudy. 20 degrees."
+PI6,R0004,2026-08-19,12:29:00,Revision,Pedro,OK,39,,,OK,960,Yes,53.648237,14.328553,Cloudy. 19 degrees
+PI5,R0004,2026-08-19,13:56:00,Revision,Pedro,OK,30,,,OK,40000,Yes,53.686736,14.270760,A fern grew right in front of the camera and trigered it a lot. However it was still working at revision on 19.08.2026. Cloudy. 19 degrees
+PH5,R0004,2026-08-19,14:30:00,Revision,Pedro,OK,41,,,OK,2230,Yes,53.648893,14.298747,"Cloudy weather, 19 degrees"
+PG5,R0004,2026-08-19,15:05:00,Revision,Pedro,OK,53,,,OK,2100,Yes,53.687453,14.357818,Cloudy. 22 degrees
+PF5,R0004,2026-08-19,15:50:00,Revision,Pedro,OK,10,,,OK,32000,Yes,53.654674,14.355461,"Camera took a lot of photos, probably banks. Don't know why. However camera was still working and taking photos during revision at 19.08.2026. Cloudy. 23 degrees."
+PD5,R0004,2026-08-19,17:13:00,Revision,Pedro,OK,37,,,OK,1100,Yes,53.678831,14.328756,Cloudy 22 degrees. Far from the road. Beech and mix forest.
+PC5,R0004,2026-08-19,17:52:00,Revision,Pedro,OK,4,,,OK,1122,Yes,53.679793,14.362356,"GPSpoint with an error of 20 meters. Cloudy, 22 degrees."
+PD4,R0004,2026-08-20,09:52:00,Revision,Pedro,OK,18,,,OK,720,Yes,53.679645,14.330886,Sunny. 20 degrees. Rained during the night
+PD3,R0004,2026-08-20,10:23:00,Revision,Pedro,OK,42,,,OK,13000,Yes,53.688896,14.359875,Cloudy. 20 degrees
+GC3,R0004,2026-08-20,11:26:00,Revision,Pedro,Altered,64,,,OK,54000,Yes,53.698100,14.306398,"Camera changed position, log fell, we recalibrate it twice: One time without the log for fixing, and we put the log again (as it make the camera more sturdy) and recalibrate it. Camera was taken photos non stop becauseofthegrass and wind, bit there was still battery and space on theSDcard. It was working until 20.08.2026 when we did the revision. Partly cloudy, 21 degrees."
+GC2,R0004,2026-08-20,12:18:00,Revision,Pedro,OK,47,,,OK,450,Yes,53.673543,14.273092,Sunny. 21 degrees.
+GC1,R0004,2026-08-20,13:11:00,Revision,Pedro,OK,11,,,OK,11500,No,53.647471,14.335130,Hour was inverted PM was as AM. That means that camera was 12 hours behind the actual time.
+GA8,R0004,2026-08-20,15:09:00,Revision,Pedro,OK,23,,,OK,2100,Yes,53.691093,14.322611,Cloudy. 21 degrees.
+GB8,R0004,2026-08-20,15:43:00,Revision,Pedro,Altered,61,,,OK,1250,Yes,53.663059,14.277925,"Camera moved just a little bit. Recalibration done just to be sure.  Cloudy, 22 degrees."
+GB6,R0004,2026-08-20,17:21:00,Revision,Pedro,OK,1,,,OK,32000,Yes,53.694147,14.364015,"Lots of photos.Blanks.
+ Not sure why. Camera still work on revision day 20.08.2026. Partly cloudy. 22 degrees"
+GA6,R0004,2026-08-20,17:42:00,Revision,Pedro,OK,32,,,OK,2300,Yes,53.693145,14.318855,Sunny. 23 degrees
+GB5,R0004,2026-08-20,18:55:00,Revision,Pedro,Altered,15,,,NoBatteries,0,Yes,53.666672,14.363946,Camera 15 worked for a day only.  Test why. There was no battery but only calibration photos and 2 photos of a squirrel. Camera 15 was replaced by 71 and calibration was done.
+GC4,R0004,2026-08-21,09:40:00,Revision,Pedro,OK,20,,,OK,790,Yes,53.670062,14.316588,Sunny. 19 degrees.
+GB4,R0004,2026-08-21,10:27:00,Revision,Pedro,OK,58,,,OK,5400,Yes,53.686679,14.285083,Sunny. 22 degrees
+GA3,R0004,2026-08-21,13:41:00,Revision,Pedro,OK,29,,,OK,3400,Yes,53.653339,14.314114,Sunny. 26 degrees.
+GA4,R0004,2026-08-21,14:21:00,Revision,Pedro,OK,34,,,OK,24000,Yes,53.699038,14.353624,"Sunny 26 degrees.lots of photos. Not sure why, maybe grass"
+PE3,R0004,2026-08-21,15:41:00,Revision,Pedro,OK,33,,,OK,7500,Yes,53.701208,14.290200,Sunny. 26 degrees
+PF3,R0004,2026-08-21,16:10:00,Revision,Pedro,OK,24,,,OK,1747,Yes,53.685015,14.354174,Sunny. 28 degrees.
+PG3,R0004,2026-08-21,16:47:00,Revision,Pedro,OK,46,,,OK,310,Yes,53.686112,14.327456,Sunn. 25 degrees
+PH3,R0004,2026-08-21,17:33:00,Revision,Pedro,OK,27,,,OK,210,Yes,53.677028,14.283642,Camerawith 200 photos only and 4% battery. I theory still functioning on the dateof revision 21.08.26. not surewhythe batterywas so consumed. Camera replacedand recalibrated.
+PI3,R0004,2026-08-21,18:06:00,Revision,Pedro,OK,55,,,OK,27000,Yes,53.655299,14.315926,"Camera with 70% battery and 27000 photos, check. Cloudy 22 degrees."
+PE4,R0004,2026-08-22,09:32:00,Revision,Pedro,OK,3,,,OK,1300,Yes,53.674140,14.340820,Sunny. 20 degrees. Rained last night
+PF4,R0004,2026-08-22,10:13:00,Revision,Pedro,OK,31,,,OK,34000,Yes,53.651743,14.338685,Sunny. 20 degrees. Rained last night
+PH4,R0004,2026-08-22,11:46:00,Revision,Pedro,OK,44,,,OK,9780,Yes,53.703484,14.303115,Cloudy. 21 degrees.
+PI4,R0004,2026-08-22,12:34:00,Revision,Pedro,Altered,38,,,OK,1200,Yes,53.683404,14.309719,Camera had moved a bit. We recalibrate it. Sunny. 21 degrees. Rained last night
+PF2,R0004,2026-08-22,14:47:00,Revision,Pedro,OK,60,,,OK,1300,Yes,53.696734,14.311730,Cloudy. 22 degreesm.rained last night
+PG2,R0004,2026-08-22,15:30:00,Revision,Pedro,OK,19,,,OK,3700,Yes,53.683191,14.338998,"Cloudy, 22 degrees. Rained last night."
+PH2,R0004,2026-08-22,16:03:00,Revision,Pedro,OK,14,,,OK,4500,Yes,53.676543,14.302964,Sunny. 25 degrz. Rained last night.
+PI2,R0004,2026-08-22,16:38:00,Revision,Pedro,Altered,2,,,OK,4300,Yes,53.702845,14.321078,"Camera moved
+ Recalibration needed and performed. Partly cloudy. 23 degrees."
+PI1,R0004,2026-08-22,17:11:00,Revision,Pedro,OK,40,,,OK,54000,Yes,53.672978,14.355487,"Many picture, but still working on revision day 22.08.26. partly cloudy 23 degrees"
+PH1,R0004,2026-08-22,17:47:00,Revision,Pedro,OK,35,,,OK,78000,Yes,53.693014,14.355351,Check why so many photos. Cloudy. 22 degrees
+PE2,R0004,2026-08-23,11:20:00,Revision,Pedro,OK,5,,,OK,1300,Yes,53.694102,14.356584,Allgood. Cloudy. 21 degrees
+PD2,R0004,2026-08-23,11:53:00,Revision,Pedro,OK,67,,,OK,15000,Yes,53.683401,14.309531,Cloudy. 21 degree.
+PD1,R0004,2026-08-23,12:40:00,Revision,Pedro,OK,8,,,OK,1500,Yes,53.675111,14.286979,Cloudy. 20 degrees.

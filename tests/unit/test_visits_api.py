@@ -1252,7 +1252,7 @@ def test_an_inactive_site_has_a_camera_put_up_again_and_a_camera_removed_after_a
 
 def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_characters():
     from wildintel_uploader.core.services import epicollect_service
-    text = (Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_epicollect.csv").read_text(encoding="utf-8")
+    text = (Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wildintel_epicollect.csv").read_text(encoding="utf-8")
     assert "5_Status_of_the_came" in text and "7_N_pictures_collect" in text and "10_Action_after_thef" in text   # as Epicollect5 cuts them
     rows = list(__import__("csv").DictReader(__import__("io").StringIO(epicollect_service.visits_from_csv(text))))
 

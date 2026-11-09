@@ -1,7 +1,7 @@
 # Custom CSV examples for WICP_02
 
 Visits for trying **Register visits → From a CSV file → Custom CSV**, made to fit the entities in
-[`../../entities_example/wicp_02`](../../entities_example/wicp_02) (import them first, with the research project **WICP_02** picked):
+[`../../entities_example/wicp_02`](../../../entities_example/wicp_02) (import them first, with the research project **WICP_02** picked):
 
 | Entity | What the visits use |
 |---|---|
