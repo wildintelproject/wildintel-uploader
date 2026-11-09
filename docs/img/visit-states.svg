@@ -76,6 +76,6 @@
   <g font-size="13" fill="#1e3a8a">
     <text x="50" y="446" font-weight="700">The deployment of a visit is open while its camera is out (Deployed)</text>
     <text x="50" y="468" fill="#334155">and closed when a later visit to the site collects its card (Collected) or finds the camera stolen (Stolen).</text>
-    <text x="50" y="490" fill="#334155">Whether its images are stored is told apart, by the tick in the Images column — it is not a state of the visit.</text>
+    <text x="50" y="490" fill="#334155">Whether its images are stored is told apart, once its deployment is made — it is not a state of the visit.</text>
   </g>
 </svg>
