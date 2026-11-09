@@ -224,12 +224,31 @@ Press **📋 Manage visits**: it offers **Register visits** and **Visit dashboar
 
 ![The visit book](img/screenshots/visit-book.png)
 
-The book is of the **default research project** (the one set in Settings › General), which it names at the top with a link to the settings where it is changed. It shows, in two tabs, the **visits** kept to it — newest first, with a filter — and the **deployments** its visits say, by collection: the closed ones and the ones whose camera is still out.
+The dashboard is of the **default research project** (the one set in Settings › General). Its head has the title, a line of buttons under it and, at the far right, the **research project** card — its label, its acronym and name, and a gear that goes to the settings where it is changed:
 
-Besides the visits made, the book has a row — status **Planned**, with no day, no actions and no buttons — for each location of the research project (but the archived ones) that has no visit in a session the visits have: if the project has 60 locations, each session has 60 rows. The list is paged, ten rows at a time, can be filtered by text, by **revision** and by status — above the list, a square for each **revision** (one visit to every site: *All revisions*, *R0003*, *R0002*… each with *N of M done*) narrows everything to the one picked, and four **cards** above the list count the rows (*Planned*, *Deployed*, *Collected*, *Stored* and *Stolen*) and pressing one shows only those; a bar and *N of M visits done* sum it up —, and **sorted by a column** — press its name, and again to turn it round (the rows not made always go last).
+- **Export visits (CSV)** — downloads the visits kept as a CSV that [Register visits › Custom CSV](#custom-csv) reads back as they are (it is there when the project has visits).
+- **Help & Legend** — opens a panel at the right with the legend: the *overall progress*, the *visit states*, the *data states* and the *filters and search*. It closes with its cross, with **Got it, close**, by pressing the background or with Escape.
 
-A visit is one row: its **Session**, **Where** (the site), **When**, the **Actions**, its **Status**, which follows the life of a visit — *Planned* (not made yet), *Deployed* (it left a camera that is still out), *Collected* (a later visit collected the card it left) and *Stored* (its deployment is made, so the images are stored) and *Stolen* (the camera it left was stolen: its deployment is closed with no images, and there is nothing to create); nothing for a visit that left no camera —
-and **Images**: a **Show image details** button once the deployment is made and its images are stored, which opens [Deployments dashboard](#show-deployments-status) on that deployment; a **Store images** button on a *collected* visit that has none yet — it opens [Import deployment](#import-a-deployment) with the research project and that visit already chosen —; and a grey crossed circle on a *deployed* visit, whose card has not been collected. **View** (the eye button, as in the entities) opens everything the visit says (the camera, the card, the photos, who went, the camera model, the details of the camera and the site, the notes, its instant in UTC…). 
+Under the head are three blocks, in this order:
+
+1. **Revision selection** — a revision is one visit to every site. A card for *All revisions* (the visits done of all, and the percentage) and one for each of the five most recent revisions (*R0003*, *R0002*… with the days it went from and to, *N of M done* and a tick when every visit is done); the older ones are in the **Older revisions** list at the right of the title. Picking one narrows everything below to it.
+2. **Status metrics & filters** — the **Progress** card (the share of visits done, with a bar and the number pending) and a card for each state, with its count: *Planned*, *Deployed*, *Collected*, *Stolen* and *Not visited*. Pressing a card shows only those visits; pressing it again shows them all.
+3. **The table** — one panel with the search, the filters and the rows.
+
+The chevron at the left of *Revision selection* and of *Status metrics & filters* **folds the block away**, to leave only the table; press it again to bring the block back.
+
+**The table.** At the top, a search (by site, revision, camera, card, who, deployment…) with a cross to clear it, the **Status** list and **Reset**, which puts every filter back (the search, the status and the revision). Under them a line tells the **active filters** — *Revision: R0003 · Status: Collected* — and how many visits match. The list is paged, ten rows at a time, with its foot (*Showing 1–10 of 24 visits*, *Prev*, the pages and *Next*), and can be **sorted by a column** — press its name, and again to turn it round (the rows not made always go last).
+
+Besides the visits made, the table has a row — status **Planned**, with no day, no actions — for each location of the research project (but the archived ones) that has no visit in a revision the visits have: if the project has 60 locations, each revision has 60 rows. A revision before the first visit of a site is **Unknown**: nothing is known of it, and it can be filled in with the pencil button.
+
+A visit is one row: its **Revision**, **Where** (the site), **When**, the **Actions**, its **Status** — *Planned* (not made yet), *Deployed* (it left a camera that is still out), *Collected* (a later visit collected the card it left), *Stolen* (the camera it left was stolen: its deployment is closed with no images, and there is nothing to create), *Not visited* (the visit could not be made) and *Unknown*; nothing for a visit that left no camera — and **Images**: a tick once the deployment is made and its images are stored, which opens [Deployments dashboard](#show-deployments-status) on that deployment; a grey crossed circle when they are not stored, because the card was not collected or the camera was stolen.
+
+**The details of a visit.** The **chevron** at the left of a row opens its details, and the row is marked with a blue band while they are open; press the chevron — now pointing down — to close them. The eye button in the row does the same. The details show everything the visit says: the actions, who went, the camera and its model, the **SD card left** and the **SD card collected** — the one the visit before it left at the site, with the photos it holds; when no visit before it is known (the revisions before are unknown) it says so —, the status of the camera, the card and the batteries, the coordinates, the notes and its instant in UTC.
+
+**The buttons of a row** are together, in a box of their own, and only the ones that apply are there: the visit of the revision **before** and the one **after**, to the same site; **edit** the visit; **fill in** an unknown visit; **create the visit** that was planned; **view** its details; and **create the deployment** — it opens [Import deployment](#import-a-deployment) with the research project and that visit already chosen — on a *collected* visit that has none yet.
+
+The [Deployments dashboard](#show-deployments-status) and the Uploads dashboard have the same head, panel of help, folding blocks and table.
+
 ### Register visits
 
 Press **Register visits**.
@@ -256,22 +275,41 @@ their deployments stay open), visits where nothing was collected (*Not revised*)
 visit already kept (it is that visit, left as it is). When the visits are kept, **a report** of the import is written beside them (`visits_import_<day>_<time>.txt`), and **Show the deployments** lists, by collection, the deployments the
 visits say: the closed ones and the ones whose camera is still out.
 
-When a file is read, the visits that were found are listed and the ones that are fine can be kept; the rows that cannot be read (*a date that is not a date*,
-*actions that are not Installation, Revision, Desinstallation or Stolen*…) are listed with why. The file is treated as the field records are: what the field wrote is
-**kept and questioned, not thrown away**:
+When a file is read, the visits that were found are listed and the ones that are fine can be kept; the rows that cannot be read or that break a rule are listed with why, and are **not kept**.
+
+#### The rules of a visit
+
+A visit follows the same rules **by hand and from a file**: the one that breaks them is refused — by hand, with the reason; from a file, with its row and a **label of its own** for each rule. The rules compare the visit with the visits before it **by date** — not only with the revision before — and with the other visits of its revision:
+
+| Label in the results | What it says |
+|---|---|
+| *Site is not a location* | The site is not a location of the research project (see *Sites that are not locations*, below). |
+| *Visit already there at that time* | The site already has a visit on that day and at that time. |
+| *Site visited twice in a revision* | A revision is **one visit to each site**, whatever the day. |
+| *Visit not after the last one of the site* / *Revision out of order* | A visit is after the last one to its site, and a revision is after the revisions before it and before the ones after it. |
+| *Revision started before the one before is finished* | A revision starts when the one before it has a visit in every location that is not archived. |
+| *Revision closed* | Every location has its visit in that revision: nothing new is added to it. |
+| *First visit is not an Installation* | The first visit to a site puts the camera up. |
+| *Something its actions ask is missing* | An Installation asks for the camera and the card it leaves; a Revision, the camera and the photos it collected (not when the card was full); a Desinstallation, the camera and the photos; a Stolen camera, the camera. |
+| *Not the camera at the site*, *Camera already installed here*, *Camera installed at another site* | A Revision, a Desinstallation or a Stolen camera is of the camera that is at the site (to change it, add an Installation to the visit); a camera is not put up where it already is, nor while it is at another site. |
+| *SD card archived*, *SD card left is the one collected*, *SD card in another camera*, *SD card collected in this revision* | The card left is not archived, is not the one the visit collects, is not in the camera of another site, and was not collected in the same revision. |
+| *Site archived*, *Archive with an Installation*, *Camera still there when the site is archived* | An archived site has no visits after the day it was archived; a visit that archives it puts no camera up and takes the one that is out away (or finds it stolen). |
+| *Camera not in the research project*, *SD card not in the research project*, *Trapper not in the settings* | The camera, the SD card and who went have to exist — by hand and in a file — unless the import is asked to create the camera or the card. |
+
+What the form only **questions** — a Revision with no photos, a camera or a card at two sites in a revision — is still kept, with a warning.
+
+**What an unknown revision hides is not checked.** A revision before the first visit of a site is *unknown*: nothing is known of it — no day, no camera, no card. So the first visit to a site in a revision after `R0001` may be any, and what a visit left at a site (which camera is there, which card is in it) is **not trusted for a later visit when an unknown revision of that site lies between them**: nobody knows what was done in it. An unknown revision counts as a visit to finish its revision, and a real visit that comes later takes its place.
+
+**A visit already kept** is the one of the **same revision and site**, whatever the day: a row like that is left as it is and counted as *already kept*. Only a row with no revision — it gets the next of its site — is told by the site, the day and the time.
 
 - **Sites that are not locations.** A site of the file that is not a location of the research project may be a site that is really new or one misnamed in the field. Its visits
   are held, and the site is shown with what tells the two apart: **how far** its first visit was from the nearest location, and the locations whose id is **one character apart**
   from its own (*it may be a misprint*). If it is new, **Add … as a location** keeps it with the coordinates of its first visit and reads the file again (**Add the N sites with coordinates as locations** does it for all the ones whose file has the coordinates and that do not look like a misprint — no id one character apart, no location within 100 m); if it is a misprint, correct
   the id in the file and read it again.
-- **What to check in the field data.** A camera or an SD card at two sites in one session or in a place it cannot be (a camera installed at another site, a card still in another camera),
-  what a visit's actions ask and it lacks (the photos of a Revision, the card of an Installation), two Revisions or two Installations of a site in one session, a visit that is not
-  after the one before, a Revision with no photos, and an Installation while the card left before was never collected. They are listed, and the visits are kept as they are.
 
-The same rules protect the form: **by hand**, a visit is refused — by the server, whatever page sends it — if its site is not a location of the project, it is already kept (same site, day and time),
-it lacks what its actions ask, or its camera or card are not where it says (a Revision, a Desinstallation or a Stolen camera is of the camera that is at the site: to change the camera, add an Installation to the visit — the form comes with the camera of the site chosen and offers no other until you do).
+#### By hand
 
-**By hand**, a visit is a form with these parts:
+A visit is a form with these parts:
 
 1. **Actions** — one or several of *Installation* (a camera is put up and a card left), *Revision* (the card is collected and another left),
    *Desinstallation* (the camera is taken away with its card) and *Stolen*. The rest of the form depends on what is chosen: what the actions do not
@@ -283,6 +321,22 @@ it lacks what its actions ask, or its camera or card are not where it says (a Re
 4. **Site** and **Grouping and notes**, as in the details of a deployment.
 
 Each field is marked *required* or *optional* according to the actions.
+
+The camera and the SD card are picked from those of the research project, and who went from the trappers of the settings; the form is refused if they are not. The rules above are checked by the server, whatever page sends the visit, and the form says why a camera or a card cannot be used as soon as it is chosen. A visit that is wrong can be **edited** from the dashboard, with the same rules checked — also on the visits after it that the change touches.
+
+#### Custom CSV
+
+Any spreadsheet with a row per visit. Press **Register visits › Custom CSV**; the research project is the default one. The steps:
+
+1. **Choose the spreadsheet file.** Pick the CSV (optionally, the *history of visits* `.xlsx`). Choosing the file does **not** move on: the step stays open with **Create what does not exist yet** — switches for the **locations**, the **cameras** and the **SD cards** the file names that are not in the project, each created with the visits; each asks for more fields in the matching, where a default can also be given — and the buttons **Back** (to the research project) and **Continue**.
+2. **Match the columns.** For each field of a visit, the column of the file that gives it. The fields are in groups, as in the form of a visit by hand — *Who*, *Where*, *When*, *The visit*, *SD card*, *Camera*, *Site*, and *Grouping and notes* —, each with an example from the file. What has the name of a field (`location_id`, `session`, `date`, `time`, `actions`, `trappers`, `camera_id`, `sd`, `num_photos`…) is matched by itself; pick the rest, or give a **default** for a field the file has no column for. The site and the actions are required; the time is a date and a time, or — when the file has it — the instant of an entry (`created_at`), as the *visit sources* setting says. Dates may be written day first. A visit with no revision gets the next one of its site. Press **Read the visits**.
+3. **Check and add the visits.** What the file says, before it is kept: *N visits to add · N already kept · N rows with a problem*, the new sites, what is worth knowing and what is odd. The rows are listed **by row** — each with the button that views what the row says and, where something is wrong, the **exclamation** button that views the errors — or **by reason / error**, each kind of error with its count and the same button to see its rows. Press **Add N visits** to keep them.
+
+When the visits are kept, the end says how many were added and, if they **closed other visits** — a visit closes the one that left the camera whose card it collects —, how many: **pick their revision and import their images** is a link to [Import deployment](#import-a-deployment) on the research project. A **report** of the import is written with the other reports.
+
+The rows are read as their fields take them: *a date that is not a date*, *actions that are not Installation, Revision, Desinstallation, Stolen or Archive*, a card code that is not OK, Card full, No batteries or Card full and no batteries, or photos that are not a whole number, are rows with a problem, and none of them is kept. The visits are then checked with [the rules of a visit](#the-rules-of-a-visit), in the order of their instants, each against the ones kept and the ones of the file before it. The visits of a file that fill unknown revisions of the visits kept are checked together, with the ones after them that they touch.
+
+There are example files of every case — all correct, three revisions, a revision that starts before the one before is finished, unknown sites, rows that cannot be read, a card that is left where it cannot be, a theft and a site given up, columns to match by hand — in [`examples/visits_example`](https://github.com/wildintelproject/wildintel-uploader/tree/main/examples/visits_example) and, made to fit the entities of the research project `WICP_02`, in `examples/visits_example/custom_csv`.
 
 **The deployments the visits say, and the logs of the collections.** Each site's visits, in order, give a deployment for every pair where the first **left a camera** (an Installation or a Revision)
 and the second **collected its card**: it goes from the one to the other and is *closed*. It belongs to the collection **the session of the visit that collected it names, minus one** — R0013
