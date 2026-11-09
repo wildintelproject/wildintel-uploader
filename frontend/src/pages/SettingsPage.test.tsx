@@ -1116,11 +1116,14 @@ describe('SettingsPage', () => {
       await userEvent.type(dialog.getByLabelText('Label'), 'North gate')
       await userEvent.type(dialog.getByLabelText('Camera id'), 'P800HG08192031')
       await userEvent.type(dialog.getByLabelText('Camera model'), 'Reconyx-PC800')
+      await userEvent.click(within(dialog.getByRole('group', { name: 'Mobile connection' })).getByRole('button', { name: '4G' }))
+      await userEvent.click(within(dialog.getByRole('group', { name: 'Power' })).getByRole('button', { name: 'Battery pack' }))
+      await userEvent.click(within(dialog.getByRole('group', { name: 'The battery pack can be taken out' })).getByRole('button', { name: 'Yes' }))
       expect(dialog.queryByLabelText('In production since')).not.toBeInTheDocument() // it is kept as the day it is created
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', connectivity: '4g', power_source: 'battery_pack', battery_removable: 'yes', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
     })
 
     it('gives a camera a status — and, once archived, the day, why and a comment — and says it on its card', async () => {

@@ -1887,7 +1887,7 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
           heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('camera', owner, c.label) : undefined)} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />} onDetail={setDetail} styled
           items={cameras.filter((c) => belongs(c.research_project))}
           onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
-          blank={{ label: '', camera_id: null, camera_model: null, in_service: today(), research_project: owner, status: 'active', status_date: null, status_note: null }}
+          blank={{ label: '', camera_id: null, camera_model: null, connectivity: null, power_source: null, battery_removable: null, in_service: today(), research_project: owner, status: 'active', status_date: null, status_note: null }}
           badges={unusualStatus} readOnly={(c) => c.status === 'archived'} notice={(c) => (c.status === 'archived' ? <Notice kind="info">This one is archived for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.camera_model, c.camera_id].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)) === 0}
@@ -1897,6 +1897,9 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
             { key: 'label', label: 'Label', placeholder: 'e.g. CAM-014', hint: 'What the camera is called in the field. No two cameras in a project have the same.', section: 'Which camera is it?', sectionIcon: <CameraIcon />, sectionHint: 'What the camera is called in the field, its serial number and its model. Visits refer to the camera by its label.' },
             { key: 'camera_id', label: 'Camera id', placeholder: 'e.g. P800HG08192031', hint: "The camera's serial number, if it is known." },
             { key: 'camera_model', label: 'Camera model', placeholder: 'e.g. Reconyx-PC800', hint: 'Manufacturer and model, written as manufacturer-model.' },
+            { key: 'connectivity', label: 'Mobile connection', kind: 'select', options: [{ value: 'none', label: 'None' }, { value: '4g', label: '4G' }, { value: '5g', label: '5G' }], section: 'How is it connected and powered?', sectionHint: 'Whether the camera sends its photos through the mobile network, and what it runs on.', hint: 'The network the camera sends its photos through; none when it does not.' },
+            { key: 'power_source', label: 'Power', kind: 'select', options: [{ value: 'batteries', label: 'Batteries', hint: 'The cells that are changed, as AA.' }, { value: 'battery_pack', label: 'Battery pack' }], hint: 'What the camera runs on.' },
+            { key: 'battery_removable', label: 'The battery pack can be taken out', kind: 'select', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }], hint: 'Only said of a battery pack: batteries are always taken out to be changed.' },
             ...statusFields<Camera>(GEAR_STATUSES, true, GEAR_HINTS, true),
           ]}
         />

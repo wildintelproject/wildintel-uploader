@@ -641,6 +641,9 @@ export interface SdCard {
   status_note?: string | null
 }
 
+export type CameraConnectivity = 'none' | '4g' | '5g'
+export type CameraPowerSource = 'batteries' | 'battery_pack'
+
 /** One of the camera traps, named as Camtrap DP names it. */
 export interface Camera {
   /** What it is called in the field: the one thing it is asked for. */
@@ -648,6 +651,12 @@ export interface Camera {
   /** Its serial number, when it is known. */
   camera_id: string | null
   camera_model: string | null
+  /** The mobile network it sends its photos through: none when it does not. */
+  connectivity?: CameraConnectivity | null
+  /** What it runs on: batteries (the cells that are changed) or a battery pack. */
+  power_source?: CameraPowerSource | null
+  /** Whether the battery pack can be taken out — only a battery pack says. */
+  battery_removable?: 'yes' | 'no' | null
   /** YYYY-MM-DD — the day it was put into production. */
   in_service: string | null
   /** The acronym of the research project it belongs to: every one belongs to one (none only while an older one waits to be assigned). */

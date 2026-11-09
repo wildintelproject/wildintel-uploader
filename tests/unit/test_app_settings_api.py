@@ -75,12 +75,26 @@ def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     # kept in the folder of the research project, and read back as it was
     assert _client().get("/api/settings").json()["FIELDWORK"]["sd_cards"][0]["in_service"] == "2026-03-01"
     assert saved["FIELDWORK"]["cameras"] == [
-        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": "DONA", **ACTIVE},
-        {"label": "X1", "camera_id": "X1", "camera_model": None, "in_service": None, "research_project": "DONA", **ACTIVE},
+        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": "DONA", **ACTIVE, **NO_POWER},
+        {"label": "X1", "camera_id": "X1", "camera_model": None, "in_service": None, "research_project": "DONA", **ACTIVE, **NO_POWER},
     ]  # one kept before it had a label is called by its id
 
 
 ACTIVE = {"status": "active", "archive_reason": None, "status_date": None, "status_note": None}
+NO_POWER = {"connectivity": None, "power_source": None, "battery_removable": None}   # what a camera says of its connection and its power when it says nothing
+
+
+def test_a_camera_says_how_it_is_connected_and_what_it_runs_on_and_only_a_battery_pack_says_if_it_can_be_taken_out():
+    saved = _put(FIELDWORK={"cameras": [
+        {"label": "A", "connectivity": "4g", "power_source": "battery_pack", "battery_removable": "yes", "research_project": "DONA"},
+        {"label": "B", "connectivity": "none", "power_source": "batteries", "battery_removable": "yes", "research_project": "DONA"},   # batteries are always taken out: nothing to say
+        {"label": "C", "connectivity": "5g", "research_project": "DONA"},
+    ]})["FIELDWORK"]["cameras"]
+    by_label = {c["label"]: c for c in saved}
+
+    assert (by_label["A"]["connectivity"], by_label["A"]["power_source"], by_label["A"]["battery_removable"]) == ("4g", "battery_pack", "yes")
+    assert (by_label["B"]["connectivity"], by_label["B"]["power_source"], by_label["B"]["battery_removable"]) == ("none", "batteries", None)
+    assert (by_label["C"]["connectivity"], by_label["C"]["power_source"], by_label["C"]["battery_removable"]) == ("5g", None, None)
 
 
 def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_only_the_known_ones_are_taken():

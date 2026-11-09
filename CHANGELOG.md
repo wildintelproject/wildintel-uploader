@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Added
+- **Cameras** (Settings › Entities): how a camera is connected and what it runs on — *Mobile connection* (none, 4G or 5G), *Power* (batteries, the cells that are changed, or a battery pack) and, for a battery pack, whether it *can be taken out*. All three are optional; batteries are always taken out to be changed, so only a battery pack says it.
 - **Import of visits**: how the card and the batteries were is also read as the form says it in English (*Card full*, *No batteries*, *Card full and no batteries*), and the id of a camera or an SD card is the number a cell starts with, or the one that follows *now* — `68 now. Before 26` is 68 —, and `42b` stays as it is.
 - **Register visits, by hand**: a visit is refused when its site already has a visit in that revision, when it is not after the last visit to its site, or when it is not after the last visit of the revisions before its own — each with the day and the time it has to be after.
 - **Register visits**: four sources, each with its switch in Settings › Visit sources — *WildINTEL Epicollect Legacy CSV*, *WildINTEL Epicollect CSV* (the download of the new form, its columns found by the label of their question) and, in *Custom CSV*, the choice of where the file is: on this computer or in the Epicollect5 project of the settings, whose entries are downloaded as a CSV and matched like any file. *Custom CSV* is always offered and cannot be turned off.
