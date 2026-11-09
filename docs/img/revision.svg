@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 520" width="920" height="520" role="img" aria-labelledby="t d" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="t">Revisions</title>
+  <desc id="d">A table of the visits: a row for each site and a column for each revision. A revision is one visit to every site that is not archived. A site is visited once in each revision, and a revision starts when the one before it is finished.</desc>
+
+  <defs>
+    <marker id="time" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#64748b" />
+    </marker>
+    <g id="done">
+      <circle r="15" fill="#dcfce7" stroke="#16a34a" stroke-width="2" />
+      <path d="M-7 0 l5 5 l9 -10" fill="none" stroke="#15803d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+    <g id="planned">
+      <circle r="15" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 4" />
+    </g>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="520" rx="18" fill="#ffffff" stroke="#d4d4d8" />
+
+  <text x="40" y="42" font-size="15" font-weight="700" fill="#2563eb" letter-spacing="1">A REVISION IS ONE VISIT TO EVERY SITE</text>
+
+  <!-- the bands of the revisions -->
+  <rect x="210" y="62" width="190" height="268" rx="12" fill="#eff6ff" stroke="#bfdbfe" />
+  <rect x="418" y="62" width="190" height="268" rx="12" fill="#eff6ff" stroke="#bfdbfe" />
+  <rect x="626" y="62" width="190" height="268" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="6 5" />
+  <g font-size="16" font-weight="700" text-anchor="middle" fill="#1e3a8a">
+    <text x="305" y="92">R0001</text>
+    <text x="513" y="92">R0002</text>
+    <text x="721" y="92" fill="#475569">R0003</text>
+  </g>
+  <g font-size="12" text-anchor="middle" fill="#475569">
+    <text x="305" y="110">finished</text>
+    <text x="513" y="110">finished</text>
+    <text x="721" y="110">going on</text>
+  </g>
+
+  <!-- the sites -->
+  <g font-size="13" font-weight="600" fill="#334155" font-family="'JetBrains Mono', 'SFMono-Regular', Consolas, monospace">
+    <text x="40" y="150">WICP_02_001</text>
+    <text x="40" y="198">WICP_02_002</text>
+    <text x="40" y="246">WICP_02_003</text>
+    <text x="40" y="294">WICP_02_004</text>
+  </g>
+  <g stroke="#e2e8f0">
+    <line x1="30" y1="166" x2="890" y2="166" />
+    <line x1="30" y1="214" x2="890" y2="214" />
+    <line x1="30" y1="262" x2="890" y2="262" />
+  </g>
+
+  <!-- the visits: R0001 -->
+  <use href="#done" x="305" y="146" /><use href="#done" x="305" y="194" /><use href="#done" x="305" y="242" /><use href="#done" x="305" y="290" />
+  <!-- R0002 -->
+  <use href="#done" x="513" y="146" /><use href="#done" x="513" y="194" /><use href="#done" x="513" y="242" /><use href="#done" x="513" y="290" />
+  <!-- R0003: two done, two to come -->
+  <use href="#done" x="721" y="146" /><use href="#done" x="721" y="194" /><use href="#planned" x="721" y="242" /><use href="#planned" x="721" y="290" />
+  <g font-size="11" text-anchor="middle" fill="#64748b" font-family="'JetBrains Mono', 'SFMono-Regular', Consolas, monospace">
+    <text x="345" y="150" text-anchor="start">Sep 14</text><text x="345" y="198" text-anchor="start">Sep 14</text><text x="345" y="246" text-anchor="start">Sep 14</text><text x="345" y="294" text-anchor="start">Sep 14</text>
+    <text x="553" y="150" text-anchor="start">Oct 19</text><text x="553" y="198" text-anchor="start">Oct 19</text><text x="553" y="246" text-anchor="start">Oct 19</text><text x="553" y="294" text-anchor="start">Oct 19</text>
+    <text x="761" y="150" text-anchor="start">Nov 02</text><text x="761" y="198" text-anchor="start">Nov 02</text><text x="761" y="246" text-anchor="start">planned</text><text x="761" y="294" text-anchor="start">planned</text>
+  </g>
+
+  <!-- the time -->
+  <path d="M210 352 H816" stroke="#64748b" stroke-width="2.500" marker-end="url(#time)" />
+  <text x="822" y="357" font-size="13" font-weight="600" fill="#64748b">time</text>
+  <text x="210" y="376" font-size="12" fill="#64748b">Every visit of a revision is after those of the revisions before it.</text>
+
+  <!-- the rules -->
+  <g font-size="13" fill="#1e3a8a">
+    <rect x="30" y="396" width="270" height="96" rx="10" fill="#eff6ff" stroke="#bfdbfe" />
+    <text x="46" y="420" font-weight="700">One visit to each site</text>
+    <text x="46" y="441" fill="#334155">A site is visited once in a</text>
+    <text x="46" y="458" fill="#334155">revision — one dot in each</text>
+    <text x="46" y="475" fill="#334155">cell, never two.</text>
+
+    <rect x="325" y="396" width="270" height="96" rx="10" fill="#eff6ff" stroke="#bfdbfe" />
+    <text x="341" y="420" font-weight="700">One after the other</text>
+    <text x="341" y="441" fill="#334155">R0003 can have its first visit</text>
+    <text x="341" y="458" fill="#334155">only because every site has its</text>
+    <text x="341" y="475" fill="#334155">visit in R0002.</text>
+
+    <rect x="620" y="396" width="270" height="96" rx="10" fill="#f8fafc" stroke="#cbd5e1" />
+    <text x="636" y="420" font-weight="700" fill="#475569">Not archived sites only</text>
+    <text x="636" y="441" fill="#334155">A location given up is not</text>
+    <text x="636" y="458" fill="#334155">part of the round: no visit is</text>
+    <text x="636" y="475" fill="#334155">expected after it is archived.</text>
+  </g>
+</svg>

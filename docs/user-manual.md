@@ -80,7 +80,28 @@ Before explaining how the application works, it is necessary to clarify the foll
 
 A **visit** is one trip to one camera trap, to do something with it. It is the field record: it says when it was, at which site, who went, what was done to the camera and the card, and what was found. The visits of a research project are registered in *Manage visits* — see the [web manual](user-manual-web.md#5-manage-visits) — and everything else is worked out from them.
 
-A **revision** is one visit to every site: the round of visits to all the locations of a research project that are not archived — the 1st, the 2nd, the 3rd one, called `R0001`, `R0002`, `R0003`… A site is visited **once** in a revision, and a revision does not start until the one before it is finished (every location has its visit in it). Revisions are in order: every visit of a revision is after those of the revisions before it. When nothing is known of a revision of a site — the first visit kept to it is of a later revision —, that revision is **unknown**: nothing is checked against it, and a visit that comes later can take its place.
+![A visit: one trip to one camera trap, recorded with when, where, who went, what was done, the SD card, the camera and what was found](img/visit.svg)
+
+A **revision** is one visit to every site: the round of visits to all the locations of a research project that are not archived — the 1st, the 2nd, the 3rd one, called `R0001`, `R0002`, `R0003`… A site is visited **once** in a revision, and a revision does not start until the one before it is finished (every location has its visit in it). Revisions are in order: every visit of a revision is after those of the revisions before it.
+
+![Revisions: a row for each site and a column for each revision, with one visit in each cell](img/revision.svg)
+
+When nothing is known of a revision of a site — the first visit kept to it is of a later revision —, that revision is **unknown**: nothing is checked against it, and a visit that comes later can take its place.
+
+#### The states of a visit
+
+A visit has a state that follows its life. A visit that left no camera has none.
+
+| State | What it says |
+|---|---|
+| **Planned** | The visit is not made yet: a location with no visit in a revision that has them. |
+| **Deployed** | It left a camera that is still out: its card has not been collected. |
+| **Collected** | A later visit collected the card it left. |
+| **Stolen** | The camera it left was stolen: its deployment is closed with no images, and there is nothing to create. |
+| **Not visited** | The visit could not be made. |
+| **Unknown** | A revision of a site of which nothing is known. |
+
+Whether the images of a visit are stored is another thing: they are once its deployment is made.
 
 #### The actions of a visit
 
@@ -106,21 +127,6 @@ A visit can do several things at once: *Revision + Installation* (the camera is 
 | **The site and the notes** | The coordinates where the note was taken, the groups and tags of the deployment, and the notes. |
 
 Which of them are required depends on the actions: an Installation asks for the camera and the card it leaves, a Revision for the photos it collected… Nothing is asked of a visit that could not be made.
-
-#### The states of a visit
-
-A visit has a state that follows its life. A visit that left no camera has none.
-
-| State | What it says |
-|---|---|
-| **Planned** | The visit is not made yet: a location with no visit in a revision that has them. |
-| **Deployed** | It left a camera that is still out: its card has not been collected. |
-| **Collected** | A later visit collected the card it left. |
-| **Stolen** | The camera it left was stolen: its deployment is closed with no images, and there is nothing to create. |
-| **Not visited** | The visit could not be made. |
-| **Unknown** | A revision of a site of which nothing is known. |
-
-Whether the images of a visit are stored is another thing: they are once its deployment is made.
 
 ### 2.2 Deployments, locations and collections
 
