@@ -1207,7 +1207,7 @@ describe('VisitsPage from a CSV file', () => {
     expect(screen.queryByRole('list', { name: 'Rows with a problem' })).not.toBeInTheDocument()
   })
 
-  it('says how many of the visits added are closed, and sends to the visit dashboard for their deployments, with no notice for each of them', async () => {
+  it('says how many other visits the ones added closed, and sends to the visit dashboard for their deployments, with no notice for each of them', async () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: null, new_sites: [], warnings: [] })
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, ignored: 0, saved: 1, new_sites: [], warnings: [] })
     mockedApi.closedVisits.mockResolvedValue({ results: [{ visit: visit({ session: 'R0001' }), end: visit() }] })
@@ -1219,7 +1219,7 @@ describe('VisitsPage from a CSV file', () => {
     await continueFromTheFile()
     await userEvent.click(await screen.findByRole('button', { name: 'Add 1 visit' }))
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 visit added to TATR. 1 of them is closed: import their images from the Visit dashboard to make their deployments.'))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 visit added to TATR. As a result of this new visit, 1 other visit is now closed: import its images from the Visit dashboard to make its deployment.'))
     expect(screen.queryByRole('button', { name: /Import the images of/ })).not.toBeInTheDocument()
   })
 
