@@ -223,15 +223,15 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
             <h4 className="text-xl font-semibold leading-tight">Visit dashboard</h4>
             <p className="text-zinc-500 dark:text-zinc-400 text-sm">The visits kept to a research project.</p>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The book" onOpenSettings={onOpenSettings} />
           {project && visits !== null && visits.length > 0 && (
-            <button type="button" className={btnOutline} disabled={exporting} onClick={() => void exportVisits()}
+            <button type="button" className={`${btnOutline} ml-4`} disabled={exporting} onClick={() => void exportVisits()}
                     title="Download the visits of this research project as a CSV file, to import them again in Register visits › CSV file">
               {exporting ? 'Exporting…' : 'Export visits (CSV)'}
             </button>
           )}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The book" onOpenSettings={onOpenSettings} />
         </div>
       </header>
 
@@ -242,8 +242,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
           {visits !== null && revisions.length > 0 && (
             <section aria-label="Revision" className="mb-6">
               <h5 className="text-lg font-semibold mb-1">Revision</h5>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see what is planned and what is done.</p>
-              <RevisionSquares all={{ label: 'All revisions', note: `${everyRow.filter((v) => !v.not_done).length} of ${everyRow.length} done` }} value={revision}
+              <RevisionSquares description="A revision is one visit to every site. Pick one to see what is planned and what is done." all={{ label: 'All revisions', note: `${everyRow.filter((v) => !v.not_done).length} of ${everyRow.length} done` }} value={revision}
                 revisions={revisions.map((r) => { const of = everyRow.filter((v) => v.session === r); return { id: r, label: r, note: `${of.filter((v) => !v.not_done).length} of ${of.length} done`, dates: spanOf(of) } })}
                 onPick={(id) => { setRevision(id); setStatusFilter(''); setPage(1); setOpened(null) }} />
             </section>

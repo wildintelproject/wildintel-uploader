@@ -110,8 +110,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
           {revisions.length > 0 && (
             <section aria-label="Revision" className="mb-6">
               <h5 className="text-lg font-semibold mb-1">Revision</h5>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see its uploads and where each is.</p>
-              <RevisionSquares all={{ label: 'All revisions', note: plural(every.length) }} value={revision}
+              <RevisionSquares description="A revision is one visit to every site. Pick one to see its uploads and where each is." all={{ label: 'All revisions', note: plural(every.length) }} value={revision}
                 revisions={revisions.map((r) => ({ id: r, label: r, note: plural(every.filter((x) => x.deployment.collection === r).length) }))}
                 onPick={(id) => { setRevision(id); setPage(1) }} />
             </section>

@@ -106,8 +106,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
         <>
           <section aria-label="Revision" className="mb-6">
             <h5 className="text-lg font-semibold mb-1">Revision</h5>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">A revision is one visit to every site. Pick one to see what is planned and what is done.</p>
-            <RevisionSquares all={{ label: 'All revisions', note: plural(deployments.length, 'deployment', 'deployments') }} value={revision}
+            <RevisionSquares description="A revision is one visit to every site. Pick one to see what is planned and what is done." all={{ label: 'All revisions', note: plural(deployments.length, 'deployment', 'deployments') }} value={revision}
               revisions={revisions.map((r) => ({ id: r, label: r, note: plural(deployments.filter((d) => d.collection === r).length, 'deployment', 'deployments') }))}
               onPick={(id) => { setRevision(id); setFilter(''); setPage(1) }} />
           </section>

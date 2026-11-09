@@ -16,6 +16,17 @@ describe('RevisionSquares', () => {
     expect(screen.getByLabelText('Older revisions').querySelectorAll('option')).toHaveLength(3) // Pick one…, R0002, R0001
   })
 
+  it('puts the list of the older ones at the height of the description, at its right, when there is one — and not beside the squares', async () => {
+    const onPick = vi.fn()
+    render(<RevisionSquares description="A revision is one visit to every site." all={{ label: 'All revisions', note: 'x' }} revisions={revisions(7)} value="" onPick={onPick} />)
+
+    const row = screen.getByText('A revision is one visit to every site.').parentElement as HTMLElement
+    expect(row).toContainElement(screen.getByLabelText('Older revisions'))                               // the same row as the description
+    expect(screen.getByRole('group', { name: 'Revision' })).not.toContainElement(screen.getByLabelText('Older revisions'))   // not among the squares
+    await userEvent.selectOptions(screen.getByLabelText('Older revisions'), 'R0001')
+    expect(onPick).toHaveBeenCalledWith('R0001')
+  })
+
   it('has no list when all the revisions fit, and shows an older one as picked in the list', () => {
     const { rerender } = render(<RevisionSquares all={{ label: 'All revisions', note: 'x' }} revisions={revisions(5)} value="" onPick={() => {}} />)
     expect(screen.queryByLabelText('Older revisions')).not.toBeInTheDocument()
