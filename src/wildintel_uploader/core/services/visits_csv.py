@@ -154,6 +154,24 @@ ERROR_LABELS: dict[str, str] = {
     "revision_order": "Revision out of order",
     "visit_repeated": "Site visited twice in a revision",
     "visit_refused": "Breaks the rules of a visit",
+    "site_not_a_location": "Site is not a location",
+    "visit_at_the_same_time": "Visit already there at that time",
+    "first_visit_not_installation": "First visit is not an Installation",
+    "required_field": "Something its actions ask is missing",
+    "camera_not_at_the_site": "Not the camera at the site",
+    "camera_installed_here": "Camera already installed here",
+    "camera_installed_elsewhere": "Camera installed at another site",
+    "card_archived": "SD card archived",
+    "card_is_the_one_collected": "SD card left is the one collected",
+    "card_in_another_camera": "SD card in another camera",
+    "card_collected_in_revision": "SD card collected in this revision",
+    "visit_not_after_the_last": "Visit not after the last one of the site",
+    "site_archived": "Site archived",
+    "archive_with_installation": "Archive with an Installation",
+    "archive_camera_still_there": "Camera still there when the site is archived",
+    "camera_unknown": "Camera not in the research project",
+    "card_unknown": "SD card not in the research project",
+    "trapper_unknown": "Trapper not in the settings",
     "date_invalid": "Date or time not valid",
     "number_invalid": "Number not valid",
     "create_missing": "Data to create it is missing",
@@ -621,14 +639,15 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         camera, card = str(visit.get("camera_id") or "").lower(), str(visit.get("sd") or "").lower()
         check = options.get("check_entities", True)
         if check and camera and options.get("cameras") is not None and camera not in cameras_known and not create.get("cameras"):
-            reasons.append(f"The camera {visit['camera_id']} is not one of the cameras of the research project.")
+            reasons.append(visit_rules._reason("camera_unknown", f"The camera {visit['camera_id']} is not one of the cameras of the research project."))
         if check and card and options.get("cards") is not None and card not in cards_known and not create.get("sd_cards"):
-            reasons.append(f"The SD card {visit['sd']} is not one of the SD cards of the research project.")
+            reasons.append(visit_rules._reason("card_unknown", f"The SD card {visit['sd']} is not one of the SD cards of the research project."))
         if check and options.get("trappers") is not None:
             known_trappers = {str(t).lower() for t in options["trappers"]}
-            reasons += [f"{t} is not one of the trappers." for t in (x.strip() for x in str(visit.get("trappers") or "").split(",")) if t and t.lower() not in known_trappers]
+            reasons += [visit_rules._reason("trapper_unknown", f"{t} is not one of the trappers.") for t in (x.strip() for x in str(visit.get("trappers") or "").split(",")) if t and t.lower() not in known_trappers]
         if reasons:
-            problem(n, " ".join(dict.fromkeys(reasons)), "revision_not_finished" if gate.get(number) and reasons[0] == gate[number] else "visit_refused")
+            # the kind of error is that of the first rule it breaks; every reason is told
+            problem(n, " ".join(dict.fromkeys(reasons)), getattr(reasons[0], "code", "visit_refused"))
         else:
             accepted.append(visit)
     refused_ids = {id(v) for v in visits} - {id(v) for v in accepted}

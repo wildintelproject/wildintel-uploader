@@ -302,3 +302,36 @@ def test_a_visit_is_not_checked_against_what_an_unknown_revision_between_it_and_
     kept, unknown = _later_revision("R0002", 1)
     result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping, {"unknown": unknown})
     assert result["visits"] == [] and "SD card 1 is the one this visit collects" in result["problems"][0]["message"]
+
+
+# ── each rule a visit breaks has its own label ───────────────────────────────────────
+
+def test_every_rule_of_a_visit_has_a_label_of_its_own():
+    import re
+    from pathlib import Path
+
+    from wildintel_uploader.core.services import visit_rules, visits_csv
+    codes = set(re.findall(r'_reason\(\s*"(\w+)"', Path(visit_rules.__file__).read_text(encoding="utf-8") + Path(visits_csv.__file__).read_text(encoding="utf-8")))
+    assert len(codes) >= 18
+    missing = sorted(c for c in codes if c not in visits_csv.ERROR_LABELS)
+    assert not missing, f"no label for {missing}"
+    assert len({visits_csv.ERROR_LABELS[c] for c in codes}) == len(codes)   # no two rules share a label
+
+
+def test_the_rows_refused_for_a_rule_say_which_rule_in_their_label():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": f"WICP_000{n}", "timezone": "UTC"} for n in (1, 2)]
+    text = ("location_id,actions,date,time,session,camera_id,sd\n"
+            "WICP_0001,Installation,2026-09-14,08:30:00,R0001,C1,1\n"
+            "WICP_0002,Installation,2026-09-14,10:05:00,R0001,C1,2\n")       # the camera is at WICP_0001
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    labels = {r["row"]: r["label"] for r in visits_csv.parse_visits(text, locations, [], "", "mapped", mapping)["rows"] if r["result"] == "problem"}
+    assert labels == {3: "Camera installed at another site"}
+
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "WICP_0001,Installation,2026-09-14,08:30:00,R0001,C1,1,\n"
+            "WICP_0001,Revision,2026-10-19,08:30:00,R0002,C1,2,\n"            # the photos collected are missing
+            "WICP_0001,Revision,2026-10-20,08:30:00,R0003,C1,3,10\n")          # R0002 is not kept: the revision before is not finished
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    labels = {r["row"]: r["label"] for r in visits_csv.parse_visits(text, locations[:1], [], "", "mapped", mapping)["rows"] if r["result"] == "problem"}
+    assert labels == {3: "Something its actions ask is missing", 4: "Revision started before the one before is finished"}

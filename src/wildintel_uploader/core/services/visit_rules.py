@@ -27,6 +27,17 @@ _LABELS = {"camera": "The camera", "sd": "The SD card left in the camera", "phot
 NOT_REVISED = ("not revised", "no revisada", "no revisado")
 
 
+class Reason(str):
+    """Why a visit is refused — the text, and `code`: which rule it is, for the label of the error (see visits_csv.ERROR_LABELS)."""
+    code: str = "visit_refused"
+
+
+def _reason(code: str, text: str) -> Reason:
+    reason = Reason(text)
+    reason.code = code
+    return reason
+
+
 def _same(a, b) -> bool:
     return str(a or "").strip().lower() == str(b or "").strip().lower()
 
@@ -85,7 +96,7 @@ def required_errors(visit: dict) -> dict[str, str]:
             continue
         if how == "required" and (value[field] is None or str(value[field]).strip() == ""):
             by = " + ".join(a for a in actions if _ASKED.get(a, {}).get(field) == "required")
-            errors[field] = f"{_LABELS[field]} is required for {by}."
+            errors[field] = _reason("required_field", f"{_LABELS[field]} is required for {by}.")
     return errors
 
 
@@ -165,20 +176,20 @@ def card_block(kept: list[dict], visit: dict, cards: list[dict] | None = None, u
     if settings and settings.get("status") == "archived" and (not settings.get("status_date") or str(settings["status_date"]) <= str(visit.get("date"))):
         since = f" since {settings['status_date']}" if settings.get("status_date") else ""
         reason = f" ({settings['archive_reason']})" if settings.get("archive_reason") else ""
-        return f"SD card {card} is not available{since}: it is archived{reason}."
+        return _reason("card_archived", f"SD card {card} is not available{since}: it is archived{reason}.")
     number = _session_number(visit.get("session"))
     there = card_at(kept, card, when, unknown, number)
     if there and collects and _same(there["site"], site):
-        return f"SD card {card} is the one this visit collects (left on {there['date']}): the card left in the camera has to be another."
+        return _reason("card_is_the_one_collected", f"SD card {card} is the one this visit collects (left on {there['date']}): the card left in the camera has to be another.")
     if there:
-        return f"SD card {card} is in the camera at {there['site']} (left on {there['date']}): it has to be collected before it is left here."
+        return _reason("card_in_another_camera", f"SD card {card} is in the camera at {there['site']} (left on {there['date']}): it has to be collected before it is left here.")
     session = visit.get("session")
     if session:
         for w in kept:
             if w is not visit and w.get("session") == session and _collects_card(w):
                 held = card_at_site(kept, w["location_id"], _stamp(w), unknown, _session_number(w.get("session")))
                 if held and _same(held["label"], card):
-                    return f"SD card {card} was collected at {w['location_id']} in this revision ({session}): it cannot be left again in the same revision."
+                    return _reason("card_collected_in_revision", f"SD card {card} was collected at {w['location_id']} in this revision ({session}): it cannot be left again in the same revision.")
     return None
 
 
@@ -199,15 +210,15 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
         there = camera_at_site(kept, site, when, unknown, number)
         if there and not _same(there["camera"], camera):
             what = " + ".join(x for x in actions if x in ACTIONS)
-            errors["camera"] = f"The camera at {site} is {there['camera']} (since {there['date']}): a {what} is of that camera. If it was replaced, add an Installation to the visit."
+            errors["camera"] = _reason("camera_not_at_the_site", f"The camera at {site} is {there['camera']} (since {there['date']}): a {what} is of that camera. If it was replaced, add an Installation to the visit.")
     if installs and camera:
         there = camera_at(kept, camera, when, unknown, number)
         # A visit that also revises may find the camera in the very site it puts it up at.
         if there and not (revises and _same(there["site"], site)):
             errors["camera"] = (
-                f"Camera {camera} is already installed here (since {there['date']}): it has to be uninstalled first."
+                _reason("camera_installed_here", f"Camera {camera} is already installed here (since {there['date']}): it has to be uninstalled first.")
                 if _same(there["site"], site) else
-                f"Camera {camera} is installed at {there['site']} (since {there['date']}): it has to be uninstalled there before it is installed here."
+                _reason("camera_installed_elsewhere", f"Camera {camera} is installed at {there['site']} (since {there['date']}): it has to be uninstalled there before it is installed here.")
             )
     sd = card_block(kept, visit, cards, unknown)
     if sd:
@@ -329,14 +340,14 @@ def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[d
     it is the first to its site and not an Installation, it lacks what its actions ask, or its camera or card are not where it says. Empty when it can be kept."""
     reasons = []
     if not any(_same(l.get("location_id"), visit["location_id"]) for l in locations):
-        reasons.append(f"The site '{visit['location_id']}' is not a location of the research project.")
+        reasons.append(_reason("site_not_a_location", f"The site '{visit['location_id']}' is not a location of the research project."))
     if any(_same(v["location_id"], visit["location_id"]) and v.get("date") == visit["date"] and v.get("time") == visit["time"] for v in kept):
-        reasons.append(f"There is already a visit to {visit['location_id']} on {visit['date']} at {visit['time']}.")
+        reasons.append(_reason("visit_at_the_same_time", f"There is already a visit to {visit['location_id']} on {visit['date']} at {visit['time']}."))
     reasons += order_errors(visit, kept)
     # The first visit to a site puts the camera up: nothing else can be done where no camera is known to be.
     unknown_before = first_may_be_any and (_session_number(visit.get("session")) or 1) > 1
     if not unknown_before and not is_not_revised(visit) and not any(_same(v["location_id"], visit["location_id"]) and _stamp(v) < _stamp(visit) for v in kept) and list(visit.get("actions") or []) != ["Installation"]:
-        reasons.append(f"The first visit to {visit['location_id']} can only be an Installation.")
+        reasons.append(_reason("first_visit_not_installation", f"The first visit to {visit['location_id']} can only be an Installation."))
     reasons += required_errors(visit).values()
     reasons += availability_errors(kept, visit, cards, unknown).values()
     reasons += archive_errors(visit, kept, next((l for l in locations if _same(l.get("location_id"), visit["location_id"])), None), unknown)
@@ -352,15 +363,15 @@ def order_errors(visit: dict, kept: list[dict]) -> list[str]:
     number = _session_number(visit.get("session"))
     site = str(visit["location_id"]).strip()
     if number is not None and any(_same(v["location_id"], site) and _session_number(v.get("session")) == number for v in kept):
-        errors.append(f"{site} already has a visit in R{number:04d}: a revision is one visit to each site.")
+        errors.append(_reason("visit_repeated", f"{site} already has a visit in R{number:04d}: a revision is one visit to each site."))
     last = max((v for v in kept if _same(v["location_id"], site)), key=_stamp, default=None)
     if last is not None and _stamp(last) >= _stamp(visit):
-        errors.append(f"The visit to {site} has to be after the last one, on {last['date']} at {last['time']} ({last.get('session')}).")
+        errors.append(_reason("visit_not_after_the_last", f"The visit to {site} has to be after the last one, on {last['date']} at {last['time']} ({last.get('session')})."))
     if number is not None:
         before = [v for v in kept if (_session_number(v.get("session")) or number) < number]
         latest = max(before, key=_stamp, default=None)
         if latest is not None and _stamp(latest) >= _stamp(visit) and not (last is not None and latest is last):
-            errors.append(f"R{number:04d} has to be after R{_session_number(latest.get('session')):04d}: its last visit was to {latest['location_id']} on {latest['date']} at {latest['time']}.")
+            errors.append(_reason("revision_order", f"R{number:04d} has to be after R{_session_number(latest.get('session')):04d}: its last visit was to {latest['location_id']} on {latest['date']} at {latest['time']}."))
     return errors
 
 
@@ -371,7 +382,7 @@ def _replay(visit: dict, others: list[dict], locations: list[dict], cards: list[
     number = _session_number(visit.get("session"))
     found: list[tuple[tuple[str, str] | None, str]] = []
     if number is not None and any(_same(v["location_id"], visit["location_id"]) and _session_number(v.get("session")) == number for v in others):
-        found.append((None, f"{visit['location_id']} already has a visit in R{number:04d}: a revision is one visit to each site."))
+        found.append((None, _reason("visit_repeated", f"{visit['location_id']} already has a visit in R{number:04d}: a revision is one visit to each site.")))
     found += [(None, why) for why in refusals(visit, [v for v in others if _stamp(v) < stamp], locations, cards, unknown)]
     # a revision is after the one before it and before the one after it, whichever the site: a visit cannot go past the visits of another revision
     if number is not None:
@@ -380,9 +391,9 @@ def _replay(visit: dict, others: list[dict], locations: list[dict], cards: list[
             if n is None or n == number:
                 continue
             if n < number and _stamp(other) >= stamp:
-                found.append((None, f"R{number:04d} has to be after R{n:04d}: its visit to {other['location_id']} was on {other['date']} at {other['time']}."))
+                found.append((None, _reason("revision_order", f"R{number:04d} has to be after R{n:04d}: its visit to {other['location_id']} was on {other['date']} at {other['time']}.")))
             elif n > number and _stamp(other) <= stamp:
-                found.append((None, f"R{number:04d} has to be before R{n:04d}: its visit to {other['location_id']} was on {other['date']} at {other['time']}."))
+                found.append((None, _reason("revision_order", f"R{number:04d} has to be before R{n:04d}: its visit to {other['location_id']} was on {other['date']} at {other['time']}.")))
     # the visits it touches — to its site, with its camera or with its card — are checked again with it where it is, those after it and those before it too: one that
     # was after it may be before it now, and has lost what it needed
     for other in sorted(others, key=_stamp):
@@ -390,7 +401,7 @@ def _replay(visit: dict, others: list[dict], locations: list[dict], cards: list[
             continue
         earlier = [v for v in [*others, visit] if v is not other and _stamp(v) < _stamp(other)]
         key = (str(other["location_id"]).lower(), str(other.get("session") or "").upper())
-        found += [(key, f"{other.get('session')} {other['location_id']} on {other['date']} at {other['time']} would no longer be possible: {why}")
+        found += [(key, _reason(getattr(why, "code", "visit_refused"), f"{other.get('session')} {other['location_id']} on {other['date']} at {other['time']} would no longer be possible: {why}"))
                   for why in refusals(other, earlier, locations, cards, unknown)]
     return found
 
@@ -417,14 +428,14 @@ def archive_errors(visit: dict, kept: list[dict], location: dict | None, unknown
     errors: list[str] = []
     site = str(visit["location_id"]).strip()
     if location and location.get("status") == "archived" and (not location.get("status_date") or str(visit.get("date")) > str(location["status_date"])):
-        errors.append(f"{site} is archived{' since ' + str(location['status_date']) if location.get('status_date') else ''}: no visit is kept for it after that.")
+        errors.append(_reason("site_archived", f"{site} is archived{' since ' + str(location['status_date']) if location.get('status_date') else ''}: no visit is kept for it after that."))
     actions = visit.get("actions") or []
     if "Archive" in actions:
         if "Installation" in actions:
-            errors.append(f"A visit that archives {site} cannot put a camera up there.")
+            errors.append(_reason("archive_with_installation", f"A visit that archives {site} cannot put a camera up there."))
         there = camera_at_site(kept, site, _stamp(visit), unknown, _session_number(visit.get("session")))
         if there and not _takes_away(visit):
-            errors.append(f"The camera at {site} ({there['camera']}) is still there: take it away (Desinstallation) or say it was stolen in the visit that archives the location.")
+            errors.append(_reason("archive_camera_still_there", f"The camera at {site} ({there['camera']}) is still there: take it away (Desinstallation) or say it was stolen in the visit that archives the location."))
     return errors
 
 
@@ -531,7 +542,7 @@ def unfinished_revision(number: int, visits: list[dict], locations: list[dict], 
     missing = revision_missing(previous, visits, locations, day, unknown)
     if not missing:
         return None
-    return f"R{number:04d} cannot start: R{previous:04d} is not finished, {len(missing)} location(s) still to be visited in it: {', '.join(missing)}."
+    return _reason("revision_not_finished", f"R{number:04d} cannot start: R{previous:04d} is not finished, {len(missing)} location(s) still to be visited in it: {', '.join(missing)}.")
 
 
 def revision_gate(new: list[dict], kept: list[dict], locations: list[dict], unknown: list[dict] | None = None) -> list[tuple[dict, str]]:
