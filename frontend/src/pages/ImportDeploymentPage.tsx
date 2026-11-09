@@ -833,13 +833,13 @@ export function SectionCard({ title, icon, filled, total, summary, optional = fa
   return (
     <section className="rounded-lg border border-zinc-200 dark:border-zinc-700 mb-3" aria-label={title}>
       <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-4 py-3 text-left">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-zinc-500 dark:text-zinc-400">{icon}</svg>
+        <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 fill-none stroke-current transition-transform ${open ? 'text-blue-600 dark:text-blue-400' : '-rotate-90 text-zinc-400'}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-blue-600 dark:text-blue-400">{icon}</svg>
         <span className="min-w-0">
           <span className="block text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}{optional && <span className="ml-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">optional</span>}</span>
           {!open && summary && <span className="block truncate text-sm text-zinc-500 dark:text-zinc-400">{summary}</span>}
         </span>
         <span className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${missing > 0 ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : filled > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'}`}>{filled} of {total} filled{missing > 0 && ` · ${missing} required missing`}</span>
-        <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 fill-none stroke-current text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
       </button>
       {open && <div className="px-4 pb-4"><fieldset disabled={locked} className="contents">{children}</fieldset></div>}
     </section>
