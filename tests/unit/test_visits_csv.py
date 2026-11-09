@@ -276,3 +276,29 @@ def test_a_site_is_visited_once_in_a_revision_even_on_another_day_in_the_same_fi
     assert [(v["location_id"], v["session"]) for v in result["visits"]] == [("WICP_0001", "R0001"), ("WICP_0002", "R0001")]
     assert [(p["row"], "row 2" in p["message"]) for p in result["problems"]] == [(3, True)]
     assert {r["row"]: r["result"] for r in result["rows"]}[3] == "problem"
+
+
+# ── what an unknown revision hides cannot be checked ──────────────────────────────────
+
+def _later_revision(session: str, number_of_unknown: int):
+    """A project whose only visit is a Revision of WICP_0001 that collects the card in the camera and leaves the card 1; the revisions before it are unknown."""
+    kept = [{"location_id": "WICP_0001", "session": session, "date": "2027-01-18", "time": "08:30:00", "when": "2027-01-18T08:30:00Z", "actions": ["Revision"], "camera_id": "C1", "sd": "1", "num_photos": 30}]
+    unknown = [{"location_id": "WICP_0001", "session": f"R{n:04d}"} for n in range(1, number_of_unknown + 1)]
+    return kept, unknown
+
+
+def test_a_visit_is_not_checked_against_what_an_unknown_revision_between_it_and_a_later_visit_may_have_changed():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}]
+    text = "location_id,actions,date,time,session,camera_id,sd\nWICP_0001,Installation,2026-09-14,08:30:00,R0001,C1,1\n"
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+
+    # R0006 collects the card in the camera and leaves card 1; R0001 leaves card 1 as well, but R0002 to R0005 are unknown: the card could have been changed in them
+    kept, unknown = _later_revision("R0006", 5)
+    result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping, {"unknown": unknown})
+    assert not result["problems"] and len(result["visits"]) == 1
+
+    # with nothing unknown between them, R0002 would collect card 1 and leave it again: the visit is refused
+    kept, unknown = _later_revision("R0002", 1)
+    result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping, {"unknown": unknown})
+    assert result["visits"] == [] and "SD card 1 is the one this visit collects" in result["problems"][0]["message"]

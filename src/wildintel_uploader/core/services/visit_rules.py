@@ -89,8 +89,18 @@ def required_errors(visit: dict) -> dict[str, str]:
     return errors
 
 
-def camera_at(visits: list[dict], camera: str, when: str) -> dict | None:
-    """The site a camera is put up at on a given moment — None when it is nowhere: never put up, uninstalled or stolen."""
+def _stale(at: dict | None, site: str, unknown: list[dict] | None, number: int | None) -> bool:
+    """Whether what a visit left at a site — where a camera is, which card is in it — cannot be trusted at revision `number`: a revision of that site between them is
+    unknown, and nobody knows what was done in it. What cannot be known cannot be checked."""
+    if not at or not unknown or number is None:
+        return False
+    since = _session_number(at.get("session"))
+    return since is not None and any(_same(u.get("location_id"), site) and (n := _session_number(u.get("session"))) is not None and since < n < number for u in unknown)
+
+
+def camera_at(visits: list[dict], camera: str, when: str, unknown: list[dict] | None = None, number: int | None = None) -> dict | None:
+    """The site a camera is put up at on a given moment — None when it is nowhere: never put up, uninstalled or stolen, or when it cannot be told (an unknown revision of
+    its site came after)."""
     at = None
     for v in sorted((v for v in visits if _stamp(v) < when), key=_stamp):
         if not _same(v.get("camera_id"), camera):
@@ -98,45 +108,48 @@ def camera_at(visits: list[dict], camera: str, when: str) -> dict | None:
         if _takes_away(v):
             at = None
         elif {"Installation", "Revision"} & set(v.get("actions") or []):
-            at = {"site": v["location_id"], "date": v["date"]}
-    return at
+            at = {"site": v["location_id"], "date": v["date"], "session": v.get("session")}
+    return None if at is None or _stale(at, at["site"], unknown, number) else at
 
 
-def camera_at_site(visits: list[dict], site: str, when: str) -> dict | None:
-    """The camera that is put up at a site on a given moment — None when none is known: nothing was installed there, or it was taken away or stolen."""
+def camera_at_site(visits: list[dict], site: str, when: str, unknown: list[dict] | None = None, number: int | None = None) -> dict | None:
+    """The camera that is put up at a site on a given moment — None when none is known: nothing was installed there, or it was taken away or stolen, or an unknown revision
+    of the site came after what is known."""
     at = None
     for v in sorted((v for v in visits if _stamp(v) < when and _same(v.get("location_id"), site)), key=_stamp):
         if _takes_away(v):
             at = None
         elif {"Installation", "Revision"} & set(v.get("actions") or []) and v.get("camera_id"):
-            at = {"camera": v["camera_id"], "date": v["date"]}
-    return at
+            at = {"camera": v["camera_id"], "date": v["date"], "session": v.get("session")}
+    return None if _stale(at, site, unknown, number) else at
 
 
-def card_at(visits: list[dict], label: str, when: str) -> dict | None:
-    """The site whose camera holds a card on a given moment — None when it is in none: never left, or collected."""
+def card_at(visits: list[dict], label: str, when: str, unknown: list[dict] | None = None, number: int | None = None) -> dict | None:
+    """The site whose camera holds a card on a given moment — None when it is in none: never left, or collected, or when it cannot be told (an unknown revision of
+    that site came after)."""
     in_site: dict[str, dict] = {}
     for v in sorted((v for v in visits if _stamp(v) < when), key=_stamp):
         site = str(v["location_id"]).lower()
         if _collects_card(v):
             in_site.pop(site, None)
         if v.get("sd") and _leaves_card(v):
-            in_site[site] = {"label": v["sd"], "date": v["date"], "site": v["location_id"]}
-    return next(({"site": c["site"], "date": c["date"]} for c in in_site.values() if _same(c["label"], label)), None)
+            in_site[site] = {"label": v["sd"], "date": v["date"], "site": v["location_id"], "session": v.get("session")}
+    found = next(({"site": c["site"], "date": c["date"], "session": c["session"]} for c in in_site.values() if _same(c["label"], label)), None)
+    return None if found and _stale(found, found["site"], unknown, number) else found
 
 
-def card_at_site(visits: list[dict], site: str, when: str) -> dict | None:
-    """The card the camera at a site holds on a given moment — None when it holds none: never left, or collected."""
+def card_at_site(visits: list[dict], site: str, when: str, unknown: list[dict] | None = None, number: int | None = None) -> dict | None:
+    """The card the camera at a site holds on a given moment — None when it holds none: never left, or collected, or an unknown revision of the site came after."""
     at = None
     for v in sorted((v for v in visits if _stamp(v) < when and _same(v.get("location_id"), site)), key=_stamp):
         if _collects_card(v):
             at = None
         if v.get("sd") and _leaves_card(v):
-            at = {"label": v["sd"], "date": v["date"]}
-    return at
+            at = {"label": v["sd"], "date": v["date"], "session": v.get("session")}
+    return None if _stale(at, site, unknown, number) else at
 
 
-def card_block(kept: list[dict], visit: dict, cards: list[dict] | None = None) -> str | None:
+def card_block(kept: list[dict], visit: dict, cards: list[dict] | None = None, unknown: list[dict] | None = None) -> str | None:
     """Why a visit cannot leave the card it says in the camera — None when it can, or when it leaves none. A card cannot be left when it is archived (from the
     day it was; with no day, for good), when it is in the camera of another site, when it is the one the visit collects, or when a visit of the same revision
     collected it."""
@@ -153,7 +166,8 @@ def card_block(kept: list[dict], visit: dict, cards: list[dict] | None = None) -
         since = f" since {settings['status_date']}" if settings.get("status_date") else ""
         reason = f" ({settings['archive_reason']})" if settings.get("archive_reason") else ""
         return f"SD card {card} is not available{since}: it is archived{reason}."
-    there = card_at(kept, card, when)
+    number = _session_number(visit.get("session"))
+    there = card_at(kept, card, when, unknown, number)
     if there and collects and _same(there["site"], site):
         return f"SD card {card} is the one this visit collects (left on {there['date']}): the card left in the camera has to be another."
     if there:
@@ -162,13 +176,13 @@ def card_block(kept: list[dict], visit: dict, cards: list[dict] | None = None) -
     if session:
         for w in kept:
             if w is not visit and w.get("session") == session and _collects_card(w):
-                held = card_at_site(kept, w["location_id"], _stamp(w))
+                held = card_at_site(kept, w["location_id"], _stamp(w), unknown, _session_number(w.get("session")))
                 if held and _same(held["label"], card):
                     return f"SD card {card} was collected at {w['location_id']} in this revision ({session}): it cannot be left again in the same revision."
     return None
 
 
-def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None = None) -> dict[str, str]:
+def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None = None, unknown: list[dict] | None = None) -> dict[str, str]:
     """What stops a visit for where its camera or its card is: the camera put up while it is somewhere else, a card left in a camera while it is
     in another one — or the very one the visit collects. Nothing is said while the visit does not say which."""
     errors: dict[str, str] = {}
@@ -177,16 +191,17 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
     actions = visit.get("actions") or []
     installs, revises = "Installation" in actions, "Revision" in actions
     collects = revises or "Desinstallation" in actions or "Stolen" in actions
+    number = _session_number(visit.get("session"))   # what an unknown revision between hides cannot be checked
 
     camera = visit.get("camera_id")
     # A visit that does not put a camera up — a Revision, a Desinstallation, a Stolen camera — is of the camera that is at the site.
     if camera and not installs and (collects or revises):
-        there = camera_at_site(kept, site, when)
+        there = camera_at_site(kept, site, when, unknown, number)
         if there and not _same(there["camera"], camera):
             what = " + ".join(x for x in actions if x in ACTIONS)
             errors["camera"] = f"The camera at {site} is {there['camera']} (since {there['date']}): a {what} is of that camera. If it was replaced, add an Installation to the visit."
     if installs and camera:
-        there = camera_at(kept, camera, when)
+        there = camera_at(kept, camera, when, unknown, number)
         # A visit that also revises may find the camera in the very site it puts it up at.
         if there and not (revises and _same(there["site"], site)):
             errors["camera"] = (
@@ -194,13 +209,13 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
                 if _same(there["site"], site) else
                 f"Camera {camera} is installed at {there['site']} (since {there['date']}): it has to be uninstalled there before it is installed here."
             )
-    sd = card_block(kept, visit, cards)
+    sd = card_block(kept, visit, cards, unknown)
     if sd:
         errors["sd"] = sd
     return errors
 
 
-def history_warning_items(new: list[dict], kept: list[dict], cards: list[dict] | None = None) -> list[tuple[str, list[dict]]]:
+def history_warning_items(new: list[dict], kept: list[dict], cards: list[dict] | None = None, unknown: list[dict] | None = None) -> list[tuple[str, list[dict]]]:
     """What is odd in the visits of a file, among them and with the ones already kept — each said once, with the session and the site, and with the visits of the
     file that it is about (the ones that make it odd). They are questions for the one who knows the field, not reasons to refuse a visit."""
     items: dict[str, list[dict]] = {}
@@ -235,7 +250,7 @@ def history_warning_items(new: list[dict], kept: list[dict], cards: list[dict] |
         for message in required_errors(v).values():
             say(f"{label(v)}: {message}", v)
         # Where its camera and its card are, with what came before it — the visits of the file included.
-        for message in availability_errors(before, v, cards).values():
+        for message in availability_errors(before, v, cards, unknown).values():
             say(f"{label(v)}: {message}", v)
         # An Installation while the card left at the visit before was not collected: nothing closes that deployment.
         if "Installation" in v["actions"] and "Revision" not in v["actions"]:
@@ -323,8 +338,8 @@ def refusals(visit: dict, kept: list[dict], locations: list[dict], cards: list[d
     if not unknown_before and not is_not_revised(visit) and not any(_same(v["location_id"], visit["location_id"]) and _stamp(v) < _stamp(visit) for v in kept) and list(visit.get("actions") or []) != ["Installation"]:
         reasons.append(f"The first visit to {visit['location_id']} can only be an Installation.")
     reasons += required_errors(visit).values()
-    reasons += availability_errors(kept, visit, cards).values()
-    reasons += archive_errors(visit, kept, next((l for l in locations if _same(l.get("location_id"), visit["location_id"])), None))
+    reasons += availability_errors(kept, visit, cards, unknown).values()
+    reasons += archive_errors(visit, kept, next((l for l in locations if _same(l.get("location_id"), visit["location_id"])), None), unknown)
     if gate:
         reasons += [why for _, why in revision_gate([visit], kept, locations, unknown)]
     return reasons
@@ -396,7 +411,7 @@ def _session_number(session) -> int | None:
     return int(m.group(0)) if m else None
 
 
-def archive_errors(visit: dict, kept: list[dict], location: dict | None) -> list[str]:
+def archive_errors(visit: dict, kept: list[dict], location: dict | None, unknown: list[dict] | None = None) -> list[str]:
     """What stops a visit for the state of its location: an archived location is archived for good, so nothing is done there after the day it was archived;
     and a visit that archives it leaves no camera there — it takes the one that is out away, or finds it stolen — and does not put one up."""
     errors: list[str] = []
@@ -407,7 +422,7 @@ def archive_errors(visit: dict, kept: list[dict], location: dict | None) -> list
     if "Archive" in actions:
         if "Installation" in actions:
             errors.append(f"A visit that archives {site} cannot put a camera up there.")
-        there = camera_at_site(kept, site, _stamp(visit))
+        there = camera_at_site(kept, site, _stamp(visit), unknown, _session_number(visit.get("session")))
         if there and not _takes_away(visit):
             errors.append(f"The camera at {site} ({there['camera']}) is still there: take it away (Desinstallation) or say it was stolen in the visit that archives the location.")
     return errors
