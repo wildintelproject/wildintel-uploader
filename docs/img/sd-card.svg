@@ -29,7 +29,7 @@
   <path d="M650 241 H750" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
   <rect x="672.2" y="204" width="55.599999999999994" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="700.0" y="218" font-size="11" fill="#475569" text-anchor="middle">stolen</text>
   <path d="M100.0 196 V190 Q100.0 178 112.0 178 H808.0 Q820.0 178 820.0 190 V194" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
-  <rect x="418.2" y="168" width="83.6" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="460.0" y="182" font-size="11" fill="#475569" text-anchor="middle">by settings</text>
+  <rect x="412.6" y="168" width="94.8" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="460.0" y="182" font-size="11" fill="#475569" text-anchor="middle">by settings *</text>
   <path d="M580.0 286 V318 Q580.0 330 568.0 330 H352.0 Q340.0 330 340.0 318 V288" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
   <rect x="423.8" y="320" width="72.4" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="460.0" y="334" font-size="11" fill="#475569" text-anchor="middle">collected</text>
   <text x="30" y="372" font-size="12" fill="#64748b">A card is left by an Installation or a Revision and collected by the next Revision or Desinstallation. Stolen with</text>

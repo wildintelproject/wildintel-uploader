@@ -87,7 +87,7 @@ def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     ]  # one kept before it had a label is called by its id
 
 
-ACTIVE = {"status": "active", "archive_reason": None, "status_date": None, "status_note": None}
+ACTIVE = {"status": "ready", "archive_reason": None, "status_date": None, "status_note": None}
 NO_POWER = {"connectivity": None, "power_source": None, "battery_removable": None}   # what a camera says of its connection and its power when it says nothing
 
 
@@ -482,7 +482,7 @@ def test_a_camera_and_an_sd_card_are_marked_as_not_available_by_what_the_visit_s
     shown = _client().get("/api/settings").json()["FIELDWORK"]
 
     assert camera.json() == {"updated": True} and card.json() == {"updated": True} and nobody.json() == {"updated": False}
-    assert {c["label"]: (c["status"], c["archive_reason"], c["status_date"]) for c in shown["cameras"]} == {"CAM-001": ("archived", "stolen", "2026-10-29"), "CAM-002": ("active", None, None)}
+    assert {c["label"]: (c["status"], c["archive_reason"], c["status_date"]) for c in shown["cameras"]} == {"CAM-001": ("archived", "stolen", "2026-10-29"), "CAM-002": ("ready", None, None)}
     assert (shown["sd_cards"][0]["status"], shown["sd_cards"][0]["archive_reason"]) == ("archived", "stolen")
 
 
@@ -647,3 +647,29 @@ def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_
     # and an id the page makes up is not taken: a new one is kept with an id of the app's
     forged = _put(FIELDWORK={"trappers": [{"username": "luis", "name": "Luis", "id": "mine"}]})["FIELDWORK"]["trappers"][0]
     assert forged["id"] != "mine" and len(forged["id"]) == 36
+
+
+def test_the_status_of_a_camera_by_hand_follows_what_the_visits_say(tmp_path, monkeypatch):
+    from wildintel_uploader.core.services import local_folder_service as svc
+    from wildintel_uploader.core.config import FieldworkSettings  # noqa: F401
+
+    svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0})
+    svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM-1", "camera_id": "P800", "status": "ready"}])
+
+    def by_hand(status: str) -> str:
+        items = svc.list_field_items(tmp_path, "DONA", "cameras")
+        try:
+            svc.write_field_items(tmp_path, "DONA", "cameras", [{**items[0], "status": status}], by_hand=True)
+            return svc.list_field_items(tmp_path, "DONA", "cameras")[0]["status"]
+        except svc.LocalFolderError as exc:
+            return str(exc)
+
+    free = (by_hand("planned"), by_hand("ready"), by_hand("active"))
+    svc.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0001", "when": "2026-01-01T09:00:00Z", "actions": ["Installation"], "camera_id": "P800", "sd": "A1"}])
+    out = (by_hand("planned"), by_hand("archived"))
+    svc.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0002", "when": "2026-02-01T09:00:00Z", "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 1}])
+    back = (by_hand("planned"), by_hand("ready"), by_hand("archived"))
+
+    assert free[0] == "planned" and free[1] == "ready" and "a visit does it" in free[2]
+    assert all("is put up at DONA_01" in o for o in out)
+    assert back == ("planned", "ready", "archived")

@@ -732,11 +732,13 @@ def test_a_revision_is_of_the_camera_that_is_at_the_site_unless_the_visit_also_i
         _save(install)
         other = _save({**VISIT, "actions": ["Revision"], "camera_id": "P999", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0004"})
         same = _save({**VISIT, "actions": ["Revision"], "camera_id": "p800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0004"})
-        swapped = _save({**VISIT, "actions": ["Revision", "Installation"], "camera_id": "P999", "num_photos": 10, "sd": "C7", "date": "2024-11-12", "session": "R0005"})
+        two = _save({**VISIT, "actions": ["Revision", "Installation"], "camera_id": "P999", "num_photos": 10, "sd": "C7", "date": "2024-11-12", "session": "R0005"})
+        swapped = _save({**VISIT, "actions": ["Revision", "Desinstallation", "Installation"], "camera_id": "P999", "num_photos": 10, "sd": "C7", "date": "2024-11-12", "session": "R0005"})
 
-    assert other.status_code == 422 and "The camera at DONA_01 is P800" in other.json()["detail"] and "add an Installation" in other.json()["detail"]
+    assert other.status_code == 422 and "The camera at DONA_01 is P800" in other.json()["detail"] and "add a Desinstallation and an Installation" in other.json()["detail"]
     assert same.status_code == 200                                  # the camera that is there, whatever its case
-    assert swapped.status_code == 200                               # the camera was replaced: the visit says so
+    assert two.status_code == 422 and "already has a camera: p800" in two.json()["detail"]   # a site has one camera at a time: the old one has to be taken away
+    assert swapped.status_code == 200                               # the camera was replaced: the visit takes the old one away and puts the new one up
 
 
 def test_the_visit_book_gives_each_visit_the_deployment_it_started_closed_or_open(tmp_path: Path):

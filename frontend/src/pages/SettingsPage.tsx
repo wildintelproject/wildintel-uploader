@@ -1880,7 +1880,7 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
           heading={`SD cards${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('sdcard', owner, c.label) : undefined)} noun="SD card" fileName={`${owner ?? 'unassigned'}_sd_cards`} icon={<SdCardIcon />} onDetail={setDetail} styled
           items={sdCards.filter((c) => belongs(c.research_project))}
           onChange={(v) => onSdCards([...sdCards.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
-          blank={{ label: '', brand: null, capacity: null, in_service: today(), research_project: owner, status: 'active', status_date: null, status_note: null }}
+          blank={{ label: '', brand: null, capacity: null, in_service: today(), research_project: owner, status: 'ready', status_date: null, status_note: null }}
           badges={unusualStatus} readOnly={(c) => c.status === 'archived'} notice={(c) => (c.status === 'archived' ? <Notice kind="info">This one is archived for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.brand, c.capacity].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && same(v.sd, c.label)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && same(v.sd, c.label)) === 0}
@@ -1900,7 +1900,7 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
           heading={`Cameras${owner ? ` of ${owner}` : ' of no project'}`} qr={(c) => (c.label ? qrPayload('camera', owner, c.label) : undefined)} noun="camera" fileName={`${owner ?? 'unassigned'}_cameras`} icon={<CameraIcon />} onDetail={setDetail} styled
           items={cameras.filter((c) => belongs(c.research_project))}
           onChange={(v) => onCameras([...cameras.filter((c) => !belongs(c.research_project)), ...v.map((c) => ({ ...c, research_project: owner }))])}
-          blank={{ label: '', camera_id: null, camera_model: null, connectivity: null, power_source: null, battery_removable: null, in_service: today(), research_project: owner, status: 'active', status_date: null, status_note: null }}
+          blank={{ label: '', camera_id: null, camera_model: null, connectivity: null, power_source: null, battery_removable: null, in_service: today(), research_project: owner, status: 'ready', status_date: null, status_note: null }}
           badges={unusualStatus} readOnly={(c) => c.status === 'archived'} notice={(c) => (c.status === 'archived' ? <Notice kind="info">This one is archived for good: it never goes back to active, and it can no longer be changed.</Notice> : undefined)} subtitle={(c) => [c.camera_model, c.camera_id].filter(Boolean).join(' · ')}
           meta={(c) => gearMeta(c, countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)))}
           canDelete={(c) => countVisits((v, p) => inProject(p) && usesCamera(v.camera_id, c)) === 0}
@@ -1913,7 +1913,7 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
             { key: 'connectivity', label: 'Mobile connection', kind: 'select', options: [{ value: 'none', label: 'None' }, { value: '4g', label: '4G' }, { value: '5g', label: '5G' }], section: 'How is it connected and powered?', sectionHint: 'Whether the camera sends its photos through the mobile network, and what it runs on: cells or a battery.', hint: 'The network the camera sends its photos through; none when it does not.' },
             { key: 'power_source', label: 'Power', kind: 'select', options: [{ value: 'cells', label: 'Cells', hint: 'AA, AAA… the ones that are changed.' }, { value: 'battery', label: 'Battery' }], hint: 'What the camera runs on: cells (AA, AAA…) or a battery.' },
             { key: 'battery_removable', label: 'The battery can be taken out', kind: 'select', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }], hint: 'Only said of a battery: cells are always taken out to be changed.' },
-            ...statusFields<Camera>(GEAR_STATUSES, true, GEAR_HINTS, true),
+            ...statusFields<Camera>(GEAR_STATUSES, true, GEAR_HINTS, true, ['active']),
           ]}
         />
       ))}

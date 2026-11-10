@@ -1072,7 +1072,7 @@ describe('SettingsPage', () => {
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'ready', status_date: null, status_note: null }])
     })
 
     it('shows the QR code of an SD card in its page', async () => {
@@ -1155,7 +1155,7 @@ describe('SettingsPage', () => {
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', connectivity: '4g', power_source: 'battery', battery_removable: 'yes', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'active', status_date: null, status_note: null }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', connectivity: '4g', power_source: 'battery', battery_removable: 'yes', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'ready', status_date: null, status_note: null }])
     })
 
     it('gives a camera a status — and, once archived, the day, why and a comment — and says it on its card', async () => {

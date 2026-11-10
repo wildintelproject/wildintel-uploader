@@ -168,7 +168,7 @@ def _esc(t): return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;
 LC={"Planned":("#fffbeb","#f59e0b","#92400e","#b45309"),"Ready":("#eff6ff","#2563eb","#1e3a8a","#1d4ed8"),
     "Active":("#ecfdf5","#10b981","#065f46","#047857"),"Archived":("#f1f5f9","#64748b","#334155","#475569")}
 XS=[30,270,510,750]; BW=140
-def lifecycle(fn,title,top,subs,labels,back,note,site=False):
+def lifecycle(fn,title,top,subs,labels,back,note,site=False,star=True):
     """top: (left, relation, right) boxes of what it is; subs: what each state means (2 lines each); labels: the label on each of the three arrows; back: the label of the way back."""
     import textwrap
     lines=textwrap.wrap(note,115)
@@ -200,7 +200,7 @@ def lifecycle(fn,title,top,subs,labels,back,note,site=False):
         svg.append(f'  <rect x="{(x1+x2)/2-w/2}" y="204" width="{w}" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(x1+x2)/2}" y="218" font-size="11" fill="#475569" text-anchor="middle">{_esc(lab)}</text>')
         d.edge(ids[i],ids[i+1],lab)
     # Settings can archive from any state: the way from Planned over the others
-    xa=XS[0]+BW/2; xb=XS[3]+BW/2; lab="by settings *" if site else "by settings"; w=len(lab)*5.6+22
+    xa=XS[0]+BW/2; xb=XS[3]+BW/2; lab="by settings *" if star else "by settings"; w=len(lab)*5.6+22
     svg.append(f'  <path d="M{xa} 196 V190 Q{xa} 178 {xa+12} 178 H{xb-12} Q{xb} 178 {xb} 190 V194" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
     svg.append(f'  <rect x="{(xa+xb)/2-w/2}" y="168" width="{w}" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(xa+xb)/2}" y="182" font-size="11" fill="#475569" text-anchor="middle">{lab}</text>')
     d.edge(ids[0],ids[3],lab,exit=(0.5,0),entry=(0.5,0),pts=[(xa,178),(xb,178)])
@@ -208,8 +208,8 @@ def lifecycle(fn,title,top,subs,labels,back,note,site=False):
         xr=XS[1]+BW/2
         svg.append(f'  <path d="M{xr} 196 V178" stroke="#475569" stroke-width="2.5" fill="none" />')
         svg.append(f'  <path d="M{XS[1]} 268 H{XS[0]+BW}" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
-        svg.append(f'  <rect x="{(XS[0]+BW+XS[1])/2-40}" y="258" width="80" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(XS[0]+BW+XS[1])/2}" y="272" font-size="11" fill="#475569" text-anchor="middle">by settings *</text>')
-        d.edge(ids[1],ids[0],"by settings *",exit=(0,0.8),entry=(1,0.8))
+        svg.append(f'  <rect x="{(XS[0]+BW+XS[1])/2-40}" y="258" width="80" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(XS[0]+BW+XS[1])/2}" y="272" font-size="11" fill="#475569" text-anchor="middle">{"by settings *" if star else "by settings"}</text>')
+        d.edge(ids[1],ids[0],"by settings *" if star else "by settings",exit=(0,0.8),entry=(1,0.8))
     # the way back, from Active to Ready
     x1=XS[2]+BW/2; x2=XS[1]+BW/2; w=len(back)*5.6+22
     svg.append(f'  <path d="M{x1} 286 V318 Q{x1} 330 {x1-12} 330 H{x2+12} Q{x2} 330 {x2} 318 V288" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
@@ -229,7 +229,7 @@ lifecycle("camera","The life of a camera",
   (("A site","where the camera is put up"),["has one camera","at a time"],("A camera","its id, its model, its settings")),
   [("Planned",["only in Settings:","not in the app"]),("Ready",["available,","not in the field"]),("Active",["put up","at a site"]),("Archived",["lost, stolen","or broken"])],
   ["by settings","Installation","Stolen"],"Desinstallation",
-  "A site has one camera at a time, and a camera is at one site at a time. A camera goes to Archived for good: stolen, or lost or broken (from Settings).")
+  "A camera that is put up is active: only a visit makes a camera active, and only a visit takes it out of active (a Desinstallation, or a Stolen visit). Archived is final: it never goes back.",site=True,star=False)
 lifecycle("sd-card","The life of an SD card",
   (("A camera","at a site"),["holds one card,","until it is collected"],("An SD card","its label, its brand, its capacity")),
   [("Planned",["only in Settings:","not in the app"]),("Ready",["free: in no","camera"]),("Active",["in a camera","in the field"]),("Archived",["lost, stolen","or broken"])],

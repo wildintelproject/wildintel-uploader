@@ -242,7 +242,7 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
         there = camera_at_site(kept, site, when, unknown, number)
         if there and not _same(there["camera"], camera):
             what = " + ".join(x for x in actions if x in ACTIONS)
-            errors["camera"] = _reason("camera_not_at_the_site", f"The camera at {site} is {there['camera']} (since {there['date']}): a {what} is of that camera. If it was replaced, add an Installation to the visit.")
+            errors["camera"] = _reason("camera_not_at_the_site", f"The camera at {site} is {there['camera']} (since {there['date']}): a {what} is of that camera. If it was replaced, add a Desinstallation and an Installation to the visit.")
     if installs and camera:
         there = camera_at(kept, camera, when, unknown, number)
         # A visit that also revises may find the camera in the very site it puts it up at.
@@ -252,6 +252,11 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
                 if _same(there["site"], site) else
                 _reason("camera_installed_elsewhere", f"Camera {camera} is installed at {there['site']} (since {there['date']}): it has to be uninstalled there before it is installed here.")
             )
+    # A site has one camera at a time: another cannot be put up where one is, unless this visit takes it away (a Desinstallation, or a Stolen camera).
+    if installs and not {"Desinstallation", "Stolen"} & set(actions) and "camera" not in errors:
+        here = camera_at_site(kept, site, when, unknown, number)
+        if here and not _same(here["camera"], camera) and not (revises and _same(here["camera"], camera)):
+            errors["camera"] = _reason("site_has_a_camera", f"{site} already has a camera: {here['camera']} (since {here['date']}). It has to be taken away — a Desinstallation, or a Stolen visit — before another is put up.")
     sd = card_block(kept, visit, cards, unknown)
     if sd:
         errors["sd"] = sd

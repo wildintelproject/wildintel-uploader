@@ -109,7 +109,7 @@ The dashboards and the revisions consider the sites that are **ready or active**
 
 ### 2.2 Cameras
 
-A **camera** is one device — its serial number, its model and how it is set up — and it is **put up at a site** by a visit. A site has **one camera at a time**, and a camera is at **one site at a time**: it cannot be put up where it already is, nor at a second site before it is taken away from the first.
+A **camera** is one device — its serial number, its model and how it is set up — and it is **put up at a site** by a visit. A site has **one camera at a time**, and a camera is at **one site at a time**: it cannot be put up where it already is, nor at a second site before it is taken away from the first, and no other camera can be put up at a site that has one until it is taken away — a replacement is a Revision, a Desinstallation and an Installation in one visit.
 
 ![The life of a camera: a site has one camera at a time; planned, ready, active and archived, and what moves it from one to the other](img/camera.svg)
 
@@ -126,12 +126,15 @@ A camera is always in one of four states:
 
 </div>
 
-The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a camera, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)). In particular:
+The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a camera, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)), where you can set it by hand. In particular:
 
 - **Planned → Ready**: you say so in Settings.
-- **Ready → Active**: an **Installation** puts the camera up at a site, and the site becomes active with it.
+- **Ready → Active**: an **Installation** puts the camera up at a site, and the site becomes active with it. Only a visit makes a camera active: it cannot be set by hand.
 - **Active → Ready**: a **Desinstallation** takes it away; a replacement takes the old camera away and puts the new one up.
-- **Active → Archived**: a **Stolen** visit finds it gone. A lost or broken camera is archived from Settings. It never goes back.
+- **Ready → Planned**: in Settings, to take the camera out of the app again.
+- **→ Archived**: a **Stolen** visit finds it gone, or you archive it in Settings — a lost or a broken camera — when it is *planned* or *ready*. It never goes back.
+
+A camera that is put up at a site is **Active**, and only a visit makes it so or takes it out of that state — an Installation puts it up; a Desinstallation, or a Stolen visit, takes it away. So Settings cannot change an active camera, and cannot make one active.
 
 ### 2.3 SD cards
 

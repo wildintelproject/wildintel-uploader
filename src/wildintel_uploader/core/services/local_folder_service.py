@@ -413,6 +413,20 @@ def list_field_items(root: Path, research_project_id: str, kind: str, include_de
     return items if include_deleted else audit.alive(items)
 
 
+def _camera_status_refusal(camera: dict, wanted: str, visits: list[dict]) -> str | None:
+    """Why the status of a camera cannot be set by hand to `wanted` — None when it can. A camera is active when a visit puts it up at a site (an Installation): it cannot be made so by
+    hand, and it cannot leave the field — back to ready, to planned, or archived — while it is put up: a visit takes it away (a Desinstallation) or finds it stolen first."""
+    name = str(camera.get("label") or camera.get("camera_id") or "")
+    if wanted == "active":
+        return f"The camera {name} is active when it is put up at a site: a visit does it (an Installation); its status cannot be set to active by hand."
+    if wanted in ("ready", "planned", "archived"):
+        for key in (camera.get("camera_id"), camera.get("label")):
+            there = visit_rules.camera_at(visits, str(key), "9999-12-31T23:59:59Z") if key else None
+            if there:
+                return f"The camera {name} is put up at {there['site']} (since {there['date']}): take it away with a visit — a Desinstallation, or a Stolen visit — before it is {wanted}."
+    return None
+
+
 def _kept_list(root: Path, research_project_id: str, kind: str, items: list[dict], key) -> None:
     """Keeps `items` as all the `kind` of the research project that are listed: the ones that were kept and are not among them are **deleted logically** — they get `deleted_at` and stay,
     with all they said — and one that was deleted and is among them comes back. Each keeps its `id`, its `created_at` and gets a new `updated_at` when it changed (see audit).
@@ -433,14 +447,28 @@ def _kept_list(root: Path, research_project_id: str, kind: str, items: list[dict
     store.write_records(research_project_id, kind, out)
 
 
-def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict]) -> None:
+def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict], by_hand: bool = False) -> None:
     """Keeps these cameras or SD cards as the research project's — the whole list: what was kept and is not in it is deleted *logically* (see `_kept_list`).
 
+    `by_hand` is a person changing them in the settings: the status of a camera is then changed only where the visits allow (see `_camera_status_refusal`) — what a visit does to a
+    camera, it does through the app and not by hand.
+
     Raises:
-        LocalFolderError: the research project isn't in the collections folder.
+        LocalFolderError: the research project isn't in the collections folder, or the status of a camera is changed where the visits do not allow it.
     """
     _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
+    if by_hand and kind == "cameras":
+        before = {str(i.get("label") or "").strip().lower(): i for i in list_field_items(root, research_project_id, kind)}
+        before_id = {i["id"]: i for i in before.values() if i.get("id")}
+        visits = None
+        for item in items:
+            old = before_id.get(item.get("id")) or before.get(str(item.get("label") or "").strip().lower())
+            if old is not None and item.get("status") and item["status"] != old.get("status"):
+                visits = list_visits(root, research_project_id) if visits is None else visits
+                why = _camera_status_refusal(old, item["status"], visits)
+                if why:
+                    raise LocalFolderError(why)
     _kept_list(root, research_project_id, kind, items, lambda i: str(i.get("label") or "").strip().lower())
 
 

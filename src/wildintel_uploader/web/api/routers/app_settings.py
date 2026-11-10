@@ -142,7 +142,10 @@ def save_settings(new: config.Settings) -> dict:
         known = {p["acronym"] for p in local_folder_service.list_research_projects(root)}
         # the list of each research project is replaced by what the page has — the ones it no longer lists are gone; a project that is not kept here keeps them in the settings
         for project in known:
-            local_folder_service.write_field_items(root, project, kind, by_project.get(project, []))
+            try:
+                local_folder_service.write_field_items(root, project, kind, by_project.get(project, []), by_hand=True)
+            except local_folder_service.LocalFolderError as exc:
+                raise HTTPException(422, str(exc)) from exc
         setattr(new.FIELDWORK, kind, [i for i in items if i.research_project not in known])
     # the roles belong to the research projects: each project's are replaced by what the page has — the ones it no longer lists are deleted, logically
     known = {p["acronym"] for p in local_folder_service.list_research_projects(root)}
