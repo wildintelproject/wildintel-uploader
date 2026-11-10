@@ -165,7 +165,7 @@ export default function CheckResultsTable<T extends string>({ report, options, e
   const onPage = shownImages.slice((current - 1) * perPage, current * perPage)
   useEffect(() => setPage(1), [show, query, group, layout])
 
-  const th = `${TABLE.th} sticky top-0 bg-zinc-100 dark:bg-zinc-900`
+  const th = TABLE.th
   const reset = () => { setFilters(NO_FILTERS); setQuery(''); setOpenTest(null); setOpenImage(null) }
 
   return (
@@ -181,7 +181,7 @@ export default function CheckResultsTable<T extends string>({ report, options, e
           summary={group === 'test' ? `${tests.length} of ${options.length} tests match` : `${shownImages.length} of ${images.length} ${images.length === 1 ? unit.one : unit.many} match`} />
 
         {group === 'test' ? (
-          <div className="max-h-[32rem] overflow-y-auto">
+          <div className="overflow-x-auto">
             <table className={TABLE.table} aria-label="Tests">
               <thead className={TABLE.head}>
                 <tr>
