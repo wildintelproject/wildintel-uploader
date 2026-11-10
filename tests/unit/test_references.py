@@ -199,7 +199,7 @@ def test_the_status_of_the_camera_is_one_of_a_few_values_written_as_they_are_and
 def test_the_batteries_and_the_card_are_two_fields_and_a_visit_kept_with_one_is_moved(tmp_path: Path, people):
     from wildintel_uploader.core.schemas.requests import VisitRecord
 
-    base = {"location_id": "DONA_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Revision"], "num_photos": 1}
+    base = {"location_id": "DONA_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Revision"]}
     assert [(v.battery_status, v.card_status) for v in (VisitRecord(**base, card_batteries_ok=c) for c in ("OK", "CarFull", "NoBatteries", "CarFullNoBatteries", "CarFullSinPilas"))] == [
         ("OK", "OK"), ("OK", "CardFull"), ("NoBatteries", "OK"), ("NoBatteries", "CardFull"), ("NoBatteries", "CardFull")]
     assert (VisitRecord(**base, battery_status="no batteries", card_status="card full").battery_status, VisitRecord(**base, card_status="CarFull").card_status) == ("NoBatteries", "CardFull")

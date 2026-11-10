@@ -122,10 +122,10 @@ function fieldsOf(action: string): ActionFields {
 
 const STRENGTH: Record<Ask, number> = { off: 0, optional: 1, required: 2 }
 
-/** What is asked of a visit: what its actions ask — except that, with the card full, the photos are not counted, so their number is not required. */
+/** What is asked of a visit: what its actions ask — except that, with the card full, the photos are not counted, so their number is not asked at all. */
 export function askedOf(v: { actions: string[]; card: CardState; status?: string }): ActionFields {
   const asked = fieldsFor(v.actions, isNotVisited(v.status))
-  return v.card === 'Full' && asked.photos === 'required' ? { ...asked, photos: 'optional' } : asked
+  return v.card === 'Full' && asked.photos !== 'off' ? { ...asked, photos: 'off' } : asked
 }
 
 export function fieldsFor(actions: string[], notVisited = false): ActionFields {
@@ -214,7 +214,7 @@ export function visitFrom(previous: StoredVisit, now: Visit): Visit {
   }
   return {
     ...now,
-    status: previous.status ?? '', batteries: previous.battery_status === 'NoBatteries' ? 'Missing' : 'OK', dateTimeOK: previous.date_time_ok ?? 'Yes', details,
+    status: previous.camera_status ?? '', batteries: previous.battery_status === 'NoBatteries' ? 'Missing' : 'OK', dateTimeOK: previous.date_time_ok ?? 'Yes', details,
   }
 }
 
@@ -1212,7 +1212,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                 </div>
                 <div className="grid grid-cols-1 gap-4 max-w-xl">
                   <Field id="visit-photos" label="Photos on the card collected" ask={asked.photos} error={shown('numPhotos')}>
-                    <input id="visit-photos" inputMode="numeric" className={`${inputClass} ${err('numPhotos') || (asked.photos === 'required' && !visit.numPhotos.trim() ? red : '')}`} value={visit.numPhotos} disabled={asked.photos === 'off'} onChange={(e) => set('numPhotos', e.target.value)} />
+                    <input id="visit-photos" inputMode="numeric" className={`${inputClass} ${err('numPhotos') || (asked.photos === 'required' && !visit.numPhotos.trim() ? red : '')}`} value={asked.photos === 'off' ? '' : visit.numPhotos} disabled={asked.photos === 'off'} onChange={(e) => set('numPhotos', e.target.value)} />
                     {asked.photos !== 'off' && (
                       <p className={hintClass}>
                         {inCamera && cardVisit ? <>SD card collected: <strong>{inCamera}</strong> (left on {cardVisit.date}).</> : 'No card is known to have been left in the camera.'}

@@ -207,7 +207,9 @@ describe('VisitsPage', () => {
     await userEvent.type(screen.getByLabelText('Photos on the card collected'), '1620')
     await userEvent.click(screen.getByRole('switch', { name: 'Card OK' }))
     expect(screen.getByRole('switch', { name: 'Card OK' })).toHaveAttribute('aria-checked', 'false')
-    expect(within(screen.getByRole('region', { name: 'SD card' })).getByText(/^3 of 3 filled/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Photos on the card collected')).toBeDisabled() // with the card full the photos are not counted: their number cannot be given
+    expect(screen.getByLabelText('Photos on the card collected')).toHaveValue('')
+    expect(within(screen.getByRole('region', { name: 'SD card' })).getByText(/^2 of 2 filled/)).toBeInTheDocument()
   })
 
   it('keeps whether the date and time of the camera were right in the Camera section, counted with the rest of it', async () => {

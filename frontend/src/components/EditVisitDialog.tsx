@@ -70,7 +70,7 @@ export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: 
       ...(filling ? { location_id: visit.location_id, session: visit.session, tags: [] } : kept),
       date: form.date, time: form.time.length === 5 ? `${form.time}:00` : form.time, actions: form.actions,
       camera_id: text(form.camera), camera_model: form.camera ? model : null, camera_status: text(form.status), battery_status: form.battery || null, card_status: form.card || null,
-      num_photos: number(form.photos), sd: text(form.sd), date_time_ok: text(form.dateTimeOk), calibration: fromYesNo(form.calibration), trappers: text(form.trappers), setup_by: text(form.trappers),
+      num_photos: form.card === 'CardFull' ? null : number(form.photos), sd: text(form.sd), date_time_ok: text(form.dateTimeOk), calibration: fromYesNo(form.calibration), trappers: text(form.trappers), setup_by: text(form.trappers),
       latitude: number(form.latitude), longitude: number(form.longitude), camera_interval: number(form.interval), camera_height: number(form.height), camera_depth: number(form.depth),
       camera_tilt: number(form.tilt), camera_heading: number(form.heading), detection_distance: number(form.distance), timestamp_issues: fromYesNo(form.timestampIssues), bait_use: fromYesNo(form.bait),
       feature_type: form.feature || null, habitat: text(form.habitat), deployment_groups: text(form.groups), tags: form.tags.split(/[,|]/).map((t) => t.trim()).filter(Boolean), comments: text(form.comments),
@@ -142,7 +142,7 @@ export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: 
             <label className={label} htmlFor="ev-sd">SD card left</label>
             <Combobox id="ev-sd" options={cards.map((c) => ({ value: c.label, label: c.label }))} value={form.sd} onChange={(v) => set({ sd: v })} placeholder={entities ? 'Pick an SD card' : 'Reading the SD cards…'} clearLabel="Clear SD card" />
           </div>
-          {field('ev-photos', 'Photos on the card collected', 'photos', 'number', { min: 0 })}
+          {field('ev-photos', 'Photos on the card collected', 'photos', 'number', { min: 0, disabled: form.card === 'CardFull', placeholder: form.card === 'CardFull' ? 'Not counted: the card is full' : undefined })}
           {choice('ev-battery', 'Batteries', 'battery', BATTERY_CODES.map((c) => ({ value: c, label: c || 'Not said' })))}
           {choice('ev-card', 'SD card', 'card', CARD_CODES.map((c) => ({ value: c, label: c || 'Not said' })))}
           {choice('ev-status', 'Status of the camera', 'status', CAMERA_STATUSES.map((c) => ({ value: c, label: c || 'Not said' })))}

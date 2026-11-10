@@ -95,7 +95,7 @@ def test_how_the_card_and_the_batteries_were_is_one_of_the_codes_of_the_datashee
         _project(archived=(2, 3))   # no revision waits for the other sites
         _installed((1,))
         for hour, code in enumerate(("OK", "CarFull", "NoBatteries", "CarFullNoBatteries", "SinPilas")):
-            visit = {**VISIT, "session": f"R{13 + hour:04d}", "time": f"0{hour}:00:00", "card_batteries_ok": code}
+            visit = {**VISIT, "session": f"R{13 + hour:04d}", "time": f"0{hour}:00:00", "card_batteries_ok": code, **({"num_photos": None} if "Full" in code else {})}
             assert _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit}).status_code == 200
         bad = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": {**VISIT, "card_batteries_ok": "Yes"}})
 
@@ -157,7 +157,7 @@ def test_a_visit_to_a_research_project_that_is_not_kept_is_refused(tmp_path: Pat
 CSV = (
     "location_id,date,time,actions,trappers,card_batteries_ok,num_photos,sd,camera_id,comments\n"
     "DONA_01,2026-10-02,08:14:05,Installation,Ana,OK,,A13,P800,new camera\n"
-    "dona_01,2026-11-05,09:00,Revision + Installation,Ana; Luis,CarFull,1620,B2,P800,\n"
+    "dona_01,2026-11-05,09:00,Revision + Installation,Ana; Luis,OK,1620,B2,P800,\n"
     "DONA_02,2026-10-03,10:00:00,Installation,,OK,,A14,X1,\n"
 )
 
@@ -187,7 +187,7 @@ def test_visits_are_read_from_a_csv_and_only_kept_when_asked(tmp_path: Path):
     assert body["problems"] == [] and body["skipped"] == 0
     first, third, second = body["visits"]  # by the day of the visit
     assert (first["location_id"], first["session"], first["actions"], first["latitude"]) == ("DONA_01", "R0001", ["Installation"], 37.1)
-    assert (second["session"], second["actions"], second["card_status"], second["num_photos"], second["time"]) == ("R0002", ["Revision", "Installation"], "CardFull", 1620, "09:00:00")
+    assert (second["session"], second["actions"], second["card_status"], second["num_photos"], second["time"]) == ("R0002", ["Revision", "Installation"], "OK", 1620, "09:00:00")
     assert (third["location_id"], third["session"], third["actions"], third["latitude"]) == ("DONA_02", "R0001", ["Installation"], 37.2)
 
 
@@ -436,10 +436,11 @@ def test_the_photos_of_a_revision_are_not_required_when_the_card_was_full(tmp_pa
         counted = _save({**VISIT, "num_photos": None})
         full = _save({**VISIT, "session": "R0013", "num_photos": None, "card_batteries_ok": "CarFull", "date": "2026-10-03"})
         full_no_batteries = _save({**VISIT, "num_photos": None, "card_batteries_ok": "CarFullNoBatteries", "session": "R0014", "date": "2026-10-04"})
-        written = _save({**VISIT, "session": "R0015", "num_photos": 12, "card_batteries_ok": "CarFull", "date": "2026-10-05"})
+        written = _save({**VISIT, "session": "R0015", "num_photos": 12, "card_batteries_ok": "CarFull", "date": "2026-10-05"})   # the photos of a full card are not counted
 
     assert counted.status_code == 422 and "photos" in counted.json()["detail"]
-    assert full.status_code == full_no_batteries.status_code == written.status_code == 200  # not asked, but it may be given
+    assert full.status_code == full_no_batteries.status_code == 200                           # not asked
+    assert written.status_code == 422 and "full card" in str(written.json()["detail"])             # and not given
 
 
 def test_a_visit_by_hand_lacks_nothing_its_actions_ask(tmp_path: Path):
@@ -842,7 +843,7 @@ EPI_ENTRIES = [
     {"created_at": "2026-10-02T08:14:05.000Z", EPI_REF["setupBy"]: ["Ana"], EPI_REF["Collection"]: 1, EPI_REF["Date"]: "02/10/2026", EPI_REF["locationID"]: "DONA_01",
      EPI_REF["Status of the camera"]: "New site", EPI_REF["Serial number"]: "A13", EPI_REF["cameraHeight"]: "50", EPI_REF["SD to insert"]: "S1", EPI_REF["Calibration"]: "Yes"},
     {"created_at": "2026-11-05T09:00:00.000Z", EPI_REF["setupBy"]: ["Ana"], EPI_REF["Collection"]: 2, EPI_REF["Date"]: "05/11/2026", EPI_REF["locationID"]: "DONA_01",
-     EPI_REF["Status of the camera"]: "OK", EPI_REF["Action"]: "Camera inspection", EPI_REF["Card and batteries"]: "Card full", EPI_REF["Nº pictures collected"]: "1620", EPI_REF["Date and time OK"]: "OK"},
+     EPI_REF["Status of the camera"]: "OK", EPI_REF["Action"]: "Camera inspection", EPI_REF["Card and batteries"]: "OK", EPI_REF["Nº pictures collected"]: "1620", EPI_REF["Date and time OK"]: "OK"},
 ]
 
 
@@ -855,7 +856,7 @@ def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_cam
         done = _import(tmp_path, "", save=True, fmt="epicollect-api", given_up="2000-01-01")
     rows = {r["date"]: r for r in __import__("csv").DictReader(__import__("io").StringIO(text))}
     assert rows["2026-10-02"]["actions"] == "Installation" and rows["2026-10-02"]["camera_height"] == "0.5" and rows["2026-10-02"]["calibration"] == "yes"
-    assert rows["2026-11-05"]["actions"] == "Revision" and rows["2026-11-05"]["card_status"] == "CardFull" and rows["2026-11-05"]["date_time_ok"] == "Yes"
+    assert rows["2026-11-05"]["actions"] == "Revision" and rows["2026-11-05"]["card_status"] == "OK" and rows["2026-11-05"]["date_time_ok"] == "Yes"
     assert done.status_code == 200, done.text
     kept = done.json()["visits"]
     assert len(kept) == 2 and {v["camera_id"] for v in kept} == {"A13"}
