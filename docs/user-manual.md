@@ -155,12 +155,15 @@ An SD card is always in one of four states:
 
 </div>
 
-The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of an SD card, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)). In particular:
+The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of an SD card, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)), where you can set it by hand. In particular:
 
 - **Planned → Ready**: you say so in Settings.
-- **Ready → Active**: a visit **leaves** the card in a camera (*Installation* or *Revision*).
+- **Ready → Active**: a visit **leaves** the card in a camera (*Installation* or *Revision*). Only a visit makes a card active: it cannot be set by hand.
 - **Active → Ready**: a visit **collects** it (*Revision* or *Desinstallation*), and the card is free again — it cannot be left again in the same revision.
-- **Active → Archived**: a **Stolen** visit archives it with its camera, because it went with it. A lost or broken card is archived from Settings. It never goes back.
+- **Ready → Planned**: in Settings, to take the card out of the app again.
+- **→ Archived**: a **Stolen** visit archives it with its camera, because it went with it, or you archive it in Settings — a lost or a broken card — when it is *planned* or *ready*. It never goes back.
+
+A card that is in a camera is **Active**, and only a visit makes it so or takes it out of that state — it leaves the card in a camera, or collects it. So Settings cannot change an active card, and cannot make one active.
 
 ### 2.4 Visits and revisions
 
@@ -276,7 +279,9 @@ The rules are the same **by hand and from a file**: a visit that breaks one is r
 
 A camera is at a site from the visit that puts it up (an Installation, or a Revision that leaves it out again) until a visit takes it away or finds it stolen. So:
 
-- A **Revision**, a **Desinstallation** or a **Stolen** visit is of **the camera that is at the site**. If it was replaced, the visit adds an Installation.
+- A **Revision**, a **Desinstallation** or a **Stolen** visit is of **the camera that is at the site**. If it was replaced, the visit adds a Desinstallation and an Installation.
+- A site has **one camera at a time**: another is not put up where one is, until it is taken away (a Desinstallation, or a Stolen visit).
+- Where the camera was taken away or found stolen, the site has **none**: there is nothing to look at, to take away or to find stolen. Only an **Installation**, an **Archive** or a **visit that is not made** can follow.
 - A camera is **not put up where it already is**, nor while it is at **another site**: it has to be uninstalled there first.
 
 **Where the SD card is**

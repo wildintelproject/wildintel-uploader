@@ -1890,7 +1890,7 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
             { key: 'label', label: 'Label', placeholder: 'e.g. SD-014', hint: 'The number or the label written on the card.', section: 'Which card is it?', sectionIcon: <SdCardIcon />, sectionHint: 'The label written on the card, and optionally who makes it and how much it holds. Visits refer to the card by its label.' },
             { key: 'brand', label: 'Brand', kind: 'suggest', suggestions: SD_CARD_BRANDS, placeholder: 'e.g. SanDisk', hint: 'Who makes it. The usual ones are suggested, but any other can be typed.' },
             { key: 'capacity', label: 'Capacity', kind: 'suggest', suggestions: SD_CARD_CAPACITIES, placeholder: 'e.g. 64 GB', hint: 'What is written on the card. The usual ones are suggested, but any other can be typed.' },
-            ...statusFields<SdCard>(GEAR_STATUSES, true, GEAR_HINTS, true),
+            ...statusFields<SdCard>(GEAR_STATUSES, true, GEAR_HINTS, true, ['active']),
           ]}
         />
       ))}

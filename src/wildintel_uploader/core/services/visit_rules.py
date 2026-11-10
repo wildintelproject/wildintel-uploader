@@ -96,6 +96,12 @@ def is_not_revised(v: dict) -> bool:
     return str(v.get("camera_status") or "").lower() in NOT_REVISED
 
 
+def _leaves_camera(v: dict) -> bool:
+    """Whether a visit leaves a camera at its site: it puts one up, or it looks at the one that is there and does not take it away."""
+    actions = set(v.get("actions") or [])
+    return "Installation" in actions or ("Revision" in actions and not _takes_away(v) and not is_not_revised(v))
+
+
 def _collects_card(v: dict) -> bool:
     return _takes_away(v) or ("Revision" in (v.get("actions") or []) and not is_not_revised(v))
 
@@ -143,28 +149,45 @@ def _stale(at: dict | None, site: str, unknown: list[dict] | None, number: int |
 
 def camera_at(visits: list[dict], camera: str, when: str, unknown: list[dict] | None = None, number: int | None = None) -> dict | None:
     """The site a camera is put up at on a given moment — None when it is nowhere: never put up, uninstalled or stolen, or when it cannot be told (an unknown revision of
-    its site came after)."""
-    at = None
+    its site came after). What is at a site is what its last visit left: a visit that takes the camera away or finds it stolen leaves none, and one that also puts another up — a
+    replacement — leaves that one."""
+    here: dict[str, dict | None] = {}
     for v in sorted((v for v in visits if _stamp(v) < when), key=_stamp):
-        if not _same(v.get("camera_id"), camera):
-            continue
+        site = str(v["location_id"]).lower()
         if _takes_away(v):
-            at = None
-        elif {"Installation", "Revision"} & set(v.get("actions") or []):
-            at = {"site": v["location_id"], "date": v["date"], "session": v.get("session")}
+            here[site] = None
+        if _leaves_camera(v) and v.get("camera_id"):
+            here[site] = {"camera": v["camera_id"], "site": v["location_id"], "date": v["date"], "session": v.get("session")}
+    at = next(({"site": h["site"], "date": h["date"], "session": h["session"]} for h in here.values() if h and _same(h["camera"], camera)), None)
     return None if at is None or _stale(at, at["site"], unknown, number) else at
 
 
 def camera_at_site(visits: list[dict], site: str, when: str, unknown: list[dict] | None = None, number: int | None = None) -> dict | None:
     """The camera that is put up at a site on a given moment — None when none is known: nothing was installed there, or it was taken away or stolen, or an unknown revision
-    of the site came after what is known."""
+    of the site came after what is known. A visit that takes the camera away and puts another up leaves the other."""
     at = None
     for v in sorted((v for v in visits if _stamp(v) < when and _same(v.get("location_id"), site)), key=_stamp):
         if _takes_away(v):
             at = None
-        elif {"Installation", "Revision"} & set(v.get("actions") or []) and v.get("camera_id"):
+        if _leaves_camera(v) and v.get("camera_id"):
             at = {"camera": v["camera_id"], "date": v["date"], "session": v.get("session")}
     return None if _stale(at, site, unknown, number) else at
+
+
+def site_without_camera(visits: list[dict], site: str, when: str, unknown: list[dict] | None = None, number: int | None = None) -> dict | None:
+    """The visit that left a site with no camera — a Desinstallation, a Stolen camera — when it is the last that did something there before `when` and nothing is unknown after it: what the
+    site has none of is known. None when it has a camera, when it has had none of its own (no visit before: the first visit puts one up), or when it cannot be told (an unknown revision of the site came after)."""
+    at, last = None, None
+    for v in sorted((v for v in visits if _stamp(v) < when and _same(v.get("location_id"), site)), key=_stamp):
+        if is_not_revised(v):
+            continue
+        if _takes_away(v):
+            at, last = None, v
+        if _leaves_camera(v) and v.get("camera_id"):
+            at, last = v, v
+    if at is not None or last is None or _stale({"session": last.get("session")}, site, unknown, number):
+        return None
+    return last
 
 
 def card_at(visits: list[dict], label: str, when: str, unknown: list[dict] | None = None, number: int | None = None) -> dict | None:
@@ -252,6 +275,11 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
                 if _same(there["site"], site) else
                 _reason("camera_installed_elsewhere", f"Camera {camera} is installed at {there['site']} (since {there['date']}): it has to be uninstalled there before it is installed here.")
             )
+    # Where a visit took the camera away or found it stolen, the site has none: there is nothing to look at, to take away or to find stolen — only an Installation, an Archive or a visit that is not made can follow.
+    if {"Revision", "Desinstallation", "Stolen"} & set(actions) and not is_not_revised(visit) and "camera" not in errors:
+        empty = site_without_camera(kept, site, when, unknown, number)
+        if empty:
+            errors["camera"] = _reason("site_without_camera", f"{site} has no camera: it was taken away or found stolen in {empty.get('session')} (on {empty['date']}). Only an Installation, an Archive or a visit not made can follow.")
     # A site has one camera at a time: another cannot be put up where one is, unless this visit takes it away (a Desinstallation, or a Stolen camera).
     if installs and not {"Desinstallation", "Stolen"} & set(actions) and "camera" not in errors:
         here = camera_at_site(kept, site, when, unknown, number)

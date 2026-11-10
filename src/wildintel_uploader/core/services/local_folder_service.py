@@ -427,6 +427,19 @@ def _camera_status_refusal(camera: dict, wanted: str, visits: list[dict]) -> str
     return None
 
 
+def _card_status_refusal(card: dict, wanted: str, visits: list[dict]) -> str | None:
+    """Why the status of an SD card cannot be set by hand to `wanted` — None when it can. A card is active when a visit leaves it in a camera (an Installation, or a Revision that
+    changes it): it cannot be made so by hand, and it cannot leave the field — back to ready, to planned, or archived — while it is in a camera: a visit collects it first."""
+    name = str(card.get("label") or "")
+    if wanted == "active":
+        return f"The SD card {name} is active when it is in a camera: a visit leaves it there (an Installation, or a Revision); its status cannot be set to active by hand."
+    if wanted in ("ready", "planned", "archived"):
+        there = visit_rules.card_at(visits, name, "9999-12-31T23:59:59Z") if name else None
+        if there:
+            return f"The SD card {name} is in the camera at {there['site']} (since {there['date']}): collect it with a visit — a Revision, a Desinstallation, or a Stolen visit — before it is {wanted}."
+    return None
+
+
 def _kept_list(root: Path, research_project_id: str, kind: str, items: list[dict], key) -> None:
     """Keeps `items` as all the `kind` of the research project that are listed: the ones that were kept and are not among them are **deleted logically** — they get `deleted_at` and stay,
     with all they said — and one that was deleted and is among them comes back. Each keeps its `id`, its `created_at` and gets a new `updated_at` when it changed (see audit).
@@ -458,7 +471,7 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
     """
     _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
-    if by_hand and kind == "cameras":
+    if by_hand and kind in ("cameras", "sd_cards"):
         before = {str(i.get("label") or "").strip().lower(): i for i in list_field_items(root, research_project_id, kind)}
         before_id = {i["id"]: i for i in before.values() if i.get("id")}
         visits = None
@@ -466,7 +479,7 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
             old = before_id.get(item.get("id")) or before.get(str(item.get("label") or "").strip().lower())
             if old is not None and item.get("status") and item["status"] != old.get("status"):
                 visits = list_visits(root, research_project_id) if visits is None else visits
-                why = _camera_status_refusal(old, item["status"], visits)
+                why = (_camera_status_refusal if kind == "cameras" else _card_status_refusal)(old, item["status"], visits)
                 if why:
                     raise LocalFolderError(why)
     _kept_list(root, research_project_id, kind, items, lambda i: str(i.get("label") or "").strip().lower())

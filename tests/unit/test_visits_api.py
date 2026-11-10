@@ -1432,3 +1432,28 @@ def test_a_site_with_a_visit_still_to_be_made_in_a_revision_that_has_begun_does_
             refused = str(exc)
 
     assert refused is not None and "still has a visit to be made in R0003" in refused
+
+
+def test_where_the_camera_was_taken_away_or_stolen_only_an_installation_an_archive_or_a_visit_not_made_can_follow(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        _save({**VISIT, "actions": ["Stolen"], "camera_id": "P800", "num_photos": None, "sd": None, "date": "2024-10-12", "session": "R0002"})
+        base = {**VISIT, "date": "2024-11-12", "session": "R0003", "num_photos": 5, "sd": "B2", "camera_id": "P800"}
+        refused = {a: _save({**base, "actions": a.split("+")}) for a in ("Revision", "Desinstallation", "Stolen", "Revision+Desinstallation")}
+        not_made = _save({**base, "actions": [], "camera_status": "Not revised", "num_photos": None, "sd": None, "camera_id": None})
+
+    assert all(r.status_code == 422 and "has no camera" in r.json()["detail"] for r in refused.values())
+    assert not_made.status_code == 200
+
+
+def test_where_the_camera_was_taken_away_a_new_one_can_be_put_up_and_the_site_can_be_given_up(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        _save({**VISIT, "actions": ["Stolen"], "camera_id": "P800", "num_photos": None, "sd": None, "date": "2024-10-12", "session": "R0002"})
+        again = _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "B2", "camera_id": "P900", "date": "2024-11-12", "session": "R0003"})
+        _save({**VISIT, "actions": ["Stolen"], "camera_id": "P900", "num_photos": None, "sd": None, "date": "2024-12-12", "session": "R0004"})
+        archive = _save({**VISIT, "actions": ["Archive"], "camera_id": None, "num_photos": None, "sd": None, "date": "2025-01-12", "session": "R0005"})
+
+    assert again.status_code == 200 and archive.status_code == 200

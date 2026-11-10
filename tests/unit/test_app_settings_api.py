@@ -673,3 +673,28 @@ def test_the_status_of_a_camera_by_hand_follows_what_the_visits_say(tmp_path, mo
     assert free[0] == "planned" and free[1] == "ready" and "a visit does it" in free[2]
     assert all("is put up at DONA_01" in o for o in out)
     assert back == ("planned", "ready", "archived")
+
+
+def test_the_status_of_an_sd_card_by_hand_follows_what_the_visits_say(tmp_path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+
+    svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0})
+    svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "A1", "status": "ready"}])
+
+    def by_hand(status: str) -> str:
+        items = svc.list_field_items(tmp_path, "DONA", "sd_cards")
+        try:
+            svc.write_field_items(tmp_path, "DONA", "sd_cards", [{**items[0], "status": status}], by_hand=True)
+            return svc.list_field_items(tmp_path, "DONA", "sd_cards")[0]["status"]
+        except svc.LocalFolderError as exc:
+            return str(exc)
+
+    free = (by_hand("planned"), by_hand("ready"), by_hand("active"))
+    svc.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0001", "when": "2026-01-01T09:00:00Z", "actions": ["Installation"], "camera_id": "P800", "sd": "A1"}])
+    inside = (by_hand("planned"), by_hand("archived"))
+    svc.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0002", "when": "2026-02-01T09:00:00Z", "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 1}])
+    back = (by_hand("planned"), by_hand("ready"), by_hand("archived"))
+
+    assert free[0] == "planned" and free[1] == "ready" and "a visit leaves it there" in free[2]
+    assert all("is in the camera at DONA_01" in o for o in inside)
+    assert back == ("planned", "ready", "archived")

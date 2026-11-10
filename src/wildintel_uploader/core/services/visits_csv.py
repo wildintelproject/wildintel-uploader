@@ -174,6 +174,7 @@ ERROR_LABELS: dict[str, str] = {
     "visit_not_after_the_last": "Visit not after the last one of the site",
     "site_archived": "Site archived",
     "site_has_a_camera": "Site already has a camera",
+    "site_without_camera": "Site has no camera",
     "site_planned": "Site planned",
     "archive_with_installation": "Archive with an Installation",
     "archive_camera_still_there": "Camera still there when the site is archived",

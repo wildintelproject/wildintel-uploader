@@ -234,4 +234,4 @@ lifecycle("sd-card","The life of an SD card",
   (("A camera","at a site"),["holds one card,","until it is collected"],("An SD card","its label, its brand, its capacity")),
   [("Planned",["only in Settings:","not in the app"]),("Ready",["free: in no","camera"]),("Active",["in a camera","in the field"]),("Archived",["lost, stolen","or broken"])],
   ["by settings","left in a camera","stolen"],"collected",
-  "A card is left by an Installation or a Revision and collected by the next Revision or Desinstallation. Stolen with its camera, or lost or broken, it is archived for good.")
+  "A card in a camera is active: only a visit makes a card active (it leaves it in a camera), and only a visit takes it out of active (it collects it). Stolen with its camera, it is archived for good.",site=True,star=False)
