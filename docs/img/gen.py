@@ -40,16 +40,16 @@ NOS=("#ffffff","#94a3b8","#475569","#64748b"); BLU=("#eff6ff","#2563eb","#1e3a8a
 # ---- actions: what can be done in a visit, by the state of the visit before it — as a drawio and as the svg the manual shows
 STATE={"Deployed":AMB,"Collected":GRN,"Stolen":RED,"Not visited":GRAY,"No camera":NOS}
 GROUPS=[
- (("No visit before",None),[("Installation","Deployed","camera and card → active"),("Not visited","Not visited","no entity changes")]),
- (("Deployed","Collected"),[("Revision","Deployed","card collected → ready · card left → active"),
+ (("No visit before",None),[("Installation","Deployed","site, camera, card: ready → active"),("Not visited","Not visited","no entity changes")]),
+ (("Deployed","Collected"),[("Revision","Deployed","card collected → ready · left → active"),
    ("Revision + Desinstallation + Installation  (replacement)","Deployed","old camera, card → ready · new → active"),
-   ("Revision + Desinstallation","No camera","camera and card → ready"),
-   ("Revision + Desinstallation + Archive","No camera","camera, card → ready · site archived")]),
- (("Deployed","Stolen"),[("Stolen","No camera","camera and its card → archived (stolen)"),
+   ("Revision + Desinstallation","No camera","site, camera, card → ready"),
+   ("Revision + Desinstallation + Archive","No camera","camera, card → ready · site → archived")]),
+ (("Deployed","Stolen"),[("Stolen","No camera","camera, card → archived · site → ready"),
    ("Stolen + Installation  (stolen and replaced)","Deployed","stolen ones archived · new → active"),
-   ("Stolen + Archive","No camera","camera, card and site → archived")]),
+   ("Stolen + Archive","No camera","camera, card, site → archived")]),
  (("Deployed","Deployed"),[("Not visited","Not visited","no entity changes")]),
- (("No camera","final"),[("Installation","Deployed","camera and card → active"),("Archive  (alone)","No camera","site → archived"),("Not visited","Not visited","no entity changes")]),
+ (("No camera","final"),[("Installation","Deployed","site, camera, card: ready → active"),("Archive  (alone)","No camera","site → archived"),("Not visited","Not visited","no entity changes")]),
 ]
 PITCH,GAP,TOP=34,12,100
 def _layout():
@@ -61,7 +61,7 @@ LAY,ENDY=_layout()
 H=ENDY+40
 d=D("The actions of a visit",920,H)
 d.text(30,22,600,28,"THE ACTIONS OF A VISIT, BY THE STATE OF THE VISIT BEFORE IT",15,"#2563eb")
-HEADS=((30,"THE VISIT BEFORE"),(235,"ACTIONS OF THIS VISIT"),(550,"IT IS LEFT"),(670,"CAMERAS, CARDS AND SITE"))
+HEADS=((30,"THE VISIT BEFORE"),(235,"ACTIONS OF THIS VISIT"),(550,"IT IS LEFT"),(670,"SITE, CAMERA AND CARD"))
 for x,t in HEADS: d.text(x,62,300,24,t,11)
 svg=[f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 {H}" width="920" height="{H}" role="img" aria-labelledby="t d" font-family="Inter, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif">',
  '  <title id="t">The actions of a visit</title>',
@@ -161,3 +161,66 @@ for x,t in ((250,"visits R0001"),(500,"visits R0002"),(750,"visits R0003")): d.t
 d.text(40,380,800,24,"closed deployment: the next visit has collected its card · open deployment (dashed): the card is still to be collected",12,"#475569",False)
 d.text(40,412,840,24,"A deployment belongs to the revision of the visit that left the camera: R0001-WICP_02_001 is of R0001.",12,"#64748b",False)
 d.save("collection.drawio")
+
+
+# ---- the life of the entities: a location, a camera, an SD card — what it is, and the states it goes through
+def _esc(t): return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+LC={"Planned":("#fffbeb","#f59e0b","#92400e","#b45309"),"Ready":("#eff6ff","#2563eb","#1e3a8a","#1d4ed8"),
+    "Active":("#ecfdf5","#10b981","#065f46","#047857"),"Archived":("#f1f5f9","#64748b","#334155","#475569")}
+XS=[30,270,510,750]; BW=140
+def lifecycle(fn,title,top,subs,labels,back,note):
+    """top: (left, relation, right) boxes of what it is; subs: what each state means (2 lines each); labels: the label on each of the three arrows; back: the label of the way back."""
+    import textwrap
+    lines=textwrap.wrap(note,115)
+    H=380+18*len(lines); svg=[f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 {H}" width="920" height="{H}" role="img" aria-labelledby="t d" font-family="Inter, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif">',
+      f'  <title id="t">{_esc(title)}</title>', f'  <desc id="d">{_esc(note)}</desc>',
+      '  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#475569" /></marker></defs>',
+      f'  <rect x="0" y="0" width="920" height="{H}" rx="18" fill="#ffffff" stroke="#d4d4d8" />',
+      f'  <text x="30" y="40" font-size="15" font-weight="700" fill="#2563eb" letter-spacing="1">{_esc(title.upper())}</text>']
+    d=D(title,920,H); d.text(30,22,800,28,title.upper(),15,"#2563eb")
+    # what it is
+    (l1,l2),rel,(r1,r2)=top
+    svg.append(f'  <rect x="30" y="64" width="260" height="76" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" /><text x="160" y="95" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">{_esc(l1)}</text><text x="160" y="117" font-size="11.5" fill="#475569" text-anchor="middle">{_esc(l2)}</text>')
+    svg.append(f'  <rect x="630" y="64" width="260" height="76" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" /><text x="760" y="95" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">{_esc(r1)}</text><text x="760" y="117" font-size="11.5" fill="#475569" text-anchor="middle">{_esc(r2)}</text>')
+    svg.append(f'  <path d="M292 102 H628" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
+    for i,line in enumerate(rel):
+        svg.append(f'  <text x="460" y="{77+i*15}" font-size="11.5" fill="#475569" text-anchor="middle"><tspan>{_esc(line)}</tspan></text>')
+    a=d.box(30,64,260,76,l1,l2,"#f8fafc","#94a3b8","#334155","#475569",fs=15); b=d.box(630,64,260,76,r1,r2,"#f8fafc","#94a3b8","#334155","#475569",fs=15); d.edge(a,b,"<br>".join(rel))
+    svg.append(f'  <text x="30" y="178" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">ITS STATES</text>')
+    d.text(30,164,300,24,"ITS STATES",12)
+    ids=[]
+    for x,(name,sub) in zip(XS,subs):
+        f,st,tc,sc=LC[name]
+        svg.append(f'  <rect x="{x}" y="196" width="{BW}" height="90" rx="12" fill="{f}" stroke="{st}" stroke-width="2" /><text x="{x+BW/2}" y="226" font-size="17" font-weight="700" fill="{tc}" text-anchor="middle">{name}</text>')
+        for i,line in enumerate(sub): svg.append(f'  <text x="{x+BW/2}" y="{248+i*15}" font-size="11" fill="{sc}" text-anchor="middle">{_esc(line)}</text>')
+        ids.append(d.box(x,196,BW,90,name,"<br>".join(sub),f,st,tc,sc,fs=17))
+    for i,lab in enumerate(labels):
+        x1=XS[i]+BW; x2=XS[i+1]; w=len(lab)*5.6+22
+        svg.append(f'  <path d="M{x1} 241 H{x2}" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
+        svg.append(f'  <rect x="{(x1+x2)/2-w/2}" y="204" width="{w}" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(x1+x2)/2}" y="218" font-size="11" fill="#475569" text-anchor="middle">{_esc(lab)}</text>')
+        d.edge(ids[i],ids[i+1],lab)
+    # the way back, from Active to Ready
+    x1=XS[2]+BW/2; x2=XS[1]+BW/2; w=len(back)*5.6+22
+    svg.append(f'  <path d="M{x1} 286 V318 Q{x1} 330 {x1-12} 330 H{x2+12} Q{x2} 330 {x2} 318 V288" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
+    svg.append(f'  <rect x="{(x1+x2)/2-w/2}" y="320" width="{w}" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(x1+x2)/2}" y="334" font-size="11" fill="#475569" text-anchor="middle">{_esc(back)}</text>')
+    d.edge(ids[2],ids[1],back,exit=(0.5,1),entry=(0.5,1),pts=[(x1,330),(x2,330)])
+    for i,line in enumerate(lines):
+        svg.append(f'  <text x="30" y="{372+i*18}" font-size="12" fill="#64748b">{_esc(line)}</text>'); d.text(30,360+i*18,860,24,line,12,"#64748b",False)
+    svg.append('</svg>\n')
+    open(OUT+fn+".svg","w",encoding="utf-8").write("\n".join(svg)); d.save(fn+".drawio")
+
+lifecycle("location","The life of a location",
+  (("A GPS coordinate","latitude, longitude, uncertainty"),("+ its information","name · timezone · summer time or not · status"),("A location","a place where a camera can be put up")) if False else (("A GPS coordinate","latitude, longitude and its uncertainty"),["with more information"],("Information","name · timezone · summer time · status")),
+  [("Planned",["only in Settings:","not in the app"]),("Ready",["ready to have","a camera"]),("Active",["it has","a camera"]),("Archived",["out of use","for good"])],
+  ["set ready","Installation","Archive"],"camera taken away or stolen",
+  "Archived is final: it never goes back. A location is archived by an Archive visit, or from Settings.")
+lifecycle("camera","The life of a camera",
+  (("A site","where the camera is put up"),["has one camera","at a time"],("A camera","its id, its model, its settings")),
+  [("Planned",["only in Settings:","not in the app"]),("Ready",["available,","not in the field"]),("Active",["put up","at a site"]),("Archived",["lost, stolen","or broken"])],
+  ["set ready","Installation","Stolen"],"Desinstallation",
+  "A site has one camera at a time, and a camera is at one site at a time. A camera goes to Archived for good: stolen, or lost or broken (from Settings).")
+lifecycle("sd-card","The life of an SD card",
+  (("A camera","at a site"),["holds one card,","until it is collected"],("An SD card","its label, its brand, its capacity")),
+  [("Planned",["only in Settings:","not in the app"]),("Ready",["free: in no","camera"]),("Active",["in a camera","in the field"]),("Archived",["lost, stolen","or broken"])],
+  ["set ready","left in a camera","stolen"],"collected",
+  "A card is left by an Installation or a Revision and collected by the next Revision or Desinstallation. Stolen with its camera, or lost or broken, it is archived for good.")

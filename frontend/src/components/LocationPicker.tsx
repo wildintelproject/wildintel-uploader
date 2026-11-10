@@ -1,3 +1,4 @@
+import { inTheApp } from '../researchProjects'
 import { useEffect, useState } from 'react'
 import TimezoneCombobox from './TimezoneCombobox'
 import { api } from '../api'
@@ -59,7 +60,7 @@ export default function LocationPicker({ researchProjectId, trapperPk, value, on
     let cancelled = false
     setLocations([]); setAdding(false)
     api.listLocalLocations(researchProjectId)
-      .then(({ results }) => { if (!cancelled) setLocations(results) })
+      .then(({ results }) => { if (!cancelled) setLocations(results.filter(inTheApp)) })
       .catch((e) => { if (!cancelled) setErrorMessage(e instanceof Error ? e.message : 'Could not read the locations.') })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps

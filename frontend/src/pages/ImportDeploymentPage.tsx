@@ -1,3 +1,4 @@
+import { inTheApp, listWorking } from '../researchProjects'
 import { TABLE, TableCard } from '../components/DashboardParts'
 import CheckResultsTable from '../components/CheckResultsTable'
 import ValidationDashboard, { formatRun } from '../components/ValidationDashboard'
@@ -889,7 +890,7 @@ const HEIGHTS = [0.5, 1, 1.5, 2]
 const TILTS: { label: string; degrees: number }[] = [{ label: 'Down −90°', degrees: -90 }, { label: 'Level 0°', degrees: 0 }, { label: 'Up 90°', degrees: 90 }]
 
 /** The optional details of a deployment — its camera, its site, its groups, tags and comments — as three cards, every field in view. */
-export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraPicker, afterCamera, camtrapTags = false, requiredKeys = [], cameraMissing = 0 }: {
+export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraPicker, afterCamera, camtrapTags = false, requiredKeys = [], cameraMissing = 0, hideSetupBy = false }: {
   deployment: DeploymentFields; errors: ReturnType<typeof shownErrors>
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
   /** More fields for the Camera card, of the page that uses the form: how many there are, how many are filled in, and the fields themselves. */
@@ -904,6 +905,8 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
   requiredKeys?: string[]
   /** How many required fields the page asks for in the Camera card that are still empty, besides the ones of the deployment — the camera the page picks. */
   cameraMissing?: number
+  /** A page that already asks who went — its visits — does not ask who set the camera up again. */
+  hideSetupBy?: boolean
 }) {
   const ask = (key: string) => requiredKeys.includes(key)
   const [mount, setMount] = useState<'above' | 'below'>(deployment.camera_depth != null ? 'below' : 'above')
@@ -995,7 +998,7 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
       {/* what the page puts here is its own, not Camtrap DP's */}
       {afterCamera && <CamtrapDpContext.Provider value={false}>{afterCamera}</CamtrapDpContext.Provider>}
 
-      <SectionCard title="Site" icon={site.icon} total={5} summary={siteSummary} missing={emptyIn(['feature_type', 'habitat', 'setup_by', 'bait_use', 'timestamp_issues'])} filled={count([deployment.feature_type, deployment.habitat, deployment.setup_by, deployment.bait_use, deployment.timestamp_issues])}>
+      <SectionCard title="Site" icon={site.icon} total={hideSetupBy ? 4 : 5} summary={siteSummary} missing={emptyIn(['feature_type', 'habitat', ...(hideSetupBy ? [] : ['setup_by']), 'bait_use', 'timestamp_issues'])} filled={count([deployment.feature_type, deployment.habitat, ...(hideSetupBy ? [] : [deployment.setup_by]), deployment.bait_use, deployment.timestamp_issues])}>
         <p className="flex items-baseline gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">What is the camera aimed at?<CamtrapDpTag /></p>
         <p className={`${hintClass} mt-0 mb-2`}>The kind of feature in view, if any.</p>
         <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Feature type">
@@ -1007,8 +1010,8 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
         <div className="grid grid-cols-2 gap-4">
           <Field label="Habitat" placeholder="e.g. Mediterranean scrub" hint={DESCRIPTIONS.habitat}
                  value={deployment.habitat ?? ''} onChange={(v) => onField('habitat', v || null)} />
-          <Field label="Set up by" placeholder="e.g. Jakub Bubnicki" hint={DESCRIPTIONS.setupBy}
-                 value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />
+          {!hideSetupBy && <Field label="Set up by" placeholder="e.g. Jakub Bubnicki" hint={DESCRIPTIONS.setupBy}
+                 value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />}
         </div>
         <div className="mt-4 space-y-3">
           <SwitchRow label="Bait was used" hint="Say what it was in the tags or comments below." required={ask('bait_use')} checked={!!deployment.bait_use}
@@ -1103,8 +1106,8 @@ export function DeploymentFormBody({ deployment, timezone, errors, onField, date
                          onChange={(v) => onField('feature_type', (v || null) as FeatureType | null)} />
             <Field label="Habitat" placeholder="e.g. Mixed temperate low-land forest" hint={DESCRIPTIONS.habitat}
                    value={deployment.habitat ?? ''} onChange={(v) => onField('habitat', v || null)} />
-            <Field label="Set up by" placeholder="e.g. Jakub Bubnicki" hint={DESCRIPTIONS.setupBy}
-                   value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />
+            {!hideSetupBy && <Field label="Set up by" placeholder="e.g. Jakub Bubnicki" hint={DESCRIPTIONS.setupBy}
+                   value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />}
           </div>
           <div className="grid grid-cols-2 gap-4 mt-4">
             <CheckboxField label="Bait used" hint={DESCRIPTIONS.baitUse} checked={!!deployment.bait_use} onChange={(v) => onField('bait_use', v || null)} />
@@ -2287,7 +2290,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   useEffect(() => {
     if (stepKey !== 'origin') return
     let cancelled = false
-    api.listResearchProjects()
+    listWorking()
       .then(async ({ results }) => {
         if (cancelled) return
         setLocalProjects(results)
@@ -2308,7 +2311,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     if (!selectedProjectId) { setLocalLocations([]); return }
     let cancelled = false
     api.listLocalLocations(selectedProjectId)
-      .then(({ results }) => { if (!cancelled) setLocalLocations(results) })
+      .then(({ results }) => { if (!cancelled) setLocalLocations(results.filter(inTheApp)) })
       .catch((e) => { if (!cancelled) setOriginError(e instanceof Error ? e.message : 'Could not read the locations.') })
     return () => { cancelled = true }
   }, [selectedProjectId])

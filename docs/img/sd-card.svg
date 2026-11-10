@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 416" width="920" height="416" role="img" aria-labelledby="t d" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="t">The life of an SD card</title>
+  <desc id="d">A card is left by an Installation or a Revision and collected by the next Revision or Desinstallation. Stolen with its camera, or lost or broken, it is archived for good.</desc>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#475569" /></marker></defs>
+  <rect x="0" y="0" width="920" height="416" rx="18" fill="#ffffff" stroke="#d4d4d8" />
+  <text x="30" y="40" font-size="15" font-weight="700" fill="#2563eb" letter-spacing="1">THE LIFE OF AN SD CARD</text>
+  <rect x="30" y="64" width="260" height="76" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" /><text x="160" y="95" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">A camera</text><text x="160" y="117" font-size="11.5" fill="#475569" text-anchor="middle">at a site</text>
+  <rect x="630" y="64" width="260" height="76" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" /><text x="760" y="95" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">An SD card</text><text x="760" y="117" font-size="11.5" fill="#475569" text-anchor="middle">its label, its brand, its capacity</text>
+  <path d="M292 102 H628" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
+  <text x="460" y="77" font-size="11.5" fill="#475569" text-anchor="middle"><tspan>holds one card,</tspan></text>
+  <text x="460" y="92" font-size="11.5" fill="#475569" text-anchor="middle"><tspan>until it is collected</tspan></text>
+  <text x="30" y="178" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">ITS STATES</text>
+  <rect x="30" y="196" width="140" height="90" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" /><text x="100.0" y="226" font-size="17" font-weight="700" fill="#92400e" text-anchor="middle">Planned</text>
+  <text x="100.0" y="248" font-size="11" fill="#b45309" text-anchor="middle">only in Settings:</text>
+  <text x="100.0" y="263" font-size="11" fill="#b45309" text-anchor="middle">not in the app</text>
+  <rect x="270" y="196" width="140" height="90" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" /><text x="340.0" y="226" font-size="17" font-weight="700" fill="#1e3a8a" text-anchor="middle">Ready</text>
+  <text x="340.0" y="248" font-size="11" fill="#1d4ed8" text-anchor="middle">free: in no</text>
+  <text x="340.0" y="263" font-size="11" fill="#1d4ed8" text-anchor="middle">camera</text>
+  <rect x="510" y="196" width="140" height="90" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2" /><text x="580.0" y="226" font-size="17" font-weight="700" fill="#065f46" text-anchor="middle">Active</text>
+  <text x="580.0" y="248" font-size="11" fill="#047857" text-anchor="middle">in a camera</text>
+  <text x="580.0" y="263" font-size="11" fill="#047857" text-anchor="middle">in the field</text>
+  <rect x="750" y="196" width="140" height="90" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="2" /><text x="820.0" y="226" font-size="17" font-weight="700" fill="#334155" text-anchor="middle">Archived</text>
+  <text x="820.0" y="248" font-size="11" fill="#475569" text-anchor="middle">lost, stolen</text>
+  <text x="820.0" y="263" font-size="11" fill="#475569" text-anchor="middle">or broken</text>
+  <path d="M170 241 H270" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
+  <rect x="183.8" y="204" width="72.4" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="220.0" y="218" font-size="11" fill="#475569" text-anchor="middle">set ready</text>
+  <path d="M410 241 H510" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
+  <rect x="404.2" y="204" width="111.6" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="460.0" y="218" font-size="11" fill="#475569" text-anchor="middle">left in a camera</text>
+  <path d="M650 241 H750" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
+  <rect x="672.2" y="204" width="55.599999999999994" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="700.0" y="218" font-size="11" fill="#475569" text-anchor="middle">stolen</text>
+  <path d="M580.0 286 V318 Q580.0 330 568.0 330 H352.0 Q340.0 330 340.0 318 V288" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
+  <rect x="423.8" y="320" width="72.4" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="460.0" y="334" font-size="11" fill="#475569" text-anchor="middle">collected</text>
+  <text x="30" y="372" font-size="12" fill="#64748b">A card is left by an Installation or a Revision and collected by the next Revision or Desinstallation. Stolen with</text>
+  <text x="30" y="390" font-size="12" fill="#64748b">its camera, or lost or broken, it is archived for good.</text>
+</svg>

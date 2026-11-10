@@ -385,7 +385,7 @@ describe('ImportDeploymentPage', () => {
 
     describe('the closed visit the deployment is of', () => {
       const stored = (over: Record<string, unknown>) => ({
-        location_id: 'DONA_01', session: 'R0001', date: '2026-06-10', time: '09:00:00', actions: ['Installation'], trappers: null, status: null, card_batteries_ok: null,
+        location_id: 'DONA_01', session: 'R0001', date: '2026-06-10', time: '09:00:00', actions: ['Installation'], trappers: null, status: null, battery_status: null, card_status: null,
         num_photos: null, sd: null, date_time_ok: null, latitude: null, longitude: null, ...over,
       }) as never
       const CLOSED = [

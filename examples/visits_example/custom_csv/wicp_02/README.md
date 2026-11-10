@@ -5,7 +5,7 @@ Visits for trying **Register visits → From a CSV file → Custom CSV**, made t
 
 | Entity | What the visits use |
 |---|---|
-| Locations | `WICP_02_001` … `WICP_02_004` (UTC; `WICP_02_004` is *planned*) |
+| Locations | `WICP_02_001` … `WICP_02_004` (UTC; `WICP_02_004` is *ready*, like the others: no camera yet) |
 | Cameras | `BR5071050724`, `RE5699252753`, `RE1161042648`, `SP1776213899` |
 | SD cards | `1` … `8` |
 | Trappers | `Ana Pérez`, `Luis Gómez` |

@@ -74,9 +74,89 @@ One download gives you both the web application and the command line.
 
 ## 2. General concepts: deployments, locations, revisions and collections
 
-Before explaining how the application works, it is necessary to clarify the following concepts. The visits come first, because everything else is worked out from them.
+Before explaining how the application works, it is necessary to clarify the following concepts. The things the visits are about come first — the locations, the cameras and the SD cards —, then the visits, because everything else is worked out from them.
 
-### 2.1 Visits and revisions
+### 2.1 Locations
+
+A **location** is a **GPS coordinate** — a latitude, a longitude and how uncertain it is — to which we add the information the app needs: its **id** (what the visits say: `DONA_01`), its **name**, its **timezone**, whether its cameras **ignore summer time**, and its **status**.
+
+![The life of a location: a GPS coordinate with more information; planned, ready, active and archived, and what moves it from one to the other](img/location.svg)
+
+A location is always in one of four states:
+
+<div class="states" markdown>
+
+| State | Meaning |
+|---|---|
+| **Planned** | The site is planned. It is only in **Settings**, to link cameras and cards to it: it is **not in the app** — no visit is kept to it and no list offers it. |
+| **Ready** | The site is **ready to have a camera**. It is in the app: the revisions count it, and a visit can put a camera up there. |
+| **Active** | The site **has a camera**. It is in the app, as a ready one. |
+| **Archived** | The site is **out of use for good**. It is **final**: it never goes back, and no visit is kept to it after the day it was archived. |
+
+</div>
+
+The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a site, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)), where you can set it by hand. In particular, what moves a location from one state to another:
+
+- **Planned → Ready**: you say so in Settings, when the site is ready to be used.
+- **Ready → Active**: a visit does an **Installation**, which puts a camera up.
+- **Active → Ready**: a visit takes the camera away (**Desinstallation**) or finds it stolen (**Stolen**), and puts no other one up. A replacement — the camera is taken away and another put up — keeps it active.
+- **→ Archived**: an **Archive** visit gives the site up (it goes with a Desinstallation or a Stolen visit, as no camera can be left), or you archive it in Settings. It never goes back.
+
+The dashboards and the revisions consider the sites that are **ready or active**: a revision is one visit to each of them.
+
+### 2.2 Cameras
+
+A **camera** is one device — its serial number, its model and how it is set up — and it is **put up at a site** by a visit. A site has **one camera at a time**, and a camera is at **one site at a time**: it cannot be put up where it already is, nor at a second site before it is taken away from the first.
+
+![The life of a camera: a site has one camera at a time; planned, ready, active and archived, and what moves it from one to the other](img/camera.svg)
+
+A camera is always in one of four states:
+
+<div class="states" markdown>
+
+| State | Meaning |
+|---|---|
+| **Planned** | The camera is registered in **Settings** but it is **not in the app** yet: no visit offers it. |
+| **Ready** | The camera is **available**, and not in the field. A visit can put it up. |
+| **Active** | The camera is **put up at a site**. |
+| **Archived** | The camera is **out of use for good**: stolen, lost or broken (the reason is kept). It is **final**. |
+
+</div>
+
+The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a camera, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)). In particular:
+
+- **Planned → Ready**: you say so in Settings.
+- **Ready → Active**: an **Installation** puts the camera up at a site, and the site becomes active with it.
+- **Active → Ready**: a **Desinstallation** takes it away; a replacement takes the old camera away and puts the new one up.
+- **Active → Archived**: a **Stolen** visit finds it gone. A lost or broken camera is archived from Settings. It never goes back.
+
+### 2.3 SD cards
+
+An **SD card** is kept in a camera: a visit **leaves** it there (an *Installation*, or a *Revision* that changes the card) and the next visit **collects** it (a *Revision* or a *Desinstallation*) — its images are the deployment. A card is in **one camera at a time**.
+
+![The life of an SD card: a camera holds one card until it is collected; planned, ready, active and archived, and what moves it from one to the other](img/sd-card.svg)
+
+An SD card is always in one of four states:
+
+<div class="states" markdown>
+
+| State | Meaning |
+|---|---|
+| **Planned** | The card is registered in **Settings** but it is **not in the app** yet. |
+| **Ready** | The card is **free**: it is in no camera, and a visit can leave it in one. |
+| **Active** | The card is **in a camera**, in the field. |
+| **Archived** | The card is **out of use for good**: stolen with its camera, lost or broken. It is **final**. |
+
+</div>
+
+The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of an SD card, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)). In particular:
+
+- **Planned → Ready**: you say so in Settings.
+- **Ready → Active**: a visit **leaves** the card in a camera (*Installation* or *Revision*).
+- **Active → Ready**: a visit **collects** it (*Revision* or *Desinstallation*), and the card is free again — it cannot be left again in the same revision.
+- **Active → Archived**: a **Stolen** visit archives it with its camera, because it went with it. A lost or broken card is archived from Settings. It never goes back.
+
+### 2.4 Visits and revisions
 
 A **visit** is one trip to one camera trap, to do something with it. It is the field record: it says when it was, at which site, who went, what was done to the camera and the card, and what was found. The visits of a research project are registered in *Manage visits* — see the [web manual](user-manual-web.md#5-manage-visits) — and everything else is worked out from them.
 
@@ -100,6 +180,8 @@ The drawing reads from left to right, and the state of a visit is decided in thr
 
 The table sums up each state and what it means.
 
+<div class="states" markdown>
+
 | State | What it says |
 |---|---|
 | **Planned** | The visit is not made yet: a location with no visit in a revision that has them. |
@@ -109,6 +191,8 @@ The table sums up each state and what it means.
 | **Not visited** | The visit could not be made. |
 | **No camera** | It left no camera: it took it away (Desinstallation), found it stolen (Stolen) or gave the site up (Archive). Nothing is waited for. |
 | **Unknown** | A revision of a site of which nothing is known: no visit of that site is kept to it. |
+
+</div>
 
 Whether the images of a visit are stored is another thing: they are once its deployment is made.
 
@@ -123,7 +207,7 @@ The **actions that can be done during a visit** depend on **what the visit befor
 - **No camera** is a **final** state: nothing waits for that visit, so it never changes to another one.
 - **Not visited** changes nothing: the camera is where it was, and the next visit is of the visit before.
 - **After an Archive** the site is closed: no visit follows.
-- **Cameras and cards** that a visit puts in the field are **active**; those it takes away — the camera it removes, the card it collects — are **ready** again, and a camera found stolen is **archived** with its card, as the location is with an Archive. An archived one is never changed.
+- **The site, the camera and the card.** An **Installation** moves the site, the camera and the card it leaves from **ready** to **active**. What a visit takes away — the camera it removes, the card it collects — is **ready** again, and so is the site when it is left with no camera. A camera found stolen is **archived** with its card, and an Archive archives the site: an archived one is never changed. See [Locations](#21-locations), [Cameras](#22-cameras) and [SD cards](#23-sd-cards).
 
 The following table sums up each action, what it is and what it asks.
 
@@ -150,8 +234,8 @@ The following table sums up what a visit records and what is validated in each f
 | **Who and where** | `location_id`, `session`, `trappers`, `setup_by` | The site is a location id (1 to 100 characters); the revision is written `R` and its number (`R0003`); who went and who set the camera up are text (who went is then looked for in the settings: see below). |
 | **When** | `date`, `time`, `when` | The day and the time have to be a real date and a real time, as the clock of the location says them. `when` is the instant in UTC (ISO 8601, with a `Z`): it is worked out from them when it is left out. |
 | **What was done** | `actions` | Any of *Installation*, *Revision*, *Desinstallation*, *Stolen* and *Archive*, each one once. Only a visit that could not be made (its status is *Not revised*) has none. |
-| **The SD card** | `sd`, `num_photos`, `card_batteries_ok` | The photos counted are a whole number, zero or more. The state of the card and the batteries is one of *OK*, *CarFull*, *NoBatteries* or *CarFullNoBatteries* (the codes of the old datasheet, *SinPilas* and *CarFullSinPilas*, are read as those). |
-| **The camera** | `camera_id`, `camera_model`, `camera_interval`, `camera_height`, `camera_depth`, `camera_tilt`, `camera_heading`, `detection_distance`, `bait_use`, `feature_type`, `habitat`, `camera_status`, `date_time_ok`, `timestamp_issues`, `calibration` | The status of the camera (`camera_status`; a CSV may call its column *Status of the camera* or *status*) is one of *OK*, *Altered* (moved or changed), *Knocked down* (fallen or tilted), *Damaged* (broken or harmed), *Stolen*, *Not revised* (the visit could not be made), and, from the field form, *New site* and *Inactive site*. The interval, the height, the depth and the detection distance are zero or more; the tilt is between -90 and 90 degrees and the heading between 0 and 360; the bait use and the calibration are yes or no; the feature type is one of the values of Camtrap DP. |
+| **The SD card** | `sd`, `num_photos`, `card_status` | The photos counted are a whole number, zero or more. The state of the card (`card_status`) is *OK* or *CardFull* (card full: its photos are not counted). |
+| **The camera** | `camera_id`, `camera_model`, `camera_interval`, `camera_height`, `camera_depth`, `camera_tilt`, `camera_heading`, `detection_distance`, `bait_use`, `feature_type`, `habitat`, `camera_status`, `battery_status`, `date_time_ok`, `timestamp_issues`, `calibration` | The state of the batteries (`battery_status`) is *OK* or *NoBatteries* (there were none). A CSV that has one column for both, `card_batteries_ok` (*OK*, *CarFull*, *NoBatteries*, *CarFullNoBatteries*, or *SinPilas*), is read as the two. The status of the camera (`camera_status`; a CSV may call its column *Status of the camera* or *status*) is one of *OK*, *Altered* (moved or changed), *Knocked down* (fallen or tilted), *Damaged* (broken or harmed), *Stolen*, *Not revised* (the visit could not be made), and, from the field form, *New site* and *Inactive site*. The interval, the height, the depth and the detection distance are zero or more; the tilt is between -90 and 90 degrees and the heading between 0 and 360; the bait use and the calibration are yes or no; the feature type is one of the values of Camtrap DP. |
 | **The site and the notes** | `latitude`, `longitude`, `deployment_groups`, `tags`, `comments` | The latitude is between -90 and 90 and the longitude between -180 and 180 (WGS84 decimal degrees). The groups, the tags and the notes are free text. |
 
 Two things are checked on the **whole visit**, with several fields together:
@@ -201,7 +285,7 @@ What the app only **questions** — it asks the one who knows the field, it does
 
 **What cannot be known cannot be checked.** An *unknown* visit — a revision of a site of which nothing is known — has no camera, no card and no day, so nothing is checked against it. And what was left at a site before an unknown revision cannot be trusted after it: the camera or the card may have been moved in it. That is why the first visit to a site after an unknown revision may be any, and a file is only excused this: what depends on a revision that nobody knows.
 
-### 2.2 Deployments, locations and collections
+### 2.5 Deployments, locations and collections
 
 A **deployment** is the set of images taken by one camera, at one **location** — some GPS coordinates and a timezone —, between two **consecutive visits** to it: the one that **left** the camera and its card, and the next one that **collected** the card. Between them the camera was set up under specific configuration conditions (height, tilt, delay between triggers…). A deployment whose camera is still out, because the card has not been collected, is *open*; when the card is collected, it is *closed* and its images can be imported. The deployment of a camera that was stolen has no images.
 
@@ -221,7 +305,7 @@ The app names everything after that:
 
 The deployment id is never typed: you give the revision and the location, and the app builds it.
 
-### 2.3 The location owns the timezone
+### 2.6 The location owns the timezone
 
 A camera's clock has no timezone of its own: its images say "13:10", and the same camera,
 elsewhere, would say it too. So the **timezone** (and whether the cameras there **ignore summer

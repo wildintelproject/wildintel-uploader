@@ -1,3 +1,4 @@
+import { listWorking } from '../researchProjects'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { defaultResearchProject } from '../defaultResearchProject'
@@ -44,7 +45,7 @@ export default function ResearchProjectPicker({ value, onSelect, onError }: Prop
 
   useEffect(() => {
     let cancelled = false
-    api.listResearchProjects()
+    listWorking(value)
       .then(async ({ results }) => {
         if (cancelled) return
         setProjects(results)

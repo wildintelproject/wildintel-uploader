@@ -100,6 +100,13 @@ def _apply_to_entities(root, research_project_id: str, new: list[dict], before: 
     for visit in sorted(new, key=visit_rules._stamp):
         changes += [(visit, c) for c in visit_rules.entity_changes(visit, history)]
         history.append(visit)
+    for visit, change in [(v, c) for v, c in changes if c["kind"] == "locations"]:
+        site = next((l for l in local_folder_service.list_locations(root, research_project_id) if str(l.get("location_id", "")).lower() == change["name"].lower()), None)
+        if site is not None and site.get("status") in ("ready", "active") and site["status"] != change["status"]:
+            try:
+                local_folder_service.update_location(root, research_project_id, site["location_id"], {"status": change["status"]})
+            except local_folder_service.LocalFolderError:
+                continue
     for kind in ("cameras", "sd_cards"):
         wanted = [(v, c) for v, c in changes if c["kind"] == kind]
         if not wanted:
@@ -135,7 +142,7 @@ def save_visit(req: SaveVisitRequest) -> dict:
     site is a location of the project, it is not kept already, it has what its actions ask and its camera and card are where it says."""
     root = config.collections_dir()
     try:
-        local_folder_service.require_research_project(root, req.research_project_id)
+        local_folder_service.require_active_research_project(root, req.research_project_id)
         visit = req.visit.model_dump(mode="json")
         locations = local_folder_service.list_locations(root, req.research_project_id)
         # the rules compare instants: the day and the time are the wall clock of the location
@@ -169,8 +176,8 @@ def _not_entities(root, research_project_id: str, old: dict | None, visit: dict)
     """What a visit says that is not an entity: a camera or an SD card that is not one of the research project's, a trapper that is not in the settings. Only what
     changed from `old` is said — what the visit already had stays, as it may have been kept without being listed."""
     reasons = []
-    cameras = {str(x).lower() for c in local_folder_service.list_field_items(root, research_project_id, "cameras") for x in (c.get("camera_id"), c.get("label")) if x}
-    cards = {str(c.get("label")).lower() for c in local_folder_service.list_field_items(root, research_project_id, "sd_cards")}
+    cameras = {str(x).lower() for c in local_folder_service.list_field_items(root, research_project_id, "cameras") if c.get("status") != "planned" for x in (c.get("camera_id"), c.get("label")) if x}
+    cards = {str(c.get("label")).lower() for c in local_folder_service.list_field_items(root, research_project_id, "sd_cards") if c.get("status") != "planned"}
     trappers = {t["name"].lower() for t in local_folder_service.list_trappers(config.collections_dir())}
     names = lambda text: [n.strip() for n in str(text or "").split(",") if n.strip()]  # noqa: E731
     camera, card = visit.get("camera_id"), visit.get("sd")
@@ -252,6 +259,8 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
     collections they change get their FileTimestampLog and FieldworkLog."""
     root = config.collections_dir()
     try:
+        if req.save:
+            local_folder_service.require_active_research_project(root, req.research_project_id)
         locations = local_folder_service.list_locations(root, req.research_project_id)
         kept = local_folder_service.list_visits(root, req.research_project_id)
         cards = local_folder_service.list_field_items(root, req.research_project_id, "sd_cards")

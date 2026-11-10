@@ -8,7 +8,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from wildintel_uploader.core.services.visit_rules import CAMERA_STATUSES, camera_status_code
+from wildintel_uploader.core.services.visit_rules import CAMERA_STATUSES, battery_status_code, camera_status_code, card_status_code, split_card_batteries
 
 
 class TrapperCredentials(BaseModel):
@@ -267,7 +267,7 @@ class ResearchProjectRecord(BaseModel):
     bait_use: int = Field(default=1, ge=1, le=6)
     event_interval: int = Field(default=0, ge=0)
     # Whether it is being prepared, running or over: a finished one is not offered when a deployment is imported.
-    status: Literal["planned", "active", "finished"] = "active"
+    status: Literal["planned", "active", "finished", "archived"] = "active"
     keywords: str = ""
     abstract: str = Field(default="", max_length=2000)
     methods: str = Field(default="", max_length=2000)
@@ -287,7 +287,7 @@ class UpdateResearchProjectRequest(ResearchProjectRecord):
     animal_types: Optional[int] = Field(default=None, ge=1, le=3)  # type: ignore[assignment]
     bait_use: Optional[int] = Field(default=None, ge=1, le=6)  # type: ignore[assignment]
     event_interval: Optional[int] = Field(default=None, ge=0)  # type: ignore[assignment]
-    status: Optional[Literal["planned", "active", "finished"]] = None  # type: ignore[assignment]
+    status: Optional[Literal["planned", "active", "finished", "archived"]] = None  # type: ignore[assignment]
     keywords: Optional[str] = None  # type: ignore[assignment]
     abstract: Optional[str] = Field(default=None, max_length=2000)  # type: ignore[assignment]
     methods: Optional[str] = Field(default=None, max_length=2000)  # type: ignore[assignment]
@@ -315,7 +315,7 @@ class LocationRecord(BaseModel):
     in_service: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     trapper_pk: Optional[int] = None
     # Whether it is in use; an archived or a planned one is not offered for a visit. When it changed (YYYY-MM-DD) and why are free to leave out.
-    status: Literal["active", "archived", "planned"] = "active"
+    status: Literal["planned", "ready", "active", "archived"] = "ready"
     status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     status_note: Optional[str] = None
 
@@ -364,8 +364,9 @@ class VisitRecord(BaseModel):
     trappers: Optional[str] = None
     # The status of the camera when the visit found it (e.g. Working, Not revised).
     camera_status: Optional[str] = None
-    # How the card and the batteries were: OK, CarFull (card full), NoBatteries or both (CarFullNoBatteries). The datasheet writes SinPilas and CarFullSinPilas: they are read as those.
-    card_batteries_ok: Optional[Literal["OK", "CarFull", "NoBatteries", "CarFullNoBatteries"]] = None
+    # How the batteries were (OK, or NoBatteries when there were none) and how the SD card was (OK, or CardFull). They were one field, card_batteries_ok: a visit that says it is read as both.
+    battery_status: Optional[Literal["OK", "NoBatteries"]] = None
+    card_status: Optional[Literal["OK", "CardFull"]] = None
     num_photos: Optional[int] = Field(default=None, ge=0)
     sd: Optional[str] = None
     date_time_ok: Optional[str] = None
@@ -400,10 +401,28 @@ class VisitRecord(BaseModel):
     comments: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
 
-    @field_validator("card_batteries_ok", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _spanish_codes(cls, value):
-        return {"SinPilas": "NoBatteries", "CarFullSinPilas": "CarFullNoBatteries"}.get(value, value)
+    def _one_field_before(cls, data):
+        """A visit that says card_batteries_ok — how it was kept before — says the status of the batteries and the one of the card."""
+        if isinstance(data, dict) and "card_batteries_ok" in data:
+            data = dict(data)
+            battery, card = split_card_batteries(data.pop("card_batteries_ok"))
+            if battery and not data.get("battery_status"):
+                data["battery_status"] = battery
+            if card and not data.get("card_status"):
+                data["card_status"] = card
+        return data
+
+    @field_validator("battery_status", mode="before")
+    @classmethod
+    def _battery_code(cls, value):
+        return None if value in (None, "") else (battery_status_code(value) or value)
+
+    @field_validator("card_status", mode="before")
+    @classmethod
+    def _card_code(cls, value):
+        return None if value in (None, "") else (card_status_code(value) or value)
 
     @field_validator("camera_status", mode="before")
     @classmethod
@@ -509,7 +528,7 @@ class UpdateLocationRequest(LocalLocationsRequest):
     timezone: Optional[str] = None
     ignore_dst: Optional[bool] = None
     in_service: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
-    status: Optional[Literal["active", "archived", "planned"]] = None
+    status: Optional[Literal["planned", "ready", "active", "archived"]] = None
     status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     status_note: Optional[str] = None
 

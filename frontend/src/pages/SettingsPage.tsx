@@ -641,7 +641,7 @@ const TONES: Record<Tone, string> = {
   blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   zinc: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300',
 }
-const STATUS_TONES: Record<string, Tone> = { active: 'green', planned: 'amber', finished: 'zinc', inactive: 'zinc', archived: 'zinc', stolen: 'red', lost: 'red', broken: 'red' }
+const STATUS_TONES: Record<string, Tone> = { active: 'green', ready: 'blue', planned: 'amber', finished: 'zinc', inactive: 'zinc', archived: 'zinc', stolen: 'red', lost: 'red', broken: 'red' }
 /** The badge of a status — what day it began and why are in its tooltip. */
 const statusBadge = (status: string | null | undefined, date?: string | null, note?: string | null): BadgeSpec => ({
   text: STATUS_LABELS[status ?? 'active'] ?? String(status), tone: STATUS_TONES[status ?? 'active'] ?? 'zinc',
@@ -748,9 +748,10 @@ function StatusChoice({ options, value, onChange }: { options: { value: string; 
 }
 
 const PROJECT_STATUSES = [
-  { value: 'planned', label: 'Planned', hint: 'Not started yet.' },
-  { value: 'active', label: 'Active', hint: 'Work is under way.' },
-  { value: 'finished', label: 'Finished', hint: 'No more fieldwork.' },
+  { value: 'planned', label: 'Planned', hint: 'It is planned: only in Settings, to link entities to it.' },
+  { value: 'active', label: 'Active', hint: 'It is seen in the whole app.' },
+  { value: 'finished', label: 'Finished', hint: 'Closed, but it can be reopened.' },
+  { value: 'archived', label: 'Archived', hint: 'Closed for good: it cannot be modified and never goes back.' },
 ]
 const fieldBox = 'block w-full rounded-xl px-4 py-3 bg-zinc-100 dark:bg-zinc-800 border border-transparent focus:border-blue-500 text-base text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none transition-colors disabled:opacity-60'
 
@@ -1287,9 +1288,9 @@ const statusFields = <T extends object>(values: string[], withDetails: boolean, 
   ] : []),
 ]
 
-const GEAR_STATUSES = ['ready', 'active', 'archived']
+const GEAR_STATUSES = ['planned', 'ready', 'active', 'archived']
 const ARCHIVE_REASONS = [{ value: 'lost', label: 'Lost' }, { value: 'stolen', label: 'Stolen' }, { value: 'broken', label: 'Broken' }, { value: 'other', label: 'Other' }]
-const GEAR_HINTS = { ready: 'Available, not in the field yet. Offered when a visit is registered.', active: 'In use in the field. Offered when a visit is registered.', archived: 'Out of use for good: lost, stolen, broken… It never goes back to ready or active.' }
+const GEAR_HINTS = { planned: 'Only in Settings: it is not in the app yet.', ready: 'Available, not in the field yet. Offered when a visit is registered.', active: 'In use in the field. Offered when a visit is registered.', archived: 'Out of use for good: lost, stolen, broken… It never goes back to ready or active.' }
 
 const numberRange = (min: number, max: number) => (v: string) => (v === '' || (Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max) ? null : `A number from ${min} to ${max}.`)
 /** A number that has to be given: the coordinates of a location. */
@@ -1304,7 +1305,7 @@ const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
   { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty', placeholder: 'e.g. 100', unit: 'metres', hint: 'How far off the position could be.', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
   { key: 'timezone', label: 'Time zone', required: true, placeholder: 'e.g. Europe/Madrid', section: 'Time', sectionIcon: <ClockIcon />, sectionHint: 'The time zone the location is in, and whether its cameras follow summer time. Every visit and deployment here is read with them.', kind: 'timezone', fixed: true, hint: "The location's own time zone, required. Every visit and deployment here is read in it, so it cannot be changed once the location is created.", validate: (v) => (!v ? 'Required.' : isValidTimezone(v) ? null : 'Not a known IANA time zone (e.g. Europe/Madrid).') },
   { key: 'ignore_dst', label: 'The cameras here ignore summer time', kind: 'bool', fixed: true, hint: 'Turn it on if their clocks stay the same all year; off, they follow summer time. Like the time zone, it cannot be changed once the location is created.' },
-  ...statusFields<LocationDraft>(['active', 'planned', 'archived'], true, { active: 'It has a camera installed.', planned: 'Available, but with no camera yet.', archived: 'Taken out of use for good: it never goes back to active.' }),
+  ...statusFields<LocationDraft>(['planned', 'ready', 'active', 'archived'], true, { planned: 'Only in Settings: it is not in the app yet.', ready: 'Ready to have a camera.', active: 'It has a camera.', archived: 'Out of use for good: it never goes back.' }),
 ]
 
 /** What a research project is when it is added by hand, or read from a CSV file: its acronym and name, and the fields free text. */
@@ -1335,7 +1336,7 @@ const PROJECT_FIELDS: ItemField<ProjectDraft>[] = [
   { key: 'name', label: 'Name', validate: (v) => (v ? null : 'A name is required.') },
   { key: 'description', label: 'Description' },
   { key: 'keywords', label: 'Keywords' },
-  ...statusFields<ProjectDraft>(['active', 'planned', 'finished'], false),
+  ...statusFields<ProjectDraft>(['planned', 'active', 'finished', 'archived'], false, { planned: 'It is planned: only in Settings, to link entities to it.', active: 'It is seen in the whole app.', finished: 'Closed, but it can be reopened.', archived: 'Closed for good: it cannot be modified and never goes back.' }),
 ]
 
 const locationDraft = (l: LocalLocation): LocationDraft => ({
@@ -1505,8 +1506,8 @@ function ProjectsTab({ projects, onChanged, onDetail, owned }: {
         ) : editing && (
           <ItemForm<ProjectDraft>
             noun="research project" backLabel="Research projects" fields={PROJECT_FIELDS} item={editing} others={[]} isNew={false} lockFirst
-            badges={[statusBadge(editing.status), originBadge(editingProject?.trapper_pk)]} readOnly={editingProject?.trapper_pk != null}
-            notice={editingProject?.trapper_pk != null ? <TrapperNotice noun="project" href={seen.base ? `${seen.base.replace(/\/+$/, '')}/research/project/detail/${editingProject.trapper_pk}/` : undefined} /> : undefined}
+            badges={[statusBadge(editing.status), originBadge(editingProject?.trapper_pk)]} readOnly={editingProject?.trapper_pk != null || editingProject?.status === 'archived'}
+            notice={editingProject?.status === 'archived' ? <p className="text-sm text-zinc-500 dark:text-zinc-400">This research project is archived: it can no longer be modified.</p> : editingProject?.trapper_pk != null ? <TrapperNotice noun="project" href={seen.base ? `${seen.base.replace(/\/+$/, '')}/research/project/detail/${editingProject.trapper_pk}/` : undefined} /> : undefined}
             extraRows={editingProject?.trapper_pk != null ? [{ label: 'Belongs to it', value: [seen.locations != null && `${seen.locations} location${seen.locations === 1 ? '' : 's'}`, owned && `${owned(editingProject.acronym).cameras} cameras`, owned && `${owned(editingProject.acronym).sdCards} SD cards`].filter(Boolean).join(' · ') }] : []}
             onChange={(patch) => setEditing((e) => (e ? { ...e, ...patch } : e))} onClose={() => { setEditing(null); setError(null) }} onDone={() => void saveEdit()} doneLabel="Save"
             onRemove={() => { setDeleting(editing.acronym); setEditing(null) }}
@@ -1848,10 +1849,10 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
       {tab === 'trappers' && (
         <ItemsEditor<Trapper>
           heading="Trappers" noun="trapper" fileName="trappers" styled plain onDetail={setDetail} items={trappers} onChange={changeTrappers}
-          icon={(t) => initialsOf(t.name)} dim={(t) => t.status === 'inactive'} readOnly={(t) => t.trapper_pk != null}
+          icon={(t) => initialsOf(t.name)} dim={(t) => t.status === 'inactive' || t.status === 'archived'} readOnly={(t) => t.trapper_pk != null || t.status === 'archived'}
           notice={(t) => (t.trapper_pk != null ? <TrapperNotice noun="trapper" /> : undefined)}
           blank={{ username: '', name: '', affiliation: null, email: null, status: 'active' }}
-          badges={(t) => [...(t.status === 'inactive' ? [statusBadge(t.status)] : []), ...(t.trapper_pk != null ? [originBadge(t.trapper_pk)] : [])]}
+          badges={(t) => [...(t.status === 'inactive' || t.status === 'archived' ? [statusBadge(t.status)] : []), ...(t.trapper_pk != null ? [originBadge(t.trapper_pk)] : [])]}
           subtitle={(t) => [t.name, t.affiliation].filter(Boolean).join(' · ')}
           meta={(t) => usedIn(countVisits((v) => (v.trappers ?? '').split(',').some((n) => same(n, t.name))))}
           footnote="Trappers that come from Trapper are read-only here. Change them in Trapper and import them again. If someone no longer goes to the field, mark them as inactive instead of deleting them."
@@ -1864,7 +1865,7 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
             { key: 'name', label: 'Full name', required: true, strict: true, placeholder: 'e.g. Ana Pérez', hint: 'The name of the person, as it should be on a visit.', validate: (v) => (v ? null : 'A full name is required.') },
             { key: 'affiliation', label: 'Affiliation', placeholder: 'e.g. University of Huelva', hint: 'Where the trapper works. Free text.' },
             { key: 'email', label: 'Email', placeholder: 'e.g. ana@example.org', hint: 'How to write to them. Optional.', validate: (v) => (v === '' || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? null : 'Not an email address.') },
-            ...statusFields<Trapper>(['active', 'inactive'], false, { active: 'Offered when a visit is registered.', inactive: 'Not offered when a visit is registered. Past visits keep their name.' })]}
+            ...statusFields<Trapper>(['active', 'inactive', 'archived'], false, { active: 'Offered when a visit is registered.', inactive: 'Not offered when a visit is registered. It can be active again.', archived: 'Out of use for good: never offered again, and it never goes back. Past visits keep their name.' })]}
         />
       )}
 

@@ -31,7 +31,9 @@ EPICOLLECT_COLUMNS: dict[str, tuple[str, ...]] = {
     "trappers": ("trappers", "trapper", "who", "tramperos", "responsable"),
     "session": ("session", "revision", "sesion", "collection"),
     "camera_status": ("camerastatus", "status", "state", "estado", "statusofthecame"),
-    "card_batteries_ok": ("cardbatteriesok", "cardbatteries", "cardpilasok"),
+    "battery_status": ("batterystatus", "batteries", "battery", "pilas", "bateria"),
+    "card_status": ("cardstatus", "sdstatus", "tarjeta"),
+    "card_batteries_ok": ("cardbatteriesok", "cardbatteries", "cardpilasok"),   # how it was before: one column for both
     "num_photos": ("numphotos", "photos", "numimages", "numfotos", "numberofpictures"),
     "sd": ("sd", "sdcard"),
     "date_time_ok": ("datetimeok", "fechahoraok", "dateandhour"),
@@ -68,7 +70,8 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("session", "Session (R0013, or its number)", False),
     ("trappers", "Who went", False),
     ("camera_status", "Status of the camera", False),
-    ("card_batteries_ok", "Card and batteries (OK, CarFull, NoBatteries, CarFullNoBatteries)", False),
+    ("battery_status", "Batteries (OK, NoBatteries)", False),
+    ("card_status", "SD card (OK, CardFull)", False),
     ("num_photos", "Photos on the card collected", False),
     ("sd", "SD card left", False),
     ("date_time_ok", "Date and time of the camera OK", False),
@@ -147,6 +150,8 @@ def id_of(value) -> str:
 ERROR_LABELS: dict[str, str] = {
     "actions_invalid": "Actions not valid",
     "card_batteries_invalid": "Card and batteries not valid",
+    "battery_status_invalid": "Batteries not valid",
+    "card_status_invalid": "SD card status not valid",
     "yes_no_invalid": "Not yes or no",
     "camera_status_invalid": "Status of the camera not valid",
     "session_invalid": "Session not valid",
@@ -168,6 +173,7 @@ ERROR_LABELS: dict[str, str] = {
     "card_collected_in_revision": "SD card collected in this revision",
     "visit_not_after_the_last": "Visit not after the last one of the site",
     "site_archived": "Site archived",
+    "site_planned": "Site planned",
     "archive_with_installation": "Archive with an Installation",
     "archive_camera_still_there": "Camera still there when the site is archived",
     "camera_unknown": "Camera not in the research project",
@@ -214,7 +220,9 @@ class CsvVisit(BaseModel):
     camera_model: str | None = None
     comments: str | None = None
     setup_by: str | None = None
-    card_batteries_ok: str | None = None
+    battery_status: str | None = None
+    card_status: str | None = None
+    card_batteries_ok: str | None = None   # how it was before: one column for both
     num_photos: int | None = None
     camera_interval: int | None = None
     camera_tilt: int | None = None
@@ -276,6 +284,22 @@ class CsvVisit(BaseModel):
         code = card_code(value)
         if code is None:
             raise _custom("card_batteries_invalid", "'{value}' is not OK, Card full, No batteries or Card full and no batteries (CarFull, NoBatteries and CarFullNoBatteries are the codes).", value)
+        return code
+
+    @field_validator("battery_status", mode="before")
+    @classmethod
+    def _battery(cls, value):
+        code = visit_rules.battery_status_code(value)
+        if code is None:
+            raise _custom("battery_status_invalid", "'{value}' is not OK or No batteries (OK and NoBatteries are the codes).", value)
+        return code
+
+    @field_validator("card_status", mode="before")
+    @classmethod
+    def _card(cls, value):
+        code = visit_rules.card_status_code(value)
+        if code is None:
+            raise _custom("card_status_invalid", "'{value}' is not OK or Card full (OK and CardFull are the codes).", value)
         return code
 
     @field_validator("camera_status", mode="before")
@@ -478,8 +502,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     known = {str(l.get("location_id", "")).lower(): l for l in locations}
     # What a row creates when its location, camera or SD card does not exist and it is asked to: {row: {"locations": [...], "cameras": [...], "sd_cards": [...]}}, and the
     # locations made from the first row that gave each site (the other rows of it are read in its timezone).
-    cameras_known = {str(c.get(k) or "").lower() for c in options.get("cameras") or [] for k in ("camera_id", "label")} - {""}
-    cards_known = {str(c.get("label") or "").lower() for c in options.get("cards") or []} - {""}
+    cameras_known = {str(c.get(k) or "").lower() for c in options.get("cameras") or [] if c.get("status") != "planned" for k in ("camera_id", "label")} - {""}
+    cards_known = {str(c.get("label") or "").lower() for c in options.get("cards") or [] if c.get("status") != "planned"} - {""}
     made_by_row: dict[int, dict[str, list[dict]]] = {}
     new_locations: dict[str, dict] = {}
     already = {(str(v.get("location_id", "")).lower(), v.get("date"), v.get("time")) for v in kept}
@@ -543,6 +567,10 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
             if create.get("sd_cards") and row.get("sd") and row["sd"].lower() not in cards_known:
                 made["sd_cards"].append(_new_card(row["sd"], row))
             data = cells.model_dump(exclude_unset=True, exclude={"actions"})
+            if "card_batteries_ok" in data:   # one column for both, as it was: the batteries and the card each in its own field
+                battery, card = visit_rules.split_card_batteries(data.pop("card_batteries_ok"))
+                data.setdefault("battery_status", battery)
+                data.setdefault("card_status", card)
             # the GPS of the note is compared with the location's, to check that the site is the right one
             if data.get("latitude") is not None and data.get("longitude") is not None and location.get("latitude") is not None and location.get("longitude") is not None:
                 gap = visit_rules.distance_m(data["latitude"], data["longitude"], float(location["latitude"]), float(location["longitude"]))

@@ -53,8 +53,29 @@ def _same(a, b) -> bool:
     return str(a or "").strip().lower() == str(b or "").strip().lower()
 
 
-# The codes of a card that was full — as the datasheet wrote the last (SinPilas) is still read.
-FULL_CARD = ("CarFull", "CarFullNoBatteries", "CarFullSinPilas")
+# How the batteries and the SD card were, each in a field of its own: the batteries are OK or there were none (NoBatteries), the card is OK or was full (CardFull).
+BATTERY_STATUSES = ("OK", "NoBatteries")
+CARD_STATUSES = ("OK", "CardFull")
+# What one code told of both, before they were two fields (and as the datasheet wrote them: SinPilas, CarFullSinPilas), and what it tells now: (batteries, card)
+_BOTH = {"ok": ("OK", "OK"), "carfull": ("OK", "CardFull"), "cardfull": ("OK", "CardFull"), "nobatteries": ("NoBatteries", "OK"), "sinpilas": ("NoBatteries", "OK"),
+         "carfullnobatteries": ("NoBatteries", "CardFull"), "cardfullnobatteries": ("NoBatteries", "CardFull"), "carfullsinpilas": ("NoBatteries", "CardFull")}
+
+
+def split_card_batteries(code) -> tuple[str | None, str | None]:
+    """The status of the batteries and the one of the card from the single code that told both (OK, CarFull, NoBatteries, CarFullNoBatteries…): (None, None) when it is not one."""
+    return _BOTH.get("".join(str(code or "").split()).lower().replace("_", "").replace("-", ""), (None, None))
+
+
+def battery_status_code(value) -> str | None:
+    """The status of the batteries as it is written — OK or NoBatteries, found ignoring case and spaces (and "sin pilas" or "no battery" as NoBatteries) — or None when it is neither."""
+    word = "".join(str(value).split()).lower().replace("_", "").replace("-", "")
+    return {"ok": "OK", "nobatteries": "NoBatteries", "nobattery": "NoBatteries", "sinpilas": "NoBatteries", "sinbateria": "NoBatteries", "sinbaterias": "NoBatteries"}.get(word)
+
+
+def card_status_code(value) -> str | None:
+    """The status of the SD card as it is written — OK or CardFull, found ignoring case and spaces (and "CarFull", "tarjeta llena" as CardFull) — or None when it is neither."""
+    word = "".join(str(value).split()).lower().replace("_", "").replace("-", "")
+    return {"ok": "OK", "cardfull": "CardFull", "carfull": "CardFull", "full": "CardFull", "tarjetallena": "CardFull"}.get(word)
 
 
 def _stamp(v: dict) -> str:
@@ -101,7 +122,7 @@ def required_errors(visit: dict) -> dict[str, str]:
     actions = visit.get("actions") or []
     value = {"camera": visit.get("camera_id"), "sd": visit.get("sd"), "photos": visit.get("num_photos"), "camera_status": visit.get("camera_status")}
     # With the card full the photos are not counted: the count is not asked (it may still be given).
-    full_card = visit.get("card_batteries_ok") in FULL_CARD
+    full_card = visit.get("card_status") == "CardFull"
     for field, how in asked(actions).items():
         if field == "photos" and full_card:
             continue
@@ -238,8 +259,8 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
 
 
 def entity_changes(visit: dict, before: list[dict]) -> list[dict]:
-    """What a visit does to the cameras and the SD cards, given the visits kept before it: {"kind": "cameras" | "sd_cards", "name", "status": "active" | "ready" | "archived", "reason"}.
-    A camera or a card put in the field is active; the one taken away — the camera that was at the site, the card that was in it — is ready again; a camera found stolen is archived
+    """What a visit does to the cameras, the SD cards and the site, given the visits kept before it: {"kind": "cameras" | "sd_cards" | "locations", "name", "status": "active" | "ready" | "archived", "reason"}.
+    A camera or a card put in the field is active, and so is the site that has a camera; the one taken away — the camera that was at the site, the card that was in it — is ready again; a camera found stolen is archived
     (stolen), and its card with it. A visit that could not be made changes nothing."""
     if is_not_revised(visit):
         return []
@@ -264,6 +285,9 @@ def entity_changes(visit: dict, before: list[dict]) -> list[dict]:
             put("sd_cards", held["label"], "ready")
     if "Installation" in actions:
         put("cameras", visit.get("camera_id"), "active")
+        put("locations", site, "active")
+    elif {"Desinstallation", "Stolen"} & actions:
+        put("locations", site, "ready")        # no camera is there now: the site is ready to have one
     if visit.get("sd") and _leaves_card(visit):
         put("sd_cards", visit["sd"], "active")
     return out
@@ -470,6 +494,8 @@ def archive_errors(visit: dict, kept: list[dict], location: dict | None, unknown
     and a visit that archives it leaves no camera there — it takes the one that is out away, or finds it stolen — and does not put one up."""
     errors: list[str] = []
     site = str(visit["location_id"]).strip()
+    if location and location.get("status") == "planned":
+        errors.append(_reason("site_planned", f"{site} is planned: it is only in Settings, and no visit is kept for it until it is ready."))
     if location and location.get("status") == "archived" and (not location.get("status_date") or str(visit.get("date")) > str(location["status_date"])):
         errors.append(_reason("site_archived", f"{site} is archived{' since ' + str(location['status_date']) if location.get('status_date') else ''}: no visit is kept for it after that."))
     actions = visit.get("actions") or []
@@ -493,7 +519,7 @@ def not_visited_records(previous: int, visits: list[dict], locations: list[dict]
     records = []
     for l in locations:
         site = str(l.get("location_id") or "")
-        if not site or site.lower() in visited or (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start)):
+        if not site or site.lower() in visited or l.get("status") == "planned" or (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start)):
             continue
         camera = camera_at_site(visits, site, f"{last}T23:59:59")
         records.append({"location_id": site, "session": f"R{previous:04d}", "date": last, "time": "23:59:00", "actions": [], "camera_status": "Not revised",
@@ -565,7 +591,7 @@ def revision_missing(number: int, visits: list[dict], locations: list[dict], day
     of = [v for v in visits if _session_number(v.get("session")) == number]
     start = min((str(v["date"]) for v in of), default=day)
     expected = [str(l["location_id"]) for l in locations
-                if l.get("location_id") and not (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start))]
+                if l.get("location_id") and l.get("status") != "planned" and not (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start))]
     visited = {str(v["location_id"]).lower() for v in of} | {site for n, site in _unknown_keys(unknown) if n == number}
     return sorted(s for s in expected if s.lower() not in visited)
 
@@ -635,7 +661,7 @@ def history_notes(new: list[dict], kept: list[dict]) -> list[str]:
         if skipped:
             notes.append(f"R{session:04d}: {len(skipped)} visit(s) with status \"Not revised\", ignored (no card collected): {', '.join(skipped)}.")
         nocount = sorted(v["location_id"] for v in current if {"Revision", "Desinstallation"} & set(v["actions"]) and v.get("num_photos") is None
-                         and v.get("card_batteries_ok") not in FULL_CARD and str(v.get("camera_status") or "").lower() not in NOT_REVISED)
+                         and v.get("card_status") != "CardFull" and str(v.get("camera_status") or "").lower() not in NOT_REVISED)
         if nocount:
             notes.append(f"R{session:04d}: {len(nocount)} visit(s) without photo count (count forgotten), counted as the end of the collection: {', '.join(nocount)}.")
     return notes

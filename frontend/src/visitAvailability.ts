@@ -141,7 +141,7 @@ export function unfinishedRevision(number: number, visits: StoredVisit[], locati
   const start = of.length ? of.map((v) => v.date).sort()[0] : day
   const visited = new Set(of.map((v) => v.location_id.toLowerCase()))
   const missing = locations
-    .filter((l) => !(l.status === 'archived' && (!l.status_date || l.status_date <= start)))
+    .filter((l) => l.status !== 'planned' && !(l.status === 'archived' && (!l.status_date || l.status_date <= start)))
     .map((l) => l.location_id).filter((id) => !visited.has(id.toLowerCase())).sort()
   if (missing.length === 0) return null
   const name = (n: number) => `R${String(n).padStart(4, '0')}`

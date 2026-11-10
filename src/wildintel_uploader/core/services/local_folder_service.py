@@ -19,7 +19,7 @@ from pathlib import Path
 
 from wildintel_uploader.core import config, storage
 from wildintel_uploader.core.config import migrate_gear
-from wildintel_uploader.core.services import audit, ids, visit_time
+from wildintel_uploader.core.services import audit, ids, visit_rules, visit_time
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +211,17 @@ def write_research_project(root: Path, project: dict) -> dict:
     return kept
 
 
+def _project_status(root: Path, research_project_id: str) -> str:
+    project = _store(root).get_project(research_project_id)
+    return str((project or {}).get("status") or "active")
+
+
+def _require_modifiable(root: Path, research_project_id: str) -> None:
+    """Raises LocalFolderError when the research project is archived: an archived one can't be modified — nor its locations, cameras, SD cards, roles or visits — and never goes back."""
+    if _project_status(root, research_project_id) == "archived":
+        raise LocalFolderError(f"The research project '{research_project_id}' is archived: it can't be modified.")
+
+
 def update_research_project(root: Path, research_project_id: str, changes: dict) -> dict:
     """Changes a kept research project's fields — only the keys in changes, the rest stay. The acronym names its folder, so it is not one of them.
 
@@ -221,6 +232,10 @@ def update_research_project(root: Path, research_project_id: str, changes: dict)
     project = store.get_project(research_project_id)
     if project is None or audit.is_deleted(project):
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    _require_modifiable(root, research_project_id)
+    wanted = changes.get("status")
+    if wanted == "planned" and _project_status(root, research_project_id) != "planned" and _raw_visits(root, research_project_id):
+        raise LocalFolderError(f"The research project '{research_project_id}' has visits: it can't go back to planned.")
     project = audit.stamped({**project, **{k: v for k, v in changes.items() if k != "acronym" and k not in audit.AUDIT_FIELDS}}, project)
     store.save_project(research_project_id, project)
     return project
@@ -238,6 +253,7 @@ def delete_research_project(root: Path, research_project_id: str) -> dict:
     project = store.get_project(research_project_id)
     if project is None or audit.is_deleted(project):
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    _require_modifiable(root, research_project_id)
     own = store.owned_names(research_project_id)
     others = sorted(e.name for e in folder.iterdir() if e.name not in own) if folder.is_dir() else []
     if others:
@@ -291,6 +307,7 @@ def write_location(root: Path, research_project_id: str, location: dict) -> dict
         LocalFolderError: the research project isn't there, or the location
             id is already used in it.
     """
+    _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
     locations = list_locations(root, research_project_id, include_deleted=True)
     if _index_of(locations, location["location_id"]) is not None:
@@ -316,6 +333,7 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
     Raises:
         LocalFolderError: the research project or the location isn't there, the timezone (or the summer-time setting) is changed, or an archived location is given another status.
     """
+    _require_modifiable(root, research_project_id)
     locations = list_locations(root, research_project_id, include_deleted=True)
     index = _index_of(locations, location_id)
     if index is None:
@@ -343,6 +361,7 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
     Raises:
         LocalFolderError: the location isn't there, it comes from Trapper, or visits were made to it.
     """
+    _require_modifiable(root, research_project_id)
     locations = list_locations(root, research_project_id, include_deleted=True)
     index = _index_of(locations, location_id)
     if index is None:
@@ -396,6 +415,7 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
     Raises:
         LocalFolderError: the research project isn't in the collections folder.
     """
+    _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
     _kept_list(root, research_project_id, kind, items, lambda i: str(i.get("label") or "").strip().lower())
 
@@ -444,7 +464,7 @@ def list_trappers(root: Path, include_deleted: bool = False) -> list[dict]:
 def write_trappers(root: Path, trappers: list[dict]) -> None:
     """Keeps these trappers as all of them: one the list no longer has is not deleted for good — it gets `deleted_at` and stays — and one that is listed again comes back. A trapper is
     the one that was kept when it says its `id` — so one that is renamed, or whose username is corrected, is the same one, and what points to it still does — or, if it says none, when
-    it has the same username. Each keeps its `id` and its `created_at`, and gets a new `updated_at` when it changed (see audit)."""
+    it has the same username. An archived one is out of use for good: it is kept as it was. Each keeps its `id` and its `created_at`, and gets a new `updated_at` when it changed (see audit)."""
     kept = list_trappers(root, include_deleted=True)
     by_id = {t["id"]: t for t in kept}
     by_username = {str(t.get("username", "")).lower(): t for t in kept}
@@ -454,6 +474,9 @@ def write_trappers(root: Path, trappers: list[dict]) -> None:
         before = by_id.get(trapper.get("id")) or by_username.get(str(trapper.get("username", "")).lower())
         if before is not None:
             listed.add(before["id"])
+        if before is not None and before.get("status") == "archived":
+            out.append(before)   # archived is for good: it is never changed
+            continue
         out.append(audit.stamped(trapper, before, at))
     out += [audit.deleted(t, at) for t in kept if t["id"] not in listed]
     _store(root).write_global("trappers", out)
@@ -491,6 +514,7 @@ def write_roles(root: Path, research_project_id: str, roles: list[dict], trapper
     Raises:
         LocalFolderError: the research project isn't in the collections folder.
     """
+    _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
     by_name = {str(t.get("name", "")).strip().lower(): t for t in _trapper_records(root, trappers)}
     stored = []
@@ -611,6 +635,7 @@ def _unlinked(visit: dict, refs: _Refs) -> dict:
 
 def _kept(visit: dict, refs: _Refs) -> dict:
     """A visit as it is kept: the instant, ISO 8601 in UTC with a Z (`when`), and not the day and the time of the wall clock of its location; and what it points to said by id."""
+    visit = _two_fields(visit)
     if "status" in visit:   # kept before it was called camera_status
         visit = {("camera_status" if k == "status" else k): v for k, v in visit.items() if not (k == "status" and "camera_status" in visit)}
     if visit.get("when"):
@@ -622,14 +647,22 @@ def _kept(visit: dict, refs: _Refs) -> dict:
     return _linked(out, refs)
 
 
-_CARD_CODES_BEFORE = {"SinPilas": "NoBatteries", "CarFullSinPilas": "CarFullNoBatteries"}
+def _two_fields(visit: dict) -> dict:
+    """A visit kept with card_batteries_ok — one field for the batteries and the card — says each in a field of its own."""
+    if "card_batteries_ok" not in visit:
+        return visit
+    battery, card = visit_rules.split_card_batteries(visit["card_batteries_ok"])
+    out = {k: v for k, v in visit.items() if k != "card_batteries_ok"}
+    if battery and not out.get("battery_status"):
+        out["battery_status"] = battery
+    if card and not out.get("card_status"):
+        out["card_status"] = card
+    return out
 
 
 def _told(visit: dict, refs: _Refs) -> dict:
     """A visit as it is told: with the day and the time of the wall clock of its location, from its instant, beside it, and what it points to by what it is called. The card and
     the batteries are told as they are written now: a visit kept with SinPilas or CarFullSinPilas says NoBatteries or CarFullNoBatteries."""
-    if visit.get("card_batteries_ok") in _CARD_CODES_BEFORE:
-        visit = {**visit, "card_batteries_ok": _CARD_CODES_BEFORE[visit["card_batteries_ok"]]}
     told = _unlinked(visit, refs)
     if not told.get("when"):
         return told
@@ -674,6 +707,16 @@ def require_research_project(root: Path, research_project_id: str) -> None:
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
 
 
+def require_active_research_project(root: Path, research_project_id: str) -> None:
+    """Raises LocalFolderError when the research project is not active: new visits are only kept to a project that is being worked on — a planned one is being prepared and a
+    finished one has no more fieldwork."""
+    require_research_project(root, research_project_id)
+    project = next((p for p in list_research_projects(root) if str(p.get("acronym", "")).lower() == research_project_id.lower()), None)
+    status = (project or {}).get("status") or "active"
+    if status != "active":
+        raise LocalFolderError(f"The research project '{research_project_id}' is {status}: new visits are only kept to an active one (change its status in Settings).")
+
+
 def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
     """Registers a visit to a research project that's already kept here — given with the day and the time of the wall clock of its location,
     kept as an instant (see list_visits) and returned told.
@@ -714,6 +757,7 @@ def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
 
     Raises:
         LocalFolderError: the research project isn't there."""
+    _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
     have = list_unknown(root, research_project_id)
     keys = {(u["location_id"].lower(), u["session"].upper()) for u in have}
@@ -729,6 +773,7 @@ def update_visit(root: Path, research_project_id: str, location_id: str, session
 
     Raises:
         LocalFolderError: the research project isn't there, or it has no visit to that site in that revision."""
+    _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
     list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
     refs = _refs(root, research_project_id)
@@ -750,6 +795,7 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
     Raises:
         LocalFolderError: the research project isn't there.
     """
+    _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
     if new:
         list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
@@ -771,6 +817,7 @@ def replace_visits(root: Path, research_project_id: str, visits: list[dict]) -> 
 
     Raises:
         LocalFolderError: the research project isn't there."""
+    _require_modifiable(root, research_project_id)
     require_research_project(root, research_project_id)
     refs = _refs(root, research_project_id)
     _write_raw_visits(root, research_project_id, [_kept(v, refs) for v in visits])

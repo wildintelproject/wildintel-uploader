@@ -9,7 +9,7 @@ def test_export_is_read_back_as_the_same_visits():
         {"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "11:40:00", "actions": ["Installation"], "camera_id": "CAM1", "sd": "3", "bait_use": True,
          "camera_height": 1.5, "tags": ["a", "b"], "trappers": "Ana Pérez", "comments": "uno, dos"},
         {"location_id": "WICP_0001", "session": "R0002", "date": "2026-10-19", "time": "11:40:00", "actions": ["Revision", "Desinstallation"], "camera_id": "CAM1",
-         "card_batteries_ok": "OK", "num_photos": 12, "sd": "4"},
+         "battery_status": "OK", "card_status": "OK", "num_photos": 12, "sd": "4"},
         {"location_id": "WICP_0001", "session": "R0003", "date": "2026-11-20", "time": "09:00:00", "actions": [], "camera_status": "Not revised"},
     ]
     text = visits_csv.export_visits(visits)
@@ -157,7 +157,7 @@ def test_a_cell_is_read_as_its_field_takes_it():
     assert visit == [] or True   # "Install" is not an action: the row is refused
     text = text.replace("Install+Revision", "Installation+Revision")
     visit = visits_csv.parse_visits(text, [{"location_id": "WICP_0001", "timezone": "UTC"}], [], "", "mapped", mapping)["visits"][0]
-    assert (visit["camera_id"], visit["card_batteries_ok"], visit["bait_use"], visit["tags"], visit["camera_tilt"], visit["session"]) == ("12", "CarFull", True, ["a", "b"], -15, "R0003")
+    assert (visit["camera_id"], visit["card_status"], visit["bait_use"], visit["tags"], visit["camera_tilt"], visit["session"]) == ("12", "CardFull", True, ["a", "b"], -15, "R0003")
 
 
 def test_what_is_odd_goes_to_the_rows_that_make_it_odd_and_what_is_about_no_row_is_said_apart():

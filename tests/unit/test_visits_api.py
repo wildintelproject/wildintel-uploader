@@ -187,7 +187,7 @@ def test_visits_are_read_from_a_csv_and_only_kept_when_asked(tmp_path: Path):
     assert body["problems"] == [] and body["skipped"] == 0
     first, third, second = body["visits"]  # by the day of the visit
     assert (first["location_id"], first["session"], first["actions"], first["latitude"]) == ("DONA_01", "R0001", ["Installation"], 37.1)
-    assert (second["session"], second["actions"], second["card_batteries_ok"], second["num_photos"], second["time"]) == ("R0002", ["Revision", "Installation"], "CarFull", 1620, "09:00:00")
+    assert (second["session"], second["actions"], second["card_status"], second["num_photos"], second["time"]) == ("R0002", ["Revision", "Installation"], "CardFull", 1620, "09:00:00")
     assert (third["location_id"], third["session"], third["actions"], third["latitude"]) == ("DONA_02", "R0001", ["Installation"], 37.2)
 
 
@@ -228,7 +228,7 @@ def test_what_a_visit_has_of_a_deployment_is_read_too(tmp_path: Path):
     )
     visit = _import(tmp_path, text).json()["visits"][0]
 
-    assert (visit["session"], visit["actions"], visit["card_batteries_ok"], visit["num_photos"], visit["date_time_ok"], visit["comments"]) == ("R0013", ["Revision"], "NoBatteries", 1620, "Yes", "pilas cambiadas")
+    assert (visit["session"], visit["actions"], visit["battery_status"], visit["num_photos"], visit["date_time_ok"], visit["comments"]) == ("R0013", ["Revision"], "NoBatteries", 1620, "Yes", "pilas cambiadas")
     assert (visit["longitude"], visit["latitude"]) == (-6.4, 37.1)
     assert (visit["camera_model"], visit["camera_interval"], visit["camera_height"], visit["camera_tilt"], visit["camera_heading"], visit["detection_distance"]) == ("Reconyx-PC800", 120, 1.2, -90, 45, 9.5)
     assert (visit["timestamp_issues"], visit["bait_use"], visit["feature_type"], visit["habitat"], visit["deployment_groups"], visit["tags"]) == (False, True, "trailHiking", "forest", "north", ["forest edge", "oak"])
@@ -255,9 +255,9 @@ def test_an_epicollect_download_is_read_as_the_field_records_read_it(tmp_path: P
     first, second = body["visits"]
     assert (first["location_id"], first["session"], first["actions"], first["trappers"], first["camera_id"]) == ("DONA_0001", "R0013", ["Revision"], "Ana", "5")
     assert (first["date"], first["time"]) == ("2026-09-04", "10:16:31")  # created_at, in UTC: the location has no timezone
-    assert (first["camera_status"], first["card_batteries_ok"], first["num_photos"], first["sd"], first["date_time_ok"], first["comments"]) == ("OK", "OK", 1620, "A13", "Yes", "all well")
+    assert (first["camera_status"], first["card_status"], first["num_photos"], first["sd"], first["date_time_ok"], first["comments"]) == ("OK", "OK", 1620, "A13", "Yes", "all well")
     assert (first["latitude"], first["longitude"]) == (37.2, -6.5)  # the coordinates of the entry, not the location's
-    assert (second["location_id"], second["session"], second["actions"], second["card_batteries_ok"]) == ("DONA_02", "R0013", ["Installation"], None)
+    assert (second["location_id"], second["session"], second["actions"], second["card_status"]) == ("DONA_02", "R0013", ["Installation"], None)
 
 
 def test_the_time_of_an_entry_is_put_in_the_timezone_of_its_location(tmp_path: Path):
@@ -278,7 +278,7 @@ def test_the_donana_form_is_read_too_with_its_spanish_headers_and_codes(tmp_path
 
     assert body["problems"] == []
     assert [(v["location_id"], v["session"], v["actions"]) for v in body["visits"]] == [("DONA_02", "R0012", ["Stolen"]), ("DONA_0001", "R0012", ["Installation"])]
-    assert body["visits"][1]["card_batteries_ok"] == "NoBatteries" and body["visits"][1]["date_time_ok"] == "No"
+    assert body["visits"][1]["battery_status"] == "NoBatteries" and body["visits"][1]["date_time_ok"] == "No"
 
 
 MAPPED = (
@@ -853,7 +853,7 @@ def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_cam
         done = _import(tmp_path, "", save=True, fmt="epicollect-api", given_up="2000-01-01")
     rows = {r["date"]: r for r in __import__("csv").DictReader(__import__("io").StringIO(text))}
     assert rows["2026-10-02"]["actions"] == "Installation" and rows["2026-10-02"]["camera_height"] == "0.5" and rows["2026-10-02"]["calibration"] == "yes"
-    assert rows["2026-11-05"]["actions"] == "Revision" and rows["2026-11-05"]["card_batteries_ok"] == "CarFull" and rows["2026-11-05"]["date_time_ok"] == "Yes"
+    assert rows["2026-11-05"]["actions"] == "Revision" and rows["2026-11-05"]["card_status"] == "CardFull" and rows["2026-11-05"]["date_time_ok"] == "Yes"
     assert done.status_code == 200, done.text
     kept = done.json()["visits"]
     assert len(kept) == 2 and {v["camera_id"] for v in kept} == {"A13"}
@@ -1258,7 +1258,7 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
 
     assert len(rows) == 8
     assert [r["actions"] for r in rows[4:]] == ["Revision", "Revision", "Revision + Desinstallation", "Stolen + Archive"]
-    assert (rows[4]["num_photos"], rows[4]["card_batteries_ok"], rows[5]["card_batteries_ok"], rows[6]["card_batteries_ok"]) == ("1420", "OK", "CarFull", "NoBatteries")
+    assert (rows[4]["num_photos"], rows[4]["card_status"], rows[5]["card_status"], rows[6]["battery_status"]) == ("1420", "OK", "CardFull", "NoBatteries")
     assert rows[0]["sd"] == "1" and rows[0]["camera_id"] == "BR5071050724" and rows[0]["trappers"] == "Ana Pérez" and rows[2]["trappers"] == "Ana Pérez, Luis Gómez"
 
 
@@ -1308,15 +1308,83 @@ def test_the_cameras_and_the_cards_are_in_the_field_back_to_ready_or_archived_wh
         svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": l, "status": "ready"} for l in ("A13", "B2", "C3")])
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
         installed = (status("cameras"), status("sd_cards"))
+        site_installed = svc.list_locations(tmp_path, "DONA")[0]["status"]
         _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
         revised = status("sd_cards")
         _save({**VISIT, "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 10, "sd": None, "date": "2024-11-12", "session": "R0003"})
         removed = (status("cameras"), status("sd_cards"))
+        site_removed = svc.list_locations(tmp_path, "DONA")[0]["status"]
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "C3", "camera_id": "P900", "date": "2024-12-12", "session": "R0004"})
         _save({**VISIT, "actions": ["Stolen"], "camera_id": "P900", "num_photos": None, "sd": None, "date": "2025-01-12", "session": "R0005"})
         stolen = (status("cameras"), status("sd_cards"))
 
+    assert (site_installed, site_removed) == ("active", "ready")                                   # the site has a camera while one is up
     assert installed == ({"P800": ("active", None), "P900": ("ready", None)}, {"A13": ("active", None), "B2": ("ready", None), "C3": ("ready", None)})
     assert revised == {"A13": ("ready", None), "B2": ("active", None), "C3": ("ready", None)}      # the card collected is back, the one left is out
     assert removed == ({"P800": ("ready", None), "P900": ("ready", None)}, {"A13": ("ready", None), "B2": ("ready", None), "C3": ("ready", None)})
     assert stolen == ({"P800": ("ready", None), "P900": ("archived", "stolen")}, {"A13": ("ready", None), "B2": ("ready", None), "C3": ("archived", "stolen")})
+
+
+def test_new_visits_are_only_kept_to_an_active_research_project(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        visit = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"}
+        results = {}
+        for status in ("planned", "finished", "active"):
+            _client().post("/api/deployment-import/research-projects/update", json={"acronym": "DONA", "changes": {"status": status}}) if False else svc.update_research_project(tmp_path, "DONA", {"status": status})
+            results[status] = _save(visit)
+        refused = results["planned"].json()["detail"]
+
+    assert results["planned"].status_code == 400 and "is planned" in refused
+    assert results["finished"].status_code == 400 and "is finished" in results["finished"].json()["detail"]
+    assert results["active"].status_code == 200
+
+
+def test_a_research_project_goes_back_to_planned_only_without_visits_and_an_archived_one_is_never_modified(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        svc.update_research_project(tmp_path, "DONA", {"status": "planned"})               # nothing was done in it: it can go back
+        svc.update_research_project(tmp_path, "DONA", {"status": "active"})
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        svc.update_research_project(tmp_path, "DONA", {"status": "finished"})
+        svc.update_research_project(tmp_path, "DONA", {"status": "active"})               # a finished one is reopened
+        try:
+            svc.update_research_project(tmp_path, "DONA", {"status": "planned"})
+            back = None
+        except svc.LocalFolderError as exc:
+            back = str(exc)
+        svc.update_research_project(tmp_path, "DONA", {"status": "archived"})
+        refused = []
+        for change in (lambda: svc.update_research_project(tmp_path, "DONA", {"status": "active"}),
+                       lambda: svc.update_research_project(tmp_path, "DONA", {"name": "Other"}),
+                       lambda: svc.update_location(tmp_path, "DONA", "DONA_01", {"name": "Other"}),
+                       lambda: svc.write_field_items(tmp_path, "DONA", "cameras", []),
+                       lambda: svc.delete_research_project(tmp_path, "DONA")):
+            try:
+                change()
+                refused.append(None)
+            except svc.LocalFolderError as exc:
+                refused.append(str(exc))
+        shown = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 1, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
+
+    assert back is not None and "has visits" in back
+    assert all(r and "archived" in r for r in refused)
+    assert shown.status_code == 400 and "archived" in shown.json()["detail"]
+
+
+def test_a_planned_site_is_not_in_the_app_and_a_ready_one_is(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        svc.update_location(tmp_path, "DONA", "DONA_01", {"status": "planned"})
+        planned = _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        svc.update_location(tmp_path, "DONA", "DONA_01", {"status": "ready"})
+        ready = _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+
+    assert planned.status_code == 422 and "is planned" in planned.json()["detail"]
+    assert ready.status_code == 200

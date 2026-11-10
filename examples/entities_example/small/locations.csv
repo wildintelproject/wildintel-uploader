@@ -1,5 +1,5 @@
 location_id,name,latitude,longitude,coordinate_uncertainty,timezone,ignore_dst,status,status_date,status_note
-WICP_0001,WICP site 1,37.012300,-6.441200,5,UTC,true,active,,
-WICP_0002,WICP site 2,37.025800,-6.452700,5,UTC,true,active,,
-WICP_0003,WICP site 3,37.038400,-6.468900,4,UTC,true,active,,
-WICP_0004,WICP site 4,37.047100,-6.481500,4,UTC,true,planned,,
+WICP_0001,WICP site 1,37.012300,-6.441200,5,UTC,true,ready,,
+WICP_0002,WICP site 2,37.025800,-6.452700,5,UTC,true,ready,,
+WICP_0003,WICP site 3,37.038400,-6.468900,4,UTC,true,ready,,
+WICP_0004,WICP site 4,37.047100,-6.481500,4,UTC,true,ready,,

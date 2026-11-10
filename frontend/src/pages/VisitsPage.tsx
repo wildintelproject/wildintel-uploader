@@ -1,3 +1,4 @@
+import { inTheApp } from '../researchProjects'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import BackButton from '../components/BackButton'
@@ -26,8 +27,8 @@ const MAPPING_FIELDS: Record<string, string[]> = {
   'Who and what was done': ['trappers', 'actions'],
   'Where': ['location_id', 'location_name', 'latitude', 'longitude', 'coordinate_uncertainty', 'timezone', 'daylight_saving'],
   'When': ['session', 'date', 'time', 'when', 'created_at'],
-  'SD card': ['sd', 'card_batteries_ok', 'num_photos', 'sd_brand', 'sd_capacity'],
-  'Camera': ['camera_status', 'date_time_ok', 'camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
+  'SD card': ['sd', 'card_status', 'num_photos', 'sd_brand', 'sd_capacity'],
+  'Camera': ['camera_status', 'battery_status', 'date_time_ok', 'camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
   'Site': ['feature_type', 'habitat', 'bait_use', 'timestamp_issues'],
   'Grouping and notes': ['deployment_groups', 'tags', 'comments'],
 }
@@ -162,12 +163,13 @@ const CAMERA_STATUSES = ['OK', 'Altered', 'Knocked down', 'Damaged']
 export type CardState = '' | 'OK' | 'Full'
 export type BatteriesState = '' | 'OK' | 'Missing'
 
-/** How the card and the batteries were, in one code for both: OK, CarFull, NoBatteries or CarFullNoBatteries — nothing when neither is said. */
-export function cardBatteriesCode(card: CardState, batteries: BatteriesState): StoredVisit['card_batteries_ok'] {
-  if (card === 'Full' && batteries === 'Missing') return 'CarFullNoBatteries'
-  if (card === 'Full') return 'CarFull'
-  if (batteries === 'Missing') return 'NoBatteries'
-  return card || batteries ? 'OK' : null
+/** How the batteries were (OK, or NoBatteries when there were none) — nothing when it is not said. */
+export function batteryStatus(batteries: BatteriesState): StoredVisit['battery_status'] {
+  return batteries === 'Missing' ? 'NoBatteries' : batteries === 'OK' ? 'OK' : null
+}
+/** How the SD card was (OK, or CardFull) — nothing when it is not said. */
+export function cardStatus(card: CardState): StoredVisit['card_status'] {
+  return card === 'Full' ? 'CardFull' : card === 'OK' ? 'OK' : null
 }
 
 /** A visit as the fieldwork datasheet keeps it (DateTime is worked out from Date and Time). What of it Camtrap DP has — who set the
@@ -203,7 +205,6 @@ const EMPTY_VISIT: Visit = {
 /** The fields of the Camera, the Site and the Grouping sections of the form, taken from a visit kept — not the notes. The day and the time, what was
  * done, who went and the card and its photos are of the visit being entered. */
 export function visitFrom(previous: StoredVisit, now: Visit): Visit {
-  const card = previous.card_batteries_ok
   const details = { ...EMPTY_DEPLOYMENT_FIELDS }
   for (const key of Object.keys(details) as (keyof DeploymentFields)[]) {
     const value = (previous as unknown as Record<string, unknown>)[key]
@@ -213,7 +214,7 @@ export function visitFrom(previous: StoredVisit, now: Visit): Visit {
   }
   return {
     ...now,
-    status: previous.status ?? '', batteries: card === 'NoBatteries' || card === 'CarFullNoBatteries' ? 'Missing' : 'OK', dateTimeOK: previous.date_time_ok ?? 'Yes', details,
+    status: previous.status ?? '', batteries: previous.battery_status === 'NoBatteries' ? 'Missing' : 'OK', dateTimeOK: previous.date_time_ok ?? 'Yes', details,
   }
 }
 
@@ -316,7 +317,7 @@ export function toStored(v: Visit): StoredVisit {
     location_id: v.site.trim(), session: sessionName(v.session)!, date: v.when.slice(0, 10), time: v.when.slice(11, 19), actions: (notVisited ? [] : v.actions) as StoredVisit['actions'],
     trappers: text(v.trappers), status: notVisited ? NOT_VISITED : asked.status !== 'off' ? text(v.status) : null,
     // only what the action asks is kept, whatever was typed before it was changed
-    card_batteries_ok: cardBatteriesCode(asked.card !== 'off' ? v.card : '', asked.batteries !== 'off' ? v.batteries : ''),
+    battery_status: batteryStatus(asked.batteries !== 'off' ? v.batteries : ''), card_status: cardStatus(asked.card !== 'off' ? v.card : ''),
     num_photos: asked.photos !== 'off' ? number(v.numPhotos) : null, sd: asked.sdLeft !== 'off' ? text(v.sd) : null, date_time_ok: asked.dateTime !== 'off' ? text(v.dateTimeOK) : null,
     calibration: asked.calibration !== 'off' ? v.calibration ?? null : null,
     latitude: number(v.latitude), longitude: number(v.longitude),
@@ -382,7 +383,6 @@ export function visitSummary(v: Visit, session: string, timezone?: string | null
       { key: 'site', title: site.label, icon: site.icon, rows: rows([
         ['Feature type', feature],
         ['Habitat', d.habitat],
-        ['Set up by', d.setup_by],
         ['Bait used', v.actions.includes('Installation') && d.bait_use != null && (d.bait_use ? 'Yes' : 'No'), 'neutral'],
         ['Photo dates may be wrong', d.timestamp_issues === true && 'Yes', 'bad'],
       ]) },
@@ -651,7 +651,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
     if (!project) return
     let cancelled = false
     Promise.resolve().then(() => api.listLocalLocations(project.acronym))
-      .then(({ results }) => { if (!cancelled) setProjectLocations(results) })
+      .then(({ results }) => { if (!cancelled) setProjectLocations(results.filter(inTheApp)) })
       .catch(() => {})
     Promise.resolve().then(() => api.listVisits(project.acronym))
       .then(({ results }) => { if (!cancelled) setAllVisits(results) })
@@ -1197,7 +1197,7 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                   <textarea id="not-visited-reason" rows={3} className={inputClass} placeholder="e.g. the road was flooded" value={visit.details.comments ?? ''} onChange={(e) => setDetail('comments', e.target.value || null)} />
                 </FormCard>
               ) : (
-              <MoreDetailsForm deployment={visit.details} errors={{ ...detailsErrors(visit.details), ...Object.fromEntries(Object.keys(installationErrors(visit)).map((k) => [k, ''])) }} onField={setDetail} camtrapTags requiredKeys={[...Object.keys(installationErrors(visit)), ...(visit.actions.includes('Installation') ? ['bait_use'] : [])]} cameraMissing={errors.camera ? 1 : 0}
+              <MoreDetailsForm deployment={visit.details} errors={{ ...detailsErrors(visit.details), ...Object.fromEntries(Object.keys(installationErrors(visit)).map((k) => [k, ''])) }} onField={setDetail} camtrapTags hideSetupBy requiredKeys={[...Object.keys(installationErrors(visit)), ...(visit.actions.includes('Installation') ? ['bait_use'] : [])]} cameraMissing={errors.camera ? 1 : 0}
                 afterCamera={(
               <SectionCard
                 title="SD card" icon={SD_ICON} total={sdValues.length} filled={sdValues.filter((v) => v.trim()).length} missing={(errors.sd ? 1 : 0) + (errors.numPhotos === 'Required.' ? 1 : 0)}

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import VisitsPage, { detailsErrors, addName, namesOf, removeName, sessionName, sessionOf, toStored, visitErrors, cardBatteriesCode, fieldsFor, installationErrors, wallClockAgo, visitSummary } from './VisitsPage'
+import VisitsPage, { detailsErrors, addName, namesOf, removeName, sessionName, sessionOf, toStored, visitErrors, batteryStatus, cardStatus, fieldsFor, installationErrors, wallClockAgo, visitSummary } from './VisitsPage'
 import { APP_SETTINGS } from '../test/fixtures'
 import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
@@ -168,7 +168,7 @@ describe('VisitsPage', () => {
     await pickWhen()
     await pickAction('Revision')
     await openSection('SD card'); await openSection('Camera'); await openSection('Site'); await openSection('Grouping and notes')
-    for (const label of ['SD card left in the camera', 'Photos on the card collected', 'Camera id', 'Set up by', 'Comments']) {
+    for (const label of ['SD card left in the camera', 'Photos on the card collected', 'Camera id', 'Comments']) {
       expect(screen.getByLabelText(label)).toBeInTheDocument()
     }
     expect(screen.queryByRole('textbox', { name: 'Site' })).not.toBeInTheDocument() // the site is the location
@@ -234,8 +234,8 @@ describe('VisitsPage', () => {
 
     // the camera, height, tilt, heading, delay and detection distance
     expect(within(screen.getByRole('region', { name: 'Camera' })).getAllByText('Camtrap DP')).toHaveLength(6)
-    // the aim of the camera, habitat, set up by, bait and the photo dates
-    expect(within(screen.getByRole('region', { name: 'Site' })).getAllByText('Camtrap DP')).toHaveLength(5)
+    // the aim of the camera, habitat, bait and the photo dates
+    expect(within(screen.getByRole('region', { name: 'Site' })).getAllByText('Camtrap DP')).toHaveLength(4)
     expect(within(screen.getByRole('region', { name: 'SD card' })).queryByText('Camtrap DP')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Camera id').closest('div')!.parentElement!.textContent).toMatch(/Camtrap DP/)
   })
@@ -307,7 +307,7 @@ describe('VisitsPage', () => {
     await addVisit()
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalled())
-    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ card_batteries_ok: 'NoBatteries', date_time_ok: 'No' })
+    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ battery_status: 'NoBatteries', date_time_ok: 'No' })
   })
 
   it('asks for what is missing and adds nothing', async () => {
@@ -637,27 +637,14 @@ describe('VisitsPage', () => {
     expect(await screen.findByRole('option', { name: 'Ana Pérez' })).toBeInTheDocument()
   })
 
-  it('fills "Set up by" with who went, follows them as they change, and leaves alone what was typed there', async () => {
+  it('does not ask who set the camera up again: it is who went, which was asked first', async () => {
     await chooseByHand()
     await pickWhere()
     await pickTrapper('Ana Pérez')
     await pickWhen()
     await pickAction('Installation')
     await openSection('Camera'); await openSection('Site')
-    expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez')
-
-    await userEvent.click(screen.getByRole('button', { name: 'Edit Who went, and when?' }))
-    await pickTrapper('Luis')
-    await userEvent.click(screen.getByRole('button', { name: 'Continue to the visit' }))
-    await openSection('Camera'); await openSection('Site')
-    expect(screen.getByLabelText('Set up by')).toHaveValue('Ana Pérez, Luis')
-
-    fireEvent.change(screen.getByLabelText('Set up by'), { target: { value: 'Someone else' } })
-    await userEvent.click(screen.getByRole('button', { name: 'Edit Who went, and when?' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Luis' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Continue to the visit' }))
-    await openSection('Camera'); await openSection('Site')
-    expect(screen.getByLabelText('Set up by')).toHaveValue('Someone else')
+    expect(screen.queryByLabelText('Set up by')).not.toBeInTheDocument()
   })
 
   it('asks the browser for the current position, and puts it in the GPS coordinates — or says why it could not', async () => {
@@ -702,7 +689,7 @@ describe('VisitsPage', () => {
     expect(summary.gps).toBe('37.0258, -6.4527')
     expect(section('camera')).toMatchObject({ 'Camera id': 'RE5699252753', 'Camera model': 'Reconyx-PC800', 'Batteries condition': 'OK', 'Mounting height': '1 m', Tilt: '0°', Heading: '45°', 'Camera trigger delay': '20 s' })
     expect(section('sd')).toMatchObject({ 'SD card left': '2' })
-    expect(section('site')).toEqual({ 'Set up by': 'Ana Pérez', 'Bait used': 'No' })
+    expect(section('site')).toEqual({ 'Bait used': 'No' })
     expect(section('notes')).toEqual({})
   })
 
@@ -753,16 +740,10 @@ describe('VisitsPage', () => {
 
 const BLANK = { trappers: '', session: '', when: '', site: '', actions: [] as string[], status: '', card: '' as const, batteries: '' as const, numPhotos: '', sd: '', dateTimeOK: '', longitude: '', latitude: '', details: EMPTY_DEPLOYMENT_FIELDS }
 
-describe('cardBatteriesCode', () => {
-  it('says how the card and the batteries were in the one code of the datasheet', () => {
-    expect(cardBatteriesCode('', '')).toBeNull()
-    expect(cardBatteriesCode('OK', '')).toBe('OK')
-    expect(cardBatteriesCode('', 'OK')).toBe('OK')
-    expect(cardBatteriesCode('OK', 'OK')).toBe('OK')
-    expect(cardBatteriesCode('Full', 'OK')).toBe('CarFull')
-    expect(cardBatteriesCode('Full', '')).toBe('CarFull')
-    expect(cardBatteriesCode('OK', 'Missing')).toBe('NoBatteries')
-    expect(cardBatteriesCode('Full', 'Missing')).toBe('CarFullNoBatteries')
+describe('batteryStatus and cardStatus', () => {
+  it('say each of the batteries and the card in a field of its own — nothing when it is not said', () => {
+    expect([batteryStatus(''), batteryStatus('OK'), batteryStatus('Missing')]).toEqual([null, 'OK', 'NoBatteries'])
+    expect([cardStatus(''), cardStatus('OK'), cardStatus('Full')]).toEqual([null, 'OK', 'CardFull'])
   })
 })
 
@@ -824,7 +805,6 @@ describe('the visit filled in from the last one', () => {
     expect(screen.getByLabelText('SD card left in the camera')).toHaveValue('') // the card collected is the last one's, so it is not left back
     expect(screen.getByLabelText('Photos on the card collected')).toHaveValue('')
     expect(screen.getByLabelText('Camera id')).toHaveValue('P800HG08192031 — Reconyx-PC800')
-    expect(screen.getByLabelText('Set up by')).toHaveValue('Ana')
     expect(screen.getByLabelText('Comments')).toHaveValue('') // the notes of the last visit are not this one's
     expect(screen.getByRole('switch', { name: 'Batteries OK' })).toHaveAttribute('aria-checked', 'false')
     expect(screen.getByRole('switch', { name: 'Card OK' })).toHaveAttribute('aria-checked', 'true')
@@ -836,7 +816,7 @@ describe('the visit filled in from the last one', () => {
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalled())
     expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({
-      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: 'P800HG08192031', camera_height: 1.2, card_batteries_ok: 'NoBatteries', date_time_ok: 'No', comments: null,
+      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: 'P800HG08192031', camera_height: 1.2, battery_status: 'NoBatteries', date_time_ok: 'No', comments: null,
     })
   })
 

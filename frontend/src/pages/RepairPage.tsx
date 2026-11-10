@@ -1,3 +1,4 @@
+import { listWorking } from '../researchProjects'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { defaultResearchProject } from '../defaultResearchProject'
@@ -69,7 +70,7 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
   const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
 
   useEffect(() => {
-    api.listResearchProjects().then(async ({ results }) => {
+    listWorking().then(async ({ results }) => {
       setProjects(results)
       // The default research project of the general settings comes filled in.
       const wanted = await defaultResearchProject()

@@ -6,7 +6,8 @@ import Combobox from './Combobox'
 
 const ACTIONS = ['Installation', 'Revision', 'Desinstallation', 'Stolen', 'Archive'] as const
 const CAMERA_STATUSES = ['', 'OK', 'Altered', 'Knocked down', 'Damaged', 'Stolen', 'Not revised', 'New site', 'Inactive site'] as const
-const CARD_CODES = ['', 'OK', 'CarFull', 'NoBatteries', 'CarFullNoBatteries'] as const
+const BATTERY_CODES = ['', 'OK', 'NoBatteries'] as const
+const CARD_CODES = ['', 'OK', 'CardFull'] as const
 
 /** What the book says of a row that is not what a visit keeps. */
 const BOOK_ONLY = ['deployment', 'deployment_status', 'deployment_no_images', 'uploaded_at', 'on_trapper', 'not_done', 'not_visited', 'unknown', 'locked', 'state', 'when']
@@ -28,8 +29,8 @@ export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: 
   const filling = Boolean(visit.unknown)
   const [form, setForm] = useState({
     date: visit.date || '', time: (visit.time || '').slice(0, 8), actions: filling ? ['Installation'] : [...visit.actions], camera: visit.camera_id ?? '', status: visit.camera_status ?? '',
-    card: visit.card_batteries_ok ?? '', photos: str(visit.num_photos), sd: visit.sd ?? '', dateTimeOk: visit.date_time_ok ?? '', calibration: yesNo(visit.calibration),
-    trappers: visit.trappers ?? '', setupBy: visit.setup_by ?? '', latitude: str(visit.latitude), longitude: str(visit.longitude),
+    card: visit.card_status ?? '', battery: visit.battery_status ?? '', photos: str(visit.num_photos), sd: visit.sd ?? '', dateTimeOk: visit.date_time_ok ?? '', calibration: yesNo(visit.calibration),
+    trappers: visit.trappers ?? '', latitude: str(visit.latitude), longitude: str(visit.longitude),
     interval: str(visit.camera_interval), height: str(visit.camera_height), depth: str(visit.camera_depth), tilt: str(visit.camera_tilt), heading: str(visit.camera_heading), distance: str(visit.detection_distance),
     timestampIssues: yesNo(visit.timestamp_issues), bait: yesNo(visit.bait_use), feature: visit.feature_type ?? '', habitat: visit.habitat ?? '', groups: visit.deployment_groups ?? '',
     tags: (visit.tags ?? []).join(', '), comments: visit.comments ?? '',
@@ -68,8 +69,8 @@ export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: 
     const stored = {
       ...(filling ? { location_id: visit.location_id, session: visit.session, tags: [] } : kept),
       date: form.date, time: form.time.length === 5 ? `${form.time}:00` : form.time, actions: form.actions,
-      camera_id: text(form.camera), camera_model: form.camera ? model : null, camera_status: text(form.status), card_batteries_ok: form.card || null,
-      num_photos: number(form.photos), sd: text(form.sd), date_time_ok: text(form.dateTimeOk), calibration: fromYesNo(form.calibration), trappers: text(form.trappers), setup_by: text(form.setupBy),
+      camera_id: text(form.camera), camera_model: form.camera ? model : null, camera_status: text(form.status), battery_status: form.battery || null, card_status: form.card || null,
+      num_photos: number(form.photos), sd: text(form.sd), date_time_ok: text(form.dateTimeOk), calibration: fromYesNo(form.calibration), trappers: text(form.trappers), setup_by: text(form.trappers),
       latitude: number(form.latitude), longitude: number(form.longitude), camera_interval: number(form.interval), camera_height: number(form.height), camera_depth: number(form.depth),
       camera_tilt: number(form.tilt), camera_heading: number(form.heading), detection_distance: number(form.distance), timestamp_issues: fromYesNo(form.timestampIssues), bait_use: fromYesNo(form.bait),
       feature_type: form.feature || null, habitat: text(form.habitat), deployment_groups: text(form.groups), tags: form.tags.split(/[,|]/).map((t) => t.trim()).filter(Boolean), comments: text(form.comments),
@@ -142,11 +143,11 @@ export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: 
             <Combobox id="ev-sd" options={cards.map((c) => ({ value: c.label, label: c.label }))} value={form.sd} onChange={(v) => set({ sd: v })} placeholder={entities ? 'Pick an SD card' : 'Reading the SD cards…'} clearLabel="Clear SD card" />
           </div>
           {field('ev-photos', 'Photos on the card collected', 'photos', 'number', { min: 0 })}
-          {choice('ev-card', 'Card and batteries', 'card', CARD_CODES.map((c) => ({ value: c, label: c || 'Not said' })))}
+          {choice('ev-battery', 'Batteries', 'battery', BATTERY_CODES.map((c) => ({ value: c, label: c || 'Not said' })))}
+          {choice('ev-card', 'SD card', 'card', CARD_CODES.map((c) => ({ value: c, label: c || 'Not said' })))}
           {choice('ev-status', 'Status of the camera', 'status', CAMERA_STATUSES.map((c) => ({ value: c, label: c || 'Not said' })))}
           {field('ev-dtok', 'Camera date and time OK', 'dateTimeOk')}
           {choice('ev-calibration', 'Camera calibrated', 'calibration', yesNoOptions)}
-          {field('ev-setup', 'Set up by', 'setupBy')}
           {field('ev-latitude', 'Latitude', 'latitude', 'number', { step: 'any' })}
           {field('ev-longitude', 'Longitude', 'longitude', 'number', { step: 'any' })}
           {field('ev-interval', 'Camera delay (s)', 'interval', 'number', { min: 0 })}

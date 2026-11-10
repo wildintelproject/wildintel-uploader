@@ -6,7 +6,7 @@ Visits to the camera traps for trying **Register visits → From a CSV file → 
 | Entity | What the visits use |
 |---|---|
 | Research project | `WICP` |
-| Locations | `WICP_0001` … `WICP_0004` (UTC, no summer time; `WICP_0004` is *planned*) |
+| Locations | `WICP_0001` … `WICP_0004` (UTC, no summer time; all *ready*: no camera yet) |
 | Cameras | `BR5071050724`, `RE5699252753`, `RE1161042648`, `SP1776213899` (labels `CAM-001` … `CAM-004`) |
 | SD cards | `1` … `8` |
 | Trappers | `Ana Pérez`, `Luis Gómez` |

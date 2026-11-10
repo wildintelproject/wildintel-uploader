@@ -10,7 +10,7 @@ vi.mock('../csvFile', () => ({ download: vi.fn() }))
 const mockedApi = vi.mocked(api)
 
 const visit = (over: object) => ({
-  location_id: 'TATR_0001', session: 'R0003', date: '2024-09-04', time: '09:00:00', actions: ['Installation'], trappers: 'Ana', camera_status: null, card_batteries_ok: null, num_photos: null,
+  location_id: 'TATR_0001', session: 'R0003', date: '2024-09-04', time: '09:00:00', actions: ['Installation'], trappers: 'Ana', camera_status: null, battery_status: null, card_status: null, num_photos: null,
   sd: 'A13', date_time_ok: null, latitude: null, longitude: null, camera_id: 'P800', camera_model: null, deployment: null, deployment_status: null, not_done: false, ...over,
 }) as never
 

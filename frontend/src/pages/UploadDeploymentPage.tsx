@@ -1,3 +1,4 @@
+import { listWorking } from '../researchProjects'
 import BackButton from '../components/BackButton'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -123,7 +124,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
 
   useEffect(() => {
     if (initial) chooseProject(initial.researchProjectId, initial.collection)
-    api.listResearchProjects().then(async ({ results }) => {
+    listWorking().then(async ({ results }) => {
       setProjects(results)
       // Opened with no research project: the default of the general settings comes filled in.
       if (initial) return

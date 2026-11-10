@@ -249,7 +249,7 @@ def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[di
         for session in sessions:
             for location in locations:
                 site = str(location.get("location_id", ""))
-                if not site or location.get("status") == "archived" or (session, site.lower()) in visited:
+                if not site or location.get("status") in ("archived", "planned") or (session, site.lower()) in visited:
                     continue
                 out.append({"location_id": site, "session": session, "date": "", "time": "", "when": None, "actions": [], "deployment": None, "deployment_status": None, "not_done": True, "not_visited": False, "state": "planned"})
     return out

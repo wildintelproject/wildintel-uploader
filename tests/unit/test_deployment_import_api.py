@@ -1024,12 +1024,12 @@ def test_the_status_of_a_location_and_of_a_research_project_is_kept_and_defaults
     assert wrong.status_code == 422 and bad_day.status_code == 422
 
 
-def test_a_location_and_a_research_project_start_active(tmp_path: Path):
+def test_a_research_project_starts_active_and_a_location_ready_to_have_a_camera(tmp_path: Path):
     with _in(tmp_path):
         project = _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         location = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
 
-    assert project.json()["status"] == "active" and location.json()["status"] == "active"
+    assert project.json()["status"] == "active" and location.json()["status"] == "ready"
 
 
 def test_a_research_project_can_be_changed_but_not_renamed(tmp_path: Path):

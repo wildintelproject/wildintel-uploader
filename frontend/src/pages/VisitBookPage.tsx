@@ -30,7 +30,7 @@ interface Props {
 /** The fields of a visit the details show, in this order, when it has them. */
 const DETAILS: [keyof BookVisit, string][] = [
   ['trappers', 'Who went'], ['setup_by', 'Set up by'], ['camera_id', 'Camera'], ['camera_model', 'Camera model'], ['sd', 'SD card left'], ['num_photos', 'Photos counted'], ['camera_status', 'Status of the camera'],
-  ['card_batteries_ok', 'Card and batteries'], ['date_time_ok', 'Camera date and time OK'], ['calibration', 'Camera calibrated'], ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['camera_interval', 'Camera delay (s)'],
+  ['battery_status', 'Batteries'], ['card_status', 'SD card status'], ['date_time_ok', 'Camera date and time OK'], ['calibration', 'Camera calibrated'], ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['camera_interval', 'Camera delay (s)'],
   ['camera_height', 'Camera height (m)'], ['camera_depth', 'Camera depth (m)'], ['camera_tilt', 'Camera tilt (°)'], ['camera_heading', 'Camera heading (°)'], ['detection_distance', 'Detection distance (m)'],
   ['timestamp_issues', 'Timestamp issues'], ['bait_use', 'Bait use'], ['feature_type', 'Feature type'], ['habitat', 'Habitat'], ['deployment_groups', 'Deployment groups'], ['tags', 'Tags'],
   ['comments', 'Notes'], ['when', 'Instant (UTC)'], ['deployment_id', 'Deployment imported'],
@@ -362,8 +362,8 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                   const rows: JSX.Element[] = []
                                   const line = (key: string, name: string, value: string) => {
                                     if (key === 'comments') return <div key={key} className="pt-1 md:col-span-2"><dt className="mb-1 font-medium text-zinc-500 dark:text-zinc-400">{name}</dt><dd className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950 p-2 italic text-zinc-700 dark:text-zinc-300">{value}</dd></div>
-                                    const okay = (key === 'card_batteries_ok' || key === 'status') && value.toLowerCase() === 'ok'
-                                    const kind = okay ? 'good' : ['trappers', 'setup_by', 'status', 'card_batteries_ok', 'date_time_ok', 'camera_model'].includes(key) ? 'plain' : 'mono'
+                                    const okay = (key === 'battery_status' || key === 'card_status' || key === 'camera_status') && value.toLowerCase() === 'ok'
+                                    const kind = okay ? 'good' : ['trappers', 'setup_by', 'camera_status', 'battery_status', 'card_status', 'date_time_ok', 'camera_model'].includes(key) ? 'plain' : 'mono'
                                     return <DetailLine key={key} name={name} kind={kind}>{key === 'trappers' && <Icon path={<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0116 0" /></>} className="mr-1.5 inline h-3 w-3 text-blue-500" />}{value}</DetailLine>
                                   }
                                   // the card is the one the visit before it left: when no visit before it is known (the revisions before are unknown), it is told, not left out

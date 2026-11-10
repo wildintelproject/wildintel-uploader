@@ -347,9 +347,10 @@ VISIT_QUESTIONS: dict[str, str] = {
     "detectiondistance": "detection_distance", "baituse": "bait_use", "featuretype": "feature_type", "habitat": "habitat", "sdtoinsert": "sd",
     "calibration": "calibration", "observations": "comments", "coordinates": "coordinates", "time": "time",
 }
-_CARD_CODES = {"ok": "OK", "card full": "CarFull", "no batteries": "NoBatteries", "card full and no batteries": "CarFullNoBatteries"}
+# what the form answers of the card and the batteries — one question — and what each of them is
+_CARD_CODES = {"ok": ("OK", "OK"), "card full": ("OK", "CardFull"), "no batteries": ("NoBatteries", "OK"), "card full and no batteries": ("NoBatteries", "CardFull")}
 VISIT_COLUMNS = (
-    "location_id", "session", "date", "time", "created_at", "actions", "trappers", "setup_by", "camera_status", "card_batteries_ok", "num_photos", "date_time_ok", "camera_id", "camera_model",
+    "location_id", "session", "date", "time", "created_at", "actions", "trappers", "setup_by", "camera_status", "battery_status", "card_status", "num_photos", "date_time_ok", "camera_id", "camera_model",
     "camera_height", "camera_interval", "camera_tilt", "camera_heading", "detection_distance", "bait_use", "feature_type", "habitat", "sd", "calibration", "comments", "latitude", "longitude",
 )
 
@@ -399,7 +400,7 @@ def visit_row(entry: dict, refs: dict[str, str]) -> dict[str, str]:
     if (text := _text(raw.get("camera_status"))) is not None:
         row["camera_status"] = text
     if (text := _text(raw.get("card_batteries_ok"))) is not None and text.lower() in _CARD_CODES:
-        row["card_batteries_ok"] = _CARD_CODES[text.lower()]
+        row["battery_status"], row["card_status"] = _CARD_CODES[text.lower()]
     if (number := _number(raw.get("num_photos"))) is not None:
         row["num_photos"] = str(int(number))
     if (text := _text(raw.get("date_time_ok"))) is not None:

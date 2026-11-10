@@ -621,15 +621,15 @@ export interface FieldworkSettings {
 }
 
 /** Whether a camera or an SD card can still be used; only an active one is offered for a visit. */
-export type CameraStatus = 'ready' | 'active' | 'archived'
-export type SdCardStatus = 'ready' | 'active' | 'archived'
+export type CameraStatus = 'planned' | 'ready' | 'active' | 'archived'
+export type SdCardStatus = 'planned' | 'ready' | 'active' | 'archived'
 /** Why a camera or an SD card was archived. */
 /** Where a visit is in its life. */
 export type VisitState = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited' | 'no_camera' | 'unknown'
 export type ArchiveReason = 'lost' | 'stolen' | 'broken' | 'other'
-export type TrapperStatus = 'active' | 'inactive'
-export type LocationStatus = 'active' | 'archived' | 'planned'
-export type ResearchProjectStatus = 'planned' | 'active' | 'finished'
+export type TrapperStatus = 'active' | 'inactive' | 'archived'
+export type LocationStatus = 'planned' | 'ready' | 'active' | 'archived'
+export type ResearchProjectStatus = 'planned' | 'active' | 'finished' | 'archived'
 
 /** One of the SD cards: what it is called (its number, or the label on it), who makes it, what it holds and the day it was put into production. */
 export interface SdCard {
@@ -777,8 +777,10 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
   trappers: string | null
   /** The status of the camera when the visit found it (Working, Not revised…). */
   camera_status: string | null
-  /** How the card and the batteries were: OK, CarFull (card full), NoBatteries or both (CarFullNoBatteries). A visit kept with the datasheet's SinPilas or CarFullSinPilas is told as those. */
-  card_batteries_ok: 'OK' | 'CarFull' | 'NoBatteries' | 'CarFullNoBatteries' | null
+  /** How the batteries were: OK, or NoBatteries when there were none. */
+  battery_status: 'OK' | 'NoBatteries' | null
+  /** How the SD card was: OK, or CardFull. */
+  card_status: 'OK' | 'CardFull' | null
   num_photos: number | null
   sd: string | null
   date_time_ok: string | null

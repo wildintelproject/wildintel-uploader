@@ -1165,7 +1165,7 @@ describe('SettingsPage', () => {
       const dialog = within(screen.getByRole('region', { name: 'Camera' }))
       expect(dialog.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
       expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual([
-        'ReadyAvailable, not in the field yet. Offered when a visit is registered.', 'ActiveIn use in the field. Offered when a visit is registered.', 'ArchivedOut of use for good: lost, stolen, broken… It never goes back to ready or active.',
+        'PlannedOnly in Settings: it is not in the app yet.', 'ReadyAvailable, not in the field yet. Offered when a visit is registered.', 'ActiveIn use in the field. Offered when a visit is registered.', 'ArchivedOut of use for good: lost, stolen, broken… It never goes back to ready or active.',
       ])
       expect(dialog.queryByLabelText('Status since')).not.toBeInTheDocument() // asked once it is archived
       await userEvent.click(dialog.getByRole('radio', { name: /Archived/ }))
@@ -1417,7 +1417,7 @@ describe('SettingsPage — Entities', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA' }))
       const dialog = within(screen.getByRole('region', { name: 'Research project' }))
       expect(dialog.getByLabelText('Acronym')).toBeDisabled()
-      expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual(['PlannedNot started yet.', 'ActiveWork is under way.', 'FinishedNo more fieldwork.'])
+      expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual(['PlannedIt is planned: only in Settings, to link entities to it.', 'ActiveIt is seen in the whole app.', 'FinishedClosed, but it can be reopened.', 'ArchivedClosed for good: it cannot be modified and never goes back.'])
       expect(dialog.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
       await userEvent.clear(dialog.getByLabelText('Name'))
       await userEvent.type(dialog.getByLabelText('Name'), 'Doñana NP')

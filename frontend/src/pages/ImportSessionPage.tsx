@@ -1,3 +1,4 @@
+import { inTheApp } from '../researchProjects'
 import ReportPanel from '../components/ReportPanel'
 import TimezoneCombobox from '../components/TimezoneCombobox'
 import DeploymentResults from '../components/DeploymentResults'
@@ -255,7 +256,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     if (!projectId) { setLocalLocations([]); return }
     let cancelled = false
     api.listLocalLocations(projectId)
-      .then(({ results }) => { if (!cancelled) { setLocalLocations(results); setLocationsReady(true) } })
+      .then(({ results }) => { if (!cancelled) { setLocalLocations(results.filter(inTheApp)); setLocationsReady(true) } })
       .catch((e) => { if (!cancelled) setOriginError(e instanceof Error ? e.message : 'Could not read the locations.') })
     return () => { cancelled = true }
   }, [projectId])
