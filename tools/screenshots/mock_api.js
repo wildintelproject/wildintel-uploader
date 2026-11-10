@@ -367,6 +367,7 @@
       'POST /api/trapper/classification-projects': () => ({ results: [{ pk: 10, name: 'DONA 2024', is_active: true }, { pk: 11, name: 'DONA 2023', is_active: false }] }),
       'POST /api/trapper/locations': () => ({ results: LOCATIONS.map((l) => ({ pk: l.trapper_pk, location_id: l.location_id.toLowerCase(), name: l.name, timezone: l.timezone, ignore_dst: true, latitude: l.latitude, longitude: l.longitude })) }),
       'GET /api/deployment-import/exiftool': () => ({ available: true, path: '/usr/bin/exiftool' }),
+      'GET /api/deployment-import/log-entry': () => ({ collection: 'R0003', timestamps: null, fieldwork: null }),
       'POST /api/deployment-import/browse-folder': () => ({ path: mock.browse }),
       'POST /api/deployment-import/scan-folder': () => SCAN,
       'POST /api/deployment-import/guess-details': (body) => {

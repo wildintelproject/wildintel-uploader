@@ -160,7 +160,7 @@ def visit_book(page: Page) -> None:
 @shot("deployments-status")
 def deployments_status(page: Page) -> None:
     open_task(page, "Manage deployments")
-    page.locator("button", has=page.locator("strong", has_text=re.compile("^Show deployments status$"))).click()
+    page.locator("button", has=page.locator("strong", has_text=re.compile("^Deployments dashboard$"))).click()
     expect(page.get_by_role("table", name="Deployments")).to_be_visible()
     save(page, "deployments-status")
 
@@ -177,8 +177,7 @@ def to_origin(page: Page) -> None:
 
 
 def pick_visit(page: Page) -> None:
-    """The research project and, among its closed visits, the one that left the camera of DONA_01."""
-    choose(page, "origin-research-project", "DONA")
+    """The research project is the default one (DONA); among its closed visits, the one that left the camera of DONA_01."""
     choose(page, "origin-visit", "DONA_01 · R0003")
     expect(button(page, "Continue to the images")).to_be_enabled()
 
@@ -198,6 +197,7 @@ def to_folder(page: Page) -> None:
 
 
 def scan(page: Page) -> None:
+    page.get_by_text("No, they are in a folder", exact=True).click()      # not on a memory card
     page.locator("#source-dir").fill(SOURCE)
     button(page, "Scan").click()
     expect(page.get_by_text("241 images found")).to_be_visible()
@@ -233,7 +233,7 @@ def run_validation(page: Page) -> None:
 @shot("validation-failures")
 def validation_failures(page: Page) -> None:
     run_validation(page)
-    page.get_by_role("button", name=re.compile("^Open the failures of Required")).click()
+    page.get_by_role("button", name=re.compile("^Show the failures of Required")).click()
     section = page.get_by_role("region", name=re.compile("^Failures of Required"))
     expect(section.get_by_role("button", name="View details of IMG_0012.JPG")).to_be_visible()
     page.wait_for_load_state("networkidle")
@@ -243,7 +243,7 @@ def validation_failures(page: Page) -> None:
 def to_dates(page: Page) -> None:
     run_validation(page)
     button(page, "Continue").last.click()
-    expect(heading(page, "When was it collected?")).to_be_visible()
+    expect(heading(page, "Dates of the deployment")).to_be_visible()
 
 
 @shot("step-dates")
@@ -382,7 +382,8 @@ def session_check_results(page: Page) -> None:
 # ── Upload ───────────────────────────────────────────────────────────────────
 
 def to_upload(page: Page) -> None:
-    open_task(page, "Upload deployment to Trapper")
+    open_task(page, "Manage uploads")
+    page.locator("button", has=page.locator("strong", has_text=re.compile("^Upload deployment to Trapper$"))).click()
     choose(page, "upload-research-project", "DONA")
     choose(page, "upload-collection", "R0003")
     expect(page.get_by_label("R0003-DONA_01")).to_be_visible()
