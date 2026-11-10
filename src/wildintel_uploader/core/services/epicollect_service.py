@@ -340,12 +340,12 @@ def find_entries_of(location_ids: list[str], revision: int | None, settings: con
 
 # What each question of the form of a visit is (found by its label, ignoring case and spaces), and the field of a visit it gives.
 VISIT_QUESTIONS: dict[str, str] = {
-    "setupby": "trappers", "collection": "session", "date": "date", "locationid": "location_id", "statusofthecamera": "camera_status",
-    "cardandbatteries": "card_batteries_ok", "nºpicturescollected": "num_photos", "dateandtimeok": "date_time_ok", "action": "action",
+    "setupby": "trappers", "collection": "session", "revision": "session", "date": "date", "locationid": "location_id", "statusofthecamera": "camera_status",
+    "cardandbatteries": "card_batteries_ok", "batterystatus": "battery_status", "batteriesstatus": "battery_status", "cardstatus": "card_status", "nºpicturescollected": "num_photos", "dateandtimeok": "date_time_ok", "action": "action",
     "actionaftertheft": "action_after_theft", "cameraname": "camera_label", "cameramodel": "camera_model", "serialnumber": "camera_id",
     "cameraheight": "camera_height", "cameradelay": "camera_interval", "cameratilt": "camera_tilt", "cameraheading": "camera_heading",
     "detectiondistance": "detection_distance", "baituse": "bait_use", "featuretype": "feature_type", "habitat": "habitat", "sdtoinsert": "sd",
-    "calibration": "calibration", "observations": "comments", "coordinates": "coordinates", "time": "time",
+    "actionafterthereview": "action", "calibration": "calibration", "observations": "comments", "coordinates": "coordinates", "time": "time",
 }
 # what the form answers of the card and the batteries — one question — and what each of them is
 _CARD_CODES = {"ok": ("OK", "OK"), "card full": ("OK", "CardFull"), "no batteries": ("NoBatteries", "OK"), "card full and no batteries": ("NoBatteries", "CardFull")}
@@ -359,18 +359,22 @@ def _label(text: str) -> str:
     return re.sub(r"\s+", "", text or "").lower()
 
 
+# What the form answers of the status of the camera when there is none at the site: the old form said it as a new site or an inactive one
+_NO_CAMERA = ("no camera at the site", "new site", "inactive site")
+
+
 def visit_actions(status: str | None, action: str | None, action_after_theft: str | None) -> str:
-    """What a visit did, from what the form answers — one simple rule: an Installation if the status says it is a new site or an inactive one (a camera is put up again); the action after a theft if the camera was
+    """What a visit did, from what the form answers — one simple rule: an Installation if the status says there is no camera at the site (a new site, or an inactive one: its camera was removed before — the form now says it in one option) and one is put up; the action after a theft if the camera was
     stolen; the action otherwise. As the visit keeps them: a camera inspected is a Revision, replaced is a Revision, a Desinstallation and an Installation (after a theft, a Stolen and an
     Installation), a camera removed is a Revision and a Desinstallation, and a site removed is those two and an Archive — the location is given up — (after a theft, a
     Stolen and an Archive; after a theft a camera removed — not replaced, the site stays open — is a Stolen alone)."""
     status = (status or "").strip().lower()
-    if status in ("new site", "inactive site"):
-        return "Installation"  # an inactive site — its camera was removed before — has a camera put up again: the form asks the same questions as for a new site
+    if status in _NO_CAMERA:
+        return "Installation"  # no camera at the site — new, or its camera was removed before — has one put up: the form asks the same questions in both
     if status == "stolen":
         return {"camera replacement": "Stolen + Installation", "site removal": "Stolen + Archive", "camera removal": "Stolen"}.get((action_after_theft or "").strip().lower(), "")
     return {
-        "camera inspection": "Revision", "camera replacement": "Revision + Desinstallation + Installation", "camera removal": "Revision + Desinstallation",
+        "camera inspection": "Revision", "keep the camera": "Revision", "camera replacement": "Revision + Desinstallation + Installation", "camera removal": "Revision + Desinstallation",
         "site removal": "Revision + Desinstallation + Archive",
     }.get((action or "").strip().lower(), "")
 
@@ -397,10 +401,14 @@ def visit_row(entry: dict, refs: dict[str, str]) -> dict[str, str]:
     if names := [str(n).strip() for n in names if str(n).strip()]:
         row["trappers"] = ", ".join(names)
         row["setup_by"] = names[0]
-    if (text := _text(raw.get("camera_status"))) is not None:
+    if (text := _text(raw.get("camera_status"))) is not None and text.strip().lower() != "no camera at the site":   # no camera is not a status of a camera: nothing is kept
         row["camera_status"] = text
     if (text := _text(raw.get("card_batteries_ok"))) is not None and text.lower() in _CARD_CODES:
         row["battery_status"], row["card_status"] = _CARD_CODES[text.lower()]
+    # the form that asks the batteries and the card apart: each answer is its own column (the codes are read as they are written)
+    for field in ("battery_status", "card_status"):
+        if (text := _text(raw.get(field))) is not None:
+            row[field] = text
     if (number := _number(raw.get("num_photos"))) is not None:
         row["num_photos"] = str(int(number))
     if (text := _text(raw.get("date_time_ok"))) is not None:
@@ -482,6 +490,7 @@ def visits_from_csv(text: str) -> str:
     questions = {re.sub(r"[\W_]+", "", k).lower(): v for k, v in VISIT_QUESTIONS.items()} | {"npicturescollected": "num_photos"}
     refs: dict[str, str] = {}
     place: dict[str, str] = {}
+    cut_headers: list[tuple[str, str]] = []
     for header in headers:
         key, part = _header_key(header)
         if key == "coordinates" and part in ("lat", "long"):
@@ -490,9 +499,14 @@ def visits_from_csv(text: str) -> str:
             refs[questions[key]] = header
         elif part is None and len(header.strip()) >= _HEADER_LIMIT:
             # Epicollect5 cuts a header — its number, an underscore and the question — at 20 characters ("7_Status_of_the_came"): the question is then the beginning of a label
-            cut = {field for label, field in questions.items() if label.startswith(key) and len(key) >= 3}
-            if len(cut) == 1 and (field := cut.pop()) not in refs:
-                refs[field] = header
+            cut_headers.append((key, header))
+    # a cut header may begin more than one label ("10_Action_after_the_" is "Action after the review" and "Action after theft"): the question that another column already is is not it
+    for _ in range(len(cut_headers)):
+        for key, header in list(cut_headers):
+            cut = {field for label, field in questions.items() if label.startswith(key) and len(key) >= 3} - set(refs)
+            if len(cut) == 1:
+                refs[cut.pop()] = header
+                cut_headers.remove((key, header))
     missing = [name for name, field in (("locationID", "location_id"), ("Date", "date"), ("Status of the camera", "camera_status")) if field not in refs]
     if missing:
         raise EpicollectError(f"The file is not the download of the form of a visit: it has no column for {', '.join(missing)}.")

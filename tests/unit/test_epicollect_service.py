@@ -325,6 +325,7 @@ def test_a_kept_token_that_epicollect5_no_longer_takes_is_replaced_once():
 def test_what_a_visit_did_is_told_by_the_status_and_the_action_of_the_form_of_the_field_flow():
     actions = epicollect_service.visit_actions
     assert actions("New site", "Camera inspection", None) == "Installation"
+    assert actions("No camera at the site", None, None) == "Installation"       # what the form says now of a new site and of one whose camera was removed
     assert actions("OK", "Camera inspection", None) == "Revision"
     assert actions("Altered", "Camera replacement", None) == "Revision + Desinstallation + Installation"
     assert actions("OK", "Camera removal", None) == "Revision + Desinstallation"                  # the location goes on
@@ -345,6 +346,31 @@ def test_the_csv_downloaded_from_the_new_project_becomes_the_visits_it_has():
     row = next(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
     assert row["location_id"] == "WICP_02_003" and row["date"] == "2026-09-14" and row["time"] == "11:40:00"
     assert row["trappers"] == "Ana, Luis" and row["latitude"] == "37.1" and row["session"] == "R0042"
+
+
+def test_the_form_that_asks_the_batteries_and_the_card_apart_and_calls_the_collection_a_revision_is_read():
+    import csv
+    import io
+    text = (
+        "ec5_uuid,created_at,title,1_setupBy,2_Revision,3_Date,4_locationID,5_Status_of_the_came,6_Battery_status,7_Card_Status,8_Time\n"
+        "u1,2026-09-14T11:40:00.000Z,t,Ana,R0042,14/09/2026,WICP_02_003,OK,No batteries,Full Card,11:40\n"
+    )
+    row = next(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+    assert row["session"] == "R0042" and row["battery_status"] == "No batteries" and row["card_status"] == "Full Card"
+
+
+def test_the_headers_of_the_form_of_the_review_are_read_though_epicollect_cuts_them_at_20_characters():
+    import csv
+    import io
+    text = (
+        "ec5_uuid,created_at,title,1_setupBy,2_Revision,3_Date,4_locationID,5_Status_of_the_came,6_Batteries_Status,7_Card_Status,8_N_pictures_collect,9_Date_and_time_OK,"
+        "10_Action_after_the_,11_Action_after_thef,12_Time\n"
+        "u1,2026-10-19T11:40:00.000Z,t,Ana,R0043,19/10/2026,WICP_02_003,OK,OK,Full Card,,OK,Keep the camera,,11:40\n"
+        "u2,2026-10-19T12:40:00.000Z,t,Ana,R0043,19/10/2026,WICP_02_004,Stolen,,,,,,Camera replacement,12:40\n"
+    )
+    rows = list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+    assert [r["actions"] for r in rows] == ["Revision", "Stolen + Installation"]
+    assert rows[0]["card_status"] == "Full Card" and rows[0]["battery_status"] == "OK"
 
 
 def test_a_csv_that_is_not_the_form_of_a_visit_is_refused():

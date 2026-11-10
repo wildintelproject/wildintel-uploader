@@ -75,7 +75,7 @@ def battery_status_code(value) -> str | None:
 def card_status_code(value) -> str | None:
     """The status of the SD card as it is written — OK or CardFull, found ignoring case and spaces (and "CarFull", "tarjeta llena" as CardFull) — or None when it is neither."""
     word = "".join(str(value).split()).lower().replace("_", "").replace("-", "")
-    return {"ok": "OK", "cardfull": "CardFull", "carfull": "CardFull", "full": "CardFull", "tarjetallena": "CardFull"}.get(word)
+    return {"ok": "OK", "cardfull": "CardFull", "fullcard": "CardFull", "carfull": "CardFull", "full": "CardFull", "tarjetallena": "CardFull"}.get(word)
 
 
 def _stamp(v: dict) -> str:
