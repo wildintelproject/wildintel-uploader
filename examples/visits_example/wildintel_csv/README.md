@@ -2,7 +2,7 @@
 
 For **Register visits → From a CSV file**. Made to fit the entities in [`../../entities_example/small`](../../entities_example/small) (research project **WICP**): import those first (Settings → Entities, with the research project picked). Load it on a research project with no visits yet.
 
-## `wildintel_epicollect.csv` — From WildINTEL Epicollect (the new form)
+## `wildintel_epicollect.csv` — WildINTEL Epicollect CSV (the new form)
 The download of the project `new-cameratrap-control-test`, with the 26 questions of the form `Cameratrap visit` and the headers as Epicollect5 writes them — the number of the question, an underscore and its text, **cut at 20 characters** (`5_Status_of_the_came`, `6_Card_and_batteries`, `7_N_pictures_collect`, `10_Action_after_thef`), and the coordinates in `lat_`, `long_`, `accuracy_`, `UTM_…` columns. Pick **WildINTEL Epicollect**; no mapping is asked.
 
 - The sites are written as the locations are (`WICP_0001`), the cameras by their serial number, and who went in one cell (`Ana Pérez, Luis Gómez`).
