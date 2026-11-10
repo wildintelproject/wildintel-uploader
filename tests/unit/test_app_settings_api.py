@@ -555,3 +555,24 @@ def test_a_camera_and_an_sd_card_get_the_date_they_were_created_and_changed_from
         after = _put(FIELDWORK={"sd_cards": [changed], "cameras": first["cameras"]})["FIELDWORK"]
     assert (after["sd_cards"][0]["created_at"], after["sd_cards"][0]["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-03T10:00:00Z")
     assert after["cameras"][0]["updated_at"] == "2026-11-01T10:00:00Z"
+
+
+def test_where_the_records_are_kept_is_a_setting_and_only_a_backend_that_exists_can_be_chosen():
+    assert _client().get("/api/settings").json()["DATA"]["storage"] == "json"            # the files of the collections folder, as it has always been
+    bad = _client().put("/api/settings", json={**_client().get("/api/settings").json(), "DATA": {**_client().get("/api/settings").json()["DATA"], "storage": "oracle"}})
+    assert bad.status_code == 422 and "no storage called 'oracle'" in bad.json()["detail"]
+
+
+def test_the_page_that_does_not_send_where_the_records_are_kept_does_not_lose_it():
+    from wildintel_uploader.core import storage
+    storage.register("other", storage.JsonFolderStore)
+    try:
+        body = _client().get("/api/settings").json()
+        body["DATA"]["storage"] = "other"
+        assert _client().put("/api/settings", json=body).status_code == 200
+        body["DATA"].pop("storage")                       # as the settings page sends its folders: it does not show where the records are kept
+        assert _client().put("/api/settings", json=body).status_code == 200
+        assert config.load_settings().DATA.storage == "other" and storage.selected() == "other"
+    finally:
+        storage._FACTORIES.pop("other", None)
+        storage.configure("json")

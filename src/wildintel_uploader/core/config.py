@@ -156,6 +156,10 @@ class DataSettings(BaseModel):
         default=None,
         description="A folder of its own for the reports of the validations, postvalidations and preprocessings, instead of the \"reports\" folder inside DATA.dir. (DATA.reports_dir)",
     )
+    storage: str = Field(
+        default="json",
+        description="Where the app keeps its records — the research projects and their locations, visits, cameras and SD cards: \"json\" (files in the collections folder, the one there is for now). (DATA.storage)",
+    )
     packages_dir: Optional[str] = Field(
         default=None,
         description="A folder of its own for the packages made to upload to Trapper, instead of the \"packages\" folder inside DATA.dir: <folder>/<research project id>/<collection>. (DATA.packages_dir)",

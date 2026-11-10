@@ -23,17 +23,17 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-from wildintel_uploader.core import config
+from wildintel_uploader.core import config, storage
 from wildintel_uploader.core.services import local_folder_service
 
 FORMAT = "wildintel-uploader-backup"
 VERSION = 1
 MANIFEST = "manifest.json"
 SETTINGS = "settings.json"
-PROJECT_FILES = (
-    local_folder_service.RESEARCH_PROJECT_METADATA_FILE, local_folder_service.LOCATIONS_FILE, local_folder_service.CAMERAS_FILE, local_folder_service.SD_CARDS_FILE,
-)
-VISITS = local_folder_service.VISITS_FILE
+# What goes in the zip is JSON, whatever the records are kept in: it is read from the store and put back in it (see core/storage).
+PROJECT = "research_project.json"
+PROJECT_RECORDS = {"locations": "locations.json", "cameras": "cameras.json", "sd_cards": "sd_cards.json"}
+VISITS = "visits.json"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp", ".mp4", ".avi", ".mov", ".mkv", ".m4v"}
 _COLLECTION = re.compile(r"^R\d+$", re.IGNORECASE)
 # what a settings backup does not hold: the secrets, and the folders of this computer
@@ -47,24 +47,6 @@ class BackupError(ValueError):
 def _is_image(name: str) -> bool:
     return Path(name).suffix.lower() in IMAGE_EXTENSIONS
 
-
-def _write_json(path: Path, data) -> None:
-    """Put in place at once: a file is never left half written."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2, ensure_ascii=False)
-    os.replace(tmp, path)
-
-
-def _read(path: Path, default):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return default
-
-
-# ── what there is to back up ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _walk(folder: Path) -> list[Path]:
     return sorted(p for p in folder.rglob("*") if p.is_file())
@@ -141,13 +123,18 @@ def create_backup(
     if wants_project:
         info = describe_project(root, research_project_id)  # type: ignore[arg-type]
         pdir = local_folder_service.project_dir(root, research_project_id)  # type: ignore[arg-type]
+        store = storage.open_store(root)
         if project_files:
-            for name in PROJECT_FILES:
-                if (pdir / name).is_file():
-                    entries.append((f"project/{name}", pdir / name, None))
+            project = store.get_project(research_project_id)  # type: ignore[arg-type]
+            if project is not None:
+                entries.append((f"project/{PROJECT}", None, project))
+            for kind, name in PROJECT_RECORDS.items():
+                records = store.read_records(research_project_id, kind)  # type: ignore[arg-type]
+                if records:
+                    entries.append((f"project/{name}", None, records))
             counts.update({"locations": info["locations"], "cameras": info["cameras"], "sd_cards": info["sd_cards"]})
-        if visits and (pdir / VISITS).is_file():
-            entries.append((f"project/{VISITS}", pdir / VISITS, None))
+        if visits and (kept_visits := store.read_records(research_project_id, "visits")):  # type: ignore[arg-type]
+            entries.append((f"project/{VISITS}", None, kept_visits))
             counts["visits"] = info["visits"]
         done_collections: set[str] = set()
         for deployment_id in deployments:
@@ -242,7 +229,7 @@ def read_backup(root: Path, path: Path) -> dict:
                 pdir = local_folder_service.project_dir(root, project)
             except local_folder_service.LocalFolderError as exc:
                 raise BackupError(str(exc)) from exc
-            here["project"] = (pdir / local_folder_service.RESEARCH_PROJECT_METADATA_FILE).is_file()
+            here["project"] = local_folder_service.has_research_project(root, project)
             for d in scope.get("deployments", []):
                 folder = pdir / d["collection"] / d["id"]
                 here["deployments"][d["id"]] = folder.is_dir() and any(folder.iterdir())
@@ -300,37 +287,41 @@ def restore_backup(
             for d in deployments:
                 if not any(x["id"] == d for x in scope.get("deployments", [])):
                     raise BackupError(f"The deployment {d} is not in that backup.")
-            if not (pdir / local_folder_service.RESEARCH_PROJECT_METADATA_FILE).is_file() and not (project_files and f"project/{local_folder_service.RESEARCH_PROJECT_METADATA_FILE}" in names):
+            if not local_folder_service.has_research_project(root, project) and not (project_files and f"project/{PROJECT}" in names):
                 raise BackupError(f"The research project {project} is not here: restore its data too.")  # type: ignore[arg-type]
 
+        store = storage.open_store(root)
         if wants_project and project_files:
             yield {"type": "step", "message": f"Restoring the data of {project}…"}
-            rp_name = local_folder_service.RESEARCH_PROJECT_METADATA_FILE
-            if f"project/{rp_name}" in names:
-                target = pdir / rp_name  # type: ignore[operator]
-                if replace or not target.is_file():
-                    _write_json(target, json.loads(zf.read(f"project/{rp_name}")))
+            if f"project/{PROJECT}" in names:
+                if replace or not store.has_project(project):  # type: ignore[arg-type]
+                    record = json.loads(zf.read(f"project/{PROJECT}"))
+                    if store.has_project(project):  # type: ignore[arg-type]
+                        store.save_project(project, record)  # type: ignore[arg-type]
+                    else:
+                        store.add_project(record)
+                    local_folder_service.project_dir(root, project).mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
                     summary["project_files"]["research_project"] = "written"
                 else:
                     summary["project_files"]["research_project"] = "kept"
-            for name, label, key in ((local_folder_service.LOCATIONS_FILE, "locations", lambda i: str(i.get("location_id", "")).lower()),
-                                     (local_folder_service.CAMERAS_FILE, "cameras", lambda i: str(i.get("label") or i.get("camera_id") or "").lower()),
-                                     (local_folder_service.SD_CARDS_FILE, "sd_cards", lambda i: str(i.get("label", "")).lower())):
-                if f"project/{name}" not in names:
+            for kind, label, key in (("locations", "locations", lambda i: str(i.get("location_id", "")).lower()),
+                                     ("cameras", "cameras", lambda i: str(i.get("label") or i.get("camera_id") or "").lower()),
+                                     ("sd_cards", "sd_cards", lambda i: str(i.get("label", "")).lower())):
+                if f"project/{PROJECT_RECORDS[kind]}" not in names:
                     continue
-                backed = [i for i in json.loads(zf.read(f"project/{name}")) if isinstance(i, dict)]
-                current = [i for i in _read(pdir / name, []) if isinstance(i, dict)]  # type: ignore[operator]
+                backed = [i for i in json.loads(zf.read(f"project/{PROJECT_RECORDS[kind]}")) if isinstance(i, dict)]
+                current = store.read_records(project, kind)  # type: ignore[arg-type]
                 merged, added, replaced, skipped = _merge(current, backed, key, replace=replace)
-                _write_json(pdir / name, merged)  # type: ignore[operator]
+                store.write_records(project, kind, merged)  # type: ignore[arg-type]
                 summary["project_files"][label] = {"added": added, "replaced": replaced, "kept": skipped}
         if wants_project and visits:
             yield {"type": "step", "message": f"Restoring the visits of {project}…"}
             if f"project/{VISITS}" not in names:
                 raise BackupError("That backup holds no visits.")
             backed = [v for v in json.loads(zf.read(f"project/{VISITS}")) if isinstance(v, dict)]
-            current = local_folder_service._raw_visits(root, project)  # type: ignore[arg-type]
+            current = store.read_records(project, "visits")  # type: ignore[arg-type]
             merged, added, replaced, skipped = _merge(current, backed, _key, replace=replace)
-            _write_json(pdir / VISITS, merged)  # type: ignore[operator]
+            store.write_records(project, "visits", merged)  # type: ignore[arg-type]
             summary["visits"] = {"added": added, "replaced": replaced, "kept": skipped}
         if wants_project and deployments:
             wanted = {d["id"]: d for d in scope.get("deployments", []) if d["id"] in deployments}

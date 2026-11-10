@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core import logging_setup
+from wildintel_uploader.core import logging_setup, storage
 from wildintel_uploader.core.services import file_manager, local_folder_service
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -86,6 +86,10 @@ def save_settings(new: config.Settings) -> dict:
     """Replaces every setting — except a password left blank, which keeps
     the saved one. Blank URL/username are cleared."""
     current = config.load_settings()
+    if "storage" not in new.DATA.model_fields_set:   # the page does not show where the records are kept: it is not its to change
+        new.DATA.storage = current.DATA.storage
+    if (new.DATA.storage or "json").strip().lower() not in storage.available():
+        raise HTTPException(422, f"There is no storage called '{new.DATA.storage}': {', '.join(storage.available())}.")
     if not new.TRAPPER.user_password:
         new.TRAPPER.user_password = current.TRAPPER.user_password
     if not new.EPICOLLECT5.client_secret:
@@ -123,6 +127,7 @@ def save_settings(new: config.Settings) -> dict:
             local_folder_service.write_field_items(root, project, kind, by_project.get(project, []))
         setattr(new.FIELDWORK, kind, [i for i in items if i.research_project not in known])
     config.save_settings(new)
+    storage.configure(new.DATA.storage)   # where the records are kept, from now on
     logging_setup.apply_level(logging_setup.effective_level())
     return _shown(new)
 

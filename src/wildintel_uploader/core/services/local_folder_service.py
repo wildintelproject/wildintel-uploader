@@ -17,6 +17,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from wildintel_uploader.core import storage
 from wildintel_uploader.core.config import migrate_gear
 from wildintel_uploader.core.services import audit, visit_time
 
@@ -34,12 +35,14 @@ UPLOAD_FAILURES_FILE = "upload_failures.json"
 CAMERAS_FILE = "cameras.json"
 SD_CARDS_FILE = "sd_cards.json"
 
-# A research project's id (its acronym) names its folder in the collections folder.
-_PROJECT_ID = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_.-]*$")
+# What is kept of the research projects — the projects, their locations, visits, cameras and SD cards — goes through `storage` (see core/storage): the JSON files of the
+# collections folder today, whatever backend is registered tomorrow. This module has the rules; the store only keeps. What is not a record — the images, and what is
+# written beside them — stays a file of the collections folder.
+LocalFolderError = storage.StorageError   # a research project or location can't be read or saved in the collections folder
 
 
-class LocalFolderError(Exception):
-    """A research project or location can't be read or saved in the collections folder."""
+def _store(root: Path) -> storage.ProjectStore:
+    return storage.open_store(root)
 
 
 def check_collection(path: Path) -> dict:
@@ -141,11 +144,7 @@ def project_dir(root: Path, research_project_id: str) -> Path:
     Raises:
         LocalFolderError: the id can't be a folder name.
     """
-    if not _PROJECT_ID.match(research_project_id):
-        raise LocalFolderError(
-            f"The research project id '{research_project_id}' can only have letters, digits, '_', '-' and '.' (and start with a letter or digit) to be a folder name."
-        )
-    return root / research_project_id
+    return root / storage.valid_project_id(research_project_id)
 
 
 def imported_source_hashes(root: Path, research_project_id: str, exclude_deployment: str | None = None) -> dict[str, list[dict]]:
@@ -176,40 +175,27 @@ def _read_json(path: Path):
 
 
 def list_research_projects(root: Path) -> list[dict]:
-    """Every research project already kept in the collections folder — each
-    subfolder holding a research_project.json. Empty if the folder doesn't
-    exist yet (the first run)."""
-    if not root.is_dir():
-        return []
-    # Two folders can say the same acronym (one renamed by hand, say): the project is listed once, from the folder the app itself
-    # would look in — the one named by the acronym — or else the first.
-    projects: dict[str, tuple[dict, bool]] = {}
-    for entry in sorted(root.iterdir(), key=lambda e: e.name.lower()):
-        metadata = _read_json(entry / RESEARCH_PROJECT_METADATA_FILE) if entry.is_dir() else None
-        if not isinstance(metadata, dict):
-            continue
-        key = str(metadata.get("acronym") or entry.name).lower()
-        named_by_acronym = entry.name == metadata.get("acronym")
-        if key in projects:
-            logger.warning("The research project %s is in more than one folder of %s (%s too): it is listed once.", key, root, entry.name)
-            if not named_by_acronym or projects[key][1]:
-                continue
-        projects[key] = (metadata, named_by_acronym)
-    return [metadata for metadata, _ in projects.values()]
+    """Every research project already kept in the collections folder. Empty if there is none yet (the first run)."""
+    return _store(root).list_projects()
+
+
+def has_research_project(root: Path, research_project_id: str) -> bool:
+    """Whether the research project is kept in the collections folder.
+
+    Raises:
+        LocalFolderError: the research project id can't be a folder name.
+    """
+    return _store(root).has_project(research_project_id)
 
 
 def write_research_project(root: Path, project: dict) -> dict:
-    """Adds a research project: its folder (named by its acronym) and
-    research_project.json.
+    """Adds a research project: its folder (named by its acronym) and its record.
 
     Raises:
         LocalFolderError: the acronym can't be a folder name, or it's already there.
     """
-    folder = project_dir(root, project["acronym"])
-    if (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
-        raise LocalFolderError(f"The research project '{project['acronym']}' already exists.")
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / RESEARCH_PROJECT_METADATA_FILE).write_text(json.dumps(project, indent=2, ensure_ascii=False), encoding="utf-8")
+    _store(root).add_project(project)
+    project_dir(root, project["acronym"]).mkdir(parents=True, exist_ok=True)   # its folder, where its collections will go
     return project
 
 
@@ -219,12 +205,12 @@ def update_research_project(root: Path, research_project_id: str, changes: dict)
     Raises:
         LocalFolderError: the research project isn't there.
     """
-    file = project_dir(root, research_project_id) / RESEARCH_PROJECT_METADATA_FILE
-    project = _read_json(file)
-    if not isinstance(project, dict):
+    store = _store(root)
+    project = store.get_project(research_project_id)
+    if project is None:
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
     project = {**project, **{k: v for k, v in changes.items() if k != "acronym"}}
-    file.write_text(json.dumps(project, indent=2, ensure_ascii=False), encoding="utf-8")
+    store.save_project(research_project_id, project)
     return project
 
 
@@ -235,19 +221,20 @@ def delete_research_project(root: Path, research_project_id: str) -> dict:
     Raises:
         LocalFolderError: the research project isn't there, or it holds more than its own files.
     """
+    store = _store(root)
     folder = project_dir(root, research_project_id)
-    own = {RESEARCH_PROJECT_METADATA_FILE, LOCATIONS_FILE, VISITS_FILE, UNKNOWN_FILE, UPLOAD_FAILURES_FILE}
-    if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
+    if not store.has_project(research_project_id):
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
-    others = sorted(e.name for e in folder.iterdir() if e.name not in own)
+    own = store.owned_names(research_project_id)
+    others = sorted(e.name for e in folder.iterdir() if e.name not in own) if folder.is_dir() else []
     if others:
         raise LocalFolderError(
             f"The research project '{research_project_id}' still holds {', '.join(others[:5])}{' and more' if len(others) > 5 else ''}: "
             "it can't be deleted until those are removed (they hold collections, deployments or images)."
         )
-    for name in own:
-        (folder / name).unlink(missing_ok=True)
-    folder.rmdir()
+    store.delete_project(research_project_id)
+    if folder.is_dir():
+        folder.rmdir()
     return {"deleted": research_project_id}
 
 
@@ -257,9 +244,8 @@ def list_locations(root: Path, research_project_id: str) -> list[dict]:
     Raises:
         LocalFolderError: the research project id can't be a folder name.
     """
-    locations = _read_json(project_dir(root, research_project_id) / LOCATIONS_FILE)
     # what was kept as "retired" is archived now
-    return [{**l, "status": "archived"} if l.get("status") == "retired" else l for l in locations if isinstance(l, dict)] if isinstance(locations, list) else []
+    return [{**l, "status": "archived"} if l.get("status") == "retired" else l for l in _store(root).read_records(research_project_id, "locations")]
 
 
 def write_location(root: Path, research_project_id: str, location: dict) -> dict:
@@ -269,16 +255,14 @@ def write_location(root: Path, research_project_id: str, location: dict) -> dict
         LocalFolderError: the research project isn't there, or the location
             id is already used in it.
     """
-    folder = project_dir(root, research_project_id)
-    if not (folder / RESEARCH_PROJECT_METADATA_FILE).is_file():
-        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    require_research_project(root, research_project_id)
     locations = list_locations(root, research_project_id)
     if any(l.get("location_id", "").lower() == location["location_id"].lower() for l in locations):
         raise LocalFolderError(f"The location '{location['location_id']}' already exists in {research_project_id}.")
     # the day it was put into production is the day it was created, when it is not said
     location = {**location, "in_service": location.get("in_service") or datetime.now().date().isoformat()}
     locations.append(location)
-    (folder / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
+    _store(root).write_records(research_project_id, "locations", locations)
     return location
 
 
@@ -305,7 +289,7 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
                 raise LocalFolderError(f"The {label} of a location can't be changed once it is created: {location_id} is {now[key]}.")
             changes = {k: v for k, v in changes.items() if k != key}
     locations[index] = {**locations[index], **changes}
-    (project_dir(root, research_project_id) / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
+    _store(root).write_records(research_project_id, "locations", locations)
     return locations[index]
 
 
@@ -326,7 +310,7 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
     if visits:
         raise LocalFolderError(f"The location '{location_id}' still has {visits} visit{'s' if visits != 1 else ''}: it can't be deleted — mark it as archived instead.")
     removed = locations.pop(index)
-    (project_dir(root, research_project_id) / LOCATIONS_FILE).write_text(json.dumps(locations, indent=2, ensure_ascii=False), encoding="utf-8")
+    _store(root).write_records(research_project_id, "locations", locations)
     return {"deleted": removed["location_id"]}
 
 
@@ -335,13 +319,9 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
 # <research project>/cameras.json and <research project>/sd_cards.json, beside its locations and its visits: they belong to the research project and travel
 # with its collections. (The trappers are people, not things of a project: they stay in the settings.)
 
-_FIELD_ITEM_FILES = {"cameras": CAMERAS_FILE, "sd_cards": SD_CARDS_FILE}
-
-
 def list_field_items(root: Path, research_project_id: str, kind: str) -> list[dict]:
     """The cameras (`kind` "cameras") or the SD cards ("sd_cards") kept for a research project — each with its `research_project` set to it. Empty until one is kept."""
-    items = _read_json(project_dir(root, research_project_id) / _FIELD_ITEM_FILES[kind])
-    return [{**migrate_gear(i), "research_project": research_project_id} for i in items if isinstance(i, dict)] if isinstance(items, list) else []
+    return [{**migrate_gear(i), "research_project": research_project_id} for i in _store(root).read_records(research_project_id, kind)]
 
 
 def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict]) -> None:
@@ -351,13 +331,13 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
         LocalFolderError: the research project isn't in the collections folder.
     """
     require_research_project(root, research_project_id)
-    path = project_dir(root, research_project_id) / _FIELD_ITEM_FILES[kind]
+    store = _store(root)
     # each one keeps its `created_at`, and gets a new `updated_at` when it changed — what the page sends for them is not taken (see audit)
-    kept = _read_json(path)
-    before = {str(i.get("label") or "").strip().lower(): i for i in kept if isinstance(i, dict)} if isinstance(kept, list) else {}
+    before = {str(i.get("label") or "").strip().lower(): i for i in store.read_records(research_project_id, kind)}
     at = audit.now()
-    clean = [audit.stamped({k: v for k, v in item.items() if k != "research_project"}, before.get(str(item.get("label") or "").strip().lower()), at) for item in items]
-    path.write_text(json.dumps(clean, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    store.write_records(research_project_id, kind, [
+        audit.stamped({k: v for k, v in item.items() if k != "research_project"}, before.get(str(item.get("label") or "").strip().lower()), at) for item in items
+    ])
 
 
 def list_all_field_items(root: Path, kind: str) -> list[dict]:
@@ -366,12 +346,11 @@ def list_all_field_items(root: Path, kind: str) -> list[dict]:
 
 
 def _raw_visits(root: Path, research_project_id: str) -> list[dict]:
-    visits = _read_json(project_dir(root, research_project_id) / VISITS_FILE)
-    return [v for v in visits if isinstance(v, dict)] if isinstance(visits, list) else []
+    return _store(root).read_records(research_project_id, "visits")
 
 
 def _write_raw_visits(root: Path, research_project_id: str, visits: list[dict]) -> None:
-    (project_dir(root, research_project_id) / VISITS_FILE).write_text(json.dumps(visits, indent=2, ensure_ascii=False), encoding="utf-8")
+    _store(root).write_records(research_project_id, "visits", visits)
 
 
 def _location_of(locations: list[dict], location_id) -> dict | None:
@@ -432,7 +411,7 @@ def list_visits(root: Path, research_project_id: str, location_id: str | None = 
 
 def require_research_project(root: Path, research_project_id: str) -> None:
     """Raises LocalFolderError when the research project isn't kept in the collections folder."""
-    if not (project_dir(root, research_project_id) / RESEARCH_PROJECT_METADATA_FILE).is_file():
+    if not has_research_project(root, research_project_id):
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
 
 
@@ -450,16 +429,14 @@ def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
 
 def list_unknown(root: Path, research_project_id: str) -> list[dict]:
     """The visits that are unknown — {"location_id", "session"}: the revisions before the first one kept to a site, of which nothing is known (see visit_rules.unknown_records)."""
-    found = _read_json(project_dir(root, research_project_id) / UNKNOWN_FILE)
-    return [u for u in found if isinstance(u, dict) and u.get("location_id") and u.get("session")] if isinstance(found, list) else []
+    return [u for u in _store(root).read_records(research_project_id, "unknown_visits") if u.get("location_id") and u.get("session")]
 
 
 def _write_unknown(root: Path, research_project_id: str, unknown: list[dict]) -> None:
-    path = project_dir(root, research_project_id) / UNKNOWN_FILE
     if unknown:
-        path.write_text(json.dumps(unknown, indent=2, ensure_ascii=False), encoding="utf-8")
-    elif path.exists():
-        path.unlink()
+        _store(root).write_records(research_project_id, "unknown_visits", unknown)
+    else:
+        _store(root).delete_records(research_project_id, "unknown_visits")
 
 
 def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
@@ -521,8 +498,7 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
 def list_upload_failures(root: Path, research_project_id: str) -> list[dict]:
     """The uploads of the deployments of a research project that were tried and failed: {"deployment_id", "destination", "note", "at"}. An upload that was done is not here:
     it is told by the deployment's own folder — and a success takes the failure away."""
-    failures = _read_json(project_dir(root, research_project_id) / UPLOAD_FAILURES_FILE)
-    return [f for f in failures if isinstance(f, dict)] if isinstance(failures, list) else []
+    return _store(root).read_records(research_project_id, "upload_failures")
 
 
 def set_upload_failure(root: Path, research_project_id: str, deployment_id: str, destination: str, note: str | None) -> None:
@@ -534,7 +510,7 @@ def set_upload_failure(root: Path, research_project_id: str, deployment_id: str,
     failures = [f for f in list_upload_failures(root, research_project_id) if not (f.get("deployment_id") == deployment_id and f.get("destination") == destination)]
     if note is not None:
         failures.append({"deployment_id": deployment_id, "destination": destination, "note": note.strip() or None, "at": datetime.now().astimezone().isoformat(timespec="seconds")})
-    (project_dir(root, research_project_id) / UPLOAD_FAILURES_FILE).write_text(json.dumps(failures, indent=2, ensure_ascii=False), encoding="utf-8")
+    _store(root).write_records(research_project_id, "upload_failures", failures)
 
 
 def write_states(root: Path, research_project_id: str, states: dict[tuple[str, str], str | None]) -> int:
@@ -619,9 +595,12 @@ def location_time(root: Path, research_project_id: str, location_id: str | None)
 
 
 def location_time_in(project_folder: Path, location_id: str | None) -> dict:
-    """location_time for a research project's folder, wherever it is — <folder>/locations.json."""
-    locations = _read_json(project_folder / LOCATIONS_FILE)
-    found = next((l for l in locations if isinstance(l, dict) and location_id and str(l.get("location_id", "")).lower() == location_id.lower()), None) if isinstance(locations, list) else None
+    """location_time for a research project's folder, wherever it is: the folder is named by the research project, and the collections folder is the one that holds it."""
+    try:
+        locations = _store(project_folder.parent).read_records(project_folder.name, "locations")
+    except LocalFolderError:
+        return {}
+    found = next((l for l in locations if location_id and str(l.get("location_id", "")).lower() == location_id.lower()), None)
     return {k: found[k] for k in ("timezone", "ignore_dst") if found and found.get(k) is not None}
 
 

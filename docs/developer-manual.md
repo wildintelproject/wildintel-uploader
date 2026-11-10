@@ -129,6 +129,7 @@ wildintel-uploader/
 │   │   ├── parallel.py          # a bounded thread pool, for validating/preprocessing images
 │   │   ├── version.py
 │   │   ├── schemas/requests.py  # request models — DeploymentFields is Camtrap DP's deployments row
+│   │   ├── storage/             # where the records are kept: the ProjectStore interface, the JSON backend, the registry (see Storage)
 │   │   └── services/            # the actual work (see below)
 │   ├── web/
 │   │   ├── main.py              # FastAPI app: routers + the built frontend as static files
@@ -190,7 +191,8 @@ something to say for each check.
 | `statistics_service` | The statistical postvalidation: sequences, and whether this revision is like the earlier ones of the location. |
 | `report_service` | The reports: builds them from a validation's, a postvalidation's or a preprocessing's results, keeps them as JSON in `<data dir>/reports/`, lists, deletes and exports them to CSV. |
 | `seal_service` | Runs the checks over the source images and writes/verifies `seal.json`. |
-| `local_folder_service` | The collections folder: research projects, locations, collections, deployments, `images.json`, the timestamp log. |
+| `local_folder_service` | The collections folder: research projects, locations, visits, cameras and SD cards (the *rules* of the records, which are kept through `core/storage`), collections, deployments, `images.json`, the timestamp log. |
+| `audit` | The two dates every visit, camera and SD card keeps — `created_at` and `updated_at` — written by the app when it is kept, as an ORM does. |
 | `camera_info` | The camera's model and id, through ExifTool when it's there (bundled or on the `PATH`), else Pillow. |
 | `trapper_service` | Thin wrapper over the SDK for lookups; registers a deployment through the classic import form. |
 | `trapper_upload_service` | Uploading a deployment: location, deployment, packing in zips + yaml, upload, wait. Also the access check. |
@@ -198,6 +200,36 @@ something to say for each check.
 | `sync_service` | Fills the collections folder from a Trapper classification project. |
 | `session_store` | The wizard's resumable runs. |
 | `folder_picker`, `file_manager` | The OS's native folder dialog and file explorer — this is a local tool, so the backend can open them on the user's screen. |
+
+### Storage
+
+The **records** — the research projects and, for each, its locations, visits, unknown visits, cameras, SD cards and failed uploads — are kept through a **layer of
+abstraction**, `core/storage`: today they are JSON files in the collections folder, and a database can be added later **without changing the code that uses them**.
+
+- `storage.base.ProjectStore` is the interface — a few methods: the research projects (`list_projects`, `has_project`, `get_project`, `add_project`, `save_project`,
+  `delete_project`) and the records of one of them by kind (`read_records`, `write_records`, `delete_records`). A record is a plain `dict`; the kinds are `RECORD_KINDS`.
+- `storage.json_files.JsonFolderStore` is the backend called `json`, the default: `<collections folder>/<research project>/visits.json` and its companions, each put in place
+  at once, so a file is never left half written.
+- The **rules** are not the store's. `local_folder_service` has them — the instants of the visits, which location can be removed, the dates `created_at` and `updated_at` (see
+  `services/audit.py`) —, and only asks the store to keep or give back. That is why a new backend is small, and why it cannot change what the app does.
+- What is not a record stays a file of the collections folder: the images and what is written beside them (`deployment.json`, `images.json`, the logs of a collection…).
+  Nor the settings (`settings.toml`), which have their own place.
+- The settings choose the backend: `DATA.storage` (`json` by default), read the first time it is needed and applied again when the settings are saved.
+
+To keep the records somewhere else — a database, say — **add a backend**; nothing else is touched:
+
+```python
+from wildintel_uploader.core import storage
+
+class SqliteStore(storage.ProjectStore):
+    def __init__(self, root): ...                       # the collections folder; the connection is the backend's own business
+    def list_projects(self): ...                        # …and the other methods of ProjectStore
+
+storage.register("sqlite", SqliteStore)                 # then: DATA.storage = "sqlite"
+```
+
+`tests/unit/test_storage.py` does exactly that with a backend in memory, and runs the projects, locations, visits and cameras of the app on it. A backup (`backup_service`) goes through
+the store too, and its `.zip` holds JSON whatever the records are kept in, so a backup made on one backend is restored on another.
 
 ### Threads
 

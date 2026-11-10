@@ -202,7 +202,7 @@ def sync_stream(
     created: dict[str, list[str]] = {"research_project": [], "locations": [], "collections": [], "deployments": [], "timestamp_log": [], "images": []}
     kept: dict[str, list[str]] = {key: [] for key in created}
 
-    if (folder / local_folder_service.RESEARCH_PROJECT_METADATA_FILE).is_file():
+    if local_folder_service.has_research_project(root, project_id):
         kept["research_project"].append(project_id)
         yield say(f"Research project {project_id}: already there.")
     else:
