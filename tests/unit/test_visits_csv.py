@@ -10,7 +10,7 @@ def test_export_is_read_back_as_the_same_visits():
          "camera_height": 1.5, "tags": ["a", "b"], "trappers": "Ana Pérez", "comments": "uno, dos"},
         {"location_id": "WICP_0001", "session": "R0002", "date": "2026-10-19", "time": "11:40:00", "actions": ["Revision", "Desinstallation"], "camera_id": "CAM1",
          "card_batteries_ok": "OK", "num_photos": 12, "sd": "4"},
-        {"location_id": "WICP_0001", "session": "R0003", "date": "2026-11-20", "time": "09:00:00", "actions": [], "status": "Not revised"},
+        {"location_id": "WICP_0001", "session": "R0003", "date": "2026-11-20", "time": "09:00:00", "actions": [], "camera_status": "Not revised"},
     ]
     text = visits_csv.export_visits(visits)
     mapping = visits_csv.suggest_mapping(text)["mapping"]
@@ -46,7 +46,7 @@ def test_a_visit_of_a_session_and_site_already_kept_is_not_imported_and_a_closed
     locations = [{"location_id": "WICP_0001", "timezone": "UTC"}, {"location_id": "WICP_0002", "timezone": "UTC"}]
     kept = [  # R0001 is closed: every location has its visit — one of them "Not revised", with no camera
         {"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "11:40:00", "actions": ["Installation"], "camera_id": "CAM1"},
-        {"location_id": "WICP_0002", "session": "R0001", "date": "2026-09-14", "time": "13:15:00", "actions": [], "status": "Not revised"},
+        {"location_id": "WICP_0002", "session": "R0001", "date": "2026-09-14", "time": "13:15:00", "actions": [], "camera_status": "Not revised"},
     ]
     text = ("location_id,actions,date,time,session,camera_id\n"
             "WICP_0002,Installation,2026-09-14,11:40:00,R0001,CAM2\n")     # same session and site, another camera and actions

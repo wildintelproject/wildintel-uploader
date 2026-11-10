@@ -27,7 +27,7 @@ const MAPPING_FIELDS: Record<string, string[]> = {
   'Where': ['location_id', 'location_name', 'latitude', 'longitude', 'coordinate_uncertainty', 'timezone', 'daylight_saving'],
   'When': ['session', 'date', 'time', 'when', 'created_at'],
   'SD card': ['sd', 'card_batteries_ok', 'num_photos', 'sd_brand', 'sd_capacity'],
-  'Camera': ['status', 'date_time_ok', 'camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
+  'Camera': ['camera_status', 'date_time_ok', 'camera_id', 'camera_model', 'camera_interval', 'detection_distance', 'camera_height', 'camera_depth', 'camera_tilt', 'camera_heading', 'calibration'],
   'Site': ['feature_type', 'habitat', 'bait_use', 'timestamp_issues'],
   'Grouping and notes': ['deployment_groups', 'tags', 'comments'],
 }

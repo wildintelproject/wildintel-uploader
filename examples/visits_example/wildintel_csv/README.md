@@ -10,3 +10,6 @@ The download of the project `new-cameratrap-control-test`, with the 26 questions
 - `R0001` installs the four cameras (status *New site*, no action: the form does not ask one). `R0002` has an inspection with *Card changed*, an inspection with *Card full* (the photos are not counted), a *Camera removal* with *no batteries* and a *Stolen* camera followed by *Site removal*.
 - Expected: **8 visits, no problems, no warnings.**
 - The headers of the form were read from the project; no entry has been downloaded from it yet, so the cut of `7_N_pictures_collect` is the one to check first with a real download.
+
+## [`wicp_02`](wicp_02)
+Four downloads, one for each revision of the research project **WICP_02**: the installation, a revision with no problems, a theft with the camera replaced and a theft with no replacement. See [its README](wicp_02/README.md).

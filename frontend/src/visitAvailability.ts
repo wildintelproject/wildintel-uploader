@@ -17,7 +17,7 @@ function before(visits: StoredVisit[], when: string): StoredVisit[] {
 }
 
 const takesAway = (v: StoredVisit) => v.actions.includes('Desinstallation') || v.actions.includes('Stolen')
-const notRevised = (v: StoredVisit) => ['not revised', 'no revisada', 'no revisado'].includes((v.status ?? '').trim().toLowerCase())
+const notRevised = (v: StoredVisit) => ['not revised', 'no revisada', 'no revisado'].includes((v.camera_status ?? '').trim().toLowerCase())
 const collectsCard = (v: StoredVisit) => takesAway(v) || (v.actions.includes('Revision') && !notRevised(v))
 
 /** The site a camera is put up at on a given moment — null when it is nowhere: never put up, uninstalled or stolen. */

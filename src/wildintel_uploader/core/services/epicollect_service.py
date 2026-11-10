@@ -340,7 +340,7 @@ def find_entries_of(location_ids: list[str], revision: int | None, settings: con
 
 # What each question of the form of a visit is (found by its label, ignoring case and spaces), and the field of a visit it gives.
 VISIT_QUESTIONS: dict[str, str] = {
-    "setupby": "trappers", "collection": "session", "date": "date", "locationid": "location_id", "statusofthecamera": "status",
+    "setupby": "trappers", "collection": "session", "date": "date", "locationid": "location_id", "statusofthecamera": "camera_status",
     "cardandbatteries": "card_batteries_ok", "nºpicturescollected": "num_photos", "dateandtimeok": "date_time_ok", "action": "action",
     "actionaftertheft": "action_after_theft", "cameraname": "camera_label", "cameramodel": "camera_model", "serialnumber": "camera_id",
     "cameraheight": "camera_height", "cameradelay": "camera_interval", "cameratilt": "camera_tilt", "cameraheading": "camera_heading",
@@ -349,7 +349,7 @@ VISIT_QUESTIONS: dict[str, str] = {
 }
 _CARD_CODES = {"ok": "OK", "card full": "CarFull", "no batteries": "NoBatteries", "card full and no batteries": "CarFullNoBatteries"}
 VISIT_COLUMNS = (
-    "location_id", "session", "date", "time", "created_at", "actions", "trappers", "setup_by", "status", "card_batteries_ok", "num_photos", "date_time_ok", "camera_id", "camera_model",
+    "location_id", "session", "date", "time", "created_at", "actions", "trappers", "setup_by", "camera_status", "card_batteries_ok", "num_photos", "date_time_ok", "camera_id", "camera_model",
     "camera_height", "camera_interval", "camera_tilt", "camera_heading", "detection_distance", "bait_use", "feature_type", "habitat", "sd", "calibration", "comments", "latitude", "longitude",
 )
 
@@ -389,15 +389,15 @@ def visit_row(entry: dict, refs: dict[str, str]) -> dict[str, str]:
         row["time"] = clock.strftime("%H:%M:%S")
     if _text(entry.get("created_at")):
         row["created_at"] = str(entry["created_at"])
-    if actions := visit_actions(_text(raw.get("status")), _text(raw.get("action")), _text(raw.get("action_after_theft"))):
+    if actions := visit_actions(_text(raw.get("camera_status")), _text(raw.get("action")), _text(raw.get("action_after_theft"))):
         row["actions"] = actions
     trappers = raw.get("trappers")
     names = trappers if isinstance(trappers, list) else ([trappers] if _text(trappers) else [])
     if names := [str(n).strip() for n in names if str(n).strip()]:
         row["trappers"] = ", ".join(names)
         row["setup_by"] = names[0]
-    if (text := _text(raw.get("status"))) is not None:
-        row["status"] = text
+    if (text := _text(raw.get("camera_status"))) is not None:
+        row["camera_status"] = text
     if (text := _text(raw.get("card_batteries_ok"))) is not None and text.lower() in _CARD_CODES:
         row["card_batteries_ok"] = _CARD_CODES[text.lower()]
     if (number := _number(raw.get("num_photos"))) is not None:
@@ -492,7 +492,7 @@ def visits_from_csv(text: str) -> str:
             cut = {field for label, field in questions.items() if label.startswith(key) and len(key) >= 3}
             if len(cut) == 1 and (field := cut.pop()) not in refs:
                 refs[field] = header
-    missing = [name for name, field in (("locationID", "location_id"), ("Date", "date"), ("Status of the camera", "status")) if field not in refs]
+    missing = [name for name, field in (("locationID", "location_id"), ("Date", "date"), ("Status of the camera", "camera_status")) if field not in refs]
     if missing:
         raise EpicollectError(f"The file is not the download of the form of a visit: it has no column for {', '.join(missing)}.")
     out = io.StringIO()

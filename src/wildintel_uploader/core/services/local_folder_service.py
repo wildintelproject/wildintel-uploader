@@ -611,6 +611,8 @@ def _unlinked(visit: dict, refs: _Refs) -> dict:
 
 def _kept(visit: dict, refs: _Refs) -> dict:
     """A visit as it is kept: the instant, ISO 8601 in UTC with a Z (`when`), and not the day and the time of the wall clock of its location; and what it points to said by id."""
+    if "status" in visit:   # kept before it was called camera_status
+        visit = {("camera_status" if k == "status" else k): v for k, v in visit.items() if not (k == "status" and "camera_status" in visit)}
     if visit.get("when"):
         return _linked({k: v for k, v in visit.items() if k not in ("date", "time")}, refs)
     if not (visit.get("date") and visit.get("time")):
@@ -816,7 +818,7 @@ def closes_collection(visit: dict) -> bool:
     actions = visit.get("actions") or []
     if "Stolen" in actions or not {"Revision", "Desinstallation"} & set(actions):
         return False
-    if str(visit.get("status") or "").lower() in ("not revised", "no revisada", "no revisado"):
+    if str(visit.get("camera_status") or "").lower() in ("not revised", "no revisada", "no revisado"):
         return False
     photos = visit.get("num_photos")
     return photos is None or photos > 0

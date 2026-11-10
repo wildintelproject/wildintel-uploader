@@ -173,3 +173,24 @@ def test_the_people_go_in_the_backup_of_the_settings_by_what_they_are_called_and
     kept = {t["username"]: t["name"] for t in svc.list_trappers(there)}
     assert kept == {"ana": "Ana Pérez", "luis": "Luis"}                                           # Luis was added; Ana, already there, stays as she was
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
+
+
+def test_the_status_of_the_camera_kept_as_status_before_is_read_and_written_as_camera_status(tmp_path: Path, people):
+    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    (tmp_path / "DONA" / "visits.json").write_text(json.dumps([{"location_id": "DONA_01", "session": "R0001", "when": "2026-06-10T09:00:00Z", "actions": ["Installation"], "status": "OK"}]), encoding="utf-8")
+
+    told = svc.list_visits(tmp_path, "DONA")[0]
+
+    assert told["camera_status"] == "OK" and "status" not in told
+    assert _on_disk(tmp_path)[0]["camera_status"] == "OK" and "status" not in _on_disk(tmp_path)[0]
+
+
+def test_the_status_of_the_camera_is_one_of_a_few_values_written_as_they_are_and_refused_otherwise():
+    from pydantic import ValidationError
+    from wildintel_uploader.core.schemas.requests import VisitRecord
+
+    base = {"location_id": "DONA_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Revision"]}
+    assert [VisitRecord(**base, camera_status=s).camera_status for s in ("ok", "knocked  down", "STOLEN", "Altered", "damaged", "", None)] == ["OK", "Knocked down", "Stolen", "Altered", "Damaged", None, None]
+    assert VisitRecord(**{**base, "actions": []}, camera_status="No revisada").camera_status == "Not revised"
+    with pytest.raises(ValidationError):
+        VisitRecord(**base, camera_status="Working")

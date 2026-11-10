@@ -775,7 +775,8 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
   actions: ('Installation' | 'Revision' | 'Desinstallation' | 'Stolen' | 'Archive')[]
   /** Who went on the visit. */
   trappers: string | null
-  status: string | null
+  /** The status of the camera when the visit found it (Working, Not revised…). */
+  camera_status: string | null
   /** How the card and the batteries were: OK, CarFull (card full), NoBatteries or both (CarFullNoBatteries). A visit kept with the datasheet's SinPilas or CarFullSinPilas is told as those. */
   card_batteries_ok: 'OK' | 'CarFull' | 'NoBatteries' | 'CarFullNoBatteries' | null
   num_photos: number | null

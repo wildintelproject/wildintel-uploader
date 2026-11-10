@@ -55,7 +55,7 @@ def _camera_stays(v: dict) -> bool:
 
 
 def _not_revised(v: dict) -> bool:
-    return str(v.get("status") or "").lower() in visit_rules.NOT_REVISED
+    return str(v.get("camera_status") or "").lower() in visit_rules.NOT_REVISED
 
 
 def _text(value) -> str | None:

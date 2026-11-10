@@ -255,7 +255,7 @@ def test_an_epicollect_download_is_read_as_the_field_records_read_it(tmp_path: P
     first, second = body["visits"]
     assert (first["location_id"], first["session"], first["actions"], first["trappers"], first["camera_id"]) == ("DONA_0001", "R0013", ["Revision"], "Ana", "5")
     assert (first["date"], first["time"]) == ("2026-09-04", "10:16:31")  # created_at, in UTC: the location has no timezone
-    assert (first["status"], first["card_batteries_ok"], first["num_photos"], first["sd"], first["date_time_ok"], first["comments"]) == ("OK", "OK", 1620, "A13", "Yes", "all well")
+    assert (first["camera_status"], first["card_batteries_ok"], first["num_photos"], first["sd"], first["date_time_ok"], first["comments"]) == ("OK", "OK", 1620, "A13", "Yes", "all well")
     assert (first["latitude"], first["longitude"]) == (37.2, -6.5)  # the coordinates of the entry, not the location's
     assert (second["location_id"], second["session"], second["actions"], second["card_batteries_ok"]) == ("DONA_02", "R0013", ["Installation"], None)
 
@@ -354,7 +354,7 @@ def test_what_does_not_collect_a_card_leaves_the_visit_before_it_open(tmp_path: 
             _visit("2026-06-10", ["Revision"], num_photos=10),                        # leaves a card; the next visit collects nothing
             _visit("2026-07-01", ["Installation"]),                                   # no card is taken
             _visit("2026-08-01", ["Revision"], num_photos=0),                         # an explicit 0 photos
-            _visit("2026-09-01", ["Revision"], status="Not revised", num_photos=5),   # nothing collected
+            _visit("2026-09-01", ["Revision"], camera_status="Not revised", num_photos=5),   # nothing collected
             _visit("2026-10-01", ["Stolen"]),                                         # the camera is gone
             _visit("2026-11-01", ["Revision"], num_photos=5),                         # the camera was stolen before
             _visit("2026-12-01", ["Revision"], num_photos=None),                      # the card was full, the count forgotten: still collected
@@ -755,7 +755,7 @@ def test_the_visit_book_says_a_visit_that_could_not_be_made_is_not_visited(tmp_p
     with _in(tmp_path):
         _project(archived=(2, 3))
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
-        second = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 0, "sd": "B2", "status": "Not revised", "date": "2024-10-12", "session": "R0002"})
+        second = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 0, "sd": "B2", "camera_status": "Not revised", "date": "2024-10-12", "session": "R0002"})
         book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
 
     assert second.status_code == 200, second.text
@@ -959,7 +959,7 @@ def test_a_visit_has_no_actions_only_when_it_could_not_be_made(tmp_path: Path):
         _project(archived=(2, 3))
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
         refused = _save({**VISIT, "actions": [], "camera_id": None, "date": "2024-10-12", "session": "R0002"})
-        kept = _save({**VISIT, "actions": [], "status": "Not revised", "camera_id": None, "num_photos": None, "sd": None, "date": "2024-10-12", "session": "R0002"})
+        kept = _save({**VISIT, "actions": [], "camera_status": "Not revised", "camera_id": None, "num_photos": None, "sd": None, "date": "2024-10-12", "session": "R0002"})
 
     assert refused.status_code == 422 and "at least one action" in refused.text
     assert kept.status_code == 200 and kept.json()["actions"] == []

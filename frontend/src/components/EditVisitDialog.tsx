@@ -5,6 +5,7 @@ import { FEATURE_TYPE_OPTIONS, btnOutline, btnPrimary, inputClass } from '../pag
 import Combobox from './Combobox'
 
 const ACTIONS = ['Installation', 'Revision', 'Desinstallation', 'Stolen', 'Archive'] as const
+const CAMERA_STATUSES = ['', 'OK', 'Altered', 'Knocked down', 'Damaged', 'Stolen', 'Not revised', 'New site', 'Inactive site'] as const
 const CARD_CODES = ['', 'OK', 'CarFull', 'NoBatteries', 'CarFullNoBatteries'] as const
 
 /** What the book says of a row that is not what a visit keeps. */
@@ -26,7 +27,7 @@ const str = (v: unknown) => (v == null ? '' : String(v))
 export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: { projectId: string; visit: BookVisit; onClose: () => void; onSaved: () => void }) {
   const filling = Boolean(visit.unknown)
   const [form, setForm] = useState({
-    date: visit.date || '', time: (visit.time || '').slice(0, 8), actions: filling ? ['Installation'] : [...visit.actions], camera: visit.camera_id ?? '', status: visit.status ?? '',
+    date: visit.date || '', time: (visit.time || '').slice(0, 8), actions: filling ? ['Installation'] : [...visit.actions], camera: visit.camera_id ?? '', status: visit.camera_status ?? '',
     card: visit.card_batteries_ok ?? '', photos: str(visit.num_photos), sd: visit.sd ?? '', dateTimeOk: visit.date_time_ok ?? '', calibration: yesNo(visit.calibration),
     trappers: visit.trappers ?? '', setupBy: visit.setup_by ?? '', latitude: str(visit.latitude), longitude: str(visit.longitude),
     interval: str(visit.camera_interval), height: str(visit.camera_height), depth: str(visit.camera_depth), tilt: str(visit.camera_tilt), heading: str(visit.camera_heading), distance: str(visit.detection_distance),
@@ -67,7 +68,7 @@ export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: 
     const stored = {
       ...(filling ? { location_id: visit.location_id, session: visit.session, tags: [] } : kept),
       date: form.date, time: form.time.length === 5 ? `${form.time}:00` : form.time, actions: form.actions,
-      camera_id: text(form.camera), camera_model: form.camera ? model : null, status: text(form.status), card_batteries_ok: form.card || null,
+      camera_id: text(form.camera), camera_model: form.camera ? model : null, camera_status: text(form.status), card_batteries_ok: form.card || null,
       num_photos: number(form.photos), sd: text(form.sd), date_time_ok: text(form.dateTimeOk), calibration: fromYesNo(form.calibration), trappers: text(form.trappers), setup_by: text(form.setupBy),
       latitude: number(form.latitude), longitude: number(form.longitude), camera_interval: number(form.interval), camera_height: number(form.height), camera_depth: number(form.depth),
       camera_tilt: number(form.tilt), camera_heading: number(form.heading), detection_distance: number(form.distance), timestamp_issues: fromYesNo(form.timestampIssues), bait_use: fromYesNo(form.bait),
@@ -142,7 +143,7 @@ export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: 
           </div>
           {field('ev-photos', 'Photos on the card collected', 'photos', 'number', { min: 0 })}
           {choice('ev-card', 'Card and batteries', 'card', CARD_CODES.map((c) => ({ value: c, label: c || 'Not said' })))}
-          {field('ev-status', 'Status of the camera', 'status')}
+          {choice('ev-status', 'Status of the camera', 'status', CAMERA_STATUSES.map((c) => ({ value: c, label: c || 'Not said' })))}
           {field('ev-dtok', 'Camera date and time OK', 'dateTimeOk')}
           {choice('ev-calibration', 'Camera calibrated', 'calibration', yesNoOptions)}
           {field('ev-setup', 'Set up by', 'setupBy')}

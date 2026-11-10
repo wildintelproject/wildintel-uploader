@@ -8,6 +8,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from wildintel_uploader.core.services.visit_rules import CAMERA_STATUSES, camera_status_code
+
 
 class TrapperCredentials(BaseModel):
     # Any of these left blank falls back to settings.toml (see
@@ -360,7 +362,8 @@ class VisitRecord(BaseModel):
     # Empty only for a visit that could not be made (its status says it was not revised): nothing was done at it.
     actions: list[Literal["Installation", "Revision", "Desinstallation", "Stolen", "Archive"]] = Field(default_factory=list)
     trappers: Optional[str] = None
-    status: Optional[str] = None
+    # The status of the camera when the visit found it (e.g. Working, Not revised).
+    camera_status: Optional[str] = None
     # How the card and the batteries were: OK, CarFull (card full), NoBatteries or both (CarFullNoBatteries). The datasheet writes SinPilas and CarFullSinPilas: they are read as those.
     card_batteries_ok: Optional[Literal["OK", "CarFull", "NoBatteries", "CarFullNoBatteries"]] = None
     num_photos: Optional[int] = Field(default=None, ge=0)
@@ -402,6 +405,16 @@ class VisitRecord(BaseModel):
     def _spanish_codes(cls, value):
         return {"SinPilas": "NoBatteries", "CarFullSinPilas": "CarFullNoBatteries"}.get(value, value)
 
+    @field_validator("camera_status", mode="before")
+    @classmethod
+    def _camera_status_code(cls, value):
+        if value is None or str(value).strip() == "":
+            return None
+        code = camera_status_code(value)
+        if code is None:
+            raise ValueError("The status of the camera is " + ", ".join(CAMERA_STATUSES[:-1]) + " or " + CAMERA_STATUSES[-1] + ".")
+        return code
+
     @field_validator("actions")
     @classmethod
     def _once_each(cls, actions: list[str]) -> list[str]:
@@ -410,7 +423,7 @@ class VisitRecord(BaseModel):
     @model_validator(mode="after")
     def _something_was_done(self):
         # a visit that could not be made did nothing; any other did at least one thing
-        if not self.actions and str(self.status or "").strip().lower() not in ("not revised", "no revisada", "no revisado"):
+        if not self.actions and str(self.camera_status or "").strip().lower() not in ("not revised", "no revisada", "no revisado"):
             raise ValueError("A visit does at least one action — only a visit that could not be made (status Not revised) has none.")
         return self
 

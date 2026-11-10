@@ -1009,7 +1009,7 @@ describe('ImportSessionPage', () => {
 
 describe('an import session of visits', () => {
   const stored = (over: Record<string, unknown>) => ({
-    location_id: 'DONA_01', session: 'R0002', date: '2026-08-05', time: '08:14:05', actions: ['Revision'], trappers: 'Ana', status: null, card_batteries_ok: null,
+    location_id: 'DONA_01', session: 'R0002', date: '2026-08-05', time: '08:14:05', actions: ['Revision'], trappers: 'Ana', camera_status: null, card_batteries_ok: null,
     num_photos: null, sd: 'A13', date_time_ok: null, latitude: null, longitude: null, camera_id: 'P800', camera_model: 'Reconyx HC600', ...over,
   }) as never
   const CLOSED = [

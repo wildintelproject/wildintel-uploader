@@ -41,7 +41,7 @@
 
   // The visits to DONA: the one that left the camera of DONA_01 on 2024-09-04 (R0003) and the one that collected its card (R0004), and the ones of the other sites.
   const visit = (location_id, session, date, time, actions, over = {}) => ({
-    location_id, session, date, time, actions, trappers: 'Ana Pérez', status: 'OK', card_batteries_ok: 'OK', num_photos: null, sd: null, date_time_ok: 'Yes',
+    location_id, session, date, time, actions, trappers: 'Ana Pérez', camera_status: 'OK', card_batteries_ok: 'OK', num_photos: null, sd: null, date_time_ok: 'Yes',
     latitude: null, longitude: null, camera_id: CAMERA.id, camera_model: CAMERA.model, ...over,
   })
   const VISIT_LEFT = visit('DONA_01', 'R0003', '2024-09-04', '12:55:00', ['Revision'], { sd: 'A13', setup_by: 'Ana Pérez', camera_height: 0.6, camera_tilt: 0, camera_heading: 180, camera_interval: 5, detection_distance: 12, habitat: 'Pine forest' })

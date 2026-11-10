@@ -10,7 +10,7 @@ vi.mock('../csvFile', () => ({ download: vi.fn() }))
 const mockedApi = vi.mocked(api)
 
 const visit = (over: object) => ({
-  location_id: 'TATR_0001', session: 'R0003', date: '2024-09-04', time: '09:00:00', actions: ['Installation'], trappers: 'Ana', status: null, card_batteries_ok: null, num_photos: null,
+  location_id: 'TATR_0001', session: 'R0003', date: '2024-09-04', time: '09:00:00', actions: ['Installation'], trappers: 'Ana', camera_status: null, card_batteries_ok: null, num_photos: null,
   sd: 'A13', date_time_ok: null, latitude: null, longitude: null, camera_id: 'P800', camera_model: null, deployment: null, deployment_status: null, not_done: false, ...over,
 }) as never
 
@@ -183,7 +183,7 @@ describe('VisitBookPage', () => {
   it('shows the state the visit is kept with, whatever its deployment says', async () => {
     mockedApi.visitBook.mockResolvedValue({ results: [
       visit({ session: 'R0001', deployment: 'R0001-TATR_0001', deployment_status: 'open', state: 'collected' }),
-      visit({ session: 'R0002', location_id: 'TATR_0002', status: 'Not revised', not_visited: true, state: 'not_visited' }),
+      visit({ session: 'R0002', location_id: 'TATR_0002', camera_status: 'Not revised', not_visited: true, state: 'not_visited' }),
     ] })
     await pickProject()
 

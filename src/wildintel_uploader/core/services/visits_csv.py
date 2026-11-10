@@ -30,7 +30,7 @@ EPICOLLECT_COLUMNS: dict[str, tuple[str, ...]] = {
     "actions": ("actions", "action", "accion"),
     "trappers": ("trappers", "trapper", "who", "tramperos", "responsable"),
     "session": ("session", "revision", "sesion", "collection"),
-    "status": ("status", "state", "estado", "statusofthecame"),
+    "camera_status": ("camerastatus", "status", "state", "estado", "statusofthecame"),
     "card_batteries_ok": ("cardbatteriesok", "cardbatteries", "cardpilasok"),
     "num_photos": ("numphotos", "photos", "numimages", "numfotos", "numberofpictures"),
     "sd": ("sd", "sdcard"),
@@ -67,7 +67,7 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("created_at", "Created at (UTC, as Epicollect writes it)", False),
     ("session", "Session (R0013, or its number)", False),
     ("trappers", "Who went", False),
-    ("status", "Status of the camera", False),
+    ("camera_status", "Status of the camera", False),
     ("card_batteries_ok", "Card and batteries (OK, CarFull, NoBatteries, CarFullNoBatteries)", False),
     ("num_photos", "Photos on the card collected", False),
     ("sd", "SD card left", False),
@@ -148,6 +148,7 @@ ERROR_LABELS: dict[str, str] = {
     "actions_invalid": "Actions not valid",
     "card_batteries_invalid": "Card and batteries not valid",
     "yes_no_invalid": "Not yes or no",
+    "camera_status_invalid": "Status of the camera not valid",
     "session_invalid": "Session not valid",
     "revision_not_finished": "Revision started before the one before is finished",
     "revision_closed": "Revision closed",
@@ -205,7 +206,7 @@ class CsvVisit(BaseModel):
 
     actions: list[str] = []
     session: str | None = None
-    status: str | None = None
+    camera_status: str | None = None
     trappers: str | None = None
     sd: str | None = None
     date_time_ok: str | None = None
@@ -277,6 +278,14 @@ class CsvVisit(BaseModel):
             raise _custom("card_batteries_invalid", "'{value}' is not OK, Card full, No batteries or Card full and no batteries (CarFull, NoBatteries and CarFullNoBatteries are the codes).", value)
         return code
 
+    @field_validator("camera_status", mode="before")
+    @classmethod
+    def _camera_status(cls, value):
+        code = visit_rules.camera_status_code(value)
+        if code is None:
+            raise _custom("camera_status_invalid", "'{value}' is not " + ", ".join(visit_rules.CAMERA_STATUSES[:-1]) + " or " + visit_rules.CAMERA_STATUSES[-1] + ".", value)
+        return code
+
     @field_validator("num_photos", "camera_interval", "camera_tilt", "camera_heading", mode="before")
     @classmethod
     def _whole(cls, value):
@@ -309,7 +318,7 @@ class CsvVisit(BaseModel):
     @model_validator(mode="after")
     def _something_was_done(self):
         # a visit that could not be made has no action: it is exported so, and read back so
-        if not self.actions and not visit_rules.is_not_revised({"status": self.status}):
+        if not self.actions and not visit_rules.is_not_revised({"camera_status": self.camera_status}):
             raise _custom("actions_invalid", "The actions '{value}' are not Installation, Revision, Desinstallation, Stolen or Archive.", "")
         return self
 

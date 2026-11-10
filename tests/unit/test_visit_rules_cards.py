@@ -3,7 +3,7 @@ from wildintel_uploader.core.services import visit_rules
 
 
 def _v(**over):
-    base = {"location_id": "DONA_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Installation"], "camera_id": "C1", "sd": "A1", "status": None}
+    base = {"location_id": "DONA_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Installation"], "camera_id": "C1", "sd": "A1", "camera_status": None}
     return {**base, "when": f"{over.get('date', base['date'])}T{over.get('time', base['time'])}+00:00", **{k: v for k, v in base.items() if k not in over}, **over}
 
 

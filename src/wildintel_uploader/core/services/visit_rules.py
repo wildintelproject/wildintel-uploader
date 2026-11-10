@@ -18,13 +18,24 @@ ACTIONS = ("Installation", "Revision", "Desinstallation", "Stolen", "Archive")
 # What each action asks: the camera, the card left, the photos collected, and how the camera was found — "required" or "optional".
 _ASKED = {
     "Installation": {"camera": "required", "sd": "required"},
-    "Revision": {"camera": "required", "sd": "optional", "photos": "required", "status": "optional"},
-    "Desinstallation": {"camera": "required", "photos": "required", "status": "optional"},
+    "Revision": {"camera": "required", "sd": "optional", "photos": "required", "camera_status": "optional"},
+    "Desinstallation": {"camera": "required", "photos": "required", "camera_status": "optional"},
     "Stolen": {"camera": "required"},
     "Archive": {},  # the location is given up: nothing else is asked
 }
-_LABELS = {"camera": "The camera", "sd": "The SD card left in the camera", "photos": "The photos on the card collected", "status": "The status of the camera"}
+_LABELS = {"camera": "The camera", "sd": "The SD card left in the camera", "photos": "The photos on the card collected", "camera_status": "The status of the camera"}
 NOT_REVISED = ("not revised", "no revisada", "no revisado")
+# The status of the camera a visit may say: how it was found, Stolen when it was gone, Not revised when the visit could not be made, and what the field form says of a site that is
+# new or was inactive (a camera is put up there).
+CAMERA_STATUSES = ("OK", "Altered", "Knocked down", "Damaged", "Stolen", "Not revised", "New site", "Inactive site")
+
+
+def camera_status_code(value) -> str | None:
+    """The status of the camera as it is written — found ignoring case and spaces (and "No revisada" as Not revised) —, or None when it is not one of CAMERA_STATUSES."""
+    word = " ".join(str(value).split()).lower()
+    if word in NOT_REVISED:
+        return "Not revised"
+    return next((s for s in CAMERA_STATUSES if s.lower() == word), None)
 
 
 class Reason(str):
@@ -61,7 +72,7 @@ def _takes_away(v: dict) -> bool:
 
 def is_not_revised(v: dict) -> bool:
     """A visit that could not be made: its status says it was not revised, so nothing was looked at, collected or left."""
-    return str(v.get("status") or "").lower() in NOT_REVISED
+    return str(v.get("camera_status") or "").lower() in NOT_REVISED
 
 
 def _collects_card(v: dict) -> bool:
@@ -83,12 +94,12 @@ def asked(actions: list[str]) -> dict[str, str]:
 
 
 def required_errors(visit: dict) -> dict[str, str]:
-    """What a visit lacks of what its actions ask of it, by field (camera, sd, photos, status) — nothing when it is complete."""
+    """What a visit lacks of what its actions ask of it, by field (camera, sd, photos, camera_status) — nothing when it is complete."""
     errors = {}
     if is_not_revised(visit):
         return errors  # nothing was done at it: nothing is asked
     actions = visit.get("actions") or []
-    value = {"camera": visit.get("camera_id"), "sd": visit.get("sd"), "photos": visit.get("num_photos"), "status": visit.get("status")}
+    value = {"camera": visit.get("camera_id"), "sd": visit.get("sd"), "photos": visit.get("num_photos"), "camera_status": visit.get("camera_status")}
     # With the card full the photos are not counted: the count is not asked (it may still be given).
     full_card = visit.get("card_batteries_ok") in FULL_CARD
     for field, how in asked(actions).items():
@@ -266,7 +277,7 @@ def history_warning_items(new: list[dict], kept: list[dict], cards: list[dict] |
         # An Installation while the card left at the visit before was not collected: nothing closes that deployment.
         if "Installation" in v["actions"] and "Revision" not in v["actions"]:
             last = max((e for e in before if _same(e["location_id"], v["location_id"]) and _stamp(e) < _stamp(v)
-                        and str(e.get("status") or "").lower() not in NOT_REVISED), key=_stamp, default=None)
+                        and str(e.get("camera_status") or "").lower() not in NOT_REVISED), key=_stamp, default=None)
             if last and _leaves_card(last) and not _takes_away(last) and last.get("sd") and _seconds(v) - _seconds(last) >= 86400:
                 say(f"{label(v)}: Installation on {v['date']} while the card left there on {last['date']} ({last.get('session')} {' + '.join(last['actions'])}) "
                     "was not collected — no Revision or Desinstallation before it, so that card has no deployment. Check the field data.", v)
@@ -453,7 +464,7 @@ def not_visited_records(previous: int, visits: list[dict], locations: list[dict]
         if not site or site.lower() in visited or (l.get("status") == "archived" and (not l.get("status_date") or str(l["status_date"]) <= start)):
             continue
         camera = camera_at_site(visits, site, f"{last}T23:59:59")
-        records.append({"location_id": site, "session": f"R{previous:04d}", "date": last, "time": "23:59:00", "actions": [], "status": "Not revised",
+        records.append({"location_id": site, "session": f"R{previous:04d}", "date": last, "time": "23:59:00", "actions": [], "camera_status": "Not revised",
                         "camera_id": camera["camera"] if camera else None, "comments": "Marked as not visited when the next revision was started."})
     return records
 
@@ -588,11 +599,11 @@ def history_notes(new: list[dict], kept: list[dict]) -> list[str]:
         if missing:
             notes.append(f"R{session:04d}: sites visited in R{session - 1:04d} and not on this trip, their cameras still out: {', '.join(missing)}.")
         current = [v for v in new if _session_number(v.get("session")) == session]
-        skipped = sorted(v["location_id"] for v in current if str(v.get("status") or "").lower() in NOT_REVISED)
+        skipped = sorted(v["location_id"] for v in current if str(v.get("camera_status") or "").lower() in NOT_REVISED)
         if skipped:
             notes.append(f"R{session:04d}: {len(skipped)} visit(s) with status \"Not revised\", ignored (no card collected): {', '.join(skipped)}.")
         nocount = sorted(v["location_id"] for v in current if {"Revision", "Desinstallation"} & set(v["actions"]) and v.get("num_photos") is None
-                         and v.get("card_batteries_ok") not in FULL_CARD and str(v.get("status") or "").lower() not in NOT_REVISED)
+                         and v.get("card_batteries_ok") not in FULL_CARD and str(v.get("camera_status") or "").lower() not in NOT_REVISED)
         if nocount:
             notes.append(f"R{session:04d}: {len(nocount)} visit(s) without photo count (count forgotten), counted as the end of the collection: {', '.join(nocount)}.")
     return notes

@@ -5,7 +5,7 @@ import type { StoredVisit } from './types'
 import type { Visit } from './pages/VisitsPage'
 
 const stored = (over: Partial<StoredVisit>): StoredVisit => ({
-  location_id: 'DONA_01', session: 'R0001', date: '2026-06-10', time: '09:00:00', actions: ['Installation'], trappers: null, status: null,
+  location_id: 'DONA_01', session: 'R0001', date: '2026-06-10', time: '09:00:00', actions: ['Installation'], trappers: null, camera_status: null,
   card_batteries_ok: null, num_photos: null, sd: null, date_time_ok: null, latitude: null, longitude: null, camera_id: null, ...over,
 } as StoredVisit)
 
