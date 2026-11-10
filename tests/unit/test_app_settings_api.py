@@ -590,7 +590,7 @@ def test_nothing_is_deleted_for_good_what_the_page_no_longer_lists_is_kept_with_
     # the page sees what is left…
     assert [t["name"] for t in shown["trappers"]] == ["Ana"] and [c["label"] for c in shown["sd_cards"]] == ["A1"] and shown["cameras"] == [] and shown["roles"] == []
     # …and what was removed is kept, with when
-    assert {t.name: t.deleted_at for t in config.load_settings().FIELDWORK.trappers} == {"Ana": None, "Luis": "2026-11-02T10:00:00Z"}
+    assert {t["name"]: t.get("deleted_at") for t in svc.list_trappers(tmp_path, include_deleted=True)} == {"Ana": None, "Luis": "2026-11-02T10:00:00Z"}
     cards = {c["label"]: c for c in svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)}
     assert cards["A2"]["deleted_at"] == "2026-11-02T10:00:00Z" and cards["A2"]["created_at"] == "2026-11-01T10:00:00Z" and "deleted_at" not in cards["A1"]
     assert [r["role"] for r in svc.list_roles(tmp_path, "DONA", include_deleted=True)] == ["contact"] and svc.list_roles(tmp_path, "DONA") == []
@@ -599,7 +599,7 @@ def test_nothing_is_deleted_for_good_what_the_page_no_longer_lists_is_kept_with_
     with patch.object(audit, "now", return_value="2026-11-03T10:00:00Z"):
         back = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}], "sd_cards": [{"label": "A2", "research_project": "DONA"}], "cameras": [], "roles": []})["FIELDWORK"]
     luis = next(t for t in back["trappers"] if t["name"] == "Luis")
-    assert luis["deleted_at"] is None and luis["created_at"] == "2026-11-01T10:00:00Z" and luis["updated_at"] == "2026-11-03T10:00:00Z"
+    assert luis.get("deleted_at") is None and luis["created_at"] == "2026-11-01T10:00:00Z" and luis["updated_at"] == "2026-11-03T10:00:00Z"
     cards = {c["label"]: c for c in svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)}
     assert cards["A2"].get("deleted_at") is None and cards["A1"]["deleted_at"] == "2026-11-03T10:00:00Z"
 
@@ -612,7 +612,7 @@ def test_the_roles_are_the_projects_and_not_the_settings(tmp_path: Path):
     assert [(r.research_project, r.role) for r in config.load_settings().FIELDWORK.roles] == [("NOWHERE", "publisher")]   # only what has no project here stays in the settings
 
 
-def test_a_trapper_without_a_username_or_with_one_that_another_has_is_refused_and_the_username_is_what_tells_one_from_another():
+def test_a_trapper_without_a_username_or_with_one_that_another_has_is_refused_and_the_username_is_what_tells_one_from_another(tmp_path: Path):
     body = config.Settings().model_dump(mode="json")
     body["FIELDWORK"]["trappers"] = [{"name": "Ana"}]
     assert _client().put("/api/settings", json=body).status_code == 422                       # the username is required
@@ -622,11 +622,12 @@ def test_a_trapper_without_a_username_or_with_one_that_another_has_is_refused_an
     body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana", "email": "ana@uhu.es"}]
     assert _client().put("/api/settings", json=body).status_code == 200
     # changing the name of a username is a change of that trapper, not another one: it keeps when it was created
-    first = config.load_settings().FIELDWORK.trappers[0]
+    from wildintel_uploader.core.services import local_folder_service as svc
+    first = svc.list_trappers(tmp_path)[0]
     body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana Pérez López"}]
     _client().put("/api/settings", json=body)
-    now = [t for t in config.load_settings().FIELDWORK.trappers if not t.deleted_at]
-    assert [(t.username, t.name, t.email) for t in now] == [("ana", "Ana Pérez López", None)] and now[0].created_at == first.created_at
+    now = svc.list_trappers(tmp_path)
+    assert [(t["username"], t["name"], t.get("email")) for t in now] == [("ana", "Ana Pérez López", None)] and now[0]["created_at"] == first["created_at"]
 
 
 def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_is_renamed(tmp_path: Path):
@@ -639,7 +640,8 @@ def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_
     renamed = _put(FIELDWORK={"trappers": [{**ana, "username": "ana.perez"}], "sd_cards": [{**card, "label": "A-1"}]})["FIELDWORK"]
     assert (renamed["trappers"][0]["id"], renamed["trappers"][0]["username"]) == (ana["id"], "ana.perez")
     assert (renamed["sd_cards"][0]["id"], renamed["sd_cards"][0]["label"]) == (card["id"], "A-1")
-    assert len(config.load_settings().FIELDWORK.trappers) == 1                                    # not a trapper deleted and another one added
+    assert len(svc.list_trappers(tmp_path, include_deleted=True)) == 1                            # not a trapper deleted and another one added
+    assert config.load_settings().FIELDWORK.trappers == []                                        # the people are not kept in the settings
     assert len(svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)) == 1
 
     # and an id the page makes up is not taken: a new one is kept with an id of the app's

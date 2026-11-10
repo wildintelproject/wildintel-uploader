@@ -133,7 +133,7 @@ def save_visit(req: SaveVisitRequest) -> dict:
 
 
 def _trapper_names() -> list[str]:
-    return [t.name for t in config.load_settings().FIELDWORK.trappers if not t.deleted_at]
+    return [t["name"] for t in local_folder_service.list_trappers(config.collections_dir())]
 
 
 def _not_entities(root, research_project_id: str, old: dict | None, visit: dict) -> list[str]:
@@ -142,7 +142,7 @@ def _not_entities(root, research_project_id: str, old: dict | None, visit: dict)
     reasons = []
     cameras = {str(x).lower() for c in local_folder_service.list_field_items(root, research_project_id, "cameras") for x in (c.get("camera_id"), c.get("label")) if x}
     cards = {str(c.get("label")).lower() for c in local_folder_service.list_field_items(root, research_project_id, "sd_cards")}
-    trappers = {t.name.lower() for t in config.load_settings().FIELDWORK.trappers if not t.deleted_at}
+    trappers = {t["name"].lower() for t in local_folder_service.list_trappers(config.collections_dir())}
     names = lambda text: [n.strip() for n in str(text or "").split(",") if n.strip()]  # noqa: E731
     camera, card = visit.get("camera_id"), visit.get("sd")
     if camera and str(camera).lower() not in cameras and str(camera).lower() != str((old or {}).get("camera_id") or "").lower():

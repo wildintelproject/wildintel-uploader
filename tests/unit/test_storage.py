@@ -91,9 +91,14 @@ class MemoryStore(ProjectStore):
 
     def delete_records(self, research_project_id, kind): self.DATA.get(research_project_id, {}).get("records", {}).pop(kind, None)
 
+    GLOBAL: dict[str, list] = {}
+
+    def read_global(self, kind): return [dict(r) for r in self.GLOBAL.get(kind, [])]
+    def write_global(self, kind, records): self.GLOBAL[kind] = [dict(r) for r in records]
+
 
 def test_keeping_the_records_somewhere_else_is_adding_a_backend_and_the_app_goes_on_as_it_was(tmp_path: Path):
-    MemoryStore.DATA = {}
+    MemoryStore.DATA, MemoryStore.GLOBAL = {}, {}
     storage.register("memory", MemoryStore)
     try:
         _on_memory(tmp_path)
@@ -122,5 +127,7 @@ def _on_memory(tmp_path: Path):
         svc.delete_location(tmp_path, "DONA", "DONA_01")
     edited = svc.update_visit(tmp_path, "DONA", "DONA_01", "R0001", {**told, "comments": "x"})
     assert edited["created_at"] == told["created_at"]
+    svc.write_trappers(tmp_path, [{"username": "ana", "name": "Ana"}])                                 # the people too: beside the projects, whatever keeps them
+    assert [t["username"] for t in svc.list_trappers(tmp_path)] == ["ana"] and not (tmp_path / "trappers.json").exists()
     assert svc.delete_research_project(tmp_path, "DONA") == {"deleted": "DONA"}
     assert svc.list_research_projects(tmp_path) == []

@@ -405,11 +405,65 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
 # What each trapper is in a research project — a contributor's role in Camtrap DP —: <research project>/roles.json. The trappers, the people, are global (the settings);
 # their roles are the project's.
 
-def _trapper_records(trappers=None) -> list[dict]:
-    """The trappers — global, in the settings — as records, those that were deleted too: a visit or a role of one that was deleted still says who it was. `trappers` are those to use
-    instead of the saved ones (the settings that are being saved)."""
+# ── The trappers ────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# The people who go to the field are the same whatever the research project: they belong to none, and are kept beside them (the store's global records). What each is in a
+# project is its role, which is the project's.
+
+def _legacy_trappers(root: Path) -> None:
+    """The trappers that an earlier version kept in the settings go to the store — the first time they are asked for — and are taken out of the settings."""
+    settings = config.load_settings()
+    legacy = settings.FIELDWORK.trappers
+    if not legacy:
+        return
+    store = _store(root)
+    kept = store.read_global("trappers")
+    have = {str(t.get("username", "")).lower() for t in kept}
+    store.write_global("trappers", [*kept, *[t.model_dump(mode="json") for t in legacy if t.username.lower() not in have]])
+    settings.FIELDWORK.trappers = []
+    config.save_settings(settings)
+
+
+def list_trappers(root: Path, include_deleted: bool = False) -> list[dict]:
+    """The trappers — the people, whatever the research project. One that was deleted is kept, but is not listed (`include_deleted` lists it too: the visits it made still say who it was)."""
+    store = _store(root)
+    records = store.read_global("trappers")
+    if not records:
+        _legacy_trappers(root)
+        records = store.read_global("trappers")
+    given, fixed = [], False
+    for t in records:
+        if not t.get("id"):   # kept before the ids existed: the same one whenever it is read
+            t, fixed = {**t, "id": ids.legacy_id("trapper", t.get("username") or t.get("name") or "")}, True
+        given.append(t)
+    if fixed:
+        store.write_global("trappers", given)
+    return given if include_deleted else audit.alive(given)
+
+
+def write_trappers(root: Path, trappers: list[dict]) -> None:
+    """Keeps these trappers as all of them: one the list no longer has is not deleted for good — it gets `deleted_at` and stays — and one that is listed again comes back. A trapper is
+    the one that was kept when it says its `id` — so one that is renamed, or whose username is corrected, is the same one, and what points to it still does — or, if it says none, when
+    it has the same username. Each keeps its `id` and its `created_at`, and gets a new `updated_at` when it changed (see audit)."""
+    kept = list_trappers(root, include_deleted=True)
+    by_id = {t["id"]: t for t in kept}
+    by_username = {str(t.get("username", "")).lower(): t for t in kept}
+    at = audit.now()
+    out, listed = [], set()
+    for trapper in trappers:
+        before = by_id.get(trapper.get("id")) or by_username.get(str(trapper.get("username", "")).lower())
+        if before is not None:
+            listed.add(before["id"])
+        out.append(audit.stamped(trapper, before, at))
+    out += [audit.deleted(t, at) for t in kept if t["id"] not in listed]
+    _store(root).write_global("trappers", out)
+
+
+def _trapper_records(root: Path, trappers=None) -> list[dict]:
+    """The trappers as records, those that were deleted too: a visit or a role of one that was deleted still says who it was. `trappers` are those to use instead of the kept ones
+    (the settings that are being saved)."""
     if trappers is None:
-        trappers = config.load_settings().FIELDWORK.trappers
+        return list_trappers(root, include_deleted=True)
     return [t if isinstance(t, dict) else t.model_dump(mode="json") for t in trappers]
 
 
@@ -420,7 +474,7 @@ def _role_key(r: dict):
 def list_roles(root: Path, research_project_id: str, include_deleted: bool = False, trappers=None) -> list[dict]:
     """The roles kept for a research project — each with its `research_project` set to it and the name of its trapper (it is kept by the trapper's id, so a trapper that is renamed
     is still the one that has the role). One that was deleted is kept, but is not listed."""
-    people = {t["id"]: t for t in _trapper_records(trappers) if t.get("id")}
+    people = {t["id"]: t for t in _trapper_records(root, trappers) if t.get("id")}
     roles = []
     for r in _read_with_ids(root, research_project_id, "roles", lambda r: f"{r.get('trapper_ref') or r.get('trapper')}:{r.get('role')}"):
         told = {k: v for k, v in r.items() if k != "trapper_ref"}
@@ -438,7 +492,7 @@ def write_roles(root: Path, research_project_id: str, roles: list[dict], trapper
         LocalFolderError: the research project isn't in the collections folder.
     """
     require_research_project(root, research_project_id)
-    by_name = {str(t.get("name", "")).strip().lower(): t for t in _trapper_records(trappers)}
+    by_name = {str(t.get("name", "")).strip().lower(): t for t in _trapper_records(root, trappers)}
     stored = []
     for r in roles:
         item = {k: v for k, v in r.items() if k not in ("trapper", "research_project", "trapper_ref")}
@@ -503,7 +557,7 @@ _CALLED = {
 def _refs(root: Path, research_project_id: str, trappers=None) -> _Refs:
     return _Refs(
         list_locations(root, research_project_id, include_deleted=True), list_field_items(root, research_project_id, "cameras", include_deleted=True),
-        list_field_items(root, research_project_id, "sd_cards", include_deleted=True), _trapper_records(trappers),
+        list_field_items(root, research_project_id, "sd_cards", include_deleted=True), _trapper_records(root, trappers),
     )
 
 

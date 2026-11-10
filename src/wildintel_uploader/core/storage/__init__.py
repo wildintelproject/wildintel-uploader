@@ -16,10 +16,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from wildintel_uploader.core.storage.base import RECORD_KINDS, ProjectStore, StorageError, valid_project_id
+from wildintel_uploader.core.storage.base import GLOBAL_KINDS, RECORD_KINDS, ProjectStore, StorageError, valid_project_id
 from wildintel_uploader.core.storage.json_files import JsonFolderStore
 
-__all__ = ["JsonFolderStore", "RECORD_KINDS", "ProjectStore", "StorageError", "available", "configure", "open_store", "register", "selected", "valid_project_id"]
+__all__ = ["GLOBAL_KINDS", "JsonFolderStore", "RECORD_KINDS", "ProjectStore", "StorageError", "available", "configure", "open_store", "register", "selected", "valid_project_id"]
 
 DEFAULT_BACKEND = "json"
 _FACTORIES: dict[str, Callable[[Path], ProjectStore]] = {DEFAULT_BACKEND: JsonFolderStore}

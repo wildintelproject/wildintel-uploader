@@ -23,7 +23,6 @@ def _public(settings: config.Settings) -> dict:
     data["TRAPPER"]["has_password"] = bool(data["TRAPPER"].pop("user_password"))
     data["EPICOLLECT5"]["has_secret"] = bool(data["EPICOLLECT5"].pop("client_secret"))
     data["AGOUTI"]["has_api_key"] = bool(data["AGOUTI"].pop("api_key"))
-    data["FIELDWORK"]["trappers"] = audit.alive(data["FIELDWORK"]["trappers"])   # a trapper that was deleted is kept, but not shown
     data["FIELDWORK"]["roles"] = audit.alive(data["FIELDWORK"]["roles"])
     data["DATA"]["dir"] = data["DATA"]["dir"] or str(config.default_data_dir())
     # What the collections folder is when no folder of its own is set — shown as the default.
@@ -48,8 +47,10 @@ def _shown(settings: config.Settings) -> dict:
     for kind in ("cameras", "sd_cards"):
         # what is still in the settings file belongs to a research project that is not in the collections folder (yet)
         data["FIELDWORK"][kind] = [i.model_dump(mode="json") if hasattr(i, "model_dump") else i for i in local_folder_service.list_all_field_items(root, kind)] + data["FIELDWORK"][kind]
+    # the trappers are the people, whatever the project: kept beside the projects, not in the settings (an earlier version kept them here: they are moved when they are asked for)
+    data["FIELDWORK"]["trappers"] = local_folder_service.list_trappers(root)
     # the roles belong to the research projects too: what is still in the settings file is of a project that is not here (yet)
-    data["FIELDWORK"]["roles"] = local_folder_service.list_all_roles(root, trappers=settings.FIELDWORK.trappers) + data["FIELDWORK"]["roles"]
+    data["FIELDWORK"]["roles"] = local_folder_service.list_all_roles(root) + data["FIELDWORK"]["roles"]
     return data
 
 
@@ -80,33 +81,15 @@ def _move_to_the_projects(settings: config.Settings) -> config.Settings:
         mine = [r for r in fieldwork.roles if r.research_project.lower() == project.lower()]
         if not mine:
             continue
-        kept = local_folder_service.list_roles(root, project, include_deleted=True, trappers=fieldwork.trappers)
+        kept = local_folder_service.list_roles(root, project, include_deleted=True)
         have = {(str(r.get("trapper") or "").lower(), r.get("role") or "contributor") for r in kept}
         added = [r.model_dump(mode="json") for r in mine if (r.trapper.lower(), r.role) not in have]
-        local_folder_service.write_roles(root, project, [*audit.alive(kept), *added], trappers=fieldwork.trappers)
+        local_folder_service.write_roles(root, project, [*audit.alive(kept), *added])
     roles_left = [r for r in fieldwork.roles if r.research_project.lower() not in {p.lower() for p in projects}]
     if (leftovers["cameras"], leftovers["sd_cards"], roles_left) != (fieldwork.cameras, fieldwork.sd_cards, fieldwork.roles):
         fieldwork.cameras, fieldwork.sd_cards, fieldwork.roles = leftovers["cameras"], leftovers["sd_cards"], roles_left
         config.save_settings(settings)
     return settings
-
-
-def _merge_trappers(current: list[config.Trapper], new: list[config.Trapper]) -> list[config.Trapper]:
-    """The trappers are global — the people, whatever the research project. One the page no longer lists is not deleted: it gets `deleted_at` and stays in the settings, and the
-    page does not see it. One that is listed again comes back. Each keeps its `id` — the one the page says, or else the one of its username — its `created_at` and gets a new
-    `updated_at` when it changed (see audit): a trapper that is renamed, or whose username is corrected, is the same one."""
-    at = audit.now()
-    kept = [t.model_dump(mode="json") for t in current]
-    by_id = {t["id"]: t for t in kept if t.get("id")}
-    by_username = {t["username"].lower(): t for t in kept}
-    out, listed = [], set()
-    for trapper in new:
-        before = by_id.get(trapper.id) or by_username.get(trapper.username.lower())
-        if before is not None:
-            listed.add(before["username"].lower())
-        out.append(config.Trapper.model_validate(audit.stamped(trapper.model_dump(mode="json"), before, at)))
-    out += [config.Trapper.model_validate(audit.deleted(record, at)) for record in kept if record["username"].lower() not in listed]
-    return out
 
 
 @router.get("")
@@ -133,8 +116,9 @@ def save_settings(new: config.Settings) -> dict:
         for field in fields:
             if not getattr(section, field):
                 setattr(section, field, None)
-    new.FIELDWORK.trappers = _merge_trappers(current.FIELDWORK.trappers, new.FIELDWORK.trappers)
     root = _root(new)
+    local_folder_service.write_trappers(root, [t.model_dump(mode="json") for t in new.FIELDWORK.trappers])   # the people are kept beside the projects, not in the settings
+    new.FIELDWORK.trappers = []
     model = {"cameras": config.Camera, "sd_cards": config.SdCard}
     for kind in ("cameras", "sd_cards"):
         items = getattr(new.FIELDWORK, kind)
@@ -166,7 +150,7 @@ def save_settings(new: config.Settings) -> dict:
     for role in new.FIELDWORK.roles:
         by_project.setdefault(role.research_project, []).append(role.model_dump(mode="json"))
     for project in known:
-        local_folder_service.write_roles(root, project, by_project.get(project, []), trappers=new.FIELDWORK.trappers)
+        local_folder_service.write_roles(root, project, by_project.get(project, []))
     new.FIELDWORK.roles = [r for r in new.FIELDWORK.roles if r.research_project not in known]
     config.save_settings(new)
     storage.configure(new.DATA.storage)   # where the records are kept, from now on

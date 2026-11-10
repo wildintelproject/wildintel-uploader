@@ -1,7 +1,7 @@
 """What the app needs of where it keeps its records — and nothing about how they are kept.
 
 The **records** are what the app keeps of a research project: the project itself and, for each, its *locations*, *visits*, *unknown visits*, *cameras*,
-*SD cards*, *roles* and the *uploads that failed*. They are plain `dict`s — the JSON the app has always kept, with the fields its models give them — so anything that can keep a
+*SD cards*, *roles* and the *uploads that failed*; and, belonging to none, the *trappers*. They are plain `dict`s — the JSON the app has always kept, with the fields its models give them — so anything that can keep a
 list of them under a research project can be a backend: a folder of JSON files today, a database tomorrow (see `register`).
 
 What is **not** a record stays where it is: the images and what is written beside them (a deployment's `deployment.json`, `images.json`, the logs of a collection…) are
@@ -18,6 +18,9 @@ from abc import ABC, abstractmethod
 # What is kept for each research project, besides the project itself. Each is a list of records, in the order they were kept. (Locations, cameras, SD cards and roles
 # belong to the project; the trappers, the people, are global and are not here.)
 RECORD_KINDS = ("locations", "visits", "unknown_visits", "cameras", "sd_cards", "roles", "upload_failures")
+
+# What is kept for all of them, belonging to no research project: the trappers, the people.
+GLOBAL_KINDS = ("trappers",)
 
 _PROJECT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
@@ -102,3 +105,19 @@ class ProjectStore(ABC):
     @abstractmethod
     def delete_records(self, research_project_id: str, kind: str) -> None:
         """Forgets every record of this kind of the research project — as if none were ever kept."""
+
+    # ── the records that belong to no research project ───────────────────────────────────────────────────────────────────
+
+    @abstractmethod
+    def read_global(self, kind: str) -> list[dict]:
+        """The records of this kind — one of GLOBAL_KINDS —, in the order they were kept; empty until one is.
+
+        Raises:
+            StorageError: the kind is not one of GLOBAL_KINDS."""
+
+    @abstractmethod
+    def write_global(self, kind: str, records: list[dict]) -> None:
+        """Keeps these records as all of this kind — the whole list, replacing what was kept.
+
+        Raises:
+            StorageError: the kind is not one of GLOBAL_KINDS."""

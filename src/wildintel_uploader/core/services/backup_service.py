@@ -85,7 +85,7 @@ def describe_project(root: Path, research_project_id: str) -> dict:
     }
 
 
-def settings_snapshot(settings: config.Settings | None = None) -> dict:
+def settings_snapshot(settings: config.Settings | None = None, root: Path | None = None) -> dict:
     """The global settings as they go in a backup: without passwords or secrets, and without the folders of this computer — nor the cameras and the SD cards, which
     belong to their research projects."""
     data = (settings or config.load_settings()).model_dump(mode="json")
@@ -95,6 +95,8 @@ def settings_snapshot(settings: config.Settings | None = None) -> dict:
     data["FIELDWORK"]["cameras"] = []
     data["FIELDWORK"]["sd_cards"] = []
     data["FIELDWORK"]["roles"] = []
+    # the people are not kept in the settings but beside the research projects: they go in the backup of the settings, by what they are called
+    data["FIELDWORK"]["trappers"] = local_folder_service.list_trappers(root or config.collections_dir(settings))
     return data
 
 
@@ -119,7 +121,7 @@ def create_backup(
     entries: list[tuple[str, Path | None, object | None]] = []   # (name in the zip, file on disk, or the data to write)
     scope: dict = {"settings": settings, "research_project": research_project_id if wants_project else None, "project_files": project_files, "visits": visits, "images": images, "deployments": []}
     if settings:
-        entries.append((SETTINGS, None, settings_snapshot()))
+        entries.append((SETTINGS, None, settings_snapshot(root=root)))
     counts: dict = {}
     if wants_project:
         info = describe_project(root, research_project_id)  # type: ignore[arg-type]
@@ -371,8 +373,11 @@ def restore_backup(
                     continue
                 kept_secrets = {f: merged[section].get(f) for s, f in _SECRETS if s == section}
                 merged[section] = {**merged[section], **values, **kept_secrets}
-            if isinstance(backed.get("FIELDWORK"), dict):   # the people; the cameras and the SD cards are the projects'
-                merged["FIELDWORK"]["trappers"] = backed["FIELDWORK"].get("trappers", merged["FIELDWORK"]["trappers"])
+            if isinstance(backed.get("FIELDWORK"), dict) and backed["FIELDWORK"].get("trappers"):   # the people, kept beside the projects; the cameras and the SD cards are the projects'
+                people = [t for t in backed["FIELDWORK"]["trappers"] if isinstance(t, dict) and t.get("username") and not t.get("deleted_at")]
+                kept, added, replaced, skipped = _merge(local_folder_service.list_trappers(root), people, lambda t: str(t.get("username", "")).lower(), replace=replace)
+                local_folder_service.write_trappers(root, kept)
+                summary["trappers"] = {"added": added, "replaced": replaced, "kept": skipped}
             try:
                 config.save_settings(config.Settings.model_validate(merged, context={"migrate": True}))
             except Exception as exc:  # a setting the backup holds that this version does not accept

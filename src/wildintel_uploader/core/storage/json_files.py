@@ -3,6 +3,7 @@
     <collections folder>/<research project id>/research_project.json
     <collections folder>/<research project id>/locations.json
     <collections folder>/<research project id>/visits.json      (and unknown_visits.json, cameras.json, sd_cards.json, roles.json, upload_failures.json)
+    <collections folder>/trappers.json                              (the people: they belong to no research project)
     <collections folder>/<research project id>/<R0003>/<deployment id>/…      (the images, and what is kept with them: not records)
 
 A file is put in place at once: it is never left half written.
@@ -15,7 +16,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from wildintel_uploader.core.storage.base import RECORD_KINDS, ProjectStore, StorageError, valid_project_id
+from wildintel_uploader.core.storage.base import GLOBAL_KINDS, RECORD_KINDS, ProjectStore, StorageError, valid_project_id
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,8 @@ RECORD_FILES = {
     "locations": "locations.json", "visits": "visits.json", "unknown_visits": "unknown_visits.json",
     "cameras": "cameras.json", "sd_cards": "sd_cards.json", "roles": "roles.json", "upload_failures": "upload_failures.json",
 }
-assert set(RECORD_FILES) == set(RECORD_KINDS)
+GLOBAL_FILES = {"trappers": "trappers.json"}   # beside the folders of the research projects, in the collections folder itself
+assert set(RECORD_FILES) == set(RECORD_KINDS) and set(GLOBAL_FILES) == set(GLOBAL_KINDS)
 
 
 def read_json(path: Path):
@@ -124,3 +126,17 @@ class JsonFolderStore(ProjectStore):
 
     def delete_records(self, research_project_id: str, kind: str) -> None:
         self._file(research_project_id, kind).unlink(missing_ok=True)
+
+    # ── the records that belong to no research project ───────────────────────────────────────────────────────────────────
+
+    def _global_file(self, kind: str) -> Path:
+        if kind not in GLOBAL_FILES:
+            raise StorageError(f"'{kind}' is not a kind of record without a research project: {', '.join(GLOBAL_KINDS)}.")
+        return self.root / GLOBAL_FILES[kind]
+
+    def read_global(self, kind: str) -> list[dict]:
+        records = read_json(self._global_file(kind))
+        return [r for r in records if isinstance(r, dict)] if isinstance(records, list) else []
+
+    def write_global(self, kind: str, records: list[dict]) -> None:
+        write_json(self._global_file(kind), records)
