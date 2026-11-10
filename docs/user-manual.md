@@ -156,7 +156,7 @@ Two things are checked on the **whole visit**, with several fields together:
 - **A visit does something.** It has at least one action: only a visit that could not be made (*Not revised*) has none.
 - **Height or depth, not both.** A camera is set up at a height or at a depth: `camera_height` and `camera_depth` are mutually exclusive.
 
-Three fields are not typed, the app fills them in: `when` (see above), `state` — where the visit is in its life: *deployed*, *collected*, *stolen* or *not visited* — and `deployment_id`, the deployment that the visit closed, once its images are imported.
+Five fields are not typed, the app fills them in: `when` (see above), `state` — where the visit is in its life: *deployed*, *collected*, *stolen* or *not visited* — and `deployment_id`, the deployment that the visit closed, once its images are imported, and `created_at` and `updated_at` — when the visit was registered and when it was last changed (ISO 8601, in UTC, with a `Z`), written by the app each time it is kept, as an ORM does: a visit that is saved again with nothing changed keeps both, and an edit, or a later visit that closes it, changes `updated_at`. A visit kept before these dates existed has none until it changes. The cameras and the SD cards have the same two dates.
 
 #### What a visit is checked against
 

@@ -321,6 +321,8 @@ class SdCard(BaseModel):
     archive_reason: Optional[Literal["lost", "stolen", "broken", "other"]] = Field(default=None, description="Why it was archived; other when it is none of the others (the status note says it).")
     status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
+    created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
+    updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
 
     _blank_in_service = field_validator("in_service", mode="before")(_blank_date)
     _blank_status_date = field_validator("status_date", mode="before")(_blank_date)
@@ -359,6 +361,8 @@ class Camera(BaseModel):
     archive_reason: Optional[Literal["lost", "stolen", "broken", "other"]] = Field(default=None, description="Why it was archived; other when it is none of the others (the status note says it).")
     status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
+    created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
+    updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
 
     _blank_in_service = field_validator("in_service", mode="before")(_blank_date)
     _blank_status_date = field_validator("status_date", mode="before")(_blank_date)

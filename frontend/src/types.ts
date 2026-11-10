@@ -639,6 +639,9 @@ export interface SdCard {
   /** YYYY-MM-DD — the day it stopped being active. */
   status_date?: string | null
   status_note?: string | null
+  /** When it was kept here and when it was last changed — ISO 8601, UTC, with a Z: written by the app, never typed (what is sent for them is not taken). Absent on one kept before they existed. */
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 export type CameraConnectivity = 'none' | '4g' | '5g'
@@ -666,6 +669,9 @@ export interface Camera {
   /** YYYY-MM-DD — the day it stopped being active. */
   status_date?: string | null
   status_note?: string | null
+  /** When it was kept here and when it was last changed — ISO 8601, UTC, with a Z: written by the app, never typed (what is sent for them is not taken). Absent on one kept before they existed. */
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 /** One of the people who go to the field, as wildintel-publisher keeps an author. */
@@ -756,6 +762,9 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
   longitude: number | null
   /** The deployment this visit closed, once it is imported. */
   deployment_id?: string | null
+  /** When it was kept here and when it was last changed — ISO 8601, UTC, with a Z: written by the app, never typed (what is sent for them is not taken). Absent on one kept before they existed. */
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 /** A visit that left a camera, and the next one at the same location, which collected its card: the visit is closed, and the deployment is of it. */

@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from wildintel_uploader.core.config import migrate_gear
-from wildintel_uploader.core.services import visit_time
+from wildintel_uploader.core.services import audit, visit_time
 
 logger = logging.getLogger(__name__)
 
@@ -351,8 +351,13 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
         LocalFolderError: the research project isn't in the collections folder.
     """
     require_research_project(root, research_project_id)
-    clean = [{k: v for k, v in item.items() if k != "research_project"} for item in items]
-    (project_dir(root, research_project_id) / _FIELD_ITEM_FILES[kind]).write_text(json.dumps(clean, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    path = project_dir(root, research_project_id) / _FIELD_ITEM_FILES[kind]
+    # each one keeps its `created_at`, and gets a new `updated_at` when it changed — what the page sends for them is not taken (see audit)
+    kept = _read_json(path)
+    before = {str(i.get("label") or "").strip().lower(): i for i in kept if isinstance(i, dict)} if isinstance(kept, list) else {}
+    at = audit.now()
+    clean = [audit.stamped({k: v for k, v in item.items() if k != "research_project"}, before.get(str(item.get("label") or "").strip().lower()), at) for item in items]
+    path.write_text(json.dumps(clean, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
 
 def list_all_field_items(root: Path, kind: str) -> list[dict]:
@@ -440,7 +445,7 @@ def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
     """
     write_visits(root, research_project_id, [visit])
     locations = list_locations(root, research_project_id)
-    return _told(_kept(visit, locations), locations)
+    return _told(_raw_visits(root, research_project_id)[-1], locations)
 
 
 def list_unknown(root: Path, research_project_id: str) -> list[dict]:
@@ -487,9 +492,9 @@ def update_visit(root: Path, research_project_id: str, location_id: str, session
     kept = _kept({**visit, "location_id": raw[index]["location_id"], "session": raw[index]["session"]}, locations)
     if raw[index].get("deployment_id"):
         kept["deployment_id"] = raw[index]["deployment_id"]
-    raw[index] = kept
+    raw[index] = audit.stamped(kept, raw[index])
     _write_raw_visits(root, research_project_id, raw)
-    return _told(kept, locations)
+    return _told(raw[index], locations)
 
 
 def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
@@ -502,7 +507,8 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
     if new:
         locations = list_locations(root, research_project_id)
         list_visits(root, research_project_id)  # an earlier file is moved to instants first
-        _write_raw_visits(root, research_project_id, _raw_visits(root, research_project_id) + [_kept(v, locations) for v in new])
+        at = audit.now()
+        _write_raw_visits(root, research_project_id, _raw_visits(root, research_project_id) + [audit.stamped(_kept(v, locations), None, at) for v in new])
         # a visit that is known takes the place of the unknown one of its site in its revision
         known = {(str(v.get("location_id", "")).lower(), str(v.get("session") or "").upper()) for v in new}
         unknown = list_unknown(root, research_project_id)
@@ -540,6 +546,7 @@ def write_states(root: Path, research_project_id: str, states: dict[tuple[str, s
         key = (str(visit.get("location_id", "")).lower(), str(visit.get("when") or ""))
         if key in states and visit.get("state") != states[key]:
             visit["state"] = states[key]
+            audit.touched(visit)
             changed += 1
     if changed:
         _write_raw_visits(root, research_project_id, raw)
@@ -594,7 +601,9 @@ def link_visit(root: Path, research_project_id: str, location_id: str, date: str
                   and (_told(v, locations).get("date"), _told(v, locations).get("time")) == (date, time)), None)
     if visit is None:
         raise LocalFolderError(f"There is no visit to {location_id} on {date} at {time} in {research_project_id}.")
-    visit["deployment_id"] = deployment_id
+    if visit.get("deployment_id") != deployment_id:
+        visit["deployment_id"] = deployment_id
+        audit.touched(visit)
     _write_raw_visits(root, research_project_id, raw)
     return _told(visit, locations)
 

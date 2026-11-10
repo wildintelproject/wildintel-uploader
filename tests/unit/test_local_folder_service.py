@@ -251,3 +251,40 @@ def test_a_visit_is_linked_by_the_day_and_the_time_it_is_told_with(tmp_path: Pat
 
     assert linked["deployment_id"] == "R0001-DONA_01" and linked["when"] == "2024-09-04T11:10:00Z"
     assert _visit_on_disk(tmp_path)[0]["deployment_id"] == "R0001-DONA_01"
+
+
+def test_a_visit_keeps_the_instant_it_was_registered_and_the_one_it_was_last_changed(tmp_path: Path):
+    from unittest.mock import patch
+    from wildintel_uploader.core.services import audit
+    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    visit = {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"], "created_at": "1999-01-01T00:00:00Z"}
+    with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
+        told = svc.write_visit(tmp_path, "DONA", visit)
+    assert (told["created_at"], told["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-01T10:00:00Z")      # what is sent for them is not taken
+
+    # saved again with nothing changed: the dates stay
+    with patch.object(audit, "now", return_value="2026-11-02T10:00:00Z"):
+        same = svc.update_visit(tmp_path, "DONA", "DONA_01", "R0001", {k: v for k, v in told.items() if k not in ("created_at", "updated_at")})
+    assert (same["created_at"], same["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-01T10:00:00Z")
+
+    # edited: it keeps when it was registered, and says when it was changed
+    with patch.object(audit, "now", return_value="2026-11-03T10:00:00Z"):
+        edited = svc.update_visit(tmp_path, "DONA", "DONA_01", "R0001", {**same, "comments": "Moved a metre", "created_at": "2000-02-02T00:00:00Z"})
+    assert (edited["created_at"], edited["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-03T10:00:00Z")
+
+    # what the app changes by itself — the deployment it closed, its state — is a change too
+    with patch.object(audit, "now", return_value="2026-11-04T10:00:00Z"):
+        linked = svc.link_visit(tmp_path, "DONA", "DONA_01", "2024-09-04", "13:10:00", "R0001-DONA_01")
+    assert (linked["created_at"], linked["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-04T10:00:00Z")
+    assert svc.list_visits(tmp_path, "DONA")[0]["updated_at"] == "2026-11-04T10:00:00Z"
+
+
+def test_a_visit_kept_before_the_dates_existed_gets_none_made_up_until_it_changes(tmp_path: Path):
+    from unittest.mock import patch
+    from wildintel_uploader.core.services import audit
+    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    (tmp_path / "DONA" / "visits.json").write_text(json.dumps([{"location_id": "DONA_01", "session": "R0001", "when": "2024-09-04T13:10:00Z", "actions": ["Installation"]}]), encoding="utf-8")
+    assert "created_at" not in svc.list_visits(tmp_path, "DONA")[0]
+    with patch.object(audit, "now", return_value="2026-11-05T10:00:00Z"):
+        edited = svc.update_visit(tmp_path, "DONA", "DONA_01", "R0001", {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"], "comments": "x"})
+    assert edited["updated_at"] == "2026-11-05T10:00:00Z" and "created_at" not in edited

@@ -375,6 +375,10 @@ class VisitRecord(BaseModel):
     # Where the visit is in its life: deployed (it left a camera that is still out), collected (its card was collected), stolen, or not visited (it could not be made).
     # Kept when the visit is added, and changed when a later visit gives it a deployment — see visit_deployments.refresh_states.
     state: Optional[Literal["deployed", "collected", "stolen", "not_visited"]] = None
+    # When the visit was registered and when it was last changed (ISO 8601, UTC, with a Z): written by the app when the visit is kept (see services.audit), never typed —
+    # what is sent for them is not taken.
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
     setup_by: Optional[str] = None
     camera_id: Optional[str] = None

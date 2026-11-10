@@ -60,6 +60,11 @@ def test_the_trappers_start_empty_and_are_saved_clean():
     assert _client().get("/api/settings").json()["FIELDWORK"]["trappers"] == expected
 
 
+def _no_dates(items: list[dict]) -> list[dict]:
+    """The cameras or the SD cards without the two dates the app writes (`created_at`, `updated_at`), which have their own tests."""
+    return [{k: v for k, v in item.items() if k not in ("created_at", "updated_at")} for item in items]
+
+
 def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     saved = _put(FIELDWORK={
         "sd_cards": [{"label": " A12 ", "brand": " SanDisk ", "capacity": " 64   GB ", "in_service": "2026-03-01", "research_project": "DONA"}, {"label": "a12", "research_project": "DONA"},
@@ -68,13 +73,13 @@ def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
                     {"camera_id": "X1", "in_service": "", "research_project": "DONA"}],
     })
 
-    assert saved["FIELDWORK"]["sd_cards"] == [
+    assert _no_dates(saved["FIELDWORK"]["sd_cards"]) == [
         {"label": "A12", "brand": "SanDisk", "capacity": "64 GB", "in_service": "2026-03-01", "research_project": "DONA", **ACTIVE},
         {"label": "B3", "brand": None, "capacity": None, "in_service": None, "research_project": "DONA", **ACTIVE},
     ]
     # kept in the folder of the research project, and read back as it was
     assert _client().get("/api/settings").json()["FIELDWORK"]["sd_cards"][0]["in_service"] == "2026-03-01"
-    assert saved["FIELDWORK"]["cameras"] == [
+    assert _no_dates(saved["FIELDWORK"]["cameras"]) == [
         {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": "DONA", **ACTIVE, **NO_POWER},
         {"label": "X1", "camera_id": "X1", "camera_model": None, "in_service": None, "research_project": "DONA", **ACTIVE, **NO_POWER},
     ]  # one kept before it had a label is called by its id
@@ -528,3 +533,25 @@ def test_a_trapper_can_have_several_roles_in_a_project_but_not_the_same_one_twic
         {"research_project": "dona", "trapper": "ana pérez", "role": "contact"},
     ]).roles
     assert [(r.trapper, r.role) for r in roles] == [("Ana Pérez", "contact"), ("Ana Pérez", "principalInvestigator")]
+
+
+def test_a_camera_and_an_sd_card_get_the_date_they_were_created_and_changed_from_the_app_and_never_from_the_page():
+    from wildintel_uploader.core.services import audit
+    with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
+        first = _put(FIELDWORK={"sd_cards": [{"label": "A12", "research_project": "DONA", "created_at": "1999-01-01T00:00:00Z"}],
+                                "cameras": [{"label": "C1", "research_project": "DONA"}]})["FIELDWORK"]
+    # a new one: both dates are the instant it was kept — what the page sent for them is not taken
+    assert (first["sd_cards"][0]["created_at"], first["sd_cards"][0]["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-01T10:00:00Z")
+    assert (first["cameras"][0]["created_at"], first["cameras"][0]["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-01T10:00:00Z")
+
+    # saved again as it is — the page sends back what it has: nothing changed, so nothing is touched
+    with patch.object(audit, "now", return_value="2026-11-02T10:00:00Z"):
+        again = _put(FIELDWORK={"sd_cards": first["sd_cards"], "cameras": first["cameras"]})["FIELDWORK"]
+    assert (again["sd_cards"][0]["created_at"], again["sd_cards"][0]["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-01T10:00:00Z")
+
+    # changed: it keeps when it was created and says when it was changed — and only the one that changed
+    changed = {**first["sd_cards"][0], "brand": "SanDisk"}
+    with patch.object(audit, "now", return_value="2026-11-03T10:00:00Z"):
+        after = _put(FIELDWORK={"sd_cards": [changed], "cameras": first["cameras"]})["FIELDWORK"]
+    assert (after["sd_cards"][0]["created_at"], after["sd_cards"][0]["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-03T10:00:00Z")
+    assert after["cameras"][0]["updated_at"] == "2026-11-01T10:00:00Z"
