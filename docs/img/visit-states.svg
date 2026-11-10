@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 420" width="920" height="420" role="img" aria-labelledby="t d" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
   <title id="t">The states of a visit</title>
-  <desc id="d">A visit is planned, or unknown, until it is registered. A visit that left a camera is deployed; when a later visit collects its card it is collected, and when a later visit finds the camera stolen it is stolen. A visit that could not be made is not visited, and a visit that left no camera is in the state No camera.</desc>
+  <desc id="d">A visit is planned, or unknown, until it is registered. A visit that left a camera is deployed; when a later visit collects its card it is collected, and when a later visit finds the camera stolen it is stolen. A visit that could not be made is not visited, and a visit that left no camera (a Desinstallation, a Stolen visit or an Archive) is in the state No camera.</desc>
 
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">

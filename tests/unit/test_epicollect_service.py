@@ -326,7 +326,7 @@ def test_what_a_visit_did_is_told_by_the_status_and_the_action_of_the_form_of_th
     actions = epicollect_service.visit_actions
     assert actions("New site", "Camera inspection", None) == "Installation"
     assert actions("OK", "Camera inspection", None) == "Revision"
-    assert actions("Altered", "Camera replacement", None) == "Revision + Installation"
+    assert actions("Altered", "Camera replacement", None) == "Revision + Desinstallation + Installation"
     assert actions("OK", "Camera removal", None) == "Revision + Desinstallation"                  # the location goes on
     assert actions("OK", "Site removal", None) == "Revision + Desinstallation + Archive"          # the location is given up
     assert actions("Stolen", None, "Camera replacement") == "Stolen + Installation"

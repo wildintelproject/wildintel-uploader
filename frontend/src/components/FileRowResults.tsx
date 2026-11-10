@@ -13,7 +13,7 @@ export interface FileRow {
   /** The day and the time (HH:MM) of the visit the row says, when it says and they are valid. */
   date?: string
   time?: string
-  /** What the row does, as the dashboard of visits says it (Revision + Installation); as the file wrote it when it is not valid. */
+  /** What the row does, as the dashboard of visits says it (Revision + Desinstallation + Installation); as the file wrote it when it is not valid. */
   actions?: string
   result: 'ok' | 'problem' | 'already_kept' | 'new_site' | 'ignored'
   /** The kind of error — what the rows that share it have in common. Empty for a row that is fine. */

@@ -95,7 +95,7 @@ A visit has a state that follows its life. A visit that left no camera has none.
 The drawing reads from left to right, and the state of a visit is decided in three moments:
 
 1. **Before it is registered**, a visit is *planned* or *unknown*. It is **planned** when the revision has visits and the site has none yet: it is the visit that is expected. It is **unknown** when nothing is known of it — the first visit kept to a site is of a later revision, so the revisions before it have no visit of that site: no day, no camera, no card. Nothing is checked against an unknown visit, it counts as a visit to finish its revision, and a visit that comes later takes its place.
-2. **When it is registered**, what the visit did gives its state. If it **left a camera** — an Installation — it is **Deployed**: the camera is out and its card is still to be collected. If it **could not be made** (its status is *Not revised*) it is **Not visited**: nothing was done at it. If it **left no camera**, what it did gives its state: a Desinstallation, which takes the camera and its card away, is **Collected**; a Stolen visit, which finds the camera gone, is **Stolen**; and a visit that only gives the site up — an Archive — is **No camera**: no camera is out and nothing is waited for.
+2. **When it is registered**, what the visit did gives its state. If it **left a camera** — an Installation — it is **Deployed**: the camera is out and its card is still to be collected. If it **could not be made** (its status is *Not revised*) it is **Not visited**: nothing was done at it. If it **left no camera**, its state is **No camera**: no camera is out and nothing is waited for. A Desinstallation takes the camera away, a Stolen visit finds it gone and an Archive gives the site up; the visit before them, the one that left that camera, is the one that becomes **Collected** (its card was collected) or **Stolen** (its camera was found stolen).
 3. **When a later visit to the site** collects the card, or finds the camera stolen, the **Deployed** visit is closed: **Collected** if its card was collected, **Stolen** if the camera was found stolen — there are no images to import. While neither happens it stays *Deployed*. A Revision or a Desinstallation collects the card, and a Stolen visit finds the camera stolen: each closes the *Deployed* visit before it.
 
 The table sums up each state and what it means.
@@ -107,20 +107,23 @@ The table sums up each state and what it means.
 | **Collected** | A later visit collected the card it left. |
 | **Stolen** | The camera it left was stolen: its deployment is closed with no images, and there is nothing to create. |
 | **Not visited** | The visit could not be made. |
+| **No camera** | It left no camera: it took it away (Desinstallation), found it stolen (Stolen) or gave the site up (Archive). Nothing is waited for. |
 | **Unknown** | A revision of a site of which nothing is known: no visit of that site is kept to it. |
 
 Whether the images of a visit are stored is another thing: they are once its deployment is made.
 
 #### The actions of a visit
 
-When a visit goes from one state to another, **one or several actions** are done in it:
+The **actions that can be done during a visit** depend on **what the visit before it left at the site** — the last one made there, or the one before it if that was not visited. The diagram below details the relationship between the **state the visit before had** and the **new state it takes** (*Deployed → Collected*), the **actions done in this visit** — the ones that cause that change in the visit before —, the **state this visit is left in**, and the **changes it produces in other entities**: the cameras, the SD cards and the site.
 
-![The actions of a visit: a planned visit becomes deployed with an Installation or not visited with no action; a deployed visit becomes collected when the next visit does a Revision or a Desinstallation, and stolen when it does a Stolen action](img/visit-actions.svg)
+![The actions of a visit, by the state of the visit before it: with no visit before, an Installation or no visit; after a Deployed visit that becomes Collected, a Revision, a replacement, a Desinstallation or a Desinstallation and an Archive; after one that becomes Stolen, a Stolen, a Stolen and an Installation or a Stolen and an Archive; after a visit that left no camera, an Installation, an Archive or no visit](img/visit-actions.svg)
 
-- A **planned** visit (or an unknown one) becomes **Deployed** if its action is an **Installation**: a camera is out. If **no action** is done (the visit could not be made, *Not revised*) it becomes **Not visited**.
-- A **Deployed** visit becomes **Collected** when the **next visit** to the site does a **Revision** or a **Desinstallation**: the card it left is collected.
-- A **Deployed** visit becomes **Stolen** when the **next visit** does a **Stolen** action: the camera is found stolen and there are no images to import.
-- An **Archive** gives the site up, and goes with a Desinstallation or a Stolen visit.
+- **No visit before** the site, or one that left **no camera** (a Desinstallation, a Stolen visit or an Archive): there is no camera to look at, so the visit can only put one up — an **Installation**, which leaves it **Deployed** —, give the site up (**Archive**, which leaves it **No camera**) or not be made. The first visit to a site is always an Installation.
+- **A Deployed visit** — a camera is out — is closed by the visit after it: **Collected** when it collects its card (a **Revision** or a **Desinstallation**) and **Stolen** when it finds the camera gone (**Stolen**). That visit is left **Deployed** if it puts a camera up (a Revision, a replacement, or a Stolen visit and an Installation) and **No camera** if it does not.
+- **No camera** is a **final** state: nothing waits for that visit, so it never changes to another one.
+- **Not visited** changes nothing: the camera is where it was, and the next visit is of the visit before.
+- **After an Archive** the site is closed: no visit follows.
+- **Cameras and cards** that a visit puts in the field are **active**; those it takes away — the camera it removes, the card it collects — are **ready** again, and a camera found stolen is **archived** with its card, as the location is with an Archive. An archived one is never changed.
 
 The following table sums up each action, what it is and what it asks.
 
@@ -132,11 +135,11 @@ The following table sums up each action, what it is and what it asks.
 | **Stolen** | The camera is found stolen, and its card with it: there will be no images. | The camera. |
 | **Archive** | The location is given up: no visit is kept to it afterwards. The camera that is out is taken away in the same visit (a Desinstallation, or a Stolen camera), and none is put up. | Nothing else. |
 
-A visit can do several things at once: *Revision + Installation* (the camera is looked at and another put up: a replacement), *Revision + Desinstallation*, *Stolen + Installation* (stolen and replaced) or *Stolen + Archive* (stolen and the site given up). A visit that **could not be made** — the status *Not revised* — has no action: nothing was done at it.
+A visit can do several things at once: *Revision + Desinstallation + Installation* (the camera is looked at, taken away and another put up: a replacement), *Revision + Desinstallation*, *Stolen + Installation* (stolen and replaced) or *Stolen + Archive* (stolen and the site given up). A visit that **could not be made** — the status *Not revised* — has no action: nothing was done at it.
 
 #### What a visit records
 
-A visit is kept as a **`VisitRecord`**, the Pydantic class (`core/schemas/requests.py`) that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks **each field on its own** (its type, its range, the values it may take) and a few of them **together**, and it says which field is wrong.
+Every visit — the one typed in the form and each row of a file alike — is **checked before it is kept**: a visit that does not pass is not kept, and the app says which field is wrong. It checks **each field on its own** (its kind, its range, the values it may take) and a few of them **together**.
 
 Depending on the actions done during a visit, some of the fields of a visit **must be filled in**: an Installation asks for the camera, the card it leaves and how the camera is set up; a Revision or a Desinstallation, for the camera and the photos collected; a Stolen visit, for the camera… The table of the actions above says what each one asks. Nothing is asked of a visit that could not be made.
 
@@ -156,13 +159,13 @@ Two things are checked on the **whole visit**, with several fields together:
 - **A visit does something.** It has at least one action: only a visit that could not be made (*Not revised*) has none.
 - **Height or depth, not both.** A camera is set up at a height or at a depth: `camera_height` and `camera_depth` are mutually exclusive.
 
-Six fields are not typed, the app fills them in: `id` — the internal id of the visit, a UUID that never changes —, `when` (see above), `state` — where the visit is in its life: *deployed*, *collected*, *stolen* or *not visited* — and `deployment_id`, the deployment that the visit closed, once its images are imported, and `created_at` and `updated_at` — when the visit was registered and when it was last changed (ISO 8601, in UTC, with a `Z`), written by the app each time it is kept, as an ORM does: a visit that is saved again with nothing changed keeps both, and an edit, or a later visit that closes it, changes `updated_at`. A visit kept before these dates existed has none until it changes. The cameras and the SD cards have the same two dates.
+Some things are not typed: the app fills them in. The **state** of the visit (*Planned*, *Deployed*, *Collected*, *Stolen*, *Not visited*, *No camera* or *Unknown*, as above); the **deployment** the visit closed, once its images are imported; the **instant** of the visit in UTC; and **when the visit was registered and when it was last changed**. A visit that is saved again with nothing changed keeps both dates; an edit, or a later visit that closes it, changes the second. The cameras and the SD cards keep the same two dates.
 
-**What a visit points to is kept by id.** A visit says *which* location, camera, SD card and trappers it is of — by their internal ids, which the app generates — and not what they are called: the file of the visits says that it was made by trapper `7c1e…`, and that trapper is Pedro Pérez. The app tells the visit with their names (`Pedro Pérez`, `A13`…), so nothing changes for you, and **a name can be corrected**: rename an SD card or a trapper and every visit that points to it says the new name, with no visit rewritten. What a visit says that the research project does not have (a card nobody registered) is kept as it was said, and is linked when it is registered. Visits kept before the ids existed are linked the first time they are read.
+**A visit remembers which location, camera, SD card and trappers it is of**, not only what they are called. So **a name can be corrected**: rename an SD card or a trapper and every visit that points to it says the new name, with no visit rewritten. What a visit says that the research project does not have (a card nobody registered) is kept as it was said, and is linked when it is registered.
 
 #### What a visit is checked against
 
-`VisitRecord` looks at a visit **alone**. But the values entered in a revision can also be **validated against other visits**: those of the **same revision** and those of **other revisions**. A camera cannot be put up where it already is, a card cannot be in two cameras, a visit cannot be before the one it follows… — that is only known by looking at what was done before. The app does it with the visits kept **before the date and the time of the visit** — not only with the revision before it —, and again with those after it when a visit is edited.
+First a visit is looked at **alone**. But the values entered in a revision can also be **validated against other visits**: those of the **same revision** and those of **other revisions**. A camera cannot be put up where it already is, a card cannot be in two cameras, a visit cannot be before the one it follows… — that is only known by looking at what was done before. The app does it with the visits kept **before the date and the time of the visit** — not only with the revision before it —, and again with those after it when a visit is edited.
 
 The rules are the same **by hand and from a file**: a visit that breaks one is refused, and it says why; what only *looks odd* is kept, with a warning. They are of five kinds.
 

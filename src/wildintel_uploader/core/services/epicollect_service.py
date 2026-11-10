@@ -360,7 +360,7 @@ def _label(text: str) -> str:
 
 def visit_actions(status: str | None, action: str | None, action_after_theft: str | None) -> str:
     """What a visit did, from what the form answers — one simple rule: an Installation if the status says it is a new site or an inactive one (a camera is put up again); the action after a theft if the camera was
-    stolen; the action otherwise. As the visit keeps them: a camera inspected is a Revision, replaced is a Revision and an Installation (after a theft, a Stolen and an
+    stolen; the action otherwise. As the visit keeps them: a camera inspected is a Revision, replaced is a Revision, a Desinstallation and an Installation (after a theft, a Stolen and an
     Installation), a camera removed is a Revision and a Desinstallation, and a site removed is those two and an Archive — the location is given up — (after a theft, a
     Stolen and an Archive; after a theft a camera removed — not replaced, the site stays open — is a Stolen alone)."""
     status = (status or "").strip().lower()
@@ -369,7 +369,7 @@ def visit_actions(status: str | None, action: str | None, action_after_theft: st
     if status == "stolen":
         return {"camera replacement": "Stolen + Installation", "site removal": "Stolen + Archive", "camera removal": "Stolen"}.get((action_after_theft or "").strip().lower(), "")
     return {
-        "camera inspection": "Revision", "camera replacement": "Revision + Installation", "camera removal": "Revision + Desinstallation",
+        "camera inspection": "Revision", "camera replacement": "Revision + Desinstallation + Installation", "camera removal": "Revision + Desinstallation",
         "site removal": "Revision + Desinstallation + Archive",
     }.get((action or "").strip().lower(), "")
 

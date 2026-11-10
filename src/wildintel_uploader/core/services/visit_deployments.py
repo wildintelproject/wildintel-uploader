@@ -190,21 +190,16 @@ def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
 
 def visit_states(visits: list[dict], keep_seconds: bool = True) -> dict[tuple[str, str], str]:
     """The state of each visit, by its site (ignoring case) and its instant: not_visited (it could not be made); deployed, collected or stolen for the visit that left
-    a camera — out there still, its card collected by a later visit, or the camera found stolen —; a visit that left none is collected when it took the card away (a
-    Desinstallation) and stolen when it found the camera stolen, and is no_camera otherwise (it left none and waits for nothing: it only archived the location)."""
+    a camera — out there still, its card collected by a later visit, or the camera found stolen —; a visit that left none (it took the camera away, found it stolen or
+    only archived the location) is no_camera: it leaves nothing to wait for."""
     started = {id(d["start_visit"]): d for d in deployments(visits, keep_seconds)}
     states: dict[tuple[str, str], str] = {}
     for v in visits:
         d = started.get(id(v))
-        actions = v.get("actions") or []
         if _not_revised(v):
             state = "not_visited"
         elif d:
             state = "deployed" if d["status"] == "open" else "stolen" if d["no_images"] else "collected"
-        elif "Stolen" in actions:
-            state = "stolen"
-        elif "Desinstallation" in actions:
-            state = "collected"
         else:
             state = "no_camera"
         states[(str(v.get("location_id", "")).lower(), str(v.get("when") or ""))] = state

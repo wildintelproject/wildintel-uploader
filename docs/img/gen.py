@@ -37,21 +37,71 @@ GRAY=("#f1f5f9","#64748b","#334155","#475569"); AMB=("#fffbeb","#f59e0b","#92400
 GRN=("#ecfdf5","#10b981","#065f46","#047857"); RED=("#fef2f2","#ef4444","#991b1b","#b91c1c")
 NOS=("#ffffff","#94a3b8","#475569","#64748b"); BLU=("#eff6ff","#2563eb","#1e3a8a","#1d4ed8")
 
-# ---- actions
-d=D("The actions of a visit",920,400)
-d.text(40,28,400,28,"THE ACTIONS OF A VISIT",15,"#2563eb")
-for x,t in ((30,"WHEN IT IS REGISTERED"),(370,"ITS STATE"),(730,"WHEN THE NEXT VISIT…")):
-    d.text(x,70,220,28,t)
-pl=d.box(30,172,160,76,"Planned","or Unknown",GRAY[0],"#94a3b8","#334155","#475569","6 5",fs=17)
-dp=d.box(370,104,170,76,"Deployed","a camera is out",*AMB,fs=17)
-nv=d.box(370,268,170,76,"Not visited","it could not be made",*GRAY,fs=17)
-co=d.box(730,104,160,76,"Collected","its card was collected",*GRN,fs=17)
-st=d.box(730,196,160,76,"Stolen","no images to import",*RED,fs=17)
-d.edge(pl,dp,"Installation",exit=(1,0.35),entry=(0,0.5),pts=[(280,198),(280,142)])
-d.edge(pl,nv,"no action: not revised",exit=(1,0.65),entry=(0,0.5),pts=[(280,222),(280,306)])
-d.edge(dp,co,"does a Revision<br>or a Desinstallation",exit=(1,0.35),entry=(0,0.35))
-d.edge(dp,st,"does a Stolen",exit=(1,0.8),entry=(0,0.5),pts=[(615,165),(615,234)])
-d.text(40,366,700,24,"An Archive goes with a Desinstallation or a Stolen visit: it gives the site up.",12,"#64748b",False)
+# ---- actions: what can be done in a visit, by the state of the visit before it — as a drawio and as the svg the manual shows
+STATE={"Deployed":AMB,"Collected":GRN,"Stolen":RED,"Not visited":GRAY,"No camera":NOS}
+GROUPS=[
+ (("No visit before",None),[("Installation","Deployed","camera and card → active"),("Not visited","Not visited","no entity changes")]),
+ (("Deployed","Collected"),[("Revision","Deployed","card collected → ready · card left → active"),
+   ("Revision + Desinstallation + Installation  (replacement)","Deployed","old camera, card → ready · new → active"),
+   ("Revision + Desinstallation","No camera","camera and card → ready"),
+   ("Revision + Desinstallation + Archive","No camera","camera, card → ready · site archived")]),
+ (("Deployed","Stolen"),[("Stolen","No camera","camera and its card → archived (stolen)"),
+   ("Stolen + Installation  (stolen and replaced)","Deployed","stolen ones archived · new → active"),
+   ("Stolen + Archive","No camera","camera, card and site → archived")]),
+ (("Deployed","Deployed"),[("Not visited","Not visited","no entity changes")]),
+ (("No camera","final"),[("Installation","Deployed","camera and card → active"),("Archive  (alone)","No camera","site → archived"),("Not visited","Not visited","no entity changes")]),
+]
+PITCH,GAP,TOP=34,12,100
+def _layout():
+    y=TOP;out=[]
+    for head,rows in GROUPS:
+        out.append((head,rows,y));y+=len(rows)*PITCH+GAP
+    return out,y
+LAY,ENDY=_layout()
+H=ENDY+40
+d=D("The actions of a visit",920,H)
+d.text(30,22,600,28,"THE ACTIONS OF A VISIT, BY THE STATE OF THE VISIT BEFORE IT",15,"#2563eb")
+HEADS=((30,"THE VISIT BEFORE"),(235,"ACTIONS OF THIS VISIT"),(550,"IT IS LEFT"),(670,"CAMERAS, CARDS AND SITE"))
+for x,t in HEADS: d.text(x,62,300,24,t,11)
+svg=[f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 {H}" width="920" height="{H}" role="img" aria-labelledby="t d" font-family="Inter, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif">',
+ '  <title id="t">The actions of a visit</title>',
+ '  <desc id="d">For each state of the visit before it — Deployed becoming Collected or Stolen, Deployed staying so, No camera, or no visit before — the actions a visit can do, the state it is left in and what it does to the cameras, the cards and the site.</desc>',
+ '  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#475569" /></marker></defs>',
+ f'  <rect x="0" y="0" width="920" height="{H}" rx="18" fill="#ffffff" stroke="#d4d4d8" />',
+ '  <text x="30" y="40" font-size="15" font-weight="700" fill="#2563eb" letter-spacing="1">THE ACTIONS OF A VISIT, BY THE STATE OF THE VISIT BEFORE IT</text>']
+for x,t in HEADS: svg.append(f'  <text x="{x}" y="78" font-size="11" font-weight="700" fill="#64748b" letter-spacing="1">{t}</text>')
+def chip_svg(x,y,w,name,dash=False,label=None):
+    f,st,tc,_=STATE.get(name,GRAY)
+    return (f'  <rect x="{x}" y="{y}" width="{w}" height="24" rx="8" fill="{f}" stroke="{st}" stroke-width="2"'+(' stroke-dasharray="4 3"' if dash else '')+' />'
+            f'<text x="{x+w/2}" y="{y+16}" font-size="11.5" font-weight="700" fill="{tc}" text-anchor="middle">{label or name}</text>')
+for (head,rows,y0) in LAY:
+    h=len(rows)*PITCH-4; cy=y0+h/2
+    svg.append(f'  <rect x="30" y="{y0}" width="190" height="{h}" rx="10" fill="#f8fafc" stroke="#e2e8f0" />')
+    gid=d.box(30,y0,190,h,"","","#f8fafc","#e2e8f0","#334155","#475569",rr=10)
+    if head[1] is None:
+        svg.append(chip_svg(38,cy-12,174,"No visit before",True)); d.box(38,cy-12,174,24,"No visit before","",*GRAY[:1],"#94a3b8","#475569","#475569","4 3",rr=30,fs=11)
+    elif head[1]=="final":
+        svg.append(chip_svg(38,cy-12,174,"No camera",label="No camera · final state")); d.box(38,cy-12,174,24,"No camera · final state","",*STATE["No camera"][:3],STATE["No camera"][3],rr=30,fs=11)
+    else:
+        svg.append(chip_svg(38,cy-12,76,head[0])+chip_svg(136,cy-12,76,head[1])+f'<path d="M116 {cy} H134" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
+        c1=d.box(38,cy-12,76,24,head[0],"",*STATE[head[0]][:3],STATE[head[0]][3],rr=30,fs=11); c2=d.box(136,cy-12,76,24,head[1],"",*STATE[head[1]][:3],STATE[head[1]][3],rr=30,fs=11)
+        d.edge(c1,c2)
+    for i,(act,res,ent) in enumerate(rows):
+        y=y0+i*PITCH; m=y+(PITCH-4)/2
+        svg.append(f'  <path d="M220 {cy} H228 V{m} H235" stroke="#cbd5e1" stroke-width="1.5" fill="none" />')
+        svg.append(f'  <rect x="235" y="{m-13}" width="300" height="26" rx="13" fill="#ffffff" stroke="#cbd5e1" /><text x="385" y="{m+4}" font-size="11.5" fill="#334155" text-anchor="middle">{act}</text>')
+        svg.append(f'  <path d="M535 {m} H548" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
+        svg.append(chip_svg(550,m-12,105,res))
+        svg.append(f'  <text x="670" y="{m+4}" font-size="10.5" fill="#475569">{ent}</text>')
+        p=d.box(235,m-13,300,26,act.replace("  "," "),"","#ffffff","#cbd5e1","#334155","#475569",rr=50,fs=11)
+        r=d.box(550,m-12,105,24,res,"",*STATE[res][:3],STATE[res][3],rr=30,fs=11)
+        d.edge(p,r)
+        d.text(670,m-10,230,20,ent,10.5,"#475569",False)
+note="A visit before that was not visited does not count: the one before it decides. After an Archive the site is closed: no visit follows."
+svg.append(f'  <text x="30" y="{ENDY+22}" font-size="12" fill="#64748b">{note}</text>')
+d.text(30,ENDY+10,860,24,note,12,"#64748b",False)
+svg.append('</svg>\n')
+open(OUT+"visit-actions.svg","w",encoding="utf-8").write("\n".join(svg))
 d.save("visit-actions.drawio")
 
 # ---- states

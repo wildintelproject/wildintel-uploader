@@ -201,6 +201,14 @@ something to say for each check.
 | `session_store` | The wizard's resumable runs. |
 | `folder_picker`, `file_manager` | The OS's native folder dialog and file explorer — this is a local tool, so the backend can open them on the user's screen. |
 
+### The record of a visit
+
+A visit is kept as a **`VisitRecord`**, the Pydantic class in `core/schemas/requests.py` that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks **each field on its own** (its type, its range, the values it may take: the status of the camera is one of `visit_rules.CAMERA_STATUSES`, the card and the batteries one of four codes) and two things on the **whole** visit: it does at least one action (only a visit that could not be made — status *Not revised* — has none), and it has a height or a depth, not both.
+
+Six fields are not typed, the app fills them in: `id` (a UUID that never changes), `when` (the instant, ISO 8601 in UTC with a `Z`, worked out from the day and the time of the wall clock of the location), `state` (`deployed`, `collected`, `stolen`, `not_visited` or `no_camera`, worked out by `visit_deployments.visit_states` and refreshed whenever a visit is added), `deployment_id` (the deployment the visit closed, once its images are imported) and `created_at` / `updated_at` (written each time the visit is kept, as an ORM does: a visit saved again with nothing changed keeps both). What a visit points to — location, camera, SD card, trappers — is kept by id: see *Storage*.
+
+What the visits do to the **entities** is `visit_rules.entity_changes`, applied by the visits router when visits are kept (by hand and from a file): the camera and the card put in the field are *active*, the ones taken away are *ready*, and a camera found stolen is archived with its card.
+
 ### Storage
 
 The **records** — the research projects and, for each, its locations, visits, unknown visits, cameras, SD cards and failed uploads — are kept through a **layer of

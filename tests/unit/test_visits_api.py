@@ -951,7 +951,7 @@ def test_a_visit_is_kept_with_its_state_which_changes_when_a_later_visit_collect
 
     assert left == [("R0001", "deployed")]                                        # it left a camera that is still out
     assert revised == [("R0001", "collected"), ("R0002", "deployed")]               # a later visit took its card: it is collected, and the new one is out
-    assert stolen == [("R0001", "collected"), ("R0002", "stolen"), ("R0003", "stolen")]   # the camera of the second was found stolen
+    assert stolen == [("R0001", "collected"), ("R0002", "stolen"), ("R0003", "no_camera")]   # the camera of the second was found stolen, and the visit that found it left none
 
 
 def test_a_visit_has_no_actions_only_when_it_could_not_be_made(tmp_path: Path):
@@ -1285,7 +1285,7 @@ def test_a_visit_with_a_camera_an_sd_card_or_a_trapper_that_does_not_exist_is_re
     assert created["problems"] == [] and len(created["visits"]) == 1 and [c["camera_id"] for c in created["create"]["cameras"]] == ["NOCAM"]
 
 
-def test_a_visit_that_left_no_camera_and_waits_for_nothing_is_in_the_state_no_camera(tmp_path: Path):
+def test_a_visit_that_left_no_camera_whether_it_took_it_away_found_it_stolen_or_gave_the_site_up_is_in_the_state_no_camera(tmp_path: Path):
     with _in(tmp_path):
         _project(archived=(2, 3))
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
@@ -1293,4 +1293,30 @@ def test_a_visit_that_left_no_camera_and_waits_for_nothing_is_in_the_state_no_ca
         _save({**VISIT, "actions": ["Archive"], "camera_id": None, "num_photos": None, "sd": None, "date": "2024-11-12", "session": "R0003"})
         shown = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
 
-    assert [(v["session"], v["state"]) for v in shown] == [("R0001", "collected"), ("R0002", "collected"), ("R0003", "no_camera")]
+    assert [(v["session"], v["state"]) for v in shown] == [("R0001", "collected"), ("R0002", "no_camera"), ("R0003", "no_camera")]
+
+
+def test_the_cameras_and_the_cards_are_in_the_field_back_to_ready_or_archived_when_stolen(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+
+    def status(kind: str) -> dict:
+        return {i["label"]: (i["status"], i.get("archive_reason")) for i in svc.list_field_items(tmp_path, "DONA", kind)}
+
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": l, "camera_id": l, "status": "ready"} for l in ("P800", "P900")])
+        svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": l, "status": "ready"} for l in ("A13", "B2", "C3")])
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        installed = (status("cameras"), status("sd_cards"))
+        _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
+        revised = status("sd_cards")
+        _save({**VISIT, "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 10, "sd": None, "date": "2024-11-12", "session": "R0003"})
+        removed = (status("cameras"), status("sd_cards"))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "C3", "camera_id": "P900", "date": "2024-12-12", "session": "R0004"})
+        _save({**VISIT, "actions": ["Stolen"], "camera_id": "P900", "num_photos": None, "sd": None, "date": "2025-01-12", "session": "R0005"})
+        stolen = (status("cameras"), status("sd_cards"))
+
+    assert installed == ({"P800": ("active", None), "P900": ("ready", None)}, {"A13": ("active", None), "B2": ("ready", None), "C3": ("ready", None)})
+    assert revised == {"A13": ("ready", None), "B2": ("active", None), "C3": ("ready", None)}      # the card collected is back, the one left is out
+    assert removed == ({"P800": ("ready", None), "P900": ("ready", None)}, {"A13": ("ready", None), "B2": ("ready", None), "C3": ("ready", None)})
+    assert stolen == ({"P800": ("ready", None), "P900": ("archived", "stolen")}, {"A13": ("ready", None), "B2": ("ready", None), "C3": ("archived", "stolen")})

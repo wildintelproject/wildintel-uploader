@@ -237,6 +237,38 @@ def availability_errors(kept: list[dict], visit: dict, cards: list[dict] | None 
     return errors
 
 
+def entity_changes(visit: dict, before: list[dict]) -> list[dict]:
+    """What a visit does to the cameras and the SD cards, given the visits kept before it: {"kind": "cameras" | "sd_cards", "name", "status": "active" | "ready" | "archived", "reason"}.
+    A camera or a card put in the field is active; the one taken away — the camera that was at the site, the card that was in it — is ready again; a camera found stolen is archived
+    (stolen), and its card with it. A visit that could not be made changes nothing."""
+    if is_not_revised(visit):
+        return []
+    actions = set(visit.get("actions") or [])
+    when, site = _stamp(visit), str(visit["location_id"])
+    there = camera_at_site(before, site, when)
+    held = card_at_site(before, site, when)
+    old = there["camera"] if there else (visit.get("camera_id") if actions & {"Desinstallation", "Stolen"} and "Installation" not in actions else None)
+    out: list[dict] = []
+
+    def put(kind: str, name, status: str, reason: str | None = None) -> None:
+        if name:
+            out.append({"kind": kind, "name": str(name), "status": status, "reason": reason})
+
+    if "Stolen" in actions:
+        put("cameras", old, "archived", "stolen")
+        put("sd_cards", held["label"] if held else None, "archived", "stolen")
+    else:
+        if {"Desinstallation"} & actions or ("Installation" in actions and old and not _same(old, visit.get("camera_id"))):
+            put("cameras", old, "ready")
+        if held and ({"Revision", "Desinstallation"} & actions):
+            put("sd_cards", held["label"], "ready")
+    if "Installation" in actions:
+        put("cameras", visit.get("camera_id"), "active")
+    if visit.get("sd") and _leaves_card(visit):
+        put("sd_cards", visit["sd"], "active")
+    return out
+
+
 def history_warning_items(new: list[dict], kept: list[dict], cards: list[dict] | None = None, unknown: list[dict] | None = None) -> list[tuple[str, list[dict]]]:
     """What is odd in the visits of a file, among them and with the ones already kept — each said once, with the session and the site, and with the visits of the
     file that it is about (the ones that make it odd). They are questions for the one who knows the field, not reasons to refuse a visit."""

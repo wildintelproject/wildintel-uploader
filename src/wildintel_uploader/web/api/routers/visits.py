@@ -92,6 +92,34 @@ def _archive_locations(root, research_project_id: str, new: list[dict]) -> list[
     return done
 
 
+def _apply_to_entities(root, research_project_id: str, new: list[dict], before: list[dict]) -> None:
+    """What the visits just kept do to the cameras and the SD cards (see visit_rules.entity_changes): in the field, back to ready, or archived when stolen. What is archived is
+    for good, and is never changed; what the research project does not keep is left alone."""
+    history = list(before)
+    changes: list[tuple[dict, dict]] = []
+    for visit in sorted(new, key=visit_rules._stamp):
+        changes += [(visit, c) for c in visit_rules.entity_changes(visit, history)]
+        history.append(visit)
+    for kind in ("cameras", "sd_cards"):
+        wanted = [(v, c) for v, c in changes if c["kind"] == kind]
+        if not wanted:
+            continue
+        items = local_folder_service.list_field_items(root, research_project_id, kind)
+        changed = False
+        for visit, change in wanted:
+            for item in items:
+                names = {str(item.get("label") or "").strip().lower()} | ({str(item.get("camera_id") or "").strip().lower()} if kind == "cameras" else set())
+                if change["name"].strip().lower() not in names or item.get("status") == "archived" or item.get("status") == change["status"]:
+                    continue
+                item["status"] = change["status"]
+                if change["status"] == "archived":
+                    item["archive_reason"], item["status_date"] = change["reason"], visit.get("date")
+                    item["status_note"] = "Stolen" if kind == "cameras" else "Stolen with the camera"
+                changed = True
+        if changed:
+            local_folder_service.write_field_items(root, research_project_id, kind, items)
+
+
 @router.post("/list")
 def list_visits(req: ListVisitsRequest) -> dict:
     """The visits kept for a research project, those to one location only when it is given."""
@@ -126,6 +154,7 @@ def save_visit(req: SaveVisitRequest) -> dict:
             raise HTTPException(422, " ".join(reasons))
         kept = local_folder_service.write_visit(root, req.research_project_id, visit)
         _archive_locations(root, req.research_project_id, [kept])
+        _apply_to_entities(root, req.research_project_id, [kept], kept_visits)
         _refresh_states(root, req.research_project_id)
         return {**kept, "field_logs": _write_logs(root, req.research_project_id, [kept])}
     except local_folder_service.LocalFolderError as exc:
@@ -277,6 +306,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             saved = local_folder_service.write_visits(root, req.research_project_id, result["visits"])
             local_folder_service.write_unknown(root, req.research_project_id, result["unknown"])
             _archive_locations(root, req.research_project_id, result["visits"])
+            _apply_to_entities(root, req.research_project_id, result["visits"], kept)
             _refresh_states(root, req.research_project_id)
             field_logs = _write_logs(root, req.research_project_id, result["visits"])
             report = _save_report(req.research_project_id, result, saved)
