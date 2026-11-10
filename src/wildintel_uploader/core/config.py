@@ -19,6 +19,8 @@ import platformdirs
 from dynaconf import Dynaconf, loaders
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
+from wildintel_uploader.core.services import ids
+
 APP_NAME = "wildintel-uploader"
 DEFAULT_CONFIG_FILE = Path(platformdirs.user_config_dir(APP_NAME)) / "settings.toml"
 # More settings files besides the default one: every .toml in CONFIGS_DIR.
@@ -280,6 +282,7 @@ class Trapper(BaseModel):
     email: Optional[str] = Field(default=None, description="The trapper's email address — optional.")
     status: Literal["active", "inactive"] = Field(default="active", description="Whether the trapper still goes to the field; an inactive one is no longer suggested.")
     trapper_pk: Optional[int] = Field(default=None, description="Its id in Trapper, when it was taken from there — such a trapper can only be seen here.")
+    id: Optional[str] = Field(default=None, description="Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to.")
     created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
     updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
     deleted_at: Optional[str] = Field(default=None, description="When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted.")
@@ -343,6 +346,7 @@ class TrapperRole(BaseModel):
     research_project: str = Field(min_length=1, description="The acronym of the research project.")
     trapper: str = Field(min_length=1, description="The name of the trapper, as it is in the list of trappers.")
     role: Literal["contact", "principalInvestigator", "rightsHolder", "publisher", "contributor"] = Field(default="contributor", description="Its role in the research project.")
+    id: Optional[str] = Field(default=None, description="Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to.")
     created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
     updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
     deleted_at: Optional[str] = Field(default=None, description="When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted.")
@@ -365,6 +369,7 @@ class SdCard(BaseModel):
     archive_reason: Optional[Literal["lost", "stolen", "broken", "other"]] = Field(default=None, description="Why it was archived; other when it is none of the others (the status note says it).")
     status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
+    id: Optional[str] = Field(default=None, description="Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to.")
     created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
     updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
     deleted_at: Optional[str] = Field(default=None, description="When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted.")
@@ -406,6 +411,7 @@ class Camera(BaseModel):
     archive_reason: Optional[Literal["lost", "stolen", "broken", "other"]] = Field(default=None, description="Why it was archived; other when it is none of the others (the status note says it).")
     status_date: Optional[date] = Field(default=None, description="The day it stopped being active.")
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
+    id: Optional[str] = Field(default=None, description="Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to.")
     created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
     updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
     deleted_at: Optional[str] = Field(default=None, description="When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted.")
@@ -485,6 +491,8 @@ class FieldworkSettings(BaseModel):
                     username = username_from(str(t["name"]), taken)
                     taken.add(username)
                     t = {**t, "username": username}
+                if isinstance(t, dict) and not t.get("id") and t.get("username"):   # kept before the ids existed: the same one whenever it is read
+                    t = {**t, "id": ids.legacy_id("trapper", t["username"])}
                 migrated.append(t)
             trappers = migrated
         return trappers

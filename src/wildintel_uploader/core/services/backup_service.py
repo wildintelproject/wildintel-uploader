@@ -130,11 +130,13 @@ def create_backup(
             if project is not None:
                 entries.append((f"project/{PROJECT}", None, project))
             for kind, name in PROJECT_RECORDS.items():
-                records = store.read_records(research_project_id, kind)  # type: ignore[arg-type]
+                # what is kept points to other things by their ids, which are the app's own: the backup says them by what they are called, so that it can be restored anywhere
+                records = (local_folder_service.list_roles(root, research_project_id, include_deleted=True) if kind == "roles"
+                           else store.read_records(research_project_id, kind))  # type: ignore[arg-type]
                 if records:
                     entries.append((f"project/{name}", None, records))
             counts.update({"locations": info["locations"], "cameras": info["cameras"], "sd_cards": info["sd_cards"]})
-        if visits and (kept_visits := store.read_records(research_project_id, "visits")):  # type: ignore[arg-type]
+        if visits and (kept_visits := local_folder_service.list_visits(root, research_project_id)):  # type: ignore[arg-type]
             entries.append((f"project/{VISITS}", None, kept_visits))
             counts["visits"] = info["visits"]
         done_collections: set[str] = set()
@@ -236,7 +238,7 @@ def read_backup(root: Path, path: Path) -> dict:
                 here["deployments"][d["id"]] = folder.is_dir() and any(folder.iterdir())
             if f"project/{VISITS}" in names:
                 backed = json.loads(zf.read(f"project/{VISITS}"))
-                mine = {_key(v) for v in local_folder_service._raw_visits(root, project)} if here["project"] else set()
+                mine = {_key(v) for v in local_folder_service.list_visits(root, project)} if here["project"] else set()
                 here["visits"] = {"in_backup": len(backed), "already": sum(_key(v) in mine for v in backed)}
         has_images = {d["id"]: any(n.startswith(f"deployments/{d['collection']}/{d['id']}/") and _is_image(n) for n in names) for d in scope.get("deployments", [])}
     return {"manifest": manifest, "here": here, "has_images": has_images}
@@ -257,7 +259,7 @@ def _merge(current: list[dict], backed: list[dict], key, *, replace: bool) -> tu
             out.append(item)
             added += 1
         elif replace and out[index[k]].get("status") != "archived":
-            out[index[k]] = item
+            out[index[k]] = {**item, **({"id": out[index[k]]["id"]} if out[index[k]].get("id") else {})}   # the one that is replaced is still the same one: others point to its id
             replaced += 1
         else:
             skipped += 1
@@ -312,18 +314,23 @@ def restore_backup(
                 if f"project/{PROJECT_RECORDS[kind]}" not in names:
                     continue
                 backed = [i for i in json.loads(zf.read(f"project/{PROJECT_RECORDS[kind]}")) if isinstance(i, dict)]
-                current = store.read_records(project, kind)  # type: ignore[arg-type]
-                merged, added, replaced, skipped = _merge(current, backed, key, replace=replace)
-                store.write_records(project, kind, merged)  # type: ignore[arg-type]
+                if kind == "roles":   # told by the name of the trapper: it is kept by its id, whoever the trapper is here
+                    current = local_folder_service.list_roles(root, project)  # type: ignore[arg-type]
+                    merged, added, replaced, skipped = _merge(current, [r for r in backed if not r.get("deleted_at")], key, replace=replace)
+                    local_folder_service.write_roles(root, project, merged)  # type: ignore[arg-type]
+                else:
+                    current = store.read_records(project, kind)  # type: ignore[arg-type]
+                    merged, added, replaced, skipped = _merge(current, backed, key, replace=replace)
+                    store.write_records(project, kind, merged)  # type: ignore[arg-type]
                 summary["project_files"][label] = {"added": added, "replaced": replaced, "kept": skipped}
         if wants_project and visits:
             yield {"type": "step", "message": f"Restoring the visits of {project}…"}
             if f"project/{VISITS}" not in names:
                 raise BackupError("That backup holds no visits.")
             backed = [v for v in json.loads(zf.read(f"project/{VISITS}")) if isinstance(v, dict)]
-            current = store.read_records(project, "visits")  # type: ignore[arg-type]
+            current = local_folder_service.list_visits(root, project)  # type: ignore[arg-type]
             merged, added, replaced, skipped = _merge(current, backed, _key, replace=replace)
-            store.write_records(project, "visits", merged)  # type: ignore[arg-type]
+            local_folder_service.replace_visits(root, project, merged)  # type: ignore[arg-type]
             summary["visits"] = {"added": added, "replaced": replaced, "kept": skipped}
         if wants_project and deployments:
             wanted = {d["id"]: d for d in scope.get("deployments", []) if d["id"] in deployments}

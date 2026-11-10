@@ -17,9 +17,9 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from wildintel_uploader.core import storage
+from wildintel_uploader.core import config, storage
 from wildintel_uploader.core.config import migrate_gear
-from wildintel_uploader.core.services import audit, visit_time
+from wildintel_uploader.core.services import audit, ids, visit_time
 
 logger = logging.getLogger(__name__)
 
@@ -257,8 +257,27 @@ def list_locations(root: Path, research_project_id: str, include_deleted: bool =
         LocalFolderError: the research project id can't be a folder name.
     """
     # what was kept as "retired" is archived now
-    kept = [{**l, "status": "archived"} if l.get("status") == "retired" else l for l in _store(root).read_records(research_project_id, "locations")]
+    kept = [{**l, "status": "archived"} if l.get("status") == "retired" else l for l in _read_with_ids(root, research_project_id, "locations", _LOCATION_KEY)]
     return kept if include_deleted else audit.alive(kept)
+
+
+def _read_with_ids(root: Path, research_project_id: str, kind: str, key_of) -> list[dict]:
+    """The records of a kind as they are kept, each with its `id`: what was kept before the ids existed gets its own the first time it is read — the same one whenever it is
+    (see ids.legacy_id) — and is written so, to keep it from then on."""
+    store = _store(root)
+    records = store.read_records(research_project_id, kind)
+    given, fixed = [], False
+    for r in records:
+        if not r.get("id"):
+            r, fixed = {**r, "id": ids.legacy_id(kind, key_of(r), research_project_id)}, True
+        given.append(r)
+    if fixed:
+        store.write_records(research_project_id, kind, given)
+    return given
+
+
+_LOCATION_KEY = lambda r: r.get("location_id", "")   # noqa: E731
+_GEAR_KEY = lambda r: r.get("label") or r.get("camera_id") or ""   # noqa: E731
 
 
 def _index_of(locations: list[dict], location_id: str, deleted: bool = False) -> int | None:
@@ -347,23 +366,27 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
 def list_field_items(root: Path, research_project_id: str, kind: str, include_deleted: bool = False) -> list[dict]:
     """The cameras (`kind` "cameras") or the SD cards ("sd_cards") kept for a research project — each with its `research_project` set to it. Empty until one is kept. One that
     was deleted is kept, but is not listed (`include_deleted` lists it too)."""
-    items = [{**migrate_gear(i), "research_project": research_project_id} for i in _store(root).read_records(research_project_id, kind)]
+    items = [{**migrate_gear(i), "research_project": research_project_id} for i in _read_with_ids(root, research_project_id, kind, _GEAR_KEY)]
     return items if include_deleted else audit.alive(items)
 
 
 def _kept_list(root: Path, research_project_id: str, kind: str, items: list[dict], key) -> None:
     """Keeps `items` as all the `kind` of the research project that are listed: the ones that were kept and are not among them are **deleted logically** — they get `deleted_at` and stay,
-    with all they said — and one that was deleted and is among them comes back. Each keeps its `created_at` and gets a new `updated_at` when it changed (see audit)."""
+    with all they said — and one that was deleted and is among them comes back. Each keeps its `id`, its `created_at` and gets a new `updated_at` when it changed (see audit).
+
+    An item is the one that was kept when it says its `id` — so one that is renamed is the same one, and what points to it still does — or, if it says none, when it has the same `key`."""
     store = _store(root)
-    kept = store.read_records(research_project_id, kind)
-    before = {key(i): i for i in kept}
+    kept = _read_with_ids(root, research_project_id, kind, (lambda r: f"{r.get('trapper_ref') or r.get('trapper')}:{r.get('role')}") if kind == "roles" else _GEAR_KEY)
+    by_id = {r["id"]: r for r in kept if r.get("id")}
+    by_key = {key(r): r for r in kept}
     at = audit.now()
     out, listed = [], set()
     for item in items:
-        k = key(item)
-        listed.add(k)
-        out.append(audit.stamped({n: v for n, v in item.items() if n != "research_project"}, before.get(k), at))
-    out += [audit.deleted(i, at) for k, i in before.items() if k not in listed]   # what is no longer listed is not forgotten
+        before = by_id.get(item.get("id")) or by_key.get(key(item))
+        if before is not None:
+            listed.add(before["id"])
+        out.append(audit.stamped({n: v for n, v in item.items() if n != "research_project"}, before, at))
+    out += [audit.deleted(r, at) for r in kept if r["id"] not in listed]   # what is no longer listed is not forgotten
     store.write_records(research_project_id, kind, out)
 
 
@@ -382,20 +405,50 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
 # What each trapper is in a research project — a contributor's role in Camtrap DP —: <research project>/roles.json. The trappers, the people, are global (the settings);
 # their roles are the project's.
 
-def list_roles(root: Path, research_project_id: str, include_deleted: bool = False) -> list[dict]:
-    """The roles kept for a research project — each with its `research_project` set to it. One that was deleted is kept, but is not listed."""
-    roles = [{**r, "research_project": research_project_id} for r in _store(root).read_records(research_project_id, "roles")]
+def _trapper_records(trappers=None) -> list[dict]:
+    """The trappers — global, in the settings — as records, those that were deleted too: a visit or a role of one that was deleted still says who it was. `trappers` are those to use
+    instead of the saved ones (the settings that are being saved)."""
+    if trappers is None:
+        trappers = config.load_settings().FIELDWORK.trappers
+    return [t if isinstance(t, dict) else t.model_dump(mode="json") for t in trappers]
+
+
+def _role_key(r: dict):
+    return (r.get("trapper_ref") or str(r.get("trapper") or "").strip().lower(), r.get("role") or "contributor")
+
+
+def list_roles(root: Path, research_project_id: str, include_deleted: bool = False, trappers=None) -> list[dict]:
+    """The roles kept for a research project — each with its `research_project` set to it and the name of its trapper (it is kept by the trapper's id, so a trapper that is renamed
+    is still the one that has the role). One that was deleted is kept, but is not listed."""
+    people = {t["id"]: t for t in _trapper_records(trappers) if t.get("id")}
+    roles = []
+    for r in _read_with_ids(root, research_project_id, "roles", lambda r: f"{r.get('trapper_ref') or r.get('trapper')}:{r.get('role')}"):
+        told = {k: v for k, v in r.items() if k != "trapper_ref"}
+        if r.get("trapper_ref") in people:
+            told["trapper"] = people[r["trapper_ref"]]["name"]
+        roles.append({**told, "research_project": research_project_id})
     return roles if include_deleted else audit.alive(roles)
 
 
-def write_roles(root: Path, research_project_id: str, roles: list[dict]) -> None:
-    """Keeps these roles as all of the research project's: the ones that were kept and are not in it are deleted *logically*, as the cameras are.
+def write_roles(root: Path, research_project_id: str, roles: list[dict], trappers=None) -> None:
+    """Keeps these roles — each with the name of its trapper — as all of the research project's: the ones that were kept and are not in it are deleted *logically*, as the cameras
+    are. A role is kept by the id of its trapper; one whose trapper is not among the trappers keeps the name it was given.
 
     Raises:
         LocalFolderError: the research project isn't in the collections folder.
     """
     require_research_project(root, research_project_id)
-    _kept_list(root, research_project_id, "roles", roles, lambda r: (str(r.get("trapper") or "").strip().lower(), r.get("role") or "contributor"))
+    by_name = {str(t.get("name", "")).strip().lower(): t for t in _trapper_records(trappers)}
+    stored = []
+    for r in roles:
+        item = {k: v for k, v in r.items() if k not in ("trapper", "research_project", "trapper_ref")}
+        person = by_name.get(str(r.get("trapper") or "").strip().lower())
+        if person and person.get("id"):
+            item["trapper_ref"] = person["id"]
+        else:
+            item["trapper"] = r.get("trapper")
+        stored.append(item)
+    _kept_list(root, research_project_id, "roles", stored, _role_key)
 
 
 def list_all_field_items(root: Path, kind: str) -> list[dict]:
@@ -403,9 +456,9 @@ def list_all_field_items(root: Path, kind: str) -> list[dict]:
     return [item for project in list_research_projects(root) for item in list_field_items(root, project["acronym"], kind)]
 
 
-def list_all_roles(root: Path) -> list[dict]:
+def list_all_roles(root: Path, trappers=None) -> list[dict]:
     """The roles of every research project kept in the collections folder, project after project."""
-    return [role for project in list_research_projects(root) for role in list_roles(root, project["acronym"])]
+    return [role for project in list_research_projects(root) for role in list_roles(root, project["acronym"], trappers=trappers)]
 
 
 def _raw_visits(root: Path, research_project_id: str) -> list[dict]:
@@ -416,57 +469,144 @@ def _write_raw_visits(root: Path, research_project_id: str, visits: list[dict]) 
     _store(root).write_records(research_project_id, "visits", visits)
 
 
+class _Refs:
+    """What the visits of a research project point to, by id and by what it is called: its locations, cameras and SD cards, and the trappers — those that were deleted too."""
+
+    def __init__(self, locations: list[dict], cameras: list[dict], sd_cards: list[dict], trappers: list[dict]):
+        self.locations = locations
+        self.by_label: dict[str, dict[str, dict]] = {"location": {}, "camera": {}, "sd": {}, "trapper": {}}
+        self.by_id: dict[str, dict[str, dict]] = {"location": {}, "camera": {}, "sd": {}, "trapper": {}}
+        for l in locations:
+            self._add("location", l, [l.get("location_id")])
+        for c in cameras:
+            self._add("camera", c, [c.get("camera_id"), c.get("label")])
+        for c in sd_cards:
+            self._add("sd", c, [c.get("label")])
+        for t in trappers:
+            self._add("trapper", t, [t.get("name"), t.get("username")])
+
+    def _add(self, kind: str, record: dict, labels: list) -> None:
+        if record.get("id"):
+            self.by_id[kind][record["id"]] = record
+        for label in labels:
+            if label:
+                self.by_label[kind].setdefault(str(label).strip().lower(), record)
+
+
+# What a visit says of what it points to — (told as, kept as an id in, kind): told by what it is called, kept by the id. What cannot be found (a card nobody registered) is kept as it was said.
+_POINTS_TO = (("location_id", "location_ref", "location"), ("camera_id", "camera_ref", "camera"), ("sd", "sd_ref", "sd"), ("setup_by", "setup_by_ref", "trapper"))
+_CALLED = {
+    "location": lambda r: r.get("location_id"), "camera": lambda r: r.get("camera_id") or r.get("label"), "sd": lambda r: r.get("label"), "trapper": lambda r: r.get("name"),
+}
+
+
+def _refs(root: Path, research_project_id: str, trappers=None) -> _Refs:
+    return _Refs(
+        list_locations(root, research_project_id, include_deleted=True), list_field_items(root, research_project_id, "cameras", include_deleted=True),
+        list_field_items(root, research_project_id, "sd_cards", include_deleted=True), _trapper_records(trappers),
+    )
+
+
 def _location_of(locations: list[dict], location_id) -> dict | None:
     return next((l for l in locations if str(l.get("location_id", "")).lower() == str(location_id or "").lower()), None)
 
 
-def _kept(visit: dict, locations: list[dict]) -> dict:
-    """A visit as it is kept: the instant, ISO 8601 in UTC with a Z (`when`), and not the day and the time of the wall clock of its location."""
-    if visit.get("when"):
-        return {k: v for k, v in visit.items() if k not in ("date", "time")}
-    if not (visit.get("date") and visit.get("time")):
-        return dict(visit)  # no time to keep
-    out = {k: v for k, v in visit.items() if k not in ("date", "time")}
-    out["when"] = visit_time.to_when(visit["date"], visit["time"], _location_of(locations, visit.get("location_id")))
+def _site(visit: dict, refs: _Refs) -> str:
+    """The site of a visit, as it is called — whether the visit is kept (by the id of its location) or told."""
+    return str((refs.by_id["location"].get(visit.get("location_ref")) or {}).get("location_id") or visit.get("location_id") or "")
+
+
+def _linked(visit: dict, refs: _Refs) -> dict:
+    """A visit with what it points to said by id: the location, the camera, the SD card and who went and set it up are the ones the research project has — if it has them —, so the
+    visit says *which* — their ids — and not what they are called, which can be corrected. What it points to that the research project has not is kept as it was said, and is
+    linked when it has it."""
+    out = dict(visit)
+    for told, kept, kind in _POINTS_TO:
+        text = out.get(told)
+        record = refs.by_label[kind].get(str(text).strip().lower()) if text not in (None, "") else None
+        if record is not None and record.get("id"):
+            out[kept] = record["id"]
+            out.pop(told, None)
+    names = [n.strip() for n in str(out.get("trappers") or "").split(",") if n.strip()]
+    if names:
+        found = [refs.by_label["trapper"].get(n.lower()) for n in names]
+        known = [*(out.get("trapper_refs") or []), *[r["id"] for r in found if r is not None and r.get("id")]]
+        if known:
+            out["trapper_refs"] = list(dict.fromkeys(known))
+        rest = [n for n, r in zip(names, found) if r is None or not r.get("id")]
+        if rest:
+            out["trappers"] = ", ".join(rest)
+        else:
+            out.pop("trappers", None)
     return out
+
+
+def _unlinked(visit: dict, refs: _Refs) -> dict:
+    """A visit as it is told: what it points to said by what it is called now."""
+    out = dict(visit)
+    for told, kept, kind in _POINTS_TO:
+        record = refs.by_id[kind].get(out.pop(kept, None))
+        if record is not None:
+            out[told] = _CALLED[kind](record)
+    named = [str(refs.by_id["trapper"][t]["name"]) for t in out.pop("trapper_refs", None) or [] if t in refs.by_id["trapper"]]
+    rest = [n.strip() for n in str(out.get("trappers") or "").split(",") if n.strip()]
+    if named or "trappers" in out:
+        out["trappers"] = ", ".join([*named, *rest]) or None
+    return out
+
+
+def _kept(visit: dict, refs: _Refs) -> dict:
+    """A visit as it is kept: the instant, ISO 8601 in UTC with a Z (`when`), and not the day and the time of the wall clock of its location; and what it points to said by id."""
+    if visit.get("when"):
+        return _linked({k: v for k, v in visit.items() if k not in ("date", "time")}, refs)
+    if not (visit.get("date") and visit.get("time")):
+        return _linked(dict(visit), refs)  # no time to keep
+    out = {k: v for k, v in visit.items() if k not in ("date", "time")}
+    out["when"] = visit_time.to_when(visit["date"], visit["time"], _location_of(refs.locations, _site(visit, refs)))
+    return _linked(out, refs)
 
 
 _CARD_CODES_BEFORE = {"SinPilas": "NoBatteries", "CarFullSinPilas": "CarFullNoBatteries"}
 
 
-def _told(visit: dict, locations: list[dict]) -> dict:
-    """A visit as it is told: with the day and the time of the wall clock of its location, from its instant, beside it. The card and the batteries are told as they
-    are written now: a visit kept with SinPilas or CarFullSinPilas says NoBatteries or CarFullNoBatteries."""
+def _told(visit: dict, refs: _Refs) -> dict:
+    """A visit as it is told: with the day and the time of the wall clock of its location, from its instant, beside it, and what it points to by what it is called. The card and
+    the batteries are told as they are written now: a visit kept with SinPilas or CarFullSinPilas says NoBatteries or CarFullNoBatteries."""
     if visit.get("card_batteries_ok") in _CARD_CODES_BEFORE:
         visit = {**visit, "card_batteries_ok": _CARD_CODES_BEFORE[visit["card_batteries_ok"]]}
-    if not visit.get("when"):
-        return dict(visit)
-    date, time = visit_time.to_wall(visit["when"], _location_of(locations, visit.get("location_id")))
-    return {**visit, "date": date, "time": time}
+    told = _unlinked(visit, refs)
+    if not told.get("when"):
+        return told
+    date, time = visit_time.to_wall(told["when"], _location_of(refs.locations, told.get("location_id")))
+    return {**told, "date": date, "time": time}
 
 
-def list_visits(root: Path, research_project_id: str, location_id: str | None = None) -> list[dict]:
+def list_visits(root: Path, research_project_id: str, location_id: str | None = None, trappers=None) -> list[dict]:
     """The visits kept for a research project, in the order they were registered — those to one location (found ignoring
     case) when it is given. Empty until one is registered.
 
     A visit is kept as an instant, `when` (ISO 8601, UTC, with a Z), and told with the day (`date`) and the time (`time`) of the wall clock of its
-    location, in the timezone the location says. A file kept with a day and a time only (an earlier version) is moved to instants when it is read —
-    in the timezone its locations say, and written back so — and the visits come the same.
+    location, in the timezone the location says. It is kept pointing to its location, its camera, its SD card and the trappers by their ids, and told with what they are called
+    now (see ids). A file kept with a day and a time only, or with the names (an earlier version), is moved to instants and to ids when it is read — in the timezone its
+    locations say —, and written back so; and the visits come the same.
 
     Raises:
         LocalFolderError: the research project id can't be a folder name.
     """
     raw = _raw_visits(root, research_project_id)
-    locations = list_locations(root, research_project_id, include_deleted=True)
+    refs = _refs(root, research_project_id, trappers)
     kept = []
     for visit in raw:
         try:
-            kept.append(_kept(visit, locations))
+            one = _kept(visit, refs)
         except (KeyError, ValueError, TypeError):
-            kept.append(visit)  # not a visit it can read the time of: left as it is
+            one = visit  # not a visit it can read the time of: left as it is
+        if not one.get("id"):   # kept before the ids existed: the same one whenever it is read
+            one = {**one, "id": ids.legacy_id("visit", f"{_site(one, refs)}|{one.get('when') or ''}", research_project_id)}
+        kept.append(one)
     if kept != raw and raw:
         _write_raw_visits(root, research_project_id, kept)
-    visits = [_told(v, locations) for v in kept]
+    visits = [_told(v, refs) for v in kept]
     if location_id is None:
         return visits
     return [v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower()]
@@ -486,20 +626,31 @@ def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
         LocalFolderError: the research project isn't there.
     """
     write_visits(root, research_project_id, [visit])
-    locations = list_locations(root, research_project_id, include_deleted=True)
-    return _told(_raw_visits(root, research_project_id)[-1], locations)
+    return _told(_raw_visits(root, research_project_id)[-1], _refs(root, research_project_id))
 
 
 def list_unknown(root: Path, research_project_id: str) -> list[dict]:
     """The visits that are unknown — {"location_id", "session"}: the revisions before the first one kept to a site, of which nothing is known (see visit_rules.unknown_records)."""
-    return [u for u in _store(root).read_records(research_project_id, "unknown_visits") if u.get("location_id") and u.get("session")]
+    where = {l["id"]: l for l in list_locations(root, research_project_id, include_deleted=True) if l.get("id")}
+    out = []
+    for u in _store(root).read_records(research_project_id, "unknown_visits"):
+        site = (where.get(u.get("location_ref")) or {}).get("location_id") or u.get("location_id")
+        if site and u.get("session"):
+            out.append({"location_id": site, "session": u["session"]})
+    return out
 
 
 def _write_unknown(root: Path, research_project_id: str, unknown: list[dict]) -> None:
-    if unknown:
-        _store(root).write_records(research_project_id, "unknown_visits", unknown)
-    else:
+    """Keeps the unknown visits — each pointing to its location by id, when the research project has it."""
+    if not unknown:
         _store(root).delete_records(research_project_id, "unknown_visits")
+        return
+    where = {str(l.get("location_id", "")).lower(): l for l in list_locations(root, research_project_id, include_deleted=True)}
+    stored = []
+    for u in unknown:
+        place = where.get(str(u["location_id"]).lower())
+        stored.append({"location_ref": place["id"], "session": u["session"]} if place and place.get("id") else {"location_id": u["location_id"], "session": u["session"]})
+    _store(root).write_records(research_project_id, "unknown_visits", stored)
 
 
 def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
@@ -523,18 +674,18 @@ def update_visit(root: Path, research_project_id: str, location_id: str, session
     Raises:
         LocalFolderError: the research project isn't there, or it has no visit to that site in that revision."""
     require_research_project(root, research_project_id)
-    locations = list_locations(root, research_project_id, include_deleted=True)
-    list_visits(root, research_project_id)  # an earlier file is moved to instants first
+    list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
+    refs = _refs(root, research_project_id)
     raw = _raw_visits(root, research_project_id)
-    index = next((i for i, v in enumerate(raw) if str(v.get("location_id", "")).lower() == location_id.lower() and str(v.get("session") or "").upper() == session.upper()), None)
+    index = next((i for i, v in enumerate(raw) if _site(v, refs).lower() == location_id.lower() and str(v.get("session") or "").upper() == session.upper()), None)
     if index is None:
         raise LocalFolderError(f"There is no visit to {location_id} in {session}.")
-    kept = _kept({**visit, "location_id": raw[index]["location_id"], "session": raw[index]["session"]}, locations)
+    kept = _kept({**visit, "location_id": _site(raw[index], refs), "session": raw[index]["session"]}, refs)
     if raw[index].get("deployment_id"):
         kept["deployment_id"] = raw[index]["deployment_id"]
     raw[index] = audit.stamped(kept, raw[index])
     _write_raw_visits(root, research_project_id, raw)
-    return _told(raw[index], locations)
+    return _told(raw[index], refs)
 
 
 def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
@@ -545,10 +696,10 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
     """
     require_research_project(root, research_project_id)
     if new:
-        locations = list_locations(root, research_project_id, include_deleted=True)
-        list_visits(root, research_project_id)  # an earlier file is moved to instants first
+        list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
+        refs = _refs(root, research_project_id)
         at = audit.now()
-        _write_raw_visits(root, research_project_id, _raw_visits(root, research_project_id) + [audit.stamped(_kept(v, locations), None, at) for v in new])
+        _write_raw_visits(root, research_project_id, _raw_visits(root, research_project_id) + [audit.stamped(_kept(v, refs), None, at) for v in new])
         # a visit that is known takes the place of the unknown one of its site in its revision
         known = {(str(v.get("location_id", "")).lower(), str(v.get("session") or "").upper()) for v in new}
         unknown = list_unknown(root, research_project_id)
@@ -556,6 +707,17 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
         if len(left) != len(unknown):
             _write_unknown(root, research_project_id, left)
     return len(new)
+
+
+def replace_visits(root: Path, research_project_id: str, visits: list[dict]) -> None:
+    """Keeps these visits — told, as `list_visits` gives them — as all the research project's: a backup that is restored, say. Each is kept as an instant and pointing by id to
+    what the research project has that it is called; it keeps its own `id` and its dates.
+
+    Raises:
+        LocalFolderError: the research project isn't there."""
+    require_research_project(root, research_project_id)
+    refs = _refs(root, research_project_id)
+    _write_raw_visits(root, research_project_id, [_kept(v, refs) for v in visits])
 
 
 def list_upload_failures(root: Path, research_project_id: str) -> list[dict]:
@@ -578,11 +740,12 @@ def set_upload_failure(root: Path, research_project_id: str, deployment_id: str,
 
 def write_states(root: Path, research_project_id: str, states: dict[tuple[str, str], str | None]) -> int:
     """Keeps the `state` of the visits — found by their site (ignoring case) and their instant — where it changed; returns how many changed."""
-    list_visits(root, research_project_id)  # an earlier file is moved to instants first
+    list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
+    refs = _refs(root, research_project_id)
     raw = _raw_visits(root, research_project_id)
     changed = 0
     for visit in raw:
-        key = (str(visit.get("location_id", "")).lower(), str(visit.get("when") or ""))
+        key = (_site(visit, refs).lower(), str(visit.get("when") or ""))
         if key in states and visit.get("state") != states[key]:
             visit["state"] = states[key]
             audit.touched(visit)
@@ -633,18 +796,18 @@ def link_visit(root: Path, research_project_id: str, location_id: str, date: str
     Raises:
         LocalFolderError: the visit isn't in the research project.
     """
-    list_visits(root, research_project_id)  # an earlier file is moved to instants first
+    list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
     raw = _raw_visits(root, research_project_id)
-    locations = list_locations(root, research_project_id, include_deleted=True)
-    visit = next((v for v in raw if str(v.get("location_id", "")).lower() == location_id.lower()
-                  and (_told(v, locations).get("date"), _told(v, locations).get("time")) == (date, time)), None)
+    refs = _refs(root, research_project_id)
+    visit = next((v for v in raw if _site(v, refs).lower() == location_id.lower()
+                  and (_told(v, refs).get("date"), _told(v, refs).get("time")) == (date, time)), None)
     if visit is None:
         raise LocalFolderError(f"There is no visit to {location_id} on {date} at {time} in {research_project_id}.")
     if visit.get("deployment_id") != deployment_id:
         visit["deployment_id"] = deployment_id
         audit.touched(visit)
     _write_raw_visits(root, research_project_id, raw)
-    return _told(visit, locations)
+    return _told(visit, refs)
 
 
 def location_time(root: Path, research_project_id: str, location_id: str | None) -> dict:

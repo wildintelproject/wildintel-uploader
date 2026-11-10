@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from wildintel_uploader.core.services import ids   # the id is kept with the dates: a record has both, written by the app
+
 AUDIT_FIELDS = ("created_at", "updated_at", "deleted_at")
 
 
@@ -25,7 +27,7 @@ def now() -> str:
 
 def _content(record: dict) -> dict:
     """What a record says, apart from its dates, and with what it leaves empty (None or "") taken as not said."""
-    return {k: v for k, v in record.items() if k not in AUDIT_FIELDS and v not in (None, "")}
+    return {k: v for k, v in record.items() if k not in AUDIT_FIELDS and k != "id" and v not in (None, "")}
 
 
 def stamped(record: dict, before: dict | None, at: str | None = None, keep_given: bool = False) -> dict:
@@ -33,7 +35,8 @@ def stamped(record: dict, before: dict | None, at: str | None = None, keep_given
 
     `keep_given` takes the dates a *new* record already has — a record that is put back from a backup — instead of the instant of now."""
     at = at or now()
-    out = {k: v for k, v in record.items() if k not in AUDIT_FIELDS}
+    out = {k: v for k, v in record.items() if k not in AUDIT_FIELDS and k != "id"}
+    out["id"] = (before or {}).get("id") or ids.new_id()   # the id is the app's too: a record keeps the one it has, and what a client sends for it is not taken
     if before is None:
         created = (record.get("created_at") if keep_given else None) or at
         out["created_at"] = created

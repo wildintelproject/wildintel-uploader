@@ -64,7 +64,7 @@ def test_the_trappers_start_empty_and_are_saved_clean():
 
 def _no_dates(items: list[dict]) -> list[dict]:
     """The records without the dates the app writes (`created_at`, `updated_at`, `deleted_at`), which have their own tests."""
-    return [{k: v for k, v in item.items() if k not in ("created_at", "updated_at", "deleted_at")} for item in items]
+    return [{k: v for k, v in item.items() if k not in ("id", "created_at", "updated_at", "deleted_at")} for item in items]
 
 
 def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
@@ -627,3 +627,21 @@ def test_a_trapper_without_a_username_or_with_one_that_another_has_is_refused_an
     _client().put("/api/settings", json=body)
     now = [t for t in config.load_settings().FIELDWORK.trappers if not t.deleted_at]
     assert [(t.username, t.name, t.email) for t in now] == [("ana", "Ana Pérez López", None)] and now[0].created_at == first.created_at
+
+
+def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_is_renamed(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+    first = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}], "sd_cards": [{"label": "A1", "research_project": "DONA"}]})["FIELDWORK"]
+    ana, card = first["trappers"][0], first["sd_cards"][0]
+    assert len(ana["id"]) == 36 and len(card["id"]) == 36                                          # the ids the app generated
+
+    # the page corrects the username and the label, and sends back what it was given
+    renamed = _put(FIELDWORK={"trappers": [{**ana, "username": "ana.perez"}], "sd_cards": [{**card, "label": "A-1"}]})["FIELDWORK"]
+    assert (renamed["trappers"][0]["id"], renamed["trappers"][0]["username"]) == (ana["id"], "ana.perez")
+    assert (renamed["sd_cards"][0]["id"], renamed["sd_cards"][0]["label"]) == (card["id"], "A-1")
+    assert len(config.load_settings().FIELDWORK.trappers) == 1                                    # not a trapper deleted and another one added
+    assert len(svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)) == 1
+
+    # and an id the page makes up is not taken: a new one is kept with an id of the app's
+    forged = _put(FIELDWORK={"trappers": [{"username": "luis", "name": "Luis", "id": "mine"}]})["FIELDWORK"]["trappers"][0]
+    assert forged["id"] != "mine" and len(forged["id"]) == 36

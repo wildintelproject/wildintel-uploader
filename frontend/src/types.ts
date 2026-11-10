@@ -602,6 +602,8 @@ export type TrapperRoleName = 'contact' | 'principalInvestigator' | 'rightsHolde
 
 /** What a trapper is in a research project. */
 export interface TrapperRole {
+  /** Its internal id — a UUID the app generates when it is kept: never typed, never changed; what the other records point to it by. Send back the one you were given. */
+  id?: string | null
   research_project: string
   trapper: string
   role: TrapperRoleName
@@ -631,6 +633,8 @@ export type ResearchProjectStatus = 'planned' | 'active' | 'finished'
 
 /** One of the SD cards: what it is called (its number, or the label on it), who makes it, what it holds and the day it was put into production. */
 export interface SdCard {
+  /** Its internal id — a UUID the app generates when it is kept: never typed, never changed; what the other records point to it by. Send back the one you were given. */
+  id?: string | null
   label: string
   brand: string | null
   capacity: string | null
@@ -654,6 +658,8 @@ export type CameraPowerSource = 'cells' | 'battery'
 
 /** One of the camera traps, named as Camtrap DP names it. */
 export interface Camera {
+  /** Its internal id — a UUID the app generates when it is kept: never typed, never changed; what the other records point to it by. Send back the one you were given. */
+  id?: string | null
   /** What it is called in the field: the one thing it is asked for. */
   label: string
   /** Its serial number, when it is known. */
@@ -682,6 +688,8 @@ export interface Camera {
 
 /** One of the people who go to the field, as wildintel-publisher keeps an author. */
 export interface Trapper {
+  /** Its internal id — a UUID the app generates when it is kept: never typed, never changed; what the other records point to it by. Send back the one you were given. */
+  id?: string | null
   /** What the trapper is called in the app: required, and unique among the trappers (whatever its case), as the label of an SD card is. */
   username: string
   /** The full name — how a visit says who went. */
@@ -729,6 +737,8 @@ export interface LocalResearchProject extends ResearchProjectDraft {
 
 /** A location of one of those (locations.json). */
 export interface LocalLocation {
+  /** Its internal id — a UUID the app generates when it is kept: never typed, never changed; what the other records point to it by. */
+  id?: string | null
   location_id: string
   name: string | null
   /** IANA timezone, when known. It belongs to the location, never to a deployment. */
@@ -777,6 +787,8 @@ export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'l
   longitude: number | null
   /** The deployment this visit closed, once it is imported. */
   deployment_id?: string | null
+  /** Its internal id — a UUID the app generates when it is kept: never typed, never changed; what the other records point to it by. Send back the one you were given. */
+  id?: string | null
   /** When it was kept here and when it was last changed — ISO 8601, UTC, with a Z: written by the app, never typed (what is sent for them is not taken). Absent on one kept before they existed. */
   created_at?: string | null
   updated_at?: string | null
