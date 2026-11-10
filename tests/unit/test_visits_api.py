@@ -1458,3 +1458,12 @@ def test_where_the_camera_was_taken_away_a_new_one_can_be_put_up_and_the_site_ca
         archive = _save({**VISIT, "actions": ["Archive"], "camera_id": None, "num_photos": None, "sd": None, "date": "2025-01-12", "session": "R0005"})
 
     assert again.status_code == 200 and archive.status_code == 200
+
+
+def test_a_stolen_camera_replaced_is_not_said_to_leave_its_card_uncollected(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        stolen = _import(tmp_path, "location_id,session,date,time,actions,camera_id,sd\nDONA_01,R0002,2024-11-12,09:00,Stolen + Installation,P900,B2\n", given_up="2024-01-01").json()
+
+    assert stolen["problems"] == [] and stolen["warnings"] == []          # the card went with the camera: the visit says so

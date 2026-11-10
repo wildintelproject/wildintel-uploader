@@ -363,8 +363,9 @@ def history_warning_items(new: list[dict], kept: list[dict], cards: list[dict] |
         # Where its camera and its card are, with what came before it — the visits of the file included.
         for message in availability_errors(before, v, cards, unknown).values():
             say(f"{label(v)}: {message}", v)
-        # An Installation while the card left at the visit before was not collected: nothing closes that deployment.
-        if "Installation" in v["actions"] and "Revision" not in v["actions"]:
+        # An Installation while the card left at the visit before was not collected: nothing closes that deployment — unless the visit itself takes the card (a Revision, a
+        # Desinstallation) or the camera went with it (a Stolen camera: its card is lost with it, and that is said by the visit).
+        if "Installation" in v["actions"] and not {"Revision", "Desinstallation", "Stolen"} & set(v["actions"]):
             last = max((e for e in before if _same(e["location_id"], v["location_id"]) and _stamp(e) < _stamp(v)
                         and str(e.get("camera_status") or "").lower() not in NOT_REVISED), key=_stamp, default=None)
             if last and _leaves_card(last) and not _takes_away(last) and last.get("sd") and _seconds(v) - _seconds(last) >= 86400:
