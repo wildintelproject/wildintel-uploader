@@ -324,11 +324,13 @@ def write_location(root: Path, research_project_id: str, location: dict) -> dict
     return kept
 
 
-def update_location(root: Path, research_project_id: str, location_id: str, changes: dict) -> dict:
+def update_location(root: Path, research_project_id: str, location_id: str, changes: dict, by_visit: bool = False) -> dict:
     """Changes a kept location's fields (found ignoring case) — only the keys in changes, the rest stay. Its timezone, and whether its cameras ignore
     summer time, are fixed when it is created: every instant kept for it (a visit's `when`) was worked out with them, so they say the same or are refused.
 
-    An archived location is archived for good: it never goes back to active or to planned.
+    An archived location is archived for good: it never goes back to active or to planned. By hand (not `by_visit`: a visit that puts a camera up or takes it away, or
+    gives the site up, moves it as it moves) the status is changed only where the visits allow: a site is active when a camera is put up there, which a visit does; and it
+    leaves the app — planned, archived — only with no camera out and no visit still to be made in a revision that has begun.
 
     Raises:
         LocalFolderError: the research project or the location isn't there, the timezone (or the summer-time setting) is changed, or an archived location is given another status.
@@ -340,6 +342,11 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
         raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
     if locations[index].get("status") == "archived" and changes.get("status", "archived") != "archived":
         raise LocalFolderError(f"The status of a location can't be changed once it is archived: {location_id} is archived for good.")
+    wanted = changes.get("status")
+    if not by_visit and wanted and wanted != locations[index].get("status"):
+        why = _site_status_refusal(root, research_project_id, locations, locations[index], wanted)
+        if why:
+            raise LocalFolderError(why)
     now = {"timezone": locations[index].get("timezone") or visit_time.DEFAULT_TIMEZONE, "ignore_dst": bool(locations[index].get("ignore_dst"))}
     for key, label in (("timezone", "timezone"), ("ignore_dst", "summer-time setting")):
         if key in changes:
@@ -351,6 +358,23 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
     locations[index] = audit.stamped({**locations[index], **changes}, locations[index])
     _store(root).write_records(research_project_id, "locations", locations)
     return locations[index]
+
+
+def _site_status_refusal(root: Path, research_project_id: str, locations: list[dict], location: dict, wanted: str) -> str | None:
+    """Why the status of a site cannot be set by hand to `wanted` — None when it can. The visits say what is there: a camera that is out, and the visits still to be made."""
+    site = str(location.get("location_id", ""))
+    visits = list_visits(root, research_project_id)
+    camera = visit_rules.camera_at_site(visits, site, "9999-12-31T23:59:59Z")
+    if wanted == "active" and camera is None:
+        return f"{site} is active when it has a camera: a visit puts it up (an Installation); the status cannot be set to active by hand."
+    if wanted in ("ready", "planned", "archived") and camera is not None:
+        return f"{site} has a camera out (put up in {camera.get('session')}): take it away with a visit — a Desinstallation, or a Stolen visit — before it is {wanted}."
+    if wanted in ("planned", "archived"):
+        numbers = sorted({n for n in (visit_rules._session_number(v.get("session")) for v in visits) if n is not None})
+        pending = [f"R{n:04d}" for n in numbers if any(str(s).lower() == site.lower() for s in visit_rules.revision_missing(n, visits, locations, "", list_unknown(root, research_project_id)))]
+        if pending:
+            return f"{site} still has a visit to be made in {', '.join(pending)}: it cannot be {wanted} until the revision is finished."
+    return None
 
 
 def delete_location(root: Path, research_project_id: str, location_id: str) -> dict:

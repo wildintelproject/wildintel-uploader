@@ -1388,3 +1388,45 @@ def test_a_planned_site_is_not_in_the_app_and_a_ready_one_is(tmp_path: Path):
 
     assert planned.status_code == 422 and "is planned" in planned.json()["detail"]
     assert ready.status_code == 200
+
+
+def test_the_status_of_a_site_by_hand_follows_what_the_visits_say(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+
+    def change(status: str):
+        try:
+            return svc.update_location(tmp_path, "DONA", "DONA_01", {"status": status})["status"]
+        except svc.LocalFolderError as exc:
+            return str(exc)
+
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        empty = (change("planned"), change("ready"), change("active"))                  # nothing has been done at the site
+        install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"}
+        _save(install)                                                                  # a camera is put up: the site is active
+        out = (change("ready"), change("planned"), change("archived"))                  # a camera is out
+        _save({**VISIT, "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 5, "sd": None, "date": "2024-10-12", "session": "R0002"})
+        after = (change("active"), change("planned"), change("ready"), change("archived"))
+
+    assert empty[0] == "planned" and empty[1] == "ready" and "a visit puts it up" in empty[2]
+    assert all("has a camera out" in o for o in out)
+    assert "a visit puts it up" in after[0] and after[1] == "planned" and after[2] == "ready" and after[3] == "archived"
+
+
+def test_a_site_with_a_visit_still_to_be_made_in_a_revision_that_has_begun_does_not_leave_the_app(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+
+    with _in(tmp_path):
+        _project(archived=(3,))
+        for n, day in ((1, "2024-09-04"), (2, "2024-09-05")):
+            assert _save({**VISIT, "location_id": f"DONA_0{n}", "actions": ["Installation"], "num_photos": None, "sd": f"S{n}", "camera_id": f"C{n}", "date": day, "session": "R0001"}).status_code == 200
+        assert _save({**VISIT, "location_id": "DONA_01", "actions": ["Revision", "Desinstallation"], "camera_id": "C1", "num_photos": 5, "sd": None, "date": "2024-10-12", "session": "R0002"}).status_code == 200
+        assert _save({**VISIT, "location_id": "DONA_02", "actions": ["Revision"], "camera_id": "C2", "num_photos": 5, "sd": "S9", "date": "2024-10-13", "session": "R0002"}).status_code == 200
+        assert _save({**VISIT, "location_id": "DONA_02", "actions": ["Revision"], "camera_id": "C2", "num_photos": 5, "sd": "S8", "date": "2024-11-13", "session": "R0003"}).status_code == 200
+        try:
+            svc.update_location(tmp_path, "DONA", "DONA_01", {"status": "planned"})
+            refused = None
+        except svc.LocalFolderError as exc:
+            refused = str(exc)
+
+    assert refused is not None and "still has a visit to be made in R0003" in refused

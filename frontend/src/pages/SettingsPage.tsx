@@ -921,6 +921,8 @@ interface ItemField<T> {
   /** In a CSV file: a row that lacks it, or has it wrong, is left out and said — as the form would not let the item be done. */
   strict?: boolean
   kind?: 'text' | 'date' | 'suggest' | 'bool' | 'select' | 'timezone'
+  /** The choices of a select that no one can pick: only what the app does puts an item there — a visit that puts a camera up makes its site active. One it is in already stays. */
+  byAppOnly?: string[]
   /** What is wrong with a value, if anything: it is said under the field, and the item cannot be done with until it is put right. */
   validate?: (value: string) => string | null
   suggestions?: string[]
@@ -1008,6 +1010,7 @@ function ItemForm<T extends object>({ same, noun, backLabel, fields, item, other
   const name = textOf(item, first.key).trim()
   const statusKey = fields.find((f) => f.kind === 'select' && f.key === 'status')?.key
   const [wasArchived] = useState(statusKey ? textOf(item, statusKey) === 'archived' : false)
+  const [wasStatus] = useState(statusKey ? textOf(item, statusKey) : '')
   const [typed, setTyped] = useState('')
   const archiving = confirmArchive && !isNew && !wasArchived && !!statusKey && textOf(item, statusKey) === 'archived'
   const unconfirmed = archiving && typed.trim() !== name
@@ -1062,7 +1065,8 @@ function ItemForm<T extends object>({ same, noun, backLabel, fields, item, other
               <div className="flex flex-wrap gap-2" role="group" aria-label={f.label}>
                 {(f.options ?? []).map((o) => (
                   <button key={o.value} type="button" aria-pressed={picked === o.value} onClick={() => change(f, i)(o.value)}
-                          className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${picked === o.value ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{o.label}</button>
+                          disabled={!!f.byAppOnly?.includes(o.value) && wasStatus !== o.value} title={f.byAppOnly?.includes(o.value) && wasStatus !== o.value ? 'Only a visit does this: an Installation makes a site active.' : undefined}
+                          className={`px-3 py-1.5 rounded-full text-sm border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${picked === o.value ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{o.label}</button>
                 ))}
               </div>,
             )
@@ -1279,8 +1283,8 @@ const STATUS_HINTS: Record<string, string> = {
 }
 const statusOptions = (...values: string[]) => values.map((value) => ({ value, label: STATUS_LABELS[value], hint: STATUS_HINTS[value] }))
 /** The status of an item, then — for what can stop being used — the day it did and why. */
-const statusFields = <T extends object>(values: string[], withDetails: boolean, hints: Record<string, string> = {}, withReason = false): ItemField<T>[] => [
-  { key: 'status' as keyof T & string, label: 'Status', kind: 'select', options: statusOptions(...values).map((o) => ({ ...o, hint: hints[o.value] ?? o.hint })), hint: 'Only an active one is offered when a visit is registered.' },
+const statusFields = <T extends object>(values: string[], withDetails: boolean, hints: Record<string, string> = {}, withReason = false, byAppOnly: string[] = []): ItemField<T>[] => [
+  { key: 'status' as keyof T & string, label: 'Status', kind: 'select', byAppOnly, options: statusOptions(...values).map((o) => ({ ...o, hint: hints[o.value] ?? o.hint })), hint: 'Only an active one is offered when a visit is registered.' },
   ...(withDetails ? [
     { key: 'status_date' as keyof T & string, label: 'Status since', kind: 'date' as const, hint: 'The day it stopped being active.' },
     ...(withReason ? [{ key: 'archive_reason' as keyof T & string, label: 'Reason', kind: 'select' as const, fallback: 'other', options: ARCHIVE_REASONS }] : []),
@@ -1305,7 +1309,7 @@ const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
   { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty', placeholder: 'e.g. 100', unit: 'metres', hint: 'How far off the position could be.', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },
   { key: 'timezone', label: 'Time zone', required: true, placeholder: 'e.g. Europe/Madrid', section: 'Time', sectionIcon: <ClockIcon />, sectionHint: 'The time zone the location is in, and whether its cameras follow summer time. Every visit and deployment here is read with them.', kind: 'timezone', fixed: true, hint: "The location's own time zone, required. Every visit and deployment here is read in it, so it cannot be changed once the location is created.", validate: (v) => (!v ? 'Required.' : isValidTimezone(v) ? null : 'Not a known IANA time zone (e.g. Europe/Madrid).') },
   { key: 'ignore_dst', label: 'The cameras here ignore summer time', kind: 'bool', fixed: true, hint: 'Turn it on if their clocks stay the same all year; off, they follow summer time. Like the time zone, it cannot be changed once the location is created.' },
-  ...statusFields<LocationDraft>(['planned', 'ready', 'active', 'archived'], true, { planned: 'Only in Settings: it is not in the app yet.', ready: 'Ready to have a camera.', active: 'It has a camera.', archived: 'Out of use for good: it never goes back.' }),
+  ...statusFields<LocationDraft>(['planned', 'ready', 'active', 'archived'], true, { planned: 'Only in Settings: it is not in the app yet.', ready: 'Ready to have a camera.', active: 'It has a camera: a visit makes it so.', archived: 'Out of use for good: it never goes back.' }, false, ['active']),
 ]
 
 /** What a research project is when it is added by hand, or read from a CSV file: its acronym and name, and the fields free text. */
@@ -1344,7 +1348,7 @@ const locationDraft = (l: LocalLocation): LocationDraft => ({
   coordinate_uncertainty: text(l.coordinate_uncertainty), timezone: l.timezone, ignore_dst: l.ignore_dst ? 'yes' : null, in_service: l.in_service ?? null,
   status: l.status ?? 'active', status_date: l.status_date ?? null, status_note: l.status_note ?? null,
 })
-const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: 'UTC', ignore_dst: null, in_service: null, status: 'active', status_date: null, status_note: null }
+const BLANK_LOCATION: LocationDraft = { location_id: '', name: null, latitude: null, longitude: null, coordinate_uncertainty: null, timezone: 'UTC', ignore_dst: null, in_service: null, status: 'ready', status_date: null, status_note: null }
 const numberOrNull = (t: string | null) => (t === null ? null : Number(t))
 /** What can change of a location kept: its time zone and its summer-time setting are fixed when it is created, so they are not sent. */
 const locationChanges = ({ timezone, ignore_dst, ...rest }: ReturnType<typeof locationFields>) => { void timezone; void ignore_dst; return rest }

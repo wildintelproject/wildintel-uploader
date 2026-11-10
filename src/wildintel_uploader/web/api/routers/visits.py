@@ -85,7 +85,7 @@ def _archive_locations(root, research_project_id: str, new: list[dict]) -> list[
             continue
         note = f"Archived in the visit {v.get('session')}" + (f": {v['comments']}" if v.get("comments") else "")
         try:
-            local_folder_service.update_location(root, research_project_id, v["location_id"], {"status": "archived", "status_date": v["date"], "status_note": note})
+            local_folder_service.update_location(root, research_project_id, v["location_id"], {"status": "archived", "status_date": v["date"], "status_note": note}, by_visit=True)
             done.append(v["location_id"])
         except local_folder_service.LocalFolderError:
             continue
@@ -104,7 +104,7 @@ def _apply_to_entities(root, research_project_id: str, new: list[dict], before: 
         site = next((l for l in local_folder_service.list_locations(root, research_project_id) if str(l.get("location_id", "")).lower() == change["name"].lower()), None)
         if site is not None and site.get("status") in ("ready", "active") and site["status"] != change["status"]:
             try:
-                local_folder_service.update_location(root, research_project_id, site["location_id"], {"status": change["status"]})
+                local_folder_service.update_location(root, research_project_id, site["location_id"], {"status": change["status"]}, by_visit=True)
             except local_folder_service.LocalFolderError:
                 continue
     for kind in ("cameras", "sd_cards"):

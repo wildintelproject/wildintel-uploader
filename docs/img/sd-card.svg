@@ -9,7 +9,7 @@
   <path d="M292 102 H628" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
   <text x="460" y="77" font-size="11.5" fill="#475569" text-anchor="middle"><tspan>holds one card,</tspan></text>
   <text x="460" y="92" font-size="11.5" fill="#475569" text-anchor="middle"><tspan>until it is collected</tspan></text>
-  <text x="30" y="178" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">ITS STATES</text>
+  <text x="30" y="160" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">ITS STATES</text>
   <rect x="30" y="196" width="140" height="90" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" /><text x="100.0" y="226" font-size="17" font-weight="700" fill="#92400e" text-anchor="middle">Planned</text>
   <text x="100.0" y="248" font-size="11" fill="#b45309" text-anchor="middle">only in Settings:</text>
   <text x="100.0" y="263" font-size="11" fill="#b45309" text-anchor="middle">not in the app</text>
@@ -23,11 +23,13 @@
   <text x="820.0" y="248" font-size="11" fill="#475569" text-anchor="middle">lost, stolen</text>
   <text x="820.0" y="263" font-size="11" fill="#475569" text-anchor="middle">or broken</text>
   <path d="M170 241 H270" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
-  <rect x="183.8" y="204" width="72.4" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="220.0" y="218" font-size="11" fill="#475569" text-anchor="middle">set ready</text>
+  <rect x="178.2" y="204" width="83.6" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="220.0" y="218" font-size="11" fill="#475569" text-anchor="middle">by settings</text>
   <path d="M410 241 H510" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
   <rect x="404.2" y="204" width="111.6" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="460.0" y="218" font-size="11" fill="#475569" text-anchor="middle">left in a camera</text>
   <path d="M650 241 H750" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
   <rect x="672.2" y="204" width="55.599999999999994" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="700.0" y="218" font-size="11" fill="#475569" text-anchor="middle">stolen</text>
+  <path d="M100.0 196 V190 Q100.0 178 112.0 178 H808.0 Q820.0 178 820.0 190 V194" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
+  <rect x="418.2" y="168" width="83.6" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="460.0" y="182" font-size="11" fill="#475569" text-anchor="middle">by settings</text>
   <path d="M580.0 286 V318 Q580.0 330 568.0 330 H352.0 Q340.0 330 340.0 318 V288" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
   <rect x="423.8" y="320" width="72.4" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="460.0" y="334" font-size="11" fill="#475569" text-anchor="middle">collected</text>
   <text x="30" y="372" font-size="12" fill="#64748b">A card is left by an Installation or a Revision and collected by the next Revision or Desinstallation. Stolen with</text>

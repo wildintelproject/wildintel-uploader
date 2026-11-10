@@ -168,7 +168,7 @@ def _esc(t): return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;
 LC={"Planned":("#fffbeb","#f59e0b","#92400e","#b45309"),"Ready":("#eff6ff","#2563eb","#1e3a8a","#1d4ed8"),
     "Active":("#ecfdf5","#10b981","#065f46","#047857"),"Archived":("#f1f5f9","#64748b","#334155","#475569")}
 XS=[30,270,510,750]; BW=140
-def lifecycle(fn,title,top,subs,labels,back,note):
+def lifecycle(fn,title,top,subs,labels,back,note,site=False):
     """top: (left, relation, right) boxes of what it is; subs: what each state means (2 lines each); labels: the label on each of the three arrows; back: the label of the way back."""
     import textwrap
     lines=textwrap.wrap(note,115)
@@ -186,8 +186,8 @@ def lifecycle(fn,title,top,subs,labels,back,note):
     for i,line in enumerate(rel):
         svg.append(f'  <text x="460" y="{77+i*15}" font-size="11.5" fill="#475569" text-anchor="middle"><tspan>{_esc(line)}</tspan></text>')
     a=d.box(30,64,260,76,l1,l2,"#f8fafc","#94a3b8","#334155","#475569",fs=15); b=d.box(630,64,260,76,r1,r2,"#f8fafc","#94a3b8","#334155","#475569",fs=15); d.edge(a,b,"<br>".join(rel))
-    svg.append(f'  <text x="30" y="178" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">ITS STATES</text>')
-    d.text(30,164,300,24,"ITS STATES",12)
+    svg.append(f'  <text x="30" y="160" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">ITS STATES</text>')
+    d.text(30,146,300,24,"ITS STATES",12)
     ids=[]
     for x,(name,sub) in zip(XS,subs):
         f,st,tc,sc=LC[name]
@@ -199,6 +199,17 @@ def lifecycle(fn,title,top,subs,labels,back,note):
         svg.append(f'  <path d="M{x1} 241 H{x2}" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
         svg.append(f'  <rect x="{(x1+x2)/2-w/2}" y="204" width="{w}" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(x1+x2)/2}" y="218" font-size="11" fill="#475569" text-anchor="middle">{_esc(lab)}</text>')
         d.edge(ids[i],ids[i+1],lab)
+    # Settings can archive from any state: the way from Planned over the others
+    xa=XS[0]+BW/2; xb=XS[3]+BW/2; lab="by settings *" if site else "by settings"; w=len(lab)*5.6+22
+    svg.append(f'  <path d="M{xa} 196 V190 Q{xa} 178 {xa+12} 178 H{xb-12} Q{xb} 178 {xb} 190 V194" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
+    svg.append(f'  <rect x="{(xa+xb)/2-w/2}" y="168" width="{w}" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(xa+xb)/2}" y="182" font-size="11" fill="#475569" text-anchor="middle">{lab}</text>')
+    d.edge(ids[0],ids[3],lab,exit=(0.5,0),entry=(0.5,0),pts=[(xa,178),(xb,178)])
+    if site:   # a ready site is archived by settings too, and goes back to planned by settings
+        xr=XS[1]+BW/2
+        svg.append(f'  <path d="M{xr} 196 V178" stroke="#475569" stroke-width="2.5" fill="none" />')
+        svg.append(f'  <path d="M{XS[1]} 268 H{XS[0]+BW}" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
+        svg.append(f'  <rect x="{(XS[0]+BW+XS[1])/2-40}" y="258" width="80" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" /><text x="{(XS[0]+BW+XS[1])/2}" y="272" font-size="11" fill="#475569" text-anchor="middle">by settings *</text>')
+        d.edge(ids[1],ids[0],"by settings *",exit=(0,0.8),entry=(1,0.8))
     # the way back, from Active to Ready
     x1=XS[2]+BW/2; x2=XS[1]+BW/2; w=len(back)*5.6+22
     svg.append(f'  <path d="M{x1} 286 V318 Q{x1} 330 {x1-12} 330 H{x2+12} Q{x2} 330 {x2} 318 V288" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />')
@@ -212,15 +223,15 @@ def lifecycle(fn,title,top,subs,labels,back,note):
 lifecycle("location","The life of a location",
   (("A GPS coordinate","latitude, longitude, uncertainty"),("+ its information","name · timezone · summer time or not · status"),("A location","a place where a camera can be put up")) if False else (("A GPS coordinate","latitude, longitude and its uncertainty"),["with more information"],("Information","name · timezone · summer time · status")),
   [("Planned",["only in Settings:","not in the app"]),("Ready",["ready to have","a camera"]),("Active",["it has","a camera"]),("Archived",["out of use","for good"])],
-  ["set ready","Installation","Archive"],"camera taken away or stolen",
-  "Archived is final: it never goes back. A location is archived by an Archive visit, or from Settings.")
+  ["by settings","Installation","Archive"],"camera taken away or stolen",
+  "* Only when no camera is out and no visit is still to be made in a revision that has begun. Only a visit makes a site active. Archived is final: it never goes back.",site=True)
 lifecycle("camera","The life of a camera",
   (("A site","where the camera is put up"),["has one camera","at a time"],("A camera","its id, its model, its settings")),
   [("Planned",["only in Settings:","not in the app"]),("Ready",["available,","not in the field"]),("Active",["put up","at a site"]),("Archived",["lost, stolen","or broken"])],
-  ["set ready","Installation","Stolen"],"Desinstallation",
+  ["by settings","Installation","Stolen"],"Desinstallation",
   "A site has one camera at a time, and a camera is at one site at a time. A camera goes to Archived for good: stolen, or lost or broken (from Settings).")
 lifecycle("sd-card","The life of an SD card",
   (("A camera","at a site"),["holds one card,","until it is collected"],("An SD card","its label, its brand, its capacity")),
   [("Planned",["only in Settings:","not in the app"]),("Ready",["free: in no","camera"]),("Active",["in a camera","in the field"]),("Archived",["lost, stolen","or broken"])],
-  ["set ready","left in a camera","stolen"],"collected",
+  ["by settings","left in a camera","stolen"],"collected",
   "A card is left by an Installation or a Revision and collected by the next Revision or Desinstallation. Stolen with its camera, or lost or broken, it is archived for good.")

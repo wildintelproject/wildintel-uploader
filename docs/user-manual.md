@@ -98,9 +98,12 @@ A location is always in one of four states:
 The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a site, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)), where you can set it by hand. In particular, what moves a location from one state to another:
 
 - **Planned → Ready**: you say so in Settings, when the site is ready to be used.
-- **Ready → Active**: a visit does an **Installation**, which puts a camera up.
+- **Ready → Active**: a visit does an **Installation**, which puts a camera up. Only a visit makes a site active: it cannot be set by hand.
 - **Active → Ready**: a visit takes the camera away (**Desinstallation**) or finds it stolen (**Stolen**), and puts no other one up. A replacement — the camera is taken away and another put up — keeps it active.
-- **→ Archived**: an **Archive** visit gives the site up (it goes with a Desinstallation or a Stolen visit, as no camera can be left), or you archive it in Settings. It never goes back.
+- **Ready → Planned**: in Settings, to take the site out of the app again.
+- **→ Archived**: an **Archive** visit gives the site up (it goes with a Desinstallation or a Stolen visit, as no camera can be left), or you archive it in Settings, **from any state** — a planned site that is given up before it is used included. It never goes back.
+
+What Settings can do is limited by what the visits say. A site goes **out of the app** — to *Planned* or to *Archived* — only when **no camera is out** there (no visit of it is *Deployed*) and **no visit is still to be made** in a revision that has begun: a revision needs the visit of every site in it. Until then Settings says what is in the way, and the site stays as it was.
 
 The dashboards and the revisions consider the sites that are **ready or active**: a revision is one visit to each of them.
 
