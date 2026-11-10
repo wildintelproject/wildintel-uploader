@@ -1045,7 +1045,7 @@ def test_a_research_project_can_be_changed_but_not_renamed(tmp_path: Path):
     assert (project["acronym"], project["name"], project["status"], project["keywords"]) == ("DONA", "Doñana NP", "finished", "wetland")  # the rest stayed
 
 
-def test_a_research_project_is_deleted_with_its_locations_unless_it_holds_collections(tmp_path: Path):
+def test_a_research_project_is_deleted_logically_unless_it_holds_collections(tmp_path: Path):
     with _in(tmp_path):
         for acronym in ("DONA", "TATR"):
             _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "acronym": acronym})
@@ -1058,7 +1058,10 @@ def test_a_research_project_is_deleted_with_its_locations_unless_it_holds_collec
 
     assert kept.status_code == 409 and "R0001" in kept.json()["detail"]
     assert gone.status_code == 200 and again.status_code == 404
-    assert [p["acronym"] for p in listed] == ["TATR"] and (tmp_path / "TATR" / "R0001").is_dir() and not (tmp_path / "DONA").exists()
+    assert [p["acronym"] for p in listed] == ["TATR"] and (tmp_path / "TATR" / "R0001").is_dir()
+    # nothing is deleted for good: the project that was deleted is kept, with when — it is only not listed
+    kept = json.loads((tmp_path / "DONA" / "research_project.json").read_text(encoding="utf-8"))
+    assert kept["deleted_at"] and kept["created_at"] and (tmp_path / "DONA" / "locations.json").is_file()
 
 
 def test_validate_deployment_takes_the_visit_for_the_card_and_the_photos(tmp_path: Path):

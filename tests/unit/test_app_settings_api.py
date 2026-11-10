@@ -52,17 +52,19 @@ def test_the_trappers_start_empty_and_are_saved_clean():
     assert _client().get("/api/settings").json()["FIELDWORK"] == {"trappers": [], "sd_cards": [], "cameras": [], "roles": []}
 
     saved = _put(FIELDWORK={"trappers": [
-        {"name": "  Ana   Pérez ", "affiliation": " University of Huelva "}, {"name": "Luis", "affiliation": "  "}, {"name": "ana pérez"},
+        {"username": " ana ", "name": "  Ana   Pérez ", "affiliation": " University of Huelva ", "email": " ana@uhu.es "}, {"username": "luis", "name": "Luis", "affiliation": "  ", "email": ""},
+        {"username": "ana.2", "name": "ana pérez"},
     ]})
 
-    expected = [{"name": "Ana Pérez", "affiliation": "University of Huelva", "status": "active", "trapper_pk": None}, {"name": "Luis", "affiliation": None, "status": "active", "trapper_pk": None}]
-    assert saved["FIELDWORK"]["trappers"] == expected
-    assert _client().get("/api/settings").json()["FIELDWORK"]["trappers"] == expected
+    expected = [{"username": "ana", "name": "Ana Pérez", "affiliation": "University of Huelva", "email": "ana@uhu.es", "status": "active", "trapper_pk": None},
+                {"username": "luis", "name": "Luis", "affiliation": None, "email": None, "status": "active", "trapper_pk": None}]
+    assert _no_dates(saved["FIELDWORK"]["trappers"]) == expected
+    assert _no_dates(_client().get("/api/settings").json()["FIELDWORK"]["trappers"]) == expected
 
 
 def _no_dates(items: list[dict]) -> list[dict]:
-    """The cameras or the SD cards without the two dates the app writes (`created_at`, `updated_at`), which have their own tests."""
-    return [{k: v for k, v in item.items() if k not in ("created_at", "updated_at")} for item in items]
+    """The records without the dates the app writes (`created_at`, `updated_at`, `deleted_at`), which have their own tests."""
+    return [{k: v for k, v in item.items() if k not in ("created_at", "updated_at", "deleted_at")} for item in items]
 
 
 def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
@@ -106,7 +108,7 @@ def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_onl
     saved = _put(FIELDWORK={
         "cameras": [{"camera_id": "X1", "status": "stolen", "status_date": "2026-05-02", "status_note": "  taken from the tree ", "research_project": "DONA"}],
         "sd_cards": [{"label": "A1", "status": "lost", "status_date": "", "research_project": "DONA"}],
-        "trappers": [{"name": "Ana", "status": "inactive"}],
+        "trappers": [{"username": "ana", "name": "Ana", "status": "inactive"}],
     })
 
     # stolen, lost and broken are the reasons for being archived
@@ -117,7 +119,7 @@ def test_the_status_of_the_cameras_the_sd_cards_and_the_trappers_is_kept_and_onl
     assert saved["FIELDWORK"]["trappers"][0]["status"] == "inactive"
 
     # each has its own: a card is not planned, a trapper is not broken
-    for field, item in (("sd_cards", {"label": "A1", "status": "planned"}), ("trappers", {"name": "Ana", "status": "broken"}), ("cameras", {"camera_id": "X1", "status": "planned"})):
+    for field, item in (("sd_cards", {"label": "A1", "status": "planned"}), ("trappers", {"username": "ana", "name": "Ana", "status": "broken"}), ("cameras", {"camera_id": "X1", "status": "planned"})):
         body = config.Settings().model_dump(mode="json")
         body["FIELDWORK"][field] = [item]
         assert _client().put("/api/settings", json=body).status_code == 422
@@ -178,7 +180,7 @@ def test_an_sd_card_needs_a_label_and_a_camera_one_too():
 
 def test_a_trapper_needs_a_name():
     body = config.Settings().model_dump(mode="json")
-    body["FIELDWORK"]["trappers"] = [{"name": ""}]
+    body["FIELDWORK"]["trappers"] = [{"username": "x", "name": ""}]
 
     assert _client().put("/api/settings", json=body).status_code == 422
 
@@ -576,3 +578,52 @@ def test_the_page_that_does_not_send_where_the_records_are_kept_does_not_lose_it
     finally:
         storage._FACTORIES.pop("other", None)
         storage.configure("json")
+
+
+def test_nothing_is_deleted_for_good_what_the_page_no_longer_lists_is_kept_with_its_deleted_at_and_comes_back_when_it_is_listed_again(tmp_path: Path):
+    from wildintel_uploader.core.services import audit, local_folder_service as svc
+    with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
+        _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}], "sd_cards": [{"label": "A1", "research_project": "DONA"}, {"label": "A2", "research_project": "DONA"}],
+                        "cameras": [{"label": "C1", "research_project": "DONA"}], "roles": [{"research_project": "DONA", "trapper": "Ana", "role": "contact"}]})
+    with patch.object(audit, "now", return_value="2026-11-02T10:00:00Z"):
+        shown = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}], "sd_cards": [{"label": "A1", "research_project": "DONA"}], "cameras": [], "roles": []})["FIELDWORK"]
+    # the page sees what is left…
+    assert [t["name"] for t in shown["trappers"]] == ["Ana"] and [c["label"] for c in shown["sd_cards"]] == ["A1"] and shown["cameras"] == [] and shown["roles"] == []
+    # …and what was removed is kept, with when
+    assert {t.name: t.deleted_at for t in config.load_settings().FIELDWORK.trappers} == {"Ana": None, "Luis": "2026-11-02T10:00:00Z"}
+    cards = {c["label"]: c for c in svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)}
+    assert cards["A2"]["deleted_at"] == "2026-11-02T10:00:00Z" and cards["A2"]["created_at"] == "2026-11-01T10:00:00Z" and "deleted_at" not in cards["A1"]
+    assert [r["role"] for r in svc.list_roles(tmp_path, "DONA", include_deleted=True)] == ["contact"] and svc.list_roles(tmp_path, "DONA") == []
+
+    # listed again: they come back, as they were created
+    with patch.object(audit, "now", return_value="2026-11-03T10:00:00Z"):
+        back = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}], "sd_cards": [{"label": "A2", "research_project": "DONA"}], "cameras": [], "roles": []})["FIELDWORK"]
+    luis = next(t for t in back["trappers"] if t["name"] == "Luis")
+    assert luis["deleted_at"] is None and luis["created_at"] == "2026-11-01T10:00:00Z" and luis["updated_at"] == "2026-11-03T10:00:00Z"
+    cards = {c["label"]: c for c in svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)}
+    assert cards["A2"].get("deleted_at") is None and cards["A1"]["deleted_at"] == "2026-11-03T10:00:00Z"
+
+
+def test_the_roles_are_the_projects_and_not_the_settings(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as svc
+    saved = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}], "roles": [{"research_project": "DONA", "trapper": "Ana", "role": "contact"}, {"research_project": "NOWHERE", "trapper": "Ana", "role": "publisher"}]})
+    assert sorted((r["research_project"], r["role"]) for r in saved["FIELDWORK"]["roles"]) == [("DONA", "contact"), ("NOWHERE", "publisher")]
+    assert [r["role"] for r in svc.list_roles(tmp_path, "DONA")] == ["contact"]                                   # kept in the research project
+    assert [(r.research_project, r.role) for r in config.load_settings().FIELDWORK.roles] == [("NOWHERE", "publisher")]   # only what has no project here stays in the settings
+
+
+def test_a_trapper_without_a_username_or_with_one_that_another_has_is_refused_and_the_username_is_what_tells_one_from_another():
+    body = config.Settings().model_dump(mode="json")
+    body["FIELDWORK"]["trappers"] = [{"name": "Ana"}]
+    assert _client().put("/api/settings", json=body).status_code == 422                       # the username is required
+    body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana"}, {"username": "ANA", "name": "Anabel"}]
+    refused = _client().put("/api/settings", json=body)
+    assert refused.status_code == 422 and "unique" in refused.text
+    body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana", "email": "ana@uhu.es"}]
+    assert _client().put("/api/settings", json=body).status_code == 200
+    # changing the name of a username is a change of that trapper, not another one: it keeps when it was created
+    first = config.load_settings().FIELDWORK.trappers[0]
+    body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana Pérez López"}]
+    _client().put("/api/settings", json=body)
+    now = [t for t in config.load_settings().FIELDWORK.trappers if not t.deleted_at]
+    assert [(t.username, t.name, t.email) for t in now] == [("ana", "Ana Pérez López", None)] and now[0].created_at == first.created_at

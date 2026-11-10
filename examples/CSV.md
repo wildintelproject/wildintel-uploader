@@ -9,7 +9,7 @@ Each group of entities has the same five files:
 
 - `research_projects.csv` — Research projects → Import CSV (kept at once in the collections folder). They can also be taken from Trapper.
 - `locations.csv` — Locations → pick a research project first → Import CSV: the ones it has are updated, the others added. They can also be taken from Trapper, when the research project was.
-- `trappers.csv` — Trappers → Import CSV (the trappers are not tied to a research project).
+- `trappers.csv` — Trappers → Import CSV (the trappers are not tied to a research project): `username` (required and unique), `name` (the full name, required), `affiliation` and `email` (both optional).
 - `sd_cards.csv` and `cameras.csv` — SD cards / Cameras → pick a research project first → Import CSV: they are added to that project. Then press Save.
 
 `big` has the 72 sites of the Doñana form download, as `WICP_` + four digits (`_B` for a second camera): their coordinates are those of the entries (the median of each site) and the names are invented. Its `sd_cards.csv` has the 193 cards that appear in that download (`aicensuscameras`); their brand, capacity and day in production are invented.

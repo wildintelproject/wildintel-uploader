@@ -1,7 +1,7 @@
 """What the app needs of where it keeps its records — and nothing about how they are kept.
 
 The **records** are what the app keeps of a research project: the project itself and, for each, its *locations*, *visits*, *unknown visits*, *cameras*,
-*SD cards* and the *uploads that failed*. They are plain `dict`s — the JSON the app has always kept, with the fields its models give them — so anything that can keep a
+*SD cards*, *roles* and the *uploads that failed*. They are plain `dict`s — the JSON the app has always kept, with the fields its models give them — so anything that can keep a
 list of them under a research project can be a backend: a folder of JSON files today, a database tomorrow (see `register`).
 
 What is **not** a record stays where it is: the images and what is written beside them (a deployment's `deployment.json`, `images.json`, the logs of a collection…) are
@@ -15,8 +15,9 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 
-# What is kept for each research project, besides the project itself. Each is a list of records, in the order they were kept.
-RECORD_KINDS = ("locations", "visits", "unknown_visits", "cameras", "sd_cards", "upload_failures")
+# What is kept for each research project, besides the project itself. Each is a list of records, in the order they were kept. (Locations, cameras, SD cards and roles
+# belong to the project; the trappers, the people, are global and are not here.)
+RECORD_KINDS = ("locations", "visits", "unknown_visits", "cameras", "sd_cards", "roles", "upload_failures")
 
 _PROJECT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
@@ -74,12 +75,12 @@ class ProjectStore(ABC):
 
     @abstractmethod
     def delete_project(self, research_project_id: str) -> None:
-        """Forgets the research project and every record it has. Nothing happens when it is not kept. What the project holds as files (collections, deployments, images)
-        is not the store's: the services check it first and never leave it behind."""
+        """Forgets the research project and every record it has, **for good** — a purge. The app does not use it to delete: it removes *logically* (`deleted_at`, see
+        services.audit), and keeps. Nothing happens when it is not kept."""
 
     def owned_names(self, research_project_id: str) -> set[str]:
         """The names the store keeps inside the research project's folder of the collections folder — a store that keeps its records elsewhere keeps none. What else is in the
-        folder is not the store's, and a research project that holds anything else cannot be deleted."""
+        folder (collections, deployments, images) is not the store's."""
         return set()
 
     # ── the records of a research project ────────────────────────────────────────────────────────────────────────────────

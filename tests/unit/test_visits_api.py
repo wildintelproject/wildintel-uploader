@@ -42,7 +42,7 @@ def _settings():
     """The settings as they were, with the trappers Ana and Luis."""
     from wildintel_uploader.core import config
     settings = _real_load_settings()
-    settings.FIELDWORK.trappers = [config.Trapper(name="Ana"), config.Trapper(name="Luis")]
+    settings.FIELDWORK.trappers = [config.Trapper(username="ana", name="Ana"), config.Trapper(username="luis", name="Luis")]
     return settings
 
 

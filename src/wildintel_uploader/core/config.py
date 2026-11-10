@@ -10,13 +10,14 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import unicodedata
 from pathlib import Path
 from datetime import date
 from typing import Literal, Optional
 
 import platformdirs
 from dynaconf import Dynaconf, loaders
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 APP_NAME = "wildintel-uploader"
 DEFAULT_CONFIG_FILE = Path(platformdirs.user_config_dir(APP_NAME)) / "settings.toml"
@@ -256,12 +257,48 @@ class PreprocessingSettings(BaseModel):
         return value.strip()
 
 
+def username_from(name: str, taken: set[str] | None = None) -> str:
+    """A username made from a full name — `Ana Pérez` is `ana.perez` —, one that is not among those `taken` (lower case): a number is added when it is."""
+    folded = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode("ascii").lower()
+    base = re.sub(r"[^a-z0-9]+", ".", folded).strip(".") or "trapper"
+    username, n = base, 1
+    while taken and username in taken:
+        n += 1
+        username = f"{base}{n}"
+    return username
+
+
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 class Trapper(BaseModel):
-    """One of the people who go to the field — {name, affiliation}, as wildintel-publisher keeps an author."""
+    """One of the people who go to the field — {username, name, affiliation, email}. The people are global: they belong to no research project (what each is in a project is
+    its role, which is the project's). Its `username` is what it is called in the app, as the label of an SD card is, and no two have the same."""
+    username: str = Field(min_length=1, description="What the trapper is called in the app — required, and unique among the trappers (whatever its case), as the label of an SD card is.")
     name: str = Field(min_length=1, description="The trapper's full name, written as it should be on a visit.")
     affiliation: Optional[str] = Field(default=None, description="Where the trapper works, free text.")
+    email: Optional[str] = Field(default=None, description="The trapper's email address — optional.")
     status: Literal["active", "inactive"] = Field(default="active", description="Whether the trapper still goes to the field; an inactive one is no longer suggested.")
     trapper_pk: Optional[int] = Field(default=None, description="Its id in Trapper, when it was taken from there — such a trapper can only be seen here.")
+    created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
+    updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
+    deleted_at: Optional[str] = Field(default=None, description="When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted.")
+
+    @field_validator("username")
+    @classmethod
+    def _username(cls, value: str) -> str:
+        value = value.strip()
+        if not value or re.search(r"\s", value):
+            raise ValueError("can't be blank or have spaces")
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def _email_address(cls, value: Optional[str]) -> Optional[str]:
+        value = (value or "").strip()
+        if value and not _EMAIL.match(value):
+            raise ValueError("is not an email address")
+        return value or None
 
     @field_validator("name")
     @classmethod
@@ -306,6 +343,9 @@ class TrapperRole(BaseModel):
     research_project: str = Field(min_length=1, description="The acronym of the research project.")
     trapper: str = Field(min_length=1, description="The name of the trapper, as it is in the list of trappers.")
     role: Literal["contact", "principalInvestigator", "rightsHolder", "publisher", "contributor"] = Field(default="contributor", description="Its role in the research project.")
+    created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
+    updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
+    deleted_at: Optional[str] = Field(default=None, description="When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted.")
 
     @field_validator("trapper")
     @classmethod
@@ -327,6 +367,7 @@ class SdCard(BaseModel):
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
     created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
     updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
+    deleted_at: Optional[str] = Field(default=None, description="When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted.")
 
     _blank_in_service = field_validator("in_service", mode="before")(_blank_date)
     _blank_status_date = field_validator("status_date", mode="before")(_blank_date)
@@ -367,6 +408,7 @@ class Camera(BaseModel):
     status_note: Optional[str] = Field(default=None, description="Why, free text.")
     created_at: Optional[str] = Field(default=None, description="When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed.")
     updated_at: Optional[str] = Field(default=None, description="When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed.")
+    deleted_at: Optional[str] = Field(default=None, description="When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted.")
 
     _blank_in_service = field_validator("in_service", mode="before")(_blank_date)
     _blank_status_date = field_validator("status_date", mode="before")(_blank_date)
@@ -429,14 +471,36 @@ class FieldworkSettings(BaseModel):
 
     @field_validator("trappers", mode="before")
     @classmethod
-    def _from_names(cls, trappers):
-        """A plain name is a trapper without affiliation."""
-        return [{"name": t} if isinstance(t, str) else t for t in trappers] if isinstance(trappers, list) else trappers
+    def _from_names(cls, trappers, info: ValidationInfo):
+        """A plain name is a trapper without affiliation. What was kept before the trappers had a username (settings read from the file or from an old backup, validated with
+        `context={"migrate": True}`) gets one made from its name — never the same as another's; what comes from a client does not: it has to say it."""
+        if not isinstance(trappers, list):
+            return trappers
+        trappers = [{"name": t} if isinstance(t, str) else t for t in trappers]
+        if (info.context or {}).get("migrate"):
+            taken = {str(t.get("username")).strip().lower() for t in trappers if isinstance(t, dict) and t.get("username")}
+            migrated = []
+            for t in trappers:
+                if isinstance(t, dict) and not t.get("username") and t.get("name"):
+                    username = username_from(str(t["name"]), taken)
+                    taken.add(username)
+                    t = {**t, "username": username}
+                migrated.append(t)
+            trappers = migrated
+        return trappers
 
     @field_validator("trappers")
     @classmethod
     def _unique_trappers(cls, trappers: list[Trapper]) -> list[Trapper]:
-        return _unique(trappers, "name")
+        # a full name is listed once among those that were not deleted (a deleted one is kept as it is); a username is the trapper's own, and only one has it
+        alive = {id(t) for t in _unique([t for t in trappers if not t.deleted_at], "name")}
+        trappers = [t for t in trappers if t.deleted_at or id(t) in alive]
+        seen: dict[str, str] = {}
+        for t in trappers:
+            if t.username.lower() in seen:
+                raise ValueError(f"The username '{t.username}' is used by more than one trapper ({seen[t.username.lower()]} and {t.name}): it is unique.")
+            seen[t.username.lower()] = t.name
+        return trappers
 
     @field_validator("roles")
     @classmethod
@@ -579,7 +643,7 @@ def load_settings(config_file: Optional[Path] = None) -> Settings:
     config_file = config_file or active_config_file()
     _ensure_config_file(config_file)
     dynaconf_settings = Dynaconf(settings_files=[str(config_file)], envvar_prefix="WILDINTEL_UPLOADER")
-    return Settings.model_validate(dynaconf_settings.to_dict())
+    return Settings.model_validate(dynaconf_settings.to_dict(), context={"migrate": True})   # what was kept before a field existed gets it
 
 
 def save_settings(settings: Settings, config_file: Optional[Path] = None) -> None:

@@ -174,29 +174,41 @@ def _read_json(path: Path):
         return None
 
 
-def list_research_projects(root: Path) -> list[dict]:
-    """Every research project already kept in the collections folder. Empty if there is none yet (the first run)."""
-    return _store(root).list_projects()
+def list_research_projects(root: Path, include_deleted: bool = False) -> list[dict]:
+    """Every research project kept in the collections folder — empty if there is none yet (the first run). A project that was deleted is kept, but is not listed (`include_deleted`
+    lists it too): nothing is deleted for good (see audit)."""
+    projects = _store(root).list_projects()
+    return projects if include_deleted else audit.alive(projects)
 
 
 def has_research_project(root: Path, research_project_id: str) -> bool:
-    """Whether the research project is kept in the collections folder.
+    """Whether the research project is kept in the collections folder — and was not deleted.
 
     Raises:
         LocalFolderError: the research project id can't be a folder name.
     """
-    return _store(root).has_project(research_project_id)
+    project = _store(root).get_project(research_project_id)
+    return project is not None and not audit.is_deleted(project)
 
 
 def write_research_project(root: Path, project: dict) -> dict:
-    """Adds a research project: its folder (named by its acronym) and its record.
+    """Adds a research project: its folder (named by its acronym) and its record, with the day it was created. One that was deleted comes back, with its own
+    `created_at`: its collections and what it had are still there.
 
     Raises:
         LocalFolderError: the acronym can't be a folder name, or it's already there.
     """
-    _store(root).add_project(project)
+    store = _store(root)
+    before = store.get_project(project["acronym"])
+    if before is not None and not audit.is_deleted(before):
+        raise LocalFolderError(f"The research project '{project['acronym']}' already exists.")
+    kept = audit.stamped(project, before)
+    if before is None:
+        store.add_project(kept)
+    else:
+        store.save_project(project["acronym"], kept)
     project_dir(root, project["acronym"]).mkdir(parents=True, exist_ok=True)   # its folder, where its collections will go
-    return project
+    return kept
 
 
 def update_research_project(root: Path, research_project_id: str, changes: dict) -> dict:
@@ -207,23 +219,24 @@ def update_research_project(root: Path, research_project_id: str, changes: dict)
     """
     store = _store(root)
     project = store.get_project(research_project_id)
-    if project is None:
+    if project is None or audit.is_deleted(project):
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
-    project = {**project, **{k: v for k, v in changes.items() if k != "acronym"}}
+    project = audit.stamped({**project, **{k: v for k, v in changes.items() if k != "acronym" and k not in audit.AUDIT_FIELDS}}, project)
     store.save_project(research_project_id, project)
     return project
 
 
 def delete_research_project(root: Path, research_project_id: str) -> dict:
-    """Removes a research project with its locations and its visits. Only what the app keeps of the project itself goes: a project that holds
-    anything else (a collection, a deployment, images) is not touched, as it would take the work with it.
+    """Deletes a research project — *logically*: it gets `deleted_at` and is no longer listed, and everything it has is kept, with its locations, its visits and its
+    collections. A project that holds collections, deployments or images is not deleted, as they would be left with no project to be seen in.
 
     Raises:
-        LocalFolderError: the research project isn't there, or it holds more than its own files.
+        LocalFolderError: the research project isn't there, or it holds more than its own records.
     """
     store = _store(root)
     folder = project_dir(root, research_project_id)
-    if not store.has_project(research_project_id):
+    project = store.get_project(research_project_id)
+    if project is None or audit.is_deleted(project):
         raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
     own = store.owned_names(research_project_id)
     others = sorted(e.name for e in folder.iterdir() if e.name not in own) if folder.is_dir() else []
@@ -232,38 +245,47 @@ def delete_research_project(root: Path, research_project_id: str) -> dict:
             f"The research project '{research_project_id}' still holds {', '.join(others[:5])}{' and more' if len(others) > 5 else ''}: "
             "it can't be deleted until those are removed (they hold collections, deployments or images)."
         )
-    store.delete_project(research_project_id)
-    if folder.is_dir():
-        folder.rmdir()
+    store.save_project(research_project_id, audit.deleted(project))
     return {"deleted": research_project_id}
 
 
-def list_locations(root: Path, research_project_id: str) -> list[dict]:
-    """The locations kept for a research project — empty until one is added.
+def list_locations(root: Path, research_project_id: str, include_deleted: bool = False) -> list[dict]:
+    """The locations kept for a research project — empty until one is added. One that was deleted is kept, but is not listed (`include_deleted` lists it too: the visits
+    made there still say their time in its timezone).
 
     Raises:
         LocalFolderError: the research project id can't be a folder name.
     """
     # what was kept as "retired" is archived now
-    return [{**l, "status": "archived"} if l.get("status") == "retired" else l for l in _store(root).read_records(research_project_id, "locations")]
+    kept = [{**l, "status": "archived"} if l.get("status") == "retired" else l for l in _store(root).read_records(research_project_id, "locations")]
+    return kept if include_deleted else audit.alive(kept)
+
+
+def _index_of(locations: list[dict], location_id: str, deleted: bool = False) -> int | None:
+    return next((i for i, l in enumerate(locations) if str(l.get("location_id", "")).lower() == location_id.lower() and audit.is_deleted(l) == deleted), None)
 
 
 def write_location(root: Path, research_project_id: str, location: dict) -> dict:
-    """Adds a location to a research project that's already kept here.
+    """Adds a location to a research project that's already kept here, with the day it was created. One that was deleted comes back, as the one now said.
 
     Raises:
         LocalFolderError: the research project isn't there, or the location
             id is already used in it.
     """
     require_research_project(root, research_project_id)
-    locations = list_locations(root, research_project_id)
-    if any(l.get("location_id", "").lower() == location["location_id"].lower() for l in locations):
+    locations = list_locations(root, research_project_id, include_deleted=True)
+    if _index_of(locations, location["location_id"]) is not None:
         raise LocalFolderError(f"The location '{location['location_id']}' already exists in {research_project_id}.")
     # the day it was put into production is the day it was created, when it is not said
     location = {**location, "in_service": location.get("in_service") or datetime.now().date().isoformat()}
-    locations.append(location)
+    back = _index_of(locations, location["location_id"], deleted=True)
+    kept = audit.stamped(location, locations[back] if back is not None else None)
+    if back is not None:
+        locations[back] = kept
+    else:
+        locations.append(kept)
     _store(root).write_records(research_project_id, "locations", locations)
-    return location
+    return kept
 
 
 def update_location(root: Path, research_project_id: str, location_id: str, changes: dict) -> dict:
@@ -275,8 +297,8 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
     Raises:
         LocalFolderError: the research project or the location isn't there, the timezone (or the summer-time setting) is changed, or an archived location is given another status.
     """
-    locations = list_locations(root, research_project_id)
-    index = next((i for i, l in enumerate(locations) if l.get("location_id", "").lower() == location_id.lower()), None)
+    locations = list_locations(root, research_project_id, include_deleted=True)
+    index = _index_of(locations, location_id)
     if index is None:
         raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
     if locations[index].get("status") == "archived" and changes.get("status", "archived") != "archived":
@@ -288,20 +310,22 @@ def update_location(root: Path, research_project_id: str, location_id: str, chan
             if wanted != now[key]:
                 raise LocalFolderError(f"The {label} of a location can't be changed once it is created: {location_id} is {now[key]}.")
             changes = {k: v for k, v in changes.items() if k != key}
-    locations[index] = {**locations[index], **changes}
+    changes = {k: v for k, v in changes.items() if k not in audit.AUDIT_FIELDS}
+    locations[index] = audit.stamped({**locations[index], **changes}, locations[index])
     _store(root).write_records(research_project_id, "locations", locations)
     return locations[index]
 
 
 def delete_location(root: Path, research_project_id: str, location_id: str) -> dict:
-    """Removes a kept location (found ignoring case). One that holds visits stays, as they would be left with no place; so does one taken from
-    Trapper, which is only read here — mark a location as archived instead and it is no longer offered.
+    """Deletes a location (found ignoring case) — *logically*: it gets `deleted_at` and is no longer listed, but it is kept, as the visits made there still need its timezone.
+    One that holds visits stays listed, as they would be left with no place; so does one taken from Trapper, which is only read here — mark a location as archived
+    instead and it is no longer offered.
 
     Raises:
         LocalFolderError: the location isn't there, it comes from Trapper, or visits were made to it.
     """
-    locations = list_locations(root, research_project_id)
-    index = next((i for i, l in enumerate(locations) if l.get("location_id", "").lower() == location_id.lower()), None)
+    locations = list_locations(root, research_project_id, include_deleted=True)
+    index = _index_of(locations, location_id)
     if index is None:
         raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
     if locations[index].get("trapper_pk") is not None:
@@ -309,7 +333,8 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
     visits = len(list_visits(root, research_project_id, location_id))
     if visits:
         raise LocalFolderError(f"The location '{location_id}' still has {visits} visit{'s' if visits != 1 else ''}: it can't be deleted — mark it as archived instead.")
-    removed = locations.pop(index)
+    removed = locations[index]
+    locations[index] = audit.deleted(removed)
     _store(root).write_records(research_project_id, "locations", locations)
     return {"deleted": removed["location_id"]}
 
@@ -319,30 +344,68 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
 # <research project>/cameras.json and <research project>/sd_cards.json, beside its locations and its visits: they belong to the research project and travel
 # with its collections. (The trappers are people, not things of a project: they stay in the settings.)
 
-def list_field_items(root: Path, research_project_id: str, kind: str) -> list[dict]:
-    """The cameras (`kind` "cameras") or the SD cards ("sd_cards") kept for a research project — each with its `research_project` set to it. Empty until one is kept."""
-    return [{**migrate_gear(i), "research_project": research_project_id} for i in _store(root).read_records(research_project_id, kind)]
+def list_field_items(root: Path, research_project_id: str, kind: str, include_deleted: bool = False) -> list[dict]:
+    """The cameras (`kind` "cameras") or the SD cards ("sd_cards") kept for a research project — each with its `research_project` set to it. Empty until one is kept. One that
+    was deleted is kept, but is not listed (`include_deleted` lists it too)."""
+    items = [{**migrate_gear(i), "research_project": research_project_id} for i in _store(root).read_records(research_project_id, kind)]
+    return items if include_deleted else audit.alive(items)
+
+
+def _kept_list(root: Path, research_project_id: str, kind: str, items: list[dict], key) -> None:
+    """Keeps `items` as all the `kind` of the research project that are listed: the ones that were kept and are not among them are **deleted logically** — they get `deleted_at` and stay,
+    with all they said — and one that was deleted and is among them comes back. Each keeps its `created_at` and gets a new `updated_at` when it changed (see audit)."""
+    store = _store(root)
+    kept = store.read_records(research_project_id, kind)
+    before = {key(i): i for i in kept}
+    at = audit.now()
+    out, listed = [], set()
+    for item in items:
+        k = key(item)
+        listed.add(k)
+        out.append(audit.stamped({n: v for n, v in item.items() if n != "research_project"}, before.get(k), at))
+    out += [audit.deleted(i, at) for k, i in before.items() if k not in listed]   # what is no longer listed is not forgotten
+    store.write_records(research_project_id, kind, out)
 
 
 def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict]) -> None:
-    """Keeps these cameras or SD cards as the research project's — the whole list, replacing what was kept.
+    """Keeps these cameras or SD cards as the research project's — the whole list: what was kept and is not in it is deleted *logically* (see `_kept_list`).
 
     Raises:
         LocalFolderError: the research project isn't in the collections folder.
     """
     require_research_project(root, research_project_id)
-    store = _store(root)
-    # each one keeps its `created_at`, and gets a new `updated_at` when it changed — what the page sends for them is not taken (see audit)
-    before = {str(i.get("label") or "").strip().lower(): i for i in store.read_records(research_project_id, kind)}
-    at = audit.now()
-    store.write_records(research_project_id, kind, [
-        audit.stamped({k: v for k, v in item.items() if k != "research_project"}, before.get(str(item.get("label") or "").strip().lower()), at) for item in items
-    ])
+    _kept_list(root, research_project_id, kind, items, lambda i: str(i.get("label") or "").strip().lower())
+
+
+# ── The roles of a research project ─────────────────────────────────────────────────────────────────────────────
+#
+# What each trapper is in a research project — a contributor's role in Camtrap DP —: <research project>/roles.json. The trappers, the people, are global (the settings);
+# their roles are the project's.
+
+def list_roles(root: Path, research_project_id: str, include_deleted: bool = False) -> list[dict]:
+    """The roles kept for a research project — each with its `research_project` set to it. One that was deleted is kept, but is not listed."""
+    roles = [{**r, "research_project": research_project_id} for r in _store(root).read_records(research_project_id, "roles")]
+    return roles if include_deleted else audit.alive(roles)
+
+
+def write_roles(root: Path, research_project_id: str, roles: list[dict]) -> None:
+    """Keeps these roles as all of the research project's: the ones that were kept and are not in it are deleted *logically*, as the cameras are.
+
+    Raises:
+        LocalFolderError: the research project isn't in the collections folder.
+    """
+    require_research_project(root, research_project_id)
+    _kept_list(root, research_project_id, "roles", roles, lambda r: (str(r.get("trapper") or "").strip().lower(), r.get("role") or "contributor"))
 
 
 def list_all_field_items(root: Path, kind: str) -> list[dict]:
     """The cameras or the SD cards of every research project kept in the collections folder, project after project."""
     return [item for project in list_research_projects(root) for item in list_field_items(root, project["acronym"], kind)]
+
+
+def list_all_roles(root: Path) -> list[dict]:
+    """The roles of every research project kept in the collections folder, project after project."""
+    return [role for project in list_research_projects(root) for role in list_roles(root, project["acronym"])]
 
 
 def _raw_visits(root: Path, research_project_id: str) -> list[dict]:
@@ -394,7 +457,7 @@ def list_visits(root: Path, research_project_id: str, location_id: str | None = 
         LocalFolderError: the research project id can't be a folder name.
     """
     raw = _raw_visits(root, research_project_id)
-    locations = list_locations(root, research_project_id)
+    locations = list_locations(root, research_project_id, include_deleted=True)
     kept = []
     for visit in raw:
         try:
@@ -423,7 +486,7 @@ def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
         LocalFolderError: the research project isn't there.
     """
     write_visits(root, research_project_id, [visit])
-    locations = list_locations(root, research_project_id)
+    locations = list_locations(root, research_project_id, include_deleted=True)
     return _told(_raw_visits(root, research_project_id)[-1], locations)
 
 
@@ -460,7 +523,7 @@ def update_visit(root: Path, research_project_id: str, location_id: str, session
     Raises:
         LocalFolderError: the research project isn't there, or it has no visit to that site in that revision."""
     require_research_project(root, research_project_id)
-    locations = list_locations(root, research_project_id)
+    locations = list_locations(root, research_project_id, include_deleted=True)
     list_visits(root, research_project_id)  # an earlier file is moved to instants first
     raw = _raw_visits(root, research_project_id)
     index = next((i for i, v in enumerate(raw) if str(v.get("location_id", "")).lower() == location_id.lower() and str(v.get("session") or "").upper() == session.upper()), None)
@@ -482,7 +545,7 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
     """
     require_research_project(root, research_project_id)
     if new:
-        locations = list_locations(root, research_project_id)
+        locations = list_locations(root, research_project_id, include_deleted=True)
         list_visits(root, research_project_id)  # an earlier file is moved to instants first
         at = audit.now()
         _write_raw_visits(root, research_project_id, _raw_visits(root, research_project_id) + [audit.stamped(_kept(v, locations), None, at) for v in new])
@@ -572,7 +635,7 @@ def link_visit(root: Path, research_project_id: str, location_id: str, date: str
     """
     list_visits(root, research_project_id)  # an earlier file is moved to instants first
     raw = _raw_visits(root, research_project_id)
-    locations = list_locations(root, research_project_id)
+    locations = list_locations(root, research_project_id, include_deleted=True)
     visit = next((v for v in raw if str(v.get("location_id", "")).lower() == location_id.lower()
                   and (_told(v, locations).get("date"), _told(v, locations).get("time")) == (date, time)), None)
     if visit is None:

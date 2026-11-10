@@ -605,6 +605,10 @@ export interface TrapperRole {
   research_project: string
   trapper: string
   role: TrapperRoleName
+  /** When it was kept here, last changed and — if it was removed — deleted: ISO 8601, UTC, with a Z, written by the app, never typed. A removed one is kept, but not shown. */
+  created_at?: string | null
+  updated_at?: string | null
+  deleted_at?: string | null
 }
 
 export interface FieldworkSettings {
@@ -642,6 +646,7 @@ export interface SdCard {
   /** When it was kept here and when it was last changed — ISO 8601, UTC, with a Z: written by the app, never typed (what is sent for them is not taken). Absent on one kept before they existed. */
   created_at?: string | null
   updated_at?: string | null
+  deleted_at?: string | null
 }
 
 export type CameraConnectivity = 'none' | '4g' | '5g'
@@ -672,15 +677,25 @@ export interface Camera {
   /** When it was kept here and when it was last changed — ISO 8601, UTC, with a Z: written by the app, never typed (what is sent for them is not taken). Absent on one kept before they existed. */
   created_at?: string | null
   updated_at?: string | null
+  deleted_at?: string | null
 }
 
 /** One of the people who go to the field, as wildintel-publisher keeps an author. */
 export interface Trapper {
+  /** What the trapper is called in the app: required, and unique among the trappers (whatever its case), as the label of an SD card is. */
+  username: string
+  /** The full name — how a visit says who went. */
   name: string
   affiliation: string | null
+  /** An email address — optional. */
+  email?: string | null
   status?: TrapperStatus
   /** Set when the trapper was taken from Trapper: it can only be seen here. */
   trapper_pk?: number | null
+  /** When it was kept here, last changed and — if it was removed — deleted: ISO 8601, UTC, with a Z, written by the app, never typed. A removed one is kept, but not shown. */
+  created_at?: string | null
+  updated_at?: string | null
+  deleted_at?: string | null
 }
 
 /** A research project entered by hand — the fields of Trapper's own "Add

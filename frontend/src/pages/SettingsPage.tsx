@@ -917,6 +917,8 @@ interface ItemField<T> {
   sectionIcon?: ReactNode
   /** Has to be given, though it is not the first field. */
   required?: boolean
+  /** In a CSV file: a row that lacks it, or has it wrong, is left out and said — as the form would not let the item be done. */
+  strict?: boolean
   kind?: 'text' | 'date' | 'suggest' | 'bool' | 'select' | 'timezone'
   /** What is wrong with a value, if anything: it is said under the field, and the item cannot be done with until it is put right. */
   validate?: (value: string) => string | null
@@ -1848,14 +1850,20 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
           heading="Trappers" noun="trapper" fileName="trappers" styled plain onDetail={setDetail} items={trappers} onChange={changeTrappers}
           icon={(t) => initialsOf(t.name)} dim={(t) => t.status === 'inactive'} readOnly={(t) => t.trapper_pk != null}
           notice={(t) => (t.trapper_pk != null ? <TrapperNotice noun="trapper" /> : undefined)}
-          blank={{ name: 'New trapper', affiliation: null, status: 'active' }}
+          blank={{ username: '', name: '', affiliation: null, email: null, status: 'active' }}
           badges={(t) => [...(t.status === 'inactive' ? [statusBadge(t.status)] : []), ...(t.trapper_pk != null ? [originBadge(t.trapper_pk)] : [])]}
-          subtitle={(t) => t.affiliation || ''}
+          subtitle={(t) => [t.name, t.affiliation].filter(Boolean).join(' · ')}
           meta={(t) => usedIn(countVisits((v) => (v.trappers ?? '').split(',').some((n) => same(n, t.name))))}
           footnote="Trappers that come from Trapper are read-only here. Change them in Trapper and import them again. If someone no longer goes to the field, mark them as inactive instead of deleting them."
           empty="No trapper yet — a visit will have none to pick as who went."
-          searchLabel="Search by name or affiliation"
-          fields={[{ key: 'name', label: 'Full name', section: 'Who is it?', sectionIcon: <UsersIcon />, sectionHint: 'The name of the person, and where they work. It is how a visit says who went to the field.' }, { key: 'affiliation', label: 'Affiliation', placeholder: 'e.g. University of Huelva', hint: 'Where the trapper works. Free text.' },
+          searchLabel="Search by username, name or affiliation"
+          fields={[
+            { key: 'username', label: 'Username', placeholder: 'e.g. ana.perez', hint: 'What the trapper is called in the app: required, with no spaces, and no two trappers have the same.', section: 'Who is it?', sectionIcon: <UsersIcon />,
+              sectionHint: 'The username tells one person from another; the full name is how a visit says who went to the field. Where they work and how to write to them are optional.',
+              strict: true, validate: (v) => (/^\S+$/.test(v) ? null : 'Required, with no spaces.') },
+            { key: 'name', label: 'Full name', required: true, strict: true, placeholder: 'e.g. Ana Pérez', hint: 'The name of the person, as it should be on a visit.', validate: (v) => (v ? null : 'A full name is required.') },
+            { key: 'affiliation', label: 'Affiliation', placeholder: 'e.g. University of Huelva', hint: 'Where the trapper works. Free text.' },
+            { key: 'email', label: 'Email', placeholder: 'e.g. ana@example.org', hint: 'How to write to them. Optional.', validate: (v) => (v === '' || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? null : 'Not an email address.') },
             ...statusFields<Trapper>(['active', 'inactive'], false, { active: 'Offered when a visit is registered.', inactive: 'Not offered when a visit is registered. Past visits keep their name.' })]}
         />
       )}

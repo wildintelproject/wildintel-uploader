@@ -2,7 +2,7 @@
 
     <collections folder>/<research project id>/research_project.json
     <collections folder>/<research project id>/locations.json
-    <collections folder>/<research project id>/visits.json      (and unknown_visits.json, cameras.json, sd_cards.json, upload_failures.json)
+    <collections folder>/<research project id>/visits.json      (and unknown_visits.json, cameras.json, sd_cards.json, roles.json, upload_failures.json)
     <collections folder>/<research project id>/<R0003>/<deployment id>/…      (the images, and what is kept with them: not records)
 
 A file is put in place at once: it is never left half written.
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 PROJECT_FILE = "research_project.json"
 RECORD_FILES = {
     "locations": "locations.json", "visits": "visits.json", "unknown_visits": "unknown_visits.json",
-    "cameras": "cameras.json", "sd_cards": "sd_cards.json", "upload_failures": "upload_failures.json",
+    "cameras": "cameras.json", "sd_cards": "sd_cards.json", "roles": "roles.json", "upload_failures": "upload_failures.json",
 }
 assert set(RECORD_FILES) == set(RECORD_KINDS)
 
@@ -103,9 +103,7 @@ class JsonFolderStore(ProjectStore):
             (folder / name).unlink(missing_ok=True)
 
     def owned_names(self, research_project_id: str) -> set[str]:
-        # What goes with the research project: it, its locations and its visits. Its cameras and its SD cards (cameras.json, sd_cards.json) are not among them — as it has
-        # always been: a project that has some cannot be deleted until they are removed.
-        return {PROJECT_FILE, *(RECORD_FILES[k] for k in ("locations", "visits", "unknown_visits", "upload_failures"))}
+        return {PROJECT_FILE, *RECORD_FILES.values()}
 
     # ── the records ──────────────────────────────────────────────────────────────────────────────────────────────────────
 

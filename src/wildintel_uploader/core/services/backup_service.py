@@ -32,7 +32,7 @@ MANIFEST = "manifest.json"
 SETTINGS = "settings.json"
 # What goes in the zip is JSON, whatever the records are kept in: it is read from the store and put back in it (see core/storage).
 PROJECT = "research_project.json"
-PROJECT_RECORDS = {"locations": "locations.json", "cameras": "cameras.json", "sd_cards": "sd_cards.json"}
+PROJECT_RECORDS = {"locations": "locations.json", "cameras": "cameras.json", "sd_cards": "sd_cards.json", "roles": "roles.json"}
 VISITS = "visits.json"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp", ".mp4", ".avi", ".mov", ".mkv", ".m4v"}
 _COLLECTION = re.compile(r"^R\d+$", re.IGNORECASE)
@@ -94,6 +94,7 @@ def settings_snapshot(settings: config.Settings | None = None) -> dict:
     data.pop("DATA", None)
     data["FIELDWORK"]["cameras"] = []
     data["FIELDWORK"]["sd_cards"] = []
+    data["FIELDWORK"]["roles"] = []
     return data
 
 
@@ -306,7 +307,8 @@ def restore_backup(
                     summary["project_files"]["research_project"] = "kept"
             for kind, label, key in (("locations", "locations", lambda i: str(i.get("location_id", "")).lower()),
                                      ("cameras", "cameras", lambda i: str(i.get("label") or i.get("camera_id") or "").lower()),
-                                     ("sd_cards", "sd_cards", lambda i: str(i.get("label", "")).lower())):
+                                     ("sd_cards", "sd_cards", lambda i: str(i.get("label", "")).lower()),
+                                     ("roles", "roles", lambda i: (str(i.get("trapper", "")).lower(), i.get("role") or "contributor"))):
                 if f"project/{PROJECT_RECORDS[kind]}" not in names:
                     continue
                 backed = [i for i in json.loads(zf.read(f"project/{PROJECT_RECORDS[kind]}")) if isinstance(i, dict)]
@@ -365,7 +367,7 @@ def restore_backup(
             if isinstance(backed.get("FIELDWORK"), dict):   # the people; the cameras and the SD cards are the projects'
                 merged["FIELDWORK"]["trappers"] = backed["FIELDWORK"].get("trappers", merged["FIELDWORK"]["trappers"])
             try:
-                config.save_settings(config.Settings.model_validate(merged))
+                config.save_settings(config.Settings.model_validate(merged, context={"migrate": True}))
             except Exception as exc:  # a setting the backup holds that this version does not accept
                 raise BackupError(f"The settings of the backup cannot be restored: {exc}") from exc
             summary["settings"] = True

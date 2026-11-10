@@ -1,5 +1,5 @@
-name,affiliation
-Ana Pérez,University of Huelva
-Luis Gómez,CSIC
-Carlos Ruiz,
-Marta Díaz,Doñana Biological Station
+username,name,affiliation,email
+ana.perez,Ana Pérez,University of Huelva,
+luis.gomez,Luis Gómez,CSIC,
+carlos.ruiz,Carlos Ruiz,,
+marta.diaz,Marta Díaz,Doñana Biological Station,

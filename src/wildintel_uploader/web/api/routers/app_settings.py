@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core import logging_setup, storage
-from wildintel_uploader.core.services import file_manager, local_folder_service
+from wildintel_uploader.core.services import audit, file_manager, local_folder_service
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -23,6 +23,8 @@ def _public(settings: config.Settings) -> dict:
     data["TRAPPER"]["has_password"] = bool(data["TRAPPER"].pop("user_password"))
     data["EPICOLLECT5"]["has_secret"] = bool(data["EPICOLLECT5"].pop("client_secret"))
     data["AGOUTI"]["has_api_key"] = bool(data["AGOUTI"].pop("api_key"))
+    data["FIELDWORK"]["trappers"] = audit.alive(data["FIELDWORK"]["trappers"])   # a trapper that was deleted is kept, but not shown
+    data["FIELDWORK"]["roles"] = audit.alive(data["FIELDWORK"]["roles"])
     data["DATA"]["dir"] = data["DATA"]["dir"] or str(config.default_data_dir())
     # What the collections folder is when no folder of its own is set — shown as the default.
     for key in ("collections", "reports", "packages"):
@@ -46,6 +48,8 @@ def _shown(settings: config.Settings) -> dict:
     for kind in ("cameras", "sd_cards"):
         # what is still in the settings file belongs to a research project that is not in the collections folder (yet)
         data["FIELDWORK"][kind] = [i.model_dump(mode="json") if hasattr(i, "model_dump") else i for i in local_folder_service.list_all_field_items(root, kind)] + data["FIELDWORK"][kind]
+    # the roles belong to the research projects too: what is still in the settings file is of a project that is not here (yet)
+    data["FIELDWORK"]["roles"] = local_folder_service.list_all_roles(root) + data["FIELDWORK"]["roles"]
     return data
 
 
@@ -54,7 +58,7 @@ def _move_to_the_projects(settings: config.Settings) -> config.Settings:
     research project's, to it. What can't be moved stays: the ones whose project isn't in the collections folder yet, and the ones that belong to none — a camera
     or an SD card belongs to one research project, so those wait to be assigned to one in the settings. Does nothing once there is nothing left to move."""
     fieldwork = settings.FIELDWORK
-    if not fieldwork.cameras and not fieldwork.sd_cards:
+    if not fieldwork.cameras and not fieldwork.sd_cards and not fieldwork.roles:
         return settings
     root = _root(settings)
     projects = [p["acronym"] for p in local_folder_service.list_research_projects(root)]
@@ -70,10 +74,35 @@ def _move_to_the_projects(settings: config.Settings) -> config.Settings:
             added = [i.model_dump(mode="json") for i in mine if i.label.lower() not in have]
             local_folder_service.write_field_items(root, project, kind, [*kept, *added])
         leftovers[kind] = [i for i in getattr(fieldwork, kind) if (i.research_project or "").lower() not in {p.lower() for p in projects}]
-    if (leftovers["cameras"], leftovers["sd_cards"]) != (fieldwork.cameras, fieldwork.sd_cards):
-        fieldwork.cameras, fieldwork.sd_cards = leftovers["cameras"], leftovers["sd_cards"]
+    # the roles too: a role of a project that is kept here goes to it
+    roles_left = []
+    for project in projects:
+        mine = [r for r in fieldwork.roles if r.research_project.lower() == project.lower()]
+        if not mine:
+            continue
+        kept = local_folder_service.list_roles(root, project, include_deleted=True)
+        have = {(r["trapper"].lower(), r.get("role") or "contributor") for r in kept}
+        added = [r.model_dump(mode="json") for r in mine if (r.trapper.lower(), r.role) not in have]
+        local_folder_service.write_roles(root, project, [*audit.alive(kept), *added])
+    roles_left = [r for r in fieldwork.roles if r.research_project.lower() not in {p.lower() for p in projects}]
+    if (leftovers["cameras"], leftovers["sd_cards"], roles_left) != (fieldwork.cameras, fieldwork.sd_cards, fieldwork.roles):
+        fieldwork.cameras, fieldwork.sd_cards, fieldwork.roles = leftovers["cameras"], leftovers["sd_cards"], roles_left
         config.save_settings(settings)
     return settings
+
+
+def _merge_trappers(current: list[config.Trapper], new: list[config.Trapper]) -> list[config.Trapper]:
+    """The trappers are global — the people, whatever the research project. One the page no longer lists is not deleted: it gets `deleted_at` and stays in the settings, and the
+    page does not see it. One that is listed again comes back. Each keeps its `created_at` and gets a new `updated_at` when it changed (see audit)."""
+    at = audit.now()
+    before = {t.username.lower(): t.model_dump(mode="json") for t in current}   # a trapper is its username
+    out, listed = [], set()
+    for trapper in new:
+        key = trapper.username.lower()
+        listed.add(key)
+        out.append(config.Trapper.model_validate(audit.stamped(trapper.model_dump(mode="json"), before.get(key), at)))
+    out += [config.Trapper.model_validate(audit.deleted(record, at)) for key, record in before.items() if key not in listed]
+    return out
 
 
 @router.get("")
@@ -100,6 +129,7 @@ def save_settings(new: config.Settings) -> dict:
         for field in fields:
             if not getattr(section, field):
                 setattr(section, field, None)
+    new.FIELDWORK.trappers = _merge_trappers(current.FIELDWORK.trappers, new.FIELDWORK.trappers)
     root = _root(new)
     model = {"cameras": config.Camera, "sd_cards": config.SdCard}
     for kind in ("cameras", "sd_cards"):
@@ -126,6 +156,14 @@ def save_settings(new: config.Settings) -> dict:
         for project in known:
             local_folder_service.write_field_items(root, project, kind, by_project.get(project, []))
         setattr(new.FIELDWORK, kind, [i for i in items if i.research_project not in known])
+    # the roles belong to the research projects: each project's are replaced by what the page has — the ones it no longer lists are deleted, logically
+    known = {p["acronym"] for p in local_folder_service.list_research_projects(root)}
+    by_project: dict[str, list] = {}
+    for role in new.FIELDWORK.roles:
+        by_project.setdefault(role.research_project, []).append(role.model_dump(mode="json"))
+    for project in known:
+        local_folder_service.write_roles(root, project, by_project.get(project, []))
+    new.FIELDWORK.roles = [r for r in new.FIELDWORK.roles if r.research_project not in known]
     config.save_settings(new)
     storage.configure(new.DATA.storage)   # where the records are kept, from now on
     logging_setup.apply_level(logging_setup.effective_level())

@@ -51,9 +51,9 @@ const squash = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '')
 export interface ItemsRead<T> { items: T[]; problems: string[] }
 
 /** The items of a CSV text: the columns are found by the key or the label of a field (whatever the case, the spaces or the underscores).
- * A blank is none (null), a day must be YYYY-MM-DD, a yes/no is read as yes (yes, true, 1) or none, a value a field finds wrong is left blank and said, and a row without the first field — the one that names the item — is left out and said. */
+ * A blank is none (null), a day must be YYYY-MM-DD, a row that lacks a `strict` field, or has it wrong, is left out and said, a yes/no is read as yes (yes, true, 1) or none, a value a field finds wrong is left blank and said, and a row without the first field — the one that names the item — is left out and said. */
 export function readItems<T extends object>(
-  text: string, fields: { key: keyof T & string; label: string; kind?: string; options?: { value: string }[]; validate?: (value: string) => string | null }[], blank: T, noun: string,
+  text: string, fields: { key: keyof T & string; label: string; kind?: string; strict?: boolean; options?: { value: string }[]; validate?: (value: string) => string | null }[], blank: T, noun: string,
 ): ItemsRead<T> {
   const [header, ...rows] = parseCsv(text)
   if (!header) return { items: [], problems: ['The file is empty.'] }
@@ -63,6 +63,7 @@ export function readItems<T extends object>(
   const problems: string[] = []
   rows.forEach((row, i) => {
     const item: Record<string, unknown> = { ...(blank as Record<string, unknown>) }
+    let wrongName = false   // the item has a name, and it is not a good one: said already
     fields.forEach((f, j) => {
       const value = columns[j] >= 0 ? (row[columns[j]] ?? '').trim() : ''
       item[f.key] = j === 0 ? value : value || null
@@ -73,7 +74,13 @@ export function readItems<T extends object>(
         item[f.key] = chosen ? chosen.value : (blank as Record<string, unknown>)[f.key] ?? null
         if (value && !chosen) problems.push(`Row ${i + 2}: ${f.label.toLowerCase()} “${value}” is none of ${f.options?.map((o) => o.value).join(', ')}; left as ${String(item[f.key])}.`)
       }
-      const wrong = j > 0 ? f.validate?.(value) : null
+      if (j === 0 && f.strict && value && f.validate?.(value)) {   // what names the item has to be right: nothing is made of a row without it
+        problems.push(`Row ${i + 2}: ${f.label.toLowerCase()} “${value}” — ${String(f.validate(value)).replace(/\.$/, '').toLowerCase()}; left out.`)
+        item[f.key] = ''
+        wrongName = true
+        return
+      }
+      const wrong = j > 0 && value ? f.validate?.(value) : null   // a blank is not wrong: it is none (or, in a `strict` field, left out below)
       if (wrong) {
         item[f.key] = null
         problems.push(`Row ${i + 2}: ${f.label.toLowerCase()} “${value}” — ${wrong.replace(/\.$/, '').toLowerCase()}; left blank.`)
@@ -83,7 +90,10 @@ export function readItems<T extends object>(
         problems.push(`Row ${i + 2}: “${value}” is not a day (YYYY-MM-DD); left blank.`)
       }
     })
+    const lacking = fields.slice(1).find((f) => f.strict && !item[f.key])   // what a `strict` field asks for is asked of a row too
+    if (wrongName) return
     if (!item[fields[0].key]) problems.push(`Row ${i + 2}: no ${fields[0].label.toLowerCase()}, so it is not a ${noun}; left out.`)
+    else if (lacking) problems.push(`Row ${i + 2}: no ${lacking.label.toLowerCase()}, so it is not a ${noun}; left out.`)
     else items.push(item as T)
   })
   return { items, problems }

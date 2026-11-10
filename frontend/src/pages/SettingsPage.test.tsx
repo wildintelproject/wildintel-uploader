@@ -824,24 +824,25 @@ describe('SettingsPage', () => {
   })
 
   describe('Trappers', () => {
-    const ANA = { name: 'Ana Pérez', affiliation: 'University of Huelva', status: 'active' as const }
-    const LUIS = { name: 'Luis', affiliation: null, status: 'active' as const }
+    const ANA = { username: 'ana', name: 'Ana Pérez', affiliation: 'University of Huelva', email: 'ana@uhu.es', status: 'active' as const }
+    const LUIS = { username: 'luis', name: 'Luis', affiliation: null, email: null, status: 'active' as const }
 
-    async function open(trappers: { name: string; affiliation: string | null }[] = []) {
+    async function open(trappers: { username: string; name: string; affiliation: string | null; email?: string | null }[] = []) {
       mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers } })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await entity('Trappers')
     }
 
-    it('lists the trappers saved as cards, with their affiliation under the name', async () => {
+    it('lists the trappers saved as cards: the username is the title, and the full name and where they work are under it', async () => {
       await open([ANA, LUIS])
 
-      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
-      expect(screen.getByText('University of Huelva')).toBeInTheDocument()
+      expect(screen.getByText('ana')).toBeInTheDocument()
+      expect(screen.getByText('Ana Pérez · University of Huelva')).toBeInTheDocument()
+      expect(screen.getByText('luis')).toBeInTheDocument()
       expect(screen.getByText('Luis')).toBeInTheDocument()
       expect(screen.queryByText('No affiliation')).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Edit Ana Pérez' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Edit ana' })).toBeInTheDocument()
     })
 
     it('says when there are none yet', async () => {
@@ -855,42 +856,69 @@ describe('SettingsPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Add trapper' }))
       const dialog = within(screen.getByRole('region', { name: 'Trapper' }))
-      await userEvent.clear(dialog.getByLabelText('Full name'))
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()                         // the username and the full name are required
+      await userEvent.type(dialog.getByLabelText('Username'), 'luis.gomez')
       await userEvent.type(dialog.getByLabelText('Full name'), 'Luis Gómez')
       await userEvent.type(dialog.getByLabelText('Affiliation'), 'CSIC')
+      await userEvent.type(dialog.getByLabelText('Email'), 'luis@csic.es')
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([ANA, { name: 'Luis Gómez', affiliation: 'CSIC', status: 'active' }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([ANA, { username: 'luis.gomez', name: 'Luis Gómez', affiliation: 'CSIC', email: 'luis@csic.es', status: 'active' }])
     })
 
-    it('imports trappers from a CSV file — the new ones are added, one with the same name is updated — and saves them with the rest', async () => {
+    it('does not let a username have spaces or an email be one that is not', async () => {
       await open([ANA])
 
-      const file = new File(['name,affiliation\nana pérez,CSIC\nLuis,\n,nobody\n'], 'trappers.csv', { type: 'text/csv' })
+      await userEvent.click(screen.getByRole('button', { name: 'Add trapper' }))
+      const dialog = within(screen.getByRole('region', { name: 'Trapper' }))
+      await userEvent.type(dialog.getByLabelText('Username'), 'luis gomez')
+      expect(dialog.getByText('Required, with no spaces.')).toBeInTheDocument()
+      await userEvent.type(dialog.getByLabelText('Full name'), 'Luis Gómez')
+      await userEvent.type(dialog.getByLabelText('Email'), 'luis')
+      expect(dialog.getByText('Not an email address.')).toBeInTheDocument()
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    })
+
+    it('imports trappers from a CSV file — the new ones are added, one with the same username is updated, one with no username or no full name is left out — and saves them with the rest', async () => {
+      await open([ANA])
+
+      const file = new File(['username,name,affiliation,email\nANA,Ana Pérez,CSIC,\nluis,Luis,,luis@x.org\n,nobody,,\nmaria,,,\nmaria lopez,María López,,\n'], 'trappers.csv', { type: 'text/csv' })
       await userEvent.upload(screen.getByLabelText('Import Trappers from a CSV file'), file)
 
       expect(await screen.findByRole('status')).toHaveTextContent('1 added, 1 updated from the file')
-      expect(screen.getByRole('status')).toHaveTextContent('Row 4: no full name')
-      expect(screen.getByText('CSIC')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveTextContent('Row 4: no username')
+      expect(screen.getByRole('status')).toHaveTextContent('Row 5: no full name')
+      expect(screen.getByRole('status')).toHaveTextContent('Row 6: username “maria lopez”')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([{ name: 'ana pérez', affiliation: 'CSIC', status: 'active' }, { name: 'Luis', affiliation: null, status: 'active' }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([
+        { username: 'ANA', name: 'Ana Pérez', affiliation: 'CSIC', email: null, status: 'active' }, { username: 'luis', name: 'Luis', affiliation: null, email: 'luis@x.org', status: 'active' },
+      ])
+    })
+
+    it('has no column for the username in a file: nothing is imported, and it says so', async () => {
+      await open([ANA])
+
+      const file = new File(['name,affiliation\nLuis,CSIC\n'], 'trappers.csv', { type: 'text/csv' })
+      await userEvent.upload(screen.getByLabelText('Import Trappers from a CSV file'), file)
+
+      expect(await screen.findByRole('status')).toHaveTextContent('The file has no column for the username')
     })
 
     it('gives a trapper a status picked from cards, with Required on the fields that are', async () => {
       await open([LUIS])
 
-      await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Edit luis' }))
       const page = within(screen.getByRole('region', { name: 'Trapper' }))
-      expect(page.getByText('Required')).toBeInTheDocument()
+      expect(page.getAllByText('Required')).toHaveLength(2)             // the username and the full name
       expect(page.queryByText('Optional')).not.toBeInTheDocument() // only what is required says so
       expect(page.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
       await userEvent.click(page.getByRole('radio', { name: /Inactive/ }))
       await userEvent.click(page.getByRole('button', { name: 'Save changes' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([expect.objectContaining({ name: 'Luis', status: 'inactive' })])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([expect.objectContaining({ username: 'luis', name: 'Luis', status: 'inactive' })])
     })
 
     it('takes the title of the page and the text over the list away while a trapper is added or edited', async () => {
@@ -917,7 +945,7 @@ describe('SettingsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'More' }))
       await userEvent.click(screen.getByRole('menuitem', { name: 'Export CSV' }))
 
-      expect(await created[0].text()).toBe('name,affiliation,status\r\nAna Pérez,University of Huelva,active\r\nLuis,,active\r\n')
+      expect(await created[0].text()).toBe('username,name,affiliation,email,status\r\nana,Ana Pérez,University of Huelva,ana@uhu.es,active\r\nluis,Luis,,,active\r\n')
     })
 
     it('has nothing to export when there are no trappers', async () => {
@@ -930,35 +958,39 @@ describe('SettingsPage', () => {
     it('edits a trapper with its gear, and removes it from the window', async () => {
       await open([ANA, LUIS])
 
-      await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Edit luis' }))
       await userEvent.type(within(screen.getByRole('region', { name: 'Trapper' })).getByLabelText('Affiliation'), 'IOP PAS')
       await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-      expect(screen.getByText('IOP PAS')).toBeInTheDocument()
+      expect(screen.getByText('Luis · IOP PAS')).toBeInTheDocument()
 
-      await userEvent.click(screen.getByRole('button', { name: 'Edit Ana Pérez' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Edit ana' }))
       await userEvent.click(screen.getByRole('button', { name: 'Delete trapper' }))
-      expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
+      expect(screen.queryByText('Ana Pérez · University of Huelva')).not.toBeInTheDocument()
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
-    it('does not let a trapper be done without a name or with the name of another', async () => {
+    it('does not let a trapper be done without a username or a full name, or with the username of another', async () => {
       await open([ANA, LUIS])
 
-      await userEvent.click(screen.getByRole('button', { name: 'Edit Luis' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Edit luis' }))
       const name = screen.getByLabelText('Full name')
       await userEvent.clear(name)
-      expect(screen.queryByText('A full name is required.')).not.toBeInTheDocument() // the label already says Required
       expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+      await userEvent.type(name, 'Luis')
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
 
-      await userEvent.type(name, 'ana pérez')
-      expect(screen.getByText('ana pérez is already in the list.')).toBeInTheDocument()
+      const username = screen.getByLabelText('Username')
+      await userEvent.clear(username)
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+      await userEvent.type(username, 'ANA')                                                    // whatever its case
+      expect(screen.getByText('ANA is already in the list.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
     })
   })
 
   describe('Roles', () => {
     it('gives a trapper a role of Camtrap DP in a research project, and keeps it', async () => {
-      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ name: 'Ana Pérez', affiliation: null }] } })
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ username: 'ana', name: 'Ana Pérez', affiliation: null }] } })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await entity('Roles')
@@ -976,7 +1008,7 @@ describe('SettingsPage', () => {
     })
 
     it('lets a trapper have several roles in a project, but not the same one twice', async () => {
-      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ name: 'Ana Pérez', affiliation: null }], roles: [{ research_project: 'DONA', trapper: 'Ana Pérez', role: 'contact' }] } })
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ username: 'ana', name: 'Ana Pérez', affiliation: null }], roles: [{ research_project: 'DONA', trapper: 'Ana Pérez', role: 'contact' }] } })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await entity('Roles')

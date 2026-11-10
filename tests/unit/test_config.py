@@ -150,15 +150,33 @@ def test_the_trappers_of_the_fieldwork_survive_a_roundtrip(tmp_path: Path):
     config_file = tmp_path / "settings.toml"
     settings = config.load_settings(config_file)
     assert settings.FIELDWORK.trappers == []
-    settings.FIELDWORK.trappers = [config.Trapper(name="Ana", affiliation="University of Huelva"), config.Trapper(name="Luis")]
+    settings.FIELDWORK.trappers = [config.Trapper(username="ana", name="Ana", affiliation="University of Huelva", email="ana@uhu.es"), config.Trapper(username="luis", name="Luis")]
     config.save_settings(settings, config_file)
 
     reloaded = config.load_settings(config_file).FIELDWORK.trappers
-    assert [(t.name, t.affiliation) for t in reloaded] == [("Ana", "University of Huelva"), ("Luis", None)]
+    assert [(t.username, t.name, t.affiliation, t.email) for t in reloaded] == [("ana", "Ana", "University of Huelva", "ana@uhu.es"), ("luis", "Luis", None, None)]
 
 
-def test_a_trapper_given_as_a_plain_name_has_no_affiliation():
-    assert config.FieldworkSettings(trappers=["Ana"]).trappers == [config.Trapper(name="Ana")]
+def test_a_trapper_has_a_username_that_is_required_and_unique_and_an_email_that_is_not_required():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        config.Trapper(name="Ana")                                                       # the username is required
+    with pytest.raises(ValidationError):
+        config.Trapper(username="ana lopez", name="Ana")                                 # and has no spaces
+    with pytest.raises(ValidationError):
+        config.Trapper(username="ana", name="Ana", email="not an email")                 # an email, when given, is one
+    assert config.Trapper(username="ana", name="Ana", email="  ").email is None          # blank is none
+    with pytest.raises(ValidationError, match="unique"):
+        config.FieldworkSettings(trappers=[{"username": "ana", "name": "Ana"}, {"username": "ANA", "name": "Anabel"}])
+
+
+def test_what_was_kept_before_the_username_existed_gets_one_made_from_its_name_when_it_is_read_from_the_file():
+    old = {"FIELDWORK": {"trappers": ["Ana Pérez", {"name": "Ana Perez"}, {"name": "Luis", "affiliation": "CSIC"}]}}
+    migrated = config.Settings.model_validate(old, context={"migrate": True}).FIELDWORK.trappers
+    assert [(t.username, t.name) for t in migrated] == [("ana.perez", "Ana Pérez"), ("ana.perez2", "Ana Perez"), ("luis", "Luis")]
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):                                                 # what a client sends has to say it
+        config.Settings.model_validate(old)
 
 
 import pytest
