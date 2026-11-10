@@ -90,12 +90,12 @@ A **revision** is one visit to every site: the round of visits to all the locati
 
 A visit has a state that follows its life. A visit that left no camera has none.
 
-![The states of a visit: planned or unknown until it is registered; then deployed, not visited or no state; and, when a later visit collects its card or finds the camera stolen, collected or stolen](img/visit-states.svg)
+![The states of a visit: planned or unknown until it is registered; then deployed, not visited or no camera; and, when a later visit collects its card or finds the camera stolen, collected or stolen](img/visit-states.svg)
 
 The drawing reads from left to right, and the state of a visit is decided in three moments:
 
 1. **Before it is registered**, a visit is *planned* or *unknown*. It is **planned** when the revision has visits and the site has none yet: it is the visit that is expected. It is **unknown** when nothing is known of it — the first visit kept to a site is of a later revision, so the revisions before it have no visit of that site: no day, no camera, no card. Nothing is checked against an unknown visit, it counts as a visit to finish its revision, and a visit that comes later takes its place.
-2. **When it is registered**, what the visit did gives its state. If it **left a camera** — an Installation — it is **Deployed**: the camera is out and its card is still to be collected. If it **could not be made** (its status is *Not revised*) it is **Not visited**: nothing was done at it. If it **left no camera** — a Desinstallation takes it away, a Stolen visit finds it gone, an Archive gives the site up — it has **no state**.
+2. **When it is registered**, what the visit did gives its state. If it **left a camera** — an Installation — it is **Deployed**: the camera is out and its card is still to be collected. If it **could not be made** (its status is *Not revised*) it is **Not visited**: nothing was done at it. If it **left no camera**, what it did gives its state: a Desinstallation, which takes the camera and its card away, is **Collected**; a Stolen visit, which finds the camera gone, is **Stolen**; and a visit that only gives the site up — an Archive — is **No camera**: no camera is out and nothing is waited for.
 3. **When a later visit to the site** collects the card, or finds the camera stolen, the **Deployed** visit is closed: **Collected** if its card was collected, **Stolen** if the camera was found stolen — there are no images to import. While neither happens it stays *Deployed*. A Revision or a Desinstallation collects the card, and a Stolen visit finds the camera stolen: each closes the *Deployed* visit before it.
 
 The table sums up each state and what it means.

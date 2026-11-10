@@ -55,18 +55,19 @@ function sortValue(v: BookVisit, key: SortKey): string | number {
 }
 
 /** Where a visit is in its life: planned (not made yet), deployed (it left a camera that is still out), collected (the card was collected: a later visit closed it), stolen (the camera was
- * stolen, so no images) and not visited (the visit could not be made). Whether the images are stored is told by the Images column, not by the state. A visit that left no camera has no state. */
-type Phase = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited' | 'unknown'
+ * stolen, so no images) not visited (the visit could not be made) and no camera (it left none and nothing is waited for). Whether the images are stored is told by the Images column, not by the state. */
+type Phase = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited' | 'no_camera' | 'unknown'
 const phaseOf = (v: BookVisit): Phase | null =>
   v.state !== undefined ? v.state : v.not_done ? 'planned' : v.not_visited ? 'not_visited' : v.deployment_status === 'open' ? 'deployed' : v.deployment_status === 'closed' ? (v.deployment_no_images ? 'stolen' : 'collected') : null
-const PHASES: Phase[] = ['collected', 'stolen', 'deployed', 'not_visited', 'unknown', 'planned']
-const PHASE_LABEL: Record<Phase, string> = { planned: 'Planned', deployed: 'Deployed', collected: 'Collected', stolen: 'Stolen', not_visited: 'Not visited', unknown: 'Unknown' }
+const PHASES: Phase[] = ['collected', 'stolen', 'deployed', 'not_visited', 'no_camera', 'unknown', 'planned']
+const PHASE_LABEL: Record<Phase, string> = { planned: 'Planned', deployed: 'Deployed', collected: 'Collected', stolen: 'Stolen', not_visited: 'Not visited', no_camera: 'No camera', unknown: 'Unknown' }
 const PHASE_BADGE: Record<Phase, string> = {
   planned: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300',
   deployed: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300',
   collected: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
   stolen: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
   not_visited: 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200',
+  no_camera: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300',
   unknown: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300',
 }
 
@@ -176,6 +177,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
     { filter: 'collected', label: 'Collected', note: 'Card collected', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></>} className="h-5 w-5" /> },
     { filter: 'stolen', label: 'Stolen', note: 'Camera stolen, no images', tone: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>} className="h-5 w-5" /> },
     { filter: 'not_visited', label: 'Not visited', note: 'The visit could not be made', tone: 'text-slate-600 dark:text-slate-300', badge: 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>} className="h-5 w-5" /> },
+    { filter: 'no_camera', label: 'No camera', note: 'Left no camera', tone: 'text-sky-600 dark:text-sky-400', badge: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300', icon: <Icon path={<><rect x="4" y="7" width="16" height="11" rx="2" /><path d="M4 4l16 16" /></>} className="h-5 w-5" /> },
   ]
 
   // a visit is brought into view: on its revision, on its page, and open

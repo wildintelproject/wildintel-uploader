@@ -1283,3 +1283,14 @@ def test_a_visit_with_a_camera_an_sd_card_or_a_trapper_that_does_not_exist_is_re
         assert said in by_hand.text
     assert [p["row"] for p in refused["problems"]] == [2] and "NOCAM" in refused["problems"][0]["message"] and "Nobody" in refused["problems"][0]["message"]
     assert created["problems"] == [] and len(created["visits"]) == 1 and [c["camera_id"] for c in created["create"]["cameras"]] == ["NOCAM"]
+
+
+def test_a_visit_that_left_no_camera_and_waits_for_nothing_is_in_the_state_no_camera(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        _save({**VISIT, "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 10, "sd": None, "date": "2024-10-12", "session": "R0002"})
+        _save({**VISIT, "actions": ["Archive"], "camera_id": None, "num_photos": None, "sd": None, "date": "2024-11-12", "session": "R0003"})
+        shown = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
+
+    assert [(v["session"], v["state"]) for v in shown] == [("R0001", "collected"), ("R0002", "collected"), ("R0003", "no_camera")]

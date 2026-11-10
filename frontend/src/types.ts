@@ -625,7 +625,7 @@ export type CameraStatus = 'ready' | 'active' | 'archived'
 export type SdCardStatus = 'ready' | 'active' | 'archived'
 /** Why a camera or an SD card was archived. */
 /** Where a visit is in its life. */
-export type VisitState = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited' | 'unknown'
+export type VisitState = 'planned' | 'deployed' | 'collected' | 'stolen' | 'not_visited' | 'no_camera' | 'unknown'
 export type ArchiveReason = 'lost' | 'stolen' | 'broken' | 'other'
 export type TrapperStatus = 'active' | 'inactive'
 export type LocationStatus = 'active' | 'archived' | 'planned'
