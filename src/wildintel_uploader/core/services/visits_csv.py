@@ -566,8 +566,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
                 camera = _new_camera(cells.camera_id, row)
                 if camera["camera_id"].lower() not in cameras_known:
                     made["cameras"].append(camera)
-            if create.get("sd_cards") and row.get("sd") and row["sd"].lower() not in cards_known:
-                made["sd_cards"].append(_new_card(row["sd"], row))
+            if create.get("sd_cards") and cells.sd and cells.sd.lower() not in cards_known:   # the card as the visit has it ("SD 7" is 7), not as the cell wrote it
+                made["sd_cards"].append(_new_card(cells.sd, row))
             data = cells.model_dump(exclude_unset=True, exclude={"actions"})
             if "card_batteries_ok" in data:   # one column for both, as it was: the batteries and the card each in its own field
                 battery, card = visit_rules.split_card_batteries(data.pop("card_batteries_ok"))

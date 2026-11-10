@@ -432,7 +432,10 @@ function Field({ id, label, ask, error, children }: { id: string; label: string;
 }
 
 interface Props {
+  /** Back to the menu of the visits. */
   onBack: () => void
+  /** Back to the main menu: offered, beside the menu of the visits, when the visits have just been registered. */
+  onMainMenu?: () => void
   /** Opens the settings, on the section given — the page is left as it is under them. */
   onOpenSettings?: (section: 'trappers' | 'sdcards' | 'cameras' | 'locations' | 'general', researchProjectId?: string) => void
   /** Whether the settings are open: the trappers are read again when they are closed, as they may have been changed. */
@@ -449,7 +452,7 @@ interface Props {
 /** What a visit keeps of its camera: its serial number, or its label when it has none. */
 const cameraKey = (c: Camera) => c.camera_id || c.label
 
-export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = false, onImportImages, onImportImagesOf, start }: Props) {
+export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, settingsOpen = false, onImportImages, onImportImagesOf, start }: Props) {
   const [source, setSource] = useState<VisitSource | null>(null)
   const byHand = source === 'manual'
   const [visit, setVisit] = useState<Visit>(EMPTY_VISIT)
@@ -1343,7 +1346,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
             <div className="mt-6 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
               <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to add another visit?</p>
               <button type="button" className={btnPrimary} onClick={() => { setJustAdded(false); setVisits([]); setJustClosed([]) }}>Add another visit</button>
-              <button type="button" className={btnOutline} onClick={onBack}>Back to the start</button>
+              <button type="button" className={btnOutline} onClick={onBack}>Back to the visits menu</button>
+              {onMainMenu && <button type="button" className={btnOutline} onClick={onMainMenu}>Back to the main menu</button>}
             </div>
           )}
         </>
@@ -1636,7 +1640,8 @@ export default function VisitsPage({ onBack, onOpenSettings, settingsOpen = fals
                     <div className="mt-6 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
                       <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to register more visits?</p>
                       <button type="button" className={btnPrimary} onClick={() => { forgetCsv(); setCsvName(null); setProject(undefined); setSource(null) }}>Register more visits</button>
-                      <button type="button" className={btnOutline} onClick={onBack}>Back to the menu</button>
+                      <button type="button" className={btnOutline} onClick={onBack}>Back to the visits menu</button>
+                      {onMainMenu && <button type="button" className={btnOutline} onClick={onMainMenu}>Back to the main menu</button>}
                     </div>
                   </>
                 )}

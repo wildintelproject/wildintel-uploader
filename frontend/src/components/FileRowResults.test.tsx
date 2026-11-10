@@ -49,6 +49,23 @@ describe('FileRowResults', () => {
     expect(screen.queryByLabelText('Contents of Row 4')).not.toBeInTheDocument()
   })
 
+  it('has a chevron in every row, as the dashboard does, that opens its details and marks the row while they are open', async () => {
+    render(<FileRowResults rows={rows} />)
+    const chevron = screen.getByRole('button', { name: 'Show the contents of Row 4' })          // a row that is fine has its contents behind it
+    const cell = chevron.closest('td')!
+    expect(cell).toHaveClass('border-l-transparent')
+    expect(screen.queryByLabelText('Contents of Row 4')).not.toBeInTheDocument()
+
+    await userEvent.click(chevron)
+    expect(screen.getByLabelText('Contents of Row 4')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide the contents of Row 4' })).toHaveAttribute('aria-expanded', 'true')
+    expect(cell).toHaveClass('border-l-blue-500')                                                // the open row is marked
+
+    await userEvent.click(screen.getByRole('button', { name: 'Hide the contents of Row 4' }))
+    expect(screen.queryByLabelText('Contents of Row 4')).not.toBeInTheDocument()
+    expect(cell).toHaveClass('border-l-transparent')
+  })
+
   it('searches the rows by what they say: the words typed have to be all in the row', async () => {
     render(<FileRowResults rows={rows} />)
     const seen = () => within(screen.getByRole('table', { name: 'Rows of the file' })).getAllByRole('button', { name: /^View the contents of Row/ }).map((b) => b.getAttribute('aria-label')!.replace(/^.* Row /, ''))

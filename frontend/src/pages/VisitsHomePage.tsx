@@ -29,7 +29,7 @@ export default function VisitsHomePage({ onBack, onOpenSettings, settingsOpen, o
   // The visit that was planned and is to be created: the register opens on it.
   const [start, setStart] = useState<{ researchProjectId: string; site: string } | undefined>(undefined)
 
-  if (view === 'register') return <VisitsPage start={start} onBack={() => { setStart(undefined); setView(null) }} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onImportImages={onImportImages} onImportImagesOf={onImportImagesOf} />
+  if (view === 'register') return <VisitsPage start={start} onBack={() => { setStart(undefined); setView(null) }} onMainMenu={() => { setStart(undefined); onBack() }} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onImportImages={onImportImages} onImportImagesOf={onImportImagesOf} />
   if (view === 'book') return <VisitBookPage onBack={() => setView(null)} onImportImages={onImportImages} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onShowDeployment={onShowDeployment} focus={focusVisit} onCreateVisit={(target) => { setStart(target); setView('register') }} />
 
   return (

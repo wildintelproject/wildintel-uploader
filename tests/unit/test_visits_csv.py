@@ -357,3 +357,13 @@ def test_a_visit_already_kept_is_the_one_of_the_same_revision_and_site_whatever_
     no_revision = "location_id,actions,date,time,camera_id,sd\nWICP_0001,Installation,2026-09-14,08:30:00,C1,1\n"       # no revision to compare: the day and the time say
     result = visits_csv.parse_visits(no_revision, locations, kept, "", "mapped", visits_csv.suggest_mapping(no_revision)["mapping"])
     assert result["skipped"] == 1 and "on 2026-09-14 at 08:30:00 is already kept" in result["rows"][0]["message"]
+
+
+def test_an_sd_card_the_import_creates_is_made_as_the_visit_has_it_and_not_twice():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0}]
+    text = "location_id,session,date,time,actions,camera_id,sd,num_photos\nWICP_0001,R0001,2026-09-14,09:00:00,Installation,C1,SD 7,\nWICP_0001,R0002,2026-10-14,09:00:00,Revision,C1,SD 1,5\n"
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, locations, [], "", "mapped", mapping, {"create": {"sd_cards": True, "cameras": True}, "cards": [{"label": "1"}], "cameras": []})
+
+    assert [c["label"] for c in result["create"]["sd_cards"]] == ["7"]      # "SD 7" is the card 7; "SD 1" is the card 1 it has already

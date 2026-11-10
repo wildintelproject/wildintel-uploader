@@ -348,7 +348,7 @@ Any spreadsheet with a row per visit. Press **Register visits › Custom CSV**; 
 3. **Check and add the visits.** What the file says, before it is kept: *N visits to add · N already kept · N rows with a problem*, the new sites, what is worth knowing and what is odd. Then the **rows** of the file, laid out like a dashboard:
    - **Revision selection** — a card for *All revisions* and one for each revision the file has (the five most recent as cards, the older ones in the **Older revisions** list, for a file with many). Picking one narrows what is below to its rows.
    - **Status metrics & filters** — the **Progress** card and a card for *Rows read*, *Ready* (new visits), *Skipped / Existing* (already kept, or ignored) and *With problems*. Pressing one shows only those rows; pressing it again shows them all.
-   - **The table** — the search (by row, site, visit, action…), **Group by** — *Row* or *Error* — and **Reset**, with a line of the **active filters**. Grouped **by row**, each row of the file has its **Row**, **Visit**, **Site ID**, **Actions**, **When** and **Status** (*Add*, *Add · to check*, *Skipped / Existing*, *Skipped / Ignored* or *Error*); the **chevron** at the left opens the list of what is wrong with it — there is none on a row that is fine — and the **eye** button shows what the row says, field by field. Grouped **by error**, each kind of error is a row with how many rows have it, and its chevron opens those rows.
+   - **The table** — the search (by row, site, visit, action…), **Group by** — *Row* or *Error* — and **Reset**, with a line of the **active filters**. Grouped **by row**, each row of the file has its **Row**, **Visit**, **Site ID**, **Actions**, **When** and **Status** (*Add*, *Add · to check*, *Skipped / Existing*, *Skipped / Ignored* or *Error*); the **chevron** at the left of every row opens its details — what is wrong with it, when something is, and what it says when it is fine — and marks the row with a blue band while they are open; the **eye** button shows what the row says, field by field. Grouped **by error**, each kind of error is a row with how many rows have it, and its chevron opens those rows.
 
    Press **Add N visits** to keep them.
 
@@ -367,6 +367,8 @@ closed deployments' start and end, as the cameras' wall clock) and its `<R000N>_
 (who set it up, the habitat), the tags and groups of both together, and a number, a yes/no or a feature type as the setup says it with the retrieval's value noted in the comments.
 
 ## 6. Manage deployments
+
+**When the visits are registered** — by hand, from a CSV file or from Epicollect — the app says how many were added and asks what next: **register more visits** (it starts again at *Where do the visits come from?*), **back to the visits menu**, or **back to the main menu**.
 
 ### Deployments dashboard
 

@@ -222,8 +222,9 @@ export default function FileRowResults({ rows: allRows, labels = {} }: {
                     return (
                       <Fragment key={r.row}>
                         <tr className={TABLE.row(panel !== null)}>
-                          {/* the chevron opens the list of what is wrong with the row — a row that is fine has none */}
-                          <ChevronCell open={panel === 'errors'} available={isFlagged(r)} label={`the errors of ${name}`} onToggle={() => toggle('errors')} />
+                          {/* the chevron opens the details of the row — what is wrong with it, when something is; what it says, when it is fine — and marks it while they are open, as in the dashboard */}
+                          <ChevronCell open={panel !== null} label={isFlagged(r) ? `the errors of ${name}` : `the contents of ${name}`}
+                                       onToggle={() => (panel ? setOpened(null) : setOpened({ row: r.row, panel: isFlagged(r) ? 'errors' : 'contents' }))} />
                           <td className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.row}</td>
                           <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-zinc-200">{r.session || '—'}</td>
                           <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-zinc-200">{r.site || '—'}</td>

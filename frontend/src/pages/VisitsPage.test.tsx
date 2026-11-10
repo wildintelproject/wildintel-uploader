@@ -522,10 +522,11 @@ describe('VisitsPage', () => {
     expect(installationErrors({ ...BLANK, actions: ['Revision'] })).toEqual({})
   })
 
-  it('asks, once a visit is added, whether to add another or go back to the start', async () => {
+  it('asks, once a visit is added, whether to add another, go back to the visits menu or to the main menu', async () => {
     const onBack = vi.fn()
+    const onMainMenu = vi.fn()
     mockedApi.listVisits.mockResolvedValue({ results: [] })
-    render(<VisitsPage onBack={onBack} />)
+    render(<VisitsPage onBack={onBack} onMainMenu={onMainMenu} />)
     await userEvent.click(screen.getByRole('button', { name: /^by hand/i }))
     await pickWhere()
     await pickWhen()
@@ -540,7 +541,11 @@ describe('VisitsPage', () => {
     const next = within(await screen.findByRole('group', { name: 'What next' }))
     expect(next.getByText('Do you want to add another visit?')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Review the visit' })).not.toBeInTheDocument()
-    await userEvent.click(next.getByRole('button', { name: 'Back to the start' }))
+    expect(next.getByRole('button', { name: 'Add another visit' })).toBeInTheDocument()
+    await userEvent.click(next.getByRole('button', { name: 'Back to the main menu' }))
+    expect(onMainMenu).toHaveBeenCalled()
+    expect(onBack).not.toHaveBeenCalled()
+    await userEvent.click(next.getByRole('button', { name: 'Back to the visits menu' }))
     expect(onBack).toHaveBeenCalled()
   })
 
@@ -855,9 +860,10 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(button)
   }
 
+  const onMainMenu = vi.fn()
   async function start(option = /custom csv/i) {
     mockedApi.visitsCsvColumns.mockResolvedValue(COLUMNS)
-    render(<VisitsPage onBack={vi.fn()} />)
+    render(<VisitsPage onBack={vi.fn()} onMainMenu={onMainMenu} />)
     await userEvent.click(screen.getByRole('button', { name: option }))
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
@@ -989,7 +995,9 @@ describe('VisitsPage from a CSV file', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to TATR. A deployment can be made once the card of a visit is collected.')
     expect(screen.queryAllByRole('table').map((t) => t.getAttribute('aria-label'))).toEqual([]) // no table of rows is shown: just the matching, in groups
     expect(screen.getByRole('region', { name: 'Where' })).toHaveTextContent('of') // the visits are kept: the list of them goes, the mapping stays
-    expect(screen.getByRole('button', { name: 'Back to the menu' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back to the visits menu' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the main menu' }))
+    expect(onMainMenu).toHaveBeenCalledTimes(1)
 
     await userEvent.click(screen.getByRole('button', { name: 'Register more visits' }))
     expect(screen.getByText('Where do the visits come from?')).toBeInTheDocument()
