@@ -107,6 +107,23 @@ def test_locations_cameras_and_sd_cards_that_do_not_exist_are_created_when_asked
     assert again["create"] == {"locations": [], "cameras": [], "sd_cards": []}
 
 
+def test_the_id_of_a_camera_and_of_an_sd_card_is_what_the_cell_says_stripped_and_what_exists_is_found_ignoring_the_case():
+    from wildintel_uploader.core.services import visits_csv
+    text = ("site,what,day,hour,lat,lon,cam,sd\n"
+            "WICP_0001,Installation,2026-09-14,11:40,40.1,-3.2, 5.0 ,SD 7\n"
+            "WICP_0002,Installation,2026-09-14,12:40,40.2,-3.2,P800, 7 \n")
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}, {"location_id": "WICP_0002", "timezone": "UTC"}]
+    options = {"create": {"cameras": True, "sd_cards": True}}
+    result = visits_csv.parse_visits(text, locations, [], _MAP, options)
+    # nothing is taken out of a cell but its spaces: SD 7 is not 7, and 5.0 is not 5
+    assert not result["problems"]
+    assert [v["camera_id"] for v in result["visits"]] == ["5.0", "P800"] and [v["sd"] for v in result["visits"]] == ["SD 7", "7"]
+    assert [c["camera_id"] for c in result["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in result["create"]["sd_cards"]] == ["SD 7", "7"]
+    # what exists is found whatever its case, in cameras and in cards alike
+    again = visits_csv.parse_visits(text, locations, [], _MAP, {**options, "cameras": [{"camera_id": "p800", "label": "p800"}], "cards": [{"label": "sd 7"}]})
+    assert [c["camera_id"] for c in again["create"]["cameras"]] == ["5.0"] and [c["label"] for c in again["create"]["sd_cards"]] == ["7"]
+
+
 def test_a_row_that_would_create_something_without_what_it_needs_is_a_problem_and_creates_nothing():
     from wildintel_uploader.core.services import visits_csv
     mapping = {**_MAP, "camera_model": "model", "sd_brand": "brand", "timezone": "tz"}
@@ -157,7 +174,7 @@ def test_a_cell_is_read_as_its_field_takes_it():
     assert visit == [] or True   # "Install" is not an action: the row is refused
     text = text.replace("Install+Revision", "Installation+Revision")
     visit = visits_csv.parse_visits(text, [{"location_id": "WICP_0001", "timezone": "UTC"}], [], mapping)["visits"][0]
-    assert (visit["camera_id"], visit["card_status"], visit["bait_use"], visit["tags"], visit["camera_tilt"], visit["session"]) == ("12", "CardFull", True, ["a", "b"], -15, "R0003")
+    assert (visit["camera_id"], visit["card_status"], visit["bait_use"], visit["tags"], visit["camera_tilt"], visit["session"]) == ("12.0", "CardFull", True, ["a", "b"], -15, "R0003")
 
 
 def test_what_is_odd_goes_to_the_rows_that_make_it_odd_and_what_is_about_no_row_is_said_apart():
@@ -187,25 +204,10 @@ def test_the_report_of_an_import_tells_what_is_odd_in_the_rows_it_is_about():
 
 
 
-def test_the_id_of_a_camera_or_a_card_is_the_number_a_cell_starts_or_says_now():
-    from wildintel_uploader.core.services import visits_csv
-    cases = {"68 now. Before 26": "68", "Now 17, before 09": "17", "25. Before was 34": "25", "72 now. It was 27": "72", "42b": "42b", "22Bb": "22Bb", "12.0": "12.0", " 7 ": "7"}
-    assert {text: visits_csv.id_of(text) for text in cases} == cases
-
-
 def test_how_the_card_and_the_batteries_were_is_read_as_the_form_says_it_in_english():
     from wildintel_uploader.core.services import visits_csv
     assert [visits_csv.card_code(v) for v in ("OK", "Card full", "No batteries", "CarFull and No batteries", "Card full and no batteries", "NoBatteries", "CarFullNoBatteries", "SinPilas", "CarFullSinPilas", "Full")] == [
         "OK", "CarFull", "NoBatteries", "CarFullNoBatteries", "CarFullNoBatteries", "NoBatteries", "CarFullNoBatteries", "NoBatteries", "CarFullNoBatteries", None]
-
-
-def test_what_a_card_cell_says_besides_its_id_goes_to_the_comments():
-    from wildintel_uploader.core.services import visits_csv
-    row = {"location_id": "A", "actions": "Revision", "session": "2", "sd": "68 now. Before 26", "comments": "Cloudy"}
-    visit = visits_csv.CsvVisit.model_validate(row)
-    assert visit.sd == "68" and visit.comments == "Cloudy | SD card: 68 now. Before 26"
-    plain = visits_csv.CsvVisit.model_validate({**row, "sd": "42b", "comments": ""})
-    assert plain.sd == "42b" and not plain.comments
 
 
 def test_a_location_is_created_only_when_the_row_says_if_its_cameras_follow_daylight_saving_time():
@@ -346,11 +348,11 @@ def test_a_visit_already_kept_is_the_one_of_the_same_revision_and_site_whatever_
     assert result["skipped"] == 1 and "on 2026-09-14 at 08:30:00 is already kept" in result["rows"][0]["message"]
 
 
-def test_an_sd_card_the_import_creates_is_made_as_the_visit_has_it_and_not_twice():
+def test_an_sd_card_the_import_creates_is_made_as_the_cell_says_it_and_not_twice():
     from wildintel_uploader.core.services import visits_csv
     locations = [{"location_id": "WICP_0001", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0}]
-    text = "location_id,session,date,time,actions,camera_id,sd,num_photos\nWICP_0001,R0001,2026-09-14,09:00:00,Installation,C1,SD 7,\nWICP_0001,R0002,2026-10-14,09:00:00,Revision,C1,SD 1,5\n"
+    text = "location_id,session,date,time,actions,camera_id,sd,num_photos\nWICP_0001,R0001,2026-09-14,09:00:00,Installation,C1,7,\nWICP_0001,R0002,2026-10-14,09:00:00,Revision,C1,1,5\n"
     mapping = visits_csv.suggest_mapping(text)["mapping"]
     result = visits_csv.parse_visits(text, locations, [], mapping, {"create": {"sd_cards": True, "cameras": True}, "cards": [{"label": "1"}], "cameras": []})
 
-    assert [c["label"] for c in result["create"]["sd_cards"]] == ["7"]      # "SD 7" is the card 7; "SD 1" is the card 1 it has already
+    assert [c["label"] for c in result["create"]["sd_cards"]] == ["7"]      # 7 is new; 1 is the card it has already
