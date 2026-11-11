@@ -533,7 +533,6 @@ class FieldlogSettings(BaseModel):
     """Field records: how the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them
     (see services.visits_csv and services.visit_deployments)."""
 
-    enabled: bool = Field(default=True, description="Whether the CSV of the WildINTEL Epicollect project can be read for visits. (FIELDLOG.enabled)")
     time_source: Literal["created_at", "hour"] = Field(
         default="created_at",
         description="When a visit happened: created_at, the time its entry was created (UTC); or hour, the date and the hour typed in the form (the wall clock of its location). (FIELDLOG.time_source)",
