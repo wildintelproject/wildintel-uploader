@@ -126,18 +126,6 @@ def card_code(value) -> str | None:
     return CODES.get(text) or CODES_OTHER.get(text)
 
 
-def id_of(value) -> str:
-    """The id of a camera or an SD card from a cell that may say more than it: "68 now. Before 26" is 68, "Now 17, before 09" is 17, "42b" stays as it is. What a cell
-    says after the id is left out; an id of letters and digits with no spaces is taken as it is."""
-    text = str(value).strip()
-    if re.fullmatch(r"[\w.-]+", text):
-        return text
-    now = re.search(r"\bnow\b\W*(\d+[A-Za-z]?)\b", text, re.IGNORECASE)
-    first = re.search(r"\b\d+[A-Za-z]?\b", text)
-    found = now or first
-    return found.group(1 if now else 0) if found else text
-
-
 # What kind of error a problem is, by its code — the rows with the same code are told together. The codes are those of the errors the row raises (RowError, or
 # the custom errors of CsvVisit): they do not change when a message is reworded.
 ERROR_LABELS: dict[str, str] = {
@@ -235,18 +223,6 @@ class CsvVisit(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _what_a_cell_says_besides_its_id(cls, data):
-        """A camera or a card cell that says more than the id (see id_of) keeps what it said in the comments of the visit."""
-        if not isinstance(data, dict):
-            return data
-        notes = [f"{what}: {str(data[key]).strip()}" for key, what in (("camera_id", "Camera"), ("sd", "SD card"))
-                 if data.get(key) is not None and str(data[key]).strip() and id_of(data[key]) != str(data[key]).strip()]
-        if not notes:
-            return data
-        return {**data, "comments": " | ".join([str(data["comments"]).strip(), *notes]) if str(data.get("comments") or "").strip() else " | ".join(notes)}
-
     @field_validator("actions", mode="before")
     @classmethod
     def _actions(cls, value):
@@ -262,16 +238,6 @@ class CsvVisit(BaseModel):
         if not m:
             raise _custom("session_invalid", "'{value}' is not a session (R0013, or its number).", value)
         return f"R{int(m.group(0)):04d}"
-
-    @field_validator("camera_id", mode="before")
-    @classmethod
-    def _camera(cls, value):
-        return re.sub(r"\.0+$", "", id_of(value))
-
-    @field_validator("sd", mode="before")
-    @classmethod
-    def _sd(cls, value):
-        return id_of(value)
 
     @field_validator("card_batteries_ok", mode="before")
     @classmethod
@@ -529,11 +495,10 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
             cells = CsvVisit.model_validate(row)
             actions = cells.actions
             report[n]["actions"] = " + ".join(actions)  # as the dashboard of visits says them
-            if create.get("cameras") and row.get("camera_id"):
-                camera = _new_camera(cells.camera_id, row)
-                if camera["camera_id"].lower() not in cameras_known:
-                    made["cameras"].append(camera)
-            if create.get("sd_cards") and cells.sd and cells.sd.lower() not in cards_known:   # the card as the visit has it ("SD 7" is 7), not as the cell wrote it
+            # a camera and an SD card are what their cell says, stripped; the ones that exist are found ignoring the case
+            if create.get("cameras") and cells.camera_id and cells.camera_id.lower() not in cameras_known:
+                made["cameras"].append(_new_camera(cells.camera_id, row))
+            if create.get("sd_cards") and cells.sd and cells.sd.lower() not in cards_known:
                 made["sd_cards"].append(_new_card(cells.sd, row))
             data = cells.model_dump(exclude_unset=True, exclude={"actions"})
             if "card_batteries_ok" in data:   # one column for both, as it was: the batteries and the card each in its own field
