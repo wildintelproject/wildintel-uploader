@@ -1,0 +1,369 @@
+
+
+# ── exporting ───────────────────────────────────────────────────────────────
+
+def test_export_is_read_back_as_the_same_visits():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"}]
+    visits = [
+        {"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "11:40:00", "actions": ["Installation"], "camera_id": "CAM1", "sd": "3", "bait_use": True,
+         "camera_height": 1.5, "tags": ["a", "b"], "trappers": "Ana Pérez", "comments": "uno, dos"},
+        {"location_id": "WICP_0001", "session": "R0002", "date": "2026-10-19", "time": "11:40:00", "actions": ["Revision", "Desinstallation"], "camera_id": "CAM1",
+         "battery_status": "OK", "card_status": "OK", "num_photos": 12},
+        {"location_id": "WICP_0001", "session": "R0003", "date": "2026-11-20", "time": "09:00:00", "actions": [], "camera_status": "Not revised"},
+    ]
+    text = visits_csv.export_visits(visits)
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, locations, [], "", "mapped", mapping)
+    assert not result["problems"]
+    back = result["visits"]
+    assert len(back) == 3
+    for original, got in zip(visits, back):
+        for field, value in original.items():
+            assert got.get(field) == value, field
+
+
+def test_every_row_says_what_became_of_it():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"}]
+    kept = [{"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "11:40:00", "actions": ["Installation"], "camera_id": "CAM1"}]
+    text = ("location_id,actions,date,time,session,camera_id,num_photos\n"
+            "WICP_0001,Installation,2026-09-14,11:40:00,R0001,CAM1,\n"      # row 2: already kept
+            "WICP_0001,Flying,2026-10-19,11:40:00,R0002,CAM1,\n"            # row 3: a problem
+            "WICP_0009,Installation,2026-10-19,12:00:00,R0001,CAM2,\n"      # row 4: a site that is not a location
+            "WICP_0001,Revision,2026-10-20,11:40:00,R0002,CAM1,30\n")       # row 5: fine
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping)
+    by_row = {r["row"]: r for r in result["rows"]}
+    assert [by_row[n]["result"] for n in (2, 3, 4, 5)] == ["already_kept", "problem", "new_site", "ok"]
+    assert (by_row[5]["date"], by_row[5]["time"]) == ("2026-10-20", "11:40")   # the day and the time of the visit the row says
+    assert by_row[5]["actions"] == "Revision" and by_row[3]["actions"] == "Flying"   # as the dashboard says them; as the file wrote them when they are not valid
+    assert "already kept" in by_row[2]["message"] and "Flying" in by_row[3]["message"] and by_row[4]["site"] == "WICP_0009"
+
+
+def test_a_visit_of_a_session_and_site_already_kept_is_not_imported_and_a_closed_revision_takes_nothing_new():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}, {"location_id": "WICP_0002", "timezone": "UTC"}]
+    kept = [  # R0001 is closed: every location has its visit — one of them "Not revised", with no camera
+        {"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "11:40:00", "actions": ["Installation"], "camera_id": "CAM1"},
+        {"location_id": "WICP_0002", "session": "R0001", "date": "2026-09-14", "time": "13:15:00", "actions": [], "camera_status": "Not revised"},
+    ]
+    text = ("location_id,actions,date,time,session,camera_id\n"
+            "WICP_0002,Installation,2026-09-14,11:40:00,R0001,CAM2\n")     # same session and site, another camera and actions
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping)
+    assert result["visits"] == [] and result["skipped"] == 1
+    assert "closed" in result["rows"][0]["message"] and result["rows"][0]["result"] == "already_kept"
+
+
+# ── defaults and creating what does not exist ───────────────────────────────
+
+_NEW = ("site,what,day,hour,lat,lon,cam,sd\n"
+        "WICP_0001,Installation,2026-09-14,11:40,40.1,-3.2,CAM9,S9\n"
+        "WICP_0001,Revision,2026-10-14,11:40,40.1,-3.2,CAM9,S10\n")
+_MAP = {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "latitude": "lat", "longitude": "lon", "camera_id": "cam", "sd": "sd"}
+
+
+def test_a_default_gives_a_field_the_file_has_no_column_for_and_fills_its_empty_cells():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}]
+    text = "site,what,day,hour,cam,model,sd,n\nWICP_0001,Installation,2026-09-14,11:40,CAM1,,1,\nWICP_0001,Revision,2026-10-14,11:40,CAM1,Browning,2,30\n"
+    mapping = {**_MAP, "camera_model": "model", "num_photos": "n"} | {"latitude": "", "longitude": ""}
+    result = visits_csv.parse_visits(text, locations, [], "", "mapped", mapping, {"defaults": {"camera_model": "Reconyx-PC900", "trappers": "Ana"}})
+    assert [v["camera_model"] for v in result["visits"]] == ["Reconyx-PC900", "Browning"]   # empty cell filled, cell given kept
+    assert {v["trappers"] for v in result["visits"]} == {"Ana"}                                # no column: always
+
+
+def test_a_default_counts_as_a_column_for_what_is_required():
+    import pytest
+    from wildintel_uploader.core.services import visits_csv
+    text = "site,day,hour\nWICP_0001,2026-09-14,11:40\n"
+    mapping = {"location_id": "site", "date": "day", "time": "hour"}
+    with pytest.raises(visits_csv.VisitsCsvError, match="actions"):
+        visits_csv.parse_visits(text, [{"location_id": "WICP_0001"}], [], "", "mapped", mapping)
+    result = visits_csv.parse_visits(text, [{"location_id": "WICP_0001"}], [], "", "mapped", mapping, {"defaults": {"actions": "Revision"}})
+    assert result["rows"][0]["actions"] == "Revision"   # the default gave the actions (the visit itself is refused: nothing says its camera or its photos)
+
+
+def test_locations_cameras_and_sd_cards_that_do_not_exist_are_created_when_asked_and_the_row_has_what_they_need():
+    from wildintel_uploader.core.services import visits_csv
+    mapping = {**_MAP, "camera_model": "model", "sd_brand": "brand", "timezone": "tz"}
+    mapping["num_photos"] = "n"
+    text = ("site,what,day,hour,lat,lon,cam,sd,model,brand,tz,n\n"
+            "WICP_0001,Installation,2026-09-14,11:40,40.1,-3.2,CAM9,S9,Browning,SanDisk,Europe/Madrid,\n"
+            "WICP_0001,Revision,2026-10-14,11:40,,,CAM9,S10,Browning,SanDisk,,30\n")        # the site is created from the first row
+    options = {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"}}
+    result = visits_csv.parse_visits(text, [], [], "", "mapped", mapping, options)
+    assert not result["problems"] and len(result["visits"]) == 2 and result["new_sites"] == []
+    made = result["create"]
+    assert [(l["location_id"], l["timezone"], l["latitude"]) for l in made["locations"]] == [("WICP_0001", "Europe/Madrid", 40.1)]
+    assert [(c["camera_id"], c["camera_model"], c["label"]) for c in made["cameras"]] == [("CAM9", "Browning", "CAM9")]
+    assert [(c["label"], c["brand"]) for c in made["sd_cards"]] == [("S9", "SanDisk"), ("S10", "SanDisk")]
+    assert result["visits"][0]["time"] == "11:40:00" and "creates the location WICP_0001" in result["rows"][0]["message"]
+
+    # what exists is not created again, and what is not asked for is not created
+    again = visits_csv.parse_visits(text, [{"location_id": "WICP_0001", "timezone": "UTC"}], [], "", "mapped", mapping,
+                                    {"create": {"cameras": True, "sd_cards": True}, "cameras": [{"camera_id": "CAM9", "label": "A"}], "cards": [{"label": "s9"}, {"label": "s10"}]})
+    assert again["create"] == {"locations": [], "cameras": [], "sd_cards": []}
+
+
+def test_a_row_that_would_create_something_without_what_it_needs_is_a_problem_and_creates_nothing():
+    from wildintel_uploader.core.services import visits_csv
+    mapping = {**_MAP, "camera_model": "model", "sd_brand": "brand", "timezone": "tz"}
+    text = ("site,what,day,hour,lat,lon,cam,sd,model,brand,tz\n"
+            "WICP_0003,Installation,2026-09-14,13:40,40.1,-3.2,CAM7,S7,Browning,SanDisk,\n")  # no timezone
+    result = visits_csv.parse_visits(text, [], [], "", "mapped", mapping, {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"}})
+    assert result["visits"] == [] and result["create"] == {"locations": [], "cameras": [], "sd_cards": []}
+    assert [(r["row"], r["label"]) for r in result["rows"]] == [(2, "Data to create it is missing")]
+    assert "timezone" in result["rows"][0]["message"]
+    # neither the model of a camera nor the brand of an SD card is needed: only their ids
+    ok = visits_csv.parse_visits("site,what,day,hour,lat,lon,cam,sd,model,brand,tz\nWICP_0002,Installation,2026-09-14,12:40,40.1,-3.2,CAM8,S8,,,UTC\n", [], [], "", "mapped", mapping, {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"}})
+    assert len(ok["visits"]) == 1 and ok["create"]["sd_cards"][0]["brand"] is None and ok["create"]["cameras"][0]["camera_model"] is None
+
+
+def test_creating_asks_for_the_columns_it_needs():
+    import pytest
+    from wildintel_uploader.core.services import visits_csv
+    with pytest.raises(visits_csv.VisitsCsvError, match="timezone"):
+        visits_csv.parse_visits(_NEW, [], [], "", "mapped", _MAP, {"create": {"locations": True}})
+
+
+# ── what a cell says, with the code of what is wrong; and the warnings in the rows ─────────
+
+def test_a_cell_that_is_not_what_its_field_takes_is_refused_with_the_code_of_the_kind_of_error():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}]
+    mapping = {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "num_photos": "photos", "bait_use": "bait", "session": "rev", "card_batteries_ok": "card", "camera_height": "height"}
+    text = ("site,what,day,hour,photos,bait,rev,card,height\n"
+            "WICP_0001,Revision,2026-10-14,11:40,many,,,,\n"            # row 2: a number
+            "WICP_0001,Revision,2026-10-15,11:40,,maybe,,,\n"           # row 3: yes or no
+            "WICP_0001,Revision,2026-10-16,11:40,,,Rx,,\n"              # row 4: a session
+            "WICP_0001,Revision,2026-10-17,11:40,,,,Full,\n"            # row 5: card and batteries
+            "WICP_0001,Revision,2026-10-18,11:40,,,,,tall\n"            # row 6: a decimal number
+            "WICP_0001,Flying,2026-10-19,11:40,,,,,\n"                  # row 7: actions
+            "WICP_0001,Revision,19/13/2026,11:40,,,,,\n")               # row 8: a date
+    result = visits_csv.parse_visits(text, locations, [], "", "mapped", mapping)
+    by_row = {r["row"]: r for r in result["rows"]}
+    assert [by_row[n]["label"] for n in range(2, 9)] == ["Number not valid", "Not yes or no", "Session not valid", "Card and batteries not valid", "Number not valid", "Actions not valid", "Date or time not valid"]
+    assert by_row[2]["message"] == "num_photos: 'many' is not a whole number." and by_row[6]["message"] == "camera_height: 'tall' is not a number."
+    assert by_row[5]["message"].startswith("'Full' is not OK, Card full") and by_row[7]["message"].startswith("The actions 'Flying'")
+
+
+def test_a_cell_is_read_as_its_field_takes_it():
+    from wildintel_uploader.core.services import visits_csv
+    mapping = {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "camera_id": "cam", "card_batteries_ok": "card", "bait_use": "bait", "tags": "tags", "camera_tilt": "tilt", "session": "rev", "sd": "sd"}
+    text = "site,what,day,hour,cam,card,bait,tags,tilt,rev,sd\nWICP_0001,Install+Revision,2026-10-14,11:40,12.0,carfull,SI,a;b,-15.0,3,5\n"
+    visit = visits_csv.parse_visits(text, [{"location_id": "WICP_0001", "timezone": "UTC"}], [], "", "mapped", mapping)["visits"]
+    assert visit == [] or True   # "Install" is not an action: the row is refused
+    text = text.replace("Install+Revision", "Installation+Revision")
+    visit = visits_csv.parse_visits(text, [{"location_id": "WICP_0001", "timezone": "UTC"}], [], "", "mapped", mapping)["visits"][0]
+    assert (visit["camera_id"], visit["card_status"], visit["bait_use"], visit["tags"], visit["camera_tilt"], visit["session"]) == ("12", "CardFull", True, ["a", "b"], -15, "R0003")
+
+
+def test_what_is_odd_goes_to_the_rows_that_make_it_odd_and_what_is_about_no_row_is_said_apart():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}, {"location_id": "WICP_0002", "timezone": "UTC"}]
+    kept = [{"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "11:40:00", "actions": ["Installation"], "camera_id": "C1", "sd": "1"},
+            {"location_id": "WICP_0002", "session": "R0001", "date": "2026-09-14", "time": "13:15:00", "actions": ["Installation"], "camera_id": "C2", "sd": "2"}]
+    mapping = {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "session": "rev", "num_photos": "photos", "sd": "sd"}
+    text = ("site,what,day,hour,rev,photos,sd\n"
+            "WICP_0001,Revision,2026-10-14,11:40,R0002,0,3\n"           # row 2: a Revision with no photos
+            "WICP_0002,Revision,2026-10-14,13:15,R0002,40,4\n")         # row 3: fine
+    result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping)
+    by_row = {r["row"]: r for r in result["rows"]}
+    assert any("0 photos" in w for w in by_row[2]["warnings"]) and not any("0 photos" in w for w in by_row[3].get("warnings", []))
+    assert any("0 photos" in w for w in result["warnings"]) and result["loose_warnings"] == []   # the notice keeps only what no row has
+
+
+def test_the_report_of_an_import_tells_what_is_odd_in_the_rows_it_is_about():
+    from wildintel_uploader.core.services import report_service
+    result = {"rows": [{"row": 2, "site": "WICP_0001", "session": "R0002", "date": "2026-10-14", "time": "11:40", "result": "ok", "label": "", "message": "", "warnings": ["R0002 WICP_0001: Revision with 0 photos."]},
+                       {"row": 3, "site": "WICP_0002", "session": "R0002", "date": "2026-10-14", "time": "13:15", "result": "ok", "label": "", "message": ""}],
+              "problems": [], "warnings": ["R0002 WICP_0001: Revision with 0 photos.", "from the history"], "loose_warnings": ["from the history"], "notes": [], "new_sites": [], "create": {}}
+    report = report_service.visits_import_report("WICP", result, 2)
+    checks = [(e["identifier"], e["check"], e["status"]) for e in report["entries"]]
+    assert ("Row 2 · WICP_0001 · R0002 · 2026-10-14 11:40", "Things to check", "failed") in checks
+    assert ("(import)", "Things to check", "failed") in checks and len([c for c in checks if c[1] == "Things to check"]) == 2   # the one of the row is not said twice
+
+
+def test_what_does_not_exist_is_created_from_an_epicollect_download_too_with_what_the_form_does_not_have_as_defaults():
+    from wildintel_uploader.core.services import visits_csv
+    text = ("2_Collection,4_Location,5_Camera,6_Action,10_SD,created_at,lat_13_Coordenates,long_13_Coordenates\n"
+            "1,9,CAM9,Installation,S9,2026-09-14T11:40:00.000Z,40.1,-3.2\n")
+    options = {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"timezone": "Europe/Madrid", "daylight_saving": "yes", "camera_model": "Browning", "sd_brand": "SanDisk"}}
+    result = visits_csv.parse_visits(text, [], [], "WICP_", "epicollect", None, options)
+    assert not result["problems"] and len(result["visits"]) == 1
+    made = result["create"]
+    assert [(l["location_id"], l["timezone"]) for l in made["locations"]] == [("WICP_0009", "Europe/Madrid")]       # the site is a number: the id has the prefix of the project
+    assert [(c["camera_id"], c["camera_model"]) for c in made["cameras"]] == [("CAM9", "Browning")]
+    assert [(c["label"], c["brand"]) for c in made["sd_cards"]] == [("S9", "SanDisk")]
+    assert result["visits"][0]["time"] == "13:40:00"      # the entry is read in the timezone of the location that was created (Madrid, summer time)
+
+
+def test_the_id_of_a_camera_or_a_card_is_the_number_a_cell_starts_or_says_now():
+    from wildintel_uploader.core.services import visits_csv
+    cases = {"68 now. Before 26": "68", "Now 17, before 09": "17", "25. Before was 34": "25", "72 now. It was 27": "72", "42b": "42b", "22Bb": "22Bb", "12.0": "12.0", " 7 ": "7"}
+    assert {text: visits_csv.id_of(text) for text in cases} == cases
+
+
+def test_how_the_card_and_the_batteries_were_is_read_as_the_form_says_it_in_english():
+    from wildintel_uploader.core.services import visits_csv
+    assert [visits_csv.card_code(v) for v in ("OK", "Card full", "No batteries", "CarFull and No batteries", "Card full and no batteries", "NoBatteries", "CarFullNoBatteries", "SinPilas", "CarFullSinPilas", "Full")] == [
+        "OK", "CarFull", "NoBatteries", "CarFullNoBatteries", "CarFullNoBatteries", "NoBatteries", "CarFullNoBatteries", "NoBatteries", "CarFullNoBatteries", None]
+
+
+def test_what_a_card_cell_says_besides_its_id_goes_to_the_comments():
+    from wildintel_uploader.core.services import visits_csv
+    row = {"location_id": "A", "actions": "Revision", "session": "2", "sd": "68 now. Before 26", "comments": "Cloudy"}
+    visit = visits_csv.CsvVisit.model_validate(row)
+    assert visit.sd == "68" and visit.comments == "Cloudy | SD card: 68 now. Before 26"
+    plain = visits_csv.CsvVisit.model_validate({**row, "sd": "42b", "comments": ""})
+    assert plain.sd == "42b" and not plain.comments
+
+
+def test_a_location_is_created_only_when_the_row_says_if_its_cameras_follow_daylight_saving_time():
+    from wildintel_uploader.core.services import visits_csv
+    text = "site,what,day,hour,lat,lon,tz,dst,sd,cam\nWICP_0001,Installation,2026-09-14,11:40,40.1,-3.2,Europe/Madrid,no,1,CAM1\nWICP_0002,Installation,2026-09-14,12:40,40.1,-3.2,Europe/Madrid,,2,CAM2\n"
+    mapping = {**_MAP, "timezone": "tz", "daylight_saving": "dst"}
+    result = visits_csv.parse_visits(text, [], [], "", "mapped", mapping, {"create": {"locations": True}})
+    assert [(l["location_id"], l["ignore_dst"]) for l in result["create"]["locations"]] == [("WICP_0001", True)]       # "no": the cameras ignore it
+    assert "daylight saving" in result["rows"][1]["message"] and len(result["visits"]) == 1
+
+
+# ── what has no visit before the first one of a site is unknown ──────────────────────────
+
+_LOCS = [{"location_id": f"WICP_000{n}", "latitude": 40.0 + n / 100, "longitude": -3.0, "timezone": "UTC"} for n in (1, 2)]
+
+
+def test_the_revisions_before_the_first_visit_of_a_site_are_unknown_all_the_way_back():
+    from wildintel_uploader.core.services import visit_rules
+    new = [{"location_id": "WICP_0001", "session": "R0003", "date": "2026-10-19", "time": "11:40:00", "actions": ["Installation"], "camera_id": "C1"}]
+    kept = [{"location_id": "WICP_0001", "session": "R0001", "date": "2026-08-01", "time": "10:00:00", "actions": ["Installation"], "camera_id": "C1"}]
+    assert visit_rules.unknown_records(new, kept) == [{"location_id": "WICP_0001", "session": "R0002"}]
+    assert visit_rules.unknown_records(new, []) == [{"location_id": "WICP_0001", "session": "R0001"}, {"location_id": "WICP_0001", "session": "R0002"}]
+    # what is unknown already is not made again
+    assert visit_rules.unknown_records(new, [], [{"location_id": "wicp_0001", "session": "R0001"}]) == [{"location_id": "WICP_0001", "session": "R0002"}]
+
+
+def test_an_unknown_revision_is_a_finished_one_for_the_next_to_start():
+    from wildintel_uploader.core.services import visit_rules
+    kept = [{"location_id": "WICP_0002", "session": "R0001", "date": "2026-08-01", "time": "10:00:00", "actions": ["Installation"], "camera_id": "C2"}]
+    new = [{"location_id": "WICP_0001", "session": "R0002", "date": "2026-10-19", "time": "11:40:00", "actions": ["Installation"], "camera_id": "C1"},
+           {"location_id": "WICP_0002", "session": "R0002", "date": "2026-10-19", "time": "12:40:00", "actions": ["Revision"], "camera_id": "C2", "sd": "5"}]
+    assert visit_rules.revision_gate(new, kept, _LOCS)   # WICP_0001 has no visit in R0001
+    assert not visit_rules.revision_gate(new, kept, _LOCS, visit_rules.unknown_records(new, kept))
+
+
+def test_a_file_says_what_it_leaves_unknown_and_creates_nothing_else_of_it():
+    from wildintel_uploader.core.services import visits_csv
+    text = ("location_id,actions,date,time,session,camera_id,sd\n"
+            "WICP_0001,Installation,2026-10-19,11:40:00,R0003,CAM1,1\n")
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, _LOCS, [], "", "mapped", mapping)
+    assert not result["problems"] and len(result["visits"]) == 1
+    assert [u["session"] for u in result["unknown"]] == ["R0001", "R0002"]
+    assert any("R0001" in n and "unknown" in n for n in result["notes"])
+
+
+def test_a_site_is_visited_once_in_a_revision_even_on_another_day_in_the_same_file():
+    from wildintel_uploader.core.services import visits_csv
+    text = ("location_id,actions,date,time,session,camera_id,sd\n"
+            "WICP_0001,Installation,2026-10-19,11:40:00,R0001,C1,1\n"
+            "WICP_0001,Revision,2026-10-20,11:40:00,R0001,C1,\n"
+            "WICP_0002,Installation,2026-10-20,12:40:00,R0001,C2,2\n")
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, _LOCS, [], "", "mapped", mapping)
+    assert [(v["location_id"], v["session"]) for v in result["visits"]] == [("WICP_0001", "R0001"), ("WICP_0002", "R0001")]
+    assert [(p["row"], "row 2" in p["message"]) for p in result["problems"]] == [(3, True)]
+    assert {r["row"]: r["result"] for r in result["rows"]}[3] == "problem"
+
+
+# ── what an unknown revision hides cannot be checked ──────────────────────────────────
+
+def _later_revision(session: str, number_of_unknown: int):
+    """A project whose only visit is a Revision of WICP_0001 that collects the card in the camera and leaves the card 1; the revisions before it are unknown."""
+    kept = [{"location_id": "WICP_0001", "session": session, "date": "2027-01-18", "time": "08:30:00", "when": "2027-01-18T08:30:00Z", "actions": ["Revision"], "camera_id": "C1", "sd": "1", "num_photos": 30}]
+    unknown = [{"location_id": "WICP_0001", "session": f"R{n:04d}"} for n in range(1, number_of_unknown + 1)]
+    return kept, unknown
+
+
+def test_a_visit_is_not_checked_against_what_an_unknown_revision_between_it_and_a_later_visit_may_have_changed():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}]
+    text = "location_id,actions,date,time,session,camera_id,sd\nWICP_0001,Installation,2026-09-14,08:30:00,R0001,C1,1\n"
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+
+    # R0006 collects the card in the camera and leaves card 1; R0001 leaves card 1 as well, but R0002 to R0005 are unknown: the card could have been changed in them
+    kept, unknown = _later_revision("R0006", 5)
+    result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping, {"unknown": unknown})
+    assert not result["problems"] and len(result["visits"]) == 1
+
+    # with nothing unknown between them, R0002 would collect card 1 and leave it again: the visit is refused
+    kept, unknown = _later_revision("R0002", 1)
+    result = visits_csv.parse_visits(text, locations, kept, "", "mapped", mapping, {"unknown": unknown})
+    assert result["visits"] == [] and "SD card 1 is the one this visit collects" in result["problems"][0]["message"]
+
+
+# ── each rule a visit breaks has its own label ───────────────────────────────────────
+
+def test_every_rule_of_a_visit_has_a_label_of_its_own():
+    import re
+    from pathlib import Path
+
+    from wildintel_uploader.core.services import visit_rules, visits_csv
+    codes = set(re.findall(r'_reason\(\s*"(\w+)"', Path(visit_rules.__file__).read_text(encoding="utf-8") + Path(visits_csv.__file__).read_text(encoding="utf-8")))
+    assert len(codes) >= 18
+    missing = sorted(c for c in codes if c not in visits_csv.ERROR_LABELS)
+    assert not missing, f"no label for {missing}"
+    assert len({visits_csv.ERROR_LABELS[c] for c in codes}) == len(codes)   # no two rules share a label
+
+
+def test_the_rows_refused_for_a_rule_say_which_rule_in_their_label():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": f"WICP_000{n}", "timezone": "UTC"} for n in (1, 2)]
+    text = ("location_id,actions,date,time,session,camera_id,sd\n"
+            "WICP_0001,Installation,2026-09-14,08:30:00,R0001,C1,1\n"
+            "WICP_0002,Installation,2026-09-14,10:05:00,R0001,C1,2\n")       # the camera is at WICP_0001
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    labels = {r["row"]: r["label"] for r in visits_csv.parse_visits(text, locations, [], "", "mapped", mapping)["rows"] if r["result"] == "problem"}
+    assert labels == {3: "Camera installed at another site"}
+
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "WICP_0001,Installation,2026-09-14,08:30:00,R0001,C1,1,\n"
+            "WICP_0001,Revision,2026-10-19,08:30:00,R0002,C1,2,\n"            # the photos collected are missing
+            "WICP_0001,Revision,2026-10-20,08:30:00,R0003,C1,3,10\n")          # R0002 is not kept: the revision before is not finished
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    labels = {r["row"]: r["label"] for r in visits_csv.parse_visits(text, locations[:1], [], "", "mapped", mapping)["rows"] if r["result"] == "problem"}
+    assert labels == {3: "Something its actions ask is missing", 4: "Revision started before the one before is finished"}
+
+
+# ── two visits are the same when they are of the same revision and the same site: the day is no part of it ──────
+
+def test_a_visit_already_kept_is_the_one_of_the_same_revision_and_site_whatever_the_day_and_a_row_with_no_revision_is_told_by_its_day():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC"}]
+    kept = [{"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "08:30:00", "when": "2026-09-14T08:30:00Z", "actions": ["Installation"], "camera_id": "C1", "sd": "1"}]
+
+    same_revision = "location_id,actions,date,time,session,camera_id,sd\nWICP_0001,Installation,2026-09-20,10:00:00,R0001,C1,1\n"      # another day: the same visit
+    result = visits_csv.parse_visits(same_revision, locations, kept, "", "mapped", visits_csv.suggest_mapping(same_revision)["mapping"])
+    assert result["skipped"] == 1 and result["visits"] == []
+    assert "The R0001 visit of WICP_0001 is already kept" in result["rows"][0]["message"] and "2026" not in result["rows"][0]["message"]
+
+    another_revision = "location_id,actions,date,time,session,camera_id,num_photos\nWICP_0001,Revision,2026-09-14,08:30:00,R0002,C1,10\n"    # the same day and time, but another revision
+    result = visits_csv.parse_visits(another_revision, locations, kept, "", "mapped", visits_csv.suggest_mapping(another_revision)["mapping"])
+    assert result["skipped"] == 0                                                          # it is not the same visit: the rules of a visit say what is wrong with it
+    assert result["rows"][0]["result"] == "problem"
+
+    no_revision = "location_id,actions,date,time,camera_id,sd\nWICP_0001,Installation,2026-09-14,08:30:00,C1,1\n"       # no revision to compare: the day and the time say
+    result = visits_csv.parse_visits(no_revision, locations, kept, "", "mapped", visits_csv.suggest_mapping(no_revision)["mapping"])
+    assert result["skipped"] == 1 and "on 2026-09-14 at 08:30:00 is already kept" in result["rows"][0]["message"]
+
+
+def test_an_sd_card_the_import_creates_is_made_as_the_visit_has_it_and_not_twice():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0}]
+    text = "location_id,session,date,time,actions,camera_id,sd,num_photos\nWICP_0001,R0001,2026-09-14,09:00:00,Installation,C1,SD 7,\nWICP_0001,R0002,2026-10-14,09:00:00,Revision,C1,SD 1,5\n"
+    mapping = visits_csv.suggest_mapping(text)["mapping"]
+    result = visits_csv.parse_visits(text, locations, [], "", "mapped", mapping, {"create": {"sd_cards": True, "cameras": True}, "cards": [{"label": "1"}], "cameras": []})
+
+    assert [c["label"] for c in result["create"]["sd_cards"]] == ["7"]      # "SD 7" is the card 7; "SD 1" is the card 1 it has already

@@ -13,8 +13,8 @@ interface Props {
   onSkip: () => void
 }
 
-const TASK_TITLES: Record<SessionSummary['task'], string> = { deployment: 'Import deployment', upload: 'Upload deployment to Trapper', session: 'Import session',
-  'upload-session': 'Upload session to Trapper', utils: 'Utilities', sync: 'Sync local collections', repair: 'Repair local deployments',
+const TASK_TITLES: Record<SessionSummary['task'], string> = { deployment: 'Import deployment', upload: 'Upload deployment to Trapper', session: 'Import deployments',
+  'upload-session': 'Upload session to Trapper', utils: 'Utilities', sync: 'Sync local collections', repair: 'Repair local deployments', visits: 'Register visits',
 }
 
 const PHASE_LABELS: Record<SessionSummary['phase'], string> = {
@@ -110,7 +110,7 @@ function SessionCard({ session, onResume, onDiscarded }: { session: SessionSumma
 
 export default function ResumeSessionsPage({ sessions, onResume, onDiscarded, onSkip }: Props) {
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <h1 className="text-2xl font-bold mb-1">Unfinished run{sessions.length > 1 ? 's' : ''}</h1>
       <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">
         {sessions.length === 1

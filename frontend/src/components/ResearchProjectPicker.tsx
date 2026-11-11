@@ -1,5 +1,7 @@
+import { listWorking } from '../researchProjects'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { defaultResearchProject } from '../defaultResearchProject'
 import TrapperAccountNotice, { trapperAccountReady } from './TrapperAccountNotice'
 import type { TrapperAccount, TrapperConnection } from './TrapperAccountNotice'
 import CheckboxList from './CheckboxList'
@@ -25,7 +27,7 @@ interface Props {
 
 const byAcronym = (a: LocalResearchProject, b: LocalResearchProject) => a.acronym.toLowerCase().localeCompare(b.acronym.toLowerCase())
 
-/** The research project the images were taken for, as the "Where was it taken?" step of Import deployment asks for it: one of those kept in
+/** The research project the images were taken for, as the "Where and when was it taken?" step of Import deployment asks for it: one of those kept in
  * the collections folder, picked from a list that filters as you type — or a new one, by hand or taken from Trapper. */
 export default function ResearchProjectPicker({ value, onSelect, onError }: Props) {
   const [projects, setProjects] = useState<LocalResearchProject[]>([])
@@ -43,8 +45,16 @@ export default function ResearchProjectPicker({ value, onSelect, onError }: Prop
 
   useEffect(() => {
     let cancelled = false
-    api.listResearchProjects()
-      .then(({ results }) => { if (!cancelled) setProjects(results) })
+    listWorking(value)
+      .then(async ({ results }) => {
+        if (cancelled) return
+        setProjects(results)
+        // With none picked, the one the general settings say comes filled in (it can be changed).
+        if (value) return
+        const wanted = await defaultResearchProject()
+        const found = wanted ? results.find((p) => p.acronym.toLowerCase() === wanted.toLowerCase()) : undefined
+        if (found && !cancelled) onSelect(found)
+      })
       .catch((e) => { if (!cancelled) setErrorMessage(e instanceof Error ? e.message : 'Could not read the collections folder.') })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps

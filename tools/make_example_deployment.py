@@ -1,8 +1,8 @@
 """Makes a camera-trap deployment of sample images to try the wizard with.
 
-    uv run python tools/make_example_deployment.py                 # examples/deployment_example_3000, 3000 images
+    uv run python tools/make_example_deployment.py                 # examples/deployment_examples/3000, 3000 images
     uv run python tools/make_example_deployment.py DIR -n 500
-    uv run python tools/make_example_deployment.py --faulty        # examples/deployment_example_3000_faulty
+    uv run python tools/make_example_deployment.py --faulty        # examples/deployment_examples/3000_faulty
 
 The images are small, different from each other, and numbered in the order they were taken
 (IMG_0001.JPG…). Each has the camera's make, model and serial number and its capture date in
@@ -119,7 +119,7 @@ def main_faulty(directory: Path, count: int, size: tuple[int, int], rng: random.
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("directory", nargs="?", type=Path, help="default: examples/deployment_example_3000 (…_faulty with --faulty)")
+    parser.add_argument("directory", nargs="?", type=Path, help="default: examples/deployment_examples/3000 (…/3000_faulty with --faulty)")
     parser.add_argument("--faulty", action="store_true", help="with problems for the validations to find: corrupted, duplicated, out of order…")
     parser.add_argument("-n", "--images", type=int, default=3000)
     parser.add_argument("--width", type=int, default=640)
@@ -127,7 +127,7 @@ def main() -> None:
     args = parser.parse_args()
 
     rng = random.Random(3000)  # the same images every time
-    args.directory = args.directory or Path(__file__).resolve().parents[1] / "examples" / ("deployment_example_3000_faulty" if args.faulty else "deployment_example_3000")
+    args.directory = args.directory or Path(__file__).resolve().parents[1] / "examples" / "deployment_examples" / ("3000_faulty" if args.faulty else "3000")
     args.directory.mkdir(parents=True, exist_ok=True)
     if args.faulty:
         return main_faulty(args.directory, args.images, (args.width, args.height), rng)

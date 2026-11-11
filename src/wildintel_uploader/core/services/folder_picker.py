@@ -51,6 +51,52 @@ def _pick_windows(title: str) -> str | None:
     return result.stdout.strip() or None
 
 
+def _pick_file_linux(title: str, extension: str) -> str | None:
+    if shutil.which("zenity"):
+        cmd = ["zenity", "--file-selection", f"--title={title}", f"--file-filter=*.{extension}"]
+    elif shutil.which("kdialog"):
+        cmd = ["kdialog", "--getopenfilename", ".", f"*.{extension}", f"--title={title}"]
+    else:
+        raise FolderPickerUnavailable("No file dialog tool found — install zenity (GNOME) or kdialog (KDE).")
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
+def _pick_file_macos(title: str, extension: str) -> str | None:
+    script = f'POSIX path of (choose file with prompt "{title}" of type {{"{extension}"}})'
+    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=False)
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
+def _pick_file_windows(title: str, extension: str) -> str | None:
+    script = (
+        "Add-Type -AssemblyName System.Windows.Forms | Out-Null; "
+        "$f = New-Object System.Windows.Forms.OpenFileDialog; "
+        f"$f.Title = '{title}'; $f.Filter = '*.{extension}|*.{extension}|All files|*.*'; "
+        "if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }"
+    )
+    result = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise FolderPickerUnavailable(result.stderr.strip() or "Could not open the file dialog.")
+    return result.stdout.strip() or None
+
+
+def pick_file(title: str = "Select a file", extension: str = "zip") -> str | None:
+    """The file the user picked (of this extension), or None if the dialog was cancelled.
+
+    Raises:
+        FolderPickerUnavailable: no native dialog tool is available — the caller should let the user type the path instead.
+    """
+    system = platform.system()
+    if system == "Linux":
+        return _pick_file_linux(title, extension)
+    if system == "Darwin":
+        return _pick_file_macos(title, extension)
+    if system == "Windows":
+        return _pick_file_windows(title, extension)
+    raise FolderPickerUnavailable(f"No file dialog support for {system}.")
+
+
 def pick_folder(title: str = "Select a folder") -> str | None:
     """The folder the user picked, or None if the dialog was cancelled.
 

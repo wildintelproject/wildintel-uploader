@@ -334,3 +334,196 @@ def find_entries_of(location_ids: list[str], revision: int | None, settings: con
             fields["comments"] = "\n".join(filter(None, [fields.get("comments"), notes]))
         found[location].append({"uuid": entry.get("ec5_uuid"), "title": entry.get("title") or "", "created_at": entry.get("created_at") or "", "fields": fields})
     return {location: sorted(items, key=lambda e: e["created_at"], reverse=True) for location, items in found.items()}
+
+
+# ── The entries of the form of the field flow of a visit: one entry is one visit ────────────────────────────────────
+
+# What each question of the form of a visit is (found by its label, ignoring case and spaces), and the field of a visit it gives.
+VISIT_QUESTIONS: dict[str, str] = {
+    "setupby": "trappers", "collection": "session", "revision": "session", "date": "date", "locationid": "location_id", "statusofthecamera": "camera_status",
+    "cardandbatteries": "card_batteries_ok", "batterystatus": "battery_status", "batteriesstatus": "battery_status", "cardstatus": "card_status", "nºpicturescollected": "num_photos", "dateandtimeok": "date_time_ok", "action": "action",
+    "actionaftertheft": "action_after_theft", "cameraname": "camera_label", "cameramodel": "camera_model", "serialnumber": "camera_id",
+    "cameraheight": "camera_height", "cameradelay": "camera_interval", "cameratilt": "camera_tilt", "cameraheading": "camera_heading",
+    "detectiondistance": "detection_distance", "baituse": "bait_use", "featuretype": "feature_type", "habitat": "habitat", "sdtoinsert": "sd",
+    "actionafterthereview": "action", "calibration": "calibration", "observations": "comments", "coordinates": "coordinates", "time": "time",
+}
+# what the form answers of the card and the batteries — one question — and what each of them is
+_CARD_CODES = {"ok": ("OK", "OK"), "card full": ("OK", "CardFull"), "no batteries": ("NoBatteries", "OK"), "card full and no batteries": ("NoBatteries", "CardFull")}
+VISIT_COLUMNS = (
+    "location_id", "session", "date", "time", "created_at", "actions", "trappers", "setup_by", "camera_status", "battery_status", "card_status", "num_photos", "date_time_ok", "camera_id", "camera_model",
+    "camera_height", "camera_interval", "camera_tilt", "camera_heading", "detection_distance", "bait_use", "feature_type", "habitat", "sd", "calibration", "comments", "latitude", "longitude",
+)
+
+
+def _label(text: str) -> str:
+    return re.sub(r"\s+", "", text or "").lower()
+
+
+# What the form answers of the status of the camera when there is none at the site: the old form said it as a new site or an inactive one
+_NO_CAMERA = ("no camera at the site", "new site", "inactive site")
+
+
+def visit_actions(status: str | None, action: str | None, action_after_theft: str | None) -> str:
+    """What a visit did, from what the form answers — one simple rule: an Installation if the status says there is no camera at the site (a new site, or an inactive one: its camera was removed before — the form now says it in one option) and one is put up; the action after a theft if the camera was
+    stolen; the action otherwise. As the visit keeps them: a camera inspected is a Revision, replaced is a Revision, a Desinstallation and an Installation (after a theft, a Stolen and an
+    Installation), a camera removed is a Revision and a Desinstallation, and a site removed is those two and an Archive — the location is given up — (after a theft, a
+    Stolen and an Archive; after a theft a camera removed — not replaced, the site stays open — is a Stolen alone)."""
+    status = (status or "").strip().lower()
+    if status in _NO_CAMERA:
+        return "Installation"  # no camera at the site — new, or its camera was removed before — has one put up: the form asks the same questions in both
+    if status == "stolen":
+        return {"camera replacement": "Stolen + Installation", "site removal": "Stolen + Archive", "camera removal": "Stolen"}.get((action_after_theft or "").strip().lower(), "")
+    return {
+        "camera inspection": "Revision", "keep the camera": "Revision", "camera replacement": "Revision + Desinstallation + Installation", "camera removal": "Revision + Desinstallation",
+        "site removal": "Revision + Desinstallation + Archive",
+    }.get((action or "").strip().lower(), "")
+
+
+def visit_row(entry: dict, refs: dict[str, str]) -> dict[str, str]:
+    """A visit, as a row with the columns a visit has, from an entry of the form of the field flow. `refs` says the ref of the input each field comes from. What the
+    entry leaves blank is not in the row. The camera's height is noted in centimetres and a visit keeps it in metres."""
+    raw = {field: entry.get(ref) for field, ref in refs.items()}
+    row: dict[str, str] = {}
+    if (text := _text(raw.get("location_id"))) is not None:
+        row["location_id"] = text
+    if (text := _text(raw.get("session"))) is not None:
+        row["session"] = text
+    if (day := _day(raw.get("date"))) is not None:
+        row["date"] = day.isoformat()
+    if (clock := _clock(raw.get("time"))) is not None:
+        row["time"] = clock.strftime("%H:%M:%S")
+    if _text(entry.get("created_at")):
+        row["created_at"] = str(entry["created_at"])
+    if actions := visit_actions(_text(raw.get("camera_status")), _text(raw.get("action")), _text(raw.get("action_after_theft"))):
+        row["actions"] = actions
+    trappers = raw.get("trappers")
+    names = trappers if isinstance(trappers, list) else ([trappers] if _text(trappers) else [])
+    if names := [str(n).strip() for n in names if str(n).strip()]:
+        row["trappers"] = ", ".join(names)
+        row["setup_by"] = names[0]
+    if (text := _text(raw.get("camera_status"))) is not None and text.strip().lower() != "no camera at the site":   # no camera is not a status of a camera: nothing is kept
+        row["camera_status"] = text
+    if (text := _text(raw.get("card_batteries_ok"))) is not None and text.lower() in _CARD_CODES:
+        row["battery_status"], row["card_status"] = _CARD_CODES[text.lower()]
+    # the form that asks the batteries and the card apart: each answer is its own column (the codes are read as they are written)
+    for field in ("battery_status", "card_status"):
+        if (text := _text(raw.get(field))) is not None:
+            row[field] = text
+    if (number := _number(raw.get("num_photos"))) is not None:
+        row["num_photos"] = str(int(number))
+    if (text := _text(raw.get("date_time_ok"))) is not None:
+        row["date_time_ok"] = "Yes" if text.lower().startswith("ok") else "No"
+    if (text := _text(raw.get("camera_id")) or _text(raw.get("camera_label"))) is not None:
+        row["camera_id"] = text
+    for field in ("camera_model", "feature_type", "habitat", "sd", "comments"):
+        if (text := _text(raw.get(field))) is not None:
+            row[field] = text
+    if (number := _number(raw.get("camera_height"))) is not None:
+        row["camera_height"] = str(round(number / 100, 4))
+    for field in ("camera_interval", "camera_tilt", "camera_heading", "detection_distance"):
+        if (number := _number(raw.get(field))) is not None:
+            row[field] = str(number)
+    for field in ("bait_use", "calibration"):
+        if (flag := _yes_no(raw.get(field))) is not None:
+            row[field] = "yes" if flag else "no"
+    if (place := _place(raw.get("coordinates"))) is not None:
+        row["latitude"], row["longitude"] = str(place["latitude"]), str(place.get("longitude", ""))
+    return row
+
+
+def visits_csv(settings: config.Settings | None = None) -> str:
+    """The entries of the Epicollect5 project saved in the settings, as the text of a CSV with a row per visit and the columns a visit has — to be read as any other
+    file of visits is. The inputs are found by their labels (see VISIT_QUESTIONS).
+
+    Raises:
+        EpicollectError: no project is saved, or it cannot be read, or the form is not the one of the field flow of a visit.
+    """
+    import csv  # noqa: PLC0415
+    import io  # noqa: PLC0415
+    settings = settings or config.load_settings()
+    cfg = settings.EPICOLLECT5
+    form = fetch_form(settings)
+    refs = {VISIT_QUESTIONS[_label(i["label"])]: i["ref"] for i in form["inputs"] if _label(i.get("label", "")) in VISIT_QUESTIONS}
+    missing = [name for name in ("locationID", "Date", "Status of the camera") if _label(name) not in {_label(i.get("label", "")) for i in form["inputs"]}]
+    if missing:
+        raise EpicollectError(f"The form of the project does not have the questions of a visit: {', '.join(missing)}.")
+    try:
+        entries = _all_entries(cfg.project_slug or "", cfg.client_id, cfg.client_secret)
+    except EpicollectError:
+        raise
+    except Exception as exc:  # the network, or an answer that is not JSON
+        raise EpicollectError(f"Could not read the entries from Epicollect5: {exc}") from exc
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=list(VISIT_COLUMNS), lineterminator="\n")
+    writer.writeheader()
+    for entry in entries:
+        writer.writerow(visit_row(entry, refs))
+    return out.getvalue()
+
+
+# Epicollect5 cuts the headers of the CSV it gives at this many characters.
+_HEADER_LIMIT = 20
+
+
+def _header_key(header: str) -> tuple[str, str | None]:
+    """A column of the CSV Epicollect5 gives, as the question it answers: its label with no number in front and no marks, and which part of a place it is, if it is one
+    (`lat_26_Coordinates`, `long_26_Coordinates`)."""
+    part = None
+    match = re.match(r"(?i)^(lat|long|accuracy)_(.*)$", header.strip())
+    if match:
+        part, header = match.group(1).lower(), match.group(2)
+    header = re.sub(r"^\d+_", "", header.strip())
+    return re.sub(r"[\W_]+", "", header).lower(), part
+
+
+def visits_from_csv(text: str) -> str:
+    """The CSV downloaded from the new Epicollect5 project (the form of the field flow), as the text of a CSV with a row per visit and the columns a visit has. Its
+    columns are found by the label of their question, ignoring the number in front, the case and the marks — and a header cut at 20 characters, as Epicollect5 does, by the beginning of it.
+
+    Raises:
+        EpicollectError: the file has no rows, or it is not the form of a visit.
+    """
+    import csv  # noqa: PLC0415
+    import io  # noqa: PLC0415
+    reader = csv.DictReader(io.StringIO(text.lstrip("﻿")))
+    headers = reader.fieldnames or []
+    questions = {re.sub(r"[\W_]+", "", k).lower(): v for k, v in VISIT_QUESTIONS.items()} | {"npicturescollected": "num_photos"}
+    refs: dict[str, str] = {}
+    place: dict[str, str] = {}
+    cut_headers: list[tuple[str, str]] = []
+    for header in headers:
+        key, part = _header_key(header)
+        if key == "coordinates" and part in ("lat", "long"):
+            place[part] = header
+        elif part is None and key in questions:
+            refs[questions[key]] = header
+        elif part is None and len(header.strip()) >= _HEADER_LIMIT:
+            # Epicollect5 cuts a header — its number, an underscore and the question — at 20 characters ("7_Status_of_the_came"): the question is then the beginning of a label
+            cut_headers.append((key, header))
+    # a cut header may begin more than one label ("10_Action_after_the_" is "Action after the review" and "Action after theft"): the question that another column already is is not it
+    for _ in range(len(cut_headers)):
+        for key, header in list(cut_headers):
+            cut = {field for label, field in questions.items() if label.startswith(key) and len(key) >= 3} - set(refs)
+            if len(cut) == 1:
+                refs[cut.pop()] = header
+                cut_headers.remove((key, header))
+    missing = [name for name, field in (("locationID", "location_id"), ("Date", "date"), ("Status of the camera", "camera_status")) if field not in refs]
+    if missing:
+        raise EpicollectError(f"The file is not the download of the form of a visit: it has no column for {', '.join(missing)}.")
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=list(VISIT_COLUMNS), lineterminator="\n")
+    writer.writeheader()
+    for line in reader:
+        entry: dict[str, Any] = {ref: line.get(header) for ref, header in ((h, h) for h in refs.values())}
+        entry["created_at"] = line.get("created_at")
+        if "trappers" in refs and (names := _text(line.get(refs["trappers"]))):
+            entry[refs["trappers"]] = [n.strip() for n in names.split(",")]
+        if place:
+            lat, lon = _text(line.get(place.get("lat", ""))), _text(line.get(place.get("long", "")))
+            if lat:
+                entry["__place"] = {"latitude": lat, "longitude": lon or ""}
+        refs_now = dict(refs)
+        if "__place" in entry:
+            refs_now["coordinates"] = "__place"
+        writer.writerow(visit_row(entry, refs_now))
+    return out.getvalue()

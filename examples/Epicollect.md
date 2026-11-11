@@ -3,7 +3,7 @@
 WildINTEL Uploader can fill a deployment's period, camera, site and notes from an entry of an
 [Epicollect5](https://five.epicollect.net) project (Settings › Epicollect5). This is the structure of the
 form it is built around — the one the project is defined with right now — and an entry for `wicp_0001`, a deployment of the example
-`session_example_timestamp_log_wicp`.
+`session_examples/timestamp_log_wicp`.
 
 **One form, one row per deployment.** The app looks for the entry whose *Location id* is the location of the deployment and
 whose *Revision* is the revision being imported (the newest one if there are several). Everything is in one
@@ -46,7 +46,7 @@ Only *Location id* and the dates are needed; every other question can be left ou
 
 ## An entry for `wicp_0001`
 
-The deployment `R0003-wicp_0001` of `session_example_timestamp_log_wicp`, as someone in the field would have answered the form:
+The deployment `R0003-wicp_0001` of `session_examples/timestamp_log_wicp`, as someone in the field would have answered the form:
 
 | Question | Answer |
 |---|---|
@@ -90,5 +90,5 @@ images' would still prevail: Epicollect5 only completes what they don't give.
 1. Add `wicp_0001` to the options of *Location id* in your Epicollect5 project (and the research project's location, with
    its timezone, to the collections folder).
 2. Submit the entry above.
-3. Import `session_example_timestamp_log_wicp` as a session (**📷 Import session**), revision `3`. The *When was it collected?* step offers
+3. Import `session_examples/timestamp_log_wicp` as a session (**📷 Import session**), revision `3`. The *When was it collected?* step offers
    **Import from Epicollect5**, and the period of `wicp_0001` says *From Epicollect5*.

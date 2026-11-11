@@ -31,19 +31,20 @@ beforeEach(() => {
   mockedApi.listSessions.mockResolvedValue([])
 })
 
-const getStarted = async () => userEvent.click(await screen.findByRole('button', { name: 'Get Started' }))
+const getStarted = async () => userEvent.click(await screen.findByRole('button', { name: /get started/i }))
 const title = () => screen.findByRole('button', { name: /WildINTEL Uploader\s*v0\.1\.0/ })
 
 describe('App', () => {
   it('goes back to the welcome screen when the title is pressed, from wherever you are', async () => {
     render(<App />)
     await getStarted()
+    await userEvent.click(await screen.findByRole('button', { name: /manage uploads/i }))
     await userEvent.click(await screen.findByRole('button', { name: /upload deployment to trapper/i }))
     expect(await screen.findByText(/Upload page — nothing chosen/)).toBeInTheDocument()
 
     await userEvent.click(await title())
 
-    expect(await screen.findByRole('button', { name: 'Get Started' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /get started/i })).toBeInTheDocument()
     expect(screen.queryByText(/Upload page/)).not.toBeInTheDocument()
     expect(screen.queryByText('What do you want to do?')).not.toBeInTheDocument()
   })
@@ -61,7 +62,7 @@ describe('App', () => {
     render(<App />)
     await userEvent.click(await title()) // the sessions are offered first when the app starts
 
-    expect(await screen.findByRole('button', { name: 'Get Started' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /get started/i })).toBeInTheDocument()
     await getStarted()
     expect(await screen.findByRole('heading', { name: 'Unfinished run' })).toBeInTheDocument()
   })
@@ -69,7 +70,8 @@ describe('App', () => {
   it('takes a finished import to the upload page, on the collection it went into', async () => {
     render(<App />)
     await getStarted()
-    await userEvent.click(await screen.findByRole('button', { name: /import deployment/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /manage deployments/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /Organize a folder/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'finish the import' }))
 
     expect(await screen.findByText('Upload page — DONA / R0003')).toBeInTheDocument()
@@ -78,10 +80,12 @@ describe('App', () => {
   it('opens the upload page empty when it is chosen from the menu, whatever was imported before', async () => {
     render(<App />)
     await getStarted()
-    await userEvent.click(await screen.findByRole('button', { name: /import deployment/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /manage deployments/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /Organize a folder/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'finish the import' }))
     await userEvent.click(await title())
     await getStarted()
+    await userEvent.click(await screen.findByRole('button', { name: /manage uploads/i }))
     await userEvent.click(await screen.findByRole('button', { name: /upload deployment to trapper/i }))
 
     expect(await screen.findByText('Upload page — nothing chosen')).toBeInTheDocument()

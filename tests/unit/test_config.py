@@ -43,7 +43,7 @@ def test_the_validation_checks_are_all_shown_by_default():
     assert all(checks.values())
     assert set(checks) == {
         "deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera",
-        "image_count", "sequence_count", "sequence_length",
+        "image_count", "sequence_count", "sequence_length", "sd_card", "photo_count",
     }
 
 
@@ -146,6 +146,39 @@ def test_the_preprocessing_settings_survive_a_roundtrip_and_text_is_stripped(tmp
     assert reloaded.owner == "Universidad de Huelva" and reloaded.coverage == "Doñana National Park"
 
 
+def test_the_trappers_of_the_fieldwork_survive_a_roundtrip(tmp_path: Path):
+    config_file = tmp_path / "settings.toml"
+    settings = config.load_settings(config_file)
+    assert settings.FIELDWORK.trappers == []
+    settings.FIELDWORK.trappers = [config.Trapper(username="ana", name="Ana", affiliation="University of Huelva", email="ana@uhu.es"), config.Trapper(username="luis", name="Luis")]
+    config.save_settings(settings, config_file)
+
+    reloaded = config.load_settings(config_file).FIELDWORK.trappers
+    assert [(t.username, t.name, t.affiliation, t.email) for t in reloaded] == [("ana", "Ana", "University of Huelva", "ana@uhu.es"), ("luis", "Luis", None, None)]
+
+
+def test_a_trapper_has_a_username_that_is_required_and_unique_and_an_email_that_is_not_required():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        config.Trapper(name="Ana")                                                       # the username is required
+    with pytest.raises(ValidationError):
+        config.Trapper(username="ana lopez", name="Ana")                                 # and has no spaces
+    with pytest.raises(ValidationError):
+        config.Trapper(username="ana", name="Ana", email="not an email")                 # an email, when given, is one
+    assert config.Trapper(username="ana", name="Ana", email="  ").email is None          # blank is none
+    with pytest.raises(ValidationError, match="unique"):
+        config.FieldworkSettings(trappers=[{"username": "ana", "name": "Ana"}, {"username": "ANA", "name": "Anabel"}])
+
+
+def test_what_was_kept_before_the_username_existed_gets_one_made_from_its_name_when_it_is_read_from_the_file():
+    old = {"FIELDWORK": {"trappers": ["Ana Pérez", {"name": "Ana Perez"}, {"name": "Luis", "affiliation": "CSIC"}]}}
+    migrated = config.Settings.model_validate(old, context={"migrate": True}).FIELDWORK.trappers
+    assert [(t.username, t.name) for t in migrated] == [("ana.perez", "Ana Pérez"), ("ana.perez2", "Ana Perez"), ("luis", "Luis")]
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):                                                 # what a client sends has to say it
+        config.Settings.model_validate(old)
+
+
 import pytest
 
 
@@ -182,3 +215,20 @@ def test_the_workers_are_saved_with_the_settings(tmp_path: Path):
 
     assert config.load_settings(config_file).GENERAL.workers == 6
     assert config.workers(config.load_settings(config_file)) == 6
+
+
+def test_saving_settings_at_the_same_time_never_leaves_a_broken_file(tmp_path):
+    """Two saves at once, each with a different amount of fieldwork, leave one of them whole — and nothing else in the folder."""
+    import threading
+
+    config_file = tmp_path / "settings.toml"
+    small = config.Settings()
+    big = config.Settings.model_validate({"FIELDWORK": {"sd_cards": [{"label": f"C{i}", "brand": "SanDisk"} for i in range(300)]}})
+    threads = [threading.Thread(target=config.save_settings, args=(s, config_file)) for s in (small, big) * 10]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(config.load_settings(config_file).FIELDWORK.sd_cards) in (0, 300)
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.toml"]

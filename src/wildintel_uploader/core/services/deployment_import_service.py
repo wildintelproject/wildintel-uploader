@@ -68,6 +68,88 @@ def collection_code(deployment_id: str) -> str:
     return match.group(1)
 
 
+def _utc(iso: str | None) -> str:
+    """An ISO date-time as UTC with a Z — a time with no designator is already UTC. Empty when there is none."""
+    if not iso:
+        return ""
+    when = datetime.fromisoformat(iso)
+    if when.tzinfo is not None:
+        when = when.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    return when.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _cell(value) -> str:
+    """A field of the fieldwork log as written: Camtrap DP's true/false for a yes/no, a list's values apart by " | "."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return " | ".join(str(v) for v in value)
+    return str(getattr(value, "value", value))
+
+
+def fieldwork_log_row(deployment: DeploymentFields, visits: dict | None = None) -> dict:
+    """A deployment's row of the collection's FieldworkLog: its fields as Camtrap DP names them, in UTC, and — when it is of
+    visits — their sessions and actions, the card and the photos counted. `visits` is the FieldworkVisits of the request, as a dict."""
+    visits = visits or {}
+    d = deployment
+    return {
+        "deploymentID": d.deployment_id, "locationID": d.location_id or "",
+        "deploymentStart": _utc(d.start_date), "deploymentEnd": _utc(d.end_date),
+        "setupBy": _cell(d.setup_by), "cameraID": _cell(d.camera_id), "cameraModel": _cell(d.camera_model),
+        "cameraDelay": _cell(d.camera_interval), "cameraHeight": _cell(d.camera_height), "cameraDepth": _cell(d.camera_depth),
+        "cameraTilt": _cell(d.camera_tilt), "cameraHeading": _cell(d.camera_heading), "detectionDistance": _cell(d.detection_distance),
+        "timestampIssues": _cell(d.timestamp_issues), "baitUse": _cell(d.bait_use), "featureType": _cell(d.feature_type),
+        "habitat": _cell(d.habitat), "deploymentGroups": _cell(d.deployment_groups), "deploymentTags": _cell(d.tags),
+        "deploymentComments": _cell(d.comments), "status": "closed" if d.end_date else "open",
+        "collection": d.deployment_id.split("-", 1)[0], "cardSD": _cell(visits.get("sd_card") or visits.get("left_sd")),
+        "photosCounted": _cell(visits.get("counted_photos")),
+        "startSession": _cell(visits.get("left_session")), "startAction": _cell(visits.get("left_action")),
+        "endSession": _cell(visits.get("collected_session")), "endAction": _cell(visits.get("collected_action")),
+    }
+
+
+_FROM_FIELDWORK_LOG: dict[str, tuple[str, type]] = {
+    "setupBy": ("setup_by", str), "cameraID": ("camera_id", str), "cameraModel": ("camera_model", str), "cameraDelay": ("camera_interval", int),
+    "cameraHeight": ("camera_height", float), "cameraDepth": ("camera_depth", float), "cameraTilt": ("camera_tilt", int),
+    "cameraHeading": ("camera_heading", int), "detectionDistance": ("detection_distance", float), "timestampIssues": ("timestamp_issues", bool),
+    "baitUse": ("bait_use", bool), "featureType": ("feature_type", str), "habitat": ("habitat", str),
+    "deploymentGroups": ("deployment_groups", str), "deploymentComments": ("comments", str),
+}
+
+
+def log_entry(research_project_id: str, deployment_id: str) -> dict:
+    """What the collection's two logs say of a deployment — their row with its id, compared ignoring case — or nothing where there is none:
+    {"collection", "timestamps": {"start", "end"} | None (the camera's wall-clock time, ISO), "fieldwork": {"start", "end" (UTC),
+    "details": the fields of DeploymentFields it fills in} | None}. A log that can't be read says so as LocalFolderError."""
+    collection = default_collection_dir(research_project_id, deployment_id)
+    wanted = deployment_id.lower()
+    timestamps = None
+    for row in local_folder_service.read_timestamp_log(local_folder_service.timestamp_log_path(collection)):
+        if row["Deployment"].lower() == wanted and row["StartDate"] and row["EndDate"]:
+            # the log writes its dates as the camera does (2024:09:04): ISO here
+            timestamps = {"start": f"{row['StartDate'].replace(':', '-')}T{row['StartTime'] or '00:00:00'}",
+                          "end": f"{row['EndDate'].replace(':', '-')}T{row['EndTime'] or '00:00:00'}"}
+    fieldwork = None
+    for row in local_folder_service.read_fieldwork_log(local_folder_service.fieldwork_log_path(collection)):
+        if row["deploymentID"].lower() != wanted:
+            continue
+        details: dict = {}
+        for column, (field, kind) in _FROM_FIELDWORK_LOG.items():
+            cell = row.get(column, "")
+            if not cell:
+                continue
+            try:
+                details[field] = (cell.lower() == "true") if kind is bool else kind(cell)
+            except ValueError:
+                continue
+        if row.get("deploymentTags"):
+            details["tags"] = [t.strip() for t in row["deploymentTags"].split("|") if t.strip()]
+        fieldwork = {"start": row.get("deploymentStart") or None, "end": row.get("deploymentEnd") or None, "details": details}
+    return {"collection": collection.name, "timestamps": timestamps, "fieldwork": fieldwork}
+
+
 def default_collection_dir(research_project_id: str, deployment_id: str) -> Path:
     """Where a deployment's collection lives locally by default:
     <collections folder>/<research project id>/<R0003>. Every collection is
@@ -387,7 +469,32 @@ def _duplicate_groups(images: list[Path], source_dir: Path) -> list[dict]:
     return sorted(groups, key=lambda g: g["files"][0])
 
 
-def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, detail: bool = False) -> dict:
+def _sha1_of(path: Path) -> str | None:
+    digest = hashlib.sha1()  # noqa: S324 — the identifier the preprocessing keeps of an original (its "source_hash"), not a security measure
+    try:
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        logger.debug("Could not read %s to look for images imported before: %s", path, exc)
+        return None
+    return digest.hexdigest()
+
+
+def _imported_before(images: list[Path], source_dir: Path, imported: dict[str, list[dict]]) -> list[dict]:
+    """The images of the folder that were already imported into the research project — by the SHA-1 of the file, as the preprocessing kept it —
+    each with where: {"file", "deployment_id", "collection", "original"}."""
+    if not imported:
+        return []
+    ordered = sorted(images)
+    found = []
+    for path, digest in zip(ordered, parallel.pmap(_sha1_of, ordered)):
+        for before in imported.get(digest or "", []):
+            found.append({"file": str(path.relative_to(source_dir)), **before})
+    return found
+
+
+def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, detail: bool = False, imported: dict[str, list[dict]] | None = None) -> dict:
     """Independent, opt-in checks over a scanned folder's images — only
     "checked_count" plus whichever of these were asked for are present in
     the result:
@@ -417,6 +524,10 @@ def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, d
         content (a card copied twice, a file renamed and kept), each with
         the size and the files. Only files of the same size are compared,
         so a big folder isn't hashed in full.
+        With `imported` (what the research project already has — see
+        local_folder_service.imported_source_hashes) it also says, in
+        "duplicates_in_project", which images were imported before into
+        another deployment of the project, and where.
     With detail, exif_missing also lists in "files" every image that lacks each field, not just examples.
 
     Raises:
@@ -461,6 +572,8 @@ def validate_images(source_dir: Path, checks: frozenset[str] | None = None, *, d
 
     if "duplicates" in checks:
         result["duplicates"] = _duplicate_groups(images, source_dir)
+        if imported is not None:
+            result["duplicates_in_project"] = _imported_before(images, source_dir, imported)
 
     if "camera" in checks:
         groups: dict[tuple[str | None, str | None], list[Path]] = defaultdict(list)
@@ -550,6 +663,8 @@ def _parse_iso(value: str | None) -> datetime | None:
 # that need what the wizard knows of the deployment. None (the default) means
 # all of them.
 DEPLOYMENT_CHECKS = frozenset({"deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera"})
+# ...and those against the visit the deployment is of — they only make sense in the wizard, where that visit is known (a seal or a repair has none).
+VISIT_CHECKS = frozenset({"sd_card", "photo_count"})
 
 # wildintel-tools' own naming rules (see its check_collections): a deployment
 # is "R0033-DONA_01[_suffix]" and lives in a collection "R0033[_suffix]".
@@ -576,10 +691,38 @@ def _collection_of(deployment_id: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _sd_card_check(visit: dict | None) -> dict:
+    """The card the images are said to come from against the one the visit left in the camera."""
+    if not visit:
+        return _ok("No visit was chosen, so the card cannot be checked.")
+    said, left, session = (visit.get("sd_card") or "").strip(), (visit.get("left_sd") or "").strip(), visit.get("left_session") or "the visit"
+    if not said:
+        return _ok("No SD card was said for these images, so the card cannot be checked.")
+    if not left:
+        return _ok(f"The visit {session} does not say which card it left, so the card cannot be checked.")
+    if said.lower() == left.lower():
+        return _ok(f"The SD card is {said}, the one the visit {session} left in the camera.")
+    return _problem(f"You said the images come from the card {said}, but the visit {session} left {left} in the camera.")
+
+
+def _photo_count_check(visit: dict | None, found: int) -> dict:
+    """The photos in the folder against those the visit counted on the card when it collected it."""
+    if not visit:
+        return _ok("No visit was chosen, so the number of photos cannot be checked.")
+    counted, session = visit.get("counted_photos"), visit.get("collected_session") or "the visit"
+    if counted is None:
+        return _ok(f"The visit {session} did not count the photos on the card, so the number of photos cannot be checked.")
+    photos = lambda n: f"{n:,} {'photo' if n == 1 else 'photos'}"  # noqa: E731
+    if counted == found:
+        return _ok(f"The folder has {photos(found)}, as the visit {session} counted.")
+    gap = abs(counted - found)
+    return _problem(f"The visit {session} counted {photos(counted)} on the card, and the folder has {photos(found)} — {photos(gap)} {'missing' if found < counted else 'more'}.")
+
+
 def validate_deployment_consistency(
     source_dir: Path, deployment: DeploymentFields, checks: frozenset[str] | None = None, *,
     collection_name: str | None = None, expected_location_id: str | None = None,
-    tolerance_hours: float = DEFAULT_TOLERANCE_HOURS,
+    tolerance_hours: float = DEFAULT_TOLERANCE_HOURS, visit: dict | None = None,
 ) -> dict:
     """The postvalidation: checks a deployment — what the wizard now knows of
     it — and its scanned images against wildintel-tools' own rules. Only
@@ -601,6 +744,10 @@ def validate_deployment_consistency(
         tolerance. Each item has the file, its date, which rule ("first",
         "last", "between") and the range it should have fallen in.
       - tolerance_hours: what was used.
+    Against the visit the deployment is of (`visit`: left_session, left_sd, collected_session, counted_photos and sd_card — the card
+    the images are said to come from), each giving {"ok", "message"}; what the visit or the user did not say can't be checked, and passes:
+      - sd_card: the card said is the one the visit left in the camera.
+      - photo_count: the folder has the photos the visit counted on the card.
     And, unchanged:
       - camera_mismatches: images whose EXIF camera model differs from the
         deployment's declared camera_model (skipped if it isn't set).
@@ -614,7 +761,7 @@ def validate_deployment_consistency(
         raise DeploymentImportError(f"Not a folder: {source_dir}")
     if tolerance_hours < 0:
         raise DeploymentImportError("The tolerance can't be negative.")
-    checks = DEPLOYMENT_CHECKS if checks is None else (checks & DEPLOYMENT_CHECKS)
+    checks = (DEPLOYMENT_CHECKS | VISIT_CHECKS) if checks is None else (checks & (DEPLOYMENT_CHECKS | VISIT_CHECKS))
 
     images = [p for p in source_dir.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS]
     result: dict = {"checked_count": len(images)}
@@ -656,6 +803,12 @@ def validate_deployment_consistency(
             result["location"] = _ok(f"The deployment id's location is {expected_location_id}, the one chosen.")
         else:
             result["location"] = _problem(f"The deployment id's location is '{tail}', but the location chosen is {expected_location_id}.")
+
+    if "sd_card" in checks:
+        result["sd_card"] = _sd_card_check(visit)
+
+    if "photo_count" in checks:
+        result["photo_count"] = _photo_count_check(visit, len(images))
 
     if "time_range" in checks:
         result["tolerance_hours"] = tolerance_hours

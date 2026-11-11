@@ -129,6 +129,7 @@ wildintel-uploader/
 │   │   ├── parallel.py          # a bounded thread pool, for validating/preprocessing images
 │   │   ├── version.py
 │   │   ├── schemas/requests.py  # request models — DeploymentFields is Camtrap DP's deployments row
+│   │   ├── storage/             # where the records are kept: the ProjectStore interface, the JSON backend, the registry (see Storage)
 │   │   └── services/            # the actual work (see below)
 │   ├── web/
 │   │   ├── main.py              # FastAPI app: routers + the built frontend as static files
@@ -160,18 +161,18 @@ wildintel-uploader/
 └── CHANGELOG.md
 ```
 
-`examples/` holds folders to try each case with: a good deployment (`deployment_example`) and
+`examples/` holds folders to try each case with: a good deployment (`deployment_examples/valid`) and
 ones with corrupted images, duplicates, missing EXIF, mixed cameras, subfolders and unordered
-images; and sessions — `session_example`, and one with a `_FileTimestampLog.csv`
-(`session_example_timestamp_log`).
+images; and sessions — `session_examples/valid`, and one with a `_FileTimestampLog.csv`
+(`session_examples/timestamp_log`).
 
 For something bigger, `tools/make_example_deployment.py` makes a deployment of any number of images
-(3000 by default, into `examples/deployment_example_3000/`, which is kept in the repository): small and all
+(3000 by default, into `examples/deployment_examples/3000/`, which is kept in the repository): small and all
 different, in bursts of three shots, numbered in the order they were taken, each with the camera's
 make, model and serial number and its capture date in the EXIF — a Reconyx HyperFire 2,
 `P800HG08`. It is what to try a long import, the statistical checks or an upload with.
 
-With `--faulty` (into `examples/deployment_example_3000_faulty/`, also kept in the repository) the same 3000 files come with
+With `--faulty` (into `examples/deployment_examples/3000_faulty/`, also kept in the repository) the same 3000 files come with
 problems for every validation to find, about 14 % of them: corrupted images (cut short, or empty), duplicates
 (`IMG_0123 (copy).JPG`, `IMG_0123_bak.JPG`), shots out of order, no capture date, no camera model or serial number,
 a second camera (a Bushnell) and some images in a `backup/` subfolder. Run through the wizard, the validation report has
@@ -190,7 +191,8 @@ something to say for each check.
 | `statistics_service` | The statistical postvalidation: sequences, and whether this revision is like the earlier ones of the location. |
 | `report_service` | The reports: builds them from a validation's, a postvalidation's or a preprocessing's results, keeps them as JSON in `<data dir>/reports/`, lists, deletes and exports them to CSV. |
 | `seal_service` | Runs the checks over the source images and writes/verifies `seal.json`. |
-| `local_folder_service` | The collections folder: research projects, locations, collections, deployments, `images.json`, the timestamp log. |
+| `local_folder_service` | The collections folder: research projects, locations, visits, cameras and SD cards (the *rules* of the records, which are kept through `core/storage`), collections, deployments, `images.json`, the timestamp log. |
+| `audit` | The two dates every visit, camera and SD card keeps — `created_at` and `updated_at` — written by the app when it is kept, as an ORM does. |
 | `camera_info` | The camera's model and id, through ExifTool when it's there (bundled or on the `PATH`), else Pillow. |
 | `trapper_service` | Thin wrapper over the SDK for lookups; registers a deployment through the classic import form. |
 | `trapper_upload_service` | Uploading a deployment: location, deployment, packing in zips + yaml, upload, wait. Also the access check. |
@@ -198,6 +200,51 @@ something to say for each check.
 | `sync_service` | Fills the collections folder from a Trapper classification project. |
 | `session_store` | The wizard's resumable runs. |
 | `folder_picker`, `file_manager` | The OS's native folder dialog and file explorer — this is a local tool, so the backend can open them on the user's screen. |
+
+### The record of a visit
+
+A visit is kept as a **`VisitRecord`**, the Pydantic class in `core/schemas/requests.py` that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks **each field on its own** (its type, its range, the values it may take: the status of the camera is one of `visit_rules.CAMERA_STATUSES`, the card and the batteries one of four codes) and two things on the **whole** visit: it does at least one action (only a visit that could not be made — status *Not revised* — has none), and it has a height or a depth, not both.
+
+Six fields are not typed, the app fills them in: `id` (a UUID that never changes), `when` (the instant, ISO 8601 in UTC with a `Z`, worked out from the day and the time of the wall clock of the location), `state` (`deployed`, `collected`, `stolen`, `not_visited` or `no_camera`, worked out by `visit_deployments.visit_states` and refreshed whenever a visit is added), `deployment_id` (the deployment the visit closed, once its images are imported) and `created_at` / `updated_at` (written each time the visit is kept, as an ORM does: a visit saved again with nothing changed keeps both). What a visit points to — location, camera, SD card, trappers — is kept by id: see *Storage*.
+
+What the visits do to the **entities** is `visit_rules.entity_changes`, applied by the visits router when visits are kept (by hand and from a file): the camera and the card put in the field are *active*, the ones taken away are *ready*, and a camera found stolen is archived with its card.
+
+### Storage
+
+The **records** — the research projects and, for each, its locations, visits, unknown visits, cameras, SD cards and failed uploads — are kept through a **layer of
+abstraction**, `core/storage`: today they are JSON files in the collections folder, and a database can be added later **without changing the code that uses them**.
+
+- `storage.base.ProjectStore` is the interface — a few methods: the research projects (`list_projects`, `has_project`, `get_project`, `add_project`, `save_project`,
+  `delete_project`) and the records of one of them by kind (`read_records`, `write_records`, `delete_records`). A record is a plain `dict`; the kinds are `RECORD_KINDS`.
+- `storage.json_files.JsonFolderStore` is the backend called `json`, the default: `<collections folder>/<research project>/visits.json` and its companions, each put in place
+  at once, so a file is never left half written.
+- The **rules** are not the store's. `local_folder_service` has them — the instants of the visits, which location can be removed, the dates `created_at` and `updated_at` (see
+  `services/audit.py`) —, and only asks the store to keep or give back. That is why a new backend is small, and why it cannot change what the app does.
+- What is not a record stays a file of the collections folder: the images and what is written beside them (`deployment.json`, `images.json`, the logs of a collection…).
+  Nor the settings (`settings.toml`), which have their own place.
+- The settings choose the backend: `DATA.storage` (`json` by default), read the first time it is needed and applied again when the settings are saved.
+
+- **The records point to each other by internal id** (`services/ids.py`). Every record that others refer to has an `id` — a UUID the app generates (`ids.new_id`); a record kept before the ids existed gets one made from what called it (`ids.legacy_id`, the same one everywhere) the first time it is read, and keeps it. A visit is **kept** with `location_ref`, `camera_ref`, `sd_ref`, `trapper_refs` and `setup_by_ref`, and **told** with what they are called (`local_folder_service._kept` and `_told`, as with the instant `when`); a role is kept with `trapper_ref`; an unknown visit with `location_ref`. What is not registered (a card nobody has) is kept as it was said and linked when it is. A backup says the visits and the roles by name, so it is restored where the ids are others. What the page sends back for an item — its `id` — tells it from a new one, so a rename is not a deletion plus an addition; an id the page makes up is not taken.
+- **Nothing is deleted for good**: a record that is removed gets `deleted_at` (`services/audit.py`) and is no longer listed; it comes back when it is added again. `ProjectStore.delete_project` is a purge the app does not use.
+- **The trappers** are global records (`ProjectStore.read_global` / `write_global`, `trappers.json` beside the projects): the people belong to no research project. Those an earlier version kept in the settings are moved to the store the first time they are asked for.
+- **What is not in the layer yet.** With a database, *all* the information should go to it, except the images. For now the layer has the records of the research projects and the trappers; the metadata of collections and deployments (`deployment.json`, `images.json`…) and the settings themselves (which say where the records are, so they stay a file) are not through it. The reports and the sessions stay files, for now.
+
+  **Not planned for now** — it has no effect until a database is used, and that is not foreseen. What was decided for when it is, so it is not lost: the metadata of collections and deployments would be *documents* of the store (by research project, collection, deployment and name; the JSON backend would keep them in the same files and paths as now, so nothing would be migrated); the modules that read them (`seal_service`, `repair_service`, `preprocessing_service`, `trapper_upload_service`, `statistics_service`, `sync_service`, `timefix_service`, `backup_service`) would be converted one by one, from paths to those names. The CSV logs of a collection (`FileTimestampLog`, `FieldworkLog`) and the packages to upload stay files: they are what `wildintel-tools` and Trapper ask for. **The seal is made over the content of the documents**, not over their files: `deployment.json` is hashed as `json.dumps(document, indent=2, ensure_ascii=False)`, which is what its file holds today, so the seals already made still verify.
+
+To keep the records somewhere else — a database, say — **add a backend**; nothing else is touched:
+
+```python
+from wildintel_uploader.core import storage
+
+class SqliteStore(storage.ProjectStore):
+    def __init__(self, root): ...                       # the collections folder; the connection is the backend's own business
+    def list_projects(self): ...                        # …and the other methods of ProjectStore
+
+storage.register("sqlite", SqliteStore)                 # then: DATA.storage = "sqlite"
+```
+
+`tests/unit/test_storage.py` does exactly that with a backend in memory, and runs the projects, locations, visits and cameras of the app on it. A backup (`backup_service`) goes through
+the store too, and its `.zip` holds JSON whatever the records are kept in, so a backup made on one backend is restored on another.
 
 ### Threads
 
@@ -252,7 +299,7 @@ deployment form — is the command line's flow.
 
 The **timezone** is read from the location, in the research project's `locations.json`
 (`local_folder_service.location_time`), never from the request: `import-local` refuses a location
-with none. This is deliberate — see the [user manual](user-manual.md#the-location-owns-the-timezone).
+with none. This is deliberate — see the [user manual](user-manual.md#23-locations).
 
 ### Reports
 
@@ -380,10 +427,11 @@ the current task and shows one page.
 |---|---|
 | `WelcomePage`, `MenuPage` | The first screen and the task menu (`OptionCards`; a task with `available: false` is *coming soon*). |
 | `ResumeSessionsPage` | The unfinished runs, shown before the menu when there are any. |
-| `ImportDeploymentPage` | The wizard of four stages (images, origin and dates, check details, prepare and save), each with steps of its own (`WizardStep`). The biggest file: its step components and the forms. |
-| `ImportSessionPage` | The same stages for a folder of deployments. Reuses the wizard's pieces, exported from `ImportDeploymentPage`. |
+| `ImportDeploymentPage` | The wizard of five stages (origin, images, dates and details, check details, prepare and save), each with steps of its own (`WizardStep`). The biggest file: its step components and the forms. It also exports what the session page reuses: `fillFromVisit`, `fillFromPreviousRevision`, `detailsFound` and `LockedDetailsContext` (the details shown as a source says them, until they are filled in by hand). |
+| `ImportSessionPage` | The same stages for a folder of deployments; with closed visits ticked in the origin, each folder is linked to a visit and the location, details and dates come from it. Reuses the wizard's pieces, exported from `ImportDeploymentPage`. |
 | `UploadDeploymentPage` | Steps: what to upload (research project → collection → deployments), what to do (mode), then the upload, with a card per deployment. |
-| `UtilsPage` | The menu's *Utils* button: a list of maintenance tasks, each shown in place of the list once chosen — `RepairPage` and `SyncCollectionsPage`. |
+| `VisitsPage` | *Register visits*: the visits of a research project, by hand, from the Epicollect download or from a CSV. Stored in the project's `visits.json`; `POST /api/visits/closed` lists the closed visits that have no deployment yet and `POST /api/visits/link` links one to the deployment it gave. |
+| `UtilsPage` | The menu's *Utils* button: a list of maintenance tasks, each shown in place of the list once chosen — `TimeFixPage`, `RepairPage` and `SyncCollectionsPage`. |
 | `RepairPage` | Research project → collection → state of each deployment, and what each repair did. |
 | `SyncCollectionsPage` | Classification project → collection → deployments, and a live log. |
 | `SettingsPage` | Shown *over* the rest, which stays mounted but hidden, so a run in progress isn't lost. |

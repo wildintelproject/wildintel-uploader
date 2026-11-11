@@ -169,3 +169,178 @@ def test_a_research_project_in_two_folders_is_listed_once_from_the_one_named_by_
     listed = svc.list_research_projects(tmp_path)
 
     assert [(p["acronym"], p["marker"]) for p in listed] == [("DONA_24", "DONA_24"), ("WICP_01", "WICP_01")]
+
+
+def _project(root: Path, acronym: str = "DONA") -> None:
+    svc.write_research_project(root, {"name": "Doñana", "acronym": acronym})
+
+
+def test_a_research_project_starts_with_no_visits_and_gets_them_registered_in_order(tmp_path: Path):
+    _project(tmp_path)
+    assert svc.list_visits(tmp_path, "DONA") == []
+
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0001", "actions": ["Installation"]})
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_02", "session": "R0001", "actions": ["Installation"]})
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0002", "actions": ["Revision"]})
+
+    assert [v["session"] for v in svc.list_visits(tmp_path, "DONA")] == ["R0001", "R0001", "R0002"]
+    assert (tmp_path / "DONA" / svc.VISITS_FILE).is_file()
+
+
+def test_the_visits_to_one_location_are_found_ignoring_case(tmp_path: Path):
+    _project(tmp_path)
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_0023_B", "session": "R0001", "actions": ["Installation"]})
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0001", "actions": ["Installation"]})
+
+    assert [v["location_id"] for v in svc.list_visits(tmp_path, "DONA", "dona_0023_b")] == ["DONA_0023_B"]
+    assert svc.list_visits(tmp_path, "DONA", "DONA_99") == []
+
+
+def test_a_visit_cannot_be_registered_to_a_research_project_that_is_not_kept(tmp_path: Path):
+    with pytest.raises(svc.LocalFolderError, match="isn't in the collections folder"):
+        svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01"})
+
+
+# ── the time of a visit: kept as an instant, told as the wall clock of its location ─────────────────────────────
+
+def _location(root: Path, location_id: str = "DONA_01", **over) -> None:
+    svc.write_location(root, "DONA", {"location_id": location_id, "name": location_id, **over})
+
+
+def _visit_on_disk(root: Path) -> list[dict]:
+    return json.loads((root / "DONA" / svc.VISITS_FILE).read_text(encoding="utf-8"))
+
+
+def test_a_visit_is_kept_as_an_instant_in_iso_8601_utc_and_told_with_the_wall_clock_of_its_location(tmp_path: Path):
+    _project(tmp_path)
+    _location(tmp_path, "DONA_01")                                                      # UTC, following summer time: the default
+    _location(tmp_path, "DONA_02", timezone="Europe/Madrid", ignore_dst=False)           # +02:00 in September
+    _location(tmp_path, "DONA_03", timezone="Europe/Madrid", ignore_dst=True)            # +01:00 all the year
+
+    for site in ("DONA_01", "DONA_02", "DONA_03"):
+        told = svc.write_visit(tmp_path, "DONA", {"location_id": site, "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"]})
+        assert (told["date"], told["time"]) == ("2024-09-04", "13:10:00")               # what was typed is what is told
+
+    on_disk = _visit_on_disk(tmp_path)
+    assert [v["when"] for v in on_disk] == ["2024-09-04T13:10:00Z", "2024-09-04T11:10:00Z", "2024-09-04T12:10:00Z"]
+    assert all("date" not in v and "time" not in v for v in on_disk)                     # the instant is what is kept
+    assert [(v["date"], v["time"]) for v in svc.list_visits(tmp_path, "DONA")] == [("2024-09-04", "13:10:00")] * 3
+
+
+def test_visits_kept_with_a_day_and_a_time_are_moved_to_instants_when_read(tmp_path: Path):
+    _project(tmp_path)
+    _location(tmp_path, "DONA_01", timezone="Europe/Madrid")
+    (tmp_path / "DONA" / svc.VISITS_FILE).write_text(json.dumps([
+        {"location_id": "DONA_01", "session": "R0001", "date": "2024-01-15", "time": "09:00:00", "actions": ["Installation"]},   # +01:00 in winter
+        {"location_id": "DONA_01", "session": "R0002", "date": "2024-07-15", "time": "09:00:00", "actions": ["Revision"]},       # +02:00 in summer
+    ]), encoding="utf-8")
+
+    told = svc.list_visits(tmp_path, "DONA")
+
+    assert [(v["date"], v["time"]) for v in told] == [("2024-01-15", "09:00:00"), ("2024-07-15", "09:00:00")]
+    assert [v["when"] for v in _visit_on_disk(tmp_path)] == ["2024-01-15T08:00:00Z", "2024-07-15T07:00:00Z"]   # written back as instants
+    assert svc.list_visits(tmp_path, "DONA") == told                                                              # and the same when read again
+
+
+def test_a_visit_is_linked_by_the_day_and_the_time_it_is_told_with(tmp_path: Path):
+    _project(tmp_path)
+    _location(tmp_path, "DONA_01", timezone="Europe/Madrid")
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"]})
+
+    linked = svc.link_visit(tmp_path, "DONA", "dona_01", "2024-09-04", "13:10:00", "R0001-DONA_01")
+
+    assert linked["deployment_id"] == "R0001-DONA_01" and linked["when"] == "2024-09-04T11:10:00Z"
+    assert _visit_on_disk(tmp_path)[0]["deployment_id"] == "R0001-DONA_01"
+
+
+def test_a_visit_keeps_the_instant_it_was_registered_and_the_one_it_was_last_changed(tmp_path: Path):
+    from unittest.mock import patch
+    from wildintel_uploader.core.services import audit
+    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    visit = {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"], "created_at": "1999-01-01T00:00:00Z"}
+    with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
+        told = svc.write_visit(tmp_path, "DONA", visit)
+    assert (told["created_at"], told["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-01T10:00:00Z")      # what is sent for them is not taken
+
+    # saved again with nothing changed: the dates stay
+    with patch.object(audit, "now", return_value="2026-11-02T10:00:00Z"):
+        same = svc.update_visit(tmp_path, "DONA", "DONA_01", "R0001", {k: v for k, v in told.items() if k not in ("created_at", "updated_at")})
+    assert (same["created_at"], same["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-01T10:00:00Z")
+
+    # edited: it keeps when it was registered, and says when it was changed
+    with patch.object(audit, "now", return_value="2026-11-03T10:00:00Z"):
+        edited = svc.update_visit(tmp_path, "DONA", "DONA_01", "R0001", {**same, "comments": "Moved a metre", "created_at": "2000-02-02T00:00:00Z"})
+    assert (edited["created_at"], edited["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-03T10:00:00Z")
+
+    # what the app changes by itself — the deployment it closed, its state — is a change too
+    with patch.object(audit, "now", return_value="2026-11-04T10:00:00Z"):
+        linked = svc.link_visit(tmp_path, "DONA", "DONA_01", "2024-09-04", "13:10:00", "R0001-DONA_01")
+    assert (linked["created_at"], linked["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-04T10:00:00Z")
+    assert svc.list_visits(tmp_path, "DONA")[0]["updated_at"] == "2026-11-04T10:00:00Z"
+
+
+def test_a_visit_kept_before_the_dates_existed_gets_none_made_up_until_it_changes(tmp_path: Path):
+    from unittest.mock import patch
+    from wildintel_uploader.core.services import audit
+    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    (tmp_path / "DONA" / "visits.json").write_text(json.dumps([{"location_id": "DONA_01", "session": "R0001", "when": "2024-09-04T13:10:00Z", "actions": ["Installation"]}]), encoding="utf-8")
+    assert "created_at" not in svc.list_visits(tmp_path, "DONA")[0]
+    with patch.object(audit, "now", return_value="2026-11-05T10:00:00Z"):
+        edited = svc.update_visit(tmp_path, "DONA", "DONA_01", "R0001", {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"], "comments": "x"})
+    assert edited["updated_at"] == "2026-11-05T10:00:00Z" and "created_at" not in edited
+
+
+def test_a_location_is_deleted_logically_it_is_kept_with_its_deleted_at_and_comes_back_when_it_is_added_again(tmp_path: Path):
+    from unittest.mock import patch
+    from wildintel_uploader.core.services import audit
+    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
+        svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "latitude": 37.0, "longitude": -6.4, "timezone": "Europe/Madrid", "ignore_dst": False})
+    with patch.object(audit, "now", return_value="2026-11-02T10:00:00Z"):
+        assert svc.delete_location(tmp_path, "DONA", "dona_01") == {"deleted": "DONA_01"}
+
+    assert svc.list_locations(tmp_path, "DONA") == []                                              # not listed…
+    kept = svc.list_locations(tmp_path, "DONA", include_deleted=True)
+    assert len(kept) == 1 and kept[0]["deleted_at"] == "2026-11-02T10:00:00Z" and kept[0]["created_at"] == "2026-11-01T10:00:00Z"   # …but kept
+    with pytest.raises(svc.LocalFolderError):
+        svc.update_location(tmp_path, "DONA", "DONA_01", {"name": "x"})                            # a location that was deleted is not changed
+    with pytest.raises(svc.LocalFolderError):
+        svc.delete_location(tmp_path, "DONA", "DONA_01")
+
+    with patch.object(audit, "now", return_value="2026-11-03T10:00:00Z"):
+        back = svc.write_location(tmp_path, "DONA", {"location_id": "dona_01", "latitude": 37.1, "longitude": -6.4, "timezone": "Europe/Madrid", "ignore_dst": False})
+    assert "deleted_at" not in back and back["created_at"] == "2026-11-01T10:00:00Z" and back["updated_at"] == "2026-11-03T10:00:00Z" and back["latitude"] == 37.1
+    assert [l["location_id"] for l in svc.list_locations(tmp_path, "DONA")] == ["dona_01"] and len(svc.list_locations(tmp_path, "DONA", include_deleted=True)) == 1
+
+
+def test_a_visit_made_at_a_location_that_was_deleted_still_says_its_time_in_its_timezone(tmp_path: Path):
+    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.0, "longitude": -6.4})
+    svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"]})
+    # with visits it is not deleted — it is archived; if it is deleted by hand in the file, the visits go on being told in its timezone
+    data = json.loads((tmp_path / "DONA" / "locations.json").read_text(encoding="utf-8"))
+    data[0]["deleted_at"] = "2026-11-02T10:00:00Z"
+    (tmp_path / "DONA" / "locations.json").write_text(json.dumps(data), encoding="utf-8")
+    assert svc.list_visits(tmp_path, "DONA")[0]["time"] == "13:10:00" and svc.list_visits(tmp_path, "DONA")[0]["when"] == "2024-09-04T11:10:00Z"
+
+
+def test_a_research_project_is_deleted_logically_and_comes_back_when_it_is_added_again(tmp_path: Path):
+    from unittest.mock import patch
+    from wildintel_uploader.core.services import audit
+    with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
+        created = svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    assert created["created_at"] == created["updated_at"] == "2026-11-01T10:00:00Z"
+    svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "latitude": 37.0, "longitude": -6.4, "timezone": "UTC", "ignore_dst": False})
+    with patch.object(audit, "now", return_value="2026-11-02T10:00:00Z"):
+        svc.delete_research_project(tmp_path, "DONA")
+
+    assert svc.list_research_projects(tmp_path) == [] and not svc.has_research_project(tmp_path, "DONA")
+    assert [p["acronym"] for p in svc.list_research_projects(tmp_path, include_deleted=True)] == ["DONA"]
+    assert (tmp_path / "DONA" / "locations.json").is_file()                                          # what it had is kept
+    with pytest.raises(svc.LocalFolderError):
+        svc.write_location(tmp_path, "DONA", {"location_id": "DONA_02", "latitude": 37.0, "longitude": -6.4, "timezone": "UTC", "ignore_dst": False})   # nothing is added to a project that was deleted
+
+    with patch.object(audit, "now", return_value="2026-11-03T10:00:00Z"):
+        back = svc.write_research_project(tmp_path, {"name": "Doñana NP", "acronym": "DONA"})
+    assert back["created_at"] == "2026-11-01T10:00:00Z" and back["updated_at"] == "2026-11-03T10:00:00Z" and "deleted_at" not in back
+    assert [l["location_id"] for l in svc.list_locations(tmp_path, "DONA")] == ["DONA_01"]            # with the locations it had

@@ -857,6 +857,54 @@ def test_validate_images_duplicates_is_empty_when_every_image_is_different(tmp_p
     assert svc.validate_images(folder, frozenset({"duplicates"}))["duplicates"] == []
 
 
+def _kept_deployment(root: Path, project: str, collection: str, deployment: str, originals: dict[str, bytes]) -> None:
+    """A deployment already imported into a research project: its preprocessing.json says the SHA-1 of each original."""
+    import hashlib
+    import json
+    folder = root / project / collection / deployment
+    folder.mkdir(parents=True)
+    images = [{"original": name, "name": f"{deployment}__{i}.JPEG", "source_hash": hashlib.sha1(content).hexdigest()} for i, (name, content) in enumerate(originals.items(), 1)]
+    (folder / "preprocessing.json").write_text(json.dumps({"options": {}, "images": images}), encoding="utf-8")
+
+
+def test_validate_images_duplicates_finds_the_images_imported_before_into_the_research_project(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service
+    root = tmp_path / "collections"
+    _kept_deployment(root, "DONA", "R0001", "R0001-DONA_01", {"IMG_0001.JPG": b"first", "IMG_0002.JPG": b"second"})
+    _kept_deployment(root, "OTHER", "R0001", "R0001-OTHER_01", {"IMG_0009.JPG": b"third"})   # another research project: not looked at
+    folder = tmp_path / "card"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"second")   # imported before, as IMG_0002.JPG
+    (folder / "b.jpg").write_bytes(b"third")    # only the other research project has it
+    (folder / "c.jpg").write_bytes(b"new")
+
+    imported = local_folder_service.imported_source_hashes(root, "DONA")
+    result = svc.validate_images(folder, frozenset({"duplicates"}), imported=imported)
+
+    assert result["duplicates_in_project"] == [{"file": "a.jpg", "deployment_id": "R0001-DONA_01", "collection": "R0001", "original": "IMG_0002.JPG"}]
+    assert result["duplicates"] == []   # the folder itself has none
+
+
+def test_validate_images_duplicates_leaves_out_the_deployment_that_is_imported_again(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service
+    root = tmp_path / "collections"
+    _kept_deployment(root, "DONA", "R0001", "R0001-DONA_01", {"IMG_0001.JPG": b"first"})
+    folder = tmp_path / "card"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"first")
+
+    again = local_folder_service.imported_source_hashes(root, "DONA", exclude_deployment="r0001-dona_01")
+
+    assert svc.validate_images(folder, frozenset({"duplicates"}), imported=again)["duplicates_in_project"] == []
+
+
+def test_validate_images_duplicates_says_nothing_of_the_project_without_its_images(tmp_path: Path):
+    (tmp_path / "a.jpg").write_bytes(b"x")
+
+    assert "duplicates_in_project" not in svc.validate_images(tmp_path, frozenset({"duplicates"}))
+    assert svc.validate_images(tmp_path, frozenset({"duplicates"}), imported={})["duplicates_in_project"] == []
+
+
 def test_validate_images_duplicates_only_hashes_files_of_the_same_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (tmp_path / "small.jpg").write_bytes(b"1")
     (tmp_path / "medium.jpg").write_bytes(b"22")
@@ -1042,3 +1090,50 @@ def test_exiftool_path_falls_back_to_the_path_when_nothing_is_bundled(tmp_path: 
     monkeypatch.setattr(camera_info.shutil, "which", lambda _name: "/usr/bin/exiftool")
 
     assert camera_info.exiftool_path() == "/usr/bin/exiftool"
+
+
+# ── the checks against the visit the deployment is of ────────────────────────
+
+def _against(visit, tmp_path: Path, images: int = 2, checks=frozenset({"sd_card", "photo_count"})):
+    for i in range(images):
+        _make_jpeg(tmp_path / f"IMG_{i}.jpg", taken="2024:09:04 10:00:00")
+    return svc.validate_deployment_consistency(tmp_path, _deployment(), checks, visit=visit)
+
+
+def test_the_card_and_the_photos_are_those_the_visit_says(tmp_path: Path):
+    visit = {"left_session": "R0001", "left_sd": "A13", "collected_session": "R0002", "counted_photos": 2, "sd_card": "a13"}
+
+    result = _against(visit, tmp_path)
+
+    assert result["sd_card"] == {"ok": True, "message": "The SD card is a13, the one the visit R0001 left in the camera."}
+    assert result["photo_count"] == {"ok": True, "message": "The folder has 2 photos, as the visit R0002 counted."}
+
+
+def test_another_card_and_missing_photos_fail(tmp_path: Path):
+    visit = {"left_session": "R0001", "left_sd": "A13", "collected_session": "R0002", "counted_photos": 1900, "sd_card": "B2"}
+
+    result = _against(visit, tmp_path)
+
+    assert result["sd_card"] == {"ok": False, "message": "You said the images come from the card B2, but the visit R0001 left A13 in the camera."}
+    assert result["photo_count"] == {"ok": False, "message": "The visit R0002 counted 1,900 photos on the card, and the folder has 2 photos — 1,898 photos missing."}
+
+
+def test_more_photos_than_counted_say_so(tmp_path: Path):
+    result = _against({"collected_session": "R0002", "counted_photos": 1}, tmp_path)
+
+    assert result["photo_count"]["ok"] is False and result["photo_count"]["message"].endswith("— 1 photo more.")
+
+
+def test_what_nobody_said_cannot_be_checked_and_passes(tmp_path: Path):
+    nothing = _against(None, tmp_path)
+    no_card = _against({"left_sd": "A13", "left_session": "R0001"}, tmp_path)
+    no_count = _against({"collected_session": "R0002"}, tmp_path)
+
+    assert nothing["sd_card"]["ok"] and nothing["photo_count"]["ok"]
+    assert no_card["sd_card"]["message"] == "No SD card was said for these images, so the card cannot be checked."
+    assert no_count["photo_count"]["message"] == "The visit R0002 did not count the photos on the card, so the number of photos cannot be checked."
+    assert all(r["ok"] for r in (no_card["sd_card"], no_count["photo_count"]))
+
+
+def test_the_checks_of_the_seal_do_not_include_those_against_the_visit():
+    assert not svc.VISIT_CHECKS & svc.DEPLOYMENT_CHECKS

@@ -359,7 +359,7 @@ def test_a_research_project_starts_with_no_locations_and_gets_them_added(tmp_pat
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         empty = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"})
         saved = _client().post("/api/deployment-import/locations/save", json={
-            "research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Doñana site 1", "timezone": "Europe/Madrid", "trapper_pk": 5},
+            "research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Doñana site 1", "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5, "trapper_pk": 5},
         })
         listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"})
 
@@ -367,21 +367,35 @@ def test_a_research_project_starts_with_no_locations_and_gets_them_added(tmp_pat
     assert saved.status_code == 200
     [location] = listed.json()["results"]
     assert (location["location_id"], location["name"], location["timezone"], location["trapper_pk"]) == ("DONA_01", "Doñana site 1", "Europe/Madrid", 5)
-    assert location["latitude"] is None and location["longitude"] is None  # not known yet
+    assert (location["latitude"], location["longitude"], location["ignore_dst"]) == (37.0, -6.5, False)
 
 
-def test_a_locations_timezone_and_summer_time_can_be_changed_and_belong_to_it(tmp_path: Path):
+def test_a_locations_timezone_and_summer_time_are_fixed_when_it_is_created(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "UTC"}})
-        only_dst = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "dona_01", "ignore_dst": False})
-        both = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "timezone": "Europe/Madrid", "ignore_dst": True})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
+        update = lambda **changes: _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "dona_01", **changes})  # noqa: E731
+        zone = update(timezone="UTC")
+        summer = update(ignore_dst=True)
+        same = update(timezone="Europe/Madrid", ignore_dst=False, name="Site 1")     # saying the same is not changing it
         listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
 
-    assert only_dst.status_code == 200 and (only_dst.json()["timezone"], only_dst.json()["ignore_dst"]) == ("UTC", False)  # the timezone was left alone
-    assert both.status_code == 200
+    assert zone.status_code == 409 and "timezone of a location can't be changed" in zone.json()["detail"]
+    assert summer.status_code == 409 and "summer-time setting" in summer.json()["detail"]
+    assert same.status_code == 200
     [location] = listed
-    assert (location["name"], location["timezone"], location["ignore_dst"]) == ("Site", "Europe/Madrid", True)
+    assert (location["name"], location["timezone"], location["ignore_dst"]) == ("Site 1", "Europe/Madrid", False)
+
+
+def test_a_location_can_be_renamed_moved_and_cleared_of_what_is_not_known_any_more(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "name": "Site", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5, "coordinate_uncertainty": 50}})
+        changed = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "name": "Site 1", "latitude": 37.1, "coordinate_uncertainty": None})
+        bad = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "latitude": 95})
+
+    assert changed.status_code == 200 and bad.status_code == 422
+    assert (changed.json()["name"], changed.json()["latitude"], changed.json()["longitude"], changed.json()["coordinate_uncertainty"]) == ("Site 1", 37.1, -6.5, None)
 
 
 def test_updating_a_location_that_is_not_there_is_a_404_and_a_bad_timezone_a_422(tmp_path: Path):
@@ -392,6 +406,29 @@ def test_updating_a_location_that_is_not_there_is_a_404_and_a_bad_timezone_a_422
 
     assert missing.status_code == 404
     assert bad.status_code == 422
+
+
+def test_a_location_is_deleted_unless_it_has_visits_or_comes_from_trapper(tmp_path: Path):
+    visit = {"location_id": "DONA_02", "session": "R0001", "date": "2026-10-02", "time": "08:14:05", "actions": ["Installation"], "camera_id": "12", "sd": "A13"}
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        for location in ({"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_02", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_03", "trapper_pk": 7, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}):
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": location})
+        from wildintel_uploader.core.services import local_folder_service
+        local_folder_service.write_field_items(tmp_path, "DONA", "cameras", [{"label": "12", "camera_id": "12", "camera_model": None, "research_project": "DONA"}])
+        local_folder_service.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "A13", "research_project": "DONA"}])
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit})
+        free = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "dona_01"})
+        visited = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "DONA_02"})
+        trapper = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "DONA_03"})
+        missing = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "NOPE"})
+        listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
+
+    assert free.status_code == 200 and free.json() == {"deleted": "DONA_01"}
+    assert visited.status_code == 409 and "1 visit" in visited.json()["detail"]
+    assert trapper.status_code == 409 and "Trapper" in trapper.json()["detail"]
+    assert missing.status_code == 404
+    assert [l["location_id"] for l in listed] == ["DONA_02", "DONA_03"]
 
 
 def test_the_next_revision_is_asked_by_research_project_and_location(tmp_path: Path):
@@ -408,29 +445,43 @@ def test_the_next_revision_is_asked_by_research_project_and_location(tmp_path: P
 def test_a_location_id_is_unique_within_its_research_project(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        body = {"research_project_id": "DONA", "location": {"location_id": "DONA_01"}}
+        body = {"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}}
         assert _client().post("/api/deployment-import/locations/save", json=body).status_code == 200
-        again = _client().post("/api/deployment-import/locations/save", json={**body, "location": {"location_id": "dona_01"}})
+        again = _client().post("/api/deployment-import/locations/save", json={**body, "location": {"location_id": "dona_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
 
     assert again.status_code == 409
 
 
 def test_a_location_needs_its_research_project_to_be_there(tmp_path: Path):
     with _in(tmp_path):
-        response = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "NOPE", "location": {"location_id": "X_01"}})
+        response = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "NOPE", "location": {"location_id": "X_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
 
     assert response.status_code == 400
     assert "isn't in the collections folder" in response.json()["detail"]
 
 
-def test_a_location_timezone_must_be_a_known_one_and_a_blank_one_is_none(tmp_path: Path):
+def test_a_location_timezone_must_be_a_known_one_and_cannot_be_left_blank(tmp_path: Path):
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        bad = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_01", "timezone": "Mars/Olympus"}})
-        blank = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_02", "timezone": ""}})
+        place = {"ignore_dst": False, "latitude": 37.0, "longitude": -6.5}
+        bad = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_01", "timezone": "Mars/Olympus", **place}})
+        blank = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_02", "timezone": "", **place}})
+        absent = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "A_03", **place}})
 
-    assert bad.status_code == 422
-    assert blank.status_code == 200 and blank.json()["timezone"] is None
+    # a location always says its clock: the timezone, the summer time and where it is
+    assert bad.status_code == blank.status_code == absent.status_code == 422
+
+
+def test_a_location_always_says_where_it_is_and_if_its_cameras_follow_summer_time(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        full = {"location_id": "A_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}
+        refused = [
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {k: v for k, v in full.items() if k != missing}}).status_code
+            for missing in ("latitude", "longitude", "ignore_dst")
+        ]
+
+    assert refused == [422, 422, 422]
 
 
 def test_locations_of_a_research_project_id_that_is_not_a_folder_name_are_refused(tmp_path: Path):
@@ -445,11 +496,11 @@ def test_a_location_keeps_its_coordinates_within_the_standards_ranges(tmp_path: 
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         saved = _client().post("/api/deployment-import/locations/save", json={
             "research_project_id": "DONA",
-            "location": {"location_id": "DONA_01", "latitude": 37.0, "longitude": -6.5, "coordinate_uncertainty": 100},
+            "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5, "coordinate_uncertainty": 100},
         })
         listed = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"})
         bad = [
-            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"X_{i}", **coords}}).status_code
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": f"X_{i}", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5, **coords}}).status_code
             for i, coords in enumerate([{"latitude": 91}, {"longitude": -181}, {"coordinate_uncertainty": 0}])
         ]
 
@@ -481,6 +532,30 @@ def test_validate_images_accepts_the_exif_and_duplicates_checks(tmp_path: Path):
     body = response.json()
     assert body["duplicates"] == [{"size": (tmp_path / "a.jpg").stat().st_size, "files": ["a.jpg", "copy.jpg"]}]
     assert body["exif_missing"]["date"]["count"] == 0 and body["exif_missing"]["camera_model"]["count"] == 2
+
+
+def test_validate_images_looks_for_the_images_imported_before_into_the_research_project(tmp_path: Path):
+    import hashlib
+    import json
+    data_dir = tmp_path / "collections"
+    kept = data_dir / "DONA" / "R0001" / "R0001-DONA_01"
+    kept.mkdir(parents=True)
+    (kept / "preprocessing.json").write_text(json.dumps({"images": [{"original": "IMG_0001.JPG", "source_hash": hashlib.sha1(b"seen before").hexdigest()}]}), encoding="utf-8")
+    folder = tmp_path / "card"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"seen before")
+    (folder / "b.jpg").write_bytes(b"new")
+    payload = {"path": str(folder), "checks": ["duplicates"], "research_project_id": "DONA"}
+
+    with patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=data_dir):
+        response = _client().post("/api/deployment-import/validate-images", json=payload)
+        elsewhere = _client().post("/api/deployment-import/validate-images", json={**payload, "deployment_id": "R0001-DONA_01"})
+        alone = _client().post("/api/deployment-import/validate-images", json={"path": str(folder), "checks": ["duplicates"]})
+
+    assert response.status_code == 200
+    assert response.json()["duplicates_in_project"] == [{"file": "a.jpg", "deployment_id": "R0001-DONA_01", "collection": "R0001", "original": "IMG_0001.JPG"}]
+    assert elsewhere.json()["duplicates_in_project"] == []   # that deployment is the one imported again
+    assert "duplicates_in_project" not in alone.json()       # no research project, nothing to look in
 
 
 def test_validate_deployment_takes_the_collection_the_location_and_the_tolerance(tmp_path: Path):
@@ -610,9 +685,40 @@ def test_timestamp_log_writes_the_deployments_row_in_its_collection(tmp_path: Pa
 
     log = tmp_path / "DONA" / "R0003" / "R0003_FileTimestampLog.csv"
     assert response.status_code == 200
-    assert response.json() == {"path": str(log), "action": "added", "rows": 1, "collection": "R0003"}
+    fieldwork = tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv"
+    assert response.json() == {"path": str(log), "action": "added", "rows": 1, "collection": "R0003",
+                               "fieldwork_log": {"path": str(fieldwork), "action": "added", "rows": 1}}
     # The camera's wall-clock time: the designators (+02:00, +01:00) are dropped, not converted.
     assert log.read_text(encoding="utf-8-sig").splitlines()[1] == "r0003-dona_0007_b,2024:09:04,13:10:00,2024:11:04,14:28:00"
+
+
+def test_timestamp_log_writes_the_deployments_row_in_the_fieldwork_log_too_in_utc(tmp_path: Path):
+    payload = _log_payload(setup_by="Ana", camera_id="P800", camera_height=1.2, bait_use=True, tags=["forest", "pine"], comments="Near the pond")
+    payload["visits"] = {"left_session": "R0003", "left_action": "Revision", "collected_session": "R0004", "collected_action": "Revision",
+                         "counted_photos": 241, "sd_card": "A13", "left_sd": "B2"}
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/timestamp-log", json=payload)
+
+    lines = (tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv").read_text(encoding="utf-8-sig").splitlines()
+    header, row = lines[0].split(","), dict(zip(lines[0].split(","), next(__import__("csv").reader([lines[1]]))))
+    assert header[:6] == ["deploymentID", "locationID", "deploymentStart", "deploymentEnd", "setupBy", "cameraID"]
+    assert row["deploymentID"] == "R0003-DONA_0007_B"
+    assert (row["deploymentStart"], row["deploymentEnd"]) == ("2024-09-04T11:10:00Z", "2024-11-04T13:28:00Z")  # the designators, converted to UTC
+    assert (row["setupBy"], row["cameraID"], row["cameraHeight"], row["baitUse"]) == ("Ana", "P800", "1.2", "true")
+    assert (row["deploymentTags"], row["deploymentComments"], row["status"], row["collection"]) == ("forest | pine", "Near the pond", "closed", "R0003")
+    assert (row["cardSD"], row["photosCounted"]) == ("A13", "241")
+    assert (row["startSession"], row["startAction"], row["endSession"], row["endAction"]) == ("R0003", "Revision", "R0004", "Revision")
+
+
+def test_the_fieldwork_log_keeps_the_other_deployments_rows_and_replaces_its_own(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_01"))
+        _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_02"))
+        again = _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_01", habitat="Pine forest"))
+
+    log = tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv"
+    assert again.json()["fieldwork_log"]["action"] == "updated" and again.json()["fieldwork_log"]["rows"] == 2
+    assert "Pine forest" in log.read_text(encoding="utf-8-sig") and log.read_text(encoding="utf-8-sig").count("R0003-DONA_0") == 2
 
 
 def test_timestamp_log_says_updated_then_unchanged(tmp_path: Path):
@@ -898,3 +1004,110 @@ def test_preprocess_needs_to_be_told_what_to_do_and_consolidate_needs_something_
     assert _client().post("/api/deployment-import/consolidate", json=payload).status_code == 400
     del payload["preprocessing"]
     assert _client().post("/api/deployment-import/preprocess", json=payload).status_code == 400
+
+
+def test_the_status_of_a_location_and_of_a_research_project_is_kept_and_defaults_to_active(tmp_path: Path):
+    with _in(tmp_path):
+        project = _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "status": "planned"})
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
+        archived = _client().post("/api/deployment-import/locations/update", json={
+            "research_project_id": "DONA", "location_id": "DONA_01", "status": "archived", "status_date": "2026-06-01", "status_note": "the road was closed",
+        })
+        # a null status (the field left blank) changes nothing
+        same = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": None, "name": "Site"})
+        wrong = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "stolen"})
+        bad_day = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status_date": "June"})
+
+    assert project.json()["status"] == "planned"
+    assert (archived.json()["status"], archived.json()["status_date"], archived.json()["status_note"]) == ("archived", "2026-06-01", "the road was closed")
+    assert (same.json()["status"], same.json()["name"]) == ("archived", "Site")
+    assert wrong.status_code == 422 and bad_day.status_code == 422
+
+
+def test_a_research_project_starts_active_and_a_location_ready_to_have_a_camera(tmp_path: Path):
+    with _in(tmp_path):
+        project = _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        location = _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
+
+    assert project.json()["status"] == "active" and location.json()["status"] == "ready"
+
+
+def test_a_research_project_can_be_changed_but_not_renamed(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "keywords": "wetland"})
+        changed = _client().post("/api/deployment-import/research-projects/update", json={"acronym": "DONA", "name": "Doñana NP", "status": "finished"})
+        bad = _client().post("/api/deployment-import/research-projects/update", json={"acronym": "DONA", "status": "stolen"})
+        missing = _client().post("/api/deployment-import/research-projects/update", json={"acronym": "NOPE", "name": "x"})
+        listed = _client().post("/api/deployment-import/research-projects/list").json()["results"]
+
+    assert changed.status_code == 200 and bad.status_code == 422 and missing.status_code == 404
+    [project] = listed
+    assert (project["acronym"], project["name"], project["status"], project["keywords"]) == ("DONA", "Doñana NP", "finished", "wetland")  # the rest stayed
+
+
+def test_a_research_project_is_deleted_logically_unless_it_holds_collections(tmp_path: Path):
+    with _in(tmp_path):
+        for acronym in ("DONA", "TATR"):
+            _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "acronym": acronym})
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": acronym, "location": {"location_id": f"{acronym}_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
+        (tmp_path / "TATR" / "R0001").mkdir()
+        kept = _client().post("/api/deployment-import/research-projects/delete", json={"research_project_id": "TATR"})
+        gone = _client().post("/api/deployment-import/research-projects/delete", json={"research_project_id": "DONA"})
+        again = _client().post("/api/deployment-import/research-projects/delete", json={"research_project_id": "DONA"})
+        listed = _client().post("/api/deployment-import/research-projects/list").json()["results"]
+
+    assert kept.status_code == 409 and "R0001" in kept.json()["detail"]
+    assert gone.status_code == 200 and again.status_code == 404
+    assert [p["acronym"] for p in listed] == ["TATR"] and (tmp_path / "TATR" / "R0001").is_dir()
+    # nothing is deleted for good: the project that was deleted is kept, with when — it is only not listed
+    kept = json.loads((tmp_path / "DONA" / "research_project.json").read_text(encoding="utf-8"))
+    assert kept["deleted_at"] and kept["created_at"] and (tmp_path / "DONA" / "locations.json").is_file()
+
+
+def test_validate_deployment_takes_the_visit_for_the_card_and_the_photos(tmp_path: Path):
+    _make_jpeg(tmp_path / "IMG_0001.jpg", "2024:09:04 12:00:00")
+    payload = {
+        "path": str(tmp_path),
+        "deployment": {
+            "deployment_id": "R0003-DONA_01", "start_date": "2024-09-04T10:00:00+02:00", "end_date": "2024-09-10T10:00:00+02:00",
+            "latitude": 37.0, "longitude": -6.5,
+        },
+        "checks": ["sd_card", "photo_count"],
+        "visit": {"left_session": "R0002", "left_sd": "7B", "collected_session": "R0003", "counted_photos": 1900, "sd_card": "1B"},
+    }
+
+    response = _client().post("/api/deployment-import/validate-deployment", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sd_card"]["ok"] is False and "left 7B" in body["sd_card"]["message"]
+    assert body["photo_count"]["ok"] is False and "1,899 photos missing" in body["photo_count"]["message"]
+
+
+def test_log_entry_gives_what_the_collections_logs_say_of_a_deployment(tmp_path: Path):
+    payload = _log_payload(setup_by="Ana", camera_id="P800", camera_height=1.2, bait_use=True, tags=["forest", "pine"])
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/timestamp-log", json=payload)
+        found = _client().get("/api/deployment-import/log-entry", params={"research_project_id": "DONA", "deployment_id": "R0003-DONA_0007_B"})
+        other = _client().get("/api/deployment-import/log-entry", params={"research_project_id": "DONA", "deployment_id": "R0003-DONA_0008_B"})
+
+    assert found.status_code == 200
+    body = found.json()
+    assert body["collection"] == "R0003"
+    assert body["timestamps"] == {"start": "2024-09-04T13:10:00", "end": "2024-11-04T14:28:00"}
+    assert body["fieldwork"]["details"] == {"setup_by": "Ana", "camera_id": "P800", "camera_height": 1.2, "bait_use": True, "tags": ["forest", "pine"]}
+    assert other.json()["timestamps"] is None and other.json()["fieldwork"] is None
+
+
+def test_a_archived_location_never_goes_back_to_active_or_planned(tmp_path: Path):
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}})
+        archived = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "archived", "status_note": "Repeated thefts"})
+        back = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "active"})
+        planned = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "planned"})
+        renamed = _client().post("/api/deployment-import/locations/update", json={"research_project_id": "DONA", "location_id": "DONA_01", "status": "archived", "status_note": "Stolen twice"})
+
+    assert archived.status_code == 200
+    assert back.status_code == planned.status_code == 409 and "archived for good" in back.json()["detail"]
+    assert renamed.status_code == 200 and renamed.json()["status_note"] == "Stolen twice"  # what says why may be said better; the status stays

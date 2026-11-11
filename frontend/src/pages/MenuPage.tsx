@@ -1,11 +1,10 @@
-import OptionCards from '../components/OptionCards'
-import type { Option } from '../components/OptionCards'
+import TaskCard, { ArrowIcon, LineIcon, MENU_ICONS as ICONS, taskCard } from '../components/TaskCard'
 import type { Task } from '../types'
 
-const TASK_OPTIONS: Option<Task>[] = [
-  { value: 'deployment', emoji: '📷', title: 'Import deployment', description: 'Organize a folder of camera-trap images locally, then register the deployment in Trapper.', available: true },
-  { value: 'session', emoji: '🗂️', title: 'Import session', description: 'A folder with one subfolder per deployment: the revision, the checks and the preprocessing are common, the location and dates are asked for each.', available: true },
-  { value: 'upload', emoji: '☁️', title: 'Upload deployment to Trapper', description: 'Pick a collection kept locally and send a deployment to Trapper — creating its location and the deployment there if they are missing.', available: true },
+const TASKS: { value: Task; icon: string; title: string; description: string }[] = [
+  { value: 'visits', icon: 'visits', title: 'Manage visits', description: 'Register the visits to the camera traps — who went, when, to which site and what was done — or look at the visit book. The deployments are worked out from the visits.' },
+  { value: 'deployment', icon: 'deployment', title: 'Manage deployments', description: 'Import a folder of camera-trap images as a deployment, or see the status of the deployments: which are closed, which still have the camera out and which are on Trapper.' },
+  { value: 'upload', icon: 'upload', title: 'Manage uploads', description: 'Send a deployment kept on this computer to Trapper, or see the status of the uploads: which deployments and revisions are on Trapper and which are still to be uploaded.' },
 ]
 
 interface Props {
@@ -14,17 +13,19 @@ interface Props {
 
 export default function MenuPage({ onChoose }: Props) {
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <h1 className="text-2xl font-bold mb-1">What do you want to do?</h1>
       <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">Choose one of the following.</p>
-      <OptionCards options={TASK_OPTIONS} selected={null} onChoose={onChoose} />
-      <button
-        type="button" onClick={() => onChoose('utils')}
-        className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-      >
-        <span className="text-lg">🧰</span>
-        <strong>Utils</strong>
-        <span className="text-zinc-500 dark:text-zinc-400">— repair local deployments, sync local collections</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {TASKS.map((t) => <TaskCard key={t.value} icon={ICONS[t.icon]} title={t.title} description={t.description} onClick={() => onChoose(t.value)} />)}
+      </div>
+      <button type="button" onClick={() => onChoose('utils')} className={`${taskCard} mt-4 w-full flex items-center gap-4 px-5 py-4 text-left`}>
+        <span className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 shrink-0"><LineIcon>{ICONS.utils}</LineIcon></span>
+        <span className="flex-1 min-w-0">
+          <strong className="block text-sm text-zinc-900 dark:text-zinc-100">Utils</strong>
+          <span className="block text-xs text-zinc-500 dark:text-zinc-400">Fix dates, repair local deployments, sync local collections.</span>
+        </span>
+        <span className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-sm font-medium text-zinc-800 dark:text-zinc-200 shrink-0">Open utilities <ArrowIcon /></span>
       </button>
     </div>
   )

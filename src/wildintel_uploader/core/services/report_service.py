@@ -3,7 +3,7 @@ screen shows of it and what can be downloaded to look at it in detail afterwards
 
 A report is a JSON file in config.reports_dir():
 
-    {"id", "kind": "validation" | "postvalidation" | "preprocessing" | "repair" | "upload", "title", "created_at", "source_dir",
+    {"id", "kind": "validation" | "postvalidation" | "preprocessing" | "repair" | "upload" | "visits", "title", "created_at", "source_dir",
      "deployment_id", "parameters", "checked",
      "checks": {check: {"label", "scope": "images" | "deployment", "ok", "failed"}},
      "totals": {"entries", "ok", "failed", "images_with_issues"},
@@ -26,17 +26,18 @@ from typing import Iterable
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.core.services import deployment_import_service as dis
 
-KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload")
+KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload", "visits")
 DEPLOYMENT = "(deployment)"
 CSV_COLUMNS = ("identifier", "check", "status", "message")
 
-_ID = re.compile(r"^\d{8}-\d{6}_(validation|postvalidation|preprocessing|repair|upload)_[0-9A-Za-z_.-]*$")
+_ID = re.compile(r"^\d{8}-\d{6}_(validation|postvalidation|preprocessing|repair|upload|visits)_[0-9A-Za-z_.-]*$")
 
 LABELS = {
     "corrupted": "Corrupted images", "sequence": "Shooting order vs. filename sequence", "structure": "Folder structure",
     "camera": "Camera", "exif": "Required EXIF fields", "duplicates": "Duplicate images",
     "deployment_id": "Deployment id format", "collection_prefix": "Deployment id starts with its collection",
     "collection_name": "Collection name", "location": "The id's location is the one chosen", "time_range": "Image dates fit the deployment",
+    "sd_card": "The SD card is the visit's", "photo_count": "Number of photos is the visit's",
     "image_count": "Number of images", "sequence_count": "Number of sequences", "sequence_length": "Length of the sequences",
     "preprocessing": "Preprocessing",
     "metadata_files": "Metadata files", "camera_match": "The camera is the deployment's",
@@ -131,6 +132,9 @@ def validation_report(found: dict, source: Path, checks: Iterable[str] | None = 
                     tags={name: ", ".join(f"No {field}" if i == 0 else f"no {field}" for i, field in enumerate(fields)) for name, fields in missing.items()})
     if "duplicates" in ran:
         problems = {name: "same content as " + ", ".join(f for f in g["files"] if f != name) for g in found.get("duplicates", []) for name in g["files"]}
+        for before in found.get("duplicates_in_project", []):   # the images imported before into the research project
+            there = f"already imported into {before['deployment_id']}" + (f" as {before['original']}" if before.get("original") else "")
+            problems[before["file"]] = f"{problems[before['file']]}; {there}" if before["file"] in problems else there
         b.per_image("duplicates", images, problems, "no other image has the same content", tag="Duplicate")
     if "structure" in ran:
         folders = found.get("subdirectories", [])
@@ -149,7 +153,7 @@ def postvalidation_report(result: dict, deployment_id: str, source: Path, parame
     images = images_of(source)
     b = _Builder("postvalidation", f"Postvalidation of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters=parameters or {})
     b.checked = result.get("checked_count", len(images))
-    for check in ("deployment_id", "collection_prefix", "collection_name", "location", "image_count", "sequence_count", "sequence_length"):
+    for check in ("deployment_id", "collection_prefix", "collection_name", "location", "sd_card", "photo_count", "image_count", "sequence_count", "sequence_length"):
         item = result.get(check)
         if isinstance(item, dict):
             b.deployment(check, bool(item.get("ok")) or bool(item.get("skipped")), item.get("message", ""))
@@ -222,6 +226,40 @@ def upload_report(collection: str, research_project: str, items: list[dict], *, 
     return b.build()
 
 
+def visits_import_report(research_project_id: str, result: dict, saved: int) -> dict:
+    """The report of an import of visits: an entry for each row of the file — what became of it, and why — then what was odd about the visits, what was worth knowing,
+    what the import created and the sites that are not locations. `result` is what visits_csv.parse_visits gave (with the folder's changes told by `saved`)."""
+    b = _Builder("visits", f"Visits imported to {research_project_id}", source_dir=None, deployment_id=None,
+                 parameters={"research_project": research_project_id, "saved": saved, "skipped": result.get("skipped", 0), "history": result.get("history", 0)})
+    rows = result.get("rows", [])
+    b.checked = len(rows)
+    for r in rows:
+        where = " · ".join(str(x) for x in (r.get("site"), r.get("session"), f"{r['date']} {r['time']}" if r.get("date") else None) if x)
+        label = r.get("label") or "Visit to add"
+        identifier = f"Row {r['row']}" + (f" · {where}" if where else "")
+        b.add(identifier, label, r["result"] in ("ok", "already_kept", "ignored"), r.get("message") or "The visit is added.", scope="deployment")
+        for warning in r.get("warnings", []):  # what is odd in the row, told in it
+            b.add(identifier, "Things to check", False, warning, scope="deployment")
+    for p in result.get("problems", []):
+        if p.get("history"):
+            b.add(f"History row {p['row']}", "History of visits", False, p["message"], scope="deployment")
+    for site in result.get("new_sites", []):
+        near = site.get("nearest")
+        b.add(site["site"], "Site is not a location", False,
+              f"{site['visits']} visit(s) held; nearest location {near['location_id'] + ' at ' + str(near['distance_m']) + ' m' if near else 'unknown'}"
+              f"{'; one character apart from ' + ', '.join(site['similar']) if site.get('similar') else ''}.", scope="deployment")
+    # what is odd and is not about a row of the file — all of it, when the result does not tell the rows
+    for warning in (result.get("loose_warnings", []) if rows else result.get("warnings", [])):
+        b.add("(import)", "Things to check", False, warning, scope="deployment")
+    for note in result.get("notes", []):
+        b.add("(import)", "Worth knowing", True, note, scope="deployment")
+    made = result.get("create") or {}
+    for kind, name, key in (("locations", "location", "location_id"), ("cameras", "camera", "camera_id"), ("sd_cards", "SD card", "label")):
+        for entity in made.get(kind, []):
+            b.add(f"{name} {entity.get(key)}", "Created", True, f"The {name} {entity.get(key)} was created with the visits." if saved else f"The {name} {entity.get(key)} would be created.", scope="deployment")
+    return b.build()
+
+
 # ── keeping ──────────────────────────────────────────────────────────────────
 
 def _slug(text: str) -> str:
@@ -233,7 +271,7 @@ def save(report: dict, root: Path | None = None) -> str:
     root = root or config.reports_dir()
     root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    name = _slug(report.get("deployment_id") or Path(report.get("source_dir") or "").name or report["kind"])
+    name = _slug(report.get("deployment_id") or Path(report.get("source_dir") or "").name or (report["parameters"]["research_project"] if report["kind"] == "visits" else report["kind"]))
     report_id, n = f"{stamp}_{report['kind']}_{name}", 1
     while (root / f"{report_id}.json").exists():
         n += 1

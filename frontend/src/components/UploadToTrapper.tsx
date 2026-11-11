@@ -147,8 +147,10 @@ function Pill({ children, tone }: { children: ReactNode; tone: 'green' | 'grey' 
 }
 
 /** What was sent, once the upload has ended — whether it all went well or not. */
-export function UploadedToTrapper({ collection, researchProject, items, startedAt, finishedAt, reportId, onMore, filesNote }: {
+export function UploadedToTrapper({ collection, researchProject, items, startedAt, finishedAt, reportId, onMore, onBack, filesNote }: {
   collection: string; researchProject: string; items: UploadItem[]; startedAt: number; finishedAt: number; onMore: () => void
+  /** Back to the start: the way out, as when a visit or a deployment is added. */
+  onBack?: () => void
   /** The report kept of this upload, once it is. */
   reportId?: string | null
   /** What became of the package files — deleted, or kept where. */
@@ -255,8 +257,8 @@ export function UploadedToTrapper({ collection, researchProject, items, startedA
             {[
               { name: researchProject, kind: 'Research project', pill: <Pill tone="grey">Already there</Pill> },
               ...(locations.length ? [{ name: locations.join(', '), kind: locations.length === 1 ? 'Location' : 'Locations', pill: locationsCreated.size === 0 ? <Pill tone="grey">Already there</Pill> : <Pill tone="green">Created</Pill> }] : []),
-              { name: collection, kind: 'Collection', pill: <Pill tone="blue">Sent</Pill> },
               ...sent.map((i) => ({ name: i.id, kind: 'Deployment', pill: i.deploymentCreated ? <Pill tone="green">Created</Pill> : <Pill tone="grey">Already there</Pill> })),
+              { name: collection, kind: 'Revision', pill: <Pill tone="blue">Sent</Pill> },
             ].map((row) => (
               <li key={`${row.kind}-${row.name}`} className="flex items-center gap-3 px-5 py-3">
                 <span className="flex-1 min-w-0">
@@ -270,9 +272,12 @@ export function UploadedToTrapper({ collection, researchProject, items, startedA
         </>
       )}
 
-      <div className="flex justify-between items-center">
-        <button type="button" className={btnOutline} onClick={onMore}>Upload more deployments</button>
-        {collectionUrl && <a className={`${btnPrimary} inline-flex items-center gap-2`} href={collectionUrl} target="_blank" rel="noreferrer">Open in Trapper<span aria-hidden="true">↗</span></a>}
+      {/* what happens next is asked as it is when a visit or a deployment is added: the question, then the options — one of them the main one */}
+      <div className="flex flex-wrap items-center gap-3" role="group" aria-label="What next">
+        <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to upload more deployments?</p>
+        {collectionUrl && <a className={`${btnOutline} inline-flex items-center gap-2`} href={collectionUrl} target="_blank" rel="noreferrer">Open in Trapper<span aria-hidden="true">↗</span></a>}
+        <button type="button" className={btnPrimary} onClick={onMore}>Upload more deployments</button>
+        {onBack && <button type="button" className={btnOutline} onClick={onBack}>Back to the start</button>}
       </div>
     </div>
   )

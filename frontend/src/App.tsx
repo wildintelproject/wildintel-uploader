@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ImportDeploymentPage from './pages/ImportDeploymentPage'
-import ImportSessionPage from './pages/ImportSessionPage'
+import ImportDeploymentsPage from './pages/ImportDeploymentsPage'
+import UploadsHomePage from './pages/UploadsHomePage'
+import type { UploadsView } from './pages/UploadsHomePage'
+import UploadStatusPage from './pages/UploadStatusPage'
 import MenuPage from './pages/MenuPage'
 import RepairPage from './pages/RepairPage'
 import ResumeSessionsPage from './pages/ResumeSessionsPage'
@@ -10,9 +13,14 @@ import SettingsPage from './pages/SettingsPage'
 import SyncCollectionsPage from './pages/SyncCollectionsPage'
 import UploadDeploymentPage from './pages/UploadDeploymentPage'
 import UtilsPage from './pages/UtilsPage'
+import VisitsHomePage from './pages/VisitsHomePage'
+import DeploymentsHomePage from './pages/DeploymentsHomePage'
+import DeploymentStatusPage from './pages/DeploymentStatusPage'
+import type { VisitFocus } from './pages/VisitBookPage'
+import type { DeploymentsView } from './pages/DeploymentsHomePage'
 import WelcomePage from './pages/WelcomePage'
 import { api } from './api'
-import type { SessionSummary, Task, UploadTarget } from './types'
+import type { ClosedVisitTarget, SessionSummary, Task, UploadTarget } from './types'
 
 export default function App() {
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
@@ -30,12 +38,26 @@ export default function App() {
   // hidden) — so a run in progress isn't lost.
   const [settingsOpen, setSettingsOpen] = useState(false)
   // The section the settings open on, when something sends the user to one in particular.
-  const [settingsSection, setSettingsSection] = useState<'epicollect' | undefined>(undefined)
-  function openSettings(section?: 'epicollect') { setSettingsSection(section); setSettingsOpen(true) }
+  const [settingsSection, setSettingsSection] = useState<'general' | 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations' | undefined>(undefined)
+  const [settingsProject, setSettingsProject] = useState<string | undefined>(undefined)
+  // The SD card or the camera whose page the settings open on.
+  const [settingsItem, setSettingsItem] = useState<string | undefined>(undefined)
+  function openSettings(section?: 'general' | 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations', researchProjectId?: string, item?: string) { setSettingsSection(section); setSettingsProject(researchProjectId); setSettingsItem(item); setSettingsOpen(true) }
   // Back on the welcome screen by the title: it is shown ahead of anything else until "Get Started" is pressed again.
   const [home, setHome] = useState(false)
   // Where the upload page starts from, when it is reached from a finished import.
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null)
+  // The visit Import deployment starts from, when it is reached from the visits page, right after one was closed.
+  const [closedVisitTarget, setClosedVisitTarget] = useState<ClosedVisitTarget | null>(null)
+  // Import deployment opened on a research project, to pick the revision whose visits were just closed.
+  const [importProjectId, setImportProjectId] = useState<string | null>(null)
+  // What Manage deployments shows: its options (none), the import or the status — on a deployment when a link of the visit book sent the user to it.
+  const [uploadsView, setUploadsView] = useState<UploadsView | null>(null)
+  const [deploymentsView, setDeploymentsView] = useState<DeploymentsView | null>(null)
+  const [visitFocus, setVisitFocus] = useState<VisitFocus | undefined>(undefined)
+  const [deploymentFocus, setDeploymentFocus] = useState<string | undefined>(undefined)
+  // the deployment whose uploads the uploads dashboard starts on
+  const [uploadSearch, setUploadSearch] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     let cancelled = false
@@ -61,11 +83,30 @@ export default function App() {
   }, [])
 
   function goHome() {
-    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setMenuShown(false); setHome(true)
+    setSettingsOpen(false); setTask(null); setResumeSession(null); setUploadTarget(null); setClosedVisitTarget(null); setImportProjectId(null); setDeploymentsView(null); setUploadsView(null); setDeploymentFocus(undefined); setUploadSearch(undefined); setVisitFocus(undefined); setMenuShown(false); setHome(true)
+  }
+
+  function goToImportOfVisit(target: ClosedVisitTarget) {
+    setClosedVisitTarget(target); setDeploymentsView('import'); setTask('deployment')
+  }
+
+  function goToImportOfProject(researchProjectId: string) {
+    setImportProjectId(researchProjectId); setDeploymentsView('import'); setTask('deployment')
+  }
+
+  function goToDeploymentStatus(deploymentId: string) {
+    setDeploymentFocus(deploymentId); setDeploymentsView('status'); setTask('deployment')
+  }
+
+  function goToUploadStatus(deploymentId: string) {
+    setUploadSearch(deploymentId); setUploadsView('status'); setTask('upload')
+  }
+  function goToVisit(target: VisitFocus) {
+    setVisitFocus(target); setTask('visits')
   }
 
   function goToUpload(target: UploadTarget) {
-    setUploadTarget(target); setTask('upload')
+    setUploadTarget(target); setUploadsView('upload'); setTask('upload')
   }
 
   const showResumeScreen = !task && !menuShown && !home && unfinishedSessions !== null && unfinishedSessions.length > 0
@@ -79,20 +120,35 @@ export default function App() {
         </div>
       )}
       <main className="flex-1">
-        {settingsOpen && <SettingsPage initialSection={settingsSection} onClose={() => setSettingsOpen(false)} />}
+        {settingsOpen && <SettingsPage initialSection={settingsSection} initialProject={settingsProject} initialItem={settingsItem} onClose={() => setSettingsOpen(false)} />}
         <div className={settingsOpen ? 'hidden' : ''}>
           {task === 'deployment'
-            ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
+            ? (resumeSession || closedVisitTarget || deploymentsView === 'import')
+              ? <ImportDeploymentPage resumeSession={resumeSession ?? undefined} closedVisit={closedVisitTarget ?? undefined} researchProject={importProjectId ?? undefined} onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings}
+                                      onDeploymentsMenu={() => { setClosedVisitTarget(null); setImportProjectId(null); setResumeSession(null); setDeploymentsView(null) }}
+                                      onMainMenu={() => { setClosedVisitTarget(null); setImportProjectId(null); setResumeSession(null); setDeploymentsView(null); setTask(null) }}
+                                      onBack={() => { setClosedVisitTarget(null); setImportProjectId(null); setResumeSession(null); if (closedVisitTarget || importProjectId || resumeSession) { setDeploymentsView(null); setTask(null) } else setDeploymentsView(null) }} />
+              : deploymentsView === 'many'
+                ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setDeploymentsView(null)} />
+              : deploymentsView === 'status'
+                ? <DeploymentStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} focus={deploymentFocus} onShowVisit={goToVisit} onUpload={goToUpload} onShowUploads={goToUploadStatus} onImportImages={goToImportOfVisit} onBack={() => { setDeploymentsView(null); setDeploymentFocus(undefined) }} />
+                : <DeploymentsHomePage onChoose={setDeploymentsView} onBack={() => setTask(null)} />
             : task === 'session'
-              ? <ImportSessionPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
+              ? <ImportDeploymentsPage onUpload={goToUpload} settingsOpen={settingsOpen} onOpenSettings={openSettings} onBack={() => setTask(null)} />
               : task === 'upload'
-              ? <UploadDeploymentPage initial={uploadTarget ?? undefined} onOpenSettings={() => openSettings()} onBack={() => setTask(null)} />
+              ? (uploadsView === 'upload' || uploadTarget || resumeSession)
+                ? <UploadDeploymentPage initial={uploadTarget ?? undefined} onOpenSettings={() => openSettings()} onBack={() => { setUploadTarget(null); if (uploadsView === 'upload' && !resumeSession) setUploadsView(null); else setTask(null) }} />
+                : uploadsView === 'status'
+                  ? <UploadStatusPage settingsOpen={settingsOpen} onOpenSettings={openSettings} onShowVisit={goToVisit} onShowDeployment={goToDeploymentStatus} onUpload={goToUpload} search={uploadSearch} onBack={() => { setUploadsView(null); setUploadSearch(undefined) }} />
+                  : <UploadsHomePage onChoose={setUploadsView} onBack={() => setTask(null)} />
               : task === 'utils'
-              ? <UtilsPage onBack={() => setTask(null)} />
+              ? <UtilsPage onBack={() => setTask(null)} onOpenSettings={openSettings} settingsOpen={settingsOpen} />
               : task === 'sync'
               ? <SyncCollectionsPage onBack={() => setTask(null)} />
               : task === 'repair'
               ? <RepairPage onBack={() => setTask(null)} />
+              : task === 'visits'
+              ? <VisitsHomePage settingsOpen={settingsOpen} onOpenSettings={openSettings} onImportImages={goToImportOfVisit} onImportImagesOf={goToImportOfProject} onShowDeployment={goToDeploymentStatus} focusVisit={visitFocus} onBack={() => { setTask(null); setVisitFocus(undefined) }} />
               : showResumeScreen
                 ? (
                   <ResumeSessionsPage
@@ -103,7 +159,7 @@ export default function App() {
                   />
                 )
                 : menuShown
-                  ? <MenuPage onChoose={setTask} />
+                  ? <MenuPage onChoose={(t) => { setClosedVisitTarget(null); setUploadTarget(null); setUploadsView(null); setDeploymentsView(null); setDeploymentFocus(undefined); setUploadSearch(undefined); setVisitFocus(undefined); setTask(t) }} />
                   : <WelcomePage onStart={() => { setHome(false); if (!unfinishedSessions?.length) setMenuShown(true) }} />}
         </div>
       </main>

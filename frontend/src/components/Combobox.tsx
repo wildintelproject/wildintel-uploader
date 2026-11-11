@@ -16,13 +16,15 @@ interface Props {
   onChange: (value: string) => void
   placeholder: string
   disabled?: boolean
+  /** Shown in red — the value is wanted and is missing. */
+  invalid?: boolean
   /** Accessible name for the "clear selection" button, e.g. "Clear research project". */
   clearLabel: string
 }
 
 /** A `<select>` that also filters as you type — pick from the list, or type
  * part of a label to narrow it down first. */
-export default function Combobox({ id, options, value, onChange, placeholder, disabled = false, clearLabel }: Props) {
+export default function Combobox({ id, options, value, onChange, placeholder, disabled = false, invalid = false, clearLabel }: Props) {
   const selected = options.find((o) => o.value === value)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -69,11 +71,14 @@ export default function Combobox({ id, options, value, onChange, placeholder, di
         aria-controls={`${id}-listbox`}
         aria-autocomplete="list"
         autoComplete="off"
-        className={[inputClass, disabled ? 'cursor-not-allowed opacity-50' : '', selected ? 'pr-8' : ''].join(' ')}
+        aria-invalid={invalid || undefined}
+        className={[inputClass, disabled ? 'cursor-not-allowed opacity-50' : '', selected ? 'pr-8' : '', invalid ? 'border-red-500 dark:border-red-500' : ''].join(' ')}
         disabled={disabled}
         placeholder={placeholder}
         value={open ? query : (selected?.label ?? '')}
         onFocus={() => { setQuery(''); setActiveIndex(0); setOpen(true) }}
+        // Still focused after a choice, the list opens again with a click — to pick one more, where several can be.
+        onClick={() => { if (!open) { setQuery(''); setActiveIndex(0); setOpen(true) } }}
         onBlur={() => { setOpen(false); setQuery('') }}
         onChange={(e) => { setQuery(e.target.value); setActiveIndex(0); setOpen(true) }}
         onKeyDown={handleKeyDown}

@@ -17,11 +17,11 @@ from pydantic import BaseModel
 from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
 from wildintel_uploader.core.schemas.requests import (
-    BrowseFolderRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
-    ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
-    NextRevisionRequest, UpdateLocationRequest, ValidateDeploymentRequest, ValidateImagesRequest,
+    BrowseFolderRequest, CardRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
+    DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
+    NextRevisionRequest, UpdateLocationRequest, UpdateResearchProjectRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
-from wildintel_uploader.core.services import camera_info, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service
+from wildintel_uploader.core.services import camera_info, card_copy_service, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
 
 router = APIRouter(prefix="/api/deployment-import", tags=["deployment-import"])
@@ -38,6 +38,25 @@ def browse_folder(req: BrowseFolderRequest = BrowseFolderRequest()) -> dict:
     except folder_picker.FolderPickerUnavailable as exc:
         raise HTTPException(501, str(exc)) from exc
     return {"path": path}
+
+
+@router.post("/copy-card")
+def copy_card(req: CardRequest) -> StreamingResponse:
+    """Copies a camera's memory card — read only — to a temporary folder of this computer, so that its images are processed as any local folder. Streamed:
+    "start", "progress" after each file and "done" with the `path` of the copy; it is removed with /discard-card-copy when the import is over."""
+    return _stream(card_copy_service.copy_card(req.path), "The memory card could not be copied")
+
+
+@router.post("/eject-card")
+def eject_card(req: CardRequest) -> dict:
+    """Ejects the removable drive a memory card was copied from, so it can be taken out: {"ejected": bool, "message"}."""
+    return card_copy_service.eject(req.path)
+
+
+@router.post("/discard-card-copy")
+def discard_card_copy(req: CardRequest) -> dict:
+    """Removes the temporary copy of a memory card — only one made by /copy-card. {"removed": bool}"""
+    return {"removed": card_copy_service.discard(req.path)}
 
 
 @router.post("/check-collection")
@@ -66,6 +85,27 @@ def save_research_project(req: ResearchProjectRecord) -> dict:
         raise HTTPException(409 if "already exists" in str(exc) else 400, str(exc)) from exc
 
 
+@router.post("/research-projects/update")
+def update_research_project(req: UpdateResearchProjectRequest) -> dict:
+    """Changes a kept research project — its name, description, keywords and status…; the fields left out stay as they are (its acronym names
+    its folder and can't change). 404 if it isn't there."""
+    changes = req.model_dump(exclude={"acronym", "trapper_pk"}, exclude_none=True, exclude_unset=True)
+    try:
+        return local_folder_service.update_research_project(config.collections_dir(), req.acronym, changes)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(404 if "isn't in" in str(exc) else 400, str(exc)) from exc
+
+
+@router.post("/research-projects/delete")
+def delete_research_project(req: LocalLocationsRequest) -> dict:
+    """Deletes a research project with its locations and visits — 409 when it holds anything more (collections, deployments, images), 404 if
+    it isn't there."""
+    try:
+        return local_folder_service.delete_research_project(config.collections_dir(), req.research_project_id)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(404 if "isn't in" in str(exc) else 409 if "still holds" in str(exc) else 400, str(exc)) from exc
+
+
 @router.post("/locations/list")
 def list_locations(req: LocalLocationsRequest) -> dict:
     """The locations kept for a research project in the collections folder."""
@@ -87,13 +127,24 @@ def save_location(req: SaveLocationRequest) -> dict:
 
 @router.post("/locations/update")
 def update_location(req: UpdateLocationRequest) -> dict:
-    """Changes the timezone and/or the summer-time setting of a kept location — they belong to the location, not to
-    a deployment. The fields left out stay as they are; 404 if the location isn't there."""
-    changes = req.model_dump(include={"timezone", "ignore_dst"}, exclude_unset=True)
+    """Changes a kept location — its name, where it is, its status. Its timezone and its summer-time setting belong to the location and are fixed
+    when it is created: asking for a different one is a 409. The fields left out stay as they are; 404 if the location isn't there."""
+    changes = req.model_dump(include={"name", "latitude", "longitude", "coordinate_uncertainty", "timezone", "ignore_dst", "in_service", "status", "status_date", "status_note"}, exclude_unset=True)
+    if changes.get("status") is None:
+        changes.pop("status", None)
     try:
         return local_folder_service.update_location(config.collections_dir(), req.research_project_id, req.location_id, changes)
     except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(404 if "isn't in" in str(exc) else 400, str(exc)) from exc
+        raise HTTPException(404 if "isn't in" in str(exc) else 409 if "can't be changed" in str(exc) else 400, str(exc)) from exc
+
+
+@router.post("/locations/delete")
+def delete_location(req: DeleteLocationRequest) -> dict:
+    """Deletes a kept location — 409 when visits were made to it (or it comes from Trapper), 404 if it isn't there."""
+    try:
+        return local_folder_service.delete_location(config.collections_dir(), req.research_project_id, req.location_id)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(404 if "isn't in" in str(exc) else 409 if "still has" in str(exc) or "comes from Trapper" in str(exc) else 400, str(exc)) from exc
 
 
 @router.get("/exiftool")
@@ -103,11 +154,22 @@ def exiftool() -> dict:
     return {"available": path is not None, "path": path}
 
 
+@router.get("/log-entry")
+def log_entry(research_project_id: str, deployment_id: str) -> dict:
+    """What the collection's FileTimestampLog and FieldworkLog say of a deployment, if they have its row — the dates and details a
+    deployment can be filled in from."""
+    try:
+        return deployment_import_service.log_entry(research_project_id, deployment_id)
+    except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.post("/timestamp-log")
 def timestamp_log(req: TimestampLogRequest) -> dict:
     """Puts the deployment's start and end in its collection's <collection>_FileTimestampLog.csv —
-    wildintel-tools' file, one row per deployment — before the postvalidation. The collection is
-    the one the deployment id names, in the research project's folder."""
+    wildintel-tools' file, one row per deployment — before the postvalidation, and its row in the
+    <collection>_FieldworkLog.csv beside it: its fields as Camtrap DP names them, in UTC, and what the
+    visits it is of say of it. The collection is the one the deployment id names, in the research project's folder."""
     try:
         collection = deployment_import_service.default_collection_dir(req.research_project_id, req.deployment.deployment_id)
         if local_folder_service.is_synced(collection / req.deployment.deployment_id):
@@ -115,7 +177,10 @@ def timestamp_log(req: TimestampLogRequest) -> dict:
         # The camera's wall-clock time: what the images' EXIF holds, whatever the designator says.
         start = datetime.fromisoformat(req.deployment.start_date).replace(tzinfo=None)
         end = datetime.fromisoformat(req.deployment.end_date).replace(tzinfo=None)
-        return {**local_folder_service.upsert_timestamp_log(collection, req.deployment.deployment_id, start, end), "collection": collection.name}
+        result = local_folder_service.upsert_timestamp_log(collection, req.deployment.deployment_id, start, end)
+        fieldwork = local_folder_service.upsert_fieldwork_log(
+            collection, deployment_import_service.fieldwork_log_row(req.deployment, req.visits.model_dump() if req.visits else None))
+        return {**result, "collection": collection.name, "fieldwork_log": fieldwork}
     except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -204,8 +269,11 @@ def validate_images(req: ValidateImagesRequest) -> dict:
     checks = frozenset(req.checks) if req.checks is not None else None
     try:
         source = Path(req.path).expanduser()
-        result = deployment_import_service.validate_images(source, checks, detail=True)
-    except deployment_import_service.DeploymentImportError as exc:
+        imported = None
+        if req.research_project_id and (checks is None or "duplicates" in checks):
+            imported = local_folder_service.imported_source_hashes(config.collections_dir(), req.research_project_id, req.deployment_id)
+        result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported)
+    except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
         raise HTTPException(400, str(exc)) from exc
     return {**result, "report_id": _keep(lambda: report_service.validation_report(result, source, checks))}
 
@@ -239,6 +307,7 @@ def validate_deployment(req: ValidateDeploymentRequest) -> dict:
         result = deployment_import_service.validate_deployment_consistency(
             source, req.deployment, checks, collection_name=req.collection_name,
             expected_location_id=req.expected_location_id, tolerance_hours=req.tolerance_hours,
+            visit=req.visit.model_dump() if req.visit else None,
         )
         # The statistical checks compare this revision with the location's previous ones.
         wanted = frozenset(statistics_service.STATISTIC_CHECKS) if checks is None else checks & frozenset(statistics_service.STATISTIC_CHECKS)

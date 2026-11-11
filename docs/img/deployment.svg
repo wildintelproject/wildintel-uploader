@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 400" width="920" height="400" role="img" aria-labelledby="t d" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="t">A deployment</title>
+  <desc id="d">A deployment is the set of images taken by one camera at one location, between two consecutive visits to it: the visit that left the camera and its card and the next visit, which collected the card. It is open while the card has not been collected, closed when it is collected, and a stolen camera leaves a deployment with no images.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569" />
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="920" height="400" rx="18" fill="#ffffff" stroke="#d4d4d8" />
+
+  <text x="40" y="42" font-size="15" font-weight="700" fill="#2563eb" letter-spacing="1">A DEPLOYMENT IS THE IMAGES BETWEEN TWO CONSECUTIVE VISITS</text>
+  <rect x="40" y="58" width="840" height="34" rx="17" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" />
+  <text x="460" y="80" font-size="13" fill="#334155" text-anchor="middle"><tspan font-weight="700">One location</tspan> — some GPS coordinates and a timezone — <tspan font-weight="700">one camera</tspan></text>
+
+  <text x="40" y="122" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">THE VISIT THAT LEFT THE CAMERA</text>
+  <text x="880" y="122" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1" text-anchor="end">THE NEXT VISIT</text>
+
+  <rect x="40" y="136" width="170" height="104" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" />
+  <text x="125" y="168" font-size="17" font-weight="700" fill="#92400e" text-anchor="middle">Visit R0001</text>
+  <text x="125" y="192" font-size="12" fill="#b45309" text-anchor="middle">left the camera</text>
+  <text x="125" y="208" font-size="12" fill="#b45309" text-anchor="middle">and its card</text>
+
+  <rect x="710" y="136" width="170" height="104" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2" />
+  <text x="795" y="168" font-size="17" font-weight="700" fill="#065f46" text-anchor="middle">Visit R0002</text>
+  <text x="795" y="192" font-size="12" fill="#047857" text-anchor="middle">collected</text>
+  <text x="795" y="208" font-size="12" fill="#047857" text-anchor="middle">the card</text>
+
+  <rect x="240" y="128" width="460" height="120" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+  <text x="470" y="152" font-size="14" font-weight="700" fill="#1e3a8a" text-anchor="middle">Deployment <tspan font-family="'JetBrains Mono', 'SFMono-Regular', Consolas, monospace">R0001-DONA_01</tspan></text>
+
+  <rect x="294" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M298 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="330" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M334 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="366" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M370 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="402" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M406 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="438" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M442 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="474" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M478 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="510" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M514 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="546" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M550 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="582" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M586 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="618" y="166" width="28" height="22" rx="3" fill="#ffffff" stroke="#60a5fa" stroke-width="1.5" /><path d="M622 183 l7 -9 l5 6 l3 -3 l5 6" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" />
+  <text x="470" y="212" font-size="12" fill="#1e40af" text-anchor="middle">the images taken by the camera between the two visits,</text>
+  <text x="470" y="230" font-size="12" fill="#1e40af" text-anchor="middle">set up with the same height, tilt, delay between triggers…</text>
+
+  <path d="M210 188 H240" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+  <path d="M700 188 H710" fill="none" stroke="#475569" stroke-width="2.500" marker-end="url(#a)" />
+
+  <text x="40" y="282" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">ITS STATE</text>
+
+  <rect x="40" y="296" width="270" height="76" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 5" />
+  <text x="175" y="324" font-size="15" font-weight="700" fill="#92400e" text-anchor="middle">Open</text>
+  <text x="175" y="346" font-size="12" fill="#b45309" text-anchor="middle">the camera is still out: the</text>
+  <text x="175" y="361" font-size="12" fill="#b45309" text-anchor="middle">card has not been collected</text>
+
+  <rect x="325" y="296" width="270" height="76" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2" />
+  <text x="460" y="324" font-size="15" font-weight="700" fill="#065f46" text-anchor="middle">Closed</text>
+  <text x="460" y="346" font-size="12" fill="#047857" text-anchor="middle">the card is collected: its</text>
+  <text x="460" y="361" font-size="12" fill="#047857" text-anchor="middle">images can be imported</text>
+
+  <rect x="610" y="296" width="270" height="76" rx="12" fill="#fef2f2" stroke="#ef4444" stroke-width="2" />
+  <text x="745" y="324" font-size="15" font-weight="700" fill="#991b1b" text-anchor="middle">Camera stolen</text>
+  <text x="745" y="346" font-size="12" fill="#b91c1c" text-anchor="middle">the deployment is closed</text>
+  <text x="745" y="361" font-size="12" fill="#b91c1c" text-anchor="middle">and has no images</text>
+</svg>

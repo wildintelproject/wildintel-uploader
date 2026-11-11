@@ -4,39 +4,43 @@ import userEvent from '@testing-library/user-event'
 import MenuPage from './MenuPage'
 
 describe('MenuPage', () => {
-  it('offers Import deployment and Import session', async () => {
+  it('offers Manage deployments, and no Import collection of its own', async () => {
     const onChoose = vi.fn()
     render(<MenuPage onChoose={onChoose} />)
 
-    const deploymentButton = screen.getByRole('button', { name: /import deployment/i })
-    const sessionButton = screen.getByRole('button', { name: /import session/i })
-
+    const deploymentButton = screen.getByRole('button', { name: /manage deployments/i })
     expect(deploymentButton).toBeEnabled()
-    expect(sessionButton).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /import collection/i })).not.toBeInTheDocument()
 
     await userEvent.click(deploymentButton)
     expect(onChoose).toHaveBeenCalledWith('deployment')
-    await userEvent.click(sessionButton)
-    expect(onChoose).toHaveBeenCalledWith('session')
+  })
+
+  it('offers to manage the visits', async () => {
+    const onChoose = vi.fn()
+    render(<MenuPage onChoose={onChoose} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /manage visits/i }))
+    expect(onChoose).toHaveBeenCalledWith('visits')
   })
 
   it('offers to upload a deployment to Trapper', async () => {
     const onChoose = vi.fn()
     render(<MenuPage onChoose={onChoose} />)
 
-    const uploadButton = screen.getByRole('button', { name: /upload deployment to trapper/i })
+    const uploadButton = screen.getByRole('button', { name: /manage uploads/i })
     expect(uploadButton).toBeEnabled()
-    expect(screen.getByText(/creating its location and the deployment there if they are missing/i)).toBeInTheDocument()
+    expect(screen.getByText(/which deployments and revisions are on trapper/i)).toBeInTheDocument()
 
     await userEvent.click(uploadButton)
     expect(onChoose).toHaveBeenCalledWith('upload')
   })
 
-  it('offers the three tasks in the order import deployment, import session, upload deployment', () => {
+  it('offers the tasks in the order manage visits, manage deployments, manage uploads', () => {
     render(<MenuPage onChoose={vi.fn()} />)
 
-    const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '').filter((t) => /Import deployment|Import session|Upload deployment/.test(t))
-    expect(titles.map((t) => t.match(/Import deployment|Import session|Upload deployment/)![0])).toEqual(['Import deployment', 'Import session', 'Upload deployment'])
+    const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '').filter((t) => /Manage visits|Manage deployments|Manage uploads/.test(t))
+    expect(titles.map((t) => t.match(/Manage visits|Manage deployments|Manage uploads/)![0])).toEqual(['Manage visits', 'Manage deployments', 'Manage uploads'])
     expect(screen.queryByRole('button', { name: /upload session to trapper/i })).not.toBeInTheDocument()
   })
 

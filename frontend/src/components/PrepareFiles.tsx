@@ -215,7 +215,7 @@ export function FilesReady({ collection, items, outputDir, startedAt, finishedAt
       {doneItems.length > 0 && (
         <>
           <h4 className="font-semibold text-zinc-900 dark:text-zinc-100">What was written</h4>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">Each deployment gets its images packed together and a description of the deployment. The collection gets one list of its deployments.</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">Each deployment gets its images packed together and a description of the deployment. The revision gets one list of its deployments.</p>
           <ul className={`${panel} divide-y divide-zinc-200 dark:divide-zinc-700 mb-4`}>
             {doneItems.map((i) => {
               const own = i.files.filter((f) => !f.name.endsWith(csvSuffix))

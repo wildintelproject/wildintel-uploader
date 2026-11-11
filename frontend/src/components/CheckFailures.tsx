@@ -9,10 +9,10 @@ const PER_PAGE = { grid: 8, list: 20 } as const
 type Sort = 'name' | 'name-desc' | 'newest' | 'oldest'
 type View = 'grid' | 'list'
 
-const formatTaken = (iso?: string) => (iso ? iso.replace('T', ' ').slice(0, 19) : 'date unknown')
+export const formatTaken = (iso?: string) => (iso ? iso.replace('T', ' ').slice(0, 19) : 'date unknown')
 
 /** The picture of a failed image — or a placeholder when it can't be shown (a corrupted file, for one). */
-function Thumbnail({ reportId, path, size = 'thumb', className }: { reportId: string; path: string; size?: 'thumb' | 'large'; className?: string }) {
+export function Thumbnail({ reportId, path, size = 'thumb', className }: { reportId: string; path: string; size?: 'thumb' | 'large'; className?: string }) {
   const [failed, setFailed] = useState(false)
   if (failed) {
     return <div className={`flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 text-xs ${className ?? ''}`} aria-label="No preview">🖼️ no preview</div>
@@ -20,8 +20,8 @@ function Thumbnail({ reportId, path, size = 'thumb', className }: { reportId: st
   return <img src={api.reportImageUrl(reportId, path, size)} alt={path} loading="lazy" onError={() => setFailed(true)} className={`object-cover bg-zinc-100 dark:bg-zinc-800 ${className ?? ''}`} />
 }
 
-/** Everything the report says of one image: what failed and what passed, and a big picture. */
-function ImageDetails({ report, path, onClose }: { report: Report; path: string; onClose: () => void }) {
+/** Everything the report says of one image, in a panel at the right: a big picture, when it was taken and each test — passed, or what it found. */
+export function ImageDetails({ report, path, onClose }: { report: Report; path: string; onClose: () => void }) {
   const entries = report.entries.filter((e) => e.identifier === path)
   useEffect(() => {
     const close = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -29,26 +29,31 @@ function ImageDetails({ report, path, onClose }: { report: Report; path: string;
     return () => window.removeEventListener('keydown', close)
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={`Details of ${path}`} className="max-h-full w-full overflow-y-auto rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 p-4"
-           style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h4 className="font-mono text-sm font-semibold break-all text-zinc-900 dark:text-zinc-100">{path}</h4>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatTaken(entries.find((e) => e.taken)?.taken)}</p>
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={`Details of ${path}`}>
+      <button type="button" aria-label="Close the details" tabIndex={-1} className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto border-l border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-3 border-b border-zinc-200 dark:border-zinc-700 pb-4">
+          <div className="min-w-0">
+            <h4 className="font-mono text-lg font-bold break-all text-zinc-900 dark:text-zinc-100">{path}</h4>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">{formatTaken(entries.find((e) => e.taken)?.taken)}</p>
           </div>
           <button type="button" className={`${btnOutline} !px-3 !py-1.5`} onClick={onClose}>Close</button>
         </div>
-        <Thumbnail reportId={report.id} path={path} size="large" className="mt-3 w-full max-h-96 rounded" />
-        <ul className="mt-3 space-y-1 text-sm">
-          {entries.map((e, i) => (
-            <li key={`${e.check}|${i}`} className="flex gap-2">
-              <StatusIcon kind={e.status === 'ok' ? 'success' : 'warning'} className={`h-4 w-4 mt-0.5 ${e.status === 'ok' ? 'text-emerald-500' : 'text-amber-500'}`} />
-              <span><strong>{report.checks[e.check]?.label ?? e.check}</strong> — <span className={e.status === 'ok' ? 'text-zinc-500 dark:text-zinc-400' : 'text-amber-700 dark:text-amber-400'}>{e.message}</span></span>
-            </li>
-          ))}
+        <Thumbnail reportId={report.id} path={path} size="large" className="w-full max-h-96 rounded-xl border border-zinc-200 dark:border-zinc-700" />
+        <h5 className="mt-6 mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Test results of this image</h5>
+        <ul className="space-y-2 text-sm">
+          {entries.map((e, i) => {
+            const failed = e.status !== 'ok'
+            return (
+              <li key={`${e.check}|${i}`} className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${failed ? 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30' : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/40'}`}>
+                <StatusIcon kind={failed ? 'warning' : 'success'} className={`h-5 w-5 shrink-0 ${failed ? 'text-amber-500' : 'text-emerald-500'}`} />
+                <span className={`flex-1 ${failed ? 'font-semibold text-zinc-900 dark:text-zinc-100' : 'text-zinc-700 dark:text-zinc-300'}`}>{report.checks[e.check]?.label ?? e.check}</span>
+                <span className={`text-right text-xs ${failed ? 'text-amber-700 dark:text-amber-400' : 'font-medium text-emerald-600 dark:text-emerald-400'}`}>{failed ? e.message : 'Passed'}</span>
+              </li>
+            )
+          })}
         </ul>
-      </div>
+      </aside>
     </div>
   )
 }

@@ -5,12 +5,19 @@ import type { Report } from '../types'
 import CheckFailures from './CheckFailures'
 import { StatusIcon } from './Notice'
 import { SmallSpinner, btnOutline, btnPrimary } from '../pages/ImportDeploymentPage'
+import { Icon, StateCard } from './Dashboard'
+import { MetricsSection, ProgressCard } from './DashboardParts'
+import { NO_FILTERS } from './CheckResultsTable'
+import type { ResultFilters, Show } from './CheckResultsTable'
 
 export interface DashboardContext {
   report: Report | null
   /** The check whose failures are open, if any. */
   openCheck: string | null
   open: (check: string) => void
+  /** With `rows`: what the figures press, for the table of results. */
+  filters?: ResultFilters
+  onFilters?: (filters: ResultFilters) => void
 }
 
 export const formatRun = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -38,7 +45,7 @@ function Figure({ tone, value, label }: { tone: string; value: number; label: st
 
 /** The validation as a dashboard: what it was run on and when, how many images are fine, the checks with how each ended — and,
  * opened from one, the images that failed it. The table of checks is the page's (it has the choosing of them): it goes in `children`. */
-export default function ValidationDashboard({ title, subtitle, reportId, running, canRun, onRun, runLabel = 'Run validation', runningLabel = 'Validating…', preprocessing = false, variant = 'classic', lastRunLine = false, onReport, children }: {
+export default function ValidationDashboard({ title, subtitle, reportId, running, canRun, onRun, runLabel = 'Run validation', runningLabel = 'Validating…', preprocessing = false, variant = 'classic', lastRunLine = false, rows = false, onReport, children }: {
   title: string
   subtitle: string
   /** The report of the last run, once there is one. */
@@ -54,6 +61,8 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
   variant?: 'classic' | 'steps' | 'headed'
   /** With the 'steps' variant: the subtitle, when it was last run and the report to download, as a line above the figures. */
   lastRunLine?: boolean
+  /** With the 'steps' variant: the figures in two rows — the images (all, without errors, with errors) and the checks (all, passed, failed) — that press the filters of the table of results. */
+  rows?: boolean
   /** Told the report once it is read (null while there is none). */
   onReport?: (report: Report | null) => void
   children: (context: DashboardContext) => ReactNode
@@ -61,6 +70,9 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
   const [report, setReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [openCheck, setOpenCheck] = useState<string | null>(null)
+  const [filters, setFilters] = useState<ResultFilters>(NO_FILTERS)
+  const [imagesOpen, setImagesOpen] = useState(true)
+  const [checksOpen, setChecksOpen] = useState(true)
 
   useEffect(() => {
     setOpenCheck(null)
@@ -125,7 +137,36 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
             {shown && <> · last run {formatRun(shown.created_at)} · <a className="font-medium text-blue-600 dark:text-blue-400 hover:underline" href={api.reportUrl(shown.id, 'csv')} download>Download report</a></>}
           </p>
         )}
-        {shown && (
+        {shown && rows && !preprocessing && (() => {
+          const valid = Math.max(0, shown.checked - withIssues)
+          const passed = checks.filter((c) => c.failed === 0).length, failed = checks.length - passed
+          const press = (group: 'image' | 'test', value: Show) => {
+            const current = group === 'image' ? filters.images : filters.tests
+            const next = current === value ? 'all' : value
+            setFilters(group === 'image' ? { ...filters, group, images: next } : { ...filters, group, tests: next })
+          }
+          const tick = <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></>} className="h-5 w-5" />
+          const alert = <Icon path={<><path d="M12 3l10 18H2z" /><path d="M12 10v4M12 17.5v.01" /></>} className="h-5 w-5" />
+          const green = 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', amber = 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+          const share = (n: number, of: number) => (of ? (n / of) * 100 : 0)
+          return (
+            <div aria-label="Summary">
+              <MetricsSection label="Images by status" title="Images status & filters" open={imagesOpen} onToggle={() => setImagesOpen(!imagesOpen)} hint="Click a card to filter the table by the images with or without errors">
+                <ProgressCard title="Images reviewed" percent={shown.checked ? 100 : 0} done={shown.checked} total={shown.checked} barLabel="Images reviewed" caption={`${withIssues} ${withIssues === 1 ? 'image' : 'images'} with errors`}
+                  segments={[{ width: share(valid, shown.checked), className: 'bg-emerald-500' }, { width: share(withIssues, shown.checked), className: 'bg-amber-500' }]} />
+                <StateCard label="Without errors" note="Passed every check" count={valid} tone="text-emerald-600 dark:text-emerald-400" badge={green} icon={tick} pressed={filters.images === 'passed'} onPress={() => press('image', 'passed')} />
+                <StateCard label="With errors" note="Failed a check" count={withIssues} tone="text-amber-600 dark:text-amber-400" badge={amber} icon={alert} pressed={filters.images === 'issues'} onPress={() => press('image', 'issues')} />
+              </MetricsSection>
+              <MetricsSection label="Checks by status" title="Checks status & filters" open={checksOpen} onToggle={() => setChecksOpen(!checksOpen)} hint="Click a card to filter the table by the checks that passed or failed">
+                <ProgressCard title="Checks finished" percent={checks.length ? 100 : 0} done={checks.length} total={checks.length} barLabel="Checks finished" caption={`${failed} ${failed === 1 ? 'check' : 'checks'} with problems`}
+                  segments={[{ width: share(passed, checks.length), className: 'bg-emerald-500' }, { width: share(failed, checks.length), className: 'bg-amber-500' }]} />
+                <StateCard label="Checks passed" note="Finished ok" count={passed} tone="text-emerald-600 dark:text-emerald-400" badge={green} icon={tick} pressed={filters.tests === 'passed'} onPress={() => press('test', 'passed')} />
+                <StateCard label="Checks failed" note="Finished with problems" count={failed} tone="text-amber-600 dark:text-amber-400" badge={amber} icon={alert} pressed={filters.tests === 'issues'} onPress={() => press('test', 'issues')} />
+              </MetricsSection>
+            </div>
+          )
+        })()}
+        {shown && !(rows && !preprocessing) && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" aria-label="Summary">
             {preprocessing ? (
               <>
@@ -146,7 +187,7 @@ export default function ValidationDashboard({ title, subtitle, reportId, running
         )}
         {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
 
-        {children({ report: shown, openCheck, open: (check) => setOpenCheck((current) => (current === check ? null : check)) })}
+        {children({ report: shown, openCheck, open: (check) => setOpenCheck((current) => (current === check ? null : check)), filters, onFilters: setFilters })}
 
         {shown && openCheck && shown.checks[openCheck] && <CheckFailures report={shown} check={openCheck} parent={title} onBack={() => setOpenCheck(null)} />}
       </div>

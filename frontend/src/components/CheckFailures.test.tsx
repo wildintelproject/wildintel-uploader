@@ -91,8 +91,10 @@ describe('CheckFailures', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Details of IMG_0001.JPG' })
     expect(within(dialog).getByAltText('IMG_0001.JPG')).toHaveAttribute('src', expect.stringContaining('size=large'))
-    expect(dialog).toHaveTextContent('Required EXIF fields — no date')
-    expect(dialog).toHaveTextContent('Corrupted images — can be read')
+    expect(dialog).toHaveTextContent('Required EXIF fields')
+    expect(dialog).toHaveTextContent('no date')
+    expect(dialog).toHaveTextContent('Corrupted images')
+    expect(within(dialog).getByText('Passed')).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })

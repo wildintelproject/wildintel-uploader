@@ -73,6 +73,19 @@ def test_list_deployments_maps_the_export_shape_and_serializes_dates():
     assert result[0]["camera_model"] == "Reconyx HC600"
 
 
+def test_list_deployments_of_a_research_project_with_none_is_empty_not_an_error():
+    from trapper_client.err import BadRequestError
+    client = MagicMock()
+    client.deployments.export.side_effect = BadRequestError('["Empty queryset or you have no permission to access the requested objects."]')
+    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client):
+        assert trapper_service.list_deployments("https://trapper.example.org", "alice", "s3cret", 17) == []
+
+    client.deployments.export.side_effect = BadRequestError("something else is wrong")
+    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client):
+        with pytest.raises(BadRequestError):
+            trapper_service.list_deployments("https://trapper.example.org", "alice", "s3cret", 17)
+
+
 def test_import_deployment_calls_the_sdk_with_the_csv(tmp_path: Path):
     client = MagicMock()
     with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client) as factory:

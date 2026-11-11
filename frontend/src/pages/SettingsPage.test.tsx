@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
 import SettingsPage from './SettingsPage'
 import { APP_SETTINGS } from '../test/fixtures'
+import { EMPTY_RESEARCH_PROJECT } from '../types'
+import type { Camera, SdCard } from '../types'
 
 vi.mock('../api', () => ({
   api: {
+    listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), updateResearchProject: vi.fn(), deleteResearchProject: vi.fn(), listLocalLocations: vi.fn(), listVisits: vi.fn(), deleteLocalLocation: vi.fn(), saveLocalLocation: vi.fn(), updateLocalLocation: vi.fn(), trapperResearchProjects: vi.fn(), trapperLocations: vi.fn(),
     getSettings: vi.fn(), saveSettings: vi.fn(), clearLog: vi.fn(), browseFolder: vi.fn(), trapperTestConnection: vi.fn(), epicollectTestConnection: vi.fn(),
     checkVersion: vi.fn(), checkForUpdate: vi.fn(), listReports: vi.fn(), deleteReport: vi.fn(), getReport: vi.fn(), reportUrl: (id: string, format: string) => `/api/reports/${id}/download?format=${format}`, configs: vi.fn(), addConfig: vi.fn(), activateConfig: vi.fn(), openConfigFolder: vi.fn(),
   },
@@ -17,19 +20,32 @@ const mockedApi = vi.mocked(api)
 beforeEach(() => {
   vi.clearAllMocks()
   mockedApi.getSettings.mockResolvedValue(APP_SETTINGS)
+  mockedApi.listResearchProjects.mockResolvedValue({ results: [DONA] })
+  mockedApi.listLocalLocations.mockResolvedValue({ results: [] })
   mockedApi.saveSettings.mockImplementation(async (update) => ({
     GENERAL: { ...APP_SETTINGS.GENERAL, ...update.GENERAL },
-    TRAPPER: { ...APP_SETTINGS.TRAPPER, base_url: update.TRAPPER.base_url, user_name: update.TRAPPER.user_name, has_password: APP_SETTINGS.TRAPPER.has_password || !!update.TRAPPER.user_password },
+    TRAPPER: { ...APP_SETTINGS.TRAPPER, enabled: update.TRAPPER.enabled, base_url: update.TRAPPER.base_url, user_name: update.TRAPPER.user_name, has_password: APP_SETTINGS.TRAPPER.has_password || !!update.TRAPPER.user_password },
+    AGOUTI: { enabled: update.AGOUTI.enabled, base_url: update.AGOUTI.base_url, has_api_key: APP_SETTINGS.AGOUTI.has_api_key || !!update.AGOUTI.api_key, project_id: update.AGOUTI.project_id },
+    EPICOLLECTCSV: update.EPICOLLECTCSV,
     EPICOLLECT5: { enabled: update.EPICOLLECT5.enabled, unmapped_to_comments: update.EPICOLLECT5.unmapped_to_comments, project_slug: update.EPICOLLECT5.project_slug, client_id: update.EPICOLLECT5.client_id, has_secret: APP_SETTINGS.EPICOLLECT5.has_secret || !!update.EPICOLLECT5.client_secret, mapping: update.EPICOLLECT5.mapping },
     DATA: { dir: update.DATA.dir ?? APP_SETTINGS.DATA.dir, collections_dir: update.DATA.collections_dir, reports_dir: update.DATA.reports_dir, packages_dir: update.DATA.packages_dir,
       default_collections_dir: APP_SETTINGS.DATA.default_collections_dir, default_reports_dir: APP_SETTINGS.DATA.default_reports_dir, default_packages_dir: APP_SETTINGS.DATA.default_packages_dir },
     VALIDATION: update.VALIDATION,
     POSTVALIDATION: update.POSTVALIDATION,
     PREPROCESSING: update.PREPROCESSING,
+    FIELDWORK: update.FIELDWORK,
+    FIELDLOG: update.FIELDLOG,
   }))
 })
 
 const section = (name: string) => userEvent.click(screen.getByRole('button', { name }))
+// The entities are one section with a tab for each; the SD cards, the cameras and the locations are those of a research project.
+const entity = async (tab: string) => { await section('Entities'); await userEvent.click(screen.getByRole('tab', { name: tab })) }
+const pickProject = async (option = 'DONA — Doñana') => {
+  await userEvent.click(await screen.findByLabelText('Research project'))
+  await userEvent.click(await screen.findByRole('option', { name: option }))
+}
+const DONA = { ...EMPTY_RESEARCH_PROJECT, name: 'Doñana', acronym: 'DONA', trapper_pk: 2 }
 /** Opens the settings of a check, behind its gear. */
 const gear = (check: RegExp) => userEvent.click(screen.getByRole('button', { name: new RegExp(`^Configure .*${check.source}`) }))
 const settingsOf = (check: RegExp) => within(screen.getByRole('group', { name: new RegExp(`${check.source}.* settings$`) }))
@@ -37,14 +53,15 @@ const settingsOf = (check: RegExp) => within(screen.getByRole('group', { name: n
 describe('SettingsPage', () => {
   it('shows one section at a time, from the sidebar: General, Trapper, Validation and Postvalidation', async () => {
     render(<SettingsPage onClose={vi.fn()} />)
-    expect(await screen.findByLabelText('Level')).toHaveValue('INFO')
+    expect(await screen.findByRole('radio', { name: /Normal/ })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page')
 
-    await section('Trapper')
-    expect(screen.getByLabelText('URL')).toHaveValue('https://trapper.example.org')
+    await section('Uploader')
+    expect(screen.getByLabelText('Web address')).toHaveValue('https://trapper.example.org')
     expect(screen.getByLabelText('Username')).toHaveValue('alice')
-    expect(screen.getByLabelText('Password')).toHaveValue('')
-    expect(screen.getByText(/a password is saved — leave it blank to keep it/i)).toBeInTheDocument()
+    expect(screen.getByText('Saved')).toBeInTheDocument() // a saved password is shown as kept, never its value
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
+    expect(screen.getByText(/the saved password is kept private/i)).toBeInTheDocument()
     expect(screen.queryByLabelText('Level')).not.toBeInTheDocument()
 
     await section('Validation')
@@ -70,7 +87,7 @@ describe('SettingsPage', () => {
 
       expect(await screen.findByLabelText('Folder')).toHaveValue('/home/me/Documents/wildintel-uploader')
       expect(screen.getByText('Data folder')).toBeInTheDocument()
-      expect(screen.getByText(/the collections, the reports and the packages, each in a folder inside it/)).toBeInTheDocument()
+      expect(screen.getByText(/the collections, the reports and the packages. Each one has its own folder inside it/)).toBeInTheDocument()
     })
 
     it('changes the data folder by typing it, or with the native folder browser', async () => {
@@ -116,15 +133,15 @@ describe('SettingsPage', () => {
 
     it('sets the log level, and shows where the log file is', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
-      const level = await screen.findByLabelText('Level')
+      await screen.findByLabelText('Level')
       expect(screen.getByText(APP_SETTINGS.GENERAL.log_file)).toBeInTheDocument()
       expect(screen.getByRole('link', { name: /download log/i })).toHaveAttribute('href', '/api/settings/log')
 
-      await userEvent.selectOptions(level, 'DEBUG')
-      expect(screen.getByText(/each image scanned and copied/i)).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('radio', { name: /Everything/ }))
+      expect(screen.getByRole('radio', { name: /Everything/ })).toHaveAttribute('aria-checked', 'true')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL).toEqual({ log_level: 'DEBUG', workers: 4 })
+      expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL).toEqual({ log_level: 'DEBUG', workers: 4, default_research_project: null })
     })
 
     it('says when the environment overrides the log level', async () => {
@@ -153,24 +170,35 @@ describe('SettingsPage', () => {
   })
 
   describe('Trapper', () => {
+    it('is set up in the Uploader section, on the tab of the platform', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      expect(screen.queryByRole('button', { name: 'Trapper' })).not.toBeInTheDocument() // Trapper is not a section of its own
+      await section('Uploader')
+
+      expect(screen.getByRole('heading', { name: 'Uploader' })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Trapper' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByLabelText('Web address')).toBeInTheDocument()
+    })
+
     it('saves the server and the account, a blank password keeping the saved one', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
 
       await userEvent.clear(screen.getByLabelText('Username'))
       await userEvent.type(screen.getByLabelText('Username'), 'bob')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].TRAPPER).toEqual({ base_url: 'https://trapper.example.org', user_name: 'bob', user_password: '', max_zip_mb: 500 })
+      expect(mockedApi.saveSettings.mock.calls[0][0].TRAPPER).toEqual({ enabled: true, base_url: 'https://trapper.example.org', user_name: 'bob', user_password: '', max_zip_mb: 500 })
       expect(await screen.findByText('Settings saved.')).toBeInTheDocument()
     })
 
     it('sets the largest zip an upload makes, from 1 to 5000 MB', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
-      const field = screen.getByLabelText('Largest zip')
+      await section('Uploader')
+      const field = screen.getByLabelText('Largest package')
       expect(field).toHaveValue('500')
 
       await userEvent.clear(field)
@@ -187,20 +215,22 @@ describe('SettingsPage', () => {
     it('never keeps the password in the form once saved', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
+      await userEvent.click(screen.getByRole('button', { name: 'Change' }))
       await userEvent.type(screen.getByLabelText('Password'), 'new-secret')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].TRAPPER.user_password).toBe('new-secret')
       await screen.findByText('Settings saved.')
-      expect(screen.getByLabelText('Password')).toHaveValue('')
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
+      expect(screen.getByText('Saved')).toBeInTheDocument()
     })
 
     it('says there is no password saved yet', async () => {
-      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, TRAPPER: { base_url: null, user_name: null, has_password: false, max_zip_mb: 500 } })
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, TRAPPER: { enabled: true, base_url: null, user_name: null, has_password: false, max_zip_mb: 500 } })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
 
       expect(screen.getByText(/no password saved yet/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Test connection' })).toBeDisabled() // nothing to connect with
@@ -210,19 +240,20 @@ describe('SettingsPage', () => {
       mockedApi.trapperTestConnection.mockResolvedValue({ ok: true, research_projects_count: 3 })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
 
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
       expect(mockedApi.trapperTestConnection).toHaveBeenCalledWith({ url: 'https://trapper.example.org', username: 'alice', password: '' })
-      expect(await screen.findByText('Connected — 3 research project(s) available.')).toBeInTheDocument()
+      expect(await screen.findByText('Connected as alice. 3 research projects available.')).toBeInTheDocument()
+      expect(screen.getByText('Connected')).toBeInTheDocument() // beside the title too
     })
 
     it('says why the connection failed', async () => {
       mockedApi.trapperTestConnection.mockRejectedValue(new Error('Invalid credentials'))
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Trapper')
+      await section('Uploader')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
       expect(await screen.findByText('Invalid credentials')).toBeInTheDocument()
@@ -230,12 +261,33 @@ describe('SettingsPage', () => {
   })
 
   describe('Epicollect5 connection', () => {
+    it('is set up in the Visit sources section, on the tab of the source: WildINTEL Epicollect first, then the connection to Epicollect5', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      expect(screen.queryByRole('button', { name: 'Epicollect' })).not.toBeInTheDocument() // Epicollect5 is not a section of its own
+      expect(screen.queryByRole('button', { name: 'Field records' })).not.toBeInTheDocument() // nor are the field records
+      await section('Visit sources')
+
+      expect(screen.getByRole('heading', { name: 'Visit sources' })).toBeInTheDocument()
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['WildINTEL Epicollect Legacy CSV', 'WildINTEL Epicollect CSV', 'Custom CSV', 'Epicollect'])
+      expect(screen.getByRole('tab', { name: 'WildINTEL Epicollect Legacy CSV' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByLabelText('The time of a visit is')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
+      expect(screen.getByRole('switch', { name: 'Use Epicollect' })).toBeInTheDocument()
+    })
+
+    it('is opened on Epicollect5 when a page asks for the Epicollect5 settings', async () => {
+      render(<SettingsPage onClose={vi.fn()} initialSection="epicollect" />)
+
+      expect(await screen.findByRole('tab', { name: 'Epicollect' })).toHaveAttribute('aria-selected', 'true')
+    })
+
     it('tests the project with what is typed, and says what it found', async () => {
       mockedApi.epicollectTestConnection.mockResolvedValue({ ok: true, project: 'Doñana cameras', slug: 'donana', forms: 1, inputs: 5 })
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Epicollect5')
-      await userEvent.type(screen.getByLabelText('Slug'), 'donana')
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
+      await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
       expect(mockedApi.epicollectTestConnection).toHaveBeenCalledWith({ project_slug: 'donana', client_id: '', client_secret: '' })
@@ -246,10 +298,10 @@ describe('SettingsPage', () => {
       mockedApi.epicollectTestConnection.mockRejectedValue(new Error('Epicollect5 refused the client id and secret.'))
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Epicollect5')
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
       expect(screen.getByRole('button', { name: 'Test connection' })).toBeDisabled()
 
-      await userEvent.type(screen.getByLabelText('Slug'), 'donana')
+      await userEvent.type(screen.getByLabelText('Project name in its web address'), 'donana')
       await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
       expect(await screen.findByText('Epicollect5 refused the client id and secret.')).toBeInTheDocument()
     })
@@ -336,11 +388,11 @@ describe('SettingsPage', () => {
     it('turns the use of Epicollect5 and the unmapped answers into comments on, and saves them', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Epicollect5')
-      const use = screen.getByLabelText('Import deployment information from Epicollect5')
-      const unmapped = screen.getByLabelText(/^Add them to the comments/)
-      expect(use).not.toBeChecked()
-      expect(unmapped).not.toBeChecked()
+      await section('Visit sources'); await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
+      const use = screen.getByRole('switch', { name: 'Use Epicollect' })
+      const unmapped = screen.getByRole('switch', { name: /^Add answers with no place to go/ })
+      expect(use).toHaveAttribute('aria-checked', 'false')
+      expect(unmapped).toHaveAttribute('aria-checked', 'false')
 
       await userEvent.click(use)
       await userEvent.click(unmapped)
@@ -355,14 +407,14 @@ describe('SettingsPage', () => {
     it('shows how many images are worked on at once, and the CPUs of the machine', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
 
-      expect(await screen.findByLabelText('Workers')).toHaveValue('4')
-      expect(screen.getByText(/This machine has 8 CPUs/)).toBeInTheDocument()
+      expect(await screen.findByLabelText('Images at once')).toHaveValue('4')
+      expect(screen.getByText(/This computer has 8 CPUs/)).toBeInTheDocument()
     })
 
     it('saves the number of workers', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
-      await userEvent.clear(await screen.findByLabelText('Workers'))
-      await userEvent.type(screen.getByLabelText('Workers'), '6')
+      await userEvent.clear(await screen.findByLabelText('Images at once'))
+      await userEvent.type(screen.getByLabelText('Images at once'), '6')
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].GENERAL.workers).toBe(6)
@@ -370,8 +422,8 @@ describe('SettingsPage', () => {
 
     it.each(['0', '65', '2.5', 'abc', ''])('marks %j workers as invalid, and cannot save', async (bad) => {
       render(<SettingsPage onClose={vi.fn()} />)
-      await userEvent.clear(await screen.findByLabelText('Workers'))
-      if (bad) await userEvent.type(screen.getByLabelText('Workers'), bad)
+      await userEvent.clear(await screen.findByLabelText('Images at once'))
+      if (bad) await userEvent.type(screen.getByLabelText('Images at once'), bad)
 
       expect(screen.getByText('A whole number from 1 to 64.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
@@ -415,6 +467,7 @@ describe('SettingsPage', () => {
       await screen.findByLabelText('Level')
       await section('Validation')
 
+      expect(screen.getByText('6 of 6 checks are on')).toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'Turn all off' }))
       for (const label of IMAGE_CHECKS) expect(screen.getByRole('switch', { name: new RegExp(label.replace(/[()]/g, '\\$&')) })).not.toBeChecked()
       await userEvent.click(screen.getByRole('button', { name: 'Turn all on' }))
@@ -434,7 +487,7 @@ describe('SettingsPage', () => {
   describe('Postvalidation', () => {
     const CHECKS = [
       /Deployment id format/, /starts with its collection/, /^Collection name/, /location is the one chosen/, /Image dates fit the deployment/, /Camera consistency/,
-      /Number of images is like the previous revisions/, /Number of sequences is like the previous revisions/, /Length of the sequences is like the previous revisions/,
+      /Number of images is like the previous revisions/, /Number of sequences is like the previous revisions/, /Length of the sequences is like the previous revisions/, /The SD card is the one the visit left/, /The photos are those the visit counted/,
     ]
     const open = async () => {
       render(<SettingsPage onClose={vi.fn()} />)
@@ -445,7 +498,7 @@ describe('SettingsPage', () => {
     it('has one entry per check, each with a switch, all on by default', async () => {
       await open()
 
-      expect(screen.getAllByRole('switch')).toHaveLength(9)
+      expect(screen.getAllByRole('switch')).toHaveLength(11)
       for (const label of CHECKS) expect(screen.getByRole('switch', { name: label })).toBeChecked()
     })
 
@@ -490,7 +543,7 @@ describe('SettingsPage', () => {
 
       expect(mockedApi.saveSettings.mock.calls[0][0].POSTVALIDATION).toEqual({
         deployment_id: true, collection_prefix: true, collection_name: true, location: false, time_range: true, camera: true,
-        image_count: true, sequence_count: true, sequence_length: true, tolerance_hours: 2.5,
+        image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true, tolerance_hours: 2.5,
         sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
         image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
       })
@@ -736,10 +789,10 @@ describe('SettingsPage', () => {
   it('saves every section at once', async () => {
     render(<SettingsPage onClose={vi.fn()} />)
     await screen.findByLabelText('Level')
-    await userEvent.selectOptions(screen.getByLabelText('Level'), 'WARNING')
-    await section('Trapper')
-    await userEvent.clear(screen.getByLabelText('URL'))
-    await userEvent.type(screen.getByLabelText('URL'), 'https://other.example.org')
+    await userEvent.click(screen.getByRole('radio', { name: /Warnings/ }))
+    await section('Uploader')
+    await userEvent.clear(screen.getByLabelText('Web address'))
+    await userEvent.type(screen.getByLabelText('Web address'), 'https://other.example.org')
     await section('Validation')
     await userEvent.click(screen.getByRole('switch', { name: /Duplicate images/ }))
     await section('Postvalidation')
@@ -748,7 +801,7 @@ describe('SettingsPage', () => {
 
     expect(mockedApi.saveSettings).toHaveBeenCalledTimes(1)
     const update = mockedApi.saveSettings.mock.calls[0][0]
-    expect(update.GENERAL).toEqual({ log_level: 'WARNING', workers: 4 })
+    expect(update.GENERAL).toEqual({ log_level: 'WARNING', workers: 4, default_research_project: null })
     expect(update.TRAPPER.base_url).toBe('https://other.example.org')
     expect(update.VALIDATION.duplicates).toBe(false)
     expect(update.POSTVALIDATION.camera).toBe(false)
@@ -768,6 +821,402 @@ describe('SettingsPage', () => {
     render(<SettingsPage onClose={vi.fn()} />)
 
     expect(await screen.findByText('Backend not reachable')).toBeInTheDocument()
+  })
+
+  describe('Trappers', () => {
+    const ANA = { username: 'ana', name: 'Ana Pérez', affiliation: 'University of Huelva', email: 'ana@uhu.es', status: 'active' as const }
+    const LUIS = { username: 'luis', name: 'Luis', affiliation: null, email: null, status: 'active' as const }
+
+    async function open(trappers: { username: string; name: string; affiliation: string | null; email?: string | null }[] = []) {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('Trappers')
+    }
+
+    it('lists the trappers saved as cards: the username is the title, and the full name and where they work are under it', async () => {
+      await open([ANA, LUIS])
+
+      expect(screen.getByText('ana')).toBeInTheDocument()
+      expect(screen.getByText('Ana Pérez · University of Huelva')).toBeInTheDocument()
+      expect(screen.getByText('luis')).toBeInTheDocument()
+      expect(screen.getByText('Luis')).toBeInTheDocument()
+      expect(screen.queryByText('No affiliation')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Edit ana' })).toBeInTheDocument()
+    })
+
+    it('says when there are none yet', async () => {
+      await open()
+
+      expect(screen.getByText(/No trapper yet/)).toBeInTheDocument()
+    })
+
+    it('adds a trapper with +, names it in the window that opens, and saves it with the rest of the settings', async () => {
+      await open([ANA])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add trapper' }))
+      const dialog = within(screen.getByRole('region', { name: 'Trapper' }))
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()                         // the username and the full name are required
+      await userEvent.type(dialog.getByLabelText('Username'), 'luis.gomez')
+      await userEvent.type(dialog.getByLabelText('Full name'), 'Luis Gómez')
+      await userEvent.type(dialog.getByLabelText('Affiliation'), 'CSIC')
+      await userEvent.type(dialog.getByLabelText('Email'), 'luis@csic.es')
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([ANA, { username: 'luis.gomez', name: 'Luis Gómez', affiliation: 'CSIC', email: 'luis@csic.es', status: 'active' }])
+    })
+
+    it('does not let a username have spaces or an email be one that is not', async () => {
+      await open([ANA])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add trapper' }))
+      const dialog = within(screen.getByRole('region', { name: 'Trapper' }))
+      await userEvent.type(dialog.getByLabelText('Username'), 'luis gomez')
+      expect(dialog.getByText('Required, with no spaces.')).toBeInTheDocument()
+      await userEvent.type(dialog.getByLabelText('Full name'), 'Luis Gómez')
+      await userEvent.type(dialog.getByLabelText('Email'), 'luis')
+      expect(dialog.getByText('Not an email address.')).toBeInTheDocument()
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    })
+
+    it('imports trappers from a CSV file — the new ones are added, one with the same username is updated, one with no username or no full name is left out — and saves them with the rest', async () => {
+      await open([ANA])
+
+      const file = new File(['username,name,affiliation,email\nANA,Ana Pérez,CSIC,\nluis,Luis,,luis@x.org\n,nobody,,\nmaria,,,\nmaria lopez,María López,,\n'], 'trappers.csv', { type: 'text/csv' })
+      await userEvent.upload(screen.getByLabelText('Import Trappers from a CSV file'), file)
+
+      expect(await screen.findByRole('status')).toHaveTextContent('1 added, 1 updated from the file')
+      expect(screen.getByRole('status')).toHaveTextContent('Row 4: no username')
+      expect(screen.getByRole('status')).toHaveTextContent('Row 5: no full name')
+      expect(screen.getByRole('status')).toHaveTextContent('Row 6: username “maria lopez”')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([
+        { username: 'ANA', name: 'Ana Pérez', affiliation: 'CSIC', email: null, status: 'active' }, { username: 'luis', name: 'Luis', affiliation: null, email: 'luis@x.org', status: 'active' },
+      ])
+    })
+
+    it('has no column for the username in a file: nothing is imported, and it says so', async () => {
+      await open([ANA])
+
+      const file = new File(['name,affiliation\nLuis,CSIC\n'], 'trappers.csv', { type: 'text/csv' })
+      await userEvent.upload(screen.getByLabelText('Import Trappers from a CSV file'), file)
+
+      expect(await screen.findByRole('status')).toHaveTextContent('The file has no column for the username')
+    })
+
+    it('gives a trapper a status picked from cards, with Required on the fields that are', async () => {
+      await open([LUIS])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit luis' }))
+      const page = within(screen.getByRole('region', { name: 'Trapper' }))
+      expect(page.getAllByText('Required')).toHaveLength(2)             // the username and the full name
+      expect(page.queryByText('Optional')).not.toBeInTheDocument() // only what is required says so
+      expect(page.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
+      await userEvent.click(page.getByRole('radio', { name: /Inactive/ }))
+      await userEvent.click(page.getByRole('button', { name: 'Save changes' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.trappers).toEqual([expect.objectContaining({ username: 'luis', name: 'Luis', status: 'inactive' })])
+    })
+
+    it('takes the title of the page and the text over the list away while a trapper is added or edited', async () => {
+      await open([LUIS])
+      expect(screen.getByRole('heading', { name: 'Entities' })).toBeInTheDocument()
+      expect(screen.getByText(/The people who go to the field/)).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add trapper' }))
+      expect(screen.queryByRole('heading', { name: 'Entities' })).not.toBeInTheDocument()
+      expect(screen.queryByText(/The people who go to the field/)).not.toBeInTheDocument()
+
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument() // the one of the settings waits until the form is closed
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(screen.getByRole('heading', { name: 'Entities' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    })
+
+    it('exports the trappers to a CSV file, and has nothing to export when there are none', async () => {
+      const created: Blob[] = []
+      URL.createObjectURL = vi.fn((b: Blob) => { created.push(b); return 'blob:x' })
+      URL.revokeObjectURL = vi.fn()
+      await open([ANA, LUIS])
+
+      await userEvent.click(screen.getByRole('button', { name: 'More' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Export CSV' }))
+
+      expect(await created[0].text()).toBe('username,name,affiliation,email,status\r\nana,Ana Pérez,University of Huelva,ana@uhu.es,active\r\nluis,Luis,,,active\r\n')
+    })
+
+    it('has nothing to export when there are no trappers', async () => {
+      await open()
+
+      await userEvent.click(screen.getByRole('button', { name: 'More' }))
+      expect(screen.getByRole('menuitem', { name: 'Export CSV' })).toBeDisabled()
+    })
+
+    it('edits a trapper with its gear, and removes it from the window', async () => {
+      await open([ANA, LUIS])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit luis' }))
+      await userEvent.type(within(screen.getByRole('region', { name: 'Trapper' })).getByLabelText('Affiliation'), 'IOP PAS')
+      await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+      expect(screen.getByText('Luis · IOP PAS')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit ana' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete trapper' }))
+      expect(screen.queryByText('Ana Pérez · University of Huelva')).not.toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('does not let a trapper be done without a username or a full name, or with the username of another', async () => {
+      await open([ANA, LUIS])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit luis' }))
+      const name = screen.getByLabelText('Full name')
+      await userEvent.clear(name)
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+      await userEvent.type(name, 'Luis')
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+
+      const username = screen.getByLabelText('Username')
+      await userEvent.clear(username)
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+      await userEvent.type(username, 'ANA')                                                    // whatever its case
+      expect(screen.getByText('ANA is already in the list.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    })
+  })
+
+  describe('Roles', () => {
+    it('gives a trapper a role of Camtrap DP in a research project, and keeps it', async () => {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ username: 'ana', name: 'Ana Pérez', affiliation: null }] } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('Roles')
+      await pickProject()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Add role' }))
+      const dialog = within(screen.getByRole('region', { name: 'Role' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Ana Pérez' }))
+      expect(dialog.getByRole('button', { name: 'Contributor' })).toHaveAttribute('aria-pressed', 'true')
+      await userEvent.click(dialog.getByRole('button', { name: 'Principal investigator' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.roles).toEqual([{ research_project: 'DONA', trapper: 'Ana Pérez', role: 'principalInvestigator' }])
+    })
+
+    it('lets a trapper have several roles in a project, but not the same one twice', async () => {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ username: 'ana', name: 'Ana Pérez', affiliation: null }], roles: [{ research_project: 'DONA', trapper: 'Ana Pérez', role: 'contact' }] } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('Roles')
+      await pickProject()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Add role' }))
+      const dialog = within(screen.getByRole('region', { name: 'Role' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Ana Pérez' }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Contact' }))
+      expect(dialog.getByText('This one is already in the list.')).toBeInTheDocument()
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.click(dialog.getByRole('button', { name: 'Publisher' }))
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeEnabled()
+    })
+  })
+
+  describe('SD cards', () => {
+    const A12: SdCard = { label: 'A12', brand: 'SanDisk', capacity: '64 GB', in_service: '2026-03-01', research_project: 'DONA' }
+    const B3: SdCard = { label: 'B3', brand: null, capacity: null, in_service: null, research_project: 'DONA' }
+
+    async function open(sd_cards: SdCard[] = []) {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('SD cards')
+      await pickProject()
+    }
+
+    it('opens on the page of the card a link of another page goes to', async () => {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [A12, B3] } })
+      render(<SettingsPage onClose={vi.fn()} initialSection="sdcards" initialProject="DONA" initialItem="b3" />)
+
+      expect(await screen.findByRole('region', { name: 'SD card' })).toBeInTheDocument()
+      expect(screen.getByText('Edit B3')).toBeInTheDocument()
+    })
+
+    it('lists the cards with their brand, capacity and the day they were put into production', async () => {
+      await open([A12, B3])
+
+      expect(screen.getByText('A12')).toBeInTheDocument()
+      expect(screen.getByText('SanDisk · 64 GB')).toBeInTheDocument()
+      expect(await screen.findByText('In production since 1 Mar 2026 · No visits yet')).toBeInTheDocument()
+    })
+
+    it('says when there are none yet', async () => {
+      await open()
+
+      expect(screen.getByText('No SD card yet.')).toBeInTheDocument()
+    })
+
+    it('adds a card with its label, a brand picked from the suggestions, its capacity and a day, and saves it', async () => {
+      await open()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add SD card' }))
+      const dialog = within(screen.getByRole('region', { name: 'SD card' }))
+      await userEvent.clear(dialog.getByLabelText('Label'))
+      await userEvent.type(dialog.getByLabelText('Label'), 'C7')
+      await userEvent.click(dialog.getByRole('button', { name: 'Kingston' }))
+      await userEvent.type(dialog.getByLabelText('Capacity'), '128 GB')
+      expect(dialog.queryByLabelText('In production since')).not.toBeInTheDocument() // it is kept as the day it is created
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ label: 'C7', brand: 'Kingston', capacity: '128 GB', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'ready', status_date: null, status_note: null }])
+    })
+
+    it('shows the QR code of an SD card in its page', async () => {
+      await open([B3])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
+      expect(screen.getByRole('img', { name: 'QR code of B3' }).querySelector('svg')).not.toBeNull()
+      expect(screen.getByText('wildintel:sdcard:DONA:B3')).toBeInTheDocument()
+    })
+
+    it('offers the usual brands to pick, and keeps any other that is typed', async () => {
+      await open([B3])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
+      const brand = screen.getByLabelText('Brand')
+      expect(within(screen.getByLabelText('Brand suggestions')).getAllByRole('button').map((o) => o.textContent)).toContain('SanDisk')
+
+      await userEvent.type(brand, 'Acme Storage')
+      await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards).toEqual([{ ...B3, brand: 'Acme Storage' }])
+    })
+
+    it('needs a label, and a different one from the other cards', async () => {
+      await open([A12, B3])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit B3' }))
+      const label = screen.getByLabelText('Label')
+      await userEvent.clear(label)
+      expect(screen.queryByText('A label is required.')).not.toBeInTheDocument() // the label already says Required
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+
+      await userEvent.type(label, 'a12')
+      expect(screen.getByText('a12 is already in the list.')).toBeInTheDocument()
+    })
+  })
+
+  describe('Cameras', () => {
+    async function open(cameras: Camera[] = []) {
+      mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, cameras } })
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await entity('Cameras')
+      await pickProject()
+    }
+
+    it('lists the cameras with their model, and says when there are none', async () => {
+      await open([{ label: 'P800HG08192031', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: '2025-11-12', research_project: 'DONA' }, { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      expect(screen.getByText('Reconyx-PC800 · P800HG08192031')).toBeInTheDocument() // the model and the serial number under the label
+      expect(await screen.findByText('In production since 12 Nov 2025 · No visits yet')).toBeInTheDocument()
+    })
+
+    it('shows the QR code of a camera in its page — not when it is being added', async () => {
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: 'Reconyx-PC800', in_service: null, research_project: 'DONA' }])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add camera' }))
+      expect(screen.queryByRole('img', { name: /QR code of/ })).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: /Cancel/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
+      expect(screen.getByRole('img', { name: 'QR code of X1' }).querySelector('svg')).not.toBeNull()
+      expect(screen.getByText('wildintel:camera:DONA:X1')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Download QR code' })).toHaveAttribute('download', 'X1_qr.svg')
+    })
+
+    it('adds a camera by its id and model, and saves it', async () => {
+      await open()
+      expect(screen.getByText('No camera yet.')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add camera' }))
+      const dialog = within(screen.getByRole('region', { name: 'Camera' }))
+      await userEvent.type(dialog.getByLabelText('Label'), 'North gate')
+      await userEvent.type(dialog.getByLabelText('Camera id'), 'P800HG08192031')
+      await userEvent.type(dialog.getByLabelText('Camera model'), 'Reconyx-PC800')
+      await userEvent.click(within(dialog.getByRole('group', { name: 'Mobile connection' })).getByRole('button', { name: '4G' }))
+      await userEvent.click(within(dialog.getByRole('group', { name: 'Power' })).getByRole('button', { name: 'Battery' }))
+      await userEvent.click(within(dialog.getByRole('group', { name: 'The battery can be taken out' })).getByRole('button', { name: 'Yes' }))
+      expect(dialog.queryByLabelText('In production since')).not.toBeInTheDocument() // it is kept as the day it is created
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', connectivity: '4g', power_source: 'battery', battery_removable: 'yes', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'ready', status_date: null, status_note: null }])
+    })
+
+    it('gives a camera a status — and, once archived, the day, why and a comment — and says it on its card', async () => {
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'active' }])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
+      const dialog = within(screen.getByRole('region', { name: 'Camera' }))
+      expect(dialog.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
+      expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual([
+        'PlannedOnly in Settings: it is not in the app yet.', 'ReadyAvailable, not in the field yet. Offered when a visit is registered.', 'ActiveIn use in the field. Offered when a visit is registered.', 'ArchivedOut of use for good: lost, stolen, broken… It never goes back to ready or active.',
+      ])
+      expect(dialog.queryByLabelText('Status since')).not.toBeInTheDocument() // asked once it is archived
+      await userEvent.click(dialog.getByRole('radio', { name: /Archived/ }))
+      expect(dialog.getByRole('button', { name: 'Other' })).toHaveAttribute('aria-pressed', 'true') // the reason a new archive starts with
+      await userEvent.click(dialog.getByRole('button', { name: 'Stolen' }))
+      fireEvent.change(dialog.getByLabelText('Status since'), { target: { value: '2026-05-02' } })
+      await userEvent.type(dialog.getByLabelText('Comment'), 'taken from the tree')
+      await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+
+      expect(screen.getByText('Archived')).toHaveAttribute('title', 'since 2026-05-02 — taken from the tree')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([
+        { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA', status: 'archived', archive_reason: 'stolen', status_date: '2026-05-02', status_note: 'taken from the tree' },
+      ])
+    })
+
+    it('says how many visits a camera was used in, and does not let one that was used be deleted', async () => {
+      const visit = (camera_id: string) => ({ project: 'DONA', camera_id })
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [DONA] })
+      mockedApi.listVisits.mockResolvedValue({ results: [visit('X1'), visit('x1')] } as never)
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }, { label: 'X2', camera_id: 'X2', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      expect(await screen.findByText('Used in 2 visits')).toBeInTheDocument()
+      expect(screen.getByText('No visits yet')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Delete X1' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Delete X2' })).toBeEnabled()
+      mockedApi.listVisits.mockReset()
+    })
+
+    it('deletes a camera from its page', async () => {
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit X1' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete camera' }))
+
+      expect(screen.queryByText('X1')).not.toBeInTheDocument()
+    })
+
+    it('needs a label, and a different one from the other cameras — its serial number is optional', async () => {
+      await open([{ label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'DONA' }, { label: 'X2', camera_id: 'X2', camera_model: null, in_service: null, research_project: 'DONA' }])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit X2' }))
+      const id = screen.getByLabelText('Label')
+      await userEvent.clear(id)
+      expect(screen.queryByText('A label is required.')).not.toBeInTheDocument() // the label already says Required
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+
+      await userEvent.type(id, 'x1')
+      expect(screen.getByText('x1 is already in the list.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    })
   })
 
   describe('Reports', () => {
@@ -804,9 +1253,9 @@ describe('SettingsPage', () => {
       await section('Config')
 
       expect(await screen.findByText('Default config')).toBeInTheDocument()
-      expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+      expect(screen.getByText('In use')).toBeInTheDocument()
       expect(screen.getByLabelText('b file location')).toHaveTextContent('/configs/b.toml')
-      expect(screen.queryByRole('button', { name: 'Activate Default config' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Use Default config' })).not.toBeInTheDocument()
     })
 
     it('switches to another config and shows its settings', async () => {
@@ -815,11 +1264,11 @@ describe('SettingsPage', () => {
       await waitFor(() => expect(mockedApi.getSettings).toHaveBeenCalledTimes(1))
       await section('Config')
       mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, TRAPPER: { ...APP_SETTINGS.TRAPPER, user_name: 'bob@b.org' } })
-      await userEvent.click(await screen.findByRole('button', { name: 'Activate b' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'Use b' }))
 
       await waitFor(() => expect(mockedApi.activateConfig).toHaveBeenCalledWith('b'))
       await waitFor(() => expect(mockedApi.getSettings).toHaveBeenCalledTimes(2)) // the settings are read again
-      await userEvent.click(screen.getByRole('button', { name: 'Trapper' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Uploader' }))
       expect(await screen.findByDisplayValue('bob@b.org')).toBeInTheDocument()
     })
 
@@ -828,7 +1277,7 @@ describe('SettingsPage', () => {
       mockedApi.addConfig.mockResolvedValue([DEFAULT, B, created])
       render(<SettingsPage onClose={() => {}} />)
       await section('Config')
-      await userEvent.click(await screen.findByRole('button', { name: 'Add config' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'New config' }))
       expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
       await userEvent.type(screen.getByLabelText('Config name'), 'Project C')
       await userEvent.click(screen.getByRole('button', { name: 'Create' }))
@@ -843,7 +1292,7 @@ describe('SettingsPage', () => {
       mockedApi.addConfig.mockRejectedValue(new Error('A config needs a name with at least one letter or digit.'))
       render(<SettingsPage onClose={() => {}} />)
       await section('Config')
-      await userEvent.click(await screen.findByRole('button', { name: 'Add config' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'New config' }))
       await userEvent.type(screen.getByLabelText('Config name'), '!!')
       await userEvent.click(screen.getByRole('button', { name: 'Create' }))
 
@@ -898,5 +1347,372 @@ describe('SettingsPage', () => {
       expect(await screen.findByText(/up to date/)).toBeInTheDocument()
       expect(screen.queryByText(/offline/)).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('SettingsPage — Entities', () => {
+  async function open(tab: string) {
+    render(<SettingsPage onClose={vi.fn()} />)
+    await screen.findByLabelText('Level')
+    await entity(tab)
+  }
+  const file = (text: string) => new File([text], 'f.csv', { type: 'text/csv' })
+
+  it('has a tab for the research projects, the trappers, their roles, the locations, the cameras and the SD cards, and takes the old sections to their tab', async () => {
+    render(<SettingsPage onClose={vi.fn()} initialSection="sdcards" />)
+    await screen.findByRole('tablist', { name: 'Entities' })
+
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Research projects', 'Trappers', 'Roles', 'Locations', 'Cameras', 'SD cards'])
+    expect(screen.getByRole('tab', { name: 'SD cards' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('button', { name: 'Trappers' })).not.toBeInTheDocument() // no longer a section of its own
+  })
+
+  describe('research projects', () => {
+    it('lists those of the collections folder', async () => {
+      await open('Research projects')
+
+      expect(await screen.findByText('DONA')).toBeInTheDocument()
+      expect(screen.getByText('Doñana')).toBeInTheDocument()
+      expect(screen.getByText('From Trapper')).toBeInTheDocument()
+    })
+
+    it('adds one by hand — kept at once, not with Save — and refuses an acronym that is not one', async () => {
+      mockedApi.saveResearchProject.mockImplementation(async (p) => p)
+      await open('Research projects')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add research project' }))
+      const dialog = within(screen.getByRole('region', { name: 'Research project' }))
+      await userEvent.type(dialog.getByLabelText('Acronym'), 'T!')
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.clear(dialog.getByLabelText('Acronym'))
+      await userEvent.type(dialog.getByLabelText('Acronym'), 'TATR')
+      await userEvent.type(dialog.getByLabelText('Name'), 'Tatra')
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ acronym: 'TATR', name: 'Tatra', trapper_pk: null })))
+      expect(mockedApi.saveSettings).not.toHaveBeenCalled()
+    })
+
+    it('only shows one taken from Trapper: no fields to change, a notice, and what belongs to it', async () => {
+      await open('Research projects')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'View DONA' }))
+
+      const page = within(screen.getByRole('region', { name: 'Research project' }))
+      expect(page.getByText('This project comes from Trapper')).toBeInTheDocument()
+      expect(page.queryByLabelText('Name')).not.toBeInTheDocument()
+      expect(page.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+      expect(page.queryByRole('button', { name: 'Remove research project' })).not.toBeInTheDocument()
+      expect(page.getByText('Doñana')).toBeInTheDocument()
+      expect(page.getByText('Belongs to it')).toBeInTheDocument()
+      await userEvent.click(page.getByRole('button', { name: 'Close' }))
+      expect(screen.getByRole('button', { name: 'View DONA' })).toBeInTheDocument()
+    })
+
+    it('edits one with its gear — its status too, but not its acronym — and keeps it at once', async () => {
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...DONA, trapper_pk: null }] })
+      mockedApi.updateResearchProject.mockResolvedValue({ ...DONA, status: 'finished' })
+      await open('Research projects')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA' }))
+      const dialog = within(screen.getByRole('region', { name: 'Research project' }))
+      expect(dialog.getByLabelText('Acronym')).toBeDisabled()
+      expect(dialog.getAllByRole('radio').map((o) => o.textContent)).toEqual(['PlannedIt is planned: only in Settings, to link entities to it.', 'ActiveIt is seen in the whole app.', 'FinishedClosed, but it can be reopened.', 'ArchivedClosed for good: it cannot be modified and never goes back.'])
+      expect(dialog.getByRole('radio', { name: /Active/ })).toHaveAttribute('aria-checked', 'true')
+      await userEvent.clear(dialog.getByLabelText('Name'))
+      await userEvent.type(dialog.getByLabelText('Name'), 'Doñana NP')
+      await userEvent.type(dialog.getByLabelText('Description'), 'Spring 2024')
+      await userEvent.type(dialog.getByPlaceholderText('e.g. camera traps'), 'doñana{Enter}')
+      await userEvent.type(dialog.getByPlaceholderText('e.g. camera traps'), 'camera traps')
+      await userEvent.click(dialog.getByRole('button', { name: 'Add keyword' }))
+      expect(dialog.getByRole('button', { name: 'Remove doñana' })).toBeInTheDocument()
+      await userEvent.click(within(dialog.getByRole('group', { name: 'Sensor method' })).getByRole('button', { name: 'timeLapse' }))
+      await userEvent.type(dialog.getByLabelText('Abstract'), 'Cameras in the park')
+      await userEvent.click(dialog.getByRole('radio', { name: /Finished/ }))
+      await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => expect(mockedApi.updateResearchProject).toHaveBeenCalledWith('DONA', expect.objectContaining({
+        name: 'Doñana NP', description: 'Spring 2024', keywords: 'doñana, camera traps', status: 'finished', sensor_method: 2, abstract: 'Cameras in the park',
+      })))
+      expect(mockedApi.saveSettings).not.toHaveBeenCalled()
+    })
+
+    it('deletes one after asking — and says why when it can not be', async () => {
+      mockedApi.deleteResearchProject.mockRejectedValueOnce(new Error("The research project 'DONA' still holds R0001: it can't be deleted until those are removed."))
+      mockedApi.deleteResearchProject.mockResolvedValueOnce({ deleted: 'DONA' })
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...DONA, trapper_pk: null }] })
+      await open('Research projects')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Remove research project' }))
+      expect(mockedApi.deleteResearchProject).not.toHaveBeenCalled() // it is asked first
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(mockedApi.deleteResearchProject).not.toHaveBeenCalled()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit DONA' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Remove research project' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete DONA' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('still holds R0001')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit DONA' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Remove research project' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete DONA' }))
+      await waitFor(() => expect(mockedApi.deleteResearchProject).toHaveBeenCalledTimes(2))
+    })
+
+    it('reads them from a CSV file, leaving out those that are there already and those that are not research projects', async () => {
+      mockedApi.saveResearchProject.mockImplementation(async (p) => p)
+      await open('Research projects')
+
+      await userEvent.upload(screen.getByLabelText('Import Research projects from a CSV file'), file('acronym,name,description\nTATR,Tatra,Mountains\ndona,Doñana again,\nX,Too short,\n'))
+
+      expect(await screen.findByRole('status')).toHaveTextContent('1 added, 1 already there.')
+      expect(screen.getByRole('status')).toHaveTextContent('X: From 3 to 10 letters')
+      expect(mockedApi.saveResearchProject).toHaveBeenCalledTimes(1)
+      expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ acronym: 'TATR', description: 'Mountains' }))
+    })
+
+    it('takes them from Trapper, those with an acronym that can be one', async () => {
+      mockedApi.trapperResearchProjects.mockResolvedValue({ results: [{ pk: 5, name: 'Tatra', acronym: 'TATR' }, { pk: 6, name: 'No acronym', acronym: null }] })
+      mockedApi.saveResearchProject.mockImplementation(async (p) => p)
+      await open('Research projects')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Import from Trapper' }))
+      const panel = within(await screen.findByRole('group', { name: 'Import research projects from Trapper' }))
+      await userEvent.click(await panel.findByRole('checkbox', { name: /TATR — Tatra/ }))
+      await userEvent.click(panel.getByRole('checkbox', { name: /No acronym/ }))
+      await userEvent.click(panel.getByRole('button', { name: 'Add 2 research projects' }))
+
+      expect(await panel.findByRole('status')).toHaveTextContent('1 added from Trapper.')
+      expect(panel.getByRole('status')).toHaveTextContent('“No acronym” has no acronym')
+      expect(mockedApi.saveResearchProject).toHaveBeenCalledWith(expect.objectContaining({ acronym: 'TATR', name: 'Tatra', trapper_pk: 5 }))
+    })
+
+    it('says why Trapper cannot be reached', async () => {
+      mockedApi.trapperResearchProjects.mockRejectedValue(new Error('No Trapper account in the settings.'))
+      await open('Research projects')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Import from Trapper' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No Trapper account in the settings.')
+    })
+  })
+
+  describe('locations', () => {
+    const RIDGE = { location_id: 'DONA_01', name: 'Ridge', timezone: 'Europe/Madrid', ignore_dst: null, latitude: 37.1, longitude: -6.4, coordinate_uncertainty: null, trapper_pk: null }
+
+    async function openLocations(locations = [RIDGE]) {
+      mockedApi.listLocalLocations.mockResolvedValue({ results: locations })
+      await open('Locations')
+      expect(screen.getByText('Pick a research project to see its locations.')).toBeInTheDocument()
+      await pickProject()
+    }
+
+    it('lists those of the research project picked, kept in the collections folder', async () => {
+      await openLocations()
+
+      expect(await screen.findByText('DONA_01')).toBeInTheDocument()
+      expect(screen.getByText('Ridge')).toBeInTheDocument()
+      expect(await screen.findByText('37.1, -6.4 · Europe/Madrid · No visits yet')).toBeInTheDocument()
+      expect(mockedApi.listLocalLocations).toHaveBeenCalledWith('DONA')
+    })
+
+    it('adds one by hand, with its numbers as numbers, and will not let a wrong coordinate or timezone be done with', async () => {
+      mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
+      await openLocations([])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add location' }))
+      const dialog = within(screen.getByRole('region', { name: 'Location' }))
+      await userEvent.type(dialog.getByLabelText('Location id'), 'DONA_02')
+      await userEvent.type(dialog.getByLabelText('Latitude'), '95')
+      expect(dialog.getByText('A number from -90 to 90.')).toBeInTheDocument()
+      expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.clear(dialog.getByLabelText('Latitude'))
+      await userEvent.type(dialog.getByLabelText('Latitude'), '37.01')
+      await userEvent.type(dialog.getByLabelText('Longitude'), '-6.44')
+      // it starts as UTC, and only a zone of the list can be picked
+      expect(dialog.getByRole('combobox')).toHaveValue('UTC')
+      await userEvent.type(dialog.getByRole('combobox'), 'Mars/Base')
+      expect(dialog.getByText('No matches')).toBeInTheDocument()
+      await userEvent.clear(dialog.getByRole('combobox'))
+      await userEvent.type(dialog.getByRole('combobox'), 'Europe/Madrid')
+      await userEvent.click(dialog.getByRole('option', { name: 'Europe/Madrid' }))
+      await userEvent.click(dialog.getByLabelText('The cameras here ignore summer time'))
+      await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', {
+        location_id: 'DONA_02', name: null, latitude: 37.01, longitude: -6.44, coordinate_uncertainty: null, timezone: 'Europe/Madrid', ignore_dst: true, in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), trapper_pk: null, status: 'ready', status_date: null, status_note: null,
+      }))
+    })
+
+    it('shows the QR code of a location in its page', async () => {
+      await openLocations()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
+      expect(screen.getByRole('img', { name: 'QR code of DONA_01' }).querySelector('svg')).not.toBeNull()
+      expect(screen.getByText(/wildintel:location:.*:DONA_01/)).toBeInTheDocument()
+    })
+
+    it('deletes one after asking, from its page — and says why when it can not be', async () => {
+      mockedApi.deleteLocalLocation.mockRejectedValueOnce(new Error("The location 'DONA_01' still has 1 visit: it can't be deleted — mark it as archived instead."))
+      mockedApi.deleteLocalLocation.mockResolvedValueOnce({ deleted: 'DONA_01' })
+      await openLocations()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete location' }))
+      expect(mockedApi.deleteLocalLocation).not.toHaveBeenCalled() // it is asked first
+      await userEvent.click(screen.getByRole('button', { name: 'Delete DONA_01' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('still has 1 visit')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Delete location' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete DONA_01' }))
+      await waitFor(() => expect(mockedApi.deleteLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01'))
+    })
+
+    it('edits one — but not its id — and keeps it at once', async () => {
+      mockedApi.updateLocalLocation.mockResolvedValue(RIDGE)
+      await openLocations()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit DONA_01' }))
+      const dialog = within(screen.getByRole('region', { name: 'Location' }))
+      expect(dialog.getByLabelText('Location id')).toBeDisabled()
+      expect(dialog.getByRole('combobox')).toBeDisabled() // set when the location was created
+      expect(dialog.getByRole('switch', { name: 'The cameras here ignore summer time' })).toBeDisabled()
+      await userEvent.clear(dialog.getByLabelText('Name'))
+      await userEvent.type(dialog.getByLabelText('Name'), 'Ridge top')
+      await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01', expect.objectContaining({ name: 'Ridge top', latitude: 37.1 })))
+      expect(mockedApi.updateLocalLocation.mock.calls[0][2]).not.toHaveProperty('timezone') // fixed when the location was created
+      expect(mockedApi.updateLocalLocation.mock.calls[0][2]).not.toHaveProperty('ignore_dst')
+    })
+
+    it('reads them from a CSV file: new ones are added, one that is there is updated, a wrong value is left blank', async () => {
+      mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
+      mockedApi.updateLocalLocation.mockResolvedValue(RIDGE)
+      await openLocations()
+
+      await userEvent.upload(await screen.findByLabelText('Import Locations of DONA from a CSV file'), file('location_id,name,latitude,longitude\nDONA_01,Ridge 2,37.2,-6.4\nDONA_03,New,95,-6.1\n'))
+
+      expect(await screen.findByText(/1 added, 1 updated in DONA/)).toBeInTheDocument()
+      expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('DONA', 'DONA_01', expect.objectContaining({ name: 'Ridge 2', latitude: 37.2 }))
+      expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', expect.objectContaining({ location_id: 'DONA_03', latitude: null, longitude: -6.1 }))
+      expect(screen.getByText(/latitude “95”/)).toBeInTheDocument()
+    })
+
+    it('takes them from the Trapper research project of the one picked, those with coordinates', async () => {
+      mockedApi.trapperLocations.mockResolvedValue({ results: [
+        { pk: 11, location_id: 'DONA_01', name: 'There already', timezone: null },
+        { pk: 12, location_id: 'DONA_07', name: 'Marsh', timezone: 'Europe/Madrid', latitude: 37.3, longitude: -6.2 },
+        { pk: 13, location_id: 'DONA_08', name: 'No GPS', timezone: null },
+      ] })
+      mockedApi.saveLocalLocation.mockImplementation(async (_rp, l) => l)
+      await openLocations()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Import from Trapper' }))
+      const panel = within(await screen.findByRole('group', { name: 'Import locations from Trapper' }))
+      for (const name of [/DONA_01/, /DONA_07/, /DONA_08/]) await userEvent.click(await panel.findByRole('checkbox', { name }))
+      await userEvent.click(panel.getByRole('button', { name: 'Add 3 locations' }))
+
+      expect(await panel.findByRole('status')).toHaveTextContent('1 added from Trapper.')
+      expect(panel.getByRole('status')).toHaveTextContent('DONA_01 is already there.')
+      expect(panel.getByRole('status')).toHaveTextContent('“DONA_08” has no coordinates in Trapper')
+      expect(mockedApi.trapperLocations).toHaveBeenCalledWith({}, 2)
+      expect(mockedApi.saveLocalLocation).toHaveBeenCalledWith('DONA', expect.objectContaining({ location_id: 'DONA_07', latitude: 37.3, longitude: -6.2, timezone: 'Europe/Madrid', trapper_pk: 12 }))
+    })
+
+    it('cannot take them from Trapper for a research project that was not taken from there', async () => {
+      mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...DONA, trapper_pk: null }] })
+      await openLocations()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Import from Trapper' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('was not taken from Trapper')
+    })
+  })
+
+  it('keeps the cameras and the SD cards by research project: those of another project, or of none, are not mixed up', async () => {
+    const card = (label: string, research_project: string | null) => ({ label, brand: null, capacity: null, in_service: null, research_project })
+    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [card('A1', 'DONA'), card('B1', 'TATR'), card('F1', null)] } })
+    await open('SD cards')
+
+    await pickProject()
+    expect(screen.getByText('A1')).toBeInTheDocument()
+    expect(screen.queryByText('B1')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add SD card' }))
+    await userEvent.type(within(screen.getByRole('region', { name: 'SD card' })).getByLabelText('Label'), '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.sd_cards.map((c) => [c.label, c.research_project])).toEqual([['B1', 'TATR'], ['F1', null], ['A1', 'DONA'], ['2', 'DONA']])
+  })
+
+  it('shows the cards of no project under their own choice', async () => {
+    const card = (label: string, research_project: string | null) => ({ label, brand: null, capacity: null, in_service: null, research_project })
+    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [card('A1', 'DONA'), card('F1', null)] } })
+    await open('SD cards')
+
+    await pickProject('Not assigned to a project')
+
+    expect(screen.getByText('F1')).toBeInTheDocument()
+    expect(screen.queryByText('A1')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('SettingsPage — which sources and uploaders are used', () => {
+  it('has a check to use each source of visits, and keeps it', async () => {
+    render(<SettingsPage onClose={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Visit sources' }))
+
+    expect(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect Legacy CSV' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect Legacy CSV' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
+    expect(screen.getByRole('switch', { name: 'Use Epicollect' })).toHaveAttribute('aria-checked', 'false')
+    await userEvent.click(screen.getByRole('switch', { name: 'Use Epicollect' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Custom CSV' }))
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument() // it is always offered: there is nothing to turn off
+    await userEvent.click(screen.getByRole('tab', { name: 'WildINTEL Epicollect CSV' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Use WildINTEL Epicollect CSV' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockedApi.saveSettings).toHaveBeenCalled())
+    const sent = mockedApi.saveSettings.mock.calls[0][0]
+    expect([sent.FIELDLOG.enabled, sent.EPICOLLECT5.enabled, sent.EPICOLLECTCSV.enabled]).toEqual([false, true, false])
+  })
+
+  it('has a check to use each uploader, and the form of what an upload to Agouti needs, which is kept', async () => {
+    render(<SettingsPage onClose={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Uploader' }))
+
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Trapper', 'Agouti'])
+    expect(screen.getByRole('switch', { name: 'Use Trapper' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(screen.getByRole('tab', { name: 'Agouti' }))
+    expect(screen.getByRole('switch', { name: 'Use Agouti' })).toHaveAttribute('aria-checked', 'false')
+    await userEvent.click(screen.getByRole('switch', { name: 'Use Agouti' }))
+    await userEvent.type(screen.getByLabelText('Agouti web address'), 'https://api.agouti.eu')
+    await userEvent.type(screen.getByLabelText('API key'), 'secret-key')
+    await userEvent.type(screen.getByLabelText('Agouti project id'), '42')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockedApi.saveSettings).toHaveBeenCalled())
+    expect(mockedApi.saveSettings.mock.calls[0][0].AGOUTI).toEqual({ enabled: true, base_url: 'https://api.agouti.eu', api_key: 'secret-key', project_id: '42' })
+  })
+})
+
+describe('SettingsPage — WildINTEL Epicollect file', () => {
+  it('says when a visit happened — in the tab of the source — and whether the logs keep the seconds, in General — and saves them', async () => {
+    render(<SettingsPage onClose={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Visit sources' }))
+
+    expect(screen.getByLabelText('The time of a visit is')).toHaveValue('created_at')
+    await userEvent.selectOptions(screen.getByLabelText('The time of a visit is'), 'hour')
+    expect(screen.queryByLabelText('Column for Who went')).not.toBeInTheDocument() // the columns are found by their names: nothing to say
+    await userEvent.click(screen.getByRole('button', { name: 'General' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Keep the seconds in the logs' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockedApi.saveSettings).toHaveBeenCalled())
+    expect(mockedApi.saveSettings.mock.calls[0][0].FIELDLOG).toEqual({ enabled: true, time_source: 'hour', keep_seconds: true })
   })
 })
