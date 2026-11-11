@@ -1,9 +1,0 @@
-ec5_uuid,created_at,1_Responsable,2_Collection,3_Date,4_Location,5_Camera,6_Action,7_Status_of_the_came,8_Card_Batteries,9_Number_of_pictures,10_SD,11_Date_and_hour,12_Observation,lat_13_Coordenates,long_13_Coordenates,14_Hour
-e001,2026-09-14T08:30:00.000Z,Ana Pérez,1,14/09/2026,1,BR5071050724,Installation,OK,OK,,1,Yes,First camera of the census,37.0123,-6.4412,08:30
-e002,2026-09-14T10:05:00.000Z,Ana Pérez,1,14/09/2026,2,RE5699252753,Installation,OK,OK,,2,Yes,,37.0258,-6.4527,10:05
-e003,2026-09-14T11:40:00.000Z,"Ana Pérez, Luis Gómez",1,14/09/2026,3,RE1161042648,Installation,OK,OK,,3,Yes,,37.0384,-6.4689,11:40
-e004,2026-09-14T13:15:00.000Z,"Ana Pérez, Luis Gómez",1,14/09/2026,4,SP1776213899,Installation,OK,OK,,4,Yes,,37.0471,-6.4815,13:15
-e005,2026-10-19T08:45:00.000Z,Luis Gómez,2,19/10/2026,1,BR5071050724,Revision,OK,OK,1420,5,Yes,Card changed,37.0123,-6.4412,08:45
-e006,2026-10-19T10:20:00.000Z,Luis Gómez,2,19/10/2026,2,RE5699252753,Revision,Knocked down,CarFull,,6,No,Camera had fallen: card full so the photos were not counted,37.0258,-6.4527,10:20
-e007,2026-10-19T11:50:00.000Z,Luis Gómez,2,19/10/2026,3,RE1161042648,Revision + Desinstallation,OK,SinPilas,1105,,Yes,Taken away: no batteries left,37.0384,-6.4689,11:50
-e008,2026-10-19T13:25:00.000Z,Luis Gómez,,19/10/2026,4,SP1776213899,Revision,,,,,,Entry of an old form version (no collection number): ignored,,,

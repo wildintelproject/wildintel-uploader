@@ -508,12 +508,12 @@ def test_a_archived_camera_or_sd_card_is_not_changed(tmp_path: Path):
 
 def test_each_source_of_visits_and_each_uploader_can_be_used_or_not(tmp_path: Path):
     shown = _client().get("/api/settings").json()
-    # by default: the CSV of the WildINTEL project, the new WildINTEL CSV and Trapper are used; Epicollect and Agouti are not
-    assert (shown["FIELDLOG"]["enabled"], shown["EPICOLLECTCSV"]["enabled"], shown["EPICOLLECT5"]["enabled"], shown["TRAPPER"]["enabled"], shown["AGOUTI"]["enabled"]) == (True, True, False, True, False)
+    # by default: the new WildINTEL CSV and Trapper are used; Epicollect and Agouti are not
+    assert (shown["EPICOLLECTCSV"]["enabled"], shown["EPICOLLECT5"]["enabled"], shown["TRAPPER"]["enabled"], shown["AGOUTI"]["enabled"]) == (True, False, True, False)
 
-    saved = _put(FIELDLOG={"enabled": False}, EPICOLLECTCSV={"enabled": False}, EPICOLLECT5={"enabled": True}, TRAPPER={"enabled": False}, AGOUTI={"enabled": True})
+    saved = _put(EPICOLLECTCSV={"enabled": False}, EPICOLLECT5={"enabled": True}, TRAPPER={"enabled": False}, AGOUTI={"enabled": True})
 
-    assert (saved["FIELDLOG"]["enabled"], saved["EPICOLLECTCSV"]["enabled"], saved["EPICOLLECT5"]["enabled"], saved["TRAPPER"]["enabled"], saved["AGOUTI"]["enabled"]) == (False, False, True, False, True)
+    assert (saved["EPICOLLECTCSV"]["enabled"], saved["EPICOLLECT5"]["enabled"], saved["TRAPPER"]["enabled"], saved["AGOUTI"]["enabled"]) == (False, True, False, True)
 
 
 def test_what_an_upload_to_agouti_needs_is_kept_and_its_key_is_not_shown(tmp_path: Path):

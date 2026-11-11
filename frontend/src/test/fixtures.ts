@@ -101,5 +101,5 @@ export const APP_SETTINGS: AppSettings = {
     license_url: 'https://creativecommons.org/licenses/by-nc/4.0/', ignore_dst: true, convert_to_utc: true,
   },
   FIELDWORK: { trappers: [], sd_cards: [], cameras: [] },
-  FIELDLOG: { enabled: true, time_source: 'created_at', keep_seconds: false },
+  FIELDLOG: { time_source: 'created_at', keep_seconds: false },
 }

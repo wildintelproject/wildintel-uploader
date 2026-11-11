@@ -164,7 +164,6 @@ interface Draft {
   reportsDir: string
   packagesDir: string
   /** Which of the sources of visits and of the places to upload to are used. */
-  wildintelEnabled: boolean
   wildintelNewEnabled: boolean
   trapperEnabled: boolean
   agoutiEnabled: boolean
@@ -243,7 +242,7 @@ function toDraft(s: AppSettings): Draft {
     collectionsDir: s.DATA.collections_dir ?? '',
     reportsDir: s.DATA.reports_dir ?? '',
     packagesDir: s.DATA.packages_dir ?? '',
-    wildintelEnabled: s.FIELDLOG.enabled ?? true, wildintelNewEnabled: s.EPICOLLECTCSV?.enabled ?? true, trapperEnabled: s.TRAPPER.enabled ?? true,
+    wildintelNewEnabled: s.EPICOLLECTCSV?.enabled ?? true, trapperEnabled: s.TRAPPER.enabled ?? true,
     agoutiEnabled: s.AGOUTI?.enabled ?? false, agoutiUrl: s.AGOUTI?.base_url ?? '', agoutiKey: '', agoutiProject: s.AGOUTI?.project_id ?? '',
     trapperUrl: s.TRAPPER.base_url ?? '',
     maxZipMb: String(s.TRAPPER.max_zip_mb),
@@ -327,7 +326,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
       trappers: d.trappers, sd_cards: d.sdCards, cameras: d.cameras, roles: d.roles,
     },
     FIELDLOG: {
-      enabled: d.wildintelEnabled, time_source: d.fieldlogTimeSource, keep_seconds: d.fieldlogKeepSeconds,
+      time_source: d.fieldlogTimeSource, keep_seconds: d.fieldlogKeepSeconds,
     },
   }
 }
@@ -2184,7 +2183,7 @@ function ConfigsEditor({ onSwitched, onError }: { onSwitched: () => void; onErro
  * and postvalidation checks the wizard shows, and how the images are preprocessed. One Save saves every section. */
 export default function SettingsPage({ onClose, initialSection, initialProject, initialItem }: Props) {
   const [uploadDestination, setUploadDestination] = useState<UploadDestinationId>('trapper')
-  const [visitSource, setVisitSource] = useState<VisitSourceId>(initialSection === ('epicollect' as string) ? 'epicollect' : 'wildintel')
+  const [visitSource, setVisitSource] = useState<VisitSourceId>(initialSection === ('epicollect' as string) ? 'epicollect' : 'wildintel-new')
   const [section, setSection] = useState<SectionId>(initialSection && initialSection in ENTITY_SECTIONS ? 'entities' : initialSection === ('epicollect' as string) ? 'sources' : (initialSection as SectionId | undefined) ?? 'general')
   const [saved, setSaved] = useState<AppSettings | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -2577,7 +2576,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
             <p className="text-sm text-zinc-500 dark:text-zinc-400">The places the visits of a research project can be taken from, besides entering them by hand. Pick one to set it up. Others may come in a future version.</p>
             <div role="tablist" aria-label="Visit sources" className="flex flex-wrap gap-2">
               {VISIT_SOURCES.map((d) => {
-                const used = d.id === 'wildintel' ? draft.wildintelEnabled : d.id === 'wildintel-new' ? draft.wildintelNewEnabled : d.id === 'epicollect' ? draft.epicollectEnabled : true
+                const used = d.id === 'wildintel-new' ? draft.wildintelNewEnabled : d.id === 'epicollect' ? draft.epicollectEnabled : true
                 return (
                   <button key={d.id} type="button" role="tab" aria-selected={visitSource === d.id} onClick={() => setVisitSource(d.id)}
                           className={`inline-flex items-center gap-2 px-4 h-10 rounded-lg border text-sm font-medium ${visitSource === d.id ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300'}`}>
@@ -2587,11 +2586,11 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
                 )
               })}
             </div>
-            {visitSource === 'wildintel' && (
+            {visitSource === 'wildintel-new' && (
               <div className="space-y-5">
-                <ToggleCard title="Use WildINTEL Epicollect Legacy CSV" checked={draft.wildintelEnabled} onChange={(v) => set('wildintelEnabled', v)}
-                            description="Offers to read the visits from the CSV of the WildINTEL Epicollect project, with the datasheet of visits if you have it. Turned off, it is not offered in Register visits." />
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">The visits are read from the CSV file downloaded from the WildINTEL Epicollect project: no connection to Epicollect is needed. Here is how the file is read.</p>
+                <ToggleCard title="Use WildINTEL Epicollect CSV" checked={draft.wildintelNewEnabled} onChange={(v) => set('wildintelNewEnabled', v)}
+                            description="Offers to read the visits from the CSV downloaded from the new WildINTEL Epicollect project (the form of the field flow). Turned off, it is not offered in Register visits." />
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">The columns are found by the label of their question. Besides, say when a visit is taken to have happened.</p>
                 <SettingsCard>
                   <CardBlock title="When did a visit happen?" description="A visit is read from the file of the field app. Its time can be when its entry was created, or the date and the hour typed in the form.">
                     <SelectBox label="The time of a visit is" value={draft.fieldlogTimeSource} onChange={(v) => set('fieldlogTimeSource', v)}
@@ -2599,13 +2598,6 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
                     <p className={hintClass}>The hour typed is the wall clock of the visit's location; the time of the entry is UTC, and is put in the timezone of the location. A row without a date and an hour typed is read by the time of its entry.</p>
                   </CardBlock>
                 </SettingsCard>
-              </div>
-            )}
-            {visitSource === 'wildintel-new' && (
-              <div className="space-y-5">
-                <ToggleCard title="Use WildINTEL Epicollect CSV" checked={draft.wildintelNewEnabled} onChange={(v) => set('wildintelNewEnabled', v)}
-                            description="Offers to read the visits from the CSV downloaded from the new WildINTEL Epicollect project (the form of the field flow). Turned off, it is not offered in Register visits." />
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">There is nothing else to set up: the columns are found by the label of their question, and the time of a visit is the day and the hour typed in the form.</p>
               </div>
             )}
             {visitSource === 'csv' && (

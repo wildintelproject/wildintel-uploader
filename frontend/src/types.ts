@@ -588,8 +588,6 @@ export interface AppSettingsUpdate {
 
 /** How the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them. */
 export interface FieldlogSettings {
-  /** Whether the CSV of the WildINTEL Epicollect project can be read for visits. */
-  enabled: boolean
   /** When a visit happened: when its entry was created (UTC), or the date and the hour typed in the form. */
   time_source: 'created_at' | 'hour'
   /** Keep the seconds of the start and the end of the deployments written in the logs; off, they are cut to the minute. */

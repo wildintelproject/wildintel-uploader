@@ -1,6 +1,6 @@
 """Reads the visits to the camera traps of a research project from a CSV file (see local_folder_service.write_visits), in one of two ways:
 
-- "epicollect": the Epicollect download of a field trip, as the field records of the project read it (the FileTimestamps tool, services/fieldlog
+- "epicollect": the Epicollect download of a field trip of the old form (it is no longer a source of Register visits; it is what the history of visits — the fieldwork datasheet — is read as), as the field records of the project read it (the FileTimestamps tool, services/fieldlog
   in the field-records work): the columns of the form are found by their names — 1_Responsable, 2_Collection, 4_Location, 5_Camera, 6_Action,
   7_Status_of_the_came, 8_Card_Batteries, 9_Number_of_pictures, 10_SD, 11_Date_and_hour, 12_Observation, lat_13_Coordenates,
   long_13_Coordenates — whatever their case, spaces or number in front; so are those of the Doñana form (Spanish headers, the actions R, I, D

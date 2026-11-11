@@ -73,7 +73,7 @@ In the same way, in **SD cards** we press **New SD card** for each [SD card](use
 Once the entities are defined, we can start with the visits (see [Manage visits](#5-manage-visits)). Following our example, we have four locations to visit. From the menu we press **📋 Manage visits › Register visits**, and choose **By hand**.
 
 !!! info "Registering many visits at once"
-    By hand is the way to register a few visits. To register many at once, the visits can be read from a file instead: with **Custom CSV**, a CSV of any shape in which we say which column gives each field of a visit, or with **WildINTEL Epicollect CSV** (and **WildINTEL Epicollect Legacy CSV**), the CSV downloaded from the WildINTEL Epicollect project. See [Register visits](#register-visits).
+    By hand is the way to register a few visits. To register many at once, the visits can be read from a file instead: with **Custom CSV**, a CSV of any shape in which we say which column gives each field of a visit, or with **WildINTEL Epicollect CSV**, the CSV downloaded from the WildINTEL Epicollect project. See [Register visits](#register-visits).
 
 To register the visit to the first location we go through the steps of the form. We pick the location, `WICP_02_001`; we say who went, Pedro Pérez, and when; and we say what was done: as no camera is known there yet, the visit is an *Installation*. We open the **Camera** section and choose the camera that is installed, `CAM-001`, say that it was calibrated, and give its height, its tilt and its heading and the delay between triggers; and in **SD card** we pick the card that is left in it, the `1`.
 
@@ -152,18 +152,13 @@ What an upload to Agouti needs: the address of its API (usually `https://api.ago
 
 ### Visit sources
 
-The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab — the sources are **WildINTEL Epicollect Legacy CSV**, **WildINTEL Epicollect CSV**, **Custom CSV** and **Epicollect**. Each can be **used or not** — but Custom CSV, which is always offered —: a check at the top of its tab (and a green dot on the tab); a source not used is not offered in *Register visits*. The section is there so that other sources can be added in a future version.
-
-#### WildINTEL Epicollect Legacy CSV
-
-The visits are read from the **CSV file downloaded from the original WildINTEL Epicollect project** (*Register visits › WildINTEL Epicollect Legacy CSV*), with the datasheet of visits if you have it: no connection to Epicollect is needed. Here is how the file is read:
-
-- **The time of a visit** — *when its entry was created* (`created_at`, UTC; the default) or *the date and the hour typed in the form*. The hour typed is the wall clock of the visit's location, and is used when the row has a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.
-- The columns are found by their names (`1_Responsable`, `4_Location`, `6_Action`, and the Camtrap DP fields by their names), whatever the case or the number in front, in English or in Spanish: there is nothing to say about them.
+The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab — the sources are **WildINTEL Epicollect CSV**, **Custom CSV** and **Epicollect**. Each can be **used or not** — but Custom CSV, which is always offered —: a check at the top of its tab (and a green dot on the tab); a source not used is not offered in *Register visits*. The section is there so that other sources can be added in a future version.
 
 #### WildINTEL Epicollect CSV
 
-The visits are read from the **CSV file downloaded from the new WildINTEL Epicollect project**, the form of the field flow (*Register visits › WildINTEL Epicollect CSV*). There is nothing else to set up: the columns are found by the label of their question.
+The visits are read from the **CSV file downloaded from the new WildINTEL Epicollect project**, the form of the field flow (*Register visits › WildINTEL Epicollect CSV*). The columns are found by the label of their question: there is nothing to say about them.
+
+- **The time of a visit** — *when its entry was created* (`created_at`, UTC; the default) or *the date and the hour typed in the form*. The hour typed is the wall clock of the visit's location, and is used when the row has a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.
 
 #### Custom CSV
 
@@ -348,7 +343,6 @@ the visits come in:
 |---|---|
 | **By hand** | You fill in each visit yourself, following the field flow: the site, when, who went and what was done. |
 | **Custom CSV** | A CSV of any shape: the page shows its columns and you say which one gives each field of a visit. When Epicollect is turned on in the settings, the CSV can also be **the entries of an Epicollect5 project** (*Epicollect5 project › Download the entries*), read the same way. |
-| **WildINTEL Epicollect Legacy CSV** | Reads the visits of a field trip from the CSV downloaded from the original WildINTEL Epicollect project. The time is the `created_at` of the entry, put in the timezone of the location — or the date and the hour typed in the form, as the settings say. |
 | **WildINTEL Epicollect CSV** | Reads the visits of a field trip from the CSV downloaded from the new WildINTEL Epicollect project (the form of the field flow): the columns are found by the label of their question. |
 
 The sources that are turned off in the [settings](#visit-sources) are not offered, but *By hand* and *Custom CSV*.
@@ -428,7 +422,7 @@ When the visits are kept, the end says how many were added and, if they **closed
 
 The rows are read as their fields take them: *a date that is not a date*, *actions that are not Installation, Revision, Desinstallation, Stolen or Archive*, a card code that is not OK, Card full, No batteries or Card full and no batteries, or photos that are not a whole number, are rows with a problem, and none of them is kept. The visits are then checked with [the rules of a visit](#the-rules-of-a-visit), in the order of their instants, each against the ones kept and the ones of the file before it. The visits of a file that fill unknown revisions of the visits kept are checked together, with the ones after them that they touch.
 
-There are example files of every case — all correct, three revisions, a revision that starts before the one before is finished, unknown sites, rows that cannot be read, a card that is left where it cannot be, a theft and a site given up, columns to match by hand — in [`examples/visits_example`](https://github.com/wildintelproject/wildintel-uploader/tree/main/examples/visits_example), in folders by the group of entities they are made for: `custom_csv/small` (the research project `WICP`), `custom_csv/wicp_02` (`WICP_02`) and `custom_csv/aicc` (`AICC`), and the downloads of Epicollect in `wildintel_csv` and `legacy_wildintel_csv`.
+There are example files of every case — all correct, three revisions, a revision that starts before the one before is finished, unknown sites, rows that cannot be read, a card that is left where it cannot be, a theft and a site given up, columns to match by hand — in [`examples/visits_example`](https://github.com/wildintelproject/wildintel-uploader/tree/main/examples/visits_example), in folders by the group of entities they are made for: `custom_csv/small` (the research project `WICP`), `custom_csv/wicp_02` (`WICP_02`) and `custom_csv/aicc` (`AICC`), and the downloads of Epicollect in `wildintel_csv`.
 
 **The deployments the visits say, and the logs of the collections.** Each site's visits, in order, give a deployment for every pair where the first **left a camera** (an Installation or a Revision)
 and the second **collected its card**: it goes from the one to the other and is *closed*. It belongs to the collection **the session of the visit that collected it names, minus one** — R0013
