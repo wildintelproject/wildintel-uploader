@@ -221,7 +221,7 @@ def lifecycle(fn,title,top,subs,labels,back,note,site=False,star=True):
     open(OUT+fn+".svg","w",encoding="utf-8").write("\n".join(svg)); d.save(fn+".drawio")
 
 lifecycle("location","The life of a location",
-  (("A GPS coordinate","latitude, longitude, uncertainty"),("+ its information","name · timezone · summer time or not · status"),("A location","a place where a camera can be put up")) if False else (("A GPS coordinate","latitude, longitude and its uncertainty"),["with more information"],("Information","name · timezone · summer time · status")),
+  (("A GPS coordinate","latitude, longitude, uncertainty"),("+ its information","name · timezone · summer time or not · status"),("A location","a place where a camera can be put up")) if False else (("A GPS coordinate","latitude, longitude and its uncertainty"),["with more information"],("Information","timezone · summer time")),
   [("Planned",["only in Settings:","not in the app"]),("Ready",["ready to have","a camera"]),("Active",["it has","a camera"]),("Archived",["out of use","for good"])],
   ["by settings","Installation","Archive"],"camera taken away or stolen",
   "* Only when no camera is out and no visit is still to be made in a revision that has begun. Only a visit makes a site active. Archived is final: it never goes back.",site=True)

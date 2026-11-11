@@ -5,7 +5,7 @@
   <rect x="0" y="0" width="920" height="416" rx="18" fill="#ffffff" stroke="#d4d4d8" />
   <text x="30" y="40" font-size="15" font-weight="700" fill="#2563eb" letter-spacing="1">THE LIFE OF A LOCATION</text>
   <rect x="30" y="64" width="260" height="76" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" /><text x="160" y="95" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">A GPS coordinate</text><text x="160" y="117" font-size="11.5" fill="#475569" text-anchor="middle">latitude, longitude and its uncertainty</text>
-  <rect x="630" y="64" width="260" height="76" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" /><text x="760" y="95" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">Information</text><text x="760" y="117" font-size="11.5" fill="#475569" text-anchor="middle">name · timezone · summer time · status</text>
+  <rect x="630" y="64" width="260" height="76" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" /><text x="760" y="95" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">Information</text><text x="760" y="117" font-size="11.5" fill="#475569" text-anchor="middle">timezone · summer time</text>
   <path d="M292 102 H628" stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#a)" />
   <text x="460" y="77" font-size="11.5" fill="#475569" text-anchor="middle"><tspan>with more information</tspan></text>
   <text x="30" y="160" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">ITS STATES</text>
