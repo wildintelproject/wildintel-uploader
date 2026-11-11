@@ -14,7 +14,7 @@ two faces that share the same settings, the same log and the same collections fo
 ## Table of Contents
 
 1. [Installation](#1-installation)
-2. [General concepts: deployments, locations, revisions and collections](#2-general-concepts-deployments-locations-revisions-and-collections)
+2. [General concepts and workflow](#2-general-concepts-and-workflow)
 3. [The folders and files it creates](#3-the-folders-and-files-it-creates)
 4. [Where to go next](#4-where-to-go-next)
 
@@ -72,15 +72,92 @@ Download the file for your system from the
 
 One download gives you both the web application and the command line.
 
-## 2. General concepts: deployments, locations, revisions and collections
+## 2. General concepts and workflow
 
-Before explaining how the application works, it is necessary to clarify the following concepts. The things the visits are about come first — the locations, the cameras and the SD cards —, then the visits, because everything else is worked out from them.
+Before starting to work with the tool it is worth clarifying a few concepts and the workflow that is followed.
 
-### 2.1 Locations
+First a **[research project](#21-research-projects)** is defined: what we want to study, where, who will do it and how. The *what* and the *how* are in the definition of the project itself. To say *who*, the **[trappers](#22-trappers-and-roles)** are created, with the **role** each one has in the project. Then come the areas where the camera traps will be put up — the **[locations](#23-locations)**. In them cameras will be installed, revised and taken away, so the **[cameras](#24-cameras)** have to be created in the app, and so do the **[SD cards](#25-sd-cards)** that go in them.
 
-A **location** is a **GPS coordinate** — a latitude, a longitude and how uncertain it is — to which we add the information the app needs: its **id** (what the visits say: `DONA_01`), its **name**, its **timezone**, whether its cameras **ignore summer time**, and its **status**.
+Once all these entities exist, the locations are gone round and things are done in them: that is a **[visit](#26-visits-and-revisions)**, and all the visits to all the locations are a **[revision](#26-visits-and-revisions)**. Often the result of a visit is a recovered SD card. From it a **[deployment](#27-deployments-and-collections)** is made: the images taken at a location during a period, and in some conditions. All the deployments of a revision are a **[collection](#27-deployments-and-collections)**, and the collections can be **[uploaded](#28-uploads)** to the camera-trap portals.
 
-![The life of a location: a GPS coordinate with more information; planned, ready, active and archived, and what moves it from one to the other](img/location.svg)
+![The workflow: define the research project, its trappers, locations, cameras and SD cards; visit the locations, and the visits are a revision; the SD cards collected give deployments, those of a revision are a collection, and the collections are uploaded](img/workflow.svg)
+
+Each of them is explained below, in the same order. The things the visits are about come first, then the visits, because everything else is worked out from them.
+
+### 2.1 Research projects
+
+A **research project** is the study that everything else belongs to: its locations, cameras, SD cards, roles, visits, deployments and collections are all kept in its own folder, and are never mixed with those of another. It says:
+
+- **What** is studied and **how**: to establish it, the project is given a **description**, an **abstract**, the **methods** used, some **keywords** and the choices that Trapper's own form asks — the *sampling design*, the *sensor method*, the *animal types*, the *use of bait* and the *interval between events*. The project itself is identified by its **name** and its **acronym**.
+- **Where**: its locations (see [Locations](#23-locations)).
+- **Who**: its trappers and their roles (see [Trappers and roles](#22-trappers-and-roles)).
+
+A research project is always in one of four **states**:
+
+<div class="states" markdown>
+
+| State | Meaning |
+|---|---|
+| **Planned** | The project is being prepared. It has **no visits** yet. |
+| **Active** | The study is **running**: it is offered when visits are registered and deployments imported. |
+| **Finished** | The fieldwork is **over**. It is not offered when a deployment is imported, but it can be **reopened**. |
+| **Archived** | The project is **out of use for good**. It is **final**: nothing in it can be changed — nor its locations, cameras, SD cards, roles or visits — and it never goes back. |
+
+</div>
+
+The following diagram shows the **transitions allowed** between the states. Where it says **by settings**, the change is made **by hand**, in the settings of the application.
+
+![The life of a research project: planned, active, finished and archived, and what moves it from one to the other](img/research-project.svg)
+
+From **any state** a project can be archived, and it goes back to *planned* only if it has **no visits**. A finished project is not offered when a deployment is imported, but it can be reopened.
+
+### 2.2 Trappers and roles
+
+A **trapper** is a person who takes part in the study: who goes to the field, sets the cameras up or is responsible for the data. It has a **username** (required, with no spaces, and different from every other), a **full name** — how a visit says who went —, an **affiliation** and an **email**, which are optional. Trappers belong to no research project: they are the same whatever the project.
+
+A trapper is always in one of three **states**:
+
+<div class="states" markdown>
+
+| State | Meaning |
+|---|---|
+| **Active** | The trapper still **goes to the field**: it is suggested when a visit says who went. |
+| **Inactive** | The trapper **no longer goes**: it is not suggested. It keeps what it did — its visits and its roles still say who it is — and can be made active again. |
+| **Archived** | The trapper is **out of use for good**. It is **final**: it never goes back. |
+
+</div>
+
+The following diagram shows the **transitions allowed** between the states. Where it says **by settings**, the change is made **by hand**, in the settings of the application.
+
+![The life of a trapper: active, inactive and archived, and what moves it from one to the other](img/trapper.svg)
+
+From **any state** a trapper can be archived. An inactive trapper can be made active again; an archived one never goes back.
+
+What a trapper is in a research project is its **role**, and is kept in that project.
+
+The roles are:
+
+| Role | What it is |
+|---|---|
+| **contact** | who to ask about the data |
+| **principalInvestigator** | who leads the study |
+| **rightsHolder** | who holds the rights over the data |
+| **publisher** | who publishes the data |
+| **contributor** | who takes part in any other way (the default) |
+
+A trapper can have several roles in a project, and different ones in each. They are managed in the settings of the application.
+
+!!! info "The roles are those of Camtrap DP"
+    The roles are the ones the **Camtrap DP** format gives to the contributors of a dataset, so the metadata of a collection says them as that format expects. They are described in its specification, under [`contributors.role`](https://camtrap-dp.tdwg.org/metadata/#contributors.role).
+
+### 2.3 Locations
+
+A **location** is a **GPS coordinate** — a latitude, a longitude and how uncertain it is — to which we add its **timezone** and whether its cameras **ignore summer time**.
+
+!!! info "Why a location has a timezone"
+    The images a camera takes say **when** they were taken, but **not in which timezone**. An image that says *2:00* may have been taken at 2, at 3 or at 4 o'clock of the real time, or at any other, depending on the timezone of the place where the camera is. So the timezone — and whether the cameras there **ignore summer time**, that is, whether their clocks are changed in summer or not — is what the app uses to turn the time of the camera into a complete date and time in **ISO 8601** form, with its offset to UTC, such as `2025-07-15T02:00:00+02:00`.
+
+    In our example the camera says *2:00* on a July day. If the location is in the timezone of Madrid and its cameras follow summer time, the real time is 2:00 of the summer time, `02:00:00+02:00`, which is 00:00 UTC. If the cameras there ignore summer time, their clocks are always in winter time, and the same *2:00* is `02:00:00+01:00`, which is 01:00 UTC.
 
 A location is always in one of four states:
 
@@ -95,7 +172,11 @@ A location is always in one of four states:
 
 </div>
 
-The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a site, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)), where you can set it by hand. In particular, what moves a location from one state to another:
+The following diagram shows the **transitions allowed** between the states. Where it says **by settings**, the change is made **by hand**, in the settings of the application.
+
+![The life of a location: a GPS coordinate with more information; planned, ready, active and archived, and what moves it from one to the other](img/location.svg)
+
+The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a site, and so can the **settings** of the application, where you can set it by hand. In particular, what moves a location from one state to another:
 
 - **Planned → Ready**: you say so in Settings, when the site is ready to be used.
 - **Ready → Active**: a visit does an **Installation**, which puts a camera up. Only a visit makes a site active: it cannot be set by hand.
@@ -107,11 +188,11 @@ What Settings can do is limited by what the visits say. A site goes **out of the
 
 The dashboards and the revisions consider the sites that are **ready or active**: a revision is one visit to each of them.
 
-### 2.2 Cameras
+**The location owns the timezone.** A camera's clock has no timezone of its own: its images say "13:10", and the same camera, elsewhere, would say it too. So the timezone (and whether the cameras there ignore summer time) belongs to the location, never to a deployment. They are asked for when a location is added, and every deployment there is read in them; the deployment's details say it before you fill anything in. A location without a timezone is reported — the app doesn't guess one.
+
+### 2.4 Cameras
 
 A **camera** is one device — its serial number, its model and how it is set up — and it is **put up at a site** by a visit. A site has **one camera at a time**, and a camera is at **one site at a time**: it cannot be put up where it already is, nor at a second site before it is taken away from the first, and no other camera can be put up at a site that has one until it is taken away — a replacement is a Revision, a Desinstallation and an Installation in one visit.
-
-![The life of a camera: a site has one camera at a time; planned, ready, active and archived, and what moves it from one to the other](img/camera.svg)
 
 A camera is always in one of four states:
 
@@ -126,7 +207,11 @@ A camera is always in one of four states:
 
 </div>
 
-The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a camera, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)), where you can set it by hand. In particular:
+The following diagram shows the **transitions allowed** between the states. Where it says **by settings**, the change is made **by hand**, in the settings of the application.
+
+![The life of a camera: a site has one camera at a time; planned, ready, active and archived, and what moves it from one to the other](img/camera.svg)
+
+The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of a camera, and so can the **settings** of the application, where you can set it by hand. In particular:
 
 - **Planned → Ready**: you say so in Settings.
 - **Ready → Active**: an **Installation** puts the camera up at a site, and the site becomes active with it. Only a visit makes a camera active: it cannot be set by hand.
@@ -136,11 +221,9 @@ The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-
 
 A camera that is put up at a site is **Active**, and only a visit makes it so or takes it out of that state — an Installation puts it up; a Desinstallation, or a Stolen visit, takes it away. So Settings cannot change an active camera, and cannot make one active.
 
-### 2.3 SD cards
+### 2.5 SD cards
 
 An **SD card** is kept in a camera: a visit **leaves** it there (an *Installation*, or a *Revision* that changes the card) and the next visit **collects** it (a *Revision* or a *Desinstallation*) — its images are the deployment. A card is in **one camera at a time**.
-
-![The life of an SD card: a camera holds one card until it is collected; planned, ready, active and archived, and what moves it from one to the other](img/sd-card.svg)
 
 An SD card is always in one of four states:
 
@@ -155,7 +238,11 @@ An SD card is always in one of four states:
 
 </div>
 
-The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of an SD card, and so can the **settings** (see [Settings › Entities](user-manual-web.md#entities)), where you can set it by hand. In particular:
+The following diagram shows the **transitions allowed** between the states. Where it says **by settings**, the change is made **by hand**, in the settings of the application.
+
+![The life of an SD card: a camera holds one card until it is collected; planned, ready, active and archived, and what moves it from one to the other](img/sd-card.svg)
+
+The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-visit)) can change the state of an SD card, and so can the **settings** of the application, where you can set it by hand. In particular:
 
 - **Planned → Ready**: you say so in Settings.
 - **Ready → Active**: a visit **leaves** the card in a camera (*Installation* or *Revision*). Only a visit makes a card active: it cannot be set by hand.
@@ -165,9 +252,9 @@ The **actions done in a visit** (see [the actions of a visit](#the-actions-of-a-
 
 A card that is in a camera is **Active**, and only a visit makes it so or takes it out of that state — it leaves the card in a camera, or collects it. So Settings cannot change an active card, and cannot make one active.
 
-### 2.4 Visits and revisions
+### 2.6 Visits and revisions
 
-A **visit** is one trip to one camera trap, to do something with it. It is the field record: it says when it was, at which site, who went, what was done to the camera and the card, and what was found. The visits of a research project are registered in *Manage visits* — see the [web manual](user-manual-web.md#5-manage-visits) — and everything else is worked out from them.
+A **visit** is one trip to one camera trap, to do something with it. It is the field record: it says when it was, at which site, who went, what was done to the camera and the card, and what was found. The visits of a research project are registered in the application, in *Manage visits*, and everything else is worked out from them.
 
 ![A visit: one trip to one camera trap, recorded with when, where, who went, what was done, the SD card, the camera and what was found](img/visit.svg)
 
@@ -216,7 +303,7 @@ The **actions that can be done during a visit** depend on **what the visit befor
 - **No camera** is a **final** state: nothing waits for that visit, so it never changes to another one.
 - **Not visited** changes nothing: the camera is where it was, and the next visit is of the visit before.
 - **After an Archive** the site is closed: no visit follows.
-- **The site, the camera and the card.** An **Installation** moves the site, the camera and the card it leaves from **ready** to **active**. What a visit takes away — the camera it removes, the card it collects — is **ready** again, and so is the site when it is left with no camera. A camera found stolen is **archived** with its card, and an Archive archives the site: an archived one is never changed. See [Locations](#21-locations), [Cameras](#22-cameras) and [SD cards](#23-sd-cards).
+- **The site, the camera and the card.** An **Installation** moves the site, the camera and the card it leaves from **ready** to **active**. What a visit takes away — the camera it removes, the card it collects — is **ready** again, and so is the site when it is left with no camera. A camera found stolen is **archived** with its card, and an Archive archives the site: an archived one is never changed. See [Locations](#23-locations), [Cameras](#24-cameras) and [SD cards](#25-sd-cards).
 
 The following table sums up each action, what it is and what it asks.
 
@@ -310,33 +397,52 @@ What the app only **questions** — it asks the one who knows the field, it does
 
 **What cannot be known cannot be checked.** An *unknown* visit — a revision of a site of which nothing is known — has no camera, no card and no day, so nothing is checked against it. And what was left at a site before an unknown revision cannot be trusted after it: the camera or the card may have been moved in it. That is why the first visit to a site after an unknown revision may be any, and a file is only excused this: what depends on a revision that nobody knows.
 
-### 2.5 Deployments, locations and collections
+### 2.7 Deployments and collections
 
-A **deployment** is the set of images taken by one camera, at one **location** — some GPS coordinates and a timezone —, between two **consecutive visits** to it: the one that **left** the camera and its card, and the next one that **collected** the card. Between them the camera was set up under specific configuration conditions (height, tilt, delay between triggers…). A deployment whose camera is still out, because the card has not been collected, is *open*; when the card is collected, it is *closed* and its images can be imported. The deployment of a camera that was stolen has no images.
+A **deployment** is the set of images taken by one camera, at one **location** (see [Locations](#23-locations)), between two **consecutive visits** to it: the one that **left** the camera and its card, and the next one that **collected** the card. Between them the camera was set up under specific configuration conditions (height, tilt, delay between triggers…). A deployment whose camera is still out, because the card has not been collected, is *open*; when the card is collected, it is *closed* and its images can be imported. The deployment of a camera that was stolen has no images.
 
 ![A deployment: the images taken by one camera at one location between the visit that left it and the next one, which collected the card; open, closed or with no images if the camera was stolen](img/deployment.svg)
 
-All the deployments of a revision form a **collection**: *collection* and *revision* are synonyms. A deployment belongs to the revision of the visit that **left** the camera — the deployment from the visits of `R0001` to the visits of `R0002` is of `R0001`. ![A collection: all the deployments of a revision, one for each site, closed when the next visit has collected the card and open while it has not](img/collection.svg)
+A deployment is always in one of three **states**:
 
-The app names everything after that:
+<div class="states" markdown>
 
-| | Example | |
-|---|---|---|
-| Revision | `3` | |
-| Location id | `DONA_01` | |
-| **Deployment id** | `R0003-DONA_01` | `R` + the revision as four digits + `-` + the location id |
-| **Collection** | `R0003` | the name of a revision: `R` + its number as four digits — all its deployments |
-| Research project | `DONA` | the project they all belong to, by its acronym |
+| State | Meaning |
+|---|---|
+| **Open** | The camera is **still out**: the visit that left it has no later visit to the site yet, so its card has not been collected. |
+| **Closed** | The card is **collected**: the images are all there and can be imported. It is **final**. |
+| **Camera stolen** | The camera was **found stolen**: the deployment is closed and has **no images**. It is **final**. |
 
-The deployment id is never typed: you give the revision and the location, and the app builds it.
+</div>
 
-### 2.6 The location owns the timezone
+The following diagram shows the **transitions allowed** between the states. A deployment is **open** from the visit that leaves the camera, and the **next visit to the site** closes it, by what it finds there.
 
-A camera's clock has no timezone of its own: its images say "13:10", and the same camera,
-elsewhere, would say it too. So the **timezone** (and whether the cameras there **ignore summer
-time**) belongs to the **location**, never to a deployment. They are asked for when a location is
-added, and every deployment there is read in them. The deployment's details say it before you fill anything in. A location
-without a timezone is reported — the app doesn't guess one.
+![The life of a deployment: open while the card is to be collected; closed when the next visit collects it, or closed with no images when it finds the camera stolen](img/deployment-states.svg)
+
+A visit that **collects** the card (a Revision, or a Desinstallation) closes the deployment and its images can be imported. A **Stolen** visit also closes it, but there are no images to import. Nothing in the settings changes the state of a deployment: only the visits do.
+
+All the deployments of a revision form a **collection**. There is a parallel between the two: a **revision** is a set of **visits**, one to each location, and a **collection** is the set of **deployments** that come out of them. They are not the same: the revision is the field work, what was done at the locations, and the collection is the images that it gave. A deployment belongs to the revision of the visit that **left** the camera — the deployment from the visits of `R0001` to the visits of `R0002` is of `R0001`. ![A collection: all the deployments of a revision, one for each site, closed when the next visit has collected the card and open while it has not](img/collection.svg)
+
+### 2.8 Uploads
+
+A **collection** is kept in your computer. To share it, its deployments are **uploaded** — their images and their metadata — to a camera-trap portal. The one the app uploads to is [Trapper](https://gitlab.com/trapper-project/trapper); the settings have a place for others, to come.
+
+For each deployment the upload creates its **location** and the **deployment** in the portal if they are not there, packs the images and uploads them, and tells the portal to process them into a **collection** — so a collection in the portal is the one of a revision here. The app remembers **where and when** each deployment was uploaded, to show which ones are still to be.
+
+Where a deployment has been uploaded is said **for each portal**, so a deployment is, for each one, in one of two **states**:
+
+<div class="states" markdown>
+
+| State | Meaning |
+|---|---|
+| **Not uploaded** | The deployment is kept here and **has not gone** to that portal. Only a closed deployment with images, imported with the application, can be uploaded. |
+| **Uploaded** | The deployment **is in the portal**: its images and its metadata went up, and the day it was uploaded is kept. It can be uploaded again, which only changes the day. |
+
+</div>
+
+The following diagram shows the **transitions allowed** between the states. A deployment goes from *not uploaded* to *uploaded* **when an upload ends well**: the images are sent and the portal has processed them into its collection. A rehearsal (*dry run*), only preparing the files, or an upload that fails change nothing: the deployment stays *not uploaded*. The app does not take a deployment back to *not uploaded*.
+
+![The life of a deployment as to an upload: not uploaded, and uploaded when an upload ends well](img/upload.svg)
 
 ## 3. The folders and files it creates
 
