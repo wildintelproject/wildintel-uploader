@@ -184,7 +184,7 @@ function CheckboxField({ label, checked, onChange, hint }: { label: string; chec
 }
 
 /** A yes/no field as a card with a switch — off means "not recorded", not "no". */
-export function SwitchRow({ label, hint, checked, onChange, disabled = false, required = false }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; required?: boolean }) {
+export function SwitchRow({ label, hint, checked, onChange, disabled = false, required = false, tone = 'blue' }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; required?: boolean; tone?: 'blue' | 'green' }) {
   return (
     <div className={`flex items-center gap-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-5 py-4 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex-1 min-w-0">
@@ -192,7 +192,7 @@ export function SwitchRow({ label, hint, checked, onChange, disabled = false, re
         <p className={`${hintClass} mt-0.5`}>{hint}</p>
       </div>
       <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
-              className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}>
+              className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${checked ? (tone === 'green' ? 'bg-emerald-500' : 'bg-blue-600') : 'bg-zinc-300 dark:bg-zinc-600'}`}>
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : ''}`} />
       </button>
     </div>
@@ -844,7 +844,8 @@ export function SectionCard({ title, icon, filled, total, summary, optional = fa
         </span>
         <span className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${missing > 0 ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : filled > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'}`}>{filled} of {total} filled{missing > 0 && ` · ${missing} required missing`}</span>
       </button>
-      {open && <div className="px-4 pb-4"><fieldset disabled={locked} className="contents">{children}</fieldset></div>}
+      {/* a line between the header and what is under it, while it is open */}
+      {open && <div className="border-t border-zinc-200 dark:border-zinc-700 px-4 pt-4 pb-4"><fieldset disabled={locked} className="contents">{children}</fieldset></div>}
     </section>
   )
 }
@@ -856,11 +857,11 @@ const HEADINGS: { label: string; degrees: number }[] = [
 export const roundPill = (active: boolean) => `px-4 py-2 text-sm font-medium rounded-full border transition-colors ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
 
 /** An angle in degrees: its label, a short input with the degree sign, the quick picks beside it, and one line on what it means. */
-function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, required, children, unit = '°', step = 1, width = 'w-32' }: {
+function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, required, children, unit = '°', step = 1 }: {
   label: string; value: number | null | undefined; onChange: (v: number | null) => void; min: number; max: number; placeholder: string
   hint: string; error?: string; required?: boolean; children: ReactNode
   /** What it is measured in, said at the end of the box (none: nothing is said). */
-  unit?: string; step?: number | 'any'; width?: string
+  unit?: string; step?: number | 'any'
 }) {
   const id = fieldId(label)
   return (
@@ -870,15 +871,14 @@ function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, 
         <CamtrapDpTag />
         {required && <span className="text-[11px] uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>}
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className={`relative ${width}`}>
-          <input id={id} type="number" min={min} max={max} step={step} placeholder={placeholder} aria-invalid={error ? true : undefined}
-                 className={`${inputClass} ${unit ? 'pr-8' : ''} ${error ? 'border-red-500 dark:border-red-500' : ''}`}
-                 value={value?.toString() ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} />
-          {unit && <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500 dark:text-zinc-400 pointer-events-none">{unit}</span>}
-        </div>
-        {children}
+      {/* the box is as long as the column, and the quick values go under it */}
+      <div className="relative">
+        <input id={id} type="number" min={min} max={max} step={step} placeholder={placeholder} aria-invalid={error ? true : undefined}
+               className={`${inputClass} ${unit ? 'pr-8' : ''} ${error ? 'border-red-500 dark:border-red-500' : ''}`}
+               value={value?.toString() ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} />
+        {unit && <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500 dark:text-zinc-400 pointer-events-none">{unit}</span>}
       </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">{children}</div>
       {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
       <p className={hintClass}>{hint}</p>
     </div>
@@ -887,18 +887,22 @@ function AngleRow({ label, value, onChange, min, max, placeholder, hint, error, 
 
 /** The heights a camera is usually put up at, in metres. */
 const HEIGHTS = [0.5, 1, 1.5, 2]
+/** The depths a camera is usually put at below the surface, in metres. */
+const DEPTHS = [0.5, 1, 2, 5]
 const TILTS: { label: string; degrees: number }[] = [{ label: 'Down −90°', degrees: -90 }, { label: 'Level 0°', degrees: 0 }, { label: 'Up 90°', degrees: 90 }]
 
 /** The optional details of a deployment — its camera, its site, its groups, tags and comments — as three cards, every field in view. */
-export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraNotice, cameraPicker, mountedExtra, afterCamera, camtrapTags = false, requiredKeys = [], cameraMissing = 0, hideSetupBy = false }: {
+export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraNotice, cameraPicker, beforeMounted, hideSetup = false, afterCamera, camtrapTags = false, requiredKeys = [], cameraMissing = 0, hideSetupBy = false }: {
   deployment: DeploymentFields; errors: ReturnType<typeof shownErrors>
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
   /** More fields for the Camera card, of the page that uses the form: how many there are, how many are filled in, and the fields themselves. */
   cameraExtra?: { total: number; filled: number; /** Whether there is something to ask under "How is it doing?" */ show?: boolean; /** What is asked above them — "How is it doing?" when the page says nothing */ title?: string; children: ReactNode }
   /** What the page tells first of the camera of the Camera card — which camera was there, say. */
   cameraNotice?: ReactNode
-  /** More of the page's own under "How was it mounted?". */
-  mountedExtra?: ReactNode
+  /** More of the page's own, after the camera and before how it was mounted — the calibration, say. */
+  beforeMounted?: ReactNode
+  /** Not the set-up of the camera — how it is mounted, where it points, how it detects —: the visit takes it away, and puts none up. */
+  hideSetup?: boolean
   /** What stands in the Camera card for the camera model and the camera id: a page that keeps its cameras asks for one of them instead. */
   cameraPicker?: ReactNode
   /** A card of the page that comes right after the Camera card. */
@@ -923,6 +927,7 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
     setMount(next)
     if (next === 'above') onField('camera_depth', null); else onField('camera_height', null)
   }
+  const segment = (active: boolean) => `px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${active ? 'bg-indigo-600 text-white shadow' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'}`
   const pill = (active: boolean) => `px-4 py-2 text-sm rounded-md border transition-colors ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
   const small = (active: boolean) => `px-2.5 py-1 text-xs rounded-md border ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
   const [camera, site, notes] = DETAILS_SECTIONS
@@ -963,28 +968,42 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
           </div>
         )}
 
-        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-1">How was it mounted?</p>
+        {beforeMounted && <div className="mt-5"><CamtrapDpContext.Provider value={false}>{beforeMounted}</CamtrapDpContext.Provider></div>}
+
+        {!hideSetup && (<>
+        <section aria-label="Mounting and placement" className="mt-6 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5">
+        <h6 className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 pb-3 mb-4 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100">
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-indigo-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h4v18H6zM10 6H8M10 10H8M10 14H8M10 18H8" /></svg>
+          Mounting &amp; placement
+        </h6>
+        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">How was it mounted?</p>
         <p className={`${hintClass} mt-0 mb-2`}>A camera is either above the ground or below the surface (snow, ice, water) — so there is one measurement.</p>
-        <div className="flex gap-2 mb-3" role="group" aria-label="How was it mounted?">
-          <button type="button" aria-pressed={mount === 'above'} className={pill(mount === 'above')} onClick={() => chooseMount('above')}>Above the ground</button>
-          <button type="button" aria-pressed={mount === 'below'} className={pill(mount === 'below')} onClick={() => chooseMount('below')}>Below the surface</button>
+        <div className="mb-4 inline-flex gap-1 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60 p-1" role="group" aria-label="How was it mounted?">
+          <button type="button" aria-pressed={mount === 'above'} className={segment(mount === 'above')} onClick={() => chooseMount('above')}>Above the ground</button>
+          <button type="button" aria-pressed={mount === 'below'} className={segment(mount === 'below')} onClick={() => chooseMount('below')}>Below the surface</button>
         </div>
-        <div className={mount === 'above' ? '' : 'max-w-xs'}>
+        <div>
           {mount === 'above' ? (
             <AngleRow label="Height above the ground (m)" placeholder="e.g. 1.2" min={0} max={1000} step="any" unit="m" value={deployment.camera_height} error={errors.camera_height} required={ask('camera_height')}
                       hint="Measured from the ground to the camera, in meters." onChange={(v) => onField('camera_height', v)}>
               {HEIGHTS.map((h) => <button key={h} type="button" aria-label={`Height ${h} m`} className={roundPill(deployment.camera_height === h)} onClick={() => onField('camera_height', h)}>{h} m</button>)}
             </AngleRow>
           ) : (
-            <Field label="Depth below the surface (m)" type="number" min={0} step="any" placeholder="e.g. 4.8" hint="For underwater cameras, measured down from the surface, in meters." error={errors.camera_depth ?? errors.camera_height} required={ask('camera_height')}
-                   value={deployment.camera_depth?.toString() ?? ''} onChange={(v) => onField('camera_depth', v ? Number(v) : null)} />
+            <AngleRow label="Depth below the surface (m)" placeholder="e.g. 4.8" min={0} max={1000} step="any" unit="m" value={deployment.camera_depth} error={errors.camera_depth ?? errors.camera_height} required={ask('camera_height')}
+                      hint="For underwater cameras, measured down from the surface, in meters." onChange={(v) => onField('camera_depth', v)}>
+              {DEPTHS.map((d) => <button key={d} type="button" aria-label={`Depth ${d} m`} className={roundPill(deployment.camera_depth === d)} onClick={() => onField('camera_depth', d)}>{d} m</button>)}
+            </AngleRow>
           )}
         </div>
 
-        {mountedExtra && <div className="mt-3"><CamtrapDpContext.Provider value={false}>{mountedExtra}</CamtrapDpContext.Provider></div>}
+        </section>
 
-        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-2">Where does it point?</p>
-        <div className="space-y-4">
+        <section aria-label="Where does it point?" className="mt-6 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5">
+          <h6 className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 pb-3 mb-4 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-emerald-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg>
+            Where does it point?
+          </h6>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <AngleRow label="Tilt" placeholder="e.g. -90" min={-90} max={90} value={deployment.camera_tilt} error={errors.camera_tilt} required={ask('camera_tilt')}
                     hint="Angle up or down: -90° faces the ground, 0° is level, 90° faces the sky." onChange={(v) => onField('camera_tilt', v)}>
             {TILTS.map((t) => <button key={t.label} type="button" className={roundPill(deployment.camera_tilt === t.degrees)} onClick={() => onField('camera_tilt', t.degrees)}>{t.label}</button>)}
@@ -995,13 +1014,21 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
           </AngleRow>
         </div>
 
-        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-2">How does it detect?</p>
-        <div className="grid grid-cols-2 gap-4">
+        </section>
+
+        <section aria-label="How does it detect?" className="mt-6 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5">
+          <h6 className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 pb-3 mb-4 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-cyan-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="17" r="2" /></svg>
+            How does it detect?
+          </h6>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <Field label="Camera delay (s)" type="number" min={0} step={1} placeholder="e.g. 120" hint={DESCRIPTIONS.cameraDelay} error={errors.camera_interval} required={ask('camera_interval')}
                  value={deployment.camera_interval?.toString() ?? ''} onChange={(v) => onField('camera_interval', v ? Number(v) : null)} />
           <Field label="Detection distance (m)" type="number" min={0} step="any" placeholder="e.g. 9.5" hint={DESCRIPTIONS.detectionDistance} error={errors.detection_distance}
                  value={deployment.detection_distance?.toString() ?? ''} onChange={(v) => onField('detection_distance', v ? Number(v) : null)} />
         </div>
+        </section>
+        </>)}
       </SectionCard>
 
       {/* what the page puts here is its own, not Camtrap DP's */}

@@ -128,6 +128,9 @@ export function askedOf(v: { actions: string[]; card: CardState; status?: string
   return v.card === 'Full' && asked.photos !== 'off' ? { ...asked, photos: 'off' } : asked
 }
 
+/** Whether a visit takes the camera away and puts none up: nothing of how a camera is set up is asked of it. */
+export const takesAwayOnly = (actions: string[]) => actions.includes('Desinstallation') && !actions.includes('Installation')
+
 /** Whether a visit has nothing to say but its notes: it does something, and that is neither an Installation nor a Revision — a Stolen camera, an Archive. */
 export const onlyNotes = (actions: string[]) => actions.length > 0 && !actions.some((a) => a === 'Installation' || a === 'Revision')
 
@@ -240,6 +243,7 @@ export function withoutWhatIsNotAsked(v: Visit): Visit {
     card: asked.card === 'off' ? 'OK' : v.card, batteries: asked.batteries === 'off' ? 'OK' : v.batteries, dateTimeOK: asked.dateTime === 'off' ? 'Yes' : v.dateTimeOK,
     // a visit that is neither an Installation nor a Revision — a stolen camera, a site given up — has nothing of the camera, the site or the grouping: only its notes
     details: onlyNotes(v.actions) ? { ...EMPTY_DEPLOYMENT_FIELDS, setup_by: v.details.setup_by, comments: v.details.comments } : { ...(asked.camera === 'off' ? { ...v.details, camera_id: null, camera_model: null } : v.details),
+               ...(takesAwayOnly(v.actions) ? { camera_height: null, camera_depth: null, camera_tilt: null, camera_heading: null, camera_interval: null, detection_distance: null } : {}),
                // the switch of the bait is off — "no" — until it is turned on: an Installation always has the answer
                ...(v.actions.includes('Installation') && v.details.bait_use == null ? { bait_use: false } : {}) },
   }
@@ -1238,7 +1242,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                   <textarea id="visit-notes" rows={3} className={inputClass} placeholder="e.g. the lock was cut" value={visit.details.comments ?? ''} onChange={(e) => setDetail('comments', e.target.value || null)} />
                 </FormCard>
               ) : (
-              <MoreDetailsForm deployment={visit.details} errors={{ ...detailsErrors(visit.details), ...Object.fromEntries(Object.keys(installationErrors(visit)).map((k) => [k, ''])) }} onField={setDetail} camtrapTags hideSetupBy requiredKeys={[...Object.keys(installationErrors(visit)), ...(visit.actions.includes('Installation') ? ['bait_use'] : [])]} cameraMissing={errors.camera ? 1 : 0}
+              <MoreDetailsForm deployment={visit.details} errors={{ ...detailsErrors(visit.details), ...Object.fromEntries(Object.keys(installationErrors(visit)).map((k) => [k, ''])) }} onField={setDetail} camtrapTags hideSetupBy hideSetup={takesAwayOnly(visit.actions)} requiredKeys={[...Object.keys(installationErrors(visit)), ...(visit.actions.includes('Installation') ? ['bait_use'] : [])]} cameraMissing={errors.camera ? 1 : 0}
                 afterCamera={(on(asked.sdLeft) || on(asked.photos) || on(asked.card)) ? (
               <SectionCard
                 title="SD card" icon={SD_ICON} total={sdValues.length} filled={sdValues.filter((v) => v.trim()).length} missing={(errors.sd ? 1 : 0) + (errors.numPhotos === 'Required.' ? 1 : 0)}
@@ -1314,7 +1318,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     </>)}
                   </div>
                 )}
-                mountedExtra={guided && asked.calibration !== 'off' ? (
+                beforeMounted={guided && asked.calibration !== 'off' ? (
                   <SwitchRow label="Calibration done" hint="On if the camera was calibrated at this visit." required={asked.calibration === 'required'} checked={visit.calibration === true} onChange={(on) => set('calibration', on)} />
                 ) : null}
                 cameraExtra={{
@@ -1331,10 +1335,18 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                         </select>
                       </Field>
                     )}
-                    <div className="sm:col-span-2 space-y-3">
-                      {on(asked.batteries) && <SwitchRow label="Batteries OK" hint="Off if the camera had no batteries." required={asked.batteries === 'required'} checked={visit.batteries === 'OK'} onChange={(on) => set('batteries', on ? 'OK' : 'Missing')} />}
-                      {on(asked.dateTime) && <SwitchRow label="Date and time of the camera OK" hint="Off if the clock of the camera was wrong." required={asked.dateTime === 'required'} checked={visit.dateTimeOK === 'Yes'} onChange={(on) => set('dateTimeOK', on ? 'Yes' : 'No')} />}
-                    </div>
+                    {(on(asked.batteries) || on(asked.dateTime)) && (
+                    <section className="sm:col-span-2 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5" aria-label="General health and time status">
+                      <h6 className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 pb-3 mb-4 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-amber-500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="18" height="10" rx="2" /><path d="M22 11v2M6 10v4" /></svg>
+                        General health &amp; time status
+                      </h6>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        {on(asked.batteries) && <SwitchRow tone="green" label="Batteries OK" hint="Off if the camera had no batteries." required={asked.batteries === 'required'} checked={visit.batteries === 'OK'} onChange={(on) => set('batteries', on ? 'OK' : 'Missing')} />}
+                        {on(asked.dateTime) && <SwitchRow tone="green" label="Date and time of the camera OK" hint="Off if the clock of the camera was wrong." required={asked.dateTime === 'required'} checked={visit.dateTimeOK === 'Yes'} onChange={(on) => set('dateTimeOK', on ? 'Yes' : 'No')} />}
+                      </div>
+                    </section>
+                    )}
                   </div>
                 ),
               }} />

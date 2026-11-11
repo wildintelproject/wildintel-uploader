@@ -825,11 +825,12 @@ describe('the visit filled in from the last one', () => {
     // a Desinstallation leaves no card: what was typed for the Revision is left out
     await userEvent.type(screen.getByLabelText('Photos on the card collected'), '10')
     await pickAction('Desinstallation')
+    for (const name of ['Mounting and placement', 'Where does it point?', 'How does it detect?']) expect(screen.queryByRole('region', { name })).not.toBeInTheDocument()   // a camera taken away has no set-up asked
     await addVisit()
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalled())
     expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({
-      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: null, camera_height: 1.2, battery_status: 'NoBatteries', date_time_ok: 'No', comments: null,
+      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: null, camera_height: null, battery_status: 'NoBatteries', date_time_ok: 'No', comments: null,
     })
   })
 
@@ -1365,7 +1366,7 @@ describe('By hand: do you see the camera?', () => {
     expect(screen.queryByRole('checkbox', { name: 'Revision' })).not.toBeInTheDocument() // the actions are not asked as boxes
   })
 
-  it('tells which camera was there, then asks how it is doing, then which camera is put up, and the calibration goes with how it was mounted — when it is replaced', async () => {
+  it('tells which camera was there, then asks how it is doing, then which camera is put up, and the calibration comes before how it was mounted — when it is replaced', async () => {
     withCamera()
     await chooseByHand()
     await pickWhere()
@@ -1383,7 +1384,7 @@ describe('By hand: do you see the camera?', () => {
     const mounted = at('How was it mounted?')
     const calibration = screen.getByRole('switch', { name: 'Calibration done' })
     expect(was).toHaveTextContent('According to the visit R0001, the camera P800HG08192031 is installed at TATR_0001.')
-    expect(before(was, doing) && before(doing, camera) && before(camera, mounted) && before(mounted, calibration)).toBe(true)
+    expect(before(was, doing) && before(doing, camera) && before(camera, calibration) && before(calibration, mounted)).toBe(true)
   })
 
   it('works the actions out from the answers when a camera is there', async () => {
