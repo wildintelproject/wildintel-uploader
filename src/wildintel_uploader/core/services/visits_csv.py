@@ -1,12 +1,6 @@
-"""Reads the visits to the camera traps of a research project from a CSV file (see local_folder_service.write_visits), in one of two ways:
-
-- "epicollect": the Epicollect download of a field trip of the old form (it is no longer a source of Register visits; it is what the history of visits — the fieldwork datasheet — is read as), as the field records of the project read it (the FileTimestamps tool, services/fieldlog
-  in the field-records work): the columns of the form are found by their names — 1_Responsable, 2_Collection, 4_Location, 5_Camera, 6_Action,
-  7_Status_of_the_came, 8_Card_Batteries, 9_Number_of_pictures, 10_SD, 11_Date_and_hour, 12_Observation, lat_13_Coordenates,
-  long_13_Coordenates — whatever their case, spaces or number in front; so are those of the Doñana form (Spanish headers, the actions R, I, D
-  and ROBADA, the sites as numbers). The time of a visit is when its entry was created (created_at, UTC), put in the timezone of the location.
-- "mapped": any other CSV, with the column that gives each field of a visit (see FIELDS) said by the caller (`mapping`, {field: column name});
-  suggest_mapping offers a mapping to start from."""
+"""Reads the visits to the camera traps of a research project from a CSV file (see local_folder_service.write_visits): any CSV, with the column that gives
+each field of a visit (see FIELDS) said by the caller (`mapping`, {field: column name}); suggest_mapping offers a mapping to start from. The downloads of the
+Epicollect5 projects are turned into such a CSV first (see epicollect_service)."""
 from __future__ import annotations
 
 import csv
@@ -21,8 +15,8 @@ from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import LocationRecord, VisitRecord
 from wildintel_uploader.core.services import visit_rules, visit_time
 
-# What each column of an Epicollect download may be called — compared without case, spaces, dashes, underscores or a number in front.
-EPICOLLECT_COLUMNS: dict[str, tuple[str, ...]] = {
+# What each column of a CSV may be called, to suggest a mapping — compared without case, spaces, dashes, underscores or a number in front.
+COLUMN_NAMES: dict[str, tuple[str, ...]] = {
     "location_id": ("site", "location", "locationid", "sitio"),
     "date": ("date", "fecha"),
     "time": ("time", "hora", "hour"),
@@ -113,7 +107,6 @@ CREATABLE: dict[str, dict] = {
 }
 # The fields that are not a visit's but an entity's.
 ENTITY_ONLY = {f: entity for entity, spec in CREATABLE.items() for f in [*spec["required"], *spec["extra"]] if f in ("location_name", "timezone", "daylight_saving", "coordinate_uncertainty", "sd_brand", "sd_capacity")}
-EPICOLLECT_NUMBER = re.compile(r"^\s*(\d+)\s*([bB]?)\s*$")
 ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation", "Stolen", "Archive")} | {
     # as the datasheets of the field work write them
     "i": "Installation", "r": "Revision", "d": "Desinstallation", "robada": "Stolen", "uninstallation": "Desinstallation", "removal": "Desinstallation",
@@ -380,21 +373,17 @@ def _table(text: str) -> list[list[str]]:
     return table
 
 
-def _fields(header: list[str], fmt: str, mapping: dict[str, str] | None) -> list[str | None]:
-    """The field of a visit each column of the header gives — nothing for a column that is not used. In an Epicollect download the columns are found by the
-    names they usually have."""
-    if fmt == "mapped":
-        by_column = {column: field for field, column in (mapping or {}).items() if column}
-        return [by_column.get(cell) for cell in header]
-    by_name = {alias: field for field, aliases in EPICOLLECT_COLUMNS.items() for alias in aliases}
-    return [by_name.get(_key(cell)) for cell in header]
+def _fields(header: list[str], mapping: dict[str, str] | None) -> list[str | None]:
+    """The field of a visit each column of the header gives — nothing for a column that is not used."""
+    by_column = {column: field for field, column in (mapping or {}).items() if column}
+    return [by_column.get(cell) for cell in header]
 
 
 def suggest_mapping(text: str) -> dict:
     """The columns of a CSV, a few of its rows, and for each field of a visit the column that most likely gives it — to start a mapping from."""
     table = _table(text)
     header = table[0]
-    names = {alias: field for field, aliases in EPICOLLECT_COLUMNS.items() for alias in aliases} | {_key(f): f for f, _, _ in FIELDS}
+    names = {alias: field for field, aliases in COLUMN_NAMES.items() for alias in aliases} | {_key(f): f for f, _, _ in FIELDS}
     mapping: dict[str, str] = {}
     for cell in header:
         field = names.get(_key(cell))
@@ -403,14 +392,14 @@ def suggest_mapping(text: str) -> dict:
     return {"columns": header, "sample": table[1:4], "mapping": mapping}
 
 
-def _rows(text: str, fmt: str, mapping: dict[str, str] | None, defaults: dict[str, str] | None = None,
+def _rows(text: str, mapping: dict[str, str] | None, defaults: dict[str, str] | None = None,
           create: dict[str, bool] | None = None) -> tuple[dict[str, str], list[dict[str, str]]]:
     """The file's columns, as the visit's fields they are, and its rows keyed by those fields.
 
     `defaults` ({field: value}) is what a field is when its column is not in the file or a cell of it is empty; a field with a default counts as given. `create` ({locations, cameras,
     sd_cards}: bool) says which entities are created when they do not exist: the fields they need (see CREATABLE) are required too."""
     table = _table(text)
-    fields = _fields(table[0], fmt, mapping)
+    fields = _fields(table[0], mapping)
     defaults = {f: v.strip() for f, v in (defaults or {}).items() if f and str(v).strip()}
     present = {f for f in fields if f} | set(defaults)
     missing = [f for f in REQUIRED if f not in present]
@@ -464,21 +453,13 @@ def _when(row: dict[str, str], location: dict, time_source: str = "created_at") 
     return _real(date, row["time"] if row["time"].count(":") == 2 else f"{row['time']}:00")
 
 
-def _site(text: str, prefix: str) -> str:
-    """A site as the forms write it: its id, or only its number (12, or 12B for the second camera of a site) — then with the prefix of the project."""
-    m = EPICOLLECT_NUMBER.match(text)
-    return f"{prefix}{int(m.group(1)):04d}{'_B' if m.group(2) else ''}" if m else text
-
-
-def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix: str = "", fmt: str = "mapped", mapping: dict[str, str] | None = None,
-                 options: dict | None = None) -> dict:
+def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: dict[str, str] | None = None, options: dict | None = None) -> dict:
     """The visits in the CSV `text` that can be kept, and what is wrong with the rest.
 
-    `fmt` is how the file is read: "epicollect" or "mapped" (with `mapping`, {field: column}) — see the top of the module.
-    A site must be a location of the research project (found ignoring case; in an Epicollect download a number alone is that of `site_prefix`); its coordinates
+    `mapping` ({field: column}) says the column that gives each field of a visit — see the top of the module.
+    A site must be a location of the research project (found ignoring case); its coordinates
     are the visit's unless the row has its own. A row without a session gets the next of its location, counted from the visits already
-    kept. A visit already kept — the same location, day and time — is left as it is, and counted as skipped. In an Epicollect download
-    (it has created_at) the entries without a collection number or a site are those of old versions of the form: ignored, and counted.
+    kept. A visit already kept — the same location, day and time — is left as it is, and counted as skipped.
 
     A site that is not a location is not a problem to throw the rows away for: it may be a site that is really new, or one misnamed in the field. Its
     visits are held and the site comes back in "new_sites" with what tells the two apart (the coordinates of its first visit, the nearest location and
@@ -489,7 +470,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     `options` are the settings of the field records: "time_source" ("created_at", or "hour" to read the date and the hour typed) and "cards" (the SD cards of the settings, to tell which are archived). A row whose session and site are those of a visit already
     kept is that visit: left as it is, and counted as skipped.
 
-    Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "ignored": int, "new_sites": [...], "warnings": [str], "notes": [str]} — the rows
+    Returns {"visits": [...], "problems": [{"row", "message"}], "skipped": int, "new_sites": [...], "warnings": [str], "notes": [str]} — the rows
     numbered as in the file, the header being 1. "notes" are what is worth knowing but not wrong: the sites of the trip before not visited on this one (their cameras
     are still out), visits where nothing was collected, visits with no photo count.
 
@@ -499,8 +480,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     options = options or {}
     time_source = options.get("time_source") or "created_at"
     create = {entity: bool(on) for entity, on in (options.get("create") or {}).items() if entity in CREATABLE}
-    columns, rows = _rows(text, fmt, mapping, options.get("defaults"), create)
-    epicollect = fmt == "epicollect" and "created_at" in columns
+    _, rows = _rows(text, mapping, options.get("defaults"), create)
     known = {str(l.get("location_id", "")).lower(): l for l in locations}
     # What a row creates when its location, camera or SD card does not exist and it is asked to: {row: {"locations": [...], "cameras": [...], "sd_cards": [...]}}, and the
     # locations made from the first row that gave each site (the other rows of it are read in its timezone).
@@ -512,7 +492,6 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     problems: list[dict] = []
     parsed: list[tuple[int, dict]] = []
     skipped = 0
-    ignored = 0
     held: dict[str, list[dict]] = {}  # the visits to sites that are not locations of the research project, by site
     row_warnings: list[tuple[int, str]] = []  # what is odd in a row by itself: its row, and what
     # A revision is one visit to each site: the session and the site of a visit already kept are taken, whatever its camera or its actions
@@ -529,11 +508,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     for n, row in enumerate(rows, start=2):
         found = re.search(r"\d+", row.get("session", ""))
         report[n] = {"row": n, "site": row.get("location_id", ""), "session": f"R{int(found.group(0)):04d}" if found else "", "actions": row.get("actions", ""), "result": "ok", "label": "", "message": "", "data": dict(row)}
-        if epicollect and ("session" not in row or "location_id" not in row):
-            ignored += 1
-            report[n] |= {"result": "ignored", "label": "Entry of an old form", "message": "It has no session or no site: it is an entry of an old version of the form."}
-            continue
-        site = _site(row.get("location_id", ""), site_prefix) if fmt == "epicollect" else row.get("location_id", "")
+        site = row.get("location_id", "")
         location = known.get(site.lower()) or new_locations.get(site.lower())
         unknown = location is None
         made: dict[str, list[dict]] = {"locations": [], "cameras": [], "sd_cards": []}
@@ -550,14 +525,6 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         try:
             date, time = _when(row, location, time_source)
             report[n] |= {"date": date, "time": time[:5]}
-            if fmt == "epicollect" and "created_at" in row and "date" in row and time_source != "hour":
-                try:
-                    created_day = _when({"created_at": row["created_at"]}, location)[0]
-                    typed_day = _when({"date": row["date"], "time": "00:00"}, location)[0]
-                    if created_day != typed_day:
-                        row_warnings.append((n, f"Row {n} ({site}): the date typed, {typed_day}, differs from the day of the entry, {created_day}; the time of the entry was used."))
-                except RowError:
-                    pass
             # what the cells say of the visit — each one read as its field takes it, or refused with the code of what is wrong
             cells = CsvVisit.model_validate(row)
             actions = cells.actions
@@ -731,7 +698,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
         names += [f"the SD card {c['label']}" for c in made_by_row.get(n, {}).get("sd_cards", [])]
         if names and n in report and report[n]["result"] == "ok":
             report[n]["message"] = f"The visit is added, and creates {', '.join(names)}."
-    return {"visits": visits, "problems": problems, "rows": [report[n] for n in sorted(report)], "skipped": skipped, "ignored": ignored, "new_sites": new_sites,
+    return {"visits": visits, "problems": problems, "rows": [report[n] for n in sorted(report)], "skipped": skipped, "new_sites": new_sites,
             "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes, "unknown": unknown}
 
 

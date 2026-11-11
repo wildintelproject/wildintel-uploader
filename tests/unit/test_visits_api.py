@@ -30,7 +30,7 @@ def entities_unchecked(request, monkeypatch):
     from wildintel_uploader.web.api.routers import visits as router
     real = visits_csv.parse_visits
     monkeypatch.setattr(router, "_not_entities", lambda *a, **k: [])
-    monkeypatch.setattr(router.visits_csv, "parse_visits", lambda *a, **k: real(*a[:6], {**(a[6] if len(a) > 6 and a[6] else {}), "check_entities": False}))
+    monkeypatch.setattr(router.visits_csv, "parse_visits", lambda *a, **k: real(*a[:4], {**(a[4] if len(a) > 4 and a[4] else {}), "check_entities": False}))
 
 
 def _client() -> TestClient:
@@ -242,43 +242,17 @@ def test_the_dates_may_be_written_day_first(tmp_path: Path):
 
 EPICOLLECT = (
     "ec5_uuid,created_at,1_Responsable,2_Collection,3_Date,4_Location,5_Camera,6_Action,7_Status_of_the_came,8_Card_Batteries,9_Number_of_pictures,10_SD,11_Date_and_hour,12_Observation,lat_13_Coordenates,long_13_Coordenates,14_Hour\n"
-    "a1,2026-09-04T10:16:31.000Z,Ana,13,04/09/2026,1,5,Revision,OK,OK,1620,A13,Yes,all well,37.2,-6.5,12:16\n"
+    "a1,2026-09-04T10:16:31.000Z,Ana,13,04/09/2026,DONA_01,5,Revision,OK,OK,1620,A13,Yes,all well,37.2,-6.5,12:16\n"
     "a2,2026-09-04T11:00:00.000Z,Ana,13,04/09/2026,DONA_02,7,Installation,,,,B2,Yes,,,,\n"
-    "a3,2026-09-04T12:00:00.000Z,Ana,,04/09/2026,DONA_01,5,Revision,,,,,,,,,\n"
 )
 
 
-def test_an_epicollect_download_is_read_as_the_field_records_read_it(tmp_path: Path):
-    body = _import(tmp_path, EPICOLLECT, fmt="epicollect").json()
-
-    assert body["problems"] == [] and body["ignored"] == 1  # the entry of an old form, without a collection number
-    first, second = body["visits"]
-    assert (first["location_id"], first["session"], first["actions"], first["trappers"], first["camera_id"]) == ("DONA_0001", "R0013", ["Revision"], "Ana", "5")
-    assert (first["date"], first["time"]) == ("2026-09-04", "10:16:31")  # created_at, in UTC: the location has no timezone
-    assert (first["camera_status"], first["card_status"], first["num_photos"], first["sd"], first["date_time_ok"], first["comments"]) == ("OK", "OK", 1620, "A13", "Yes", "all well")
-    assert (first["latitude"], first["longitude"]) == (37.2, -6.5)  # the coordinates of the entry, not the location's
-    assert (second["location_id"], second["session"], second["actions"], second["card_status"]) == ("DONA_02", "R0013", ["Installation"], None)
-
-
 def test_the_time_of_an_entry_is_put_in_the_timezone_of_its_location(tmp_path: Path):
-    summer = _import(tmp_path, EPICOLLECT, fmt="epicollect", timezone="Europe/Madrid").json()["visits"][0]
-    standard = _import(tmp_path / "b", EPICOLLECT, fmt="epicollect", timezone="Europe/Madrid", ignore_dst=True).json()["visits"][0]
+    summer = _import(tmp_path, EPICOLLECT, timezone="Europe/Madrid").json()["visits"][0]
+    standard = _import(tmp_path / "b", EPICOLLECT, timezone="Europe/Madrid", ignore_dst=True).json()["visits"][0]
 
     assert summer["time"] == "12:16:31"
     assert standard["time"] == "11:16:31"
-
-
-def test_the_donana_form_is_read_too_with_its_spanish_headers_and_codes(tmp_path: Path):
-    text = (
-        "created_at,1_Tramperos,2_Sesion,3_Fecha,4_Sitio,5_Camara,6_Accion,7_Estado,8_CardPilasOK,9_NumFotos,10_SD,11_FechaHoraOK,12_Observaciones,lat_13_Localizacin_actua,long_13_Localizacin_actua\n"
-        "2026-09-04T10:16:31.000Z,Ana,12,04/09/2026,DONA_02,5,ROBADA,,,,,,gone,,\n"
-        "2026-09-04T11:16:31.000Z,Ana,12,04/09/2026,1,6,I,,SinPilas,,A1,No,,,\n"
-    )
-    body = _import(tmp_path, text, fmt="epicollect").json()
-
-    assert body["problems"] == []
-    assert [(v["location_id"], v["session"], v["actions"]) for v in body["visits"]] == [("DONA_02", "R0012", ["Stolen"]), ("DONA_0001", "R0012", ["Installation"])]
-    assert body["visits"][1]["battery_status"] == "NoBatteries" and body["visits"][1]["date_time_ok"] == "No"
 
 
 MAPPED = (
@@ -591,58 +565,6 @@ def test_the_visits_of_a_csv_make_the_folders_and_the_logs_of_their_collections_
     assert shown.status_code == 200
 
 
-# ── the history of visits: an .xlsx that completes the visits kept before a file's are applied ──────────────────
-
-def _workbook(rows: list[list]) -> str:
-    import base64
-    import io
-
-    import openpyxl
-    book = openpyxl.Workbook()
-    for row in rows:
-        book.active.append(row)
-    out = io.BytesIO()
-    book.save(out)
-    return base64.b64encode(out.getvalue()).decode()
-
-
-HISTORY = [
-    ["Trappers", "Session", "Date", "Time", "Site", "Camera", "Action", "NumPhotos", "SD"],
-    ["Ana", "R0003", "2024-09-04", "09:00:00", "DONA_01", "P800", "Installation", None, "A13"],
-]
-
-
-def test_a_history_completes_the_visits_kept_and_the_file_is_applied_on_top(tmp_path: Path):
-    csv_text = "location_id,date,time,actions,session,num_photos,sd,camera_id\nDONA_01,2024-10-12,09:00,Revision,R0004,241,B2,P800\n"
-    with _in(tmp_path):
-        _project(archived=(2, 3))
-        mapping = _client().post("/api/visits/csv-columns", json={"csv": csv_text}).json()["mapping"]
-        body = {"research_project_id": "DONA", "csv": csv_text, "format": "mapped", "mapping": mapping, "history_xlsx": _workbook(HISTORY)}
-        shown = _client().post("/api/visits/import-csv", json=body).json()
-        kept = _client().post("/api/visits/import-csv", json={**body, "save": True}).json()
-        listed = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
-
-    assert shown["history"] == 1 and [v["session"] for v in shown["visits"]] == ["R0003", "R0004"]      # the history first, then the file's
-    assert kept["saved"] == 2 and [v["session"] for v in listed] == ["R0003", "R0004"]
-    # the Revision of the file collects the deployment the history left: no warning about a card still in the camera, and the log has it
-    assert not any("is in the camera at" in w for w in kept["warnings"])
-    assert "closed" in (tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv").read_text(encoding="utf-8-sig")
-
-
-def test_a_history_that_is_not_a_workbook_with_visits_is_refused(tmp_path: Path):
-    import base64
-    with _in(tmp_path):
-        _project()
-        csv_text = "location_id,date,time,actions\nDONA_01,2024-10-12,09:00,Installation\n"
-        mapping = _client().post("/api/visits/csv-columns", json={"csv": csv_text}).json()["mapping"]
-        base = {"research_project_id": "DONA", "csv": csv_text, "format": "mapped", "mapping": mapping}
-        not_xlsx = _client().post("/api/visits/import-csv", json={**base, "history_xlsx": base64.b64encode(b"a,b\n1,2\n").decode()})
-        no_visits = _client().post("/api/visits/import-csv", json={**base, "history_xlsx": _workbook([["name", "colour"], ["A", "red"]])})
-
-    assert not_xlsx.status_code == 400 and ".xlsx" in not_xlsx.json()["detail"]
-    assert no_visits.status_code == 400 and "history of visits" in no_visits.json()["detail"]
-
-
 def test_a_closed_visit_comes_with_what_its_two_visits_say_of_the_deployment_mixed_as_the_log_mixes_them(tmp_path: Path):
     with _in(tmp_path):
         _field_visits()
@@ -657,10 +579,10 @@ def test_a_closed_visit_comes_with_what_its_two_visits_say_of_the_deployment_mix
 
 # ── the settings of the field records, and what the engine of the field records also says ───────────────────────
 
-def _parse(text: str, kept=None, options=None, fmt="epicollect", sites=("DONA_01", "DONA_02", "DONA_03")):
+def _parse(text: str, kept=None, options=None, sites=("DONA_01", "DONA_02", "DONA_03")):
     from wildintel_uploader.core.services import visits_csv
     locations = [{"location_id": s, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.4} for s in sites]
-    return visits_csv.parse_visits(text, locations, kept or [], "DONA_", fmt, None, options)
+    return visits_csv.parse_visits(text, locations, kept or [], visits_csv.suggest_mapping(text)["mapping"], options)
 
 
 EPI_HEADER = "created_at,1_Responsable,2_Collection,3_Date,4_Location,5_Camera,6_Action,9_Number_of_pictures,10_SD,14_Hour\n"
@@ -674,12 +596,6 @@ def test_the_time_of_a_visit_is_when_its_entry_was_created_or_the_date_and_the_h
 
     assert (created["date"], created["time"], created["when"]) == ("2024-09-04", "11:10:00", "2024-09-04T11:10:00Z")
     assert (typed["date"], typed["time"], typed["when"]) == ("2024-09-04", "12:30:00", "2024-09-04T12:30:00Z")   # the hour typed in the form
-
-
-def test_the_date_typed_that_differs_from_the_day_of_the_entry_is_warned_of():
-    text = EPI_HEADER + "2024-09-04T23:50:00.000Z,Ana,R0003,2024-09-05,DONA_01,P800,Installation,,A13,12:30\n"
-
-    assert any("the date typed, 2024-09-05, differs from the day of the entry, 2024-09-04" in w for w in _parse(text)["warnings"])
 
 
 def test_the_session_numbers_that_jump_are_warned_of_and_the_sites_not_visited_are_told_as_notes():
