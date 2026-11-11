@@ -31,9 +31,81 @@ the Trapper server you configure. The welcome screen says what it does; press **
 
 ![Welcome](img/screenshots/welcome.png)
 
-Before you start using the application it has to be configured. To do so, press **⚙️ Settings** (top right) and fill in the
-**Trapper** server, username and password — see [Settings](#2-settings); you can test them right there. Also fill in who owns the
-images (Preprocessing › Authorship) if you are going to import some.
+### Defining the entities
+
+We are going to follow one study from the start: the research project `WICP_02`, with four locations where cameras are put up, whose images we bring home and upload to Trapper. Everything the visits and the deployments refer to is defined first, in the settings.
+
+!!! info "Many entities to create"
+    When there are many entities to create, they do not have to be added one by one: each tab of Entities can be filled in at once from a CSV file, with **Import CSV**. There are examples of every file in `examples/entities_example/wicp_02`.
+
+#### The research project
+
+The first thing to do is to create the [research project](user-manual.md#21-research-projects). For that we go to **⚙️ Settings › Entities** (see [Settings](#2-settings) and [Entities](#entities)), and in the **Research projects** tab we press **New research project**. The form is filled in as follows: the **acronym** `WICP_02` and the **name** `WICP_02 Doñana census`, a **description** and some **keywords** — type each one and press Enter —, and the **design of the study**, as Trapper asks for it: here, a *systematicRandom* sampling design. The abstract and the methods are optional. We leave the project *Active* and press **Add**.
+
+![Settings › Entities › New research project, filled in for WICP_02](img/screenshots/research-project-form.png)
+
+#### The trappers
+
+Once the research project is defined, we create the [trappers](user-manual.md#22-trappers-and-roles) who are going to do the study. For that we go to the **Trappers** tab of the same section and create one or more by pressing **New trapper**. For example, to create the trapper Pedro Pérez we put his **full name** — it is how a visit says who went to the field — and his **affiliation**, and leave him *Active*, so that he is offered when a visit is registered. We press **Add**.
+
+![Settings › Entities › New trapper, filled in for Pedro Pérez](img/screenshots/trapper-form.png)
+
+#### The locations
+
+Now the [locations](user-manual.md#23-locations): the places where the cameras will be put up. The locations, the cameras and the SD cards belong to a research project, so in their tabs we pick first `WICP_02`. In **Locations** we press **New location** for each one. For the first, we give its **id** `WICP_02_001` — it is how the visits refer to it —, a **name**, its **coordinates** (`37.0123`, `-6.4412`) and how far off they could be, and its **time zone**, which we leave as it comes, `UTC`, the standard that is used, with the switch **The cameras here ignore summer time** on. We leave it *Ready*, to have a camera put up, and press **Add**. We create the four in the same way: `WICP_02_001` to `WICP_02_004`.
+
+![Settings › Entities › New location, filled in for WICP_02_001](img/screenshots/location-form.png)
+
+#### The cameras
+
+In **Cameras** we press **New camera** for each one of the four [cameras](user-manual.md#24-cameras) that are going to be put up. We give each its **label** — how it is called in the field: `CAM-001` —, its **camera id** — its serial number — and its **model**, and leave it *Ready*: available, and not in the field yet.
+
+![Settings › Entities › New camera, filled in for CAM-001](img/screenshots/camera-form.png)
+
+#### The SD cards
+
+In the same way, in **SD cards** we press **New SD card** for each [SD card](user-manual.md#25-sd-cards): its **label** — the number written on it: `1` —, its brand and its capacity. They are left *Ready* too. For the study we create eight cards: four for the first visits and four more for the next ones.
+
+![Settings › Entities › New SD card, filled in for the card 1](img/screenshots/sd-card-form.png)
+
+### Managing visits
+
+Once the entities are defined, we can start with the visits (see [Manage visits](#5-manage-visits)). Following our example, we have four locations to visit. From the menu we press **📋 Manage visits › Register visits**, and choose **By hand**.
+
+!!! info "Registering many visits at once"
+    By hand is the way to register a few visits. To register many at once, the visits can be read from a file instead: with **Custom CSV**, a CSV of any shape in which we say which column gives each field of a visit, or with **WildINTEL Epicollect CSV** (and **WildINTEL Epicollect Legacy CSV**), the CSV downloaded from the WildINTEL Epicollect project. See [Register visits](#register-visits).
+
+To register the visit to the first location we go through the steps of the form. We pick the location, `WICP_02_001`; we say who went, Pedro Pérez, and when; and we say what was done: as no camera is known there yet, the visit is an *Installation*. We open the **Camera** section and choose the camera that is installed, `CAM-001`, say that it was calibrated, and give its height, its tilt and its heading and the delay between triggers; and in **SD card** we pick the card that is left in it, the `1`.
+
+![Register visits › By hand: the first visit, an Installation of the camera CAM-001 with the card 1](img/screenshots/visit-installation-form.png)
+
+We press **Review the visit**, check what is going to be kept and confirm it. Once the visit is registered, we go to the **Visit dashboard** (see [Visit dashboard](#visit-dashboard)) and we see that the first revision, `R0001`, has been created, and the state of its visits: all of them are *Planned*, but the one already made, which is *Deployed*: the camera is out.
+
+![The visit dashboard after the first visit: the revision R0001 has one visit done, and three planned](img/screenshots/dashboard-first-visit.png)
+
+In the same way as we have registered the first visit to the first site, we do it with the three that are left, each one with its camera — `CAM-002` to `CAM-004` — and its card. When the process ends, the dashboard shows the first revision complete: its four visits are *Deployed*.
+
+![The visit dashboard at the end of the first revision: the four visits are Deployed](img/screenshots/dashboard-first-revision.png)
+
+Some time later we go back to the locations to make the second revision. We register the visit to the first one in the same way, but now the camera is there, so we answer that we see it, and that it is well: the visit is a *Revision*. The camera is the one the visit before says, so it is not asked; we say that it was calibrated and, in **SD card**, how many photos the card collected has and which card is left, the `5`.
+
+![Register visits › By hand: the first visit of the second revision, a Revision](img/screenshots/visit-revision-form.png)
+
+We do the same with the other three. When the second revision is finished, the dashboard shows that the visits of `R0001` are now *Collected*: the cards were collected, and the deployments are closed — their images can be imported —, while those of `R0002` are *Deployed*: the cameras are out again.
+
+![The visit dashboard at the end of the second revision: the visits of R0001 are Collected and those of R0002 are Deployed](img/screenshots/dashboard-second-revision.png)
+
+### Managing deployments
+
+The images of each card collected are a **deployment**. With the cards copied to our computer, from the menu we press **📷 Manage deployments** and **Import deployment** — one folder of images from one camera — or **Import deployments** — a folder with the images of several cameras (see [Manage deployments](#6-manage-deployments) and [Import deployments](#7-import-deployments)). The app checks the images and keeps them in the collections folder, one **collection** for each revision. The location, the camera and the dates are taken from the visits.
+
+The images go through a preprocessing that adds data to each one — who owns it, who publishes it, where it was taken and under which license — so those data have to be configured first. In Settings, in **Preprocessing › Authorship**, we fill in, for example, **Owner** and **Publisher**: `University of Huelva`, and **Coverage**: `Parque Nacional de Doñana` (see [Preprocessing](#preprocessing)).
+
+![Settings › Preprocessing, with the authorship filled in: University of Huelva as owner and publisher, and Parque Nacional de Doñana as coverage](img/screenshots/settings-preprocessing.png)
+
+### Managing uploads
+
+Last, the collections are uploaded to Trapper. First, in Settings, in **Uploader › Trapper**, we fill in the server, our username and our password — we can test them right there (see [Trapper](#trapper)). Then we press **☁️ Manage uploads › Upload deployment to Trapper**, choose `WICP_02` and the collection — `R0001` — and what to upload (see [Upload a deployment to Trapper](#8-upload-a-deployment-to-trapper)). The uploads dashboard says what has been uploaded and what is still to be.
 
 ## 2. Settings
 
