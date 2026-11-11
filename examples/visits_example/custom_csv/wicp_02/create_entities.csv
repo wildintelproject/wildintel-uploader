@@ -1,0 +1,5 @@
+location_id,session,date,time,actions,trappers,status,camera_id,camera_model,sd,sd_brand,sd_capacity,card_batteries_ok,camera_height,camera_interval,latitude,longitude,location_name,location_latitude,location_longitude,coordinate_uncertainty,timezone,daylight_saving
+WICP_02_001,R0001,2026-09-14,08:30:00,Installation,Ana Pérez,,BR5071050724,Browning-BTC-8A,1,SanDisk,64 GB,OK,0.5,30,37.012340,-6.441230,WICP_02 site 1,37.012300,-6.441200,5,UTC,no
+WICP_02_002,R0001,2026-09-14,10:05:00,Installation,Ana Pérez,,RE5699252753,Reconyx-PC800,2,SanDisk,64 GB,OK,0.5,30,37.025750,-6.452680,WICP_02 site 2,37.025800,-6.452700,5,UTC,no
+WICP_02_003,R0001,2026-09-14,11:40:00,Installation,"Ana Pérez, Luis Gómez",,RE1161042648,Reconyx-HC600,3,Transcend,32 GB,OK,0.5,30,37.038420,-6.468850,WICP_02 site 3,37.038400,-6.468900,4,UTC,no
+WICP_02_004,R0001,2026-09-14,13:15:00,Installation,"Ana Pérez, Luis Gómez",,SP1776213899,Spypoint-Force-Dark,4,Transcend,32 GB,OK,0.5,30,37.047070,-6.481540,WICP_02 site 4,37.047100,-6.481500,4,UTC,no

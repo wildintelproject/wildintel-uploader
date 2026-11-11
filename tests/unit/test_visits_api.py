@@ -23,14 +23,25 @@ def reports(tmp_path_factory, monkeypatch) -> Path:
 
 @pytest.fixture(autouse=True)
 def entities_unchecked(request, monkeypatch):
-    """Most tests save visits of cameras, cards and trappers that nobody registered: the check that they exist is off, except in the tests marked `entities`."""
-    if request.node.get_closest_marker("entities"):
-        return
-    from wildintel_uploader.core.services import visits_csv
+    """Most tests save visits of cameras, cards and trappers that nobody registered: the check that they exist is off, except in the tests marked `entities`.
+    Every visit of a file needs its coordinates, so the rows of the samples that do not give them get these, as a default."""
+    from wildintel_uploader.core.services import visit_rules, visits_csv
     from wildintel_uploader.web.api.routers import visits as router
     real = visits_csv.parse_visits
-    monkeypatch.setattr(router, "_not_entities", lambda *a, **k: [])
-    monkeypatch.setattr(router.visits_csv, "parse_visits", lambda *a, **k: real(*a[:4], {**(a[4] if len(a) > 4 and a[4] else {}), "check_entities": False}))
+    entities = request.node.get_closest_marker("entities")
+    if not request.node.get_closest_marker("gps"):
+        monkeypatch.setattr(visit_rules, "GPS_TOLERANCE_M", 10**9)      # the default coordinates are not those of the sites: only the tests marked `gps` check the distance
+
+    def parse(*a, **k):
+        options = dict(a[4] if len(a) > 4 and a[4] else {})
+        options["defaults"] = {"latitude": "37.0", "longitude": "-6.4", **(options.get("defaults") or {})}
+        if not entities:
+            options["check_entities"] = False
+        return real(*a[:4], options)
+
+    if not entities:
+        monkeypatch.setattr(router, "_not_entities", lambda *a, **k: [])
+    monkeypatch.setattr(router.visits_csv, "parse_visits", parse)
 
 
 def _client() -> TestClient:
@@ -186,9 +197,9 @@ def test_visits_are_read_from_a_csv_and_only_kept_when_asked(tmp_path: Path):
     assert shown.status_code == 200 and body["saved"] is None and nothing == []
     assert body["problems"] == [] and body["skipped"] == 0
     first, third, second = body["visits"]  # by the day of the visit
-    assert (first["location_id"], first["session"], first["actions"], first["latitude"]) == ("DONA_01", "R0001", ["Installation"], 37.1)
+    assert (first["location_id"], first["session"], first["actions"], first["latitude"]) == ("DONA_01", "R0001", ["Installation"], 37.0)
     assert (second["session"], second["actions"], second["card_status"], second["num_photos"], second["time"]) == ("R0002", ["Revision", "Installation"], "OK", 1620, "09:00:00")
-    assert (third["location_id"], third["session"], third["actions"], third["latitude"]) == ("DONA_02", "R0001", ["Installation"], 37.2)
+    assert (third["location_id"], third["session"], third["actions"], third["latitude"]) == ("DONA_02", "R0001", ["Installation"], 37.0)   # the default of the sample: its rows give no coordinates
 
 
 def test_the_visits_of_a_csv_are_added_to_the_ones_kept_without_repeating_any(tmp_path: Path):
@@ -287,7 +298,7 @@ def test_the_columns_of_a_csv_are_offered_with_the_fields_and_the_column_that_mo
 
     assert body["columns"] == ["Site", "Date", "Time", "Action", "Sd", "Whatever"] and body["sample"] == [["A", "2026-10-02", "08:00", "Revision", "B2", "1"]]
     assert body["mapping"] == {"location_id": "Site", "date": "Date", "time": "Time", "actions": "Action", "sd": "Sd"}
-    assert [f["field"] for f in body["fields"] if f["required"]] == ["location_id", "actions"]
+    assert [f["field"] for f in body["fields"] if f["required"]] == ["location_id", "actions", "latitude", "longitude"]
     assert empty.status_code == 400
 
 
@@ -790,6 +801,7 @@ def test_a_form_that_is_not_the_one_of_a_visit_is_said_plainly():
             epicollect_service.visits_csv()
 
 
+@pytest.mark.gps
 def test_a_note_whose_gps_is_far_from_its_location_is_warned_of(tmp_path: Path):
     text = "location_id,date,time,actions,latitude,longitude\nDONA_01,2026-10-02,08:00:00,Installation,37.2,-6.4\nDONA_0001,2026-10-03,08:00:00,Installation,37.1,-6.4\n"
     shown = _import(tmp_path, text).json()
@@ -940,10 +952,10 @@ def test_a_visit_that_finds_the_camera_stolen_and_puts_up_another_opens_a_deploy
 
 
 def test_importing_a_csv_creates_the_locations_cameras_and_sd_cards_it_is_asked_to_and_keeps_them(tmp_path: Path):
-    csv = ("site,what,day,hour,lat,lon,tz,cam,model,sd,brand\n"
-           "DONA_09,Installation,2026-09-14,11:40,37.1,-6.4,Europe/Madrid,CAM9,Browning,S9,SanDisk\n")
+    csv = ("site,what,day,hour,lat,lon,llat,llon,tz,cam,model,sd,brand\n"
+           "DONA_09,Installation,2026-09-14,11:40,37.1002,-6.4001,37.1,-6.4,Europe/Madrid,CAM9,Browning,S9,SanDisk\n")
     body = {"research_project_id": "DONA", "csv": csv, "format": "mapped", "create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"},
-            "mapping": {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "latitude": "lat", "longitude": "lon", "timezone": "tz",
+            "mapping": {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "latitude": "lat", "longitude": "lon", "location_latitude": "llat", "location_longitude": "llon", "timezone": "tz",
                         "camera_id": "cam", "camera_model": "model", "sd": "sd", "sd_brand": "brand"}}
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
@@ -957,11 +969,12 @@ def test_importing_a_csv_creates_the_locations_cameras_and_sd_cards_it_is_asked_
 
     assert shown["saved"] is None and before == [] and len(shown["create"]["locations"]) == 1   # reading creates nothing
     assert kept["saved"] == 1
-    assert [(l["location_id"], l["timezone"]) for l in locations] == [("DONA_09", "Europe/Madrid")]
+    assert [(l["location_id"], l["timezone"], l["latitude"]) for l in locations] == [("DONA_09", "Europe/Madrid", 37.1)]   # the location has its own coordinates, not the visit's
     assert "CAM9" in cameras and "Browning" in cameras and "S9" in cards and "SanDisk" in cards
     sd_brand = next(f for f in columns["fields"] if f["field"] == "sd_brand")
     assert sd_brand["entity"] == "sd_cards" and sd_brand["required_with"] == []
-    assert next(f for f in columns["fields"] if f["field"] == "latitude")["required_with"] == ["locations"]
+    assert next(f for f in columns["fields"] if f["field"] == "location_latitude")["required_with"] == ["locations"]
+    assert next(f for f in columns["fields"] if f["field"] == "latitude")["required_with"] == []
 
 
 def test_the_entries_of_epicollect_are_downloaded_as_a_csv(monkeypatch):

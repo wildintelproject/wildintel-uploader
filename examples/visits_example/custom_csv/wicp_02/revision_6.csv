@@ -1,5 +1,5 @@
-location_id,session,date,time,actions,trappers,status,camera_id,camera_model,sd,card_batteries_ok,num_photos,date_time_ok,camera_height,camera_interval,comments
-WICP_02_001,R0006,2027-01-18,08:30:00,Revision,Luis Gómez,OK,BR5071050724,,1,OK,3120,Yes,,,Collects card 5 and leaves 1 — another one, which was collected in R0002
-WICP_02_002,R0006,2027-01-18,10:05:00,Revision,Luis Gómez,OK,RE5699252753,,2,OK,2480,Yes,,,Collects card 6 and leaves 2
-WICP_02_003,R0006,2027-01-18,11:40:00,Revision,Luis Gómez,OK,RE1161042648,,3,OK,2655,Yes,,,Collects card 7 and leaves 3
-WICP_02_004,R0006,2027-01-18,13:15:00,Revision,Luis Gómez,OK,SP1776213899,,8,OK,1340,Yes,,,WICP_02_004 was not visited in R0002: card 4 is still in its camera; it is collected and card 8 left
+location_id,session,date,time,actions,trappers,status,camera_id,camera_model,sd,card_batteries_ok,num_photos,date_time_ok,camera_height,camera_interval,comments,latitude,longitude
+WICP_02_001,R0006,2027-01-18,08:30:00,Revision,Luis Gómez,OK,BR5071050724,,1,OK,3120,Yes,,,"Collects card 5 and leaves 1 — another one, which was collected in R0002",37.012340,-6.441230
+WICP_02_002,R0006,2027-01-18,10:05:00,Revision,Luis Gómez,OK,RE5699252753,,2,OK,2480,Yes,,,Collects card 6 and leaves 2,37.025750,-6.452680
+WICP_02_003,R0006,2027-01-18,11:40:00,Revision,Luis Gómez,OK,RE1161042648,,3,OK,2655,Yes,,,Collects card 7 and leaves 3,37.038420,-6.468850
+WICP_02_004,R0006,2027-01-18,13:15:00,Revision,Luis Gómez,OK,SP1776213899,,8,OK,1340,Yes,,,WICP_02_004 was not visited in R0002: card 4 is still in its camera; it is collected and card 8 left,37.047070,-6.481540

@@ -37,6 +37,8 @@ COLUMN_NAMES: dict[str, tuple[str, ...]] = {
     "setup_by": ("setupby",),
     "latitude": ("latitude", "lat", "latitud", "lat13coordenates", "lat13localizacinactua"),
     "longitude": ("longitude", "lon", "lng", "longitud", "long13coordenates", "long13localizacinactua"),
+    "location_latitude": ("locationlatitude", "locationlat"),
+    "location_longitude": ("locationlongitude", "locationlon", "locationlng"),
     "created_at": ("createdat",),
     # what a deployment has beside, named as Camtrap DP names it (or as the visit does)
     "camera_interval": ("cameradelay", "camerainterval"),
@@ -73,8 +75,8 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("camera_model", "Camera model", False),
     ("comments", "Notes", False),
     ("setup_by", "Set up by", False),
-    ("latitude", "Latitude", False),
-    ("longitude", "Longitude", False),
+    ("latitude", "Latitude of the visit (where the trapper was when it was noted)", True),
+    ("longitude", "Longitude of the visit (where the trapper was when it was noted)", True),
     ("camera_interval", "Camera delay (s)", False),
     ("camera_height", "Camera height (m)", False),
     ("camera_depth", "Camera depth (m)", False),
@@ -90,6 +92,8 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("tags", "Tags (separated by |)", False),
     # what a row says of the entities it may create (see CREATABLE): they are not fields of the visit
     ("location_name", "Name of the location", False),
+    ("location_latitude", "Latitude of the location", False),
+    ("location_longitude", "Longitude of the location", False),
     ("timezone", "Timezone of the location (IANA, e.g. Europe/Madrid)", False),
     ("daylight_saving", "Daylight saving time of the location (yes if its cameras follow it, no if they do not)", False),
     ("coordinate_uncertainty", "Coordinate uncertainty of the location (m)", False),
@@ -98,15 +102,15 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
 )
 REQUIRED = tuple(f for f, _, required in FIELDS if required)
 # What the import can create when a visit names a location, a camera or an SD card that does not exist: each one's fields that a row must give — by a column or
-# by a default — and the ones that are only asked for when it is created. The fields of the visit that appear here (latitude, longitude, camera_id, camera_model, sd)
-# become required when it is.
+# by a default — and the ones that are only asked for when it is created. The fields of the visit that appear here (camera_id, camera_model, sd) become required
+# when it is; the coordinates of the location are its own (location_latitude, location_longitude), apart from those of the visit, which every row gives.
 CREATABLE: dict[str, dict] = {
-    "locations": {"required": ["latitude", "longitude", "timezone", "daylight_saving"], "extra": ["location_name", "coordinate_uncertainty"]},
+    "locations": {"required": ["location_latitude", "location_longitude", "timezone", "daylight_saving"], "extra": ["location_name", "coordinate_uncertainty"]},
     "cameras": {"required": ["camera_id"], "extra": ["camera_model"]},
     "sd_cards": {"required": ["sd"], "extra": ["sd_brand", "sd_capacity"]},
 }
 # The fields that are not a visit's but an entity's.
-ENTITY_ONLY = {f: entity for entity, spec in CREATABLE.items() for f in [*spec["required"], *spec["extra"]] if f in ("location_name", "timezone", "daylight_saving", "coordinate_uncertainty", "sd_brand", "sd_capacity")}
+ENTITY_ONLY = {f: entity for entity, spec in CREATABLE.items() for f in [*spec["required"], *spec["extra"]] if f in ("location_name", "location_latitude", "location_longitude", "timezone", "daylight_saving", "coordinate_uncertainty", "sd_brand", "sd_capacity")}
 ACTIONS = {a.lower(): a for a in ("Installation", "Revision", "Desinstallation", "Stolen", "Archive")} | {
     # as the datasheets of the field work write them
     "i": "Installation", "r": "Revision", "d": "Desinstallation", "robada": "Stolen", "uninstallation": "Desinstallation", "removal": "Desinstallation",
@@ -164,6 +168,7 @@ ERROR_LABELS: dict[str, str] = {
     "trapper_unknown": "Trapper not in the settings",
     "date_invalid": "Date or time not valid",
     "number_invalid": "Number not valid",
+    "coordinates_missing": "Coordinates of the visit missing",
     "create_missing": "Data to create it is missing",
     "create_invalid": "Data to create it is not valid",
     "visit_invalid": "Value not valid",
@@ -493,6 +498,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
             report[n] |= {"date": date, "time": time[:5]}
             # what the cells say of the visit — each one read as its field takes it, or refused with the code of what is wrong
             cells = CsvVisit.model_validate(row)
+            if cells.latitude is None or cells.longitude is None:
+                raise RowError("coordinates_missing", "The row needs the coordinates of the visit: a latitude and a longitude.")
             actions = cells.actions
             report[n]["actions"] = " + ".join(actions)  # as the dashboard of visits says them
             # a camera and an SD card are what their cell says, stripped; the ones that exist are found ignoring the case
@@ -510,9 +517,6 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
                 gap = visit_rules.distance_m(data["latitude"], data["longitude"], float(location["latitude"]), float(location["longitude"]))
                 if gap > visit_rules.GPS_TOLERANCE_M:
                     row_warnings.append((n, f"Row {n} ({site}): the GPS of the note is {round(gap)} m from the location; check that the site is the right one."))
-            for f in ("latitude", "longitude"):
-                if f not in data and location.get(f) not in (None, ""):
-                    data[f] = float(location[f])
             visit = {"location_id": location.get("location_id", site), "date": date, "time": time, "actions": actions, **data}
             visit.setdefault("session", "R0000")  # worked out below, when the order of the visits is known
             record = VisitRecord.model_validate(visit).model_dump(mode="json")
@@ -697,14 +701,14 @@ def export_visits(visits: list[dict]) -> str:
 
 
 def _new_location(site: str, row: dict[str, str]) -> dict:
-    """The location a row creates: its id, its coordinates and its timezone are the row's.
+    """The location a row creates: its id, its coordinates (the location's, not the visit's) and its timezone are the row's.
 
     Raises:
         RowError: the row has no coordinates or timezone, or they are not valid."""
     try:
-        latitude, longitude = float(row["latitude"]), float(row["longitude"])
+        latitude, longitude = float(row["location_latitude"]), float(row["location_longitude"])
     except (KeyError, ValueError) as exc:
-        raise RowError("create_missing", f"To create the location {site} the row needs its coordinates: a latitude and a longitude.") from exc
+        raise RowError("create_missing", f"To create the location {site} the row needs its own coordinates: a latitude and a longitude of the location.") from exc
     if not row.get("timezone"):
         raise RowError("create_missing", f"To create the location {site} the row needs its timezone (e.g. Europe/Madrid).")
     saving = str(row.get("daylight_saving") or "").strip().lower()

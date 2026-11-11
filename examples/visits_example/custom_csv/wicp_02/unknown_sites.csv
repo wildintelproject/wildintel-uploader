@@ -1,5 +1,5 @@
-location_id,session,date,time,actions,trappers,status,camera_id,camera_model,sd,card_batteries_ok,num_photos,date_time_ok,camera_height,camera_interval,comments
-WICP_02_001,R0001,2026-09-14,08:30:00,Installation,Ana Pérez,,BR5071050724,Browning-BTC-8A,1,OK,,,0.5,30,
-WICP_02_002,R0001,2026-09-14,10:05:00,Installation,Ana Pérez,,RE5699252753,Reconyx-PC800,2,OK,,,0.5,30,
-WICP_02_005,R0001,2026-09-14,14:30:00,Installation,Ana Pérez,,BR9999999999,Browning-BTC-8A,9,OK,,,0.5,30,New site 5
-WICP_02_O03,R0001,2026-09-14,11:40:00,Installation,Ana Pérez,,RE1161042648,Reconyx-HC600,3,OK,,,0.6,30,Typed with the letter O
+location_id,session,date,time,actions,trappers,status,camera_id,camera_model,sd,card_batteries_ok,num_photos,date_time_ok,camera_height,camera_interval,comments,latitude,longitude
+WICP_02_001,R0001,2026-09-14,08:30:00,Installation,Ana Pérez,,BR5071050724,Browning-BTC-8A,1,OK,,,0.5,30,,37.012340,-6.441230
+WICP_02_002,R0001,2026-09-14,10:05:00,Installation,Ana Pérez,,RE5699252753,Reconyx-PC800,2,OK,,,0.5,30,,37.025750,-6.452680
+WICP_02_005,R0001,2026-09-14,14:30:00,Installation,Ana Pérez,,BR9999999999,Browning-BTC-8A,9,OK,,,0.5,30,New site 5,37.056020,-6.494950
+WICP_02_O03,R0001,2026-09-14,11:40:00,Installation,Ana Pérez,,RE1161042648,Reconyx-HC600,3,OK,,,0.6,30,Typed with the letter O,37.038370,-6.468940
