@@ -374,7 +374,7 @@ class VisitRecord(BaseModel):
     calibration: Optional[bool] = None
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
-    # The deployment this visit closed, once it is imported (see local_folder_service.closed_visits).
+    # The deployment this visit started — the images of the card it left, once they are imported (see local_folder_service.closed_visits).
     deployment_id: Optional[str] = None
     # Where the visit is in its life: deployed (it left a camera that is still out), collected (its card was collected), stolen, or not visited (it could not be made).
     # Kept when the visit is added, and changed when a later visit gives it a deployment — see visit_deployments.refresh_states.
@@ -438,6 +438,25 @@ class VisitRecord(BaseModel):
     @classmethod
     def _once_each(cls, actions: list[str]) -> list[str]:
         return list(dict.fromkeys(actions))
+
+    @model_validator(mode="after")
+    def _the_status_of_a_camera_found_stolen_is_stolen(self):
+        # a Stolen visit says it all with its action: the status of the camera is Stolen — and only there is the camera found stolen
+        if "Stolen" in self.actions:
+            if self.camera_status not in (None, "Stolen"):
+                raise ValueError("The camera of a Stolen visit is stolen: its status is Stolen.")
+            self.camera_status = "Stolen"
+        elif self.camera_status == "Stolen":
+            raise ValueError("The status Stolen is for the visit that finds the camera stolen: its action is Stolen.")
+        return self
+
+    @model_validator(mode="after")
+    def _no_card_left_where_the_camera_is_taken_away(self):
+        # the camera that is taken away goes with its card: nothing is left, unless another camera is put up
+        actions = set(self.actions)
+        if "Desinstallation" in actions and "Installation" not in actions and self.sd:
+            raise ValueError("No SD card is left where the camera is taken away: leave the card out.")
+        return self
 
     @model_validator(mode="after")
     def _no_photos_on_a_full_card(self):

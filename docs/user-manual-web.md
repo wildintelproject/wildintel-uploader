@@ -630,7 +630,8 @@ A good save says where the deployment was kept, and offers:
 - **Open folder** in the file explorer.
 - **Upload to Trapper** — straight to [the upload page](#8-upload-a-deployment-to-trapper) with the
   research project and the collection already chosen.
-- **Start over**.
+- **Add another deployment**, which starts again at stage 1.
+- **Back to the deployments menu** and **Back to the main menu**, as when visits are registered.
 
 #### What gets written next to the images
 

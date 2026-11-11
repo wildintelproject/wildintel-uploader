@@ -2406,6 +2406,27 @@ describe('ImportDeploymentPage', () => {
       expect(mockedApi.discardSession).not.toHaveBeenCalled()
     })
 
+    it('asks once it is done what next: open the folder, upload, add another, or go back to the menu of the deployments or to the main menu', async () => {
+      const onDeploymentsMenu = vi.fn()
+      const onMainMenu = vi.fn()
+      const onUpload = vi.fn()
+      pageProps = { onUpload, onDeploymentsMenu, onMainMenu }
+      mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
+        onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })
+      })
+      await walkToImportStep()
+      await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
+      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await screen.findByText(/Deployment saved/)
+
+      const next = within(screen.getByRole('group', { name: 'What next' }))
+      expect(next.getAllByRole('button').map((b) => b.textContent)).toEqual(['Open folder', 'Upload to Trapper', 'Add another deployment', 'Back to the deployments menu', 'Back to the main menu'])
+      await userEvent.click(next.getByRole('button', { name: 'Back to the main menu' }))
+      expect(onMainMenu).toHaveBeenCalledTimes(1)
+      await userEvent.click(next.getByRole('button', { name: 'Back to the deployments menu' }))
+      expect(onDeploymentsMenu).toHaveBeenCalledTimes(1)
+    })
+
     it('starts over from the folder once it is done', async () => {
       mockedApi.consolidate.mockImplementation(async (_src, _dir, _dep, onEvent) => {
         onEvent({ type: 'done', dest_dir: `${COLLECTIONS_DIR}/R0001-DONA_01` })

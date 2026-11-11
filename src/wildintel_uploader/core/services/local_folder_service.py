@@ -735,6 +735,27 @@ def _told(visit: dict, refs: _Refs) -> dict:
     return {**told, "date": date, "time": time}
 
 
+def _with_the_camera_there(visits: list[dict]) -> list[dict]:
+    """The visits told with the camera they are of: a Revision, a Desinstallation or a Stolen visit does not say which camera — it is the one at its site, which the visit before says —,
+    so it is told as that one (it is not kept: it would say twice what the visit that put it up says)."""
+    out = [dict(v) for v in visits]
+    there: dict[str, tuple[str, str | None]] = {}
+    for v in sorted(out, key=visit_rules._stamp):
+        site = str(v.get("location_id") or "").lower()
+        if visit_rules.is_not_revised(v):
+            continue
+        actions = set(v.get("actions") or [])
+        if not v.get("camera_id") and {"Revision", "Desinstallation", "Stolen"} & actions and "Installation" not in actions and site in there:
+            v["camera_id"], model = there[site]
+            if model and not v.get("camera_model"):
+                v["camera_model"] = model
+        if visit_rules._takes_away(v):
+            there.pop(site, None)
+        if visit_rules._leaves_camera(v) and v.get("camera_id"):
+            there[site] = (v["camera_id"], v.get("camera_model"))
+    return out
+
+
 def list_visits(root: Path, research_project_id: str, location_id: str | None = None, trappers=None) -> list[dict]:
     """The visits kept for a research project, in the order they were registered — those to one location (found ignoring
     case) when it is given. Empty until one is registered.
@@ -760,7 +781,7 @@ def list_visits(root: Path, research_project_id: str, location_id: str | None = 
         kept.append(one)
     if kept != raw and raw:
         _write_raw_visits(root, research_project_id, kept)
-    visits = [_told(v, refs) for v in kept]
+    visits = _with_the_camera_there([_told(v, refs) for v in kept])
     if location_id is None:
         return visits
     return [v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower()]

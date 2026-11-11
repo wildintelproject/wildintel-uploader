@@ -57,7 +57,7 @@ function fieldId(label: string) {
 }
 
 /** Whether the fields of the details say they are Camtrap DP's — on for a page that also asks for others (see MoreDetailsForm). */
-const CamtrapDpContext = createContext(false)
+export const CamtrapDpContext = createContext(false)
 
 /** The tag of a field that is one of Camtrap DP's deployments table, when the page asks for it. */
 export function CamtrapDpTag() {
@@ -142,10 +142,10 @@ export function DateTimeField({ label, value, onChange, hint, required, error, e
 }
 
 /** A titled group of related fields. */
-export function FormCard({ title, description, children }: { title?: string; description?: string; children: ReactNode }) {
+export function FormCard({ title, description, tag, children }: { title?: string; description?: string; tag?: ReactNode; children: ReactNode }) {
   return (
     <section className="mb-5 p-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40">
-      {title && <h5 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h5>}
+      {title && <h5 className="flex items-baseline gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}{tag}</h5>}
       {description && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{description}</p>}
       <div className={title || description ? 'mt-4' : ''}>{children}</div>
     </section>
@@ -890,11 +890,15 @@ const HEIGHTS = [0.5, 1, 1.5, 2]
 const TILTS: { label: string; degrees: number }[] = [{ label: 'Down −90°', degrees: -90 }, { label: 'Level 0°', degrees: 0 }, { label: 'Up 90°', degrees: 90 }]
 
 /** The optional details of a deployment — its camera, its site, its groups, tags and comments — as three cards, every field in view. */
-export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraPicker, afterCamera, camtrapTags = false, requiredKeys = [], cameraMissing = 0, hideSetupBy = false }: {
+export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, cameraNotice, cameraPicker, mountedExtra, afterCamera, camtrapTags = false, requiredKeys = [], cameraMissing = 0, hideSetupBy = false }: {
   deployment: DeploymentFields; errors: ReturnType<typeof shownErrors>
   onField: <K extends keyof DeploymentFields>(key: K, value: DeploymentFields[K]) => void
   /** More fields for the Camera card, of the page that uses the form: how many there are, how many are filled in, and the fields themselves. */
-  cameraExtra?: { total: number; filled: number; children: ReactNode }
+  cameraExtra?: { total: number; filled: number; /** Whether there is something to ask under "How is it doing?" */ show?: boolean; /** What is asked above them — "How is it doing?" when the page says nothing */ title?: string; children: ReactNode }
+  /** What the page tells first of the camera of the Camera card — which camera was there, say. */
+  cameraNotice?: ReactNode
+  /** More of the page's own under "How was it mounted?". */
+  mountedExtra?: ReactNode
   /** What stands in the Camera card for the camera model and the camera id: a page that keeps its cameras asks for one of them instead. */
   cameraPicker?: ReactNode
   /** A card of the page that comes right after the Camera card. */
@@ -940,6 +944,16 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
       <SectionCard title="Camera" icon={camera.icon} total={7 + (cameraExtra?.total ?? 0)} summary={cameraSummary}
                    missing={emptyIn(['camera_model', 'camera_id', 'camera_height', 'camera_tilt', 'camera_heading', 'camera_interval', 'detection_distance']) + cameraMissing}
                    filled={count([deployment.camera_model, deployment.camera_id, mount === 'above' ? deployment.camera_height : deployment.camera_depth, deployment.camera_tilt, deployment.camera_heading, deployment.camera_interval, deployment.detection_distance]) + (cameraExtra?.filled ?? 0)}>
+        {cameraNotice && <CamtrapDpContext.Provider value={false}>{cameraNotice}</CamtrapDpContext.Provider>}
+        {/* what was there, then how the camera is — its state —, then the camera itself: the state is not of the one put up, but of the one that was there */}
+        {cameraExtra && cameraExtra.show !== false && (
+          <>
+            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-2">{cameraExtra.title ?? 'How is it doing?'}</p>
+            {/* what the page puts here is its own, not Camtrap DP's */}
+            <CamtrapDpContext.Provider value={false}>{cameraExtra.children}</CamtrapDpContext.Provider>
+          </>
+        )}
+
         {cameraPicker ?? (
           <div className="grid grid-cols-2 gap-4">
             <Field label="Camera model" placeholder="e.g. Reconyx-PC800" hint={DESCRIPTIONS.cameraModel}
@@ -967,6 +981,8 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
           )}
         </div>
 
+        {mountedExtra && <div className="mt-3"><CamtrapDpContext.Provider value={false}>{mountedExtra}</CamtrapDpContext.Provider></div>}
+
         <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-2">Where does it point?</p>
         <div className="space-y-4">
           <AngleRow label="Tilt" placeholder="e.g. -90" min={-90} max={90} value={deployment.camera_tilt} error={errors.camera_tilt} required={ask('camera_tilt')}
@@ -986,13 +1002,6 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
           <Field label="Detection distance (m)" type="number" min={0} step="any" placeholder="e.g. 9.5" hint={DESCRIPTIONS.detectionDistance} error={errors.detection_distance}
                  value={deployment.detection_distance?.toString() ?? ''} onChange={(v) => onField('detection_distance', v ? Number(v) : null)} />
         </div>
-        {cameraExtra && (
-          <>
-            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-5 mb-2">How is it doing?</p>
-            {/* what the page puts here is its own, not Camtrap DP's */}
-            <CamtrapDpContext.Provider value={false}>{cameraExtra.children}</CamtrapDpContext.Provider>
-          </>
-        )}
       </SectionCard>
 
       {/* what the page puts here is its own, not Camtrap DP's */}
@@ -1403,12 +1412,15 @@ interface Props {
   settingsOpen?: boolean
   /** Goes back to the menu — what Back does on the first step. */
   onBack?: () => void
+  /** Once a deployment is saved: back to the menu of the deployments, and back to the main menu. */
+  onDeploymentsMenu?: () => void
+  onMainMenu?: () => void
 }
 
 // Blank credentials: the backend uses the ones saved in the settings.
 export const NO_CREDENTIALS: TrapperCredentials = {}
 
-export default function ImportDeploymentPage({ resumeSession, closedVisit, researchProject, onUpload, onOpenSettings, settingsOpen = false, onBack }: Props) {
+export default function ImportDeploymentPage({ resumeSession, closedVisit, researchProject, onUpload, onOpenSettings, settingsOpen = false, onBack, onDeploymentsMenu, onMainMenu }: Props) {
   const [step, setStep] = useState(0)
 
   // The Trapper account is the one saved in the settings: nothing is asked for here, and the backend
@@ -3468,7 +3480,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                   <button type="button" className={btnOutline} onClick={() => onUpload({ researchProjectId: selectedProjectId, collection: plannedCollection.collection })}>Upload to Trapper</button>
                 )}
                 <button type="button" className={btnPrimary} onClick={handleStartOver}>Add another deployment</button>
-                {onBack && <button type="button" className={btnOutline} onClick={onBack}>Back to the start</button>}
+                {(onDeploymentsMenu ?? onBack) && <button type="button" className={btnOutline} onClick={onDeploymentsMenu ?? onBack}>Back to the deployments menu</button>}
+                {onMainMenu && <button type="button" className={btnOutline} onClick={onMainMenu}>Back to the main menu</button>}
               </div>
               {openFolderError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{openFolderError}</p>}
             </div>

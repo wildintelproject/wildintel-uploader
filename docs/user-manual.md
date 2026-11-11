@@ -236,6 +236,20 @@ Every visit — the one typed in the form and each row of a file alike — is **
 
 Depending on the actions done during a visit, some of the fields of a visit **must be filled in**: an Installation asks for the camera, the card it leaves and how the camera is set up; a Revision or a Desinstallation, for the camera and the photos collected; a Stolen visit, for the camera… The table of the actions above says what each one asks. Nothing is asked of a visit that could not be made.
 
+**What the form asks of a visit by hand**, by what is done in it — *required* is what has to be filled in and *not asked* what the visit does not need; the rest is optional:
+
+| What is done | Required | Not asked |
+|---|---|---|
+| **Installation** | The camera and how it is set up (height or depth, delay, tilt, heading, bait use), the card left, the **calibration** | The batteries, the date and time of the camera, the state of the camera, the state of the card, the photos |
+| **Revision** | The **state of the camera** (never *Stolen*), the **batteries**, the **state of the card**, the **photos collected** — not when the card is *full*: they are not counted —, the **date and time of the camera**, the **calibration**, the **card left** | The camera itself: it is the one that was there, and the visit before says it — it is not filled in again, nor kept |
+| **Revision + Desinstallation** (and **Archive**) | The **photos collected** — not when the card is *full* —, the **state of the camera**, the **batteries**, the **state of the card**, the **date and time of the camera** | The card left (it goes with the camera), the calibration, and everything about putting a camera up: its set-up |
+| **Revision + Desinstallation + Installation** (a replacement) | What a Revision + Desinstallation asks, and the **new camera** with its set-up, its card and the calibration | |
+| **Stolen** (and **Archive**) | Nothing but who, when and the site, as in every visit: the action says it all — the camera is the one that was there, and its state is *Stolen* — | Everything else: nothing of the camera, the card or the site, and of the grouping and notes only the **comment**, which is optional |
+| **Stolen + Installation** | The new camera, its set-up, the card left and the calibration | The photos, the states and the batteries |
+| **Archive** alone, or a visit that could not be made | Nothing | Everything |
+
+A Revision, a Desinstallation or a Stolen visit does not say which camera it is of: it is the one at the site, which the visit that put it up says. With the card full — *Card full* — the photos are not counted, and their number cannot be given: it is not asked. A Desinstallation does not come alone: it goes with a Revision. A CSV file is checked by the server, which asks less than the form: the camera and the card left, and the photos of a revision.
+
 The following table sums up what a visit records and what is validated in each field.
 
 | | Fields | What is validated |

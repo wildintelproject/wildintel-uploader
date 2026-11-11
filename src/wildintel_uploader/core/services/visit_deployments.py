@@ -213,13 +213,13 @@ def refresh_states(root: Path, research_project_id: str, keep_seconds: bool = Tr
 
 
 def locked(visits: list[dict], keep_seconds: bool = True) -> set[tuple[str, str]]:
-    """The visits that cannot be edited, found by their site (ignoring case) and their instant: those that start or close a deployment that is imported — the visit that
-    closes it says so, with the deployment it closed."""
+    """The visits that cannot be edited, found by their site (ignoring case) and their instant: those that start or close a deployment that is imported. The deployment is
+    linked on the visit that left the camera — the one it belongs to — (or, as it was linked before, on the one that collected the card): either says it."""
     out = set()
     for d in deployments(visits, keep_seconds):
-        end = d["end_visit"]
-        if end and end.get("deployment_id"):
-            out |= {(str(v["location_id"]).lower(), str(v.get("when") or "")) for v in (d["start_visit"], end)}
+        start, end = d["start_visit"], d["end_visit"]
+        if end and (start.get("deployment_id") or end.get("deployment_id")):
+            out |= {(str(v["location_id"]).lower(), str(v.get("when") or "")) for v in (start, end)}
     return out
 
 

@@ -859,7 +859,10 @@ def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_cam
     assert rows["2026-11-05"]["actions"] == "Revision" and rows["2026-11-05"]["card_status"] == "OK" and rows["2026-11-05"]["date_time_ok"] == "Yes"
     assert done.status_code == 200, done.text
     kept = done.json()["visits"]
-    assert len(kept) == 2 and {v["camera_id"] for v in kept} == {"A13"}
+    assert len(kept) == 2 and [v.get("camera_id") for v in kept] == ["A13", None]      # the inspection does not say which camera: it is the one the visit before put up
+    with _in(tmp_path):
+        told = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
+    assert [v["camera_id"] for v in told] == ["A13", "A13"]                              # and it is told as that one
 
 
 def test_a_form_that_is_not_the_one_of_a_visit_is_said_plainly():
@@ -1155,6 +1158,20 @@ def test_a_visit_that_starts_or_closes_an_imported_deployment_cannot_be_edited(t
         assert {(v["location_id"], v["session"]): v["locked"] for v in book if not v.get("not_done")}[("DONA_01", "R0013")] is True
 
 
+def test_a_visit_linked_to_its_deployment_where_it_starts_it_locks_the_two_visits_of_the_deployment(tmp_path: Path):
+    with _in(tmp_path):
+        _project(); _installed()
+        _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()})
+        # the app links the deployment on the visit that left the camera: the installation
+        assert _client().post("/api/visits/link", json={"research_project_id": "DONA", "location_id": "DONA_01", "date": "2026-01-10", "time": "08:14:05", "deployment_id": "R0012-DONA_01"}).status_code == 200
+        book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
+        locked = {(v["location_id"], v["session"]): v["locked"] for v in book if not v.get("not_done")}
+        install = next(v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA", "location_id": "DONA_01"}).json()["results"] if v["session"] == "R0012")
+        edits = (_edit(install).status_code, _edit(_revision(comments="after")).status_code)
+
+    assert locked[("DONA_01", "R0012")] is True and locked[("DONA_01", "R0013")] is True and edits == (409, 409)
+
+
 def test_an_unknown_visit_is_filled_by_a_known_one_where_its_day_puts_it(tmp_path: Path):
     from wildintel_uploader.core.services import local_folder_service
     with _in(tmp_path):
@@ -1440,7 +1457,7 @@ def test_where_the_camera_was_taken_away_or_stolen_only_an_installation_an_archi
         _project(archived=(2, 3))
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
         _save({**VISIT, "actions": ["Stolen"], "camera_id": "P800", "num_photos": None, "sd": None, "date": "2024-10-12", "session": "R0002"})
-        base = {**VISIT, "date": "2024-11-12", "session": "R0003", "num_photos": 5, "sd": "B2", "camera_id": "P800"}
+        base = {**VISIT, "date": "2024-11-12", "session": "R0003", "num_photos": 5, "sd": None, "camera_id": "P800"}
         refused = {a: _save({**base, "actions": a.split("+")}) for a in ("Revision", "Desinstallation", "Stolen", "Revision+Desinstallation")}
         not_made = _save({**base, "actions": [], "camera_status": "Not revised", "num_photos": None, "sd": None, "camera_id": None})
 
@@ -1467,3 +1484,14 @@ def test_a_stolen_camera_replaced_is_not_said_to_leave_its_card_uncollected(tmp_
         stolen = _import(tmp_path, "location_id,session,date,time,actions,camera_id,sd\nDONA_01,R0002,2024-11-12,09:00,Stolen + Installation,P900,B2\n", given_up="2024-01-01").json()
 
     assert stolen["problems"] == [] and stolen["warnings"] == []          # the card went with the camera: the visit says so
+
+
+def test_no_card_is_left_where_the_camera_is_taken_away_unless_another_is_put_up(tmp_path: Path):
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
+        leaves = _save({**VISIT, "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 5, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
+        away = _save({**VISIT, "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 5, "sd": None, "date": "2024-10-12", "session": "R0002"})
+
+    assert leaves.status_code == 422 and "taken away" in str(leaves.json()["detail"])
+    assert away.status_code == 200

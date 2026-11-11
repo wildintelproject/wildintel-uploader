@@ -15,12 +15,13 @@ from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
 
 ACTIONS = ("Installation", "Revision", "Desinstallation", "Stolen", "Archive")
-# What each action asks: the camera, the card left, the photos collected, and how the camera was found — "required" or "optional".
+# What each action asks: the camera, the card left, the photos collected, and how the camera was found — "required" or "optional". Only an Installation says which camera: the
+# others — a Revision, a Desinstallation, a Stolen camera — are of the one that was there, which the visit before says.
 _ASKED = {
     "Installation": {"camera": "required", "sd": "required"},
-    "Revision": {"camera": "required", "sd": "optional", "photos": "required", "camera_status": "optional"},
-    "Desinstallation": {"camera": "required", "photos": "required", "camera_status": "optional"},
-    "Stolen": {"camera": "required"},
+    "Revision": {"sd": "optional", "photos": "required", "camera_status": "optional"},
+    "Desinstallation": {"photos": "required", "camera_status": "optional"},
+    "Stolen": {},
     "Archive": {},  # the location is given up: nothing else is asked
 }
 _LABELS = {"camera": "The camera", "sd": "The SD card left in the camera", "photos": "The photos on the card collected", "camera_status": "The status of the camera"}

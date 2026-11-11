@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import VisitsPage, { detailsErrors, addName, namesOf, removeName, sessionName, sessionOf, toStored, visitErrors, batteryStatus, cardStatus, fieldsFor, installationErrors, wallClockAgo, visitSummary } from './VisitsPage'
+import VisitsPage, { detailsErrors, addName, namesOf, removeName, sessionName, sessionOf, toStored, visitErrors, batteryStatus, cardStatus, onlyNotes, withoutWhatIsNotAsked, fieldsFor, installationErrors, wallClockAgo, visitSummary } from './VisitsPage'
 import { APP_SETTINGS } from '../test/fixtures'
 import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
@@ -98,12 +98,17 @@ async function fillInstallation() {
 // The camera of the visit is one of the settings, and what is collected at a revision is counted.
 async function pickCamera() {
   await openSection('Camera')
-  await userEvent.click(screen.getByLabelText('Camera id'))
+  await userEvent.click(screen.getByLabelText('Which camera will be installed?'))
   await userEvent.click(await screen.findByRole('option', { name: 'P800HG08192031 — Reconyx-PC800' }))
 }
+/** The SD card section of a revision: the photos collected (when a number is given) and the card that is left — a revision asks for both. */
 async function typePhotos(count = '1620') {
   await openSection('SD card')
-  await userEvent.type(screen.getByLabelText('Photos on the card collected'), count)
+  if (count) {
+    await userEvent.type(screen.getByLabelText('Photos on the card collected'), count)
+    await userEvent.click(screen.getByLabelText('SD card left in the camera'))
+    await userEvent.click(await screen.findByRole('option', { name: 'B2' }))
+  }
 }
 
 // a visit that put the camera P800HG08192031 up, with the card A13: what a later visit sees there
@@ -168,7 +173,7 @@ describe('VisitsPage', () => {
     await pickWhen()
     await pickAction('Revision')
     await openSection('SD card'); await openSection('Camera'); await openSection('Site'); await openSection('Grouping and notes')
-    for (const label of ['SD card left in the camera', 'Photos on the card collected', 'Camera id', 'Comments']) {
+    for (const label of ['SD card left in the camera', 'Photos on the card collected', 'Comments']) {
       expect(screen.getByLabelText(label)).toBeInTheDocument()
     }
     expect(screen.queryByRole('textbox', { name: 'Site' })).not.toBeInTheDocument() // the site is the location
@@ -207,8 +212,7 @@ describe('VisitsPage', () => {
     await userEvent.type(screen.getByLabelText('Photos on the card collected'), '1620')
     await userEvent.click(screen.getByRole('switch', { name: 'Card OK' }))
     expect(screen.getByRole('switch', { name: 'Card OK' })).toHaveAttribute('aria-checked', 'false')
-    expect(screen.getByLabelText('Photos on the card collected')).toBeDisabled() // with the card full the photos are not counted: their number cannot be given
-    expect(screen.getByLabelText('Photos on the card collected')).toHaveValue('')
+    expect(screen.queryByLabelText('Photos on the card collected')).not.toBeInTheDocument() // with the card full the photos are not counted: their number is not asked
     expect(within(screen.getByRole('region', { name: 'SD card' })).getByText(/^2 of 2 filled/)).toBeInTheDocument()
   })
 
@@ -220,7 +224,7 @@ describe('VisitsPage', () => {
 
     await pickAction('Revision')
     const camera = () => within(screen.getByRole('region', { name: 'Camera' }))
-    expect(camera().getByText(/^5 of 10 filled/)).toBeInTheDocument() // the camera, its state, the batteries and the date and time of the camera start filled in
+    expect(camera().getByText(/^3 of 10 filled/)).toBeInTheDocument() // the state of the camera, the batteries and the date and time of the camera start filled in: not the camera, which the visit before says
     await openSection('Camera')
     await userEvent.click(screen.getByRole('switch', { name: 'Date and time of the camera OK' }))
     expect(screen.getByRole('switch', { name: 'Date and time of the camera OK' })).toHaveAttribute('aria-checked', 'false')
@@ -234,12 +238,15 @@ describe('VisitsPage', () => {
     await pickAction('Revision')
     await openSection('Camera'); await openSection('Site'); await openSection('SD card')
 
-    // the camera, height, tilt, heading, delay and detection distance
-    expect(within(screen.getByRole('region', { name: 'Camera' })).getAllByText('Camtrap DP')).toHaveLength(6)
+    // height, tilt, heading, delay and detection distance — the camera itself is not asked at a revision: it is the one that was there
+    expect(within(screen.getByRole('region', { name: 'Camera' })).getAllByText('Camtrap DP')).toHaveLength(5)
     // the aim of the camera, habitat, bait and the photo dates
     expect(within(screen.getByRole('region', { name: 'Site' })).getAllByText('Camtrap DP')).toHaveLength(4)
     expect(within(screen.getByRole('region', { name: 'SD card' })).queryByText('Camtrap DP')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Camera id').closest('div')!.parentElement!.textContent).toMatch(/Camtrap DP/)
+    expect(screen.getByRole('heading', { name: /^Who/ })).toHaveTextContent('Camtrap DP')                  // who went is the deployment's setupBy
+    expect(screen.getByText('Date and time of the visit').closest('span')).toHaveTextContent('Camtrap DP')   // when it was is where the deployment starts and ends
+    expect(screen.queryByLabelText('Which camera will be installed?')).not.toBeInTheDocument()
+    expect(document.body).toHaveTextContent('According to the visit R0001, the camera P800HG08192031 is installed at TATR_0001.')   // which camera it is of is not asked: the visit before says it
   })
 
   it('picks the SD card of the visit from those of the settings, with a way to add a new one there', async () => {
@@ -270,10 +277,10 @@ describe('VisitsPage', () => {
     await openSection('Camera')
 
     expect(screen.queryByLabelText('Camera model')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByLabelText('Camera id'))
+    await userEvent.click(screen.getByLabelText('Which camera will be installed?'))
     expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['P800HG08192031 — Reconyx-PC800', 'X1'])
     await userEvent.click(screen.getByRole('option', { name: 'P800HG08192031 — Reconyx-PC800' }))
-    expect(screen.getByLabelText('Camera id')).toHaveValue('P800HG08192031 — Reconyx-PC800')
+    expect(screen.getByLabelText('Which camera will be installed?')).toHaveValue('P800HG08192031 — Reconyx-PC800')
     expect(screen.getByText('Model: Reconyx-PC800')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'go to Settings › Cameras' }))
@@ -299,7 +306,7 @@ describe('VisitsPage', () => {
     await pickWhere()
     await pickWhen()
     await pickAction('Revision')
-    await pickCamera(); await typePhotos()
+    await typePhotos(); await openSection('Camera')
     for (const name of ['Card OK', 'Batteries OK', 'Date and time of the camera OK']) {
       expect(screen.getByRole('switch', { name })).toHaveAttribute('aria-checked', 'true')
     }
@@ -373,13 +380,12 @@ describe('VisitsPage', () => {
     await pickTrapper('Ana Pérez')
     await pickWhen()
     await pickAction('Revision')
-    await pickCamera()
     await typePhotos()
     await addVisit()
 
     expect(await screen.findByText('1 visit added')).toBeInTheDocument()
     expect(mockedApi.saveVisit).toHaveBeenCalledWith('TATR', expect.objectContaining({
-      location_id: 'TATR_0001', session: 'R0003', date: '2026-10-02', time: '08:14:05', actions: ['Revision'], trappers: 'Ana Pérez', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', latitude: 49.2, longitude: 20.1,
+      location_id: 'TATR_0001', session: 'R0003', date: '2026-10-02', time: '08:14:05', actions: ['Revision'], trappers: 'Ana Pérez', camera_id: null, camera_model: null, latitude: 49.2, longitude: 20.1,   // a revision does not say which camera: the visit before does
     }))
     expect(screen.queryByText('Where was the visit?')).not.toBeInTheDocument() // the form is out of the way while the next step is asked
     await userEvent.click(screen.getByRole('button', { name: 'Add another visit' }))
@@ -391,8 +397,8 @@ describe('VisitsPage', () => {
     expect(within(screen.getByRole('list', { name: 'Who went' })).getByText('Ana Pérez')).toBeInTheDocument()
     await pickWhen('2026-10-03T09:00:00')
     await openSection('Camera')
-    expect(screen.getByLabelText('Camera id')).toHaveValue('')
-    expect(screen.getByLabelText('Camera id')).toBeEnabled()   // the visit installs one where none is known: its camera is asked, as the first time
+    expect(screen.getByLabelText('Which camera will be installed?')).toHaveValue('')
+    expect(screen.getByLabelText('Which camera will be installed?')).toBeEnabled()   // the visit installs one where none is known: its camera is asked, as the first time
   })
 
   it('offers only the cameras and the SD cards of the research project: each belongs to one, and the ones of none are not offered', async () => {
@@ -411,7 +417,7 @@ describe('VisitsPage', () => {
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
     expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['T1'])
     await userEvent.click(screen.getByRole('option', { name: 'T1' }))
-    await userEvent.click(screen.getByLabelText('Camera id'))
+    await userEvent.click(screen.getByLabelText('Which camera will be installed?'))
     expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['CT'])
   })
 
@@ -432,7 +438,7 @@ describe('VisitsPage', () => {
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
     expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['T1', 'T3'])  // ready and active ones; the archived one is not offered
     await userEvent.click(screen.getByRole('option', { name: 'T1' }))
-    await userEvent.click(screen.getByLabelText('Camera id'))
+    await userEvent.click(screen.getByLabelText('Which camera will be installed?'))
     expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['CT', 'CR'])
   })
 
@@ -448,13 +454,13 @@ describe('VisitsPage', () => {
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
     expect(screen.queryByRole('option', { name: 'A13 — SanDisk 64 GB' })).not.toBeInTheDocument() // it is in the camera at another site: not offered
     await userEvent.keyboard('{Escape}')
-    await userEvent.click(screen.getByLabelText('Camera id'))
+    await userEvent.click(screen.getByLabelText('Which camera will be installed?'))
     await userEvent.click(await screen.findByRole('option', { name: 'X1' }))
     expect(screen.getByText('Camera X1 is installed at TATR_0002 (since 2026-06-10): it has to be uninstalled there before it is installed here.')).toBeInTheDocument()
     await addVisit()
     expect(mockedApi.saveVisit).not.toHaveBeenCalled()
 
-    await userEvent.click(screen.getByLabelText('Camera id'))
+    await userEvent.click(screen.getByLabelText('Which camera will be installed?'))
     await userEvent.click(await screen.findByRole('option', { name: 'P800HG08192031 — Reconyx-PC800' }))
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
     await userEvent.click(await screen.findByRole('option', { name: 'B2' }))
@@ -474,7 +480,7 @@ describe('VisitsPage', () => {
       await pickWhere()
       await pickWhen()
       await pickAction('Revision')
-      await pickCamera(); await typePhotos()
+      await typePhotos()
       await addVisit()
       await screen.findByText('1 visit added')
       return onImportImages
@@ -569,9 +575,9 @@ describe('VisitsPage', () => {
     await pickWhere('TATR_0002')
     await pickWhen('2026-10-03T09:00:00')
     await openSection('Camera'); await openSection('SD card')
-    expect(screen.getByLabelText('Camera id')).toBeEnabled()
+    expect(screen.getByLabelText('Which camera will be installed?')).toBeEnabled()
     expect(screen.getByLabelText('SD card left in the camera')).toBeEnabled()
-    await userEvent.click(screen.getByLabelText('Camera id'))
+    await userEvent.click(screen.getByLabelText('Which camera will be installed?'))
     expect(await screen.findByRole('option', { name: 'X1' })).toBeInTheDocument()   // a camera can be picked
   })
 
@@ -618,7 +624,7 @@ describe('VisitsPage', () => {
 
     await pickWhen()
     await pickAction('Revision')
-    await pickCamera(); await typePhotos()
+    await typePhotos()
     await addVisit()
 
     expect(await screen.findByText('The research project is not there.')).toBeInTheDocument()
@@ -694,7 +700,7 @@ describe('VisitsPage', () => {
     const section = (key: string) => of(summary.sections.find((x) => x.key === key)!.rows)
     expect(of(summary.overview)).toEqual({ Location: 'TATR_0001', 'Revision code': 'R0001', When: '2026-11-03 22:19:48 (Europe/Madrid)', 'Who went': 'Ana Pérez', 'Action performed': 'Installation' })
     expect(summary.gps).toBe('37.0258, -6.4527')
-    expect(section('camera')).toMatchObject({ 'Camera id': 'RE5699252753', 'Camera model': 'Reconyx-PC800', 'Batteries condition': 'OK', 'Mounting height': '1 m', Tilt: '0°', Heading: '45°', 'Camera trigger delay': '20 s' })
+    expect(section('camera')).toMatchObject({ 'Camera id': 'RE5699252753', 'Camera model': 'Reconyx-PC800', 'Mounting height': '1 m', Tilt: '0°', Heading: '45°', 'Camera trigger delay': '20 s' })
     expect(section('sd')).toMatchObject({ 'SD card left': '2' })
     expect(section('site')).toEqual({ 'Bait used': 'No' })
     expect(section('notes')).toEqual({})
@@ -811,7 +817,7 @@ describe('the visit filled in from the last one', () => {
     await openSection('SD card'); await openSection('Camera'); await openSection('Site'); await openSection('Grouping and notes')
     expect(screen.getByLabelText('SD card left in the camera')).toHaveValue('') // the card collected is the last one's, so it is not left back
     expect(screen.getByLabelText('Photos on the card collected')).toHaveValue('')
-    expect(screen.getByLabelText('Camera id')).toHaveValue('P800HG08192031 — Reconyx-PC800')
+    expect(screen.queryByLabelText('Which camera will be installed?')).not.toBeInTheDocument()   // a revision is of the camera that was there, which the visit before says: it is not asked
     expect(screen.getByLabelText('Comments')).toHaveValue('') // the notes of the last visit are not this one's
     expect(screen.getByRole('switch', { name: 'Batteries OK' })).toHaveAttribute('aria-checked', 'false')
     expect(screen.getByRole('switch', { name: 'Card OK' })).toHaveAttribute('aria-checked', 'true')
@@ -823,7 +829,7 @@ describe('the visit filled in from the last one', () => {
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalled())
     expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({
-      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: 'P800HG08192031', camera_height: 1.2, battery_status: 'NoBatteries', date_time_ok: 'No', comments: null,
+      actions: ['Revision', 'Desinstallation'], sd: null, num_photos: 10, camera_id: null, camera_height: 1.2, battery_status: 'NoBatteries', date_time_ok: 'No', comments: null,
     })
   })
 
@@ -1246,8 +1252,19 @@ describe('VisitsPage from a CSV file', () => {
   })
 })
 
+describe('a visit that is neither an Installation nor a Revision', () => {
+  it('has nothing of the camera, the site or the grouping but its notes', () => {
+    const v = { ...BLANK, actions: ['Stolen'], sd: 'A13', numPhotos: '12', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: '12', camera_height: 1, habitat: 'oak', deployment_groups: 'north', comments: 'the lock was cut' } }
+    expect(withoutWhatIsNotAsked(v as never)).toMatchObject({ sd: '', numPhotos: '', details: { camera_id: null, camera_height: null, habitat: null, deployment_groups: null, comments: 'the lock was cut' } })
+    expect(onlyNotes(['Stolen'])).toBe(true)
+    expect(onlyNotes(['Stolen', 'Archive'])).toBe(true)
+    expect(onlyNotes(['Revision', 'Desinstallation'])).toBe(false)
+    expect(onlyNotes(['Stolen', 'Installation'])).toBe(false)
+  })
+})
+
 describe('visitErrors', () => {
-  const ok = { ...BLANK, session: 'R0013', when: '2026-10-02T08:14:05', site: 'TATR_0001', actions: ['Revision'], numPhotos: '1620', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: '12' } }
+  const ok = { ...BLANK, session: 'R0013', when: '2026-10-02T08:14:05', site: 'TATR_0001', actions: ['Revision'], numPhotos: '1620', status: 'OK', sd: 'B2', details: { ...EMPTY_DEPLOYMENT_FIELDS, camera_id: '12' } }
 
   it('has nothing to say of a complete visit', () => {
     expect(visitErrors(ok)).toEqual({})
@@ -1269,18 +1286,23 @@ describe('visitErrors', () => {
     expect(visitErrors({ ...ok, numPhotos: '1.5' })).toEqual({ numPhotos: 'A whole number.' })
   })
 
-  it('wants the camera, and the photos collected at a revision, but not the photos of an installation', () => {
-    expect(visitErrors({ ...ok, numPhotos: '', details: EMPTY_DEPLOYMENT_FIELDS })).toEqual({ numPhotos: 'Required.', camera: 'Required.' })
+  it('wants the photos collected at a revision, but not the photos of an installation — and the camera only at an installation: a revision is of the one that was there', () => {
+    expect(visitErrors({ ...ok, numPhotos: '', details: EMPTY_DEPLOYMENT_FIELDS })).toEqual({ numPhotos: 'Required.' })
+    expect(visitErrors({ ...ok, actions: ['Installation'], details: EMPTY_DEPLOYMENT_FIELDS, sd: 'A13' }).camera).toBe('Required.')
     expect(visitErrors({ ...ok, actions: ['Installation'], numPhotos: '', sd: 'A13' })).toEqual({})
   })
 
   it('wants the card left at an installation', () => {
-    expect(visitErrors({ ...ok, actions: ['Installation'] })).toEqual({ sd: 'Required.' })
+    expect(visitErrors({ ...ok, actions: ['Installation'], sd: '' })).toEqual({ sd: 'Required.' })
   })
 
   it('asks as strongly as any of the actions asks', () => {
-    expect(fieldsFor(['Revision', 'Installation'])).toMatchObject({ sdLeft: 'required', photos: 'required', status: 'optional' })
-    expect(fieldsFor(['Stolen'])).toMatchObject({ camera: 'required', photos: 'off', sdLeft: 'off' })
+    expect(fieldsFor(['Revision', 'Installation'])).toMatchObject({ sdLeft: 'required', photos: 'required', status: 'required', batteries: 'required', dateTime: 'required', card: 'required', calibration: 'required' })
+    expect(fieldsFor(['Revision', 'Desinstallation', 'Installation'])).toMatchObject({ sdLeft: 'required', photos: 'required', calibration: 'required' })      // a replacement: the card of the new camera
+    expect(fieldsFor(['Revision', 'Desinstallation'])).toMatchObject({ sdLeft: 'off', photos: 'required', status: 'required', batteries: 'required', calibration: 'off' })   // taken away: nothing is left in it
+    expect(fieldsFor(['Stolen'])).toMatchObject({ camera: 'off', photos: 'off', sdLeft: 'off' })   // the camera is the one that was there
+    expect(fieldsFor(['Revision'])).toMatchObject({ camera: 'off', sdLeft: 'required', photos: 'required', status: 'required', batteries: 'required', card: 'required', dateTime: 'required', calibration: 'required' })   // a revision asks it all but the set-up of the camera
+    expect(fieldsFor(['Installation'])).toMatchObject({ batteries: 'off', dateTime: 'off', card: 'off', photos: 'off', status: 'off', calibration: 'required' })
     expect(fieldsFor([]).camera).toBe('off')
   })
 })
@@ -1343,6 +1365,27 @@ describe('By hand: do you see the camera?', () => {
     expect(screen.queryByRole('checkbox', { name: 'Revision' })).not.toBeInTheDocument() // the actions are not asked as boxes
   })
 
+  it('tells which camera was there, then asks how it is doing, then which camera is put up, and the calibration goes with how it was mounted — when it is replaced', async () => {
+    withCamera()
+    await chooseByHand()
+    await pickWhere()
+    await pickWhen()
+    await userEvent.click(await screen.findByRole('radio', { name: 'Yes, I see it' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'OK' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Replace it with another' }))
+    await openSection('Camera')
+
+    const at = (text: string | RegExp) => (screen.getByText(text) as HTMLElement)
+    const before = (a: HTMLElement, b: HTMLElement) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    const was = at(/According to the visit/)
+    const doing = at('How did it go with the camera P800HG08192031?')
+    const camera = screen.getByLabelText('Which camera will be installed?')
+    const mounted = at('How was it mounted?')
+    const calibration = screen.getByRole('switch', { name: 'Calibration done' })
+    expect(was).toHaveTextContent('According to the visit R0001, the camera P800HG08192031 is installed at TATR_0001.')
+    expect(before(was, doing) && before(doing, camera) && before(camera, mounted) && before(mounted, calibration)).toBe(true)
+  })
+
   it('works the actions out from the answers when a camera is there', async () => {
     withCamera()
     await start()
@@ -1353,7 +1396,9 @@ describe('By hand: do you see the camera?', () => {
     await userEvent.click(await screen.findByRole('radio', { name: 'OK' }))
     expect(hint()).toHaveTextContent('The visit is kept as Revision')
     await userEvent.click(screen.getByRole('radio', { name: 'Replace it with another' }))
-    expect(hint()).toHaveTextContent('Revision + Installation')
+    expect(hint()).toHaveTextContent('The visit is kept as Revision + Desinstallation + Installation. The camera is looked at and taken away, with its card, and another is put up with a card of its own: it is replaced.')
+    await userEvent.click(screen.getByRole('radio', { name: 'Take it away' }))
+    expect(hint()).toHaveTextContent('The visit is kept as Revision + Desinstallation. The camera is looked at and taken away, with its card: nothing is left.')
     await userEvent.click(screen.getByRole('radio', { name: 'Take it away, and archive the location' }))
     expect(hint()).toHaveTextContent('Revision + Desinstallation')
 
@@ -1409,7 +1454,7 @@ describe('By hand: do you see the camera?', () => {
     expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Stolen', 'Archive'] })
   })
 
-  it('says the camera and the card were stolen and will be marked as not available, and does it when the visit is kept', async () => {
+  it('says the camera and the card were stolen and will be archived, and does it when the visit is kept', async () => {
     withCamera()
     mockedApi.saveVisit.mockResolvedValue({} as never)
     mockedApi.setFieldItemStatus.mockResolvedValue({ updated: true })
@@ -1417,9 +1462,12 @@ describe('By hand: do you see the camera?', () => {
 
     await userEvent.click(await screen.findByRole('radio', { name: 'No, it was stolen' }))
     await userEvent.click(screen.getByRole('radio', { name: 'Archive the location' }))
-    await openSection('Camera'); await openSection('SD card')
-    expect(document.body).toHaveTextContent('The camera P800HG08192031 was stolen: it will be marked as not available because it was stolen.')
-    expect(document.body).toHaveTextContent('The SD card A13, which was in the camera, was stolen with it: it will be marked as not available because it was stolen.')
+    expect(screen.queryByRole('region', { name: 'Camera' })).not.toBeInTheDocument()     // a stolen camera has nothing of the camera, the card or the site: only its notes
+    expect(screen.queryByRole('region', { name: 'SD card' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Site' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Comments')).toBeInTheDocument()
+    expect(document.body).toHaveTextContent('The camera P800HG08192031 was stolen and will be archived.')
+    expect(document.body).toHaveTextContent('The SD card A13, which was in the camera, was stolen with it and will be archived.')
 
     await addVisit()
     await waitFor(() => expect(mockedApi.setFieldItemStatus).toHaveBeenCalledWith('TATR', 'cameras', 'P800HG08192031', 'stolen', '2026-10-02', 'Stolen'))

@@ -32,12 +32,13 @@ export function cameraAt(visits: StoredVisit[], cameraId: string, when: string):
 }
 
 /** The camera that is put up at a site on a given moment — null when none is known: nothing was installed there, or it was taken away or stolen. */
-export function cameraAtSite(visits: StoredVisit[], site: string, when: string): { camera: string; date: string } | null {
-  let at: { camera: string; date: string } | null = null
+export function cameraAtSite(visits: StoredVisit[], site: string, when: string): { camera: string; date: string; session: string } | null {
+  let at: { camera: string; date: string; session: string } | null = null
   for (const v of before(visits, when)) {
     if (!same(v.location_id, site)) continue
     if (takesAway(v)) at = null
-    else if ((v.actions.includes('Installation') || v.actions.includes('Revision')) && v.camera_id) at = { camera: v.camera_id, date: v.date }
+    // what a visit leaves is the camera it puts up, or — a Revision that does not take it away — the one that was there; a replacement takes one away and puts another up
+    if ((v.actions.includes('Installation') || (v.actions.includes('Revision') && !takesAway(v))) && v.camera_id) at = { camera: v.camera_id, date: v.date, session: v.session }
   }
   return at
 }

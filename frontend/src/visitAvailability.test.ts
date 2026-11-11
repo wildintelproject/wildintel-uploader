@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { availabilityErrors, cameraAt, cardAt, cardBlock, unfinishedRevision } from './visitAvailability'
+import { availabilityErrors, cameraAt, cameraAtSite, cardAt, cardBlock, unfinishedRevision } from './visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from './types'
 import type { StoredVisit } from './types'
 import type { Visit } from './pages/VisitsPage'
@@ -120,5 +120,17 @@ describe('cardBlock', () => {
     // A2 is in the camera at DONA_01 and collected there by R0003: it cannot be left elsewhere in R0003.
     expect(cardBlock(taken, 'A2', visit({ site: 'DONA_02', when: '2026-11-03T09:00:00' }), { session: 'R0003' })).toMatch(/collected at DONA_01 in this revision \(R0003\)/)
     expect(cardBlock(taken, 'A2', visit({ site: 'DONA_02', when: '2026-11-03T09:00:00' }), { session: 'R0004' })).toBeUndefined()
+  })
+})
+
+describe('cameraAtSite', () => {
+  it('is the camera the last visit left, and says which visit it was — a replacement leaves the new one, a removal leaves none', () => {
+    const put = stored({ session: 'R0001', date: '2026-06-10', camera_id: 'C1', sd: 'A1' })
+    const replaced = stored({ session: 'R0002', date: '2026-07-10', actions: ['Revision', 'Desinstallation', 'Installation'], camera_id: 'C2', sd: 'A2' })
+    const removed = stored({ session: 'R0003', date: '2026-08-10', actions: ['Revision', 'Desinstallation'], camera_id: 'C2' })
+    const later = '2026-12-01T09:00:00'
+    expect(cameraAtSite([put], 'DONA_01', later)).toEqual({ camera: 'C1', date: '2026-06-10', session: 'R0001' })
+    expect(cameraAtSite([put, replaced], 'DONA_01', later)).toMatchObject({ camera: 'C2', session: 'R0002' })
+    expect(cameraAtSite([put, replaced, removed], 'DONA_01', later)).toBeNull()
   })
 })

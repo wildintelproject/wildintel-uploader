@@ -9,7 +9,7 @@ def test_export_is_read_back_as_the_same_visits():
         {"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "11:40:00", "actions": ["Installation"], "camera_id": "CAM1", "sd": "3", "bait_use": True,
          "camera_height": 1.5, "tags": ["a", "b"], "trappers": "Ana Pérez", "comments": "uno, dos"},
         {"location_id": "WICP_0001", "session": "R0002", "date": "2026-10-19", "time": "11:40:00", "actions": ["Revision", "Desinstallation"], "camera_id": "CAM1",
-         "battery_status": "OK", "card_status": "OK", "num_photos": 12, "sd": "4"},
+         "battery_status": "OK", "card_status": "OK", "num_photos": 12},
         {"location_id": "WICP_0001", "session": "R0003", "date": "2026-11-20", "time": "09:00:00", "actions": [], "camera_status": "Not revised"},
     ]
     text = visits_csv.export_visits(visits)

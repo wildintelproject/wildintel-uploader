@@ -633,11 +633,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], site_prefix
     for _, record in sorted(parsed, key=lambda p: (p[1]["date"], p[1]["time"])):
         given = record.pop("_given")
         loc = record["location_id"].lower()
-        # a visit that does not put a camera up is of the one at the site: an inspection or a removal does not say which — it is the one of the deployment that is open
-        if not record.get("camera_id") and "Installation" not in record["actions"]:
-            there = visit_rules.camera_at_site([*kept, *visits], record["location_id"], record.get("when") or f"{record['date']}T{record['time']}")
-            if there:
-                record["camera_id"] = there["camera"]
+        # a visit that does not put a camera up is of the one at the site: an inspection or a removal does not say which — and it is not told here: it is in the visit before
         if not given:
             record["session"] = f"R{count[loc] + 1:04d}"
         count[loc] += 1
