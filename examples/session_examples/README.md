@@ -8,7 +8,7 @@ All the images are small (1280×720) and made up.
 |---|---|---|
 | [`valid`](valid) | `DONA_01` (12 images), `DONA_02` (12), `DONA_03` (8) | A good session, with nothing else: the dates of each deployment come from the images' EXIF (Reconyx HyperFire 2, serial `P900123`). |
 | [`timestamp_log`](timestamp_log) | the same three | The same session with a `R0003_FileTimestampLog.csv`: the start and the end of `DONA_01` and `DONA_02` are the camera's wall clock written in the log, not the images' EXIF. `DONA_03` is not in the log, so it falls back to its images. The *Details* step says where each date comes from. |
-| [`timestamp_log_wicp`](timestamp_log_wicp) | `wicp_0001` (12), `wicp_0002` (12), `wicp_0003` (8) | The same, for the research project **WICP** of `entities_example/small`: the folders are named as its locations (`wicp_0001` …) and the log is `R0003_FileTimestampLog.csv` (revision 3). The log has `wicp_0001`, `wicp_0002` and `wicp_0004`, but there is no `wicp_0004` folder and `wicp_0003` has no row. |
+| [`timestamp_log_wicp`](timestamp_log_wicp) | `wicp_0001` (12), `wicp_0002` (12), `wicp_0003` (8) | The same, for a research project **WICP** with the locations `WICP_0001` …: the folders are named as its locations (`wicp_0001` …) and the log is `R0003_FileTimestampLog.csv` (revision 3). The log has `wicp_0001`, `wicp_0002` and `wicp_0004`, but there is no `wicp_0004` folder and `wicp_0003` has no row. |
 | [`faulty`](faulty) | `dona_0001` … `dona_0006` (72 images) | A session with a fault in every folder and a log that does not fit it, for the validation to find (see below). |
 
 ## `faulty`

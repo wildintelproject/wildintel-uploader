@@ -1187,15 +1187,26 @@ def test_an_inactive_site_has_a_camera_put_up_again_and_a_camera_removed_after_a
 
 
 def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_characters():
-    from wildintel_uploader.core.services import epicollect_service
-    text = (Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wildintel_epicollect.csv").read_text(encoding="utf-8")
-    assert "5_Status_of_the_came" in text and "7_N_pictures_collect" in text and "10_Action_after_thef" in text   # as Epicollect5 cuts them
-    rows = list(__import__("csv").DictReader(__import__("io").StringIO(epicollect_service.visits_from_csv(text))))
+    import csv
+    import io
 
-    assert len(rows) == 8
-    assert [r["actions"] for r in rows[4:]] == ["Revision", "Revision", "Revision + Desinstallation", "Stolen + Archive"]
-    assert (rows[4]["num_photos"], rows[4]["card_status"], rows[5]["card_status"], rows[6]["battery_status"]) == ("1420", "OK", "CardFull", "NoBatteries")
-    assert rows[0]["sd"] == "1" and rows[0]["camera_id"] == "BR5071050724" and rows[0]["trappers"] == "Ana Pérez" and rows[2]["trappers"] == "Ana Pérez, Luis Gómez"
+    from wildintel_uploader.core.services import epicollect_service
+    folder = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
+
+    def read(name: str) -> tuple[str, list[dict]]:
+        text = (folder / name).read_text(encoding="utf-8")
+        return text, list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+
+    text, rows = read("revision_5_replacement_removal_and_site_given_up.csv")
+    assert all(h in text for h in ("5_Status_of_the_came", "8_N_pictures_collect", "10_Action_after_the_", "11_Action_after_thef"))   # as Epicollect5 cuts them
+    assert [r["actions"] for r in rows] == ["Revision + Desinstallation + Installation", "Revision + Desinstallation", "Installation", "Revision + Desinstallation + Archive"]
+
+    _, rows = read("revision_2_all_revised.csv")
+    assert len(rows) == 4 and [r["actions"] for r in rows] == ["Revision"] * 4
+    assert (rows[0]["num_photos"], rows[0]["card_status"], rows[2]["card_status"], rows[3]["battery_status"]) == ("1420", "OK", "Full Card", "No batteries")
+
+    _, rows = read("revision_1_installation.csv")
+    assert rows[0]["sd"] == "SD 1" and rows[0]["camera_id"] == "BR5071050724" and rows[0]["trappers"] == "Ana Pérez"
 
 
 # ── a visit says a camera, an SD card or a trapper that exist, by hand and in a file ────────────────────────────
