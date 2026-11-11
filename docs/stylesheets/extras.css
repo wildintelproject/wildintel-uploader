@@ -27,8 +27,8 @@ article img {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-/* the tables of the states: the header is highlighted */
-.md-typeset .states table:not([class]) th {
+/* every table: the header is highlighted */
+.md-typeset table:not([class]) th {
   background: var(--md-primary-fg-color);
   color: #ffffff;
   font-weight: 700;
