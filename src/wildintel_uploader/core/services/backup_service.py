@@ -67,7 +67,7 @@ def describe_project(root: Path, research_project_id: str) -> dict:
     collections = []
     for collection in sorted((c for c in pdir.iterdir() if c.is_dir() and _COLLECTION.match(c.name)), key=lambda c: c.name, reverse=True):
         deployments = []
-        for folder in sorted(d for d in collection.iterdir() if d.is_dir()):
+        for folder in sorted(d for d in collection.iterdir() if d.is_dir() and not d.name.startswith(".")):  # .staging is where a deployment is prepared, not a deployment
             files = _walk(folder)
             images = [f for f in files if _is_image(f.name)]
             deployments.append({

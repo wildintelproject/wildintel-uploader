@@ -683,16 +683,20 @@ images as thumbnails. The [report](#reports) says what was done to each image. *
 
 ![Stage 5 — Saved](img/screenshots/step-import.png)
 
-The images are ready, so this step **consolidates** the deployment: press **Save deployment** and its
-`deployment.json` is written and the deployment is **sealed**. From then on it can't be modified — the app notices if an image
+The images are ready, so this step **consolidates** the deployment: a note says that *saving seals the deployment*, and **Save to my collection** — under it, at the right — writes its
+`deployment.json`, moves the deployment to its place in the collection and **seals** it. From then on it can't be modified — the app notices if an image
 or its details change — and it can be uploaded.
 
-A good save says where the deployment was kept, and offers:
+Until you save, the images are prepared in a hidden `.staging` folder inside the collection (`<collection>/.staging/<deployment>`): the collection has nothing of the deployment, and
+what an interrupted preparation leaves there is cleared when the deployment is prepared again. Saving moves the folder with a single rename, so it is instant however many images there are.
+On Windows, if another program has one of its files open for a moment (the antivirus, a viewer), the move is tried again for a few seconds before it gives up.
 
-- **Open folder** in the file explorer.
-- **Upload to Trapper** — straight to [the upload page](#8-upload-a-deployment-to-trapper) with the
-  research project and the collection already chosen.
-- **Add another deployment**, which starts again at stage 1.
+Once it is saved, the steps before are **locked** (they show a padlock) and a fourth step, **Review and upload**, opens. It has:
+
+- a **Deployment saved** notice with the id of the deployment;
+- **What was saved**: how many images and what was done to them, that its metadata is written and sealed, and where it is kept, with **Open folder** and **Copy path**;
+- **Upload**: *Not uploaded yet*, with **Upload to Trapper** — straight to [the upload page](#8-upload-a-deployment-to-trapper) with the research project and the collection already chosen — and **Add another deployment**, which starts again at stage 1;
+- and, below, the way back to the **Deployments menu** and the **Main menu**.
 - **Back to the deployments menu** and **Back to the main menu**, as when visits are registered.
 
 #### What gets written next to the images

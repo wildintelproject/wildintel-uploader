@@ -451,16 +451,17 @@ def _two_images(tmp_path: Path) -> Path:
     return source
 
 
-def test_without_consolidating_the_deployment_is_left_pending_and_unsealed(tmp_path: Path):
+def test_without_consolidating_the_deployment_is_left_pending_in_the_staging_folder_and_the_collection_has_nothing_of_it(tmp_path: Path):
     source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
 
     events = list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
 
-    dest = collection / "R0003-DONA_01"
+    work = collection / ".staging" / "R0003-DONA_01"
     assert [e["type"] for e in events][-1] == "done" and "sealing" not in [e["type"] for e in events]
-    assert events[-1]["sealed"] is None and events[-1]["processed"] == 2
-    assert (dest / "preprocessing.json").is_file() and (dest / "images.json").is_file()
-    assert not (dest / "seal.json").exists() and not (dest / "deployment.json").exists()
+    assert events[-1]["sealed"] is None and events[-1]["processed"] == 2 and events[-1]["dest_dir"] == str(work)
+    assert (work / "preprocessing.json").is_file() and (work / "images.json").is_file()
+    assert not (work / "seal.json").exists() and not (work / "deployment.json").exists()
+    assert not (collection / "R0003-DONA_01").exists()        # not in the collection until it is saved
 
 
 def test_a_pending_deployment_is_preprocessed_again_instead_of_refused(tmp_path: Path):
@@ -471,7 +472,7 @@ def test_a_pending_deployment_is_preprocessed_again_instead_of_refused(tmp_path:
     events = list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
 
     assert events[-1]["processed"] == 3
-    assert len(list((collection / "R0003-DONA_01").glob("*.JPEG"))) == 3
+    assert len(list((collection / ".staging" / "R0003-DONA_01").glob("*.JPEG"))) == 3
 
 
 def test_consolidating_writes_the_deployment_and_seals_it_and_then_nothing_can_be_redone(tmp_path: Path):
@@ -482,7 +483,9 @@ def test_consolidating_writes_the_deployment_and_seals_it_and_then_nothing_can_b
 
     dest = collection / "R0003-DONA_01"
     assert [e["type"] for e in events] == ["sealing", "done"] and events[-1]["sealed"] is True and events[-1]["processed"] == 2
+    assert events[-1]["dest_dir"] == str(dest)
     assert (dest / "deployment.json").is_file() and (dest / "seal.json").is_file()
+    assert not (collection / ".staging").exists()              # moved to its place, and the staging folder is gone with nothing else in it
     with pytest.raises(pre.DeploymentImportError, match="already consolidated"):
         pre.consolidate_stream(str(source), str(collection), DEPLOYMENT)
     with pytest.raises(pre.DeploymentImportError, match="already exists"):
@@ -493,3 +496,70 @@ def test_a_deployment_that_was_not_preprocessed_cannot_be_consolidated(tmp_path:
     source = _two_images(tmp_path)
     with pytest.raises(pre.DeploymentImportError, match="has not been preprocessed"):
         pre.consolidate_stream(str(source), str(tmp_path / "collections" / "R0003"), DEPLOYMENT)
+
+
+def test_importing_in_one_go_prepares_in_staging_and_leaves_the_deployment_sealed_in_its_place(tmp_path: Path):
+    source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
+
+    events = _run(source, collection)
+
+    dest = collection / "R0003-DONA_01"
+    assert events[-1]["dest_dir"] == str(dest) and events[-1]["sealed"] is True
+    assert (dest / "seal.json").is_file() and (dest / "deployment.json").is_file() and not (collection / ".staging").exists()
+
+
+def test_what_an_interrupted_run_left_in_staging_is_cleared_when_the_deployment_is_prepared_again(tmp_path: Path):
+    source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
+    stale = collection / ".staging" / "R0003-DONA_01"
+    stale.mkdir(parents=True)
+    (stale / "left-over.txt").write_text("from a run that did not finish", encoding="utf-8")
+
+    list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+
+    assert not (stale / "left-over.txt").exists() and (stale / "preprocessing.json").is_file()
+
+
+def test_moving_to_the_collection_is_tried_again_while_another_program_has_a_file_open(tmp_path: Path, monkeypatch):
+    work, dest = tmp_path / ".staging" / "R0003-DONA_01", tmp_path / "R0003-DONA_01"
+    work.mkdir(parents=True)
+    (work / "a.txt").write_text("x", encoding="utf-8")
+    real, calls = pre.os.replace, []
+
+    def busy_twice(src, dst):
+        calls.append(1)
+        if len(calls) <= 2:
+            raise PermissionError(13, "The process cannot access the file because it is being used by another process")   # what Windows says
+        return real(src, dst)
+
+    monkeypatch.setattr(pre.os, "replace", busy_twice)
+    monkeypatch.setattr(pre.time, "sleep", lambda _s: None)
+
+    pre.publish(work, dest)
+
+    assert len(calls) == 3 and (dest / "a.txt").is_file() and not work.exists()
+
+
+def test_moving_to_the_collection_says_so_when_the_files_stay_in_use(tmp_path: Path, monkeypatch):
+    work, dest = tmp_path / ".staging" / "R0003-DONA_01", tmp_path / "R0003-DONA_01"
+    work.mkdir(parents=True)
+
+    def always_busy(src, dst):
+        raise PermissionError(13, "in use")
+
+    monkeypatch.setattr(pre.os, "replace", always_busy)
+    monkeypatch.setattr(pre.time, "sleep", lambda _s: None)
+
+    with pytest.raises(pre.DeploymentImportError, match="in use by another program"):
+        pre.publish(work, dest)
+    assert work.is_dir() and not dest.exists()                       # nothing was lost: it can be saved again
+
+
+def test_an_empty_folder_in_the_way_does_not_stop_the_move(tmp_path: Path):
+    work, dest = tmp_path / ".staging" / "R0003-DONA_01", tmp_path / "R0003-DONA_01"
+    work.mkdir(parents=True)
+    (work / "a.txt").write_text("x", encoding="utf-8")
+    dest.mkdir()
+
+    pre.publish(work, dest)
+
+    assert (dest / "a.txt").is_file()

@@ -20,8 +20,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import shutil
 import subprocess
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -264,18 +266,73 @@ def _process(index: int, path: Path, source_dir: Path, dest: Path, deployment: D
     }
 
 
+# Where a deployment is prepared: <collection>/.staging/<deployment id>, inside its own collection so that moving it to its place is one rename on the same
+# volume — atomic, and instant however many images it has. The collection has nothing of the deployment until it is saved; what is left in .staging by a run that
+# was interrupted is cleared when the deployment is prepared again.
+STAGING_DIR = ".staging"
+# On Windows a file that is open for a moment (the antivirus, the indexer, a viewer, ExifTool finishing) keeps a folder from being renamed: it is tried again.
+PUBLISH_TRIES = 20
+PUBLISH_WAIT = 0.5
+
+
+def staging_dir(collection: Path, deployment_id: str) -> Path:
+    """The folder where the deployment of `collection` is prepared until it is saved."""
+    return collection / STAGING_DIR / deployment_id
+
+
+def _hide(path: Path) -> None:
+    """Marks a folder as hidden on Windows, where a name that starts with a dot does not hide it. Best effort: nothing depends on it."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetFileAttributesW(str(path), 0x2)  # type: ignore[attr-defined]  # FILE_ATTRIBUTE_HIDDEN
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def publish(work: Path, dest: Path) -> None:
+    """Moves a prepared deployment from its staging folder to its place in the collection, in one rename.
+
+    Raises:
+        DeploymentImportError: the deployment's folder could not be moved — after trying again for a few seconds, as an open file may be the cause.
+    """
+    if dest.is_dir() and not any(dest.iterdir()):
+        dest.rmdir()  # an empty folder in the way: Windows refuses to replace it, and nothing is lost
+    last: OSError | None = None
+    for attempt in range(PUBLISH_TRIES):
+        try:
+            os.replace(work, dest)  # not rename: on Windows that fails when the destination exists
+            last = None
+            break
+        except PermissionError as exc:  # Windows: something has a file of the folder open — it usually lets go in a moment
+            last = exc
+            time.sleep(PUBLISH_WAIT)
+        except OSError as exc:
+            raise DeploymentImportError(f"Could not move {work.name} into its collection: {exc}") from exc
+    if last is not None:
+        raise DeploymentImportError(f"Could not move {work.name} into its collection — a file in it is in use by another program: {last}") from last
+    try:
+        work.parent.rmdir()  # .staging, when nothing else is being prepared
+    except OSError:
+        pass
+
+
 def preprocess_stream(
     source_dir: str, collection_dir: str, collection_name: str | None, deployment: DeploymentFields, options: PreprocessOptions,
     consolidate: bool = True,
 ) -> Iterator[dict]:
-    """Imports source_dir's images into collection_dir/<deployment_id>, preprocessed as
-    `options` says, with the collection's and deployment's metadata beside them.
-    With consolidate False it stops there — the images, their images.json and preprocessing.json — leaving the
-    deployment *pending*: unsealed, so it can be preprocessed again, until consolidate_stream freezes it.
+    """Imports source_dir's images, preprocessed as `options` says, with the collection's and deployment's metadata beside them.
+    They are prepared in collection_dir/.staging/<deployment_id> — the collection has nothing of the deployment until it is saved —
+    and, with consolidate, moved to collection_dir/<deployment_id> and sealed there.
+    With consolidate False it stops after preparing them — the images, their images.json and preprocessing.json — leaving the
+    deployment *pending* in .staging: unsealed and not yet in the collection, so it can be preprocessed again, until consolidate_stream
+    moves it to its place and freezes it.
     Events, as the other imports': {"type": "copy", index, total, name} per file,
     {"type": "skipped", name, detail} for one that couldn't be processed (the rest go
     on), {"type": "metadata", total} once the XMP is being written, and finally
-    {"type": "done", dest_dir, processed, skipped}.
+    {"type": "done", dest_dir, processed, skipped} — dest_dir is where the deployment is: its place in the collection once it is
+    saved, its staging folder while it is pending.
 
     Raises:
         DeploymentImportError: bad source/destination paths, an unknown timezone,
@@ -284,14 +341,17 @@ def preprocess_stream(
     source = Path(source_dir).expanduser()
     collection = Path(collection_dir).expanduser()
     dest = collection / deployment.deployment_id
+    work = staging_dir(collection, deployment.deployment_id)
     deployment_import_service.check_paths(source, dest)
     zone_of(options.timezone)
     exiftool = camera_info.exiftool_path()
     if options.metadata and exiftool is None:
         raise DeploymentImportError("Adding metadata needs ExifTool, and it isn't installed.")
     if deployment_import_service.is_pending(dest) and not local_folder_service.is_synced(dest):
-        shutil.rmtree(dest)  # preprocessed before and never consolidated: nothing froze it, so it is done again
+        shutil.rmtree(dest)  # preprocessed before, by a version that did it in the collection, and never consolidated: nothing froze it, so it is done again
     deployment_import_service.check_not_kept(dest)
+    if work.exists():
+        shutil.rmtree(work)  # prepared before and not saved, or interrupted: it is done again
 
     def events() -> Iterator[dict]:
         local_folder_service.write_collection_metadata(collection, collection_name)
@@ -307,9 +367,10 @@ def preprocess_stream(
         skipped = 0
         skipped_items: list[dict] = []
         done = 0
-        dest.mkdir(parents=True, exist_ok=True)
+        work.mkdir(parents=True, exist_ok=True)
+        _hide(work.parent)
         with ThreadPoolExecutor(max_workers=config.workers()) as pool:
-            futures = [(path, pool.submit(_process, index_of[path], path, source, dest, deployment, options, cameras)) for path in images]
+            futures = [(path, pool.submit(_process, index_of[path], path, source, work, deployment, options, cameras)) for path in images]
             for path, future in futures:  # in order, so the events are too
                 done += 1
                 try:
@@ -323,7 +384,7 @@ def preprocess_stream(
                 records.append(record)
                 yield {"type": "copy", "index": done, "total": total, "name": record["name"]}
         for path in others:  # anything that isn't an image goes across as it is
-            target = dest / path.relative_to(source)
+            target = work / path.relative_to(source)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
             done += 1
@@ -341,48 +402,58 @@ def preprocess_stream(
         for r in records:  # the file as it ends up, metadata included — what sha1sum gives; the XMP can't hold its own hash
             r["final_hash"] = _sha1(r["_target"])
 
-        if consolidate:
-            local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
-        local_folder_service.write_images_file(dest, deployment.deployment_id, [_image_entry(r) for r in records])
+        local_folder_service.write_images_file(work, deployment.deployment_id, [_image_entry(r) for r in records])
         public = [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
-        (dest / PREPROCESSING_LOG_FILE).write_text(
+        (work / PREPROCESSING_LOG_FILE).write_text(
             json.dumps({"options": asdict(options), "processed": len(records), "skipped": skipped, "images": public}, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
         sealed = None
         if consolidate:
             yield {"type": "sealing"}
+            publish(work, dest)  # from now on it is in the collection: its metadata and its seal are written there, where the seal's checks look for the rest of the project
+            local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
             sealed = deployment_import_service.seal_deployment(
                 source, dest, deployment, originals={r["name"]: r["original"] for r in records},
                 source_hashes={r["original"]: r["source_hash"] for r in records}, preprocessing=asdict(options),
             )
-        logger.info("Deployment %s preprocessed in %s (%d image(s), %d skipped)", deployment.deployment_id, dest, len(records), skipped)
+        where = dest if consolidate else work
+        logger.info("Deployment %s preprocessed in %s (%d image(s), %d skipped)", deployment.deployment_id, where, len(records), skipped)
         report_id = None
         try:
             report_id = report_service.save(report_service.preprocessing_report(records, skipped_items, deployment.deployment_id, source, dest, asdict(options)))
         except Exception as exc:  # the import is done: not having its report is no reason to fail it
             logger.warning("Could not write the report of the preprocessing of %s: %s", deployment.deployment_id, exc)
-        yield {"type": "done", "dest_dir": str(dest), "processed": len(records), "skipped": skipped, "sealed": sealed, "report_id": report_id}
+        yield {"type": "done", "dest_dir": str(where), "processed": len(records), "skipped": skipped, "sealed": sealed, "report_id": report_id}
 
     return events()
 
 
 def consolidate_stream(source_dir: str, collection_dir: str, deployment: DeploymentFields) -> Iterator[dict]:
-    """Freezes a preprocessed (pending) deployment: writes its deployment.json and seals it — from then on the app
-    notices any change to it. Events: {"type": "sealing"} and {"type": "done", dest_dir, processed, skipped, sealed}.
+    """Saves a preprocessed (pending) deployment: moves it from its staging folder to its place in the collection, writes its
+    deployment.json and seals it — from then on the app notices any change to it. Events: {"type": "sealing"} and
+    {"type": "done", dest_dir, processed, skipped, sealed}.
+
+    A deployment that an earlier version left pending in the collection itself is sealed where it is.
 
     Raises:
-        DeploymentImportError: the deployment wasn't preprocessed, or is already sealed or synced from Trapper.
+        DeploymentImportError: the deployment wasn't preprocessed, or is already sealed or synced from Trapper, or its place in the
+            collection is taken.
     """
     source = Path(source_dir).expanduser()
-    dest = Path(collection_dir).expanduser() / deployment.deployment_id
+    collection = Path(collection_dir).expanduser()
+    dest = collection / deployment.deployment_id
+    work = staging_dir(collection, deployment.deployment_id)
     if local_folder_service.is_synced(dest):
         raise DeploymentImportError(f"{dest.name} was synced from Trapper, so it can't be modified here.")
     if (dest / "seal.json").exists():
         raise DeploymentImportError(f"{dest.name} is already consolidated.")
-    log_file = dest / PREPROCESSING_LOG_FILE
+    staged = (work / PREPROCESSING_LOG_FILE).is_file()
+    log_file = (work if staged else dest) / PREPROCESSING_LOG_FILE
     if not log_file.is_file():
         raise DeploymentImportError(f"{dest.name} has not been preprocessed yet.")
+    if staged:
+        deployment_import_service.check_not_kept(dest)
     try:
         log = json.loads(log_file.read_text(encoding="utf-8"))
         images = log["images"]
@@ -392,6 +463,8 @@ def consolidate_stream(source_dir: str, collection_dir: str, deployment: Deploym
 
     def events() -> Iterator[dict]:
         yield {"type": "sealing"}
+        if staged:
+            publish(work, dest)
         local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
         sealed = deployment_import_service.seal_deployment(
             source, dest, deployment, originals={r["name"]: r["original"] for r in images},
