@@ -4,7 +4,7 @@ import CheckResultsTable from '../components/CheckResultsTable'
 import ValidationDashboard, { formatRun } from '../components/ValidationDashboard'
 import TimezoneCombobox from '../components/TimezoneCombobox'
 import WizardStep from '../components/WizardStep'
-import { formatDay, formatPeriod } from '../dateFormat'
+import { formatDay } from '../dateFormat'
 import TrapperAccountNotice, { trapperAccountReady } from '../components/TrapperAccountNotice'
 import type { TrapperAccount } from '../components/TrapperAccountNotice'
 import { Fragment, createContext, useContext, useEffect, useRef, useState } from 'react'
@@ -12,6 +12,11 @@ import type { ReactNode } from 'react'
 import { api } from '../api'
 import { defaultResearchProject } from '../defaultResearchProject'
 import RevisionSquares from '../components/RevisionSquares'
+import ClosedVisitsTable, { closedVisitKey } from '../components/ClosedVisitsTable'
+import LinkButton from '../components/LinkButton'
+import SdCardsTable from '../components/SdCardsTable'
+import { Glyph } from '../components/ViewSwitch'
+import { ICON_PATHS } from '../components/IconButton'
 import { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import type { TrapperCredentials } from '../api'
@@ -184,9 +189,11 @@ function CheckboxField({ label, checked, onChange, hint }: { label: string; chec
 }
 
 /** A yes/no field as a card with a switch — off means "not recorded", not "no". */
-export function SwitchRow({ label, hint, checked, onChange, disabled = false, required = false, tone = 'blue' }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; required?: boolean; tone?: 'blue' | 'green' }) {
+export function SwitchRow({ label, hint, checked, onChange, disabled = false, required = false, tone = 'blue', plain = false }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; required?: boolean; tone?: 'blue' | 'green'
+  /** Without a box of its own: a row of a card, with a line between it and the next. */
+  plain?: boolean }) {
   return (
-    <div className={`flex items-center gap-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-5 py-4 ${disabled ? 'opacity-50' : ''}`}>
+    <div className={`flex items-center gap-4 ${plain ? 'py-4' : 'rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 px-5 py-4'} ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex-1 min-w-0">
         <p className="flex items-baseline gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">{label}<CamtrapDpTag />{required && <span className="text-[11px] uppercase tracking-wide text-red-600 dark:text-red-400">Required</span>}</p>
         <p className={`${hintClass} mt-0.5`}>{hint}</p>
@@ -228,13 +235,15 @@ export const DESCRIPTIONS = {
 } as const
 
 /** A multi-line field. */
-export function TextAreaField({ label, value, onChange, maxLength, error, hint }: {
+export function TextAreaField({ label, value, onChange, maxLength, error, hint, hideLabel = false }: {
   label: string; value: string; onChange: (v: string) => void; maxLength?: number; error?: string; hint?: string
+  /** The label is only the name of the field for assistive technology: what it asks is said above it. */
+  hideLabel?: boolean
 }) {
   const id = fieldId(label)
   return (
     <div>
-      <FieldLabel id={id} label={label} />
+      {hideLabel ? <label className="sr-only" htmlFor={id}>{label}</label> : <FieldLabel id={id} label={label} />}
       <textarea id={id} rows={4} maxLength={maxLength} value={value} aria-invalid={error ? true : undefined}
                 className={`${inputClass} ${error ? 'border-red-500 dark:border-red-500' : ''}`} onChange={(e) => onChange(e.target.value)} />
       {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
@@ -465,7 +474,7 @@ export function StrictnessTable<T extends string>({ options, enabled, required, 
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${failed ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'}`}>
                         {failed ? 'Failed' : 'Passed'}
                       </span>
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">{!failed ? '0' : unit ? `${result.failed.toLocaleString('en-US')} ${result.failed === 1 ? unit.one : unit.many}` : result.images === null ? 'Whole folder' : `${result.failed.toLocaleString('en-US')} ${result.failed === 1 ? 'image' : 'images'}`}</span>
+                      {failed && <span className="text-xs text-zinc-500 dark:text-zinc-400">{unit ? `${result.failed.toLocaleString('en-US')} ${result.failed === 1 ? unit.one : unit.many}` : result.images === null ? 'Whole folder' : `${result.failed.toLocaleString('en-US')} ${result.failed === 1 ? 'image' : 'images'}`}</span>}
                     </button>
                   )}
                 </td>}
@@ -547,7 +556,12 @@ export function fillFromClosedVisit(d: DeploymentFields, c: ClosedVisit): Deploy
 }
 
 /** A closed visit as an option: when it was, where, which session, what was done there, and when its card was collected — and how many photos it had. */
-export const visitKey = (c: ClosedVisit) => `${c.visit.location_id}|${c.visit.date}|${c.visit.time}`
+/** The period of a deployment as ISO 8601, each end with the offset from UTC it was stamped with (2026-10-19T08:30:00+02:00) — the timezone is in them. An end with no offset says the timezone of the location after it. */
+export const isoPeriod = (start: string | null | undefined, end: string | null | undefined, timezone: string) => {
+  const stamped = (v: string) => (/(Z|[+-]\d\d:\d\d)$/.test(v) || !timezone ? v : `${v} ${timezone}`)
+  return start ? `${stamped(start)} → ${end ? stamped(end) : '…'}` : '—'
+}
+export const visitKey = closedVisitKey
 export const visitLabel = (c: ClosedVisit) =>
   `${c.visit.date} ${c.visit.time} · ${c.visit.location_id} · ${c.visit.session} · ${c.visit.actions.join(' + ')}${c.visit.sd ? ` · card ${c.visit.sd}` : ''} · collected on ${c.end.date}${c.end.num_photos != null ? ` (${c.end.num_photos} photos)` : ''}`
 
@@ -782,8 +796,12 @@ export const DETAILS_SECTIONS: { id: DetailsSection; label: string; icon: ReactN
 
 
 /** A list of short values — typed in and added one by one, shown as chips that can be taken out again. */
-function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, suggestions }: {
+function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, suggestions, heading, empty }: {
   label: string; values: string[]; onChange: (values: string[]) => void; addLabel: string; placeholder: string; hint?: string; suggestions?: string[]
+  /** What the field asks, as a heading above it — the label is then only its name for assistive technology. */
+  heading?: string
+  /** What is said while there is nothing in the list. */
+  empty?: string
 }) {
   const [text, setText] = useState('')
   const add = (value: string) => {
@@ -794,7 +812,8 @@ function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, sugg
   const id = fieldId(label)
   return (
     <div>
-      <div className="flex items-baseline gap-2 mb-1.5">
+      {heading && <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">{heading}</p>}
+      <div className={`flex items-baseline gap-2 ${heading ? 'sr-only' : 'mb-1.5'}`}>
         <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor={id}>{label}</label>
         <CamtrapDpTag />
       </div>
@@ -804,6 +823,7 @@ function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, sugg
                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(text) } }} />
         <button type="button" aria-label={addLabel} className={btnOutline} disabled={!text.trim()} onClick={() => add(text)}>Add</button>
       </div>
+      {values.length === 0 && empty && <p className={`${hintClass} mt-3`}>{empty}</p>}
       {values.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-2">
           {values.map((v) => (
@@ -823,6 +843,19 @@ function ChipEditor({ label, values, onChange, addLabel, placeholder, hint, sugg
         </div>
       )}
     </div>
+  )
+}
+
+/** A card of the details, with its title in capitals and its icon in a colour, and a line under them: what is inside is the card's own. */
+function DetailCard({ title, icon, tone, children }: { title: string; icon: ReactNode; tone: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5">
+      <h6 className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 pb-3 mb-4 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100">
+        <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-5 w-5 fill-none ${tone}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{icon}</svg>
+        {title}
+      </h6>
+      {children}
+    </section>
   )
 }
 
@@ -928,7 +961,6 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
     if (next === 'above') onField('camera_depth', null); else onField('camera_height', null)
   }
   const segment = (active: boolean) => `px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${active ? 'bg-indigo-600 text-white shadow' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'}`
-  const small = (active: boolean) => `px-2.5 py-1 text-xs rounded-md border ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
   const [camera, site, notes] = DETAILS_SECTIONS
   const sum = (parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(' · ')
   const cameraSummary = sum([
@@ -1034,34 +1066,50 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
       {afterCamera && <CamtrapDpContext.Provider value={false}>{afterCamera}</CamtrapDpContext.Provider>}
 
       <SectionCard title="Site" icon={site.icon} total={hideSetupBy ? 4 : 5} summary={siteSummary} missing={emptyIn(['feature_type', 'habitat', ...(hideSetupBy ? [] : ['setup_by']), 'bait_use', 'timestamp_issues'])} filled={count([deployment.feature_type, deployment.habitat, ...(hideSetupBy ? [] : [deployment.setup_by]), deployment.bait_use, deployment.timestamp_issues])}>
-        <p className="flex items-baseline gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">What is the camera aimed at?<CamtrapDpTag /></p>
-        <p className={`${hintClass} mt-0 mb-2`}>The kind of feature in view, if any.</p>
-        <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Feature type">
-          {FEATURE_TYPE_OPTIONS.map((o) => (
-            <button key={o.value} type="button" aria-pressed={deployment.feature_type === o.value} className={small(deployment.feature_type === o.value)}
-                    onClick={() => onField('feature_type', deployment.feature_type === o.value ? null : o.value)}>{o.label}</button>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Habitat" placeholder="e.g. Mediterranean scrub" hint={DESCRIPTIONS.habitat}
-                 value={deployment.habitat ?? ''} onChange={(v) => onField('habitat', v || null)} />
-          {!hideSetupBy && <Field label="Set up by" placeholder="e.g. Jakub Bubnicki" hint={DESCRIPTIONS.setupBy}
-                 value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />}
-        </div>
-        <div className="mt-4 space-y-3">
-          <SwitchRow label="Bait was used" hint="Say what it was in the tags or comments below." required={ask('bait_use')} checked={!!deployment.bait_use}
-                     onChange={(v) => onField('bait_use', ask('bait_use') ? v : v || null)} />
-          <SwitchRow label="Photo dates may be wrong" hint="Turn on if the dates in the photos are known to be off and can’t be fixed, for example an unknown or wrong camera clock." checked={!!deployment.timestamp_issues} onChange={(v) => onField('timestamp_issues', v || null)} />
+        <div className="space-y-5">
+          <DetailCard title="What is in view?" tone="stroke-violet-400" icon={<><path d="M2 12s3.600-7 10-7 10 7 10 7-3.600 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>}>
+            <p className="flex items-baseline gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">What is the camera aimed at?<CamtrapDpTag /></p>
+            <p className={`${hintClass} mt-0 mb-4`}>The kind of feature in view, if any.</p>
+            <div className="flex flex-wrap gap-3" role="group" aria-label="Feature type">
+              {FEATURE_TYPE_OPTIONS.map((o) => (
+                <button key={o.value} type="button" aria-pressed={deployment.feature_type === o.value} className={`${roundPill(deployment.feature_type === o.value)} font-mono`}
+                        onClick={() => onField('feature_type', deployment.feature_type === o.value ? null : o.value)}>{o.label}</button>
+              ))}
+            </div>
+          </DetailCard>
+          <DetailCard title="Habitat &amp; deployment" tone="stroke-emerald-400" icon={<><path d="M11 20A7 7 0 0 1 9.800 6.100C15.500 5 17 4.500 19 2c1 2 2 4.200 2 8 0 5.500-4.800 10-10 10z" /><path d="M2 21c0-3 1.850-5.360 5.080-6C9.500 14.520 12 13 13 12" /></>}>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Habitat" placeholder="e.g. Mediterranean scrub" hint={DESCRIPTIONS.habitat}
+                     value={deployment.habitat ?? ''} onChange={(v) => onField('habitat', v || null)} />
+              {!hideSetupBy && <Field label="Set up by" placeholder="e.g. Jakub Bubnicki" hint={DESCRIPTIONS.setupBy}
+                     value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />}
+            </div>
+          </DetailCard>
+          <DetailCard title="Conditions &amp; flags" tone="stroke-orange-400" icon={<><path d="M4 22V4" /><path d="M4 4h14l-3 4.500 3 4.500H4" /></>}>
+            <div className="divide-y divide-zinc-200 dark:divide-zinc-700 -mt-2">
+              <SwitchRow plain label="Bait was used" hint="Say what it was in the tags or comments below." required={ask('bait_use')} checked={!!deployment.bait_use}
+                       onChange={(v) => onField('bait_use', ask('bait_use') ? v : v || null)} />
+              <SwitchRow plain label="Photo dates may be wrong" hint="Turn on if the dates in the photos are known to be off and can’t be fixed, for example an unknown or wrong camera clock." checked={!!deployment.timestamp_issues} onChange={(v) => onField('timestamp_issues', v || null)} />
+            </div>
+          </DetailCard>
         </div>
       </SectionCard>
 
       <SectionCard title="Grouping and notes" icon={notes.icon} optional total={3} summary={notesSummary} filled={count([groups.length || null, deployment.tags.length || null, deployment.comments])}>
         <div className="space-y-5">
-          <ChipEditor label="Groups" values={groups} onChange={(v) => onField('deployment_groups', v.length ? v.join(' | ') : null)} addLabel="Add group"
-                      placeholder="e.g. season:winter 2025" hint="Which set the deployment belongs to — an array, a grid, a season. Preferably as key:value." />
-          <ChipEditor label="Tags" values={deployment.tags} onChange={(v) => onField('tags', v)} addLabel="Add tag" placeholder="e.g. forest edge"
-                      hint="Short words describing the deployment. Use key:value if you like." suggestions={['forest edge', 'bait:food', 'near water']} />
-          <TextAreaField label="Comments" hint={DESCRIPTIONS.deploymentComments} value={deployment.comments ?? ''} onChange={(v) => onField('comments', v || null)} />
+          <DetailCard title="Groups" tone="stroke-violet-400" icon={<><path d="M12 3 2 8l10 5 10-5-10-5z" /><path d="m2 13 10 5 10-5" /><path d="m2 18 10 5 10-5" /></>}>
+            <ChipEditor label="Groups" heading="Which set does the deployment belong to?" values={groups} onChange={(v) => onField('deployment_groups', v.length ? v.join(' | ') : null)} addLabel="Add group"
+                        placeholder="e.g. season:winter 2025" hint="An array, a grid, a season. Preferably as key:value." empty="No groups added yet." />
+          </DetailCard>
+          <DetailCard title="Tags" tone="stroke-sky-400" icon={<><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" /><path d="M7.5 7.5h.01" /></>}>
+            <ChipEditor label="Tags" heading="Short words describing the deployment" values={deployment.tags} onChange={(v) => onField('tags', v)} addLabel="Add tag" placeholder="e.g. forest edge"
+                        hint="Use key:value if you like." suggestions={['forest edge', 'bait:food', 'near water']} />
+          </DetailCard>
+          <DetailCard title="Comments" tone="stroke-orange-400" icon={<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M8 9h8M8 13h5" />}>
+            <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Notes about the deployment</p>
+            <p className={`${hintClass} mt-0 mb-3`}>{DESCRIPTIONS.deploymentComments}</p>
+            <TextAreaField label="Comments" hideLabel value={deployment.comments ?? ''} onChange={(v) => onField('comments', v || null)} />
+          </DetailCard>
         </div>
       </SectionCard>
     </div>
@@ -1433,7 +1481,7 @@ interface Props {
   /** Offered once a deployment is imported: goes to the upload page, on the collection it went into. */
   onUpload?: (target: UploadTarget) => void
   /** Opens the settings — where the owner and publisher written into the images are set — on a section when given one. */
-  onOpenSettings?: (section?: 'epicollect' | 'general') => void
+  onOpenSettings?: (section?: 'epicollect' | 'general' | 'projects' | 'locations' | 'sdcards', researchProjectId?: string, item?: string) => void
   /** Whether the settings are open over the wizard: what they hold is read again once they close. */
   settingsOpen?: boolean
   /** Goes back to the menu — what Back does on the first step. */
@@ -1593,6 +1641,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   const [events, setEvents] = useState<ImportEvent[]>([])
   const [importError, setImportError] = useState<string | null>(null)
   const [destDir, setDestDir] = useState<string | null>(null)
+  // the path of the saved deployment was copied
+  const [copied, setCopied] = useState(false)
 
   const stepKey = STEPS[step]?.key
   // The origin (where) and the dates and details (when, camera, site) are two steps of what the deployment is: they share what is looked up.
@@ -2444,7 +2494,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   }
 
   async function handleImport() {
-    setImporting(true); setEvents([]); setImportError(null); setDestDir(null)
+    setImporting(true); setEvents([]); setImportError(null); setDestDir(null); setCopied(false)
     try {
       await api.consolidate(sourceDir, plannedCollection!.path, deployment, (event) => {
         setEvents((prev) => [...prev, event])
@@ -2485,7 +2535,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set())
     setTimestampLogError(null)
     setSdCard('')
-    setEvents([]); setImportError(null); setDestDir(null)
+    setEvents([]); setImportError(null); setDestDir(null); setCopied(false)
     setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
     setTaskId(null)
   }
@@ -2660,12 +2710,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
               <button type="button" className={btnOutline} onClick={() => handleScan()}>Scan</button>
             ) : null}
             {scan && selectedProjectId && (
-              <div className="mt-4"><FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project. Optional: it is checked against the card the visit says was left in the camera.`}>
-                <label className="sr-only" htmlFor="images-sd-card">SD card</label>
-                <Combobox
-                  id="images-sd-card" options={projectSdCards.map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
-                  value={sdCard} onChange={setSdCard} placeholder={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet` : 'Select the SD card the images come from…'} clearLabel="Clear SD card"
-                />
+              <div className="mt-4"><FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project.`}>
+                <Notice kind="info" className="mb-3">It is checked against the card the visit says was left in the camera.</Notice>
+                <SdCardsTable cards={projectSdCards} selected={sdCard} onSelect={setSdCard}
+                  empty={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet.` : 'No SD card matches.'} />
               </FormCard></div>
             )}
             <div className="flex justify-end items-center mt-4">
@@ -2771,23 +2819,27 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
           <StepHeading>{stepKey === 'origin' ? 'Origin' : 'Dates and details'}</StepHeading>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
             {stepKey === 'origin'
-              ? 'Say where the images were taken: the research project and the visit or the location they come from. Next you pick the folder with the images.'
+              ? 'Say where the images were taken: the research project and the visit they come from.'
               : 'Say when the images were collected, then add what you know about the camera and the site — the rest can wait.'}
           </p>
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
           {stepKey === 'origin' && (
           <WizardStep n={1} title={closedVisits && closedVisits.length > 0 ? 'When was it collected?' : 'Where was it taken?'} status={originStatus(1)} canEdit onEdit={() => setOriginOpen(1)}
                       description={closedVisits && closedVisits.length > 0
-                        ? 'The research project and the visit the images come from — the visit whose card was collected. It says where they were taken. Research projects are kept in the collections folder.'
+                        ? (usesDefaultProject && !addingProject
+                          ? <>Tell us in which of the visits of the project{' '}
+                              {onOpenSettings
+                                ? <LinkButton className="font-mono font-bold text-zinc-800 dark:text-zinc-100" title="See the details of the research project in the settings" onClick={() => onOpenSettings('projects', undefined, defaultProject!.acronym)}>{defaultProject!.acronym}</LinkButton>
+                                : <strong className="font-mono font-bold text-zinc-800 dark:text-zinc-100">{defaultProject!.acronym}</strong>}{' '}
+                              the SD card that holds the images you want to link to the new deployment was installed.</>
+                          : 'Pick the research project, then tell us in which of its visits the SD card that holds the images you want to link to the new deployment was installed.')
                         : 'The research project and the location the images come from. They are kept in the collections folder — pick one that is already there, or add a new one, by hand or from Trapper.'}
                       summary={selectedProject && selectedLocation && <>
                         {selectedProject.acronym} · {selectedLocation.location_id}{selectedLocation.name ? `, ${selectedLocation.name}` : ''}<br />
                         {linkedVisit && <>Closed visit: {visitLabel(linkedVisit)}<br /></>}
                         {selectedLocation.latitude != null && selectedLocation.longitude != null && <>GPS {selectedLocation.latitude}, {selectedLocation.longitude} · </>}Timezone {timezone || 'unknown'}
                       </>}>
-          {usesDefaultProject && !addingProject ? (
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">This deployment is of the default research project, <span className="font-mono font-semibold">{defaultProject!.acronym}</span> — it is changed in the settings, from the card at the top right.</p>
-          ) : (
+          {usesDefaultProject && !addingProject ? null : (
           <FormCard title="Research project" description="Those found in the collections folder.">
             {!addingProject ? (
               <>
@@ -2883,18 +2935,18 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
 
           {selectedProjectId && !addingProject && closedVisits !== null && closedVisits.length > 0 && (
             <>
-            <FormCard title="Revision" description="A revision is one visit to every site. Pick one — or all — to see the visits that can still be given a deployment.">
-              <RevisionSquares all={{ label: 'All revisions', note: `${closedVisits.length} ${closedVisits.length === 1 ? 'visit' : 'visits'} without deployment` }} value={revisionPick === null ? '' : String(revisionPick)}
-                revisions={[...new Set(closedVisits.map((c) => revisionOfVisit(c)).filter((r): r is number => r !== null))].sort((x, y) => y - x).map((r) => { const n = closedVisits.filter((c) => revisionOfVisit(c) === r).length; return { id: String(r), label: `R${String(r).padStart(4, '0')}`, note: `${n} ${n === 1 ? 'visit' : 'visits'} without deployment` } })}
+            <FormCard title="Revision" description="Select the revision that the visit in which the SD card was installed belongs to.">
+              <RevisionSquares all={{ label: 'All revisions', note: `${closedVisits.length} ${closedVisits.length === 1 ? 'visit' : 'visits'} without deployment`, strong: String(closedVisits.length) }} variablesInBold value={revisionPick === null ? '' : String(revisionPick)}
+                revisions={[...new Set(closedVisits.map((c) => revisionOfVisit(c)).filter((r): r is number => r !== null))].sort((x, y) => y - x).map((r) => { const n = closedVisits.filter((c) => revisionOfVisit(c) === r).length; return { id: String(r), label: `R${String(r).padStart(4, '0')}`, note: `${n} ${n === 1 ? 'visit' : 'visits'} without deployment`, strong: String(n) } })}
                 onPick={(id) => { const r = id ? Number(id) : null; setRevisionPick(r); if (r !== null && linkedVisit && revisionOfVisit(linkedVisit) !== r) selectClosedVisit(undefined) }} />
             </FormCard>
-            <FormCard title="Closed visit" description={`The visits to ${selectedProjectId} that left a camera and whose card has been collected, with no deployment yet. The deployment is of the visit you pick — where its card was left — and its location is the visit's.`}>
-              <label className="sr-only" htmlFor="origin-visit">Closed visit</label>
-              <Combobox
-                id="origin-visit"
-                options={closedVisits.filter((c) => revisionPick === null || revisionOfVisit(c) === revisionPick).map((c) => ({ value: visitKey(c), label: visitLabel(c) }))}
-                value={linkedVisit ? visitKey(linkedVisit) : ''} onChange={(key) => selectClosedVisit(closedVisits.find((c) => visitKey(c) === key))}
-                placeholder="Select a closed visit…" clearLabel="Clear closed visit"
+            <FormCard title="Closed visit" description="Select the visit in which the SD card was installed. Only the visits whose SD cards have already been collected are shown.">
+              <ClosedVisitsTable
+                visits={closedVisits.filter((c) => revisionPick === null || revisionOfVisit(c) === revisionPick)}
+                selectedKey={linkedVisit ? visitKey(linkedVisit) : ''} onSelect={selectClosedVisit}
+                locations={localLocations} onOpenSite={onOpenSettings ? (id) => onOpenSettings('locations', selectedProjectId, id) : undefined}
+                sdCards={projectSdCards} onOpenSdCard={onOpenSettings ? (label) => onOpenSettings('sdcards', selectedProjectId, label) : undefined}
+                filters={[{ label: `Revision: ${revisionPick === null ? 'All' : `R${String(revisionPick).padStart(4, '0')}`}`, tone: 'blue' }]} total={closedVisits.length}
               />
               {linkedVisit && locationLacksCoordinates && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{selectedLocationId} has no coordinates, and a deployment needs them — add them to the location.</p>
@@ -3314,9 +3366,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
             </p>
             <div className="border-t border-zinc-200 dark:border-zinc-700" />
 
-            <WizardStep n={1} title="Preprocessing steps" status={prepStarted ? 'done' : 'open'} canEdit={!preprocessing} onEdit={handleEditPreprocessSteps}
+            <WizardStep n={1} title="Preprocessing steps" status={destDir ? 'locked' : prepStarted ? 'done' : 'open'} canEdit={!preprocessing} onEdit={handleEditPreprocessSteps}
                         summary={`${activeRows.length} ${activeRows.length === 1 ? 'step' : 'steps'} chosen`}
-                        description="Choose what to do to the images. They're copied, renamed, resized and tagged into the deployment's folder. Your originals are never touched, and nothing is final until you save.">
+                        description={destDir ? 'Locked: the deployment is saved and sealed.' : "Choose what to do to the images. They're copied, renamed, resized and tagged into the deployment's folder. Your originals are never touched, and nothing is final until you save."}>
               <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700 mb-4">
                 <table className="w-full text-sm">
                   <thead className="bg-zinc-50 dark:bg-zinc-800">
@@ -3386,10 +3438,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
               </div>
             </WizardStep>
 
-            <WizardStep n={2} title="Preprocessing results" status={preprocessing ? 'running' : preprocessError ? 'error' : doneRun ? 'done' : 'locked'} canEdit={resultsDone && !importing && !destDir} onEdit={() => setResultsDone(false)} expanded={doneRun && !resultsDone} badge={preprocessing ? 'Preparing…' : undefined}
+            <WizardStep n={2} title="Preprocessing results" status={destDir ? 'locked' : preprocessing ? 'running' : preprocessError ? 'error' : doneRun ? 'done' : 'locked'} canEdit={resultsDone && !importing && !destDir} onEdit={() => setResultsDone(false)} expanded={doneRun && !resultsDone} badge={preprocessing ? 'Preparing…' : undefined}
                         action={!preprocessing && !destDir && !resultsDone && (doneRun || preprocessError) ? <button type="button" className={btnOutline} disabled={importing} onClick={handlePreprocess}>Prepare again</button> : undefined}
                         summary={preprocessed?.type === 'done' ? `${(preprocessed.processed ?? 0).toLocaleString('en-US')} ${preprocessed.processed === 1 ? 'image' : 'images'} prepared${preprocessed.skipped ? `, ${preprocessed.skipped} skipped` : ''}` : undefined}
-                        description="How each step went, and which images, if any, had to be skipped.">
+                        description={destDir ? 'Locked: the deployment is saved and sealed.' : 'How each step went, and which images, if any, had to be skipped.'}>
               {preprocessing && (
                 <div className="mb-4" role="status" aria-label={`Step ${currentStep + 1} of ${activeRows.length}`}>
                   <div className="flex items-baseline justify-between text-sm">
@@ -3457,8 +3509,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
               )}
             </WizardStep>
 
-            <WizardStep n={3} title="Save to your collection" status={prepStatus2} canEdit={false} onEdit={() => {}} expanded={Boolean(destDir)} badge={importing ? 'Saving…' : undefined}
-                        description="Available once the images are prepared.">
+            <WizardStep n={3} title="Save to your collection" status={destDir ? 'locked' : prepStatus2} canEdit={false} onEdit={() => {}} badge={importing ? 'Saving…' : undefined}
+                        summary={destDir ? <>{deployment.deployment_id} saved in your collection</> : undefined}
+                        description={destDir ? 'Locked: the deployment is saved and sealed.' : 'Available once the images are prepared.'}>
               <p className="text-base text-zinc-600 dark:text-zinc-300 mb-4">
                 Everything is ready. This saves the deployment in your local collection. Nothing is uploaded to Trapper yet.
               </p>
@@ -3469,7 +3522,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                 const rows: [string, ReactNode][] = [
                   ['Deployment', <span className="font-mono font-semibold">{deployment.deployment_id}</span>],
                   ['Taken at', [selectedProject?.acronym, [deployment.location_id, savedLocation?.name].filter(Boolean).join(', ')].filter(Boolean).join(' · ')],
-                  ['Period', `${formatPeriod(deployment.start_date, deployment.end_date)}${timezone ? ` (${timezone})` : ''}`],
+                  ['Period', <span className="font-mono text-xs">{isoPeriod(deployment.start_date, deployment.end_date, timezone)}</span>],
                   ['Images', done ? `${(done.processed ?? 0).toLocaleString('en-US')} prepared${did.length ? ` · ${did.join(', ').replace(/, ([^,]*)$/, ' and $1')}` : ''}${done.skipped ? ` · ${done.skipped} skipped` : ''}` : ''],
                   ['Saved to', plannedCollection ? <span className="font-mono break-all">{`${plannedCollection.path}/${deployment.deployment_id}`}</span> : ''],
                 ]
@@ -3484,34 +3537,98 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                   </dl>
                 )
               })()}
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
-                Saving consolidates the deployment: its metadata is written and it is <strong>sealed</strong>, so it can&rsquo;t be modified afterwards
-                — the app notices if an image or its details change — and it can then be uploaded.
-              </p>
-          {importError && <p className="text-sm text-red-600 dark:text-red-400">{importError}</p>}
-          {destDir && (
-            <div>
-              <div role="status" className="mb-4 rounded-xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-6 py-4 text-emerald-900 dark:text-emerald-100">
-                <p className="text-lg font-semibold">Deployment saved</p>
-                <p className="text-sm text-emerald-800/90 dark:text-emerald-200/80">
-                  {deployment.deployment_id} is now in your local collection.
-                  {events.some((e) => e.type === 'done' && e.sealed === false) && ' It could not be sealed — see the log.'}
-                </p>
+              <div role="note" className="mb-4 flex items-start gap-4 rounded-2xl border border-amber-300 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 px-6 py-5 text-amber-900 dark:text-amber-200">
+                <span className="mt-0.5 text-amber-500"><Glyph className="h-6 w-6"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Glyph></span>
+                <div>
+                  <p className="text-lg font-semibold">Saving seals the deployment</p>
+                  <p className="text-base leading-relaxed">Its metadata is written and it can&rsquo;t be modified afterwards. The app notices if an image or its details change. Once saved, it can be uploaded.</p>
+                </div>
               </div>
-              {/* what happens next is asked as it is when a visit is added: the question, then the options — one of them the main one */}
-              <div className="flex flex-wrap items-center gap-3" role="group" aria-label="What next">
-                <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to add another deployment?</p>
-                <button type="button" className={btnOutline} onClick={handleOpenFolder}>Open folder</button>
-                {onUpload && selectedProjectId && plannedCollection && (
-                  <button type="button" className={btnOutline} onClick={() => onUpload({ researchProjectId: selectedProjectId, collection: plannedCollection.collection })}>Upload to Trapper</button>
-                )}
-                <button type="button" className={btnPrimary} onClick={handleStartOver}>Add another deployment</button>
-                {(onDeploymentsMenu ?? onBack) && <button type="button" className={btnOutline} onClick={onDeploymentsMenu ?? onBack}>Back to the deployments menu</button>}
-                {onMainMenu && <button type="button" className={btnOutline} onClick={onMainMenu}>Back to the main menu</button>}
-              </div>
-              {openFolderError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{openFolderError}</p>}
-            </div>
-          )}
+              {importError && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{importError}</p>}
+              {!destDir && (
+                <div className="flex items-center justify-end gap-3">
+                  {preprocessed?.type !== 'done' && !preprocessing && <p className="text-xs text-amber-600 dark:text-amber-400">Prepare the images to save.</p>}
+                  <button type="button" className={`${btnPrimary} flex items-center gap-2 !h-14 !px-6 text-lg`} disabled={preprocessed?.type !== 'done' || !resultsDone || !canImport || importing || preprocessing} onClick={handleImport}>
+                    {importing ? <SmallSpinner /> : <Glyph className="h-5 w-5"><path d="M5 3h11l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" /><path d="M8 3v5h7V3M7 21v-7h10v7" /></Glyph>}{importing ? 'Saving…' : 'Save to my collection'}
+                  </button>
+                </div>
+              )}
+            </WizardStep>
+            <WizardStep n={4} title="Review and upload" status={destDir ? 'open' : 'locked'} canEdit={false} onEdit={() => {}}
+                        description="What was saved, and what to do with it.">
+              {destDir && (
+                <div className="space-y-4">
+                  <div role="status" className="rounded-xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-6 py-4 text-emerald-900 dark:text-emerald-100">
+                    <p className="text-lg font-semibold">Deployment saved</p>
+                    <p className="text-sm text-emerald-800/90 dark:text-emerald-200/80">
+                      <span className="font-mono font-semibold">{deployment.deployment_id}</span> is now in your local collection.
+                      {events.some((e) => e.type === 'done' && e.sealed === false) && ' It could not be sealed — see the log.'}
+                    </p>
+                  </div>
+
+                  <section aria-label="What was saved" className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5">
+                    <h6 className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 pb-3 mb-4 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-emerald-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3h11l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" /><path d="M8 3v5h7V3M7 21v-7h10v7" /></svg>
+                      What was saved
+                    </h6>
+                    {(() => {
+                      const done = preprocessed?.type === 'done' ? preprocessed : null
+                      const did = [effectivePreprocessSteps.has('rename') && 'renamed', effectivePreprocessSteps.has('resize') && 'resized', effectivePreprocessSteps.has('metadata') && 'tagged'].filter(Boolean) as string[]
+                      const path = plannedCollection ? `${plannedCollection.path}/${deployment.deployment_id}` : destDir
+                      return (
+                        <>
+                          <p className="text-base text-zinc-900 dark:text-zinc-100">
+                            {done ? `${(done.processed ?? 0).toLocaleString('en-US')} images${did.length ? ` · ${did.join(', ').replace(/, ([^,]*)$/, ' and $1')}` : ''}${done.skipped ? ` · ${done.skipped} skipped` : ''}` : 'Images saved'}
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Metadata written and sealed. The app will notice if an image or its details change.</p>
+                          <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">Saved to</p>
+                          <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-200">{path}</p>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <button type="button" className={`${btnOutline} inline-flex items-center gap-2`} onClick={handleOpenFolder}>
+                              <Glyph className="h-4 w-4"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></Glyph>Open folder
+                            </button>
+                            <button type="button" className={`${btnOutline} inline-flex items-center gap-2`} onClick={() => { void navigator.clipboard?.writeText(path)?.then(() => setCopied(true), () => {}) }}>
+                              <Glyph className="h-4 w-4"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></Glyph>{copied ? 'Copied' : 'Copy path'}
+                            </button>
+                          </div>
+                          {openFolderError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{openFolderError}</p>}
+                        </>
+                      )
+                    })()}
+                  </section>
+
+                  <div role="group" aria-label="What next">
+                    <section aria-label="Upload" className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5">
+                      <h6 className="flex items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-700 pb-3 mb-4 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100">
+                        <span className="flex items-center gap-2">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-sky-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICON_PATHS.upload}</svg>
+                          Upload
+                        </span>
+                        <span className="rounded-full px-2.5 py-1 text-xs font-semibold normal-case tracking-normal bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">Not uploaded yet</span>
+                      </h6>
+                      <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">Send this deployment to Trapper now, or do it later from the deployments menu.</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {onUpload && selectedProjectId && plannedCollection && (
+                          <button type="button" className={`${btnPrimary} inline-flex items-center justify-center gap-2 !h-14 text-base`}
+                                  onClick={() => onUpload({ researchProjectId: selectedProjectId, collection: plannedCollection.collection })}>
+                            <Glyph className="h-5 w-5">{ICON_PATHS.upload}</Glyph>Upload to Trapper
+                          </button>
+                        )}
+                        <button type="button" className={`${onUpload && selectedProjectId && plannedCollection ? btnOutline : btnPrimary} inline-flex items-center justify-center gap-2 !h-14 text-base`} onClick={handleStartOver}>
+                          <Glyph className="h-5 w-5"><path d="M12 5v14M5 12h14" /></Glyph>Add another deployment
+                        </button>
+                      </div>
+                    </section>
+                    {((onDeploymentsMenu ?? onBack) || onMainMenu) && (
+                      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
+                        <span>Or go back to</span>
+                        {(onDeploymentsMenu ?? onBack) && <button type="button" className="text-zinc-800 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400" onClick={onDeploymentsMenu ?? onBack}><span aria-hidden="true">← </span>Deployments menu</button>}
+                        {onMainMenu && <button type="button" className="text-zinc-800 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400" onClick={onMainMenu}><span aria-hidden="true">← </span>Main menu</button>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </WizardStep>
           </div>
         )
@@ -3549,14 +3666,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
             <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!originReady || !newDetailsReady || savingDetails} onClick={handleContinueFromDeployment}>
               {savingDetails && <SmallSpinner />}
               {savingDetails ? 'Saving…' : <>Continue<span aria-hidden="true"> →</span></>}
-            </button>
-          </div>
-        )}
-        {!destDir && stepKey === 'prepare' && (
-          <div className="flex items-center gap-3">
-            {preprocessed?.type !== 'done' && !preprocessing && <p className="text-xs text-amber-600 dark:text-amber-400">Prepare the images to save.</p>}
-            <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={preprocessed?.type !== 'done' || !resultsDone || !canImport || importing || preprocessing} onClick={handleImport}>
-              {importing && <SmallSpinner />}{importing ? 'Saving…' : 'Save deployment'}
             </button>
           </div>
         )}

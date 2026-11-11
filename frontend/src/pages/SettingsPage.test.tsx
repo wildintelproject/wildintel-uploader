@@ -1037,6 +1037,14 @@ describe('SettingsPage', () => {
       await pickProject()
     }
 
+    it('opens on the page of the research project a link of another page goes to', async () => {
+      render(<SettingsPage onClose={vi.fn()} initialSection="projects" initialItem="DONA" />)
+
+      const page = within(await screen.findByRole('region', { name: 'Research project' }))
+      expect(page.getByText('This project comes from Trapper')).toBeInTheDocument()   // its page is open, not the list
+      expect(page.getByText('Doñana')).toBeInTheDocument()
+    })
+
     it('opens on the page of the card a link of another page goes to', async () => {
       mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [A12, B3] } })
       render(<SettingsPage onClose={vi.fn()} initialSection="sdcards" initialProject="DONA" initialItem="b3" />)

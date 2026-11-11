@@ -350,7 +350,7 @@ type SectionId = 'general' | 'uploader' | 'sources' | 'validation' | 'postvalida
 
 /** The lists of the entities, each with its own tab. The sections of the settings that used to be one each open the entities on their tab. */
 type EntityTab = 'projects' | 'trappers' | 'roles' | 'locations' | 'cameras' | 'sdcards'
-const ENTITY_SECTIONS: Record<string, EntityTab> = { trappers: 'trappers', roles: 'roles', sdcards: 'sdcards', cameras: 'cameras', locations: 'locations' }
+const ENTITY_SECTIONS: Record<string, EntityTab> = { projects: 'projects', trappers: 'trappers', roles: 'roles', sdcards: 'sdcards', cameras: 'cameras', locations: 'locations' }
 
 /** The platforms a deployment can be uploaded to, each set up in the Uploader section. */
 
@@ -1424,8 +1424,10 @@ function TrapperPanel<T>({ noun, load, keyOf, labelOf, onAdd, onClose }: {
 }
 
 /** The research projects of the collections folder: listed, added by hand, read from a CSV file or taken from Trapper. They are kept as they are added. */
-function ProjectsTab({ projects, onChanged, onDetail, owned }: {
+function ProjectsTab({ projects, onChanged, onDetail, owned, openItem }: {
   projects: LocalResearchProject[]; onChanged: () => void; onDetail?: (open: boolean) => void
+  /** The acronym of the research project whose page opens at once (a link from another page). */
+  openItem?: string
   /** How many cameras and SD cards each research project has. */
   owned?: (acronym: string) => { cameras: number; sdCards: number }
 }) {
@@ -1439,6 +1441,13 @@ function ProjectsTab({ projects, onChanged, onDetail, owned }: {
   const [search, setSearch] = useState('')
   // For a project taken from Trapper, which can only be seen: where Trapper is, and how many locations it has.
   const [seen, setSeen] = useState<{ base: string | null; locations: number | null }>({ base: null, locations: null })
+  // The research project asked for (a link from another page) is opened once, when the list has been read.
+  const openedItem = useRef(false)
+  useEffect(() => {
+    if (!openItem || openedItem.current) return
+    const found = projects.find((p) => p.acronym.toLowerCase() === openItem.toLowerCase())
+    if (found) { openedItem.current = true; setEditing(projectDraftOf(found)) }
+  }, [openItem, projects]) // eslint-disable-line react-hooks/exhaustive-deps
   const viewing = editing ? projects.find((p) => p.acronym === editing.acronym && p.trapper_pk != null) : undefined
   useEffect(() => {
     if (!viewing) return
@@ -1828,7 +1837,7 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
         </div>
       )}
 
-      {tab === 'projects' && <ProjectsTab projects={projects} onChanged={loadProjects} onDetail={setDetail}
+      {tab === 'projects' && <ProjectsTab projects={projects} onChanged={loadProjects} onDetail={setDetail} openItem={initialItem}
         owned={(a) => ({ cameras: cameras.filter((c) => (c.research_project ?? '').toLowerCase() === a.toLowerCase()).length, sdCards: sdCards.filter((c) => (c.research_project ?? '').toLowerCase() === a.toLowerCase()).length })} />}
 
       {tab === 'roles' && (
@@ -1923,7 +1932,7 @@ function EntitiesSection({ trappers, roles, cameras, sdCards, onTrappers, onRole
 interface Props {
   onClose: () => void
   /** The section to open on; the general one when left out. */
-  initialSection?: SectionId | 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations'
+  initialSection?: SectionId | 'epicollect' | 'projects' | 'trappers' | 'sdcards' | 'cameras' | 'locations'
   /** The research project the entities are shown for, when opened on its locations. */
   initialProject?: string
   /** The SD card or the camera (by its label) whose page opens at once, on its tab. */

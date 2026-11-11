@@ -38,11 +38,11 @@ export default function App() {
   // hidden) — so a run in progress isn't lost.
   const [settingsOpen, setSettingsOpen] = useState(false)
   // The section the settings open on, when something sends the user to one in particular.
-  const [settingsSection, setSettingsSection] = useState<'general' | 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations' | undefined>(undefined)
+  const [settingsSection, setSettingsSection] = useState<'general' | 'epicollect' | 'projects' | 'trappers' | 'sdcards' | 'cameras' | 'locations' | undefined>(undefined)
   const [settingsProject, setSettingsProject] = useState<string | undefined>(undefined)
   // The SD card or the camera whose page the settings open on.
   const [settingsItem, setSettingsItem] = useState<string | undefined>(undefined)
-  function openSettings(section?: 'general' | 'epicollect' | 'trappers' | 'sdcards' | 'cameras' | 'locations', researchProjectId?: string, item?: string) { setSettingsSection(section); setSettingsProject(researchProjectId); setSettingsItem(item); setSettingsOpen(true) }
+  function openSettings(section?: 'general' | 'epicollect' | 'projects' | 'trappers' | 'sdcards' | 'cameras' | 'locations', researchProjectId?: string, item?: string) { setSettingsSection(section); setSettingsProject(researchProjectId); setSettingsItem(item); setSettingsOpen(true) }
   // Back on the welcome screen by the title: it is shown ahead of anything else until "Get Started" is pressed again.
   const [home, setHome] = useState(false)
   // Where the upload page starts from, when it is reached from a finished import.

@@ -269,7 +269,7 @@ async function advanceToPreprocessing() {
 async function runPreprocessingAndContinue() {
   await userEvent.click(screen.getByRole('button', { name: 'Start preparing' }))
   await userEvent.click(await screen.findByRole('button', { name: 'Continue to save' }))
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Save deployment' })).toBeEnabled())
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save to my collection' })).toBeEnabled())
 }
 
 /** From the postvalidation → step "import", through the preprocessing. */
@@ -405,21 +405,188 @@ describe('ImportDeploymentPage', () => {
       it('asks for the closed visit instead of the location, and lists those that have no deployment yet', async () => {
         await pickProject()
 
-        await userEvent.click(await screen.findByLabelText('Closed visit'))
-        const options = within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
-        expect(options).toEqual([
-          '2026-08-05 08:14:05 · DONA_01 · R0002 · Revision · card B2 · collected on 2026-10-02 (1620 photos)',
-          '2026-06-10 09:00:00 · DONA_01 · R0001 · Installation · card A13 · collected on 2026-08-05 (300 photos)',
+        const table = await screen.findByRole('table', { name: 'Closed visits' })
+        const rows = within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').slice(1).map((c) => c.textContent))
+        expect(rows).toEqual([
+          ['R0002', 'DONA_01', 'Collected', 'B2', '2026-08-05 08:14:05', '2026-10-02', '1620', ''],
+          ['R0001', 'DONA_01', 'Collected', 'A13', '2026-06-10 09:00:00', '2026-08-05', '300', ''],
         ])
         expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
         expect(mockedApi.closedVisits).toHaveBeenCalledWith('DONA')
       })
 
+      it('names the research project in the question about the visit — in bold, as a link to its details in the settings — when it is the default one', async () => {
+        storedProjects = [DONA_PROJECT]
+        storedLocations = { DONA: [DONA_01] }
+        mockedApi.closedVisits.mockResolvedValue({ results: CLOSED })
+        mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, GENERAL: { ...APP_SETTINGS.GENERAL, default_research_project: 'DONA' } })
+        const onOpenSettings = vi.fn()
+        render(<ImportDeploymentPage {...pageProps} onOpenSettings={onOpenSettings} />)
+
+        expect(await screen.findByText(/Tell us in which of the visits of the project/)).toBeInTheDocument()
+        expect(screen.getByText(/the SD card that holds the images you want to link to the new deployment was installed/)).toBeInTheDocument()
+        expect(screen.queryByText(/This deployment is of the default research project/)).not.toBeInTheDocument()   // said once, in the question
+        const link = screen.getByRole('button', { name: 'DONA' })
+        expect(link).toHaveClass('font-bold')
+        await userEvent.click(link)
+        expect(onOpenSettings).toHaveBeenCalledWith('projects', undefined, 'DONA')
+      })
+
+      it('opens the data of the site of a row in a panel at the right — with a way on to the settings — without picking the visit', async () => {
+        storedProjects = [DONA_PROJECT]
+        storedLocations = { DONA: [DONA_01] }
+        mockedApi.closedVisits.mockResolvedValue({ results: CLOSED })
+        const onOpenSettings = vi.fn()
+        render(<ImportDeploymentPage {...pageProps} onOpenSettings={onOpenSettings} />)
+        await userEvent.click(await screen.findByLabelText('Research project'))
+        await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+        const table = await screen.findByRole('table', { name: 'Closed visits' })
+
+        await userEvent.click(within(within(table).getByRole('row', { name: /R0002/ })).getByRole('button', { name: 'DONA_01' }))
+        const panel = within(screen.getByRole('dialog', { name: 'Details of the location DONA_01' }))
+        expect(panel.getByRole('heading', { name: 'DONA_01' })).toBeInTheDocument()
+        expect(panel.getByText('Doñana site 1')).toBeInTheDocument()          // its name is under the id, in the header — not again in the list
+        expect(panel.getAllByText('Doñana site 1')).toHaveLength(1)
+        expect(panel.getByRole('application', { name: 'Map of the location' })).toBeInTheDocument()   // where it is, on a map
+        expect(onOpenSettings).not.toHaveBeenCalled()
+        expect(within(table).queryByRole('button', { pressed: true })).not.toBeInTheDocument()     // the press went to the link, not to the row
+
+        await userEvent.click(panel.getByRole('button', { name: 'Open it in the settings' }))
+        expect(onOpenSettings).toHaveBeenCalledWith('locations', 'DONA', 'DONA_01')
+        expect(screen.queryByRole('dialog', { name: /Details of the location/ })).not.toBeInTheDocument()
+      })
+
+      it('picks a visit by pressing its row, and lets it go by pressing the row again', async () => {
+        await pickProject()
+        const table = await screen.findByRole('table', { name: 'Closed visits' })
+
+        await userEvent.click(within(table).getByRole('row', { name: /R0002/ }))
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
+        expect(within(table).getByRole('button', { name: /R0002/, pressed: true })).toBeInTheDocument()
+        expect(within(table).getByRole('button', { name: /R0001/, pressed: false })).toBeInTheDocument()
+        await userEvent.click(within(table).getByRole('row', { name: /R0002/ }))
+        expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
+        // the search narrows the rows
+        await userEvent.type(screen.getByLabelText('Filter the closed visits'), 'a13')
+        expect(within(table).queryByRole('row', { name: /R0002/ })).not.toBeInTheDocument()
+        expect(within(table).getByRole('row', { name: /R0001/ })).toBeInTheDocument()
+      })
+
+      it('tells the filters that are on — the revision picked and what is searched — and how many visits match', async () => {
+        await pickProject()
+        const filters = await screen.findByLabelText('Active filters')
+        expect(filters).toHaveTextContent('Revision: All')
+        expect(filters).toHaveTextContent('Search: None')
+        expect(filters).toHaveTextContent('2 of 2 visits match')
+
+        await userEvent.click(screen.getByRole('button', { name: /^R0001/ }))
+        expect(screen.getByLabelText('Active filters')).toHaveTextContent('Revision: R0001')
+        expect(screen.getByLabelText('Active filters')).toHaveTextContent('1 of 2 visits match')
+        await userEvent.type(screen.getByLabelText('Filter the closed visits'), 'nothing like this')
+        expect(screen.getByLabelText('Active filters')).toHaveTextContent('Search: “nothing like this”')
+        expect(screen.getByLabelText('Active filters')).toHaveTextContent('0 of 2 visits match')
+      })
+
+      it('shows the details of a visit in a panel at the right from the eye of its row, without picking it', async () => {
+        await pickProject()
+        const table = await screen.findByRole('table', { name: 'Closed visits' })
+
+        await userEvent.click(within(table).getByRole('button', { name: 'Show the details of the visit R0002 to DONA_01' }))
+        const panel = within(screen.getByRole('dialog', { name: 'Details of the visit R0002 to DONA_01' }))
+        expect(panel.getByRole('heading', { name: 'DONA_01' })).toBeInTheDocument()
+        expect(panel.getByText('R0002 · 2026-08-05 08:14 → 2026-10-02')).toBeInTheDocument()         // the revision and the days it went from and to, under the site
+        const left = within(panel.getByRole('region', { name: 'The visit that left the card' }))
+        expect(left.getByText('2026-08-05 08:14')).toBeInTheDocument()
+        expect(left.getByText('B2')).toBeInTheDocument()                                   // the card it left
+        expect(panel.getByText('58 days in the field')).toBeInTheDocument()
+        const collected = within(panel.getByRole('region', { name: 'The visit that collected it' }))
+        expect(collected.getByText('R0003')).toBeInTheDocument()
+        expect(collected.getByText('1,620 photos')).toBeInTheDocument()                     // what it counted
+        expect(within(table).queryByRole('button', { pressed: true })).not.toBeInTheDocument()   // the press went to the eye, not to the row
+
+        await userEvent.click(panel.getByRole('button', { name: 'Close' }))
+        expect(screen.queryByRole('dialog', { name: /Details of the visit/ })).not.toBeInTheDocument()
+      })
+
+      it('opens the data of the SD card of a row in a panel at the right — with a way on to the settings — without picking the visit', async () => {
+        storedProjects = [DONA_PROJECT]
+        storedLocations = { DONA: [DONA_01] }
+        mockedApi.closedVisits.mockResolvedValue({ results: CLOSED })
+        mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, sd_cards: [
+          { label: 'B2', brand: 'SanDisk', capacity: '64 GB', in_service: '2026-01-10', research_project: 'DONA', status: 'active' },
+        ] } })
+        const onOpenSettings = vi.fn()
+        render(<ImportDeploymentPage {...pageProps} onOpenSettings={onOpenSettings} />)
+        await userEvent.click(await screen.findByLabelText('Research project'))
+        await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+        const table = await screen.findByRole('table', { name: 'Closed visits' })
+
+        await userEvent.click(within(within(table).getByRole('row', { name: /R0002/ })).getByRole('button', { name: 'B2' }))
+        const panel = within(screen.getByRole('dialog', { name: 'Details of the SD card B2' }))
+        expect(panel.getByRole('heading', { name: 'B2' })).toBeInTheDocument()
+        expect(panel.getByText('SanDisk', { selector: 'dd' })).toBeInTheDocument()
+        expect(panel.getByText('64 GB', { selector: 'dd' })).toBeInTheDocument()
+        expect(within(table).queryByRole('button', { pressed: true })).not.toBeInTheDocument()     // the press went to the link, not to the row
+        await userEvent.click(panel.getByRole('button', { name: 'Open it in the settings' }))
+        expect(onOpenSettings).toHaveBeenCalledWith('sdcards', 'DONA', 'B2')
+
+        // a card that is not one of the project's says so
+        await userEvent.click(within(within(table).getByRole('row', { name: /R0001/ })).getByRole('button', { name: 'A13' }))
+        expect(screen.getByText(/The SD card A13 is not one of the SD cards of this research project yet/)).toBeInTheDocument()
+      })
+
+      it('shows only the search field when asked, and picks a visit from the list under it', async () => {
+        await pickProject()
+        await screen.findByRole('table', { name: 'Closed visits' })
+
+        await userEvent.click(screen.getByRole('button', { name: 'Show only the search field' }))
+        expect(screen.queryByRole('table', { name: 'Closed visits' })).not.toBeInTheDocument()
+        const field = screen.getByLabelText('Filter the closed visits')
+        expect(field).toHaveAttribute('placeholder', 'Select a visit…')
+        await userEvent.click(field)
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument()          // nothing typed, nothing offered
+        await userEvent.type(field, 'R0001')
+        expect(screen.getByRole('listbox')).toBeInTheDocument()
+        await userEvent.clear(field)
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument()          // and when it is emptied again, nothing again
+        await userEvent.type(field, 'R0001')
+        const options = within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
+        expect(options).toEqual(['2026-06-10 09:00:00 · DONA_01 · R0001 · Collected · card A13 · collected on 2026-08-05 (300 photos)'])
+
+        await userEvent.click(screen.getByRole('option', { name: /R0001/ }))
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
+        expect(field).toHaveValue('2026-06-10 09:00:00 · DONA_01 · R0001 · Collected · card A13 · collected on 2026-08-05 (300 photos)')
+      })
+
+      it('shows the closed visits as labels when asked, and a label picks its visit as a row does', async () => {
+        await pickProject()
+        await screen.findByRole('table', { name: 'Closed visits' })
+
+        await userEvent.click(screen.getByRole('button', { name: 'Show the visits as labels' }))
+        expect(screen.queryByRole('table', { name: 'Closed visits' })).not.toBeInTheDocument()
+        const labels = screen.getByRole('group', { name: 'Closed visits' })
+        expect(within(labels).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Pick the visit R0002 to DONA_01', 'Pick the visit R0001 to DONA_01'])
+        const label = within(labels).getByRole('button', { name: /R0002/ })
+        expect(label).toHaveTextContent('DONA_01')
+        expect(label).toHaveTextContent('Collected')
+        expect(label).toHaveTextContent('R0002 · card B2')
+        expect(label).toHaveTextContent('58 days in the field')                    // from the day it left to the day it was collected
+        expect(label).toHaveTextContent('Left on2026-08-05 08:14')
+        expect(label).toHaveTextContent('Collected on2026-10-02')
+        expect(within(labels).getByRole('button', { name: /R0002/ })).toHaveTextContent('1620 photos')
+
+        await userEvent.click(within(labels).getByRole('button', { name: /R0002/ }))
+        await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
+        expect(within(labels).getByRole('button', { name: /R0002/, pressed: true })).toBeInTheDocument()
+        // and back to the table: the row of the visit is still the one picked
+        await userEvent.click(screen.getByRole('button', { name: 'Show the visits as a table' }))
+        expect(within(screen.getByRole('table', { name: 'Closed visits' })).getByRole('button', { name: /R0002/, pressed: true })).toBeInTheDocument()
+      })
+
       it('takes the location of the visit as the deployment\'s, and its session as the revision', async () => {
         await pickProject()
-        await userEvent.click(await screen.findByLabelText('Closed visit'))
-        await userEvent.click(await screen.findByRole('option', { name: /R0002/ }))
+        await userEvent.click(within(await screen.findByRole('table', { name: 'Closed visits' })).getByRole('row', { name: /R0002/ }))
 
         await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
         await continueToDates()
@@ -431,15 +598,14 @@ describe('ImportDeploymentPage', () => {
 
       it('records on the visit the deployment it closed, once the deployment is saved', async () => {
         await pickProject()
-        await userEvent.click(await screen.findByLabelText('Closed visit'))
-        await userEvent.click(await screen.findByRole('option', { name: /R0002/ }))
+        await userEvent.click(within(await screen.findByRole('table', { name: 'Closed visits' })).getByRole('row', { name: /R0002/ }))
         await continueToDates()
         await screen.findByText('Dates of the deployment')
         await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
         await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
         await screen.findByText('Check the details', { selector: 'h4' })
         await advanceToImportStep()
-        await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
         await screen.findByText(/Deployment saved/)
         expect(mockedApi.linkVisit).toHaveBeenCalledWith('DONA', CLOSED[0].visit, 'R0002-DONA_01')
@@ -454,7 +620,7 @@ describe('ImportDeploymentPage', () => {
 
         await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
         expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
-        expect((screen.getByLabelText('Closed visit') as HTMLInputElement).value).toMatch(/R0001/)
+        expect(screen.getByRole('button', { name: /R0001/, pressed: true })).toBeInTheDocument()   // the row of the visit is the one picked
         await continueToDates()
         await screen.findByText('Dates of the deployment')
         expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
@@ -472,8 +638,7 @@ describe('ImportDeploymentPage', () => {
         await goToOriginStep()
         await userEvent.click(await screen.findByLabelText('Research project'))
         await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-        await userEvent.click(await screen.findByLabelText('Closed visit'))
-        await userEvent.click(await screen.findByRole('option', { name: /R0001/ }))
+        await userEvent.click(within(await screen.findByRole('table', { name: 'Closed visits' })).getByRole('row', { name: /R0001/ }))
         await continueToDates()
         await screen.findByText('Dates of the deployment')
 
@@ -514,8 +679,7 @@ describe('ImportDeploymentPage', () => {
         await goToOriginStep()
         await userEvent.click(await screen.findByLabelText('Research project'))
         await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-        await userEvent.click(await screen.findByLabelText('Closed visit'))
-        await userEvent.click(await screen.findByRole('option', { name: /R0001/ }))
+        await userEvent.click(within(await screen.findByRole('table', { name: 'Closed visits' })).getByRole('row', { name: /R0001/ }))
         await continueToDates()
         await screen.findByText('Dates of the deployment')
         await waitFor(() => expect(mockedApi.logEntry).toHaveBeenCalledWith('DONA', 'R0001-DONA_01'))
@@ -545,13 +709,12 @@ describe('ImportDeploymentPage', () => {
           await goToOriginStep()
           await userEvent.click(await screen.findByLabelText('Research project'))
           await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-          await userEvent.click(await screen.findByLabelText('Closed visit'))
-          await userEvent.click(await screen.findByRole('option', { name: /R0001/ }))
+          await userEvent.click(within(await screen.findByRole('table', { name: 'Closed visits' })).getByRole('row', { name: /R0001/ }))
           await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
           await scanTheFolder()
           if (card) {
-            await userEvent.click(await screen.findByLabelText('SD card')) // asked once the folder is chosen
-            await userEvent.click(await screen.findByRole('option', { name: new RegExp(`^${card}`) }))
+            // asked once the folder is chosen
+            await userEvent.click(within(await screen.findByRole('table', { name: 'SD cards' })).getByRole('row', { name: new RegExp(`\\b${card}\\b`) }))
           }
           await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
           await screen.findByText('Choose the checks')
@@ -569,15 +732,24 @@ describe('ImportDeploymentPage', () => {
           await goToOriginStep()
           await userEvent.click(await screen.findByLabelText('Research project'))
           await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-          expect(screen.queryByLabelText('SD card')).not.toBeInTheDocument() // not in the origin: it is asked after the folder
+          expect(screen.queryByRole('table', { name: 'SD cards' })).not.toBeInTheDocument() // not in the origin: it is asked after the folder
           await userEvent.click(await screen.findByLabelText('Location'))
           await userEvent.click(await screen.findByRole('option', { name: 'DONA_01 — Doñana site 1' }))
           await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
-          expect(screen.queryByLabelText('SD card')).not.toBeInTheDocument() // nor before the folder is chosen
+          expect(screen.queryByRole('table', { name: 'SD cards' })).not.toBeInTheDocument() // nor before the folder is chosen
           await scanTheFolder()
 
-          await userEvent.click(await screen.findByLabelText('SD card'))
-          expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['A13 — SanDisk 64 GB', 'B2'])
+          expect(screen.getByText(/It is checked against the card the visit says was left in the camera/)).toBeInTheDocument()           // what it is for is in a box above the table
+          const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
+          expect(cards.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').slice(1).map((c) => c.textContent))).toEqual([['A13', 'SanDisk', '64 GB', 'Active'], ['B2', '—', '—', 'Active']])
+          // a row picks its card, and a second press lets it go
+          await userEvent.click(cards.getByRole('row', { name: /A13/ }))
+          expect(cards.getByRole('button', { name: /A13/, pressed: true })).toBeInTheDocument()
+          await userEvent.click(cards.getByRole('row', { name: /A13/ }))
+          expect(cards.getByRole('button', { name: /A13/, pressed: false })).toBeInTheDocument()
+          // and the labels view offers the same cards
+          await userEvent.click(screen.getByRole('button', { name: 'Show the SD cards as labels' }))
+          expect(within(screen.getByRole('group', { name: 'SD cards' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Pick the SD card A13', 'Pick the SD card B2'])
         })
 
         const STRICT_CARD = 'How strict: The SD card is the one the visit left'
@@ -635,7 +807,7 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
 
         expect(await screen.findByLabelText('Location')).toBeInTheDocument()
-        expect(screen.queryByLabelText('Closed visit')).not.toBeInTheDocument()
+        expect(screen.queryByRole('table', { name: 'Closed visits' })).not.toBeInTheDocument()
       })
     })
 
@@ -2137,7 +2309,7 @@ describe('ImportDeploymentPage', () => {
       await runPreprocessingAndContinue()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
       expect(screen.queryByRole('button', { name: 'Open folder' })).not.toBeInTheDocument()
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
       await screen.findByText(/Deployment saved/)
       await userEvent.click(screen.getByRole('button', { name: 'Open folder' }))
@@ -2155,7 +2327,7 @@ describe('ImportDeploymentPage', () => {
       await runPreprocessingAndContinue()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
       expect(screen.queryByRole('button', { name: 'Upload to Trapper' })).not.toBeInTheDocument() // not before it is imported
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
       await screen.findByText(/Deployment saved/)
       await userEvent.click(screen.getByRole('button', { name: 'Upload to Trapper' }))
@@ -2169,7 +2341,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
       await runPreprocessingAndContinue()
-      await userEvent.click(await screen.findByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'Save to my collection' }))
 
       await screen.findByText(/Deployment saved/)
       expect(screen.queryByRole('button', { name: 'Upload to Trapper' })).not.toBeInTheDocument()
@@ -2187,7 +2359,7 @@ describe('ImportDeploymentPage', () => {
       await userEvent.click(screen.getByRole('checkbox', { name: 'Resize the images' })) // not this time
       await runPreprocessingAndContinue()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
       await screen.findByText(/Deployment saved/)
       expect(mockedApi.preprocess).toHaveBeenCalledWith(
@@ -2228,7 +2400,7 @@ describe('ImportDeploymentPage', () => {
 
       await runPreprocessingAndContinue()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
       await screen.findByText(/Deployment saved/)
       expect(mockedApi.preprocess.mock.calls[0][4]).toEqual(expect.objectContaining({ rename: true, resize: true, metadata: false }))
     })
@@ -2246,16 +2418,16 @@ describe('ImportDeploymentPage', () => {
     it('cannot be saved before the preprocessing has run, and has to run it again after going back', async () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
-      expect(screen.getByRole('button', { name: 'Save deployment' })).toBeDisabled()
-      expect(screen.getByText('Prepare the images to save.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Save to my collection' })).not.toBeInTheDocument()   // it is under the notice of the last step, which opens once the images are prepared
 
       await runPreprocessingAndContinue()
       await screen.findByText('Save to your collection', { selector: 'h4' })
+      expect(screen.getByRole('button', { name: 'Save to my collection' })).toBeInTheDocument()
 
       await userEvent.click(screen.getByRole('button', { name: 'Back' }))
       await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
       await screen.findByText('Preprocessing steps', { selector: 'h4' })
-      expect(screen.getByRole('button', { name: 'Save deployment' })).toBeDisabled() // what it did may be stale now
+      expect(screen.queryByRole('button', { name: 'Save to my collection' })).not.toBeInTheDocument() // what it did may be stale now
     })
 
     it('has Preprocessing steps to choose what to do and Preprocessing results for how it went, with Prepare again in its header', async () => {
@@ -2293,7 +2465,7 @@ describe('ImportDeploymentPage', () => {
     it('says in the import step that it consolidates the deployment', async () => {
       await walkToImportStep()
 
-      expect(screen.getByText(/Saving consolidates the deployment/)).toBeInTheDocument()
+      expect(screen.getByText(/Saving seals the deployment/)).toBeInTheDocument()
       expect(screen.getByText(/Everything is ready/)).toBeInTheDocument()
       expect(screen.getByText(/1 prepared/)).toBeInTheDocument()
     })
@@ -2315,7 +2487,7 @@ describe('ImportDeploymentPage', () => {
       await walkToImportStep()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
 
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
       await screen.findByText(/Deployment saved/)
       const deployment = expect.objectContaining({ deployment_id: 'R0001-DONA_01', location_id: 'DONA_01', latitude: 37, longitude: -6.5 })
@@ -2323,7 +2495,12 @@ describe('ImportDeploymentPage', () => {
         '/home/me/deployments/DONA_01', COLLECTIONS_DIR, 'R0001', deployment, expect.objectContaining({ rename: true, resize: true, metadata: true }), expect.any(Function),
       )
       expect(mockedApi.consolidate).toHaveBeenCalledWith('/home/me/deployments/DONA_01', COLLECTIONS_DIR, deployment, expect.any(Function))
-      expect(screen.getByText(/R0001-DONA_01 is now in your local collection/)).toBeInTheDocument()
+      expect(screen.getByText(/is now in your local collection/)).toBeInTheDocument()
+      // the card of what was saved: where it is, with the buttons to copy its path and open it, and that it is not on Trapper yet
+      expect(screen.getByText('Not uploaded yet')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Copy path' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Open folder' })).toBeInTheDocument()
+      expect(screen.queryByText('Saving seals the deployment')).not.toBeInTheDocument()   // said before saving, not after
       expect(mockedApi.discardSession).toHaveBeenCalledWith('task-1')
       expect(screen.getByRole('button', { name: 'Add another deployment' })).toBeInTheDocument()
     })
@@ -2335,7 +2512,7 @@ describe('ImportDeploymentPage', () => {
       })
       await walkToImportStep()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
       await screen.findByText(/Deployment saved/)
       expect(mockedApi.preprocess).toHaveBeenCalledWith('/home/me/deployments/DONA_01', COLLECTIONS_DIR, null, expect.anything(), expect.anything(), expect.any(Function))
@@ -2347,7 +2524,7 @@ describe('ImportDeploymentPage', () => {
       })
       await walkToImportStep()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
       await screen.findByText(/Deployment saved/)
       expect(mockedApi.importDeployment).not.toHaveBeenCalled()
@@ -2373,7 +2550,7 @@ describe('ImportDeploymentPage', () => {
     await userEvent.type(screen.getByLabelText('Tags'), 'north{Enter}')
       })
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
       await screen.findByText(/Deployment saved/)
       expect(mockedApi.preprocess).toHaveBeenCalledWith(
@@ -2400,7 +2577,7 @@ describe('ImportDeploymentPage', () => {
       mockedApi.consolidate.mockRejectedValue(new Error('No space left on device'))
       await walkToImportStep()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
 
       expect(await screen.findByText('No space left on device')).toBeInTheDocument()
       expect(mockedApi.discardSession).not.toHaveBeenCalled()
@@ -2416,14 +2593,16 @@ describe('ImportDeploymentPage', () => {
       })
       await walkToImportStep()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
       await screen.findByText(/Deployment saved/)
 
       const next = within(screen.getByRole('group', { name: 'What next' }))
-      expect(next.getAllByRole('button').map((b) => b.textContent)).toEqual(['Open folder', 'Upload to Trapper', 'Add another deployment', 'Back to the deployments menu', 'Back to the main menu'])
-      await userEvent.click(next.getByRole('button', { name: 'Back to the main menu' }))
+      expect(next.getAllByRole('button').map((b) => b.textContent)).toEqual(['Upload to Trapper', 'Add another deployment', '← Deployments menu', '← Main menu'])
+      expect(screen.getByText('Review and upload', { selector: 'h3, h4, h5, span, p' })).toBeInTheDocument()   // the step that holds what was saved and what to do next
+      expect(screen.getAllByText('Locked: the deployment is saved and sealed.')).toHaveLength(3)   // the three steps before it are locked once it is saved
+      await userEvent.click(next.getByRole('button', { name: 'Main menu' }))
       expect(onMainMenu).toHaveBeenCalledTimes(1)
-      await userEvent.click(next.getByRole('button', { name: 'Back to the deployments menu' }))
+      await userEvent.click(next.getByRole('button', { name: 'Deployments menu' }))
       expect(onDeploymentsMenu).toHaveBeenCalledTimes(1)
     })
 
@@ -2433,7 +2612,7 @@ describe('ImportDeploymentPage', () => {
       })
       await walkToImportStep()
       await screen.findAllByText(`${COLLECTIONS_DIR}/R0001-DONA_01`)
-      await userEvent.click(screen.getByRole('button', { name: 'Save deployment' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save to my collection' }))
       await screen.findByText(/Deployment saved/)
 
       await userEvent.click(screen.getByRole('button', { name: 'Add another deployment' }))
