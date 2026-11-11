@@ -230,19 +230,16 @@ def visits_import_report(research_project_id: str, result: dict, saved: int) -> 
     """The report of an import of visits: an entry for each row of the file — what became of it, and why — then what was odd about the visits, what was worth knowing,
     what the import created and the sites that are not locations. `result` is what visits_csv.parse_visits gave (with the folder's changes told by `saved`)."""
     b = _Builder("visits", f"Visits imported to {research_project_id}", source_dir=None, deployment_id=None,
-                 parameters={"research_project": research_project_id, "saved": saved, "skipped": result.get("skipped", 0), "history": result.get("history", 0)})
+                 parameters={"research_project": research_project_id, "saved": saved, "skipped": result.get("skipped", 0)})
     rows = result.get("rows", [])
     b.checked = len(rows)
     for r in rows:
         where = " · ".join(str(x) for x in (r.get("site"), r.get("session"), f"{r['date']} {r['time']}" if r.get("date") else None) if x)
         label = r.get("label") or "Visit to add"
         identifier = f"Row {r['row']}" + (f" · {where}" if where else "")
-        b.add(identifier, label, r["result"] in ("ok", "already_kept", "ignored"), r.get("message") or "The visit is added.", scope="deployment")
+        b.add(identifier, label, r["result"] in ("ok", "already_kept"), r.get("message") or "The visit is added.", scope="deployment")
         for warning in r.get("warnings", []):  # what is odd in the row, told in it
             b.add(identifier, "Things to check", False, warning, scope="deployment")
-    for p in result.get("problems", []):
-        if p.get("history"):
-            b.add(f"History row {p['row']}", "History of visits", False, p["message"], scope="deployment")
     for site in result.get("new_sites", []):
         near = site.get("nearest")
         b.add(site["site"], "Site is not a location", False,

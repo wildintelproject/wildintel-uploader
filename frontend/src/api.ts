@@ -181,10 +181,9 @@ export const api = {
     post<StoredVisit>('/api/visits/link', { research_project_id: researchProjectId, location_id: visit.location_id, date: visit.date, time: visit.time, deployment_id: deploymentId }),
 
   // The visits of a CSV file for a research project: what can be kept and what is wrong with the rest — kept too when `save` is set.
-  /** Reads the visits of a CSV file — with, optionally, a history of visits (the fieldwork datasheet, an .xlsx, as base64) that completes the ones kept first. */
-  importVisitsCsv: (researchProjectId: string, csv: string, save = false, format: VisitsCsvFormat = 'mapped', mapping?: Record<string, string>, historyXlsx?: string, options?: ImportCsvOptions) =>
+  importVisitsCsv: (researchProjectId: string, csv: string, save = false, format: VisitsCsvFormat = 'mapped', mapping?: Record<string, string>, options?: ImportCsvOptions) =>
     post<VisitsCsvResult>('/api/visits/import-csv', {
-      research_project_id: researchProjectId, csv, save, format, mapping: mapping ?? null, ...(historyXlsx ? { history_xlsx: historyXlsx } : {}),
+      research_project_id: researchProjectId, csv, save, format, mapping: mapping ?? null,
       ...(options?.create ? { create: options.create } : {}), ...(options?.defaults ? { defaults: options.defaults } : {}),
     }),
 

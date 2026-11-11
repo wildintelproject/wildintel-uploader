@@ -2,13 +2,12 @@
 (see local_folder_service.list_visits and write_visit)."""
 from __future__ import annotations
 
-import base64
 
 from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, MarkNotVisitedRequest, SaveVisitRequest, UpdateVisitRequest, VisitRecord, VisitsCsvColumnsRequest
-from wildintel_uploader.core.services import epicollect_service, local_folder_service, report_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv, visits_xlsx
+from wildintel_uploader.core.services import epicollect_service, local_folder_service, report_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
 
@@ -253,10 +252,7 @@ def _save_report(research_project_id: str, result: dict, saved: int) -> str | No
 def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
     """Reads the visits of a CSV file for a research project: what can be kept and what is wrong with the rest — kept when `save` is set.
 
-    With a history of visits (the fieldwork datasheet, an .xlsx) the history comes first: it completes the visits kept, and then the file's are applied on top of
-    both — their sessions, what is already kept and what is odd are told with all of it in front. The visits of the history come first in "visits" ("history"
-    says how many), and what is wrong with them is told beside the file's, from the history ("history": true). When the visits are kept, the folders of the
-    collections they change get their FileTimestampLog and FieldworkLog."""
+    When the visits are kept, the folders of the collections they change get their FileTimestampLog and FieldworkLog."""
     root = config.collections_dir()
     try:
         if req.save:
@@ -265,17 +261,6 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
         kept = local_folder_service.list_visits(root, req.research_project_id)
         cards = local_folder_service.list_field_items(root, req.research_project_id, "sd_cards")
         cameras = local_folder_service.list_field_items(root, req.research_project_id, "cameras")
-        prefix = f"{req.research_project_id}_"
-        history = None
-        if req.history_xlsx:
-            try:
-                text = visits_xlsx.to_csv(base64.b64decode(req.history_xlsx, validate=False))
-            except (visits_xlsx.VisitsXlsxError, ValueError) as exc:
-                raise HTTPException(400, f"The history of visits: {exc}") from exc
-            try:
-                history = visits_csv.parse_visits(text, locations, kept, prefix, "epicollect", None, {"cards": cards, "cameras": cameras, "trappers": _trapper_names()})
-            except visits_csv.VisitsCsvError as exc:
-                raise HTTPException(400, f"The history of visits: {exc}") from exc
         field_options = config.load_settings().FIELDLOG
         text, fmt, mapping, time_source = req.csv, req.format, req.mapping, field_options.time_source
         if fmt == "epicollect-api":
@@ -292,18 +277,8 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             except epicollect_service.EpicollectError as exc:
                 raise HTTPException(400, str(exc)) from exc
             fmt, mapping = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}
-        result = visits_csv.parse_visits(text, locations, kept + (history["visits"] if history else []), prefix, fmt, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults, "trappers": _trapper_names(),
+        result = visits_csv.parse_visits(text, locations, kept, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults, "trappers": _trapper_names(),
                                                                                                                                   "unknown": local_folder_service.list_unknown(root, req.research_project_id)})
-        if history:
-            seen = {s["site"].lower() for s in result["new_sites"]}
-            result = {
-                **result, "visits": history["visits"] + result["visits"], "history": len(history["visits"]),
-                "problems": [{**p, "history": True} for p in history["problems"]] + result["problems"],
-                "new_sites": result["new_sites"] + [s for s in history["new_sites"] if s["site"].lower() not in seen],
-                "warnings": list(dict.fromkeys([*history["warnings"], *result["warnings"]])), "loose_warnings": list(dict.fromkeys([*history["warnings"], *result["loose_warnings"]])), "notes": list(dict.fromkeys([*history["notes"], *result["notes"]])),
-                "skipped": result["skipped"] + history["skipped"],
-                "unknown": result["unknown"] + [u for u in history["unknown"] if (u["location_id"].lower(), u["session"]) not in {(r["location_id"].lower(), r["session"]) for r in result["unknown"]}],
-            }
         saved = field_logs = report = None
         if req.save:
             # what the visits need is created first: their locations, cameras and SD cards

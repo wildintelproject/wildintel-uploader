@@ -811,7 +811,7 @@ export interface ClosedVisitTarget {
 }
 
 /** How a CSV file of visits is read: as an Epicollect download, or with the column of each field said. */
-export type VisitsCsvFormat = 'epicollect' | 'mapped' | 'epicollect-api' | 'epicollect-csv'
+export type VisitsCsvFormat = 'mapped' | 'epicollect-api' | 'epicollect-csv'
 
 /** The columns of a CSV file, a few of its rows, the fields of a visit it can give (those a visit needs marked) and the column that most
  * likely gives each. */
@@ -838,28 +838,24 @@ export interface ImportCsvOptions { create?: CsvCreate; defaults?: Record<string
  * those already kept, and how many were kept when asked to. */
 export interface VisitsCsvResult {
   visits: StoredVisit[]
-  problems: { row: number; message: string; /** The row is of the history of visits, not of the file. */ history?: boolean }[]
+  problems: { row: number; message: string; }[]
   skipped: number
   /** What the visits to add create: the locations, cameras and SD cards that do not exist and the file was asked to create. */
   create?: Record<CsvEntity, Record<string, unknown>[]>
   /** What became of each row of the file, numbered as in it: kept to add (ok), a problem, already kept, held for a site that is not a location, or ignored. */
   rows?: { row: number; site: string; session?: string; date?: string; time?: string; actions?: string; result: 'ok' | 'problem' | 'already_kept' | 'new_site' | 'ignored'; label?: string; message: string; warnings?: string[]; data?: Record<string, string> }[]
-  /** How many of the visits come from the history, which are the first ones. */
-  history?: number
   /** What is worth knowing of the visits, without being wrong (the sites of the trip before not visited on this one…). */
   notes?: string[]
   /** The report of the import, a text file beside the visits of the research project — when they were kept. */
   report?: string | null
   /** The folders and logs made of the collections the visits kept change — when they were kept. */
   field_logs?: FieldLogsResult | null
-  /** Entries of old versions of the Epicollect form (no collection number or site), left out. */
-  ignored: number
   saved: number | null
   /** The sites of the file that are not locations of the research project, with what tells a new site from a misnamed one; their visits are held. */
   new_sites: NewSite[]
   /** What is odd in the visits — their camera or card, what their actions ask, two Revisions in a session… — said, not refused. */
   warnings: string[]
-  /** The warnings that are not about a row of the file — told in the rows otherwise — such as those of the history of visits. */
+  /** The warnings that are not about a row of the file — told in the rows otherwise — */
   loose_warnings?: string[]
 }
 
