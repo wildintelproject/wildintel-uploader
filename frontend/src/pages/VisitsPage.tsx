@@ -331,7 +331,7 @@ export function toStored(v: Visit): StoredVisit {
     // a visit that could not be made looked at no camera
     ...(notVisited ? { camera_id: null, camera_model: null } : {}),
     location_id: v.site.trim(), session: sessionName(v.session)!, date: v.when.slice(0, 10), time: v.when.slice(11, 19), actions: (notVisited ? [] : v.actions) as StoredVisit['actions'],
-    trappers: text(v.trappers), status: notVisited ? NOT_VISITED : asked.status !== 'off' ? text(v.status) : null,
+    trappers: text(v.trappers), camera_status: notVisited ? NOT_VISITED : asked.status !== 'off' ? text(v.status) : null,
     // only what the action asks is kept, whatever was typed before it was changed
     battery_status: batteryStatus(asked.batteries !== 'off' ? v.batteries : ''), card_status: cardStatus(asked.card !== 'off' ? v.card : ''),
     num_photos: asked.photos !== 'off' ? number(v.numPhotos) : null, sd: asked.sdLeft !== 'off' ? text(v.sd) : null, date_time_ok: asked.dateTime !== 'off' ? text(v.dateTimeOK) : null,
@@ -524,7 +524,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   // The visits already kept to the location: the one being registered is the next.
   const [kept, setKept] = useState<StoredVisit[] | null>(null)
   // The visits to the location that were made: one that could not be made does not count — with none made, this is the first time at the site.
-  const made = kept?.filter((w) => !isNotVisited(w.status) && w.actions.length > 0) ?? null
+  const made = kept?.filter((w) => !isNotVisited(w.camera_status) && w.actions.length > 0) ?? null
   // Every visit kept to the research project: where its cameras and its SD cards are is worked out from them.
   const [allVisits, setAllVisits] = useState<StoredVisit[] | null>(null)
   // The locations of the research project: a revision is one visit to each of them, and cannot start before the one before it is finished.
@@ -724,12 +724,14 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   useEffect(() => { forgetCsv(); setCsvName(null); setHistoryName(null); setHistoryXlsx(''); setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({}) }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // What goes after the mapping of a call to read the file: the history, when there is one.
-  const withHistory = historyXlsx ? ([historyXlsx] as const) : ([] as const)
+  // What follows the mapping in the call that reads the file: nothing, the history, or the history and the options (the arguments are those the call has, so none is sent when none is given)
+  type ReadTail = [historyXlsx?: string, options?: ImportCsvOptions]
+  const withHistory: ReadTail = historyXlsx ? [historyXlsx] : []
   // What a custom CSV is asked besides its columns — the entities to create and the defaults —, said only when there is something.
   const defaultsGiven = Object.fromEntries(Object.entries(csvDefaults).filter(([, v]) => v.trim()).map(([f, v]) => [f, v.trim()]))
   const csvOptions: ImportCsvOptions | undefined = (source === 'csv' || source === 'wildintel') && (Object.values(csvCreate).some(Boolean) || Object.keys(defaultsGiven).length > 0)
     ? { ...(Object.values(csvCreate).some(Boolean) ? { create: csvCreate } : {}), ...(Object.keys(defaultsGiven).length > 0 ? { defaults: defaultsGiven } : {}) } : undefined
-  const readTail = csvOptions ? ([historyXlsx || undefined, csvOptions] as const) : withHistory
+  const readTail: ReadTail = csvOptions ? [historyXlsx || undefined, csvOptions] : withHistory
   const csvReading = useRef(0)
   function forgetCsv() {
     csvReading.current++ // what an older file is still being answered is left out
@@ -751,7 +753,8 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
         const found = await api.visitsCsvColumns(text)
         if (reading === csvReading.current) { setCsvColumns(found); setCsvMapping(found.mapping) }
       } else {
-        const result = await api.importVisitsCsv(project.acronym, text, false, csvFormat, ...(csvOptions ? ([undefined, historyXlsx || undefined, csvOptions] as const) : historyXlsx ? ([undefined, historyXlsx] as const) : ([] as const)))
+        const tail: [mapping?: Record<string, string>, historyXlsx?: string, options?: ImportCsvOptions] = csvOptions ? [undefined, historyXlsx || undefined, csvOptions] : historyXlsx ? [undefined, historyXlsx] : []
+        const result = await api.importVisitsCsv(project.acronym, text, false, csvFormat, ...tail)
         if (reading === csvReading.current) setCsvResult(result)
       }
     } catch (e) {
@@ -1269,14 +1272,14 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     <ControlRow id="visit-sd" label="SD card left in the camera" ask={asked.sdLeft}>
                     <Combobox
                       id="visit-sd" options={sdCards.filter((c) => !stolenCard || !visit.actions.includes('Installation') || c.label.toLowerCase() !== stolenCard.toLowerCase()).map((c) => ({ value: c.label, label: [c.label, [c.brand, c.capacity].filter(Boolean).join(' ')].filter(Boolean).join(' — ') }))}
-                      value={visit.sd} onChange={(label) => set('sd', label)} disabled={asked.sdLeft === 'off'} invalid={asked.sdLeft === 'required' && !visit.sd.trim()}
+                      value={visit.sd} onChange={(label) => set('sd', label)} invalid={asked.sdLeft === 'required' && !visit.sd.trim()}
                       placeholder={sdCards.length === 0 ? 'No SD cards yet' : 'Select an SD card…'} clearLabel="Clear SD card"
                     />
                     </ControlRow>
                     {conflicts.sd ? <Notice kind="error" role="alert" className="mt-2">{conflicts.sd}</Notice> : shown('sd') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('sd')}</p>}
-                    {asked.sdLeft !== 'off' && allSdCards.every((c) => !ofProject(c.research_project)) && <p className={hintClass}>The settings have no SD cards yet.</p>}
-                    {asked.sdLeft !== 'off' && sdCards.length === 0 && allSdCards.some((c) => ofProject(c.research_project)) && <p className={hintClass}>No SD card is available: they are archived, in a camera or were collected in this revision.</p>}
-                    {asked.sdLeft !== 'off' && onOpenSettings && (
+                    {allSdCards.every((c) => !ofProject(c.research_project)) && <p className={hintClass}>The settings have no SD cards yet.</p>}
+                    {sdCards.length === 0 && allSdCards.some((c) => ofProject(c.research_project)) && <p className={hintClass}>No SD card is available: they are archived, in a camera or were collected in this revision.</p>}
+                    {onOpenSettings && (
                       <p className={`${hintClass} mt-3`}>
                         The SD card is not here? A new SD card is created in the settings:{' '}
                         <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => onOpenSettings('sdcards')}>go to Settings › SD cards</button>.
@@ -1303,7 +1306,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     </div>
                     <Combobox
                       id="visit-camera" options={cameras.filter((c) => !theft || !visit.actions.includes('Installation') || (cameraKey(c).toLowerCase() !== theft.toLowerCase() && c.label.toLowerCase() !== theft.toLowerCase())).filter((c) => !ofTheSiteCamera || cameraKey(c).toLowerCase() === siteCamera!.camera.toLowerCase() || c.label.toLowerCase() === siteCamera!.camera.toLowerCase()).map((c) => ({ value: c.label, label: c.camera_model ? `${c.label} — ${c.camera_model}` : c.label }))}
-                      value={cameras.find((c) => cameraKey(c) === visit.details.camera_id)?.label ?? ''} onChange={pickCamera} disabled={asked.camera === 'off'} invalid={asked.camera === 'required' && !visit.details.camera_id}
+                      value={cameras.find((c) => cameraKey(c) === visit.details.camera_id)?.label ?? ''} onChange={pickCamera} invalid={asked.camera === 'required' && !visit.details.camera_id}
                       placeholder={cameras.length === 0 ? 'No cameras yet' : 'Select a camera…'} clearLabel="Clear camera"
                     />
                     {conflicts.camera ? <Notice kind="error" role="alert" className="mt-2">{conflicts.camera}</Notice> : shown('camera') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('camera')}</p>}

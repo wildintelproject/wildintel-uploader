@@ -29,7 +29,7 @@ import {
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
   DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, hintClass, statParamsOf, statParamsValid, toggled, fillFromClosedVisit, visitKey, visitLabel,
-  DstSelect, FieldLabel, FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound, fieldworkVisits, revisionOfVisit,
+  FieldLabel, FILLED_FROM_PREVIOUS, LockedDetailsContext, detailsFound, fieldworkVisits, revisionOfVisit,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
 

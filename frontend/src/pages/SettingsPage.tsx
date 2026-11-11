@@ -1526,7 +1526,7 @@ function ProjectsTab({ projects, onChanged, onDetail, owned }: {
     <div>
       <EntityHeader
         heading="Research projects" count={projects.length} noun="research project" onFile={(f) => void importFile(f)} exportDisabled={projects.length === 0} onTrapper={() => setTrapper(true)}
-        onExport={() => download('research_projects.csv', itemsToCsv(projects.map((p) => ({ acronym: p.acronym, name: p.name, description: p.description, keywords: p.keywords, status: p.status ?? 'active' })), PROJECT_FIELDS))}
+        onExport={() => download('research_projects.csv', itemsToCsv<ProjectDraft>(projects.map((p) => ({ acronym: p.acronym, name: p.name, description: p.description, keywords: p.keywords, status: p.status ?? 'active' })) as ProjectDraft[], PROJECT_FIELDS))}
         onAdd={() => setAdding({ ...BLANK_PROJECT })}
       />
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}

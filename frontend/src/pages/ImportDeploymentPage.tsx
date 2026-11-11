@@ -928,7 +928,6 @@ export function MoreDetailsForm({ deployment, errors, onField, cameraExtra, came
     if (next === 'above') onField('camera_depth', null); else onField('camera_height', null)
   }
   const segment = (active: boolean) => `px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${active ? 'bg-indigo-600 text-white shadow' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'}`
-  const pill = (active: boolean) => `px-4 py-2 text-sm rounded-md border transition-colors ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
   const small = (active: boolean) => `px-2.5 py-1 text-xs rounded-md border ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
   const [camera, site, notes] = DETAILS_SECTIONS
   const sum = (parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(' · ')
@@ -1142,8 +1141,8 @@ export function DeploymentFormBody({ deployment, timezone, errors, onField, date
                          onChange={(v) => onField('feature_type', (v || null) as FeatureType | null)} />
             <Field label="Habitat" placeholder="e.g. Mixed temperate low-land forest" hint={DESCRIPTIONS.habitat}
                    value={deployment.habitat ?? ''} onChange={(v) => onField('habitat', v || null)} />
-            {!hideSetupBy && <Field label="Set up by" placeholder="e.g. Jakub Bubnicki" hint={DESCRIPTIONS.setupBy}
-                   value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />}
+            <Field label="Set up by" placeholder="e.g. Jakub Bubnicki" hint={DESCRIPTIONS.setupBy}
+                   value={deployment.setup_by ?? ''} onChange={(v) => onField('setup_by', v || null)} />
           </div>
           <div className="grid grid-cols-2 gap-4 mt-4">
             <CheckboxField label="Bait used" hint={DESCRIPTIONS.baitUse} checked={!!deployment.bait_use} onChange={(v) => onField('bait_use', v || null)} />

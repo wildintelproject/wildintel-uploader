@@ -359,7 +359,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 {DETAILS.flatMap(([k, label]) => {
                                   const photos = v.num_photos
                                   const taken = photos !== null && photos !== undefined ? collectedCard(everyRow, v) : null
-                                  const rows: JSX.Element[] = []
+                                  const rows: ReactNode[] = []
                                   const line = (key: string, name: string, value: string) => {
                                     if (key === 'comments') return <div key={key} className="pt-1 md:col-span-2"><dt className="mb-1 font-medium text-zinc-500 dark:text-zinc-400">{name}</dt><dd className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950 p-2 italic text-zinc-700 dark:text-zinc-300">{value}</dd></div>
                                     const okay = (key === 'battery_status' || key === 'card_status' || key === 'camera_status') && value.toLowerCase() === 'ok'

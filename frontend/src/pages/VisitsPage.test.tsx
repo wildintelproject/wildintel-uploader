@@ -19,7 +19,7 @@ beforeEach(() => {
   mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...EMPTY_RESEARCH_PROJECT, name: 'Tatra', acronym: 'TATR', trapper_pk: 2 }] })
   mockedApi.trapperGetConfig.mockRejectedValue(new Error('no account in this test'))
   mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: {
-      ...APP_SETTINGS.FIELDWORK, trappers: [{ name: 'Ana Pérez', affiliation: 'University of Huelva' }, { name: 'Luis', affiliation: null }],
+      ...APP_SETTINGS.FIELDWORK, trappers: [{ username: 'ana.perez', name: 'Ana Pérez', affiliation: 'University of Huelva' }, { username: 'luis', name: 'Luis', affiliation: null }],
       sd_cards: [{ label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: null, research_project: 'TATR' }, { label: 'B2', brand: null, capacity: null, in_service: null, research_project: 'TATR' }],
       cameras: [{ label: 'P800HG08192031', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', in_service: null, research_project: 'TATR' }, { label: 'X1', camera_id: 'X1', camera_model: null, in_service: null, research_project: 'TATR' }],
     } })
@@ -425,7 +425,7 @@ describe('VisitsPage', () => {
     const card = (label: string, status: 'active' | 'ready' | 'archived') => ({ label, brand: null, capacity: null, in_service: null, research_project: 'TATR', status })
     const camera = (camera_id: string, status: 'active' | 'ready' | 'archived') => ({ label: camera_id, camera_id, camera_model: null, in_service: null, research_project: 'TATR', status })
     mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: {
-      trappers: [{ name: 'Ana Pérez', affiliation: null, status: 'active' }, { name: 'Luis', affiliation: null, status: 'inactive' }],
+      trappers: [{ username: 'ana.perez', name: 'Ana Pérez', affiliation: null, status: 'active' }, { username: 'luis', name: 'Luis', affiliation: null, status: 'inactive' }],
       sd_cards: [card('T1', 'active'), card('T2', 'archived'), card('T3', 'ready')], cameras: [camera('CT', 'active'), camera('CS', 'archived'), camera('CR', 'ready')],
     } })
     await chooseByHand()
@@ -735,7 +735,7 @@ describe('VisitsPage', () => {
     await pickWhere()
     expect(await screen.findByText('The settings have no trappers yet.')).toBeInTheDocument()
 
-    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ name: 'Marta', affiliation: null }] } })
+    mockedApi.getSettings.mockResolvedValue({ ...APP_SETTINGS, FIELDWORK: { ...APP_SETTINGS.FIELDWORK, trappers: [{ username: 'marta', name: 'Marta', affiliation: null }] } })
     view.rerender(<VisitsPage onBack={vi.fn()} onOpenSettings={vi.fn()} settingsOpen={false} />)
 
     await userEvent.click(await screen.findByLabelText('Trappers'))
@@ -1317,7 +1317,7 @@ describe('toStored', () => {
 
     expect(stored).toMatchObject({
       location_id: 'TATR_0001', session: 'R0013', date: '2026-10-02', time: '08:14:00', num_photos: 1620, latitude: 37.1, longitude: -3.4,
-      trappers: 'Ana', setup_by: 'Ana', camera_id: '12', camera_height: 1.2, tags: ['forest edge'], status: null, sd: null,
+      trappers: 'Ana', setup_by: 'Ana', camera_id: '12', camera_height: 1.2, tags: ['forest edge'], camera_status: null, sd: null,
     })
     expect(stored).not.toHaveProperty('deployment_id')
     expect(stored).not.toHaveProperty('start_date')
@@ -1438,7 +1438,7 @@ describe('By hand: do you see the camera?', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Yes, add the visit' }))
 
     await waitFor(() => expect(mockedApi.saveVisit).toHaveBeenCalledTimes(1))
-    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: [], status: 'Not revised', camera_id: null, num_photos: null, sd: null, comments: 'the road was flooded' })
+    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: [], camera_status: 'Not revised', camera_id: null, num_photos: null, sd: null, comments: 'the road was flooded' })
   })
 
   it('archives the location, with the reason, when the camera was stolen and the site is given up', async () => {
@@ -1525,7 +1525,7 @@ describe('By hand: do you see the camera?', () => {
     await addVisit()
 
     await waitFor(() => expect(mockedApi.updateLocalLocation).toHaveBeenCalledWith('TATR', 'TATR_0001', { status_note: 'No cameras left' }))
-    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Revision', 'Desinstallation', 'Archive'], status: 'OK' }) // the state the camera was found in
+    expect(mockedApi.saveVisit.mock.calls[0][1]).toMatchObject({ actions: ['Revision', 'Desinstallation', 'Archive'], camera_status: 'OK' }) // the state the camera was found in
   })
 
   it('takes the camera away and keeps the location active: no Archive, nor a reason asked', async () => {
