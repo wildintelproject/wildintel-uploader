@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { btnOutline, btnPrimary } from '../pages/ImportDeploymentPage'
 import { pageNumbers } from './CheckFailures'
 import { Icon } from './Dashboard'
@@ -168,20 +168,24 @@ export function TableCard({ label, children }: { label: string; children: ReactN
 export interface ToolbarChoice { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; all?: string | null }
 
 /** The search of the table, a choice among a few of what to show (the status, the uploader), and the button that puts all the filters back. */
-export function TableToolbar({ searchLabel, placeholder, text, onText, choice, extra, onReset }: {
+export function TableToolbar({ searchLabel, placeholder, text, onText, choice, extra, trailing, onReset, onSearchFocus, onSearchBlur, onSearchKeyDown }: {
   searchLabel: string; placeholder: string; text: string; onText: (text: string) => void
   /** One or several choices, each a select beside the others. */
   choice?: ToolbarChoice | ToolbarChoice[]
   /** Something more beside the choices, before the reset button — the buttons of the view, for one. */
   extra?: ReactNode
+  /** Something at the right of the reset button — the button that changes the view, for one. */
+  trailing?: ReactNode
   onReset: () => void
+  /** What the search field does when it takes the focus, loses it or has a key pressed — to open a list under it, for one. */
+  onSearchFocus?: () => void; onSearchBlur?: () => void; onSearchKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement>) => void
 }) {
   const choices = choice === undefined ? [] : Array.isArray(choice) ? choice : [choice]
   return (
     <div role="search" className="flex flex-col items-stretch justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-4 md:flex-row md:items-center">
       <div className="relative min-w-[14rem] flex-1">
         <span aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400"><Icon path={<><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></>} className="h-3.5 w-3.5" /></span>
-        <input aria-label={searchLabel} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-white dark:bg-zinc-950 py-2 pl-9 pr-8 text-xs text-zinc-900 dark:text-zinc-200 placeholder-zinc-500 transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder={placeholder} value={text} onChange={(e) => onText(e.target.value)} />
+        <input aria-label={searchLabel} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-white dark:bg-zinc-950 py-2 pl-9 pr-8 text-xs text-zinc-900 dark:text-zinc-200 placeholder-zinc-500 transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder={placeholder} value={text} onChange={(e) => onText(e.target.value)} onFocus={onSearchFocus} onBlur={onSearchBlur} onKeyDown={onSearchKeyDown} />
         {text && (
           <button type="button" aria-label="Clear the search" className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" onClick={() => onText('')}>
             <Icon path={<path d="M6 6l12 12M18 6L6 18" />} className="h-3.5 w-3.5" />
@@ -202,6 +206,7 @@ export function TableToolbar({ searchLabel, placeholder, text, onText, choice, e
           <Icon path={<><path d="M21 12a9 9 0 11-3-6.700" /><path d="M21 4v5h-5" /></>} className="h-3 w-3" />
           <span className="hidden sm:inline">Reset</span>
         </button>
+        {trailing}
       </div>
     </div>
   )

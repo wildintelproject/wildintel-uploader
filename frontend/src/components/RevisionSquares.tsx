@@ -11,14 +11,24 @@ export interface RevisionSquare {
   complete?: boolean
   /** Optional, of the square for all the revisions: how much of them is done, in a badge beside its note. */
   percent?: number
+  /** Optional: the start of the note that is a value (the number of visits), in bold when `variablesInBold` is on. */
+  strong?: string
+}
+
+/** A note with its value in bold and the rest as plain text — or all of it in bold, as the squares have it, when it says no value. */
+function Note({ note, strong, plain, className }: { note: string; strong?: string; plain: boolean; className: string }) {
+  if (!plain || !strong || !note.startsWith(strong)) return <span className={`${className} font-bold`}>{note}</span>
+  return <span className={className}><strong className="font-bold">{strong}</strong>{note.slice(strong.length)}</span>
 }
 
 /** A square for all the revisions and one for each of the five most recent — `revisions` newest first —, with a list on the right for the older ones.
  * The value is the id of the one picked, '' for all of them. */
-export default function RevisionSquares({ all, revisions, value, onPick, label = 'Revision', description }: {
+export default function RevisionSquares({ all, revisions, value, onPick, label = 'Revision', description, variablesInBold = false }: {
   all: Omit<RevisionSquare, 'id'>; revisions: RevisionSquare[]; value: string; onPick: (id: string) => void; label?: string
   /** What a revision is, above the squares: given, the list of the older ones goes at its height, at the right, not beside the squares. */
   description?: ReactNode
+  /** The values of a square — the name of the revision and the number in its note — are in bold, and the words around them are not. */
+  variablesInBold?: boolean
 }) {
   const recent = revisions.slice(0, SHOWN_REVISIONS), older = revisions.slice(SHOWN_REVISIONS)
   const square = 'group rounded-xl border p-3.5 text-left transition-all duration-200'
@@ -43,18 +53,18 @@ export default function RevisionSquares({ all, revisions, value, onPick, label =
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current text-blue-600 dark:text-blue-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l10 5-10 5L2 7z" /><path d="M2 12l10 5 10-5" /><path d="M2 17l10 5 10-5" /></svg>
               </span>
               <span className="mt-2 flex items-baseline justify-between gap-2">
-                <span className="text-sm font-bold tracking-tight text-zinc-900 dark:text-white">{r.note}</span>
+                <Note note={r.note} strong={r.strong} plain={variablesInBold} className="text-sm tracking-tight text-zinc-900 dark:text-white" />
                 {r.percent !== undefined && <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">{r.percent}%</span>}
               </span>
             </>
           ) : (
             <>
               <span className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white">{r.label}</span>
+                <span className={`text-xs ${variablesInBold ? 'font-bold' : 'font-semibold'} text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white`}>{r.label}</span>
                 {'dates' in r && r.dates && <span className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400">{r.dates}</span>}
               </span>
               <span className="mt-2 flex items-baseline justify-between gap-2">
-                <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200">{r.note}</span>
+                <Note note={r.note} strong={r.strong} plain={variablesInBold} className="text-sm text-zinc-800 dark:text-zinc-200" />
                 {r.complete && <svg role="img" aria-label="Complete" viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 fill-none stroke-current text-emerald-600 dark:text-emerald-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" /></svg>}
               </span>
             </>

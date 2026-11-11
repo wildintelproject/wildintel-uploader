@@ -12,3 +12,9 @@ export function formatPeriod(start: string | null | undefined, end: string | nul
   const sameYear = Boolean(end) && start.slice(0, 4) === end!.slice(0, 4)
   return `${formatDay(start, !sameYear)} → ${end ? formatDay(end, true) : '…'}`
 }
+
+/** The days between two days (YYYY-MM-DD, or a date and time) — nothing when either is not one. */
+export function daysBetween(from: string, to: string): number | null {
+  const a = Date.parse(`${from.slice(0, 10)}T00:00:00Z`), b = Date.parse(`${to.slice(0, 10)}T00:00:00Z`)
+  return Number.isNaN(a) || Number.isNaN(b) ? null : Math.round((b - a) / 86400000)
+}

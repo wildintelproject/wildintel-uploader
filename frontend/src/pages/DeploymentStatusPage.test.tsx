@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
 import DeploymentStatusPage from './DeploymentStatusPage'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), fieldDeployments: vi.fn(), getSettings: vi.fn(), collectionPath: vi.fn(), listLocalDeployments: vi.fn(), visitBook: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), fieldDeployments: vi.fn(), getSettings: vi.fn(), collectionPath: vi.fn(), listLocalDeployments: vi.fn(), visitBook: vi.fn(), listVisits: vi.fn() } }))
 const mockedApi = vi.mocked(api)
 
 const deployment = (over: object) => ({
@@ -35,13 +35,28 @@ describe('DeploymentStatusPage', () => {
     expect(mockedApi.fieldDeployments).toHaveBeenCalledWith('TATR')
   })
 
-  it('links the SD card of a deployment to its state in the settings', async () => {
+  it('opens the data of the SD card of a deployment in a panel at the right, with a way on to its state in the settings', async () => {
+    mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'TATR' }, FIELDWORK: { sd_cards: [
+      { label: 'A13', brand: 'SanDisk', capacity: '64 GB', in_service: '2025-01-10', research_project: 'TATR', status: 'active' },
+      { label: 'C7', brand: 'Other', capacity: '8 GB', in_service: null, research_project: 'OTHER' },
+    ] } } as never)
     const onOpenSettings = vi.fn()
     render(<DeploymentStatusPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
 
     const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
     await userEvent.click(within(region).getAllByRole('button', { name: 'Show the state of the SD card A13' })[0])
+    const panel = within(await screen.findByRole('dialog', { name: 'Details of the SD card A13' }))
+    expect(panel.getByRole('heading', { name: 'A13' })).toBeInTheDocument()
+    expect(panel.getByText('SanDisk', { selector: 'dd' })).toBeInTheDocument()
+    expect(onOpenSettings).not.toHaveBeenCalled()                           // it goes to the settings from the panel, not at once
+
+    await userEvent.click(panel.getByRole('button', { name: 'Open it in the settings' }))
     expect(onOpenSettings).toHaveBeenCalledWith('sdcards', 'TATR', 'A13')
+    expect(screen.queryByRole('dialog', { name: /Details of the SD card/ })).not.toBeInTheDocument()
+
+    // one that is not among the SD cards of the research project says so (C7 is of another)
+    await userEvent.click(within(region).getAllByRole('button', { name: 'Show the state of the SD card C7' })[0])
+    expect(screen.getByText(/The SD card C7 is not one of the SD cards of this research project yet/)).toBeInTheDocument()
   })
 
   it('has the deployments as a book: a square for each revision, the status squares of the one picked, and a table', async () => {
@@ -59,14 +74,46 @@ describe('DeploymentStatusPage', () => {
 
     await userEvent.click(within(revisions).getByRole('button', { name: /^R0003/ }))
     const table = within(region).getByRole('table', { name: 'Deployments' })
-    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Details', 'Deployment', 'Where', 'When', 'SD and photos', 'Creation', 'Upload', 'What to do'])
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Details', 'Deployment', 'Visit', 'SD and photos', 'Creation', 'Upload', 'What to do'])
     const first = within(table).getAllByRole('row')[1]
-    expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['', 'R0003-TATR_0001', 'TATR_0001', 'Visit R0003 · TATR_00014 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'SD A13 · 241 photos', 'Created', '', ''])
+    expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['', 'R0003-TATR_0001', 'R0003 · TATR_00014 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'SD A13 · 241 photos', 'Created', '', ''])
     expect(within(first).getByRole('button', { name: 'View the deployment R0003-TATR_0001' })).toBeInTheDocument()
     expect(within(first).getByRole('img', { name: 'Uploaded' })).toBeInTheDocument() // it was uploaded: a tick
 
     await userEvent.click(square(/^Created/))
     expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual(['R0003-TATR_0001', 'R0003-TATR_0002'])   // both have their images stored — what was uploaded is another state
+  })
+
+  it('shows the deployments as labels, with their options, or only the search field that lists what matches as it is written and goes to the one picked', async () => {
+    render(<DeploymentStatusPage onBack={vi.fn()} />)
+    const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
+    expect(within(region).getAllByRole('button', { name: /^Show (the deployments as|only the search)/ }).map((b) => b.getAttribute('aria-label')))
+      .toEqual(['Show the deployments as a table', 'Show the deployments as labels', 'Show only the search field'])
+
+    // labels: the same deployments, six to a page, each with what the row says and what can be done with it
+    await userEvent.click(within(region).getByRole('button', { name: 'Show the deployments as labels' }))
+    expect(within(region).queryByRole('table', { name: 'Deployments' })).not.toBeInTheDocument()
+    const label = within(within(region).getByRole('group', { name: 'Deployments' })).getByRole('article', { name: 'Deployment R0003-TATR_0001' })
+    expect(label).toHaveTextContent('Created')
+    expect(label).toHaveTextContent('R0003 · TATR_0001')
+    expect(label).toHaveTextContent('SD A13 · 241 photos')
+    expect(within(label).getByRole('img', { name: 'Uploaded' })).toBeInTheDocument()
+    await userEvent.click(within(label).getByRole('button', { name: 'View the deployment R0003-TATR_0001' }))      // its details open in a panel at the right
+    const panel = await screen.findByRole('dialog', { name: 'Details of the deployment R0003-TATR_0001' })
+    await userEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+
+    // only the search field: nothing until something is written, then what matches; picking one goes to it in the table
+    await userEvent.click(within(region).getByRole('button', { name: 'Show only the search field' }))
+    expect(within(region).queryByRole('group', { name: 'Deployments' })).not.toBeInTheDocument()
+    const field = within(region).getByLabelText('Filter the deployments')
+    expect(field).toHaveAttribute('placeholder', 'Select a deployment…')
+    await userEvent.click(field)
+    expect(within(region).queryByRole('listbox')).not.toBeInTheDocument()
+    await userEvent.type(field, 'TATR_0003')
+    expect(within(within(region).getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['R0003-TATR_0003 · TATR_0003 · Planned'])
+    await userEvent.click(within(within(region).getByRole('listbox')).getByRole('option'))
+    const table = within(region).getByRole('table', { name: 'Deployments' })
+    expect(within(table).getAllByRole('row').find((r) => r.getAttribute('aria-current') === 'true')).toHaveTextContent('R0003-TATR_0003')
   })
 
   it('opens the legend in a panel from its button in the header, folds away the revisions and the cards, and opens the details with the chevron of the row', async () => {
@@ -98,31 +145,78 @@ describe('DeploymentStatusPage', () => {
     expect(within(table).getByText('R0003-TATR_0002').closest('tr')).toHaveAttribute('aria-current', 'true')
   })
 
-  it('has the visit that started each deployment, and goes to the visit dashboard on it', async () => {
+  it('opens the visit that started a deployment in a panel at the right, with the one that collected its card, and from there goes to the visit dashboard on it', async () => {
+    const stored = (over: object) => ({ location_id: 'TATR_0001', session: 'R0003', date: '2024-09-04', time: '09:00:00', actions: ['Installation'], trappers: 'Ana', camera_id: 'P800', sd: 'A13', num_photos: null, ...over }) as never
+    mockedApi.listVisits.mockResolvedValue({ results: [stored({}), stored({ session: 'R0004', date: '2024-10-12', time: '09:30:00', actions: ['Revision'], num_photos: 241 })] })
     const onShowVisit = vi.fn()
     render(<DeploymentStatusPage onBack={vi.fn()} onShowVisit={onShowVisit} />)
     await screen.findByRole('table', { name: 'Deployments' })
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Show the visit R0003 to TATR_0001' })[0])
-    expect(onShowVisit).toHaveBeenCalledWith({ session: 'R0003', site: 'TATR_0001' })
+    const panel = within(await screen.findByRole('dialog', { name: 'Details of the visit R0003 to TATR_0001' }))
+    expect(mockedApi.listVisits).toHaveBeenCalledWith('TATR', 'TATR_0001')
+    expect(panel.getByText('The visit that left the card')).toBeInTheDocument()
+    expect(panel.getByText('The visit that collected it')).toBeInTheDocument()
+    expect(panel.getByText('241 photos')).toBeInTheDocument()
+    expect(onShowVisit).not.toHaveBeenCalled()
+
+    // a button under each of the two visits goes to it in the dashboard of the visits — to the visit, not to its revision
+    await userEvent.click(panel.getByRole('button', { name: /Open visit R0004/ }))
+    expect(onShowVisit).toHaveBeenCalledWith({ session: 'R0004', site: 'TATR_0001' })
+    expect(screen.queryByRole('dialog', { name: /Details of the visit/ })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Show the visit R0003 to TATR_0001' })[0])
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Details of the visit R0003 to TATR_0001' })).getByRole('button', { name: /Open visit R0003/ }))
+    expect(onShowVisit).toHaveBeenLastCalledWith({ session: 'R0003', site: 'TATR_0001' })
   })
 
-  it('opens what a created deployment says of itself with its View button, and has none for one that is not created', async () => {
+  it('says when the visit of a deployment is not among the visits kept', async () => {
+    mockedApi.listVisits.mockResolvedValue({ results: [] })
+    render(<DeploymentStatusPage onBack={vi.fn()} onShowVisit={vi.fn()} />)
+    await screen.findByRole('table', { name: 'Deployments' })
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Show the visit R0003 to TATR_0001' })[0])
+    expect(await screen.findByRole('alert')).toHaveTextContent('The visit R0003 to TATR_0001 was not found.')
+  })
+
+  it('opens what a created deployment says of itself in a panel at the right with its View button, and has none for one that is not created', async () => {
     mockedApi.collectionPath.mockResolvedValue({ path: '/collections/TATR/R0003', collection: 'R0003' } as never)
-    mockedApi.listLocalDeployments.mockResolvedValue({ results: [{ deployment_id: 'R0003-TATR_0002', start_date: '2024-09-04T09:00:00Z', camera_id: 'P800', camera_height: 1.2, bait_use: true, tags: ['forest edge'] }] } as never)
+    mockedApi.listLocalDeployments.mockResolvedValue({ results: [{
+      deployment_id: 'R0003-TATR_0002', location_id: 'TATR_0002', location_name: 'Ridge', latitude: 37.0123, longitude: -6.4412, coordinate_uncertainty: 5,
+      start_date: '2024-09-04T09:00:00Z', end_date: '2024-10-12T09:30:00Z', setup_by: 'Setup: Ana Pérez | Retrieval: Luis Gómez', camera_id: 'P800', camera_model: 'GardePro', camera_interval: 5,
+      detection_distance: 10, camera_height: 1.2, camera_tilt: 0, camera_heading: 90, feature_type: 'trailHiking', habitat: 'Holm oak', bait_use: false, comments: 'Setup: First camera | SD card: SD 1',
+    }] } as never)
     render(<DeploymentStatusPage onBack={vi.fn()} />)
     await screen.findByRole('table', { name: 'Deployments' })
 
     expect(screen.queryByRole('button', { name: 'View the deployment R0003-TATR_0003' })).not.toBeInTheDocument() // not created: nothing to see
     await userEvent.click(screen.getByRole('button', { name: 'View the deployment R0003-TATR_0002' }))
-    const details = await screen.findByLabelText('Details of the deployment R0003-TATR_0002', { selector: 'dl' })
+    const dialog = await screen.findByRole('dialog', { name: 'Details of the deployment R0003-TATR_0002' })
+    const panel = within(dialog)
+    expect(await panel.findByRole('region', { name: 'Location' })).toBeInTheDocument()
     expect(mockedApi.collectionPath).toHaveBeenCalledWith('TATR', 'R0003-TATR_0002')
     expect(mockedApi.listLocalDeployments).toHaveBeenCalledWith('/collections/TATR/R0003')
-    expect(details).toHaveTextContent('Camera height (m)1.2')
-    expect(details).toHaveTextContent('Bait useyes')
-    expect(details).toHaveTextContent('forest edge')
-    await userEvent.click(screen.getByRole('button', { name: 'View the deployment R0003-TATR_0002' }))
-    expect(screen.queryByLabelText('Details of the deployment R0003-TATR_0002', { selector: 'dl' })).not.toBeInTheDocument()
+    expect(panel.getByRole('heading', { name: 'R0003-TATR_0002' })).toBeInTheDocument()
+    expect(panel.getByText('Created')).toBeInTheDocument()
+    expect(panel.getByText('Not uploaded')).toBeInTheDocument()
+    expect(within(panel.getByRole('region', { name: 'Location' })).getByText('37.0123, -6.4412')).toBeInTheDocument()
+    expect(within(panel.getByRole('region', { name: 'Location' })).getByText('± 5 m')).toBeInTheDocument()
+    const period = within(panel.getByRole('region', { name: 'Period' }))
+    expect(period.getByText('2024-09-04T09:00:00Z')).toBeInTheDocument()                 // as it is kept: the offset says the timezone
+    expect(period.getByText('Ana Pérez')).toBeInTheDocument()                             // the mix of the two visits, told as who set it up…
+    expect(period.getByText('Luis Gómez')).toBeInTheDocument()                            // …and who retrieved it
+    expect(period.getByText('38 days in the field')).toBeInTheDocument()
+    expect(within(panel.getByRole('region', { name: 'Camera' })).getByText('GardePro')).toBeInTheDocument()
+    expect(within(panel.getByRole('region', { name: 'Placement' })).getByText('90° (E)')).toBeInTheDocument()
+    expect(within(panel.getByRole('region', { name: 'Site' })).getByText('Trail (hiking)')).toBeInTheDocument()
+    expect(within(panel.getByRole('region', { name: 'Site' })).getByText('No')).toBeInTheDocument()
+    expect(within(panel.getByRole('region', { name: 'Notes' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Setup: First camera', 'SD card: SD 1'])
+    await userEvent.click(panel.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog', { name: /Details of the deployment/ })).not.toBeInTheDocument()
+
+    // the chevron of the row still opens its details in the table
+    await userEvent.click(screen.getByRole('button', { name: 'Show the details of the deployment R0003-TATR_0002' }))
+    expect(await screen.findByLabelText('Details of the deployment R0003-TATR_0002', { selector: 'dl' })).toHaveTextContent('Camera height (m)1.2')
   })
 
   it('lists the deployment of a stolen camera as Not created — nothing to create or upload — and counts it in what was planned', async () => {
@@ -145,7 +239,7 @@ describe('DeploymentStatusPage', () => {
     expect(within(stolen).queryByRole('button', { name: /View the deployment|Upload the deployment/ })).not.toBeInTheDocument()
   })
 
-  it('links the location, the visit and the SD card in the same style, and goes to the deployment before and after at the same site', async () => {
+  it('links the visit and the SD card in the same style, and goes to the deployment before and after at the same site', async () => {
     const onOpenSettings = vi.fn()
     mockedApi.fieldDeployments.mockResolvedValue({ results: [
       deployment({ deployment_id: 'R0001-TATR_0001', collection: 'R0001', start_session: 'R0001' }),
@@ -157,9 +251,8 @@ describe('DeploymentStatusPage', () => {
     const rowOf = (id: string) => within(table).getAllByRole('row').find((r) => within(r).queryByRole('button', { name: new RegExp(`^View the deployment ${id}`) }))!
 
     const first = rowOf('R0001-TATR_0001')
-    await userEvent.click(within(first).getByRole('button', { name: 'TATR_0001' }))
-    expect(onOpenSettings).toHaveBeenCalledWith('locations', 'TATR', 'TATR_0001')
-    for (const name of ['TATR_0001', 'Show the visit R0001 to TATR_0001', 'Show the state of the SD card A13']) {
+    expect(within(table).queryByRole('columnheader', { name: 'Location' })).not.toBeInTheDocument()   // the site is told in the visit
+    for (const name of ['Show the visit R0001 to TATR_0001', 'Show the state of the SD card A13']) {
       expect(within(first).getByRole('button', { name })).toHaveClass('underline', 'decoration-dotted')
     }
 
@@ -183,8 +276,8 @@ describe('DeploymentStatusPage', () => {
     ] })
     render(<DeploymentStatusPage onBack={vi.fn()} onUpload={onUpload} onShowUploads={onShowUploads} />)
     const table = await screen.findByRole('table', { name: 'Deployments' })
-    const rowOf = (site: string) => within(table).getAllByRole('row').find((r) => within(r).queryAllByRole('cell')[2]?.textContent === site)!
-    const uploadCell = (site: string) => within(rowOf(site)).getAllByRole('cell')[6]
+    const rowOf = (site: string) => within(table).getAllByRole('row').find((r) => within(r).queryAllByRole('cell')[1]?.textContent?.endsWith(`-${site}`))!
+    const uploadCell = (site: string) => within(rowOf(site)).getAllByRole('cell')[5]
 
     // uploaded: a tick that goes to the uploads of the deployment
     await userEvent.click(within(uploadCell('TATR_0001')).getByRole('button', { name: 'Show the uploads of the deployment R0003-TATR_0001' }))

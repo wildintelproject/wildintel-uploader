@@ -1,13 +1,18 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatDay } from '../dateFormat'
-import type { DeploymentFields, DeploymentUploadState, FieldDeployment } from '../types'
+import type { DeploymentFields, DeploymentUploadState, FieldDeployment, SdCard, StoredVisit } from '../types'
 import { Icon, StateCard } from './Dashboard'
 import { ActiveFilters, ChevronCell, DetailLine, DetailsRow, HELP_ICONS, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from './DashboardParts'
 import IconButton, { ICON_PATHS } from './IconButton'
 import LinkButton from './LinkButton'
+import { Glyph, ViewSwitch, type View } from './ViewSwitch'
+import DeploymentDetails from './DeploymentDetails'
+import SdCardDetails from './SdCardDetails'
+import VisitDetails from './VisitDetails'
 
-/** How many deployments a page has. */
+/** How many deployments a page has: ten rows of the table, six labels. */
 const PER_PAGE = 10
+const LABELS = 6
 
 /** Where a deployment is in its life — which says nothing of the camera, that is the visit's, nor of its uploads, which are their own: planned (a card was left, so its deployment is to be made), created (its images are stored) or not created (the camera was stolen, the card is gone: it will not be made — as a visit that could not be made). */
 export type Filter = '' | 'planned' | 'created' | 'not_created'
@@ -31,7 +36,7 @@ const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
-export default function FieldDeployments({ deployments: every, onShowSd, onShowLocation, onShowUploads, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload, onCreate, helpOpen = false, onCloseHelp }: {
+export default function FieldDeployments({ deployments: every, onShowSd, onShowLocation, onShowUploads, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload, onCreate, loadVisits, sdCards, helpOpen = false, onCloseHelp }: {
   /** The help and the legend are open: the panel that says them is this component's, as it knows the states. */
   helpOpen?: boolean
   onCloseHelp?: () => void
@@ -48,6 +53,10 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   onUpload?: (deployment: FieldDeployment) => void
   /** Goes to create the deployment — to import its images — of one that is planned and whose card was already collected. */
   onCreate?: (deployment: FieldDeployment) => void
+  /** Reads the visit that left the camera of a deployment, and the one that collected its card when there is one: the link of the visit opens them in a panel. */
+  loadVisits?: (deployment: FieldDeployment) => Promise<{ visit: StoredVisit; end?: StoredVisit | null } | null>
+  /** The SD cards of the research project: the link of a card opens its data in a panel — with a way on to the settings, by `onShowSd` — instead of going to the settings at once. */
+  sdCards?: SdCard[]
 }) {
   // Every card that was left is a deployment to make; the ones whose camera was stolen will not be made (Not created).
   const deployments = every
@@ -59,6 +68,11 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   const [filter, setFilter] = useState<Filter>(initialFilter)
   const [page, setPage] = useState(1)
   const [text, setText] = useState('')
+  // How they are shown: the table, labels, or only the search field — which lists what matches as it is written, and picking one goes to it in the table.
+  const [view, setView] = useState<View>('table')
+  const [listOpen, setListOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const perPage = view === 'labels' ? LABELS : PER_PAGE
   // The revisions and the status cards fold away, to leave the table alone.
   const [revisionsOpen, setRevisionsOpen] = useState(true)
   const [metricsOpen, setMetricsOpen] = useState(true)
@@ -71,19 +85,39 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
     .sort((x, y) => (step < 0 ? y.collection.localeCompare(x.collection) : x.collection.localeCompare(y.collection)))[0]
   // the deployment whose details are open
   const [opened, setOpened] = useState<string | null>(null)
+  // the visit whose panel is open, and why one could not be shown
+  const [visitPanel, setVisitPanel] = useState<{ visit: StoredVisit; end?: StoredVisit | null } | null>(null)
+  const [visitError, setVisitError] = useState<string | null>(null)
+  // the SD card whose panel is open
+  const [cardPanel, setCardPanel] = useState<string | null>(null)
+  async function showVisit(d: FieldDeployment) {
+    setVisitError(null)
+    try {
+      const found = await loadVisits!(d)
+      if (found) setVisitPanel(found)
+      else setVisitError(`The visit ${d.start_session ?? ''} to ${d.site} was not found.`)
+    } catch (e) { setVisitError(e instanceof Error ? e.message : 'Could not read the visit.') }
+  }
   const [details, setDetails] = useState<Record<string, DeploymentFields | null | 'error'>>({})
+  // what a deployment says of itself is read once, for the row that opens it and for the panel of its eye
+  function read(id: string) {
+    if (loadDetails && !(id in details)) loadDetails(id).then((fields) => setDetails((d) => ({ ...d, [id]: fields }))).catch(() => setDetails((d) => ({ ...d, [id]: 'error' })))
+  }
   function toggle(id: string) {
     if (opened === id) { setOpened(null); return }
     setOpened(id)
-    if (loadDetails && !(id in details)) loadDetails(id).then((fields) => setDetails((d) => ({ ...d, [id]: fields }))).catch(() => setDetails((d) => ({ ...d, [id]: 'error' })))
+    read(id)
   }
+  // the deployment whose panel is open
+  const [panelId, setPanelId] = useState<string | null>(null)
+  const showPanel = (id: string) => { setPanelId(id); read(id) }
   const revisions = [...new Set(deployments.map((d) => d.collection))].sort((a, b) => b.localeCompare(a))
   const inRevision = revision ? deployments.filter((d) => d.collection === revision) : deployments
   const needle = text.trim().toLowerCase()
   const shown = inRevision.filter((d) => matches(d, filter)).filter((d) => !needle || `${d.deployment_id} ${d.site} ${d.collection} ${d.card ?? ''} ${d.camera_id ?? ''} ${phaseOf(d)}`.replace('_', ' ').toLowerCase().includes(needle))
-  const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE))
+  const pages = Math.max(1, Math.ceil(shown.length / perPage))
   const current = Math.min(page, pages)
-  const onPage = shown.slice((current - 1) * PER_PAGE, current * PER_PAGE)
+  const onPage = shown.slice((current - 1) * perPage, current * perPage)
   const count = (f: Filter) => inRevision.filter((d) => matches(d, f)).length
 
   // the one a link of the visit book goes to is brought into view, on its revision and on its page
@@ -94,7 +128,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
     if (!target) return
     setRevision(target.collection); setFilter(''); setText('')
     const position = deployments.filter((d) => d.collection === target.collection).findIndex((d) => d.deployment_id === focus)
-    setPage(Math.floor(position / PER_PAGE) + 1)
+    setPage(Math.floor(position / perPage) + 1)
   }, [focus, deployments])
   useEffect(() => { marked.current?.scrollIntoView?.({ block: 'center' }) })
 
@@ -105,6 +139,69 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
     { filter: 'created', label: 'Created', note: 'Images stored', tone: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', icon: <Icon path={<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />} className="h-5 w-5" /> },
     { filter: 'not_created', label: 'Not created', note: 'Camera stolen: the card is gone', tone: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>} className="h-5 w-5" /> },
   ]
+
+
+  const phaseLabel: Record<Exclude<Filter, ''>, string> = { planned: 'Planned', created: 'Created', not_created: 'Not created' }
+  // Picking one from the list of the search goes to it in the table: its revision and its page, marked.
+  const goTo = (d: FieldDeployment) => { setJump(d.deployment_id); setView('table'); setListOpen(false); setText('') }
+
+  // What a deployment says of itself, as the table and the labels both show it.
+  const creation = (d: FieldDeployment) => (
+    phaseOf(d) === 'not_created'
+                          ? <span title="The camera was stolen: the card is gone, so the deployment will not be created" className="rounded-full px-2.5 py-1 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Not created</span>
+                          : phaseOf(d) === 'planned'
+                          ? <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Planned</span>
+                          : <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Created</span>
+  )
+  const uploadMark = (d: FieldDeployment) => (
+    phaseOf(d) === 'created' ? (() => {
+                          const states = statesOf(d)
+                          const tip = states.map((u) => `${DESTINATION_NAME[u.destination] ?? u.destination}: ${STATE_NAME[u.state] ?? u.state}`).join(' · ')
+                          const tick = <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></svg>
+                          return states.some((u) => u.state === 'done')
+                            ? (onShowUploads
+                              ? <button type="button" title={`Uploaded (${tip}). Show its uploads`} aria-label={`Show the uploads of the deployment ${d.deployment_id}`} onClick={() => onShowUploads(d.deployment_id)}
+                                        className="inline-flex rounded-full text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{tick}</button>
+                              : <span role="img" title={`Uploaded (${tip})`} aria-label="Uploaded" className="inline-flex text-emerald-600 dark:text-emerald-400">{tick}</span>)
+                            : <span role="img" title={`Not uploaded (${tip})`} aria-label="Not uploaded" className="inline-flex text-zinc-400 dark:text-zinc-500">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
+                              </span>
+                        })() : <span className="text-zinc-400">—</span>
+  )
+  const rowOptions = (d: FieldDeployment) => (
+    // only what can be done with the row: the options that do not apply to it are not there
+                        <RowOptions label={`Options of the deployment ${d.deployment_id}`}>
+                          {(() => {
+                            const before = neighbour(d, -1)
+                            return before && <IconButton compact label={`Show the previous deployment of ${d.site} (${before.collection})`} title={`The previous revision of this location: ${before.collection}`} onClick={() => setJump(before.deployment_id)} path={ICON_PATHS.before} />
+                          })()}
+                          {phaseOf(d) === 'created' && (
+                            <IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" onClick={() => showPanel(d.deployment_id)} path={ICON_PATHS.view} />
+                          )}
+                          {(() => {
+                            const after = neighbour(d, 1)
+                            return after && <IconButton compact label={`Show the next deployment of ${d.site} (${after.collection})`} title={`The next revision of this location: ${after.collection}`} onClick={() => setJump(after.deployment_id)} path={ICON_PATHS.after} />
+                          })()}
+                          {/* the card was collected and the images are not stored: the deployment can be made now */}
+                          {phaseOf(d) === 'planned' && d.status === 'closed' && onCreate && (
+                            <IconButton compact label={`Create the deployment ${d.deployment_id}`} title="Create the deployment" onClick={() => onCreate(d)}
+                                        path={<><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><circle cx="12" cy="13" r="3.5" /></>} />
+                          )}
+                          {phaseOf(d) === 'created' && onUpload && statesOf(d).some((u) => u.destination === 'trapper' && u.state !== 'done') && (
+                            <IconButton compact label={`Upload the deployment ${d.deployment_id}`} title={statesOf(d).some((u) => u.state === 'failed') ? 'Upload the images again' : 'Upload the images'} onClick={() => onUpload(d)} path={ICON_PATHS.upload} />
+                          )}
+                        </RowOptions>
+  )
+  const detailList = (d: FieldDeployment) => (
+    details[d.deployment_id] === undefined ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployment…</p>
+                          : details[d.deployment_id] === 'error' || details[d.deployment_id] === null ? <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">The details of this deployment could not be read from the collections folder.</p>
+                          : (
+                            <dl aria-label={`Details of the deployment ${d.deployment_id}`} className="grid grid-cols-1 gap-x-8 gap-y-2 text-xs md:grid-cols-2">
+                              {DEPLOYMENT_DETAILS.filter(([k]) => { const value = (details[d.deployment_id] as DeploymentFields)[k]; return value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0) })
+                                .map(([k, label]) => <DetailLine key={k} name={label} kind={k === 'comments' ? 'plain' : 'mono'}>{shownValue((details[d.deployment_id] as DeploymentFields)[k])}</DetailLine>)}
+                            </dl>
+                          )
+  )
 
   return (
     <div aria-label="Deployments the visits say" role="region">
@@ -124,16 +221,38 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
             ))}
           </MetricsSection>
 
+          {visitError && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{visitError}</p>}
           <TableCard label="Deployments table">
-            <TableToolbar searchLabel="Filter the deployments" placeholder="Search by deployment, site, card, camera…" text={text} onText={(t) => { setText(t); setPage(1) }}
+            <TableToolbar searchLabel="Filter the deployments" placeholder={view === 'search' ? 'Select a deployment…' : 'Search by deployment, location, SD card, camera…'} text={text} onText={(t) => { setText(t); setPage(1); if (view === 'search') { setListOpen(true); setActive(0) } }}
               choice={{ label: 'Status', value: filter, onChange: (v) => { setFilter(v as Filter); setPage(1) }, options: SQUARES.map((q) => ({ value: q.filter, label: q.label })) }}
-              onReset={() => { setText(''); setFilter(''); setRevision(''); setPage(1) }} />
-            <ActiveFilters filters={[{ label: `Revision: ${revision || 'All'}`, tone: 'blue' }, { label: `Status: ${filter ? SQUARES.find((q) => q.filter === filter)?.label : 'All'}`, tone: 'green' }]} summary={`${shown.length} of ${deployments.length} deployments match`} />
+              trailing={<ViewSwitch view={view} items="deployments" onChange={(v) => { setView(v); setPage(1); setListOpen(false) }} />}
+              onSearchBlur={() => setListOpen(false)}
+              onSearchKeyDown={(e) => {
+                if (view !== 'search') return
+                if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, shown.length - 1)) }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
+                else if (e.key === 'Enter' && listOpen && needle && shown[active]) { e.preventDefault(); goTo(shown[active]) }
+                else if (e.key === 'Escape') setListOpen(false)
+              }}
+              onReset={() => { setText(''); setFilter(''); setRevision(''); setPage(1); setListOpen(false) }} />
+            {view === 'search' && listOpen && needle !== '' && (
+              <ul role="listbox" aria-label="Deployments" className="max-h-64 overflow-y-auto border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-1 text-sm">
+                {shown.map((d, i) => (
+                  <li key={d.deployment_id} role="option" aria-selected={i === active} onMouseDown={(e) => e.preventDefault()} onClick={() => goTo(d)}
+                      className={`cursor-pointer px-4 py-2 font-mono text-xs text-zinc-800 dark:text-zinc-200 ${i === active ? 'bg-blue-50 dark:bg-zinc-800' : ''}`}>
+                    {d.deployment_id} · {d.site} · {phaseLabel[phaseOf(d)]}
+                  </li>
+                ))}
+                {shown.length === 0 && <li className="px-4 py-2 text-xs text-zinc-500 dark:text-zinc-400">No deployment matches.</li>}
+              </ul>
+            )}
+            {view !== 'search' && (<ActiveFilters filters={[{ label: `Revision: ${revision || 'All'}`, tone: 'blue' }, { label: `Status: ${filter ? SQUARES.find((q) => q.filter === filter)?.label : 'All'}`, tone: 'green' }]} summary={`${shown.length} of ${deployments.length} deployments match`} />)}
 
+            {view === 'table' && (
             <div className="overflow-x-auto">
               <table className={TABLE.table} aria-label="Deployments">
                 <thead className={TABLE.head}>
-                  <tr><th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>{['Deployment', 'Where', 'When', 'SD and photos', 'Creation', 'Upload'].map((h) => <th key={h} scope="col" className={TABLE.th}>{h}</th>)}<th scope="col" className="px-4 py-3"><span className="sr-only">What to do</span></th></tr>
+                  <tr><th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>{['Deployment', 'Visit', 'SD and photos', 'Creation', 'Upload'].map((h) => <th key={h} scope="col" className={TABLE.th}>{h}</th>)}<th scope="col" className="px-4 py-3"><span className="sr-only">What to do</span></th></tr>
                 </thead>
                 <tbody className={TABLE.body}>
                   {onPage.map((d) => (
@@ -141,93 +260,100 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                     <tr ref={d.deployment_id === focus ? marked : undefined} aria-current={d.deployment_id === focus ? 'true' : undefined} className={`${TABLE.row(opened === d.deployment_id)} ${d.deployment_id === focus ? 'bg-blue-50 dark:bg-blue-950/40' : ''}`}>
                       <ChevronCell open={opened === d.deployment_id} available={phaseOf(d) === 'created'} label={`the details of the deployment ${d.deployment_id}`} onToggle={() => toggle(d.deployment_id)} />
                       <td className={`${TABLE.cell} font-mono text-xs font-semibold`}>{d.deployment_id}</td>
-                      <td className={`${TABLE.cell} font-mono text-xs`}>
-                        {onShowLocation
-                          ? <LinkButton title={`Show the details of the location ${d.site}`} onClick={() => onShowLocation(d.site)}>{d.site}</LinkButton>
-                          : d.site}
-                      </td>
                       <td className={TABLE.cell}>
-                        {d.start_session && (onShowVisit
-                          ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => onShowVisit({ session: d.start_session!, site: d.site })}>Visit {d.start_session} · {d.site}</LinkButton>
-                          : <span className="block text-xs font-semibold">Visit {d.start_session} · {d.site}</span>)}
+                        {d.start_session && (onShowVisit || loadVisits
+                          ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => (loadVisits ? void showVisit(d) : onShowVisit?.({ session: d.start_session!, site: d.site }))}>{d.start_session} · {d.site}</LinkButton>
+                          : <span className="block text-xs font-semibold">{d.start_session} · {d.site}</span>)}
                         <span className="block font-mono text-xs">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
                       </td>
                       <td className={`${TABLE.cell} text-xs text-zinc-600 dark:text-zinc-400`}>
-                        {d.card && (onShowSd
-                          ? <LinkButton className="font-semibold" aria-label={`Show the state of the SD card ${d.card}`} onClick={() => onShowSd(d.card!)}>SD {d.card}</LinkButton>
+                        {d.card && (onShowSd || sdCards
+                          ? <LinkButton className="font-semibold" aria-label={`Show the state of the SD card ${d.card}`} onClick={() => (sdCards ? setCardPanel(d.card!) : onShowSd?.(d.card!))}>SD {d.card}</LinkButton>
                           : <>SD {d.card}</>)}
                         {d.card && d.photos_counted != null && ' · '}{d.photos_counted != null && `${d.photos_counted} photos`}
                       </td>
                       <td className={TABLE.cell}>
-                        {phaseOf(d) === 'not_created'
-                          ? <span title="The camera was stolen: the card is gone, so the deployment will not be created" className="rounded-full px-2.5 py-1 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Not created</span>
-                          : phaseOf(d) === 'planned'
-                          ? <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">Planned</span>
-                          : <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Created</span>}
+                        {creation(d)}
                       </td>
                       <td className={TABLE.cell}>
-                        {phaseOf(d) === 'created' ? (() => {
-                          const states = statesOf(d)
-                          const tip = states.map((u) => `${DESTINATION_NAME[u.destination] ?? u.destination}: ${STATE_NAME[u.state] ?? u.state}`).join(' · ')
-                          const tick = <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></svg>
-                          return states.some((u) => u.state === 'done')
-                            ? (onShowUploads
-                              ? <button type="button" title={`Uploaded (${tip}). Show its uploads`} aria-label={`Show the uploads of the deployment ${d.deployment_id}`} onClick={() => onShowUploads(d.deployment_id)}
-                                        className="inline-flex rounded-full text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{tick}</button>
-                              : <span role="img" title={`Uploaded (${tip})`} aria-label="Uploaded" className="inline-flex text-emerald-600 dark:text-emerald-400">{tick}</span>)
-                            : <span role="img" title={`Not uploaded (${tip})`} aria-label="Not uploaded" className="inline-flex text-zinc-400 dark:text-zinc-500">
-                                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
-                              </span>
-                        })() : <span className="text-zinc-400">—</span>}
+                        {uploadMark(d)}
                       </td>
                       <td className={`${TABLE.cell} whitespace-nowrap`}>
-                        {/* only what can be done with the row: the options that do not apply to it are not there */}
-                        <RowOptions label={`Options of the deployment ${d.deployment_id}`}>
-                          {(() => {
-                            const before = neighbour(d, -1)
-                            return before && <IconButton compact label={`Show the previous deployment of ${d.site} (${before.collection})`} title={`The previous revision of this location: ${before.collection}`} onClick={() => setJump(before.deployment_id)} path={ICON_PATHS.before} />
-                          })()}
-                          {phaseOf(d) === 'created' && (
-                            <IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" expanded={opened === d.deployment_id} onClick={() => toggle(d.deployment_id)} path={ICON_PATHS.view} />
-                          )}
-                          {(() => {
-                            const after = neighbour(d, 1)
-                            return after && <IconButton compact label={`Show the next deployment of ${d.site} (${after.collection})`} title={`The next revision of this location: ${after.collection}`} onClick={() => setJump(after.deployment_id)} path={ICON_PATHS.after} />
-                          })()}
-                          {/* the card was collected and the images are not stored: the deployment can be made now */}
-                          {phaseOf(d) === 'planned' && d.status === 'closed' && onCreate && (
-                            <IconButton compact label={`Create the deployment ${d.deployment_id}`} title="Create the deployment" onClick={() => onCreate(d)}
-                                        path={<><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><circle cx="12" cy="13" r="3.5" /></>} />
-                          )}
-                          {phaseOf(d) === 'created' && onUpload && statesOf(d).some((u) => u.destination === 'trapper' && u.state !== 'done') && (
-                            <IconButton compact label={`Upload the deployment ${d.deployment_id}`} title={statesOf(d).some((u) => u.state === 'failed') ? 'Upload the images again' : 'Upload the images'} onClick={() => onUpload(d)} path={ICON_PATHS.upload} />
-                          )}
-                        </RowOptions>
+                        {rowOptions(d)}
                       </td>
                     </tr>
                     {opened === d.deployment_id && (
-                      <DetailsRow colSpan={8}>
-                        {details[d.deployment_id] === undefined ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployment…</p>
-                          : details[d.deployment_id] === 'error' || details[d.deployment_id] === null ? <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">The details of this deployment could not be read from the collections folder.</p>
-                          : (
-                            <dl aria-label={`Details of the deployment ${d.deployment_id}`} className="grid grid-cols-1 gap-x-8 gap-y-2 text-xs md:grid-cols-2">
-                              {DEPLOYMENT_DETAILS.filter(([k]) => { const value = (details[d.deployment_id] as DeploymentFields)[k]; return value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0) })
-                                .map(([k, label]) => <DetailLine key={k} name={label} kind={k === 'comments' ? 'plain' : 'mono'}>{shownValue((details[d.deployment_id] as DeploymentFields)[k])}</DetailLine>)}
-                            </dl>
-                          )}
+                      <DetailsRow colSpan={7}>
+                        {detailList(d)}
                       </DetailsRow>
                     )}
                     </Fragment>
                   ))}
-                  {shown.length === 0 && <tr><td colSpan={8} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">No deployment matches.</td></tr>}
+                  {shown.length === 0 && <tr><td colSpan={7} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">No deployment matches.</td></tr>}
                 </tbody>
               </table>
             </div>
+            )}
+            {view === 'labels' && (
+              <div role="group" aria-label="Deployments" className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+                {onPage.map((d) => (
+                  <article key={d.deployment_id} aria-label={`Deployment ${d.deployment_id}`} aria-current={d.deployment_id === focus ? 'true' : undefined}
+                           className={`rounded-2xl border p-5 ${d.deployment_id === focus ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-mono text-base font-bold text-zinc-900 dark:text-white">{d.deployment_id}</span>
+                      {creation(d)}
+                    </div>
+                    <div className="my-3 border-t border-zinc-200 dark:border-zinc-700/70" />
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span className="text-blue-500"><Glyph><path d="M12 21s-6-5.200-6-10a6 6 0 1112 0c0 4.800-6 10-6 10z" /><circle cx="12" cy="11" r="2.200" /></Glyph></span>
+                        {onShowLocation
+                          ? <LinkButton title={`Show the details of the location ${d.site}`} onClick={() => onShowLocation(d.site)}>{d.site}</LinkButton>
+                          : d.site}
+                      </div>
+                      <div>
+                        {d.start_session && (onShowVisit || loadVisits
+                          ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => (loadVisits ? void showVisit(d) : onShowVisit?.({ session: d.start_session!, site: d.site }))}>{d.start_session} · {d.site}</LinkButton>
+                          : <span className="block text-xs font-semibold">{d.start_session} · {d.site}</span>)}
+                        <span className="block font-mono text-xs text-zinc-600 dark:text-zinc-400">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-xs text-zinc-600 dark:text-zinc-400">
+                        <span>
+                          {d.card && (onShowSd || sdCards
+                            ? <LinkButton className="font-semibold" aria-label={`Show the state of the SD card ${d.card}`} onClick={() => (sdCards ? setCardPanel(d.card!) : onShowSd?.(d.card!))}>SD {d.card}</LinkButton>
+                            : <>SD {d.card}</>)}
+                          {d.card && d.photos_counted != null && ' · '}{d.photos_counted != null && `${d.photos_counted} photos`}
+                        </span>
+                        <span className="flex items-center gap-2"><span className="text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Upload</span>{uploadMark(d)}</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex justify-end">{rowOptions(d)}</div>
+                    {opened === d.deployment_id && <div className="mt-3 border-t border-zinc-200 dark:border-zinc-700/70 pt-3">{detailList(d)}</div>}
+                  </article>
+                ))}
+                {shown.length === 0 && <p className="col-span-full py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">No deployment matches.</p>}
+              </div>
+            )}
 
-            {shown.length > 0 && (
-              <TableFooter from={(current - 1) * PER_PAGE + 1} to={Math.min(current * PER_PAGE, shown.length)} total={shown.length} noun="deployments" page={current} pages={pages} onPage={setPage} />
+            {view !== 'search' && shown.length > 0 && (
+              <TableFooter from={(current - 1) * perPage + 1} to={Math.min(current * perPage, shown.length)} total={shown.length} noun="deployments" page={current} pages={pages} onPage={setPage} />
             )}
           </TableCard>
+
+          {panelId && (() => {
+            const shown = deployments.find((x) => x.deployment_id === panelId)
+            return shown && <DeploymentDetails deployment={shown} fields={details[panelId]} creation={phaseOf(shown)} uploaded={statesOf(shown).some((u) => u.state === 'done')} onClose={() => setPanelId(null)} />
+          })()}
+
+          {visitPanel && (
+            <VisitDetails closed={visitPanel} onClose={() => setVisitPanel(null)}
+              onOpenVisit={onShowVisit ? (session) => { setVisitPanel(null); onShowVisit({ session, site: visitPanel.visit.location_id }) } : undefined} />
+          )}
+
+          {cardPanel && (
+            <SdCardDetails label={cardPanel} card={sdCards?.find((c) => c.label.toLowerCase() === cardPanel.toLowerCase())} onClose={() => setCardPanel(null)}
+              onOpenInSettings={onShowSd ? () => { setCardPanel(null); onShowSd(cardPanel) } : undefined} />
+          )}
 
           {helpOpen && onCloseHelp && (
             <HelpDrawer onClose={onCloseHelp}>

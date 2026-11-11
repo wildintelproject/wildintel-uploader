@@ -5,7 +5,7 @@ import { DashboardHeader, HelpButton } from '../components/DashboardParts'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import FieldDeployments from '../components/FieldDeployments'
 import { readDeployment } from '../deploymentDetails'
-import type { ClosedVisitTarget, FieldDeployment, UploadTarget } from '../types'
+import type { ClosedVisitTarget, FieldDeployment, SdCard, UploadTarget } from '../types'
 import { btnOutline } from './ImportDeploymentPage'
 import type { VisitFocus } from './VisitBookPage'
 
@@ -32,6 +32,8 @@ export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsO
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  // The SD cards of the research project, for the panel of the card of a deployment.
+  const [sdCards, setSdCards] = useState<SdCard[]>([])
   const error = projectError ?? loadError
 
   // The deployment is of the visit that left the camera: it is found in the visits of the research project.
@@ -44,6 +46,25 @@ export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsO
       onImportImages({ researchProjectId: project.acronym, visit })
     } catch (e) { setLoadError(e instanceof Error ? e.message : 'Could not read the visits.') }
   }
+
+  // The visits of a deployment: the one that left the camera and the one that collected its card, from the visits kept to the location.
+  async function loadVisits(d: FieldDeployment) {
+    if (!project) return null
+    const { results } = await api.listVisits(project.acronym, d.site)
+    const at = (session: string | null) => (session ? results.find((v) => v.session === session && v.location_id.toLowerCase() === d.site.toLowerCase()) : undefined)
+    const visit = at(d.start_session)
+    return visit ? { visit, end: at(d.end_session) ?? null } : null
+  }
+
+  useEffect(() => {
+    setSdCards([])
+    if (!project) return
+    let cancelled = false
+    Promise.resolve().then(() => api.getSettings())
+      .then((s) => { if (!cancelled) setSdCards((s?.FIELDWORK?.sd_cards ?? []).filter((c) => (c.research_project ?? '').toLowerCase() === project.acronym.toLowerCase())) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setDeployments(null); setLoadError(null)
@@ -63,7 +84,7 @@ export default function DeploymentStatusPage({ onBack, onOpenSettings, settingsO
         aside={project !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={project} defaultAcronym={defaultAcronym} of="The dashboard" onOpenSettings={onOpenSettings} /> : undefined} />
 
       {error && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} onCreate={onImportImages ? (d) => void create(d) : undefined} helpOpen={helpOpen} onCloseHelp={() => setHelpOpen(false)} onShowSd={onOpenSettings && ((label) => onOpenSettings('sdcards', project.acronym, label))} onShowLocation={onOpenSettings && ((site) => onOpenSettings('locations', project.acronym, site))} onShowUploads={onShowUploads} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
+      {project && (deployments === null ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployments…</p> : <FieldDeployments deployments={deployments} loadVisits={loadVisits} sdCards={sdCards} onCreate={onImportImages ? (d) => void create(d) : undefined} helpOpen={helpOpen} onCloseHelp={() => setHelpOpen(false)} onShowSd={onOpenSettings && ((label) => onOpenSettings('sdcards', project.acronym, label))} onShowLocation={onOpenSettings && ((site) => onOpenSettings('locations', project.acronym, site))} onShowUploads={onShowUploads} highlight={focus} onShowVisit={onShowVisit} loadDetails={(id) => readDeployment(project.acronym, id)} onUpload={onUpload && ((d) => onUpload({ researchProjectId: project.acronym, collection: d.collection }))} />)}
 
       <div className="mt-10">
         <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>

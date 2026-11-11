@@ -33,4 +33,16 @@ describe('RevisionSquares', () => {
     rerender(<RevisionSquares all={{ label: 'All revisions', note: 'x' }} revisions={revisions(7)} value="R0001" onPick={() => {}} />)
     expect(screen.getByLabelText('Older revisions')).toHaveValue('R0001')
   })
+
+  it('puts the name of the revision and the number of its note in bold, and not the words around them, when asked', () => {
+    const squares = [{ id: 'R0002', label: 'R0002', note: '3 visits without deployment', strong: '3' }]
+    const { rerender } = render(<RevisionSquares variablesInBold all={{ label: 'All revisions', note: '6 visits without deployment', strong: '6' }} revisions={squares} value="" onPick={() => {}} />)
+    expect(screen.getByText('R0002')).toHaveClass('font-bold')
+    expect(screen.getByText('3').tagName).toBe('STRONG')
+    expect(screen.getByText('3').parentElement).not.toHaveClass('font-bold')           // the words around it are plain
+    expect(screen.getByText('6').tagName).toBe('STRONG')
+    // as it was, without asking: the whole note in bold
+    rerender(<RevisionSquares all={{ label: 'All revisions', note: '6 visits without deployment', strong: '6' }} revisions={squares} value="" onPick={() => {}} />)
+    expect(screen.getByText('3 visits without deployment')).toHaveClass('font-bold')
+  })
 })
