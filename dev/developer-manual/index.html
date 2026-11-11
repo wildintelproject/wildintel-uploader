@@ -691,6 +691,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-record-of-a-visit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The record of a visit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#threads" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1134,6 +1156,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-record-of-a-visit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The record of a visit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#threads" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1537,7 +1581,7 @@ wins over the settings page's. Both can also go in <code>src/wildintel_uploader/
 <div class="admonition note">
 <p class="admonition-title">Two kinds of settings</p>
 <p><code>web/settings.py</code> is the <strong>server's</strong> (port, log level, CORS — environment variables).
-<code>core/config.py</code> is the <strong>app's</strong> own <code>settings.toml</code> (Trapper account, the images folder,
+<code>core/config.py</code> is the <strong>app's</strong> own <code>settings.toml</code> (Trapper account, the data folder,
 checks, preprocessing — the ⚙️ page, and <code>wildintel-uploader config</code>).</p>
 </div>
 <h2 id="3-repository-layout">3. Repository layout<a class="headerlink" href="#3-repository-layout" title="Permanent link">&para;</a></h2>
@@ -1549,46 +1593,47 @@ checks, preprocessing — the ⚙️ page, and <code>wildintel-uploader config</
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>│   │   ├── parallel.py          # a bounded thread pool, for validating/preprocessing images
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>│   │   ├── version.py
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>│   │   ├── schemas/requests.py  # request models — DeploymentFields is Camtrap DP's deployments row
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>│   │   └── services/            # the actual work (see below)
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>│   ├── web/
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>│   │   ├── main.py              # FastAPI app: routers + the built frontend as static files
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>│   │   ├── app_entry.py         # executable entry point: the web app — or, with arguments, the CLI
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>│   │   ├── settings.py          # the server's settings (env vars / .env)
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>│   │   └── api/routers/         # one router per area — thin: resolve credentials, map errors, stream
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>│   ├── cli/
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>│   │   ├── app.py               # the Typer app: config, trapper lookups, import-deployment
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>│   │   └── common.py            # the console, credentials, errors
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>│   └── wucli.py                 # the development CLI (uv run wucli …)
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>├── tests/unit/                  # pytest — Trapper always faked
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>├── frontend/
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>│   └── src/
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>│       ├── api.ts               # every backend call, and the NDJSON stream reader
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>│       ├── types.ts             # the backend's models, in TypeScript
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>│       ├── pages/               # one per task, plus Settings, Menu, Welcome and Resume
-<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>│       ├── components/          # Combobox, OptionCards, pickers… shared by pages
-<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>│       ├── deploymentValidation.ts  # the details form's rules, mirroring DeploymentFields
-<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>│       └── test/                # Vitest setup and fixtures
-<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>├── tools/
-<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>│   ├── make_example_deployment.py   # a deployment of sample images, with camera EXIF
-<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>│   └── screenshots/         # the manual's screenshots: capture.py + mock_api.js
-<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>├── examples/                    # small folders of images for trying the wizard (see below)
-<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>├── docs/                        # this documentation (MkDocs Material)
-<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>├── .github/workflows/           # CI, docs, release
-<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>├── wildintel-uploader.spec      # PyInstaller
-<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>├── setup.sh                     # installs everything for development
-<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>├── mkdocs.yml
-<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>└── CHANGELOG.md
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>│   │   ├── storage/             # where the records are kept: the ProjectStore interface, the JSON backend, the registry (see Storage)
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>│   │   └── services/            # the actual work (see below)
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>│   ├── web/
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>│   │   ├── main.py              # FastAPI app: routers + the built frontend as static files
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>│   │   ├── app_entry.py         # executable entry point: the web app — or, with arguments, the CLI
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>│   │   ├── settings.py          # the server's settings (env vars / .env)
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>│   │   └── api/routers/         # one router per area — thin: resolve credentials, map errors, stream
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>│   ├── cli/
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>│   │   ├── app.py               # the Typer app: config, trapper lookups, import-deployment
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>│   │   └── common.py            # the console, credentials, errors
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>│   └── wucli.py                 # the development CLI (uv run wucli …)
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>├── tests/unit/                  # pytest — Trapper always faked
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>├── frontend/
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>│   └── src/
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>│       ├── api.ts               # every backend call, and the NDJSON stream reader
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>│       ├── types.ts             # the backend's models, in TypeScript
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>│       ├── pages/               # one per task, plus Settings, Menu, Welcome and Resume
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>│       ├── components/          # Combobox, OptionCards, pickers… shared by pages
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>│       ├── deploymentValidation.ts  # the details form's rules, mirroring DeploymentFields
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>│       └── test/                # Vitest setup and fixtures
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>├── tools/
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>│   ├── make_example_deployment.py   # a deployment of sample images, with camera EXIF
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>│   └── screenshots/         # the manual's screenshots: capture.py + mock_api.js
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>├── examples/                    # small folders of images for trying the wizard (see below)
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>├── docs/                        # this documentation (MkDocs Material)
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>├── .github/workflows/           # CI, docs, release
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>├── wildintel-uploader.spec      # PyInstaller
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>├── setup.sh                     # installs everything for development
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>├── mkdocs.yml
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>└── CHANGELOG.md
 </code></pre></div>
-<p><code>examples/</code> holds folders to try each case with: a good deployment (<code>deployment_example</code>) and
+<p><code>examples/</code> holds folders to try each case with: a good deployment (<code>deployment_examples/valid</code>) and
 ones with corrupted images, duplicates, missing EXIF, mixed cameras, subfolders and unordered
-images; and sessions — <code>session_example</code>, and one with a <code>_FileTimestampLog.csv</code>
-(<code>session_example_timestamp_log</code>).</p>
+images; and sessions — <code>session_examples/valid</code>, and one with a <code>_FileTimestampLog.csv</code>
+(<code>session_examples/timestamp_log</code>).</p>
 <p>For something bigger, <code>tools/make_example_deployment.py</code> makes a deployment of any number of images
-(3000 by default, into <code>examples/deployment_example_3000/</code>, which git ignores): small and all
+(3000 by default, into <code>examples/deployment_examples/3000/</code>, which is kept in the repository): small and all
 different, in bursts of three shots, numbered in the order they were taken, each with the camera's
 make, model and serial number and its capture date in the EXIF — a Reconyx HyperFire 2,
 <code>P800HG08</code>. It is what to try a long import, the statistical checks or an upload with.</p>
-<p>With <code>--faulty</code> (into <code>examples/deployment_example_3000_faulty/</code>, also ignored by git) the same 3000 files come with
+<p>With <code>--faulty</code> (into <code>examples/deployment_examples/3000_faulty/</code>, also kept in the repository) the same 3000 files come with
 problems for every validation to find, about 14 % of them: corrupted images (cut short, or empty), duplicates
 (<code>IMG_0123 (copy).JPG</code>, <code>IMG_0123_bak.JPG</code>), shots out of order, no capture date, no camera model or serial number,
 a second camera (a Bushnell) and some images in a <code>backup/</code> subfolder. Run through the wizard, the validation report has
@@ -1626,7 +1671,11 @@ something to say for each check.</p>
 </tr>
 <tr>
 <td><code>local_folder_service</code></td>
-<td>The collections folder: research projects, locations, collections, deployments, <code>images.json</code>, the timestamp log.</td>
+<td>The collections folder: research projects, locations, visits, cameras and SD cards (the <em>rules</em> of the records, which are kept through <code>core/storage</code>), collections, deployments, <code>images.json</code>, the timestamp log.</td>
+</tr>
+<tr>
+<td><code>audit</code></td>
+<td>The two dates every visit, camera and SD card keeps — <code>created_at</code> and <code>updated_at</code> — written by the app when it is kept, as an ORM does.</td>
 </tr>
 <tr>
 <td><code>camera_info</code></td>
@@ -1658,6 +1707,44 @@ something to say for each check.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="the-record-of-a-visit">The record of a visit<a class="headerlink" href="#the-record-of-a-visit" title="Permanent link">&para;</a></h3>
+<p>A visit is kept as a <strong><code>VisitRecord</code></strong>, the Pydantic class in <code>core/schemas/requests.py</code> that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks <strong>each field on its own</strong> (its type, its range, the values it may take: the status of the camera is one of <code>visit_rules.CAMERA_STATUSES</code>, the card and the batteries one of four codes) and two things on the <strong>whole</strong> visit: it does at least one action (only a visit that could not be made — status <em>Not revised</em> — has none), and it has a height or a depth, not both.</p>
+<p>Six fields are not typed, the app fills them in: <code>id</code> (a UUID that never changes), <code>when</code> (the instant, ISO 8601 in UTC with a <code>Z</code>, worked out from the day and the time of the wall clock of the location), <code>state</code> (<code>deployed</code>, <code>collected</code>, <code>stolen</code>, <code>not_visited</code> or <code>no_camera</code>, worked out by <code>visit_deployments.visit_states</code> and refreshed whenever a visit is added), <code>deployment_id</code> (the deployment the visit closed, once its images are imported) and <code>created_at</code> / <code>updated_at</code> (written each time the visit is kept, as an ORM does: a visit saved again with nothing changed keeps both). What a visit points to — location, camera, SD card, trappers — is kept by id: see <em>Storage</em>.</p>
+<p>What the visits do to the <strong>entities</strong> is <code>visit_rules.entity_changes</code>, applied by the visits router when visits are kept (by hand and from a file): the camera and the card put in the field are <em>active</em>, the ones taken away are <em>ready</em>, and a camera found stolen is archived with its card.</p>
+<h3 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h3>
+<p>The <strong>records</strong> — the research projects and, for each, its locations, visits, unknown visits, cameras, SD cards and failed uploads — are kept through a <strong>layer of
+abstraction</strong>, <code>core/storage</code>: today they are JSON files in the collections folder, and a database can be added later <strong>without changing the code that uses them</strong>.</p>
+<ul>
+<li><code>storage.base.ProjectStore</code> is the interface — a few methods: the research projects (<code>list_projects</code>, <code>has_project</code>, <code>get_project</code>, <code>add_project</code>, <code>save_project</code>,
+  <code>delete_project</code>) and the records of one of them by kind (<code>read_records</code>, <code>write_records</code>, <code>delete_records</code>). A record is a plain <code>dict</code>; the kinds are <code>RECORD_KINDS</code>.</li>
+<li><code>storage.json_files.JsonFolderStore</code> is the backend called <code>json</code>, the default: <code>&lt;collections folder&gt;/&lt;research project&gt;/visits.json</code> and its companions, each put in place
+  at once, so a file is never left half written.</li>
+<li>The <strong>rules</strong> are not the store's. <code>local_folder_service</code> has them — the instants of the visits, which location can be removed, the dates <code>created_at</code> and <code>updated_at</code> (see
+  <code>services/audit.py</code>) —, and only asks the store to keep or give back. That is why a new backend is small, and why it cannot change what the app does.</li>
+<li>What is not a record stays a file of the collections folder: the images and what is written beside them (<code>deployment.json</code>, <code>images.json</code>, the logs of a collection…).
+  Nor the settings (<code>settings.toml</code>), which have their own place.</li>
+<li>
+<p>The settings choose the backend: <code>DATA.storage</code> (<code>json</code> by default), read the first time it is needed and applied again when the settings are saved.</p>
+</li>
+<li>
+<p><strong>The records point to each other by internal id</strong> (<code>services/ids.py</code>). Every record that others refer to has an <code>id</code> — a UUID the app generates (<code>ids.new_id</code>); a record kept before the ids existed gets one made from what called it (<code>ids.legacy_id</code>, the same one everywhere) the first time it is read, and keeps it. A visit is <strong>kept</strong> with <code>location_ref</code>, <code>camera_ref</code>, <code>sd_ref</code>, <code>trapper_refs</code> and <code>setup_by_ref</code>, and <strong>told</strong> with what they are called (<code>local_folder_service._kept</code> and <code>_told</code>, as with the instant <code>when</code>); a role is kept with <code>trapper_ref</code>; an unknown visit with <code>location_ref</code>. What is not registered (a card nobody has) is kept as it was said and linked when it is. A backup says the visits and the roles by name, so it is restored where the ids are others. What the page sends back for an item — its <code>id</code> — tells it from a new one, so a rename is not a deletion plus an addition; an id the page makes up is not taken.</p>
+</li>
+<li><strong>Nothing is deleted for good</strong>: a record that is removed gets <code>deleted_at</code> (<code>services/audit.py</code>) and is no longer listed; it comes back when it is added again. <code>ProjectStore.delete_project</code> is a purge the app does not use.</li>
+<li><strong>The trappers</strong> are global records (<code>ProjectStore.read_global</code> / <code>write_global</code>, <code>trappers.json</code> beside the projects): the people belong to no research project. Those an earlier version kept in the settings are moved to the store the first time they are asked for.</li>
+<li><strong>What is not in the layer yet.</strong> With a database, <em>all</em> the information should go to it, except the images. For now the layer has the records of the research projects and the trappers; the metadata of collections and deployments (<code>deployment.json</code>, <code>images.json</code>…) and the settings themselves (which say where the records are, so they stay a file) are not through it. The reports and the sessions stay files, for now.</li>
+</ul>
+<p><strong>Not planned for now</strong> — it has no effect until a database is used, and that is not foreseen. What was decided for when it is, so it is not lost: the metadata of collections and deployments would be <em>documents</em> of the store (by research project, collection, deployment and name; the JSON backend would keep them in the same files and paths as now, so nothing would be migrated); the modules that read them (<code>seal_service</code>, <code>repair_service</code>, <code>preprocessing_service</code>, <code>trapper_upload_service</code>, <code>statistics_service</code>, <code>sync_service</code>, <code>timefix_service</code>, <code>backup_service</code>) would be converted one by one, from paths to those names. The CSV logs of a collection (<code>FileTimestampLog</code>, <code>FieldworkLog</code>) and the packages to upload stay files: they are what <code>wildintel-tools</code> and Trapper ask for. <strong>The seal is made over the content of the documents</strong>, not over their files: <code>deployment.json</code> is hashed as <code>json.dumps(document, indent=2, ensure_ascii=False)</code>, which is what its file holds today, so the seals already made still verify.</p>
+<p>To keep the records somewhere else — a database, say — <strong>add a backend</strong>; nothing else is touched:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">wildintel_uploader.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">storage</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">SqliteStore</span><span class="p">(</span><span class="n">storage</span><span class="o">.</span><span class="n">ProjectStore</span><span class="p">):</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">root</span><span class="p">):</span> <span class="o">...</span>                       <span class="c1"># the collections folder; the connection is the backend's own business</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">list_projects</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="o">...</span>                        <span class="c1"># …and the other methods of ProjectStore</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">storage</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">"sqlite"</span><span class="p">,</span> <span class="n">SqliteStore</span><span class="p">)</span>                 <span class="c1"># then: DATA.storage = "sqlite"</span>
+</code></pre></div>
+<p><code>tests/unit/test_storage.py</code> does exactly that with a backend in memory, and runs the projects, locations, visits and cameras of the app on it. A backup (<code>backup_service</code>) goes through
+the store too, and its <code>.zip</code> holds JSON whatever the records are kept in, so a backup made on one backend is restored on another.</p>
 <h3 id="threads">Threads<a class="headerlink" href="#threads" title="Permanent link">&para;</a></h3>
 <p>Validating and preprocessing images is CPU-bound (decoding, hashing, resizing), so it runs on a
 pool of threads — <code>GENERAL.workers</code> of them, default the CPUs up to 4 (<code>core/parallel.py</code>).
@@ -1725,14 +1812,14 @@ themselves.</p>
 deployment form — is the command line's flow.</p>
 <p>The <strong>timezone</strong> is read from the location, in the research project's <code>locations.json</code>
 (<code>local_folder_service.location_time</code>), never from the request: <code>import-local</code> refuses a location
-with none. This is deliberate — see the <a href="../user-manual/#the-location-owns-the-timezone">user manual</a>.</p>
+with none. This is deliberate — see the <a href="../user-manual/#23-locations">user manual</a>.</p>
 <h3 id="reports">Reports<a class="headerlink" href="#reports" title="Permanent link">&para;</a></h3>
 <p><code>report_service</code> turns the results the checks already return into one JSON shape:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"20261006-094512_validation_R0003-DONA_01"</span><span class="p">,</span><span class="w"> </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"validation"</span><span class="p">,</span><span class="w"> </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"created_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w"> </span><span class="nt">"source_dir"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"deployment_id"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">…</span><span class="p">},</span><span class="w"> </span><span class="nt">"checked"</span><span class="p">:</span><span class="w"> </span><span class="mi">241</span><span class="p">,</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w"> </span><span class="nt">"checks"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"duplicates"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"label"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Duplicate images"</span><span class="p">,</span><span class="w"> </span><span class="nt">"scope"</span><span class="p">:</span><span class="w"> </span><span class="s2">"images"</span><span class="p">,</span><span class="w"> </span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="mi">239</span><span class="p">,</span><span class="w"> </span><span class="nt">"failed"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">}},</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w"> </span><span class="nt">"totals"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"entries"</span><span class="p">:</span><span class="w"> </span><span class="mi">965</span><span class="p">,</span><span class="w"> </span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="mi">963</span><span class="p">,</span><span class="w"> </span><span class="nt">"failed"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">},</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w"> </span><span class="nt">"entries"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"identifier"</span><span class="p">:</span><span class="w"> </span><span class="s2">"IMG_0087.JPG"</span><span class="p">,</span><span class="w"> </span><span class="nt">"check"</span><span class="p">:</span><span class="w"> </span><span class="s2">"duplicates"</span><span class="p">,</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"failed"</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"same content as …"</span><span class="p">}]}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"20261006-094512_validation_R0003-DONA_01"</span><span class="p">,</span><span class="w"> </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"validation"</span><span class="p">,</span><span class="w"> </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"created_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w"> </span><span class="nt">"source_dir"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"deployment_id"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">…</span><span class="p">},</span><span class="w"> </span><span class="nt">"checked"</span><span class="p">:</span><span class="w"> </span><span class="mi">241</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w"> </span><span class="nt">"checks"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"duplicates"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"label"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Duplicate images"</span><span class="p">,</span><span class="w"> </span><span class="nt">"scope"</span><span class="p">:</span><span class="w"> </span><span class="s2">"images"</span><span class="p">,</span><span class="w"> </span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="mi">239</span><span class="p">,</span><span class="w"> </span><span class="nt">"failed"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">}},</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w"> </span><span class="nt">"totals"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"entries"</span><span class="p">:</span><span class="w"> </span><span class="mi">965</span><span class="p">,</span><span class="w"> </span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="mi">963</span><span class="p">,</span><span class="w"> </span><span class="nt">"failed"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">},</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w"> </span><span class="nt">"entries"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"identifier"</span><span class="p">:</span><span class="w"> </span><span class="s2">"IMG_0087.JPG"</span><span class="p">,</span><span class="w"> </span><span class="nt">"check"</span><span class="p">:</span><span class="w"> </span><span class="s2">"duplicates"</span><span class="p">,</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"failed"</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"same content as …"</span><span class="p">}]}</span>
 </code></pre></div>
 <p>An entry is one check of one image (its path in the source folder) or of the deployment (<code>"(deployment)"</code>); a check that
 looks at every image has an entry for each, the passed ones too. <code>validation_report</code>, <code>postvalidation_report</code> and
@@ -1829,21 +1916,21 @@ holding a <code>session.json</code>, in the phases <code>scanned</code> → <cod
 atomically (<code>.tmp</code> then replace), and no phase erases another's. The session is offered back on
 start-up until the import reaches <code>done</code>, which discards it. Credentials never reach this module.</p>
 <h3 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h3>
-<p><code>core/logging_setup.py</code>: console and a rotating file (<code>logs/wildintel-uploader.log</code>, 5 MB × 5) at
+<p><code>core/logging_setup.py</code>: console and a rotating file (<code>wildintel-uploader.log</code>, 5 MB × 5, in <code>platformdirs.user_log_dir</code> — <code>~/.local/state/wildintel-uploader/log</code> on Linux; the sessions are in <code>user_state_dir()/sessions</code>; neither is configurable, and what an earlier version left beside <code>settings.toml</code> or in Documents is moved at start) at
 <code>GENERAL.log_level</code>, changed on the fly when the settings are saved. At <code>DEBUG</code> each file and each
 Trapper query is logged, and tracebacks are kept; the libraries' byte-level chatter stays at INFO.
 The command line only prints warnings unless given <code>-v</code>.</p>
 <h3 id="streaming-endpoints">Streaming endpoints<a class="headerlink" href="#streaming-endpoints" title="Permanent link">&para;</a></h3>
 <p>Every router that streams does it the same way: the checks that can fail before starting are done
 first, as plain HTTP errors (<code>HTTPException</code>), and then:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">lines</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>            <span class="k">yield</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">event</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>        <span class="k">yield</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"error"</span><span class="p">,</span> <span class="s2">"detail"</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">exc</span><span class="p">)})</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">return</span> <span class="n">StreamingResponse</span><span class="p">(</span><span class="n">lines</span><span class="p">(),</span> <span class="n">media_type</span><span class="o">=</span><span class="s2">"application/x-ndjson"</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">lines</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>            <span class="k">yield</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">event</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="k">yield</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"error"</span><span class="p">,</span> <span class="s2">"detail"</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">exc</span><span class="p">)})</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">return</span> <span class="n">StreamingResponse</span><span class="p">(</span><span class="n">lines</span><span class="p">(),</span> <span class="n">media_type</span><span class="o">=</span><span class="s2">"application/x-ndjson"</span><span class="p">)</span>
 </code></pre></div>
 <p>The request going away (closing the tab) stops the generator.</p>
 <h2 id="5-frontend">5. Frontend<a class="headerlink" href="#5-frontend" title="Permanent link">&para;</a></h2>
@@ -1867,19 +1954,23 @@ the current task and shows one page.</p>
 </tr>
 <tr>
 <td><code>ImportDeploymentPage</code></td>
-<td>The wizard of four stages (images, origin and dates, check details, prepare and save), each with steps of its own (<code>WizardStep</code>). The biggest file: its step components and the forms.</td>
+<td>The wizard of five stages (origin, images, dates and details, check details, prepare and save), each with steps of its own (<code>WizardStep</code>). The biggest file: its step components and the forms. It also exports what the session page reuses: <code>fillFromVisit</code>, <code>fillFromPreviousRevision</code>, <code>detailsFound</code> and <code>LockedDetailsContext</code> (the details shown as a source says them, until they are filled in by hand).</td>
 </tr>
 <tr>
 <td><code>ImportSessionPage</code></td>
-<td>The same stages for a folder of deployments. Reuses the wizard's pieces, exported from <code>ImportDeploymentPage</code>.</td>
+<td>The same stages for a folder of deployments; with closed visits ticked in the origin, each folder is linked to a visit and the location, details and dates come from it. Reuses the wizard's pieces, exported from <code>ImportDeploymentPage</code>.</td>
 </tr>
 <tr>
 <td><code>UploadDeploymentPage</code></td>
 <td>Steps: what to upload (research project → collection → deployments), what to do (mode), then the upload, with a card per deployment.</td>
 </tr>
 <tr>
+<td><code>VisitsPage</code></td>
+<td><em>Register visits</em>: the visits of a research project, by hand, from the Epicollect download or from a CSV. Stored in the project's <code>visits.json</code>; <code>POST /api/visits/closed</code> lists the closed visits that have no deployment yet and <code>POST /api/visits/link</code> links one to the deployment it gave.</td>
+</tr>
+<tr>
 <td><code>UtilsPage</code></td>
-<td>The menu's <em>Utils</em> button: a list of maintenance tasks, each shown in place of the list once chosen — <code>RepairPage</code> and <code>SyncCollectionsPage</code>.</td>
+<td>The menu's <em>Utils</em> button: a list of maintenance tasks, each shown in place of the list once chosen — <code>TimeFixPage</code>, <code>RepairPage</code> and <code>SyncCollectionsPage</code>.</td>
 </tr>
 <tr>
 <td><code>RepairPage</code></td>
@@ -2143,9 +2234,9 @@ an image check <code>x</code>:</p>
 <li><strong>Tests</strong> — see below — and a line in the user manual's table of checks.</li>
 </ol>
 <h2 id="8-testing">8. Testing<a class="headerlink" href="#8-testing" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>backend<span class="w"> </span><span class="nb">test</span><span class="w">              </span><span class="c1"># pytest; -v, -k NAME</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>frontend<span class="w"> </span><span class="nb">test</span><span class="w">             </span><span class="c1"># vitest (frontend/)</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>frontend<span class="w"> </span>lint
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>backend<span class="w"> </span><span class="nb">test</span><span class="w">              </span><span class="c1"># pytest; -v, -k NAME</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>frontend<span class="w"> </span><span class="nb">test</span><span class="w">             </span><span class="c1"># vitest (frontend/)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>frontend<span class="w"> </span>lint
 </code></pre></div>
 <ul>
 <li><strong>Backend</strong> — <code>tests/unit/</code>: services directly and the routers through FastAPI's <code>TestClient</code>.
@@ -2162,8 +2253,8 @@ an image check <code>x</code>:</p>
 <p>One executable per platform, with PyInstaller (<code>wildintel-uploader.spec</code>), containing the Python
 runtime, the backend, the built frontend (as <code>static/</code>, served by <code>web/main.py</code>) and ExifTool.
 PyInstaller doesn't cross-compile: each platform builds on its own runner.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>package<span class="w"> </span>build<span class="w">              </span><span class="c1"># this system's, into dist/</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>package<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>appimage<span class="w"> </span>-v<span class="w"> </span><span class="m">0</span>.1.0
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>package<span class="w"> </span>build<span class="w">              </span><span class="c1"># this system's, into dist/</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>package<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>appimage<span class="w"> </span>-v<span class="w"> </span><span class="m">0</span>.1.0
 </code></pre></div>
 <table>
 <thead>
@@ -2197,8 +2288,8 @@ unpacks it there. The spec excludes tkinter — which is why the folder picker
 <h2 id="10-documentation">10. Documentation<a class="headerlink" href="#10-documentation" title="Permanent link">&para;</a></h2>
 <p>This site: MkDocs Material, in <code>docs/</code> (<code>mkdocs.yml</code>), versioned with
 <a href="https://github.com/jimporter/mike">mike</a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>docs<span class="w"> </span>serve<span class="w">      </span><span class="c1"># http://127.0.0.1:8080, live reload</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>docs<span class="w"> </span>build<span class="w">      </span><span class="c1"># strict: broken links fail</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>docs<span class="w"> </span>serve<span class="w">      </span><span class="c1"># http://127.0.0.1:8080, live reload</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>docs<span class="w"> </span>build<span class="w">      </span><span class="c1"># strict: broken links fail</span>
 </code></pre></div>
 <p><code>docs/changelog.md</code> includes <code>CHANGELOG.md</code>: keep release notes there only.</p>
 <p>The command-line manual's terminals are animated by Termynal (<code>docs/javascripts/termynal*.js</code>, taken
@@ -2206,8 +2297,8 @@ from <a href="https://github.com/fastapi/typer">Typer</a>'s docs): a <code>conso
 <code>&lt;div class="termy"&gt;</code> — <code>$</code> lines are typed, <code>//</code> lines are comments, anything else is output.</p>
 <h3 id="screenshots">Screenshots<a class="headerlink" href="#screenshots" title="Permanent link">&para;</a></h3>
 <p>The web manual's screenshots (<code>docs/img/screenshots/</code>) are generated, not taken by hand:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>docs<span class="w"> </span>screenshots<span class="w">                       </span><span class="c1"># builds the frontend, then every screenshot</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>docs<span class="w"> </span>screenshots<span class="w"> </span>step-details<span class="w"> </span>sync<span class="w">     </span><span class="c1"># only these</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>docs<span class="w"> </span>screenshots<span class="w">                       </span><span class="c1"># builds the frontend, then every screenshot</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>uv<span class="w"> </span>run<span class="w"> </span>wucli<span class="w"> </span>docs<span class="w"> </span>screenshots<span class="w"> </span>step-details<span class="w"> </span>sync<span class="w">     </span><span class="c1"># only these</span>
 </code></pre></div>
 <p><code>tools/screenshots/capture.py</code> serves the built frontend and drives it with Playwright, through
 the same steps a user takes. <code>tools/screenshots/mock_api.js</code> replaces <code>fetch</code> in the page with a

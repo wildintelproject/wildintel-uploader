@@ -955,6 +955,12 @@ the WildINTEL project's camera-trap platform.</p>
 <p>It runs on your own computer, with a guided interface in your browser — and a command line for the
 quick jobs:</p>
 <ul>
+<li><strong>Register visits</strong> — the visits to the camera traps (who went, when, to which site and what was done), by hand
+  or from a CSV file. A <strong>revision</strong> is one visit to every site of a research project, and each visit is checked
+  against the rules of a field trip: a revision does not start until the one before it is finished, a camera is
+  not put up where it already is, a card is not left in two cameras… The deployments are worked out from the
+  visits (one goes from the visit that left a camera to the one that collected its card), and the <strong>visit
+  dashboard</strong> shows, revision by revision, what is planned and what is done.</li>
 <li><strong>Import deployments</strong> — one folder of images, or a session with one subfolder per deployment.
   The images are validated (corrupted, duplicated, out of order, mixed cameras…), the deployment's
   details are filled in and checked against the earlier revisions of its location, and the images
@@ -973,8 +979,8 @@ quick jobs:</p>
 <p>What the web app and the command line have in common: installation, the general concepts
 (deployment, revision, location, collection) and the folders and files the app creates. Start here.</p>
 <h3 id="user-manual-web-app"><a href="user-manual-web/">User Manual — web app</a><a class="headerlink" href="#user-manual-web-app" title="Permanent link">&para;</a></h3>
-<p>Settings, and a step-by-step guide to every task in the web interface: importing a
-deployment or a session, uploading to Trapper and syncing.</p>
+<p>Settings, and a step-by-step guide to every task in the web interface: registering and following the
+visits, importing a deployment or a session, uploading to Trapper and syncing.</p>
 <h3 id="user-manual-command-line"><a href="user-manual-cli/">User Manual — command line</a><a class="headerlink" href="#user-manual-command-line" title="Permanent link">&para;</a></h3>
 <p>The <code>wildintel-uploader</code> command: connection test, settings, Trapper lookups and a quick
 interactive import.</p>

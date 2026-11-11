@@ -651,6 +651,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#visits-and-revisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visits and revisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Visits and revisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#revisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Revisions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-rules-of-a-visit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rules of a visit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-visit-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The visit dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#importing-a-deployment" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -923,6 +973,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#visits-and-revisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visits and revisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Visits and revisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#revisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Revisions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-rules-of-a-visit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rules of a visit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-visit-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The visit dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#importing-a-deployment" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1125,6 +1225,28 @@
 
 
 <h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
+<h2 id="visits-and-revisions">Visits and revisions<a class="headerlink" href="#visits-and-revisions" title="Permanent link">&para;</a></h2>
+<p>The visits to the camera traps are the field record the deployments are worked out from: who went, when, to
+which site and what was done (an installation, a revision, a desinstallation, a stolen camera, a site given
+up). They are entered <strong>by hand</strong>, or read from a <strong>CSV file</strong> — an Epicollect download, or any spreadsheet whose
+columns you match to the fields of a visit — and kept in the research project's folder.</p>
+<h3 id="revisions">Revisions<a class="headerlink" href="#revisions" title="Permanent link">&para;</a></h3>
+<p>A <strong>revision</strong> is one visit to every site of a research project. A site is visited once in each, and a
+revision does not start until the one before it is finished. A revision of a site of which nothing is known
+(the first visit kept to it is of a later one) is <strong>unknown</strong>: nothing is checked against it, and a later visit
+can take its place.</p>
+<h3 id="the-rules-of-a-visit">The rules of a visit<a class="headerlink" href="#the-rules-of-a-visit" title="Permanent link">&para;</a></h3>
+<p>A visit by hand and a visit in a file follow the same rules, and the one that breaks them is refused, with
+the reason — each rule has its own label in the results of a file. They compare the visit with the visits
+before it, by date: the camera and the SD card must be where the visit says (a camera is not put up where it
+already is, a card is not left in two cameras), what the actions ask must be given, the visits of a site go
+in order, the camera, the card and who went must exist, and nothing is done at a site after it was given up.
+What an unknown revision hides cannot be checked, and is not.</p>
+<h3 id="the-visit-dashboard">The visit dashboard<a class="headerlink" href="#the-visit-dashboard" title="Permanent link">&para;</a></h3>
+<p>The visits of the research project, revision by revision: what is planned and what is done, the state of
+each visit (planned, deployed, collected, stolen, not visited, unknown), the details of a visit, and the
+deployments the visits say — the closed ones, whose images can be imported, and the ones whose camera is
+still out. The deployments and the uploads have their own dashboards, with the same layout.</p>
 <h2 id="importing-a-deployment">Importing a deployment<a class="headerlink" href="#importing-a-deployment" title="Permanent link">&para;</a></h2>
 <h3 id="local-first">Local first<a class="headerlink" href="#local-first" title="Permanent link">&para;</a></h3>
 <p>An import never touches Trapper: it organizes the images in a <strong>collections folder</strong> on your
@@ -1215,7 +1337,7 @@ what its folder holds: the capture dates and camera of the images, the location'
 <code>FileTimestampLog.csv</code>, which always prevails over what the images say (a deployment it doesn't have gets its row). The images
 are validated, postvalidated and checked against what preprocessing leaves, and a report says what was found.</p>
 <h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
-<p>Trapper account, images folder, how many images are worked on at once, which checks are shown
+<p>Trapper account, data folder, how many images are worked on at once, which checks are shown
 and what they mean, the preprocessing — all in <code>settings.toml</code>, edited from the ⚙️ page. You can keep
 <strong>several configs</strong> (a test server and the real one) and switch between them. The log is
 downloadable from there.</p>
