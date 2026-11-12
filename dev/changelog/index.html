@@ -701,6 +701,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#changed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -814,6 +825,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#changed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -868,10 +890,11 @@ adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Cameras</strong> (Settings › Entities): how a camera is connected and what it runs on — <em>Mobile connection</em> (none, 4G or 5G), <em>Power</em> (cells — AA, AAA… —, or a battery) and, for a battery, whether it <em>can be taken out</em>. All three are optional; cells are always taken out to be changed, so only a battery says it.</li>
-<li><strong>Import of visits</strong>: how the card and the batteries were is also read as the form says it in English (<em>Card full</em>, <em>No batteries</em>, <em>Card full and no batteries</em>), and the id of a camera or an SD card is the number a cell starts with, or the one that follows <em>now</em> — <code>68 now. Before 26</code> is 68 —, and <code>42b</code> stays as it is.</li>
+<li><strong>Import of visits</strong>: how the card and the batteries were is also read as the form says it in English (<em>Card full</em>, <em>No batteries</em>, <em>Card full and no batteries</em>).</li>
+<li><strong>Import of visits</strong>: the id of a camera or an SD card is what its cell says, stripped, the same for both (<code>SD 7</code> is not <code>7</code>, <code>5.0</code> is not <code>5</code>); what already exists is still found ignoring the case.</li>
 <li><strong>Register visits, by hand</strong>: a visit is refused when its site already has a visit in that revision, when it is not after the last visit to its site, or when it is not after the last visit of the revisions before its own — each with the day and the time it has to be after.</li>
-<li><strong>Register visits</strong>: four sources, each with its switch in Settings › Visit sources — <em>WildINTEL Epicollect Legacy CSV</em>, <em>WildINTEL Epicollect CSV</em> (the download of the new form, its columns found by the label of their question) and, in <em>Custom CSV</em>, the choice of where the file is: on this computer or in the Epicollect5 project of the settings, whose entries are downloaded as a CSV and matched like any file. <em>Custom CSV</em> is always offered and cannot be turned off.</li>
-<li><strong>Register visits</strong>: the sources are, in this order, <em>By hand</em>, <em>Custom CSV</em>, <em>WildINTEL Epicollect Legacy</em> (the Epicollect download of the first form, with the option to create the locations, cameras and SD cards that do not exist) and <em>WildINTEL Epicollect</em> — the entries of the Epicollect5 project of the settings, read with no file; it was <em>Epicollect</em>. The action <em>Camera removal</em> of the new form is a Revision and a Desinstallation, and <em>Site removal</em> also archives the location (a Stolen and an Archive after a theft).</li>
+<li><strong>Register visits</strong>: three sources, each with its switch in Settings › Visit sources — <em>WildINTEL Epicollect CSV</em> (the download of the new form, its columns found by the label of their question) and, in <em>Custom CSV</em>, the choice of where the file is: on this computer or in the Epicollect5 project of the settings, whose entries are downloaded as a CSV and matched like any file. <em>Custom CSV</em> is always offered and cannot be turned off.</li>
+<li><strong>Register visits</strong>: the sources are, in this order, <em>By hand</em>, <em>Custom CSV</em> and <em>WildINTEL Epicollect</em> — the entries of the Epicollect5 project of the settings, read with no file; it was <em>Epicollect</em>. The action <em>Camera removal</em> of the new form is a Revision and a Desinstallation, and <em>Site removal</em> also archives the location (a Stolen and an Archive after a theft).</li>
 <li><strong>Import of visits</strong>: what is odd in the visits (the card left in another camera, a revision with no photos, a camera at two sites…) is told in the rows it is about — an amber <em>Add · to check</em> and its own errors — and no longer only in a notice; the cells of a row are read by a pydantic model whose errors have a code of their own, so that the rows are grouped by the kind of error and not by what the message says. A date that does not exist (the 13th month) is a date that is not valid.</li>
 <li><strong>Reports</strong>: the report of an import of visits is kept with the other reports (kind <em>Visits</em>) — an entry for each row of the file, with what became of it, then what is odd, worth knowing, created or held — and can be viewed and downloaded as they are; it is no longer a <code>.txt</code> beside the visits.</li>
 <li><strong>Register visits › Custom CSV</strong>: <em>Match the columns</em> can <strong>create what does not exist yet</strong> — the locations, the cameras and the SD cards a visit names that are not in the research project — from the file: each asks for more fields (a location, its coordinates and timezone; a camera, its id and model; an SD card, its id and brand, with its capacity and the location's name optional), which become required, and a row without them is a problem that creates nothing. Every field also takes a <strong>default value</strong>, used when the file has no column for it and in the rows where its cell is empty. What is created is told before the visits are added, and written with them (<code>create</code> and <code>defaults</code> of <code>POST /api/visits/import-csv</code>).</li>
@@ -912,7 +935,6 @@ adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>
   (<code>Setup: … | Retrieval: …</code>, the tags and groups of both, the setup's number, both visits' notes in the comments) — and <em>What the field sheet says</em> (Import deployment and Import session) fills the form with it.</li>
 <li><strong>Registering a visit makes the folders and the logs</strong>: the folder of each collection the visit changes (with its <code>collection.json</code>) gets its <code>&lt;R000N&gt;_FileTimestampLog.csv</code> and <code>&lt;R000N&gt;_FieldworkLog.csv</code> at once — by hand or from a file —,
   as importing the deployment or the collection did before (<code>field_logs</code> in the answer of <code>/api/visits/save</code> and <code>/api/visits/import-csv</code>).</li>
-<li><strong>A history of visits for a CSV import</strong> (<code>history_xlsx</code> in <code>/api/visits/import-csv</code>, <code>visits_xlsx.py</code>, new dependency <code>openpyxl</code>): the fieldwork datasheet, an <code>.xlsx</code>, completes the visits kept before the file's are applied on top of both.</li>
 <li><strong>A location's timezone (and its summer-time setting) cannot be changed once it is created</strong>: the instants kept for it were worked out with them. The server refuses a different one (<code>409</code>), and the form of a location shows them disabled.</li>
 <li><strong>The time of a visit is kept as an instant</strong>: <code>when</code>, ISO 8601 in UTC with a Z (<code>2024-09-04T11:10:00Z</code>), in the research project's <code>visits.json</code>. The day (<code>date</code>) and the
   time (<code>time</code>) the forms and the tables show are the wall clock of the visit's location, in the timezone the location says; the API gives both. A <code>visits.json</code> kept with a day and
@@ -1031,10 +1053,18 @@ adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>
   reports to look at again or delete.</p>
 </li>
 </ul>
+<h3 id="removed">Removed<a class="headerlink" href="#removed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Examples</strong>: only those of the research project <code>WICP_02</code> are kept — the entities <code>small</code>, <code>big</code> and <code>aicc</code>, the Custom CSV examples <code>small</code> and <code>aicc</code>, and the download <code>wildintel_epicollect.csv</code> are gone.</li>
+<li><strong>Register visits</strong>: the option <em>WildINTEL Epicollect Legacy CSV</em> — there is not much data in the old format, and moving from the old form to the new one is easy; its tab in Settings › Visit sources and the setting <code>FIELDLOG.enabled</code> are gone. The setting of when a visit happened is kept, now in the tab of <em>WildINTEL Epicollect CSV</em>.</li>
+<li><strong>Register visits</strong>: the optional <em>History of visits</em> (the fieldwork datasheet, an <code>.xlsx</code>) — the history of the visits is now kept by the app itself, so there is nothing to update from an external workbook; <code>history_xlsx</code> in <code>/api/visits/import-csv</code>, <code>visits_xlsx.py</code>, the format <code>epicollect</code> of the CSV reader and the dependency <code>openpyxl</code> are gone.</li>
+</ul>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
+<li><strong>Import of a deployment</strong>: the images are prepared in a hidden folder of their own, <code>&lt;collection&gt;/.staging/&lt;deployment&gt;</code>, and moved to the collection with a single rename when the deployment is saved — before, they were prepared in the collection itself and left there, unsealed, if the import was interrupted. The collection has nothing of a deployment until it is saved, and what a preparation that did not finish leaves in <code>.staging</code> is cleared when the deployment is prepared again. On Windows the move is tried again for a few seconds if another program has a file of the folder open. Saving has a step of its own, <strong>Review and upload</strong> (what was saved, where, and the upload), and the steps before it are locked once it is saved; the <em>Period</em> of the summary is shown in ISO 8601, with its offset from UTC.</li>
+<li><strong>Import of visits (CSV)</strong>: the coordinates of a visit (<code>latitude</code>, <code>longitude</code>: where the trapper was when it was noted) are now <strong>required</strong> in every row — they are no longer taken from the location when a row has none — and a location created from a file is created with <strong>its own coordinates</strong>, the new fields <code>location_latitude</code> and <code>location_longitude</code> (asked for only when the locations are created), not with those of its first visit. A file without the coordinates of its visits, which was read before, is refused. The Custom CSV examples have them, and <code>create_entities.csv</code> is one that creates the locations, cameras and SD cards it names.</li>
 <li><strong>Import of visits</strong>: the visits of a file follow the rules of a visit made by hand, and the one that breaks them is refused with its row — the camera or the SD card not where the visit says, an archived card, what its actions ask and it lacks, the order of the visits of a site and of the revisions, an archived site, the first visit to a site not being an Installation, a revision started before the one before is finished — instead of being kept and warned of. The only thing excused is what cannot be checked because a revision is unknown: the first visit to a site in a revision after <code>R0001</code> may be any, and where a camera or an SD card is — what a visit leaves at a site — is not trusted for a later visit when an unknown revision of that site lies between them, since nobody knows what was done in it. What the form only questions (a Revision with 0 photos, a camera at two sites in a revision) is still kept with a warning. The camera, the SD card and the trappers of a visit have to exist — also when it is registered by hand —, unless the import creates them. The examples of visits are changed to match (<code>rules_of_a_visit.csv</code>, <code>custom_csv/card_rules.csv</code>). Each rule a visit breaks has its own label in the results of the file (<em>SD card in another camera</em>, <em>Not the camera at the site</em>, <em>Site archived</em>, <em>First visit is not an Installation</em>…), not one for all of them.</li>
-<li><strong>WildINTEL Epicollect (the new form)</strong>: the headers of the CSV that Epicollect5 downloads are cut at 20 characters (<code>5_Status_of_the_came</code>); they are now found by the beginning of the question. The time of a visit is the one the setting says (by default when the entry was created, UTC), no longer the date and hour typed in the form (local) forced for this source. The status <em>Inactive site</em> — a camera put up again at a site whose camera was removed — is an Installation, as <em>New site</em>; a camera removed after a theft is a Stolen alone (the site stays open). The example <code>wildintel_epicollect.csv</code> is the new form; the old one is <code>wildintel_epicollect_legacy.csv</code>.</li>
+<li><strong>WildINTEL Epicollect (the new form)</strong>: the headers of the CSV that Epicollect5 downloads are cut at 20 characters (<code>5_Status_of_the_came</code>); they are now found by the beginning of the question. The time of a visit is the one the setting says (by default when the entry was created, UTC), no longer the date and hour typed in the form (local) forced for this source. The status <em>Inactive site</em> — a camera put up again at a site whose camera was removed — is an Installation, as <em>New site</em>; a camera removed after a theft is a Stolen alone (the site stays open). The examples of the new form are in <code>examples/visits_example/wildintel_csv/wicp_02</code>.</li>
 <li><strong>Scan</strong> only counts the files and the images of the folder; it no longer opens them. Their dates and camera are read when the
   deployment details open (<code>/api/deployment-import/guess-details</code>), so scanning thousands of images is instant.</li>
 <li>The validation step is a dashboard: when it was last run, the valid images, the images with issues and the tests that failed, a table of tests with

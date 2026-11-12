@@ -773,17 +773,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#wildintel-epicollect-legacy-csv" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        WildINTEL Epicollect Legacy CSV
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#wildintel-epicollect-csv" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1658,17 +1647,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#wildintel-epicollect-legacy-csv" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        WildINTEL Epicollect Legacy CSV
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#wildintel-epicollect-csv" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2226,7 +2204,7 @@ the Trapper server you configure. The welcome screen says what it does; press <s
 <p>Once the entities are defined, we can start with the visits (see <a href="#5-manage-visits">Manage visits</a>). Following our example, we have four locations to visit. From the menu we press <strong>📋 Manage visits › Register visits</strong>, and choose <strong>By hand</strong>.</p>
 <div class="admonition info">
 <p class="admonition-title">Registering many visits at once</p>
-<p>By hand is the way to register a few visits. To register many at once, the visits can be read from a file instead: with <strong>Custom CSV</strong>, a CSV of any shape in which we say which column gives each field of a visit, or with <strong>WildINTEL Epicollect CSV</strong> (and <strong>WildINTEL Epicollect Legacy CSV</strong>), the CSV downloaded from the WildINTEL Epicollect project. See <a href="#register-visits">Register visits</a>.</p>
+<p>By hand is the way to register a few visits. To register many at once, the visits can be read from a file instead: with <strong>Custom CSV</strong>, a CSV of any shape in which we say which column gives each field of a visit, or with <strong>WildINTEL Epicollect CSV</strong>, the CSV downloaded from the WildINTEL Epicollect project. See <a href="#register-visits">Register visits</a>.</p>
 </div>
 <p>To register the visit to the first location we go through the steps of the form. We pick the location, <code>WICP_02_001</code>; we say who went, Pedro Pérez, and when; and we say what was done: as no camera is known there yet, the visit is an <em>Installation</em>. We open the <strong>Camera</strong> section and choose the camera that is installed, <code>CAM-001</code>, say that it was calibrated, and give its height, its tilt and its heading and the delay between triggers; and in <strong>SD card</strong> we pick the card that is left in it, the <code>1</code>.</p>
 <p><img alt="Register visits › By hand: the first visit, an Installation of the camera CAM-001 with the card 1" src="../img/screenshots/visit-installation-form.png" /></p>
@@ -2279,15 +2257,12 @@ images of each deployment are uploaded in packages of this size at most (500 by 
 <h4 id="agouti">Agouti<a class="headerlink" href="#agouti" title="Permanent link">&para;</a></h4>
 <p>What an upload to Agouti needs: the address of its API (usually <code>https://api.agouti.eu</code>), the <strong>API key</strong> that Agouti's support gives (kept private, and a blank key on saving keeps the saved one) and the <strong>id of the project</strong>. Nothing is uploaded to Agouti yet: the form only keeps these, and it is off by default.</p>
 <h3 id="visit-sources">Visit sources<a class="headerlink" href="#visit-sources" title="Permanent link">&para;</a></h3>
-<p>The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab — the sources are <strong>WildINTEL Epicollect Legacy CSV</strong>, <strong>WildINTEL Epicollect CSV</strong>, <strong>Custom CSV</strong> and <strong>Epicollect</strong>. Each can be <strong>used or not</strong> — but Custom CSV, which is always offered —: a check at the top of its tab (and a green dot on the tab); a source not used is not offered in <em>Register visits</em>. The section is there so that other sources can be added in a future version.</p>
-<h4 id="wildintel-epicollect-legacy-csv">WildINTEL Epicollect Legacy CSV<a class="headerlink" href="#wildintel-epicollect-legacy-csv" title="Permanent link">&para;</a></h4>
-<p>The visits are read from the <strong>CSV file downloaded from the original WildINTEL Epicollect project</strong> (<em>Register visits › WildINTEL Epicollect Legacy CSV</em>), with the datasheet of visits if you have it: no connection to Epicollect is needed. Here is how the file is read:</p>
+<p>The places the visits of a research project can be taken from, besides entering them by hand, each set up on its own tab — the sources are <strong>WildINTEL Epicollect CSV</strong>, <strong>Custom CSV</strong> and <strong>Epicollect</strong>. Each can be <strong>used or not</strong> — but Custom CSV, which is always offered —: a check at the top of its tab (and a green dot on the tab); a source not used is not offered in <em>Register visits</em>. The section is there so that other sources can be added in a future version.</p>
+<h4 id="wildintel-epicollect-csv">WildINTEL Epicollect CSV<a class="headerlink" href="#wildintel-epicollect-csv" title="Permanent link">&para;</a></h4>
+<p>The visits are read from the <strong>CSV file downloaded from the new WildINTEL Epicollect project</strong>, the form of the field flow (<em>Register visits › WildINTEL Epicollect CSV</em>). The columns are found by the label of their question: there is nothing to say about them.</p>
 <ul>
 <li><strong>The time of a visit</strong> — <em>when its entry was created</em> (<code>created_at</code>, UTC; the default) or <em>the date and the hour typed in the form</em>. The hour typed is the wall clock of the visit's location, and is used when the row has a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.</li>
-<li>The columns are found by their names (<code>1_Responsable</code>, <code>4_Location</code>, <code>6_Action</code>, and the Camtrap DP fields by their names), whatever the case or the number in front, in English or in Spanish: there is nothing to say about them.</li>
 </ul>
-<h4 id="wildintel-epicollect-csv">WildINTEL Epicollect CSV<a class="headerlink" href="#wildintel-epicollect-csv" title="Permanent link">&para;</a></h4>
-<p>The visits are read from the <strong>CSV file downloaded from the new WildINTEL Epicollect project</strong>, the form of the field flow (<em>Register visits › WildINTEL Epicollect CSV</em>). There is nothing else to set up: the columns are found by the label of their question.</p>
 <h4 id="custom-csv">Custom CSV<a class="headerlink" href="#custom-csv" title="Permanent link">&para;</a></h4>
 <p>Always offered in <em>Register visits</em>, and it cannot be turned off. There is nothing to set up: the columns are matched when each file is read (see <a href="#custom-csv">Custom CSV</a>).</p>
 <h4 id="epicollect">Epicollect<a class="headerlink" href="#epicollect" title="Permanent link">&para;</a></h4>
@@ -2365,7 +2340,7 @@ switch each step off.</p>
 <p><img alt="Settings › Entities" src="../img/screenshots/settings-entities.png" /></p>
 <p>The things the visits and the deployments refer to, one tab each: <strong>Research projects</strong>, <strong>Trappers</strong>, <strong>Roles</strong>, <strong>Locations</strong>, <strong>Cameras</strong> and <strong>SD cards</strong>.
 Each can be added one at a time, taken from Trapper (research projects and locations) or loaded from a CSV with <strong>Import CSV</strong> (there are
-examples in <code>examples/entities_example/big</code> (and a small one in <code>small</code>), explained in <code>examples/CSV.md</code>). Locations, cameras, SD cards and roles belong to a research project: pick it first. The <strong>trappers</strong>, the people, belong to none: they are the same whatever the project, and what each is in a project is its <strong>role</strong>. The page of each location, SD card and camera shows its <strong>QR code</strong> (it says <code>wildintel:&lt;camera|sdcard|location&gt;:&lt;research project&gt;:&lt;id&gt;</code>), with a button to download it as an SVG to print on a label.
+examples in <code>examples/entities_example/wicp_02</code>, explained in <code>examples/CSV.md</code>). Locations, cameras, SD cards and roles belong to a research project: pick it first. The <strong>trappers</strong>, the people, belong to none: they are the same whatever the project, and what each is in a project is its <strong>role</strong>. The page of each location, SD card and camera shows its <strong>QR code</strong> (it says <code>wildintel:&lt;camera|sdcard|location&gt;:&lt;research project&gt;:&lt;id&gt;</code>), with a button to download it as an SVG to print on a label.
 A location's <strong>time zone</strong> (UTC unless you say another) and whether its cameras ignore summer time are chosen when it is created and <strong>cannot be changed afterwards</strong>: the instant of every visit to it was worked out with them. The <strong>locations</strong>, <strong>cameras</strong>, <strong>SD cards</strong> and <strong>roles</strong> belong to a research project and are kept in its folder of the collections folder (<code>&lt;research project&gt;/locations.json</code>, <code>cameras.json</code>, <code>sd_cards.json</code> and <code>roles.json</code>, beside its <code>visits.json</code>), so they travel with its collections. The <strong>trappers</strong>, the people, are kept beside the folders of the research projects (<code>trappers.json</code> in the collections folder), not in the settings. Cameras, cards, roles and trappers kept in the settings file by an earlier version are moved to where they belong the first time they are needed. A camera or a card can be <em>active</em> or not; the visits only offer the ones in use.</p>
 <p>A <strong>trapper</strong> has a <strong>username</strong> — required, with no spaces, and no two trappers have the same, whatever its case, as the label of an SD card is —, a <strong>full name</strong> (how a visit says who went), an <strong>affiliation</strong> and an <strong>email</strong>, which are optional. The trappers kept before the username existed get one made from their name (<code>Ana Pérez</code> is <code>ana.perez</code>) when the settings are read. In <strong>Import CSV</strong> the columns are <code>username</code>, <code>name</code>, <code>affiliation</code> and <code>email</code>: a row with no username or no full name is left out, and said.</p>
 <p>The visits and the roles remember <strong>which</strong> location, camera, SD card or trapper they are of, not only what it is called. So correcting the label of an SD card, the id of a camera or the username of a trapper changes nothing else: the visits and the roles are still of the same one, and say the new name.</p>
@@ -2509,19 +2484,12 @@ the visits come in:</p>
 <td>A CSV of any shape: the page shows its columns and you say which one gives each field of a visit. When Epicollect is turned on in the settings, the CSV can also be <strong>the entries of an Epicollect5 project</strong> (<em>Epicollect5 project › Download the entries</em>), read the same way.</td>
 </tr>
 <tr>
-<td><strong>WildINTEL Epicollect Legacy CSV</strong></td>
-<td>Reads the visits of a field trip from the CSV downloaded from the original WildINTEL Epicollect project. The time is the <code>created_at</code> of the entry, put in the timezone of the location — or the date and the hour typed in the form, as the settings say.</td>
-</tr>
-<tr>
 <td><strong>WildINTEL Epicollect CSV</strong></td>
 <td>Reads the visits of a field trip from the CSV downloaded from the new WildINTEL Epicollect project (the form of the field flow): the columns are found by the label of their question.</td>
 </tr>
 </tbody>
 </table>
 <p>The sources that are turned off in the <a href="#visit-sources">settings</a> are not offered, but <em>By hand</em> and <em>Custom CSV</em>.</p>
-<p>A file can come with a <strong>history of visits</strong> (optional): the fieldwork datasheet, an <code>.xlsx</code> workbook whose first sheet has a Site and an Action column (Trappers, Session, Date, Time, Camera, NumPhotos, SD… or Tramperos, Sesion, Fecha, Hora…
-— found by their names, as in an Epicollect download). The history <strong>completes the visits kept</strong>, and then the file's are applied on top of both: sessions, what is already kept and what is odd are told with all of it in front. Its visits come first in the list, and its rows
-that cannot be read appear as <em>History row N</em>.</p>
 <p>Besides the visits and the rows with problems, reading a file says what is <strong>worth knowing</strong> without being wrong — the sites visited on the trip before and not on this one (their cameras are still out and
 their deployments stay open), visits where nothing was collected (<em>Not revised</em>), visits with no photo count —, and warns of a <strong>jump in the session numbers</strong> and of a row whose <strong>session, site, camera and actions</strong> are those of a
 visit already kept (it is that visit, left as it is). When the visits are kept, <strong>a report</strong> of the import is written beside them (<code>visits_import_&lt;day&gt;_&lt;time&gt;.txt</code>), and <strong>Show the deployments</strong> lists, by collection, the deployments the
@@ -2593,7 +2561,7 @@ visits say: the closed ones and the ones whose camera is still out.</p>
 <ul>
 <li><strong>Sites that are not locations.</strong> A site of the file that is not a location of the research project may be a site that is really new or one misnamed in the field. Its visits
   are held, and the site is shown with what tells the two apart: <strong>how far</strong> its first visit was from the nearest location, and the locations whose id is <strong>one character apart</strong>
-  from its own (<em>it may be a misprint</em>). If it is new, <strong>Add … as a location</strong> keeps it with the coordinates of its first visit and reads the file again (<strong>Add the N sites with coordinates as locations</strong> does it for all the ones whose file has the coordinates and that do not look like a misprint — no id one character apart, no location within 100 m); if it is a misprint, correct
+  from its own (<em>it may be a misprint</em>). If it is new, create it — by turning on <strong>Create the locations that do not exist</strong> in the first step (the file then gives the coordinates <strong>of the location</strong>, <code>location_latitude</code> and <code>location_longitude</code>, besides its <code>timezone</code> and <code>daylight_saving</code>) or in Settings › Locations — and read the file again; if it is a misprint, correct
   the id in the file and read it again.</li>
 </ul>
 <h4 id="by-hand">By hand<a class="headerlink" href="#by-hand" title="Permanent link">&para;</a></h4>
@@ -2613,8 +2581,8 @@ visits say: the closed ones and the ones whose camera is still out.</p>
 <h4 id="custom-csv_1">Custom CSV<a class="headerlink" href="#custom-csv_1" title="Permanent link">&para;</a></h4>
 <p>Any spreadsheet with a row per visit. Press <strong>Register visits › Custom CSV</strong>; the research project is the default one. The steps:</p>
 <ol>
-<li><strong>Choose the spreadsheet file.</strong> When Epicollect is turned on in the settings, first say <strong>where the CSV is</strong>: <em>A file on this computer</em> or <em>Epicollect5 project</em> — with the latter, <strong>Download the entries</strong> reads them from the project of the settings and goes on as a file does. Pick the CSV (optionally, the <em>history of visits</em> <code>.xlsx</code>). Choosing the file does <strong>not</strong> move on: the step stays open with <strong>Create what does not exist yet</strong> — switches for the <strong>locations</strong>, the <strong>cameras</strong> and the <strong>SD cards</strong> the file names that are not in the project, each created with the visits; each asks for more fields in the matching, where a default can also be given — and the buttons <strong>Back</strong> (to the research project) and <strong>Continue</strong>.</li>
-<li><strong>Match the columns.</strong> For each field of a visit, the column of the file that gives it. The fields are in groups, as in the form of a visit by hand — <em>Who</em>, <em>Where</em>, <em>When</em>, <em>The visit</em>, <em>SD card</em>, <em>Camera</em>, <em>Site</em>, and <em>Grouping and notes</em> —, each with an example from the file. Each group is a card with a <strong>chevron at the left</strong> that folds it away, and says how many of its fields are matched (<em>3 of 5 matched</em>). What has the name of a field (<code>location_id</code>, <code>session</code>, <code>date</code>, <code>time</code>, <code>actions</code>, <code>trappers</code>, <code>camera_id</code>, <code>sd</code>, <code>num_photos</code>…) is matched by itself; pick the rest, or give a <strong>default</strong> for a field the file has no column for. The site and the actions are required; the time is a date and a time, or — when the file has it — the instant of an entry (<code>created_at</code>), as the <em>visit sources</em> setting says. Dates may be written day first. A visit with no revision gets the next one of its site. Press <strong>Read the visits</strong>.</li>
+<li><strong>Choose the spreadsheet file.</strong> When Epicollect is turned on in the settings, first say <strong>where the CSV is</strong>: <em>A file on this computer</em> or <em>Epicollect5 project</em> — with the latter, <strong>Download the entries</strong> reads them from the project of the settings and goes on as a file does. Pick the CSV. Choosing the file does <strong>not</strong> move on: the step stays open with <strong>Create what does not exist yet</strong> — switches for the <strong>locations</strong>, the <strong>cameras</strong> and the <strong>SD cards</strong> the file names that are not in the project, each created with the visits; each asks for more fields in the matching, where a default can also be given (a location is created with <strong>its own coordinates</strong>, <code>location_latitude</code> and <code>location_longitude</code>, which are not those of the visit) — and the buttons <strong>Back</strong> (to the research project) and <strong>Continue</strong>.</li>
+<li><strong>Match the columns.</strong> For each field of a visit, the column of the file that gives it. The fields are in groups, as in the form of a visit by hand — <em>Who</em>, <em>Where</em>, <em>When</em>, <em>The visit</em>, <em>SD card</em>, <em>Camera</em>, <em>Site</em>, and <em>Grouping and notes</em> —, each with an example from the file. Each group is a card with a <strong>chevron at the left</strong> that folds it away, and says how many of its fields are matched (<em>3 of 5 matched</em>). What has the name of a field (<code>location_id</code>, <code>session</code>, <code>date</code>, <code>time</code>, <code>actions</code>, <code>trappers</code>, <code>camera_id</code>, <code>sd</code>, <code>num_photos</code>…) is matched by itself; pick the rest, or give a <strong>default</strong> for a field the file has no column for. The site, the actions and the <strong>coordinates of the visit</strong> (<code>latitude</code> and <code>longitude</code>: where the trapper was when the visit was noted) are required — every row gives them, by a column or a default; the time is a date and a time, or — when the file has it — the instant of an entry (<code>created_at</code>), as the <em>visit sources</em> setting says. Dates may be written day first. A visit with no revision gets the next one of its site. Press <strong>Read the visits</strong>.</li>
 <li><strong>Check and add the visits.</strong> What the file says, before it is kept: <em>N visits to add · N already kept · N rows with a problem</em>, the new sites, what is worth knowing and what is odd. Then the <strong>rows</strong> of the file, laid out like a dashboard:</li>
 <li><strong>Revision selection</strong> — a card for <em>All revisions</em> and one for each revision the file has (the five most recent as cards, the older ones in the <strong>Older revisions</strong> list, for a file with many). Picking one narrows what is below to its rows.</li>
 <li><strong>Status metrics &amp; filters</strong> — the <strong>Progress</strong> card and a card for <em>Rows read</em>, <em>Ready</em> (new visits), <em>Skipped / Existing</em> (already kept, or ignored) and <em>With problems</em>. Pressing one shows only those rows; pressing it again shows them all.</li>
@@ -2623,7 +2591,7 @@ visits say: the closed ones and the ones whose camera is still out.</p>
 <p>Press <strong>Add N visits</strong> to keep them.</p>
 <p>When the visits are kept, the end says how many were added and, if they <strong>closed other visits</strong> — a visit closes the one that left the camera whose card it collects —, how many: <strong>pick their revision and import their images</strong> is a link to <a href="#import-a-deployment">Import deployment</a> on the research project. A <strong>report</strong> of the import is written with the other reports.</p>
 <p>The rows are read as their fields take them: <em>a date that is not a date</em>, <em>actions that are not Installation, Revision, Desinstallation, Stolen or Archive</em>, a card code that is not OK, Card full, No batteries or Card full and no batteries, or photos that are not a whole number, are rows with a problem, and none of them is kept. The visits are then checked with <a href="#the-rules-of-a-visit">the rules of a visit</a>, in the order of their instants, each against the ones kept and the ones of the file before it. The visits of a file that fill unknown revisions of the visits kept are checked together, with the ones after them that they touch.</p>
-<p>There are example files of every case — all correct, three revisions, a revision that starts before the one before is finished, unknown sites, rows that cannot be read, a card that is left where it cannot be, a theft and a site given up, columns to match by hand — in <a href="https://github.com/wildintelproject/wildintel-uploader/tree/main/examples/visits_example"><code>examples/visits_example</code></a>, in folders by the group of entities they are made for: <code>custom_csv/small</code> (the research project <code>WICP</code>), <code>custom_csv/wicp_02</code> (<code>WICP_02</code>) and <code>custom_csv/aicc</code> (<code>AICC</code>), and the downloads of Epicollect in <code>wildintel_csv</code> and <code>legacy_wildintel_csv</code>.</p>
+<p>There are example files of every case — all correct, three revisions, a revision that starts before the one before is finished, unknown sites, rows that cannot be read, a card that is left where it cannot be, a theft and a site given up, columns to match by hand — in <a href="https://github.com/wildintelproject/wildintel-uploader/tree/main/examples/visits_example"><code>examples/visits_example</code></a>, in folders by the option they are for — <code>custom_csv/wicp_02</code> and <code>wildintel_csv/wicp_02</code> —, made for the entities of the research project <code>WICP_02</code>.</p>
 <p><strong>The deployments the visits say, and the logs of the collections.</strong> Each site's visits, in order, give a deployment for every pair where the first <strong>left a camera</strong> (an Installation or a Revision)
 and the second <strong>collected its card</strong>: it goes from the one to the other and is <em>closed</em>. It belongs to the collection <strong>the session of the visit that collected it names, minus one</strong> — R0013
 collects the deployments of R0012 — and that is the revision <a href="#import-a-deployment">Import deployment</a> gives it. A camera that was left and has not been collected is <em>open</em>: it will belong to
@@ -2968,15 +2936,18 @@ simply redone.</p>
 images as thumbnails. The <a href="#reports">report</a> says what was done to each image. <strong>Continue to save</strong> goes on.</p>
 <p><strong>3. Save to your collection.</strong></p>
 <p><img alt="Stage 5 — Saved" src="../img/screenshots/step-import.png" /></p>
-<p>The images are ready, so this step <strong>consolidates</strong> the deployment: press <strong>Save deployment</strong> and its
-<code>deployment.json</code> is written and the deployment is <strong>sealed</strong>. From then on it can't be modified — the app notices if an image
+<p>The images are ready, so this step <strong>consolidates</strong> the deployment: a note says that <em>saving seals the deployment</em>, and <strong>Save to my collection</strong> — under it, at the right — writes its
+<code>deployment.json</code>, moves the deployment to its place in the collection and <strong>seals</strong> it. From then on it can't be modified — the app notices if an image
 or its details change — and it can be uploaded.</p>
-<p>A good save says where the deployment was kept, and offers:</p>
+<p>Until you save, the images are prepared in a hidden <code>.staging</code> folder inside the collection (<code>&lt;collection&gt;/.staging/&lt;deployment&gt;</code>): the collection has nothing of the deployment, and
+what an interrupted preparation leaves there is cleared when the deployment is prepared again. Saving moves the folder with a single rename, so it is instant however many images there are.
+On Windows, if another program has one of its files open for a moment (the antivirus, a viewer), the move is tried again for a few seconds before it gives up.</p>
+<p>Once it is saved, the steps before are <strong>locked</strong> (they show a padlock) and a fourth step, <strong>Review and upload</strong>, opens. It has:</p>
 <ul>
-<li><strong>Open folder</strong> in the file explorer.</li>
-<li><strong>Upload to Trapper</strong> — straight to <a href="#8-upload-a-deployment-to-trapper">the upload page</a> with the
-  research project and the collection already chosen.</li>
-<li><strong>Add another deployment</strong>, which starts again at stage 1.</li>
+<li>a <strong>Deployment saved</strong> notice with the id of the deployment;</li>
+<li><strong>What was saved</strong>: how many images and what was done to them, that its metadata is written and sealed, and where it is kept, with <strong>Open folder</strong> and <strong>Copy path</strong>;</li>
+<li><strong>Upload</strong>: <em>Not uploaded yet</em>, with <strong>Upload to Trapper</strong> — straight to <a href="#8-upload-a-deployment-to-trapper">the upload page</a> with the research project and the collection already chosen — and <strong>Add another deployment</strong>, which starts again at stage 1;</li>
+<li>and, below, the way back to the <strong>Deployments menu</strong> and the <strong>Main menu</strong>.</li>
 <li><strong>Back to the deployments menu</strong> and <strong>Back to the main menu</strong>, as when visits are registered.</li>
 </ul>
 <h4 id="what-gets-written-next-to-the-images">What gets written next to the images<a class="headerlink" href="#what-gets-written-next-to-the-images" title="Permanent link">&para;</a></h4>
