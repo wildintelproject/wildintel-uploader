@@ -57,12 +57,14 @@ describe('BackupPage', () => {
     expect(await screen.findByText('3 locations · 2 cameras · 4 SD cards')).toBeInTheDocument()   // the research project of the settings comes chosen
     expect(screen.getByText('12 visits')).toBeInTheDocument()
 
-    const revisions = screen.getByRole('table', { name: 'Revisions' }), deployments = screen.getByRole('table', { name: 'Deployments' })
-    expect(within(deployments).getByRole('checkbox', { name: 'R0001-DONA_02' })).not.toBeChecked()
-    await userEvent.click(within(revisions).getByRole('checkbox', { name: 'Revision R0001' }))      // the whole revision: its deployments are picked in the other table
+    const revisions = screen.getByRole('table', { name: 'Revisions' })
+    expect(screen.queryByRole('table', { name: 'Deployments' })).not.toBeInTheDocument()            // no revision is picked: no deployments to choose among
+    await userEvent.click(within(revisions).getByRole('checkbox', { name: 'Revision R0001' }))      // the revision: its deployments can be chosen, all of them at first
+    const deployments = screen.getByRole('table', { name: 'Deployments' })
     expect(within(deployments).getByRole('checkbox', { name: 'R0001-DONA_01' })).toBeChecked()
     expect(within(deployments).getByRole('checkbox', { name: 'R0001-DONA_02' })).toBeChecked()
-    expect(within(deployments).getByRole('checkbox', { name: 'R0002-DONA_01' })).not.toBeChecked()
+    expect(within(deployments).queryByRole('checkbox', { name: 'R0002-DONA_01' })).not.toBeInTheDocument()   // of the revisions picked only
+    await userEvent.click(within(deployments).getByRole('checkbox', { name: 'R0001-DONA_02' }))   // one of them is left out
     const images = screen.getByRole('switch', { name: 'Include the images of the deployments' })
     expect(images).toHaveAttribute('aria-checked', 'false')
     expect(screen.getByText(/its images \(.+\) stay out/)).toBeInTheDocument()
@@ -74,12 +76,12 @@ describe('BackupPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Make the backup' }))
 
     await waitFor(() => expect(mocked.backupCreate).toHaveBeenCalled())
-    expect(mocked.backupCreate.mock.calls[0][0]).toEqual({ dest_dir: '/backups', settings: true, research_project_id: 'DONA', project_files: true, visits: true, deployments: ['R0001-DONA_01', 'R0001-DONA_02'], images: true })
+    expect(mocked.backupCreate.mock.calls[0][0]).toEqual({ dest_dir: '/backups', settings: true, research_project_id: 'DONA', project_files: true, visits: true, deployments: ['R0001-DONA_01'], images: true })
     await screen.findByText(/Backup made — 4 KB/)
     const done = screen.getAllByRole('status').find((e) => /Backup made/.test(e.textContent ?? ''))!
     expect(done).toHaveTextContent('Backup made — 4 KB')
     expect(done).toHaveTextContent('/backups/wildintel-backup_DONA_20261030.zip')
-    expect(done).toHaveTextContent('2 deployments of DONA, with their images')
+    expect(done).toHaveTextContent('2 deployments of DONA, with their images')   // as the manifest the server answers says
   })
 
   it('can back up the settings alone, with no research project, and has nothing to continue with when nothing is chosen', async () => {

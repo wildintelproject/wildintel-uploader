@@ -80,6 +80,8 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
   const [withProjectFiles, setWithProjectFiles] = useState(true)
   const [withVisits, setWithVisits] = useState(true)
   const [chosen, setChosen] = useState<Set<string>>(new Set())
+  // the revisions picked: their deployments are the ones that can be chosen — all of them at first
+  const [pickedRevisions, setPickedRevisions] = useState<Set<string>>(new Set())
   const [withImages, setWithImages] = useState(false)
   const [selectionDone, setSelectionDone] = useState(false)
   const [destDir, setDestDir] = useState('')
@@ -107,7 +109,7 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
   }, [settingsOpen])
 
   useEffect(() => {
-    setInfo(null); setInfoError(null); setChosen(new Set()); setSelectionDone(false)
+    setInfo(null); setInfoError(null); setChosen(new Set()); setPickedRevisions(new Set()); setSelectionDone(false)
     if (!projectId || mode !== 'backup') return
     let cancelled = false
     api.backupProjectInfo(projectId)
@@ -123,9 +125,8 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
   // ── what goes in ──
   const allDeployments = (info?.collections ?? []).flatMap((c) => c.deployments)
   const picked = allDeployments.filter((d) => chosen.has(d.id))
-  // the deployments with the revision they are of, and the revisions all of whose deployments are chosen
-  const everyDeployment = (info?.collections ?? []).flatMap((c) => c.deployments.map((d) => ({ ...d, revision: c.name })))
-  const chosenRevisions = new Set((info?.collections ?? []).filter((c) => c.deployments.length > 0 && c.deployments.every((d) => chosen.has(d.id))).map((c) => c.name))
+  // the deployments of the revisions picked, with the revision they are of
+  const everyDeployment = (info?.collections ?? []).filter((c) => pickedRevisions.has(c.name)).flatMap((c) => c.deployments.map((d) => ({ ...d, revision: c.name })))
   const imageBytes = picked.reduce((n, d) => n + d.image_bytes, 0)
   const pickedBytes = picked.reduce((n, d) => n + d.bytes - (withImages ? 0 : d.image_bytes), 0)
   const hasProject = Boolean(projectId)
@@ -258,16 +259,20 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
                         <PickTable
                           items={info.collections} keyOf={(c) => c.name}
                           many={{
-                            selected: chosenRevisions, noun: 'revisions', selectable: (c) => c.deployments.length > 0,
+                            selected: pickedRevisions, noun: 'revisions', selectable: (c) => c.deployments.length > 0,
                             detail: (rs) => plural(rs.reduce((n, c) => n + c.deployments.length, 0), 'deployment', 'deployments'),
-                            onChange: (next) => setChosen((cur) => {
-                              const out = new Set(cur)
-                              for (const c of info.collections) {
-                                const was = chosenRevisions.has(c.name), now = next.has(c.name)
-                                if (was !== now) c.deployments.forEach((d) => (now ? out.add(d.id) : out.delete(d.id)))
-                              }
-                              return out
-                            }),
+                            // picking a revision puts its deployments in the backup — they are then chosen among —, and letting it go takes them out
+                            onChange: (next) => {
+                              setChosen((cur) => {
+                                const out = new Set(cur)
+                                for (const c of info.collections) {
+                                  const was = pickedRevisions.has(c.name), now = next.has(c.name)
+                                  if (was !== now) c.deployments.forEach((d) => (now ? out.add(d.id) : out.delete(d.id)))
+                                }
+                                return out
+                              })
+                              setPickedRevisions(next)
+                            },
                           }}
                           columns={[
                             { label: 'Revision', className: 'px-4 py-3 font-mono text-sm', cell: (c) => c.name },
@@ -286,6 +291,7 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
                       </div>
                       <div>
                         <p className="mb-2 text-sm font-semibold">Deployments</p>
+                        {everyDeployment.length === 0 ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Pick a revision to choose among its deployments.</p> : (
                         <PickTable
                           items={everyDeployment} keyOf={(d) => d.id}
                           many={{ selected: chosen, onChange: setChosen, noun: 'deployments', detail: (ds) => formatBytes(ds.reduce((n, d) => n + d.bytes, 0)) }}
@@ -304,6 +310,7 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
                           names={{ table: 'Deployments', search: 'Search the deployments', items: 'deployments', pick: (d) => d.id, pickPlaceholder: 'Type to pick a deployment…' }}
                           optionLabel={(d) => `${d.id} · ${formatBytes(d.bytes)}`} searchPlaceholder="Search by deployment or revision…" empty="No deployment matches." perPage={8}
                         />
+                        )}
                       </div>
                     </>
                   )}
