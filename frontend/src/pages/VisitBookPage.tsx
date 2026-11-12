@@ -4,7 +4,7 @@ import { api } from '../api'
 import { formatVisitWhen } from '../dateFormat'
 import { Icon, StateCard } from '../components/Dashboard'
 import { ActiveFilters, DashboardHeader, DownloadButton, HELP_ICONS, HelpButton, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from '../components/DashboardParts'
-import { Breadcrumb } from '../components/TaskCard'
+import { Breadcrumb, MENU_ICONS } from '../components/TaskCard'
 import IconButton, { ICON_PATHS } from '../components/IconButton'
 import LinkButton from '../components/LinkButton'
 import EditVisitDialog from '../components/EditVisitDialog'
@@ -258,7 +258,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 )}
                                 {!v.not_done && !v.deployment_id && v.deployment_status === 'closed' && !v.deployment_no_images && onImportImages && (
                                   <IconButton compact label={`Create the deployment of the visit ${v.session} to ${v.location_id}`} title="Create the deployment"
-                                    onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })} path={<><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><circle cx="12" cy="13" r="3.5" /></>} />
+                                    onClick={() => onImportImages({ researchProjectId: project!.acronym, visit: v })} path={MENU_ICONS.deployment} />
                                 )}
                               </RowOptions>
     )

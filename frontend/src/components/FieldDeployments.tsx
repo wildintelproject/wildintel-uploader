@@ -8,6 +8,7 @@ import LinkButton from './LinkButton'
 import { Glyph, ViewSwitch, type View } from './ViewSwitch'
 import DeploymentDetails from './DeploymentDetails'
 import SdCardDetails from './SdCardDetails'
+import { MENU_ICONS } from './TaskCard'
 import VisitDetails from './VisitDetails'
 
 /** How many deployments a page has: ten rows of the table, six labels. */
@@ -157,7 +158,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                           {/* the card was collected and the images are not stored: the deployment can be made now */}
                           {phaseOf(d) === 'planned' && d.status === 'closed' && onCreate && (
                             <IconButton compact label={`Create the deployment ${d.deployment_id}`} title="Create the deployment" onClick={() => onCreate(d)}
-                                        path={<><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><circle cx="12" cy="13" r="3.5" /></>} />
+                                        path={MENU_ICONS.deployment} />
                           )}
                           {phaseOf(d) === 'created' && onUpload && statesOf(d).some((u) => u.destination === 'trapper' && u.state !== 'done') && (
                             <IconButton compact label={`Upload the deployment ${d.deployment_id}`} title={statesOf(d).some((u) => u.state === 'failed') ? 'Upload the images again' : 'Upload the images'} onClick={() => onUpload(d)} path={ICON_PATHS.upload} />
