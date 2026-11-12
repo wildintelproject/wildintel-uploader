@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "deployment.schema.json",
+  "title": "Deployment",
+  "description": "One row of the Camtrap Data Package \"deployments\" table — see\nhttps://camtrap-dp.tdwg.org (deployments-table-schema.json), whose field\nnames and constraints this mirrors (deploymentID -> deployment_id, etc.):\ndeploymentID, latitude, longitude, deploymentStart and deploymentEnd are\nrequired; the numeric ranges, integer types and the featureType enum\napply; and cameraHeight/cameraDepth are mutually exclusive. The two dates\nare ISO 8601 with a timezone designator (Z or ±hh:mm).",
+  "x-file": "<collections folder>/<research project id>/<R000N>/<deployment id>/deployment.json",
+  "x-unique": [
+    [
+      "deployment_id"
+    ]
+  ],
+  "x-references": {
+    "location_id": "locations.location_id"
+  },
+  "x-rules": [
+    "deployment_id is <R000N>-<location id>: the revision, a dash and the location.",
+    "camera_height and camera_depth are mutually exclusive.",
+    "start_date and end_date are ISO 8601 with the offset of the location's timezone; the end is after the start."
+  ],
+  "properties": {
+    "deployment_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "location_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "location_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "latitude": {
+      "maximum": 90,
+      "minimum": -90,
+      "type": "number"
+    },
+    "longitude": {
+      "maximum": 180,
+      "minimum": -180,
+      "type": "number"
+    },
+    "coordinate_uncertainty": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "start_date": {
+      "type": "string"
+    },
+    "end_date": {
+      "type": "string"
+    },
+    "setup_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "camera_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "camera_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "camera_interval": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "camera_height": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "camera_depth": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "camera_tilt": {
+      "anyOf": [
+        {
+          "maximum": 90,
+          "minimum": -90,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "camera_heading": {
+      "anyOf": [
+        {
+          "maximum": 360,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "detection_distance": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "timestamp_issues": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bait_use": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "feature_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "roadPaved",
+            "roadDirt",
+            "trailHiking",
+            "trailGame",
+            "roadUnderpass",
+            "roadOverpass",
+            "roadBridge",
+            "culvert",
+            "burrow",
+            "nestSite",
+            "carcass",
+            "waterSource",
+            "fruitingTree"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "habitat": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deployment_groups": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "comments": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "deployment_id",
+    "latitude",
+    "longitude",
+    "start_date",
+    "end_date"
+  ],
+  "type": "object"
+}

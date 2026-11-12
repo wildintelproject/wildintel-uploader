@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "upload_failures.schema.json",
+  "title": "Upload failures",
+  "description": "The uploads of the deployments that were tried and failed. An upload that was done is not here, and a success takes the failure away.",
+  "x-file": "<collections folder>/<research project id>/upload_failures.json",
+  "x-unique": [
+    [
+      "deployment_id",
+      "destination"
+    ]
+  ],
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "deployment_id",
+      "destination"
+    ],
+    "properties": {
+      "deployment_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "destination": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Where the upload was to go (trapper…)."
+      },
+      "note": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Why it failed."
+      },
+      "at": {
+        "type": "string",
+        "description": "When it was tried, ISO 8601 with its offset."
+      }
+    }
+  }
+}

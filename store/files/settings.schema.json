@@ -1,0 +1,1044 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "settings.schema.json",
+  "title": "Settings",
+  "description": "The settings of the app: kept in settings.toml of the user's configuration folder, not in the collections folder. It has the connection to Trapper and the like, so what is kept of them is a secret.",
+  "x-file": "<user configuration folder>/settings.toml",
+  "properties": {
+    "GENERAL": {
+      "$ref": "#/$defs/GeneralSettings"
+    },
+    "TRAPPER": {
+      "$ref": "#/$defs/TrapperSettings"
+    },
+    "EPICOLLECT5": {
+      "$ref": "#/$defs/Epicollect5Settings"
+    },
+    "AGOUTI": {
+      "$ref": "#/$defs/AgoutiSettings"
+    },
+    "EPICOLLECTCSV": {
+      "$ref": "#/$defs/EpicollectCsvSettings"
+    },
+    "DATA": {
+      "$ref": "#/$defs/DataSettings"
+    },
+    "VALIDATION": {
+      "$ref": "#/$defs/ValidationSettings"
+    },
+    "POSTVALIDATION": {
+      "$ref": "#/$defs/PostvalidationSettings"
+    },
+    "PREPROCESSING": {
+      "$ref": "#/$defs/PreprocessingSettings"
+    },
+    "FIELDWORK": {
+      "$ref": "#/$defs/FieldworkSettings"
+    },
+    "FIELDLOG": {
+      "$ref": "#/$defs/FieldlogSettings"
+    }
+  },
+  "type": "object",
+  "$defs": {
+    "AgoutiSettings": {
+      "description": "What an upload to Agouti needs (its public API: https://docs.agouti.eu/api/endpoints.html) — kept here; nothing is uploaded to Agouti yet.",
+      "properties": {
+        "enabled": {
+          "description": "Whether Agouti is used as a place to upload deployments to. (AGOUTI.enabled)",
+          "type": "boolean"
+        },
+        "base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The address of Agouti's API (https://api.agouti.eu). (AGOUTI.base_url)"
+        },
+        "api_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The API key Agouti's support gives, sent as X-API-KEY. (AGOUTI.api_key)",
+          "secret": true
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The id of the Agouti project the deployments are uploaded to. (AGOUTI.project_id)"
+        }
+      },
+      "type": "object"
+    },
+    "Camera": {
+      "description": "One of the camera traps — its label (what it is called), optionally its id (the serial number) and its model, as Camtrap DP names\nthem, and the day it was put into production.",
+      "properties": {
+        "label": {
+          "description": "What the camera is called — the name it goes by in the field.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "camera_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The camera's id — its serial number. (cameraID)"
+        },
+        "camera_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Manufacturer and model, written as manufacturer-model. (cameraModel)"
+        },
+        "connectivity": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "4g",
+                "5g"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The mobile network the camera sends its photos through: none when it does not."
+        },
+        "power_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "cells",
+                "battery"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What it runs on: cells (AA, AAA… the ones that are changed) or a battery."
+        },
+        "battery_removable": {
+          "anyOf": [
+            {
+              "enum": [
+                "yes",
+                "no"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whether the battery can be taken out of the camera: only said of a battery, as cells are always taken out to be changed."
+        },
+        "in_service": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The day it was put into production."
+        },
+        "research_project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The acronym of the research project it belongs to: every one belongs to one (a card or camera without it, as older settings had, waits to be assigned)."
+        },
+        "status": {
+          "description": "Planned: only in Settings, not in the app. Ready: available, not in the field yet. Active: in use. Archived: out of use for good (see archive_reason).",
+          "enum": [
+            "planned",
+            "ready",
+            "active",
+            "archived"
+          ],
+          "type": "string"
+        },
+        "archive_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "lost",
+                "stolen",
+                "broken",
+                "other"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why it was archived; other when it is none of the others (the status note says it)."
+        },
+        "status_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The day it stopped being active."
+        },
+        "status_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why, free text."
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to."
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed."
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed."
+        },
+        "deleted_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted."
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "type": "object"
+    },
+    "DataSettings": {
+      "properties": {
+        "dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The data folder, where the app keeps what it makes: its collections (collections/<research project id>/<collection>/<deployment id>), reports and packages go in folders inside it, unless each has one of its own. (DATA.dir)"
+        },
+        "collections_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A folder of its own for the collections, instead of the \"collections\" folder inside DATA.dir: <folder>/<research project id>/<collection>/<deployment id>. (DATA.collections_dir)"
+        },
+        "reports_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A folder of its own for the reports of the validations, postvalidations and preprocessings, instead of the \"reports\" folder inside DATA.dir. (DATA.reports_dir)"
+        },
+        "storage": {
+          "description": "Where the app keeps its records — the research projects and their locations, visits, cameras and SD cards: \"json\" (files in the collections folder, the one there is for now). (DATA.storage)",
+          "type": "string"
+        },
+        "packages_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A folder of its own for the packages made to upload to Trapper, instead of the \"packages\" folder inside DATA.dir: <folder>/<research project id>/<collection>. (DATA.packages_dir)"
+        }
+      },
+      "type": "object"
+    },
+    "Epicollect5Settings": {
+      "properties": {
+        "enabled": {
+          "description": "Whether Epicollect5 is used as a source: of visits (its entries are downloaded as a CSV), and of the details of a deployment when it is imported. (EPICOLLECT5.enabled)",
+          "type": "boolean"
+        },
+        "unmapped_to_comments": {
+          "description": "What an entry says in an input that is not mapped to any field goes to the comments of the deployment. (EPICOLLECT5.unmapped_to_comments)",
+          "type": "boolean"
+        },
+        "project_slug": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Slug of the Epicollect5 project — the name in its URL (five.epicollect.net/project/<slug>). (EPICOLLECT5.project_slug)"
+        },
+        "client_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Client id of the Epicollect5 API client app, for private projects. (EPICOLLECT5.client_id)"
+        },
+        "client_secret": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Client secret of the Epicollect5 API client app. (EPICOLLECT5.client_secret)",
+          "secret": true
+        },
+        "mapping": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Which input of the Epicollect5 form (its ref) gives each field of a deployment: deployment field -> input ref. (EPICOLLECT5.mapping)",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "EpicollectCsvSettings": {
+      "properties": {
+        "enabled": {
+          "description": "Whether the CSV downloaded from the new WildINTEL Epicollect project can be read for visits. (EPICOLLECTCSV.enabled)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "FieldlogSettings": {
+      "description": "Field records: how the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them\n(see services.visits_csv and services.visit_deployments).",
+      "properties": {
+        "time_source": {
+          "description": "When a visit happened: created_at, the time its entry was created (UTC); or hour, the date and the hour typed in the form (the wall clock of its location). (FIELDLOG.time_source)",
+          "enum": [
+            "created_at",
+            "hour"
+          ],
+          "type": "string"
+        },
+        "keep_seconds": {
+          "description": "Keep the seconds of the visits in the deployments' start and end written in the logs; off, they are cut to the minute. (FIELDLOG.keep_seconds)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "FieldworkSettings": {
+      "properties": {
+        "trappers": {
+          "description": "The people who go to the field — suggested when a visit is registered, as who went. (FIELDWORK.trappers)",
+          "items": {
+            "$ref": "#/$defs/Trapper"
+          },
+          "type": "array"
+        },
+        "sd_cards": {
+          "description": "The SD cards of the field work. (FIELDWORK.sd_cards)",
+          "items": {
+            "$ref": "#/$defs/SdCard"
+          },
+          "type": "array"
+        },
+        "cameras": {
+          "description": "The camera traps of the field work. (FIELDWORK.cameras)",
+          "items": {
+            "$ref": "#/$defs/Camera"
+          },
+          "type": "array"
+        },
+        "roles": {
+          "description": "What each trapper is in each research project: a trapper can have several in the same project, one entry for each. (FIELDWORK.roles)",
+          "items": {
+            "$ref": "#/$defs/TrapperRole"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "GeneralSettings": {
+      "properties": {
+        "log_level": {
+          "description": "How much the app logs, to the console and its log file. (GENERAL.log_level)",
+          "enum": [
+            "ERROR",
+            "WARNING",
+            "INFO",
+            "DEBUG"
+          ],
+          "type": "string"
+        },
+        "workers": {
+          "description": "How many images are validated or preprocessed at once — up to the CPUs of the machine pays off. (GENERAL.workers)",
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "default_research_project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The acronym of the research project that comes filled in wherever one is asked for; it can still be changed there. (GENERAL.default_research_project)"
+        }
+      },
+      "type": "object"
+    },
+    "PostvalidationSettings": {
+      "description": "Which of the postvalidation checks the wizard shows — and so runs — and\nthe parameters those that take one start from. They need what the wizard\nknows of the deployment: its id, collection, location and dates.",
+      "properties": {
+        "deployment_id": {
+          "description": "Deployment id format. (POSTVALIDATION.deployment_id)",
+          "type": "boolean"
+        },
+        "collection_prefix": {
+          "description": "Deployment id starts with its collection. (POSTVALIDATION.collection_prefix)",
+          "type": "boolean"
+        },
+        "collection_name": {
+          "description": "Collection name. (POSTVALIDATION.collection_name)",
+          "type": "boolean"
+        },
+        "location": {
+          "description": "The id's location is the one chosen. (POSTVALIDATION.location)",
+          "type": "boolean"
+        },
+        "time_range": {
+          "description": "Image dates fit the deployment. (POSTVALIDATION.time_range)",
+          "type": "boolean"
+        },
+        "camera": {
+          "description": "Camera consistency. (POSTVALIDATION.camera)",
+          "type": "boolean"
+        },
+        "image_count": {
+          "description": "The number of images is like the previous revisions'. (POSTVALIDATION.image_count)",
+          "type": "boolean"
+        },
+        "sequence_count": {
+          "description": "The number of sequences is like the previous revisions'. (POSTVALIDATION.sequence_count)",
+          "type": "boolean"
+        },
+        "sequence_length": {
+          "description": "The length of the sequences is like the previous revisions'. (POSTVALIDATION.sequence_length)",
+          "type": "boolean"
+        },
+        "sd_card": {
+          "description": "The SD card is the one the visit left in the camera. (POSTVALIDATION.sd_card)",
+          "type": "boolean"
+        },
+        "photo_count": {
+          "description": "The folder has the number of photos the visit counted on the card. (POSTVALIDATION.photo_count)",
+          "type": "boolean"
+        },
+        "sequence_gap_seconds": {
+          "description": "What a sequence is: a new one starts when the gap to the previous image is at least this many seconds. (POSTVALIDATION.sequence_gap_seconds)",
+          "exclusiveMinimum": 0,
+          "maximum": 86400,
+          "type": "number"
+        },
+        "min_revisions": {
+          "description": "How many previous revisions of the location the statistical checks need to have to judge — with fewer they are skipped. (POSTVALIDATION.min_revisions)",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "similarity_method": {
+          "description": "What this revision is compared to: the median or mean of the previous ones, the last one, or the range they span. (POSTVALIDATION.similarity_method)",
+          "enum": [
+            "median",
+            "mean",
+            "last",
+            "range"
+          ],
+          "type": "string"
+        },
+        "image_count_tolerance": {
+          "description": "What is similar for the number of images, in percent. (POSTVALIDATION.image_count_tolerance)",
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "number"
+        },
+        "sequence_count_tolerance": {
+          "description": "What is similar for the number of sequences, in percent. (POSTVALIDATION.sequence_count_tolerance)",
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "number"
+        },
+        "sequence_length_tolerance": {
+          "description": "What is similar for the length of the sequences, in percent. (POSTVALIDATION.sequence_length_tolerance)",
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "number"
+        },
+        "tolerance_hours": {
+          "description": "Hours of leeway around the deployment's start and end when checking the image dates — the default of the tolerance the wizard asks for. (POSTVALIDATION.tolerance_hours)",
+          "maximum": 8760,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "PreprocessingSettings": {
+      "description": "What is done to the images as they are imported into their collection —\nwhich preprocessing steps a new run starts with, and the values they use.\nThe wizard lists them before the import, and a run can still switch each off.",
+      "properties": {
+        "rename": {
+          "description": "Rename the images <DEPLOYMENT>__<YYYYMMDD>_<n>.<EXT>. (PREPROCESSING.rename)",
+          "type": "boolean"
+        },
+        "resize": {
+          "description": "Resize the images to a width, keeping their proportions. (PREPROCESSING.resize)",
+          "type": "boolean"
+        },
+        "resize_width": {
+          "description": "The width, in pixels, images wider than it are resized to. Smaller ones are left as they are. (PREPROCESSING.resize_width)",
+          "maximum": 20000,
+          "minimum": 100,
+          "type": "integer"
+        },
+        "metadata": {
+          "description": "Add authorship, rights and license metadata (XMP, with ExifTool). (PREPROCESSING.metadata)",
+          "type": "boolean"
+        },
+        "owner": {
+          "description": "Who owns the images — the rights holder. (PREPROCESSING.owner)",
+          "type": "string"
+        },
+        "publisher": {
+          "description": "Who publishes the images. (PREPROCESSING.publisher)",
+          "type": "string"
+        },
+        "coverage": {
+          "description": "Where the images were taken, in the coverage text (e.g. Doñana National Park). Blank: the deployment's location. (PREPROCESSING.coverage)",
+          "type": "string"
+        },
+        "license_url": {
+          "description": "The license the images are shared under. (PREPROCESSING.license_url)",
+          "type": "string"
+        },
+        "ignore_dst": {
+          "description": "Read the camera's clock as if it never changed to summer time, using the timezone's standard offset. (PREPROCESSING.ignore_dst)",
+          "type": "boolean"
+        },
+        "convert_to_utc": {
+          "description": "Give the capture dates (in names and metadata) in UTC. (PREPROCESSING.convert_to_utc)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "SdCard": {
+      "description": "One of the SD cards of the field work — its label, as it is written on it, and optionally its brand, its capacity and the\nday it was put into production.",
+      "properties": {
+        "label": {
+          "description": "What the card is called — its number or the label on it (e.g. A12).",
+          "minLength": 1,
+          "type": "string"
+        },
+        "brand": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Who makes it, free text (e.g. SanDisk)."
+        },
+        "capacity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How much it holds, free text (e.g. 64 GB)."
+        },
+        "in_service": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The day it was put into production."
+        },
+        "research_project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The acronym of the research project it belongs to: every one belongs to one (a card or camera without it, as older settings had, waits to be assigned)."
+        },
+        "status": {
+          "description": "Planned: only in Settings, not in the app. Ready: available, not in the field yet. Active: in use. Archived: out of use for good (see archive_reason).",
+          "enum": [
+            "planned",
+            "ready",
+            "active",
+            "archived"
+          ],
+          "type": "string"
+        },
+        "archive_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "lost",
+                "stolen",
+                "broken",
+                "other"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why it was archived; other when it is none of the others (the status note says it)."
+        },
+        "status_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The day it stopped being active."
+        },
+        "status_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why, free text."
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to."
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed."
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed."
+        },
+        "deleted_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted."
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "type": "object"
+    },
+    "Trapper": {
+      "description": "One of the people who go to the field — {username, name, affiliation, email}. The people are global: they belong to no research project (what each is in a project is\nits role, which is the project's). Its `username` is what it is called in the app, as the label of an SD card is, and no two have the same.",
+      "properties": {
+        "username": {
+          "description": "What the trapper is called in the app — required, and unique among the trappers (whatever its case), as the label of an SD card is.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "description": "The trapper's full name, written as it should be on a visit.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "affiliation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where the trapper works, free text."
+        },
+        "email": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The trapper's email address — optional."
+        },
+        "status": {
+          "description": "Whether the trapper still goes to the field: an inactive one is no longer suggested, and an archived one is out of use for good (it never goes back).",
+          "enum": [
+            "active",
+            "inactive",
+            "archived"
+          ],
+          "type": "string"
+        },
+        "trapper_pk": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Its id in Trapper, when it was taken from there — such a trapper can only be seen here."
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to."
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed."
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed."
+        },
+        "deleted_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted."
+        }
+      },
+      "required": [
+        "username",
+        "name"
+      ],
+      "type": "object"
+    },
+    "TrapperRole": {
+      "description": "What a trapper is in a research project — one of the roles of a contributor in Camtrap DP (contributors.role).",
+      "properties": {
+        "research_project": {
+          "description": "The acronym of the research project.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "trapper": {
+          "description": "The name of the trapper, as it is in the list of trappers.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "role": {
+          "description": "Its role in the research project.",
+          "enum": [
+            "contact",
+            "principalInvestigator",
+            "rightsHolder",
+            "publisher",
+            "contributor"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to."
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed."
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed."
+        },
+        "deleted_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted."
+        }
+      },
+      "required": [
+        "research_project",
+        "trapper"
+      ],
+      "type": "object"
+    },
+    "TrapperSettings": {
+      "properties": {
+        "enabled": {
+          "description": "Whether Trapper is used as a place to upload deployments to. (TRAPPER.enabled)",
+          "type": "boolean"
+        },
+        "base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Trapper server URL. (TRAPPER.base_url)"
+        },
+        "user_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Trapper username (its email — the import form only accepts that). (TRAPPER.user_name)"
+        },
+        "user_password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Trapper password. (TRAPPER.user_password)",
+          "secret": true
+        },
+        "max_zip_mb": {
+          "description": "The images of each deployment are uploaded in packages of at most this many megabytes. (TRAPPER.max_zip_mb)",
+          "maximum": 5000,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "ValidationSettings": {
+      "description": "Which of the \"Validate folder contents\" checks the wizard shows — and\nso runs. Each looks at the folder alone, without knowing the deployment.",
+      "properties": {
+        "corrupted": {
+          "description": "Corrupted images. (VALIDATION.corrupted)",
+          "type": "boolean"
+        },
+        "sequence": {
+          "description": "Shooting order vs. filename sequence. (VALIDATION.sequence)",
+          "type": "boolean"
+        },
+        "structure": {
+          "description": "Folder structure (subdirectories). (VALIDATION.structure)",
+          "type": "boolean"
+        },
+        "camera": {
+          "description": "Same camera (model and id) on every image. (VALIDATION.camera)",
+          "type": "boolean"
+        },
+        "exif": {
+          "description": "Required EXIF fields (capture date, camera model and id). (VALIDATION.exif)",
+          "type": "boolean"
+        },
+        "duplicates": {
+          "description": "Duplicate images (same content). (VALIDATION.duplicates)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  }
+}

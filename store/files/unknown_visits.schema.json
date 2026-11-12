@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "unknown_visits.schema.json",
+  "title": "Unknown visits",
+  "description": "The visits that nothing is known of — no day, no camera, no card — to a location in a revision before its first known visit. They count as visits to finish a revision, but nothing can be checked against them. A real visit that comes later takes the place of its unknown one.",
+  "x-file": "<collections folder>/<research project id>/unknown_visits.json",
+  "x-unique": [
+    [
+      "location_ref",
+      "session"
+    ]
+  ],
+  "x-references": {
+    "location_ref": "locations.id"
+  },
+  "x-rules": [
+    "Only for a revision before the first known visit of the location."
+  ],
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "session"
+    ],
+    "properties": {
+      "location_ref": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "description": "The location, by id."
+      },
+      "location_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The location as it was said, when it is not one of the project's."
+      },
+      "session": {
+        "type": "string",
+        "pattern": "^R\\d+$"
+      }
+    },
+    "anyOf": [
+      {
+        "required": [
+          "location_ref"
+        ]
+      },
+      {
+        "required": [
+          "location_id"
+        ]
+      }
+    ]
+  }
+}

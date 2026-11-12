@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "locations.schema.json",
+  "title": "Locations",
+  "description": "The places of a research project where the cameras are put up. A location is also a site of Camtrap DP.",
+  "x-file": "<collections folder>/<research project id>/locations.json",
+  "x-unique": [
+    [
+      "location_id"
+    ]
+  ],
+  "x-rules": [
+    "location_id is unique in the research project, whatever its case.",
+    "A location that is deleted keeps its id: the visits that point to it still do.",
+    "timezone is an IANA name (Europe/Madrid); ignore_dst says whether its cameras ignore summer time — the day and the time of its visits are told on that wall clock.",
+    "An archived location is not expected in the revisions that start after status_date (with no date, after it was made)."
+  ],
+  "type": "array",
+  "items": {
+    "description": "A location of a research project kept in the collections folder.",
+    "properties": {
+      "location_id": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+      },
+      "name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "timezone": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "ignore_dst": {
+        "type": "boolean"
+      },
+      "latitude": {
+        "maximum": 90,
+        "minimum": -90,
+        "type": "number"
+      },
+      "longitude": {
+        "maximum": 180,
+        "minimum": -180,
+        "type": "number"
+      },
+      "coordinate_uncertainty": {
+        "anyOf": [
+          {
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "in_service": {
+        "anyOf": [
+          {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "trapper_pk": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "status": {
+        "enum": [
+          "planned",
+          "ready",
+          "active",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "status_date": {
+        "anyOf": [
+          {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "status_note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "id": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "description": "Its internal id: a UUID the app generates when it is kept. It never changes, and what points to the record points to it."
+      },
+      "created_at": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+        "description": "When it was kept here."
+      },
+      "updated_at": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+        "description": "When it was last changed."
+      },
+      "deleted_at": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+        "description": "When it was removed, if it was. Nothing is deleted: a removed record stays, with all it said, and is no longer listed."
+      }
+    },
+    "required": [
+      "location_id",
+      "timezone",
+      "ignore_dst",
+      "latitude",
+      "longitude"
+    ],
+    "type": "object"
+  }
+}

@@ -1,0 +1,454 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "visits.schema.json",
+  "title": "Visits",
+  "description": "The visits to the cameras of a research project: the history of the field work, from which its deployments are worked out. A visit has one or more actions and is made at one location in one revision (R0001, R0002…): a revision is one visit to each location that is not archived.",
+  "x-file": "<collections folder>/<research project id>/visits.json",
+  "x-unique": [
+    [
+      "location_ref",
+      "session"
+    ],
+    [
+      "location_id",
+      "session"
+    ]
+  ],
+  "x-references": {
+    "location_ref": "locations.id",
+    "camera_ref": "cameras.id",
+    "sd_ref": "sd_cards.id",
+    "setup_by_ref": "trappers.id",
+    "trapper_refs[]": "trappers.id",
+    "deployment_id": "<collections folder>/<research project id>/<R000N>/<deployment id>/deployment.json"
+  },
+  "x-rules": [
+    "A location has one visit in a revision, and a visit is after the last one to its location and after every visit of the revisions before its own.",
+    "A revision starts when the one before it is finished: every location that is not archived has its visit in it — made, or marked as not visited (camera_status Not revised, no actions). An unknown visit (unknown_visits.json) counts as one.",
+    "The first visit to a location can only be an Installation, unless the revisions before are unknown.",
+    "A camera is up at one location at a time; a card is in one camera at a time. A Revision or a Desinstallation collects the card that was in the camera.",
+    "state is worked out from the visits (see visit_deployments.refresh_states): deployed, collected, stolen, not_visited or no_camera.",
+    "deployment_id is the deployment the visit started — the images of the card it left, once they are imported; it is kept by the app.",
+    "latitude and longitude are where the trapper was when the visit was noted: they are not those of the location."
+  ],
+  "type": "array",
+  "items": {
+    "description": "A visit to a camera trap, as the fieldwork datasheet keeps it, at a location of the research project.\n\nWhat the datasheet has that Camtrap DP does not is the visit's own (session, action, status, card and batteries, the\nphotos counted, the SD card, whether the camera's date and time were right, and who went: trappers); what it has of a\ndeployment is named as DeploymentFields names it — camera_id (Camera), comments (Notes), the coordinates, setup_by —\nbeside the optional details the field app may also ask for.",
+    "properties": {
+      "session": {
+        "pattern": "^R\\d+$",
+        "type": "string"
+      },
+      "when": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+        "description": "The instant of the visit — what is kept. The day and the time of the wall clock of its location are worked out from it and its location's timezone."
+      },
+      "actions": {
+        "items": {
+          "enum": [
+            "Installation",
+            "Revision",
+            "Desinstallation",
+            "Stolen",
+            "Archive"
+          ],
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "trappers": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The names of who went that are not trappers of the list, comma separated."
+      },
+      "camera_status": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "battery_status": {
+        "anyOf": [
+          {
+            "enum": [
+              "OK",
+              "NoBatteries"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "card_status": {
+        "anyOf": [
+          {
+            "enum": [
+              "OK",
+              "CardFull"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "num_photos": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "date_time_ok": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "calibration": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "latitude": {
+        "anyOf": [
+          {
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "longitude": {
+        "anyOf": [
+          {
+            "maximum": 180,
+            "minimum": -180,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "deployment_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "state": {
+        "anyOf": [
+          {
+            "enum": [
+              "deployed",
+              "collected",
+              "stolen",
+              "not_visited",
+              "no_camera"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "created_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "updated_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "camera_model": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "camera_interval": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "camera_height": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "camera_depth": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "camera_tilt": {
+        "anyOf": [
+          {
+            "maximum": 90,
+            "minimum": -90,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "camera_heading": {
+        "anyOf": [
+          {
+            "maximum": 360,
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "detection_distance": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "timestamp_issues": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "bait_use": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "feature_type": {
+        "anyOf": [
+          {
+            "enum": [
+              "roadPaved",
+              "roadDirt",
+              "trailHiking",
+              "trailGame",
+              "roadUnderpass",
+              "roadOverpass",
+              "roadBridge",
+              "culvert",
+              "burrow",
+              "nestSite",
+              "carcass",
+              "waterSource",
+              "fruitingTree"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "habitat": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "deployment_groups": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "comments": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "tags": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "id": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "description": "Its internal id: a UUID the app generates when it is kept. It never changes, and what points to the record points to it."
+      },
+      "deleted_at": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+        "description": "When it was removed, if it was. Nothing is deleted: a removed record stays, with all it said, and is no longer listed."
+      },
+      "location_ref": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "description": "The location, by id. When the research project has none that is called so, location_id is kept as it was said."
+      },
+      "location_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100,
+        "description": "The location as it was said — only when the research project has no such location (no location_ref)."
+      },
+      "camera_ref": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "description": "The camera, by id."
+      },
+      "camera_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "The camera as it was said — only when the research project has no such camera."
+      },
+      "sd_ref": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "description": "The SD card left in the camera, by id."
+      },
+      "sd": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "The SD card as it was said — only when the research project has no such card."
+      },
+      "setup_by_ref": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "description": "Who set the camera up, by id of the trapper."
+      },
+      "setup_by": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Who set it up as it was said — only when it is not a trapper."
+      },
+      "trapper_refs": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "uniqueItems": true,
+        "description": "Who went, by id of the trappers."
+      }
+    },
+    "required": [
+      "session"
+    ],
+    "type": "object",
+    "anyOf": [
+      {
+        "required": [
+          "location_ref"
+        ]
+      },
+      {
+        "required": [
+          "location_id"
+        ]
+      }
+    ]
+  }
+}

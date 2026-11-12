@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "trappers.schema.json",
+  "title": "Trappers",
+  "description": "The people who go to the field. They belong to no research project: what each is in a project is its role.",
+  "x-file": "<collections folder>/trappers.json",
+  "x-unique": [
+    [
+      "username"
+    ],
+    [
+      "name"
+    ]
+  ],
+  "x-rules": [
+    "username is unique whatever its case, and has no spaces.",
+    "An inactive trapper is no longer suggested; an archived one is out of use. One taken from Trapper (trapper_pk) can only be seen here."
+  ],
+  "type": "array",
+  "items": {
+    "description": "One of the people who go to the field — {username, name, affiliation, email}. The people are global: they belong to no research project (what each is in a project is\nits role, which is the project's). Its `username` is what it is called in the app, as the label of an SD card is, and no two have the same.",
+    "properties": {
+      "username": {
+        "description": "What the trapper is called in the app — required, and unique among the trappers (whatever its case), as the label of an SD card is.",
+        "minLength": 1,
+        "type": "string"
+      },
+      "name": {
+        "description": "The trapper's full name, written as it should be on a visit.",
+        "minLength": 1,
+        "type": "string"
+      },
+      "affiliation": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Where the trapper works, free text."
+      },
+      "email": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The trapper's email address — optional."
+      },
+      "status": {
+        "description": "Whether the trapper still goes to the field: an inactive one is no longer suggested, and an archived one is out of use for good (it never goes back).",
+        "enum": [
+          "active",
+          "inactive",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "trapper_pk": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Its id in Trapper, when it was taken from there — such a trapper can only be seen here."
+      },
+      "id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to."
+      },
+      "created_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed."
+      },
+      "updated_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed."
+      },
+      "deleted_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted."
+      }
+    },
+    "required": [
+      "username",
+      "name"
+    ],
+    "type": "object"
+  }
+}

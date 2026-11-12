@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "roles.schema.json",
+  "title": "Roles",
+  "description": "What a trapper is in a research project (a contributor of Camtrap DP).",
+  "x-file": "<collections folder>/<research project id>/roles.json",
+  "x-unique": [
+    [
+      "trapper_ref",
+      "role"
+    ]
+  ],
+  "x-references": {
+    "trapper_ref": "trappers.id"
+  },
+  "type": "array",
+  "items": {
+    "description": "What a trapper is in a research project — one of the roles of a contributor in Camtrap DP (contributors.role).",
+    "properties": {
+      "trapper": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The name of the trapper, when it is not in the list of trappers."
+      },
+      "role": {
+        "description": "Its role in the research project.",
+        "enum": [
+          "contact",
+          "principalInvestigator",
+          "rightsHolder",
+          "publisher",
+          "contributor"
+        ],
+        "type": "string"
+      },
+      "id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to."
+      },
+      "created_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed."
+      },
+      "updated_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed."
+      },
+      "deleted_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted."
+      },
+      "trapper_ref": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "description": "The id of the trapper — when it is in the list of trappers; the name is then not kept."
+      }
+    },
+    "required": [
+      "role"
+    ],
+    "type": "object",
+    "anyOf": [
+      {
+        "required": [
+          "trapper_ref"
+        ]
+      },
+      {
+        "required": [
+          "trapper"
+        ]
+      }
+    ]
+  }
+}

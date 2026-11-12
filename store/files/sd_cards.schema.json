@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sd_cards.schema.json",
+  "title": "SD cards",
+  "description": "The SD cards of a research project.",
+  "x-file": "<collections folder>/<research project id>/sd_cards.json",
+  "x-unique": [
+    [
+      "label"
+    ]
+  ],
+  "x-rules": [
+    "label is unique in the research project, whatever its case.",
+    "Only a ready card can be left in a camera; a card is active while it is in one and is ready again when a visit collects it.",
+    "An archived card says why (archive_reason). It never goes back to planned, ready or active.",
+    "A card collected in a revision cannot be left again in the same revision."
+  ],
+  "type": "array",
+  "items": {
+    "description": "One of the SD cards of the field work — its label, as it is written on it, and optionally its brand, its capacity and the\nday it was put into production.",
+    "properties": {
+      "label": {
+        "description": "What the card is called — its number or the label on it (e.g. A12).",
+        "minLength": 1,
+        "type": "string"
+      },
+      "brand": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Who makes it, free text (e.g. SanDisk)."
+      },
+      "capacity": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "How much it holds, free text (e.g. 64 GB)."
+      },
+      "in_service": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The day it was put into production."
+      },
+      "status": {
+        "description": "Planned: only in Settings, not in the app. Ready: available, not in the field yet. Active: in use. Archived: out of use for good (see archive_reason).",
+        "enum": [
+          "planned",
+          "ready",
+          "active",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "archive_reason": {
+        "anyOf": [
+          {
+            "enum": [
+              "lost",
+              "stolen",
+              "broken",
+              "other"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Why it was archived; other when it is none of the others (the status note says it)."
+      },
+      "status_date": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The day it stopped being active."
+      },
+      "status_note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Why, free text."
+      },
+      "id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to."
+      },
+      "created_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed."
+      },
+      "updated_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed."
+      },
+      "deleted_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted."
+      }
+    },
+    "required": [
+      "label"
+    ],
+    "type": "object"
+  }
+}

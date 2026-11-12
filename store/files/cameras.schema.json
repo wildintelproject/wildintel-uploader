@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cameras.schema.json",
+  "title": "Cameras",
+  "description": "The cameras of a research project. What a visit does to a camera (put it up, take it away, find it stolen) is what changes its status.",
+  "x-file": "<collections folder>/<research project id>/cameras.json",
+  "x-unique": [
+    [
+      "label"
+    ],
+    [
+      "camera_id"
+    ]
+  ],
+  "x-rules": [
+    "label is unique in the research project, whatever its case; so is camera_id when it has one.",
+    "An archived camera says why (archive_reason): lost, stolen, broken or other. It never goes back to planned, ready or active.",
+    "status: ready (available, not in the field), active (it is up at a location); the visits change it, not a person.",
+    "A camera can be up at one location at a time."
+  ],
+  "type": "array",
+  "items": {
+    "description": "One of the camera traps — its label (what it is called), optionally its id (the serial number) and its model, as Camtrap DP names\nthem, and the day it was put into production.",
+    "properties": {
+      "label": {
+        "description": "What the camera is called — the name it goes by in the field.",
+        "minLength": 1,
+        "type": "string"
+      },
+      "camera_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The camera's id — its serial number. (cameraID)"
+      },
+      "camera_model": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Manufacturer and model, written as manufacturer-model. (cameraModel)"
+      },
+      "connectivity": {
+        "anyOf": [
+          {
+            "enum": [
+              "none",
+              "4g",
+              "5g"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The mobile network the camera sends its photos through: none when it does not."
+      },
+      "power_source": {
+        "anyOf": [
+          {
+            "enum": [
+              "cells",
+              "battery"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "What it runs on: cells (AA, AAA… the ones that are changed) or a battery."
+      },
+      "battery_removable": {
+        "anyOf": [
+          {
+            "enum": [
+              "yes",
+              "no"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Whether the battery can be taken out of the camera: only said of a battery, as cells are always taken out to be changed."
+      },
+      "in_service": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The day it was put into production."
+      },
+      "status": {
+        "description": "Planned: only in Settings, not in the app. Ready: available, not in the field yet. Active: in use. Archived: out of use for good (see archive_reason).",
+        "enum": [
+          "planned",
+          "ready",
+          "active",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "archive_reason": {
+        "anyOf": [
+          {
+            "enum": [
+              "lost",
+              "stolen",
+              "broken",
+              "other"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Why it was archived; other when it is none of the others (the status note says it)."
+      },
+      "status_date": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The day it stopped being active."
+      },
+      "status_note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Why, free text."
+      },
+      "id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Its internal id — a UUID the app generates when it is kept, that never changes and is never typed: what the records that refer to it point to."
+      },
+      "created_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was kept here (ISO 8601, UTC, with a Z): written by the app, never typed."
+      },
+      "updated_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was last changed (ISO 8601, UTC, with a Z): written by the app, never typed."
+      },
+      "deleted_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "When it was removed (ISO 8601, UTC, with a Z), if it was: it is no longer listed, but it is kept — nothing is deleted."
+      }
+    },
+    "required": [
+      "label"
+    ],
+    "type": "object"
+  }
+}

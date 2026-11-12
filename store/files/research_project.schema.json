@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_project.schema.json",
+  "title": "Research project",
+  "description": "A research project kept in the collections folder — the fields of\nTrapper's own \"Add research project\" form, its choice fields holding\nTrapper's option numbers. The acronym names its folder.",
+  "x-file": "<collections folder>/<research project id>/research_project.json",
+  "x-unique": [
+    [
+      "acronym"
+    ]
+  ],
+  "x-rules": [
+    "The acronym names the project's folder, so it can only have letters, digits, '_', '-' and '.', and starts with a letter or a digit.",
+    "A project is not deleted: its status is archived."
+  ],
+  "properties": {
+    "name": {
+      "maxLength": 255,
+      "minLength": 1,
+      "type": "string"
+    },
+    "acronym": {
+      "maxLength": 10,
+      "minLength": 3,
+      "pattern": "^[0-9A-Za-z][0-9A-Za-z_.-]*$",
+      "type": "string"
+    },
+    "sampling_design": {
+      "maximum": 6,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "sensor_method": {
+      "maximum": 3,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "animal_types": {
+      "maximum": 3,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "bait_use": {
+      "maximum": 6,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "event_interval": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "planned",
+        "active",
+        "finished",
+        "archived"
+      ],
+      "type": "string"
+    },
+    "keywords": {
+      "type": "string"
+    },
+    "abstract": {
+      "maxLength": 2000,
+      "type": "string"
+    },
+    "methods": {
+      "maxLength": 2000,
+      "type": "string"
+    },
+    "description": {
+      "maxLength": 2000,
+      "type": "string"
+    },
+    "trapper_pk": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Its internal id: a UUID the app generates when it is kept. It never changes, and what points to the record points to it."
+    },
+    "created_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "When it was kept here."
+    },
+    "updated_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "When it was last changed."
+    },
+    "deleted_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "When it was removed, if it was. Nothing is deleted: a removed record stays, with all it said, and is no longer listed."
+    }
+  },
+  "required": [
+    "name",
+    "acronym"
+  ],
+  "type": "object"
+}

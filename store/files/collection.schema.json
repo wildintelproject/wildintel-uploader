@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "collection.schema.json",
+  "title": "Collection",
+  "description": "A collection — a revision: R0001, R0002… — of a research project. Its folder holds its deployments.",
+  "x-file": "<collections folder>/<research project id>/<R000N>/collection.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^R\\d+$"
+    }
+  }
+}
