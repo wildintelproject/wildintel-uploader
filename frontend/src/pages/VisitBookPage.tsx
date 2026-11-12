@@ -7,8 +7,9 @@ import { Breadcrumb } from '../components/TaskCard'
 import IconButton, { ICON_PATHS } from '../components/IconButton'
 import LinkButton from '../components/LinkButton'
 import EditVisitDialog from '../components/EditVisitDialog'
+import LocationDetails from '../components/LocationDetails'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
-import type { BookVisit, ClosedVisitTarget, VisitState } from '../types'
+import type { BookVisit, ClosedVisitTarget, LocalLocation, VisitState } from '../types'
 import { btnOutline } from './ImportDeploymentPage'
 import { download } from '../csvFile'
 
@@ -111,6 +112,17 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const [metricsOpen, setMetricsOpen] = useState(true)
   // The book is of the research project the general settings say is the default: the one that is active.
   const { project, defaultAcronym, error: projectError } = useDefaultResearchProject(settingsOpen)
+  // The data of a location, in a panel at the right: from the link of the location of a visit.
+  const [sitePanel, setSitePanel] = useState<{ site: string; location: LocalLocation | undefined } | null>(null)
+  const [siteError, setSiteError] = useState<string | null>(null)
+  async function showSite(site: string) {
+    if (!project) return
+    setSiteError(null)
+    try {
+      const { results } = await api.listLocalLocations(project.acronym)
+      setSitePanel({ site, location: results.find((l) => l.location_id.toLowerCase() === site.toLowerCase()) })
+    } catch (e) { setSiteError(e instanceof Error ? e.message : 'Could not read the locations.') }
+  }
   const [visits, setVisits] = useState<BookVisit[] | null>(null)
   const [opened, setOpened] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
@@ -282,8 +294,8 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                             <ChevronCell open={opened === key} available={!v.not_done && !v.unknown} label={`the details of the visit ${v.session} to ${v.location_id}`} onToggle={() => setOpened(opened === key ? null : key)} />
                             <td className="px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-zinc-200">{v.session}</td>
                             <td className="px-4 py-3 font-mono">
-                              {onOpenSettings && project
-                                ? <LinkButton title={`Show the details of the location ${v.location_id}`} className="font-mono" onClick={() => onOpenSettings('locations', project.acronym, v.location_id)}>{v.location_id}</LinkButton>
+                              {project
+                                ? <LinkButton title={`Show the details of the location ${v.location_id}`} className="font-mono" onClick={() => void showSite(v.location_id)}>{v.location_id}</LinkButton>
                                 : v.location_id}
                             </td>
                             <td className="px-4 py-3 font-mono text-[11px] whitespace-nowrap text-zinc-600 dark:text-zinc-300">{v.not_done || v.unknown || phaseOf(v) === 'not_visited' ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
@@ -381,6 +393,12 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
           )}
           </TableCard>
         </>
+      )}
+
+      {siteError && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{siteError}</p>}
+      {sitePanel && (
+        <LocationDetails site={sitePanel.site} location={sitePanel.location} onClose={() => setSitePanel(null)}
+          onOpenInSettings={onOpenSettings && project ? () => { setSitePanel(null); onOpenSettings('locations', project.acronym, sitePanel.site) } : undefined} />
       )}
 
       {helpOpen && (

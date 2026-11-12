@@ -5,7 +5,7 @@ import { api } from '../api'
 import VisitBookPage from './VisitBookPage'
 import { download } from '../csvFile'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), getSettings: vi.fn(), exportVisitsCsv: vi.fn(), updateVisit: vi.fn(), saveVisit: vi.fn() } }))
+vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), trapperGetConfig: vi.fn(), visitBook: vi.fn(), getSettings: vi.fn(), exportVisitsCsv: vi.fn(), updateVisit: vi.fn(), saveVisit: vi.fn(), listLocalLocations: vi.fn() } }))
 vi.mock('../csvFile', () => ({ download: vi.fn() }))
 const mockedApi = vi.mocked(api)
 
@@ -141,13 +141,21 @@ describe('VisitBookPage', () => {
     expect(within(revisions).getByRole('button', { name: /^R0001/ })).toHaveTextContent('2024-06-01 → …')
   })
 
-  it('links the location of a visit to its details in the settings', async () => {
+  it('opens the data of the location of a visit in a panel at the right, with a way on to its page in the settings', async () => {
     mockedApi.visitBook.mockResolvedValue({ results: [visit({ session: 'R0001', deployment_status: 'closed' })] })
+    mockedApi.listLocalLocations.mockResolvedValue({ results: [{ location_id: 'TATR_0001', name: 'Ridge', latitude: 49.2, longitude: 20.1, timezone: 'Europe/Warsaw', coordinate_uncertainty: 5, trapper_pk: null }] } as never)
     const onOpenSettings = vi.fn()
     render(<VisitBookPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
     await screen.findByText('Tatra', { exact: false })
     const table = await screen.findByRole('table', { name: 'Visits' })
+
     await userEvent.click(within(table).getByRole('button', { name: 'TATR_0001' }))
+    const panel = within(await screen.findByRole('dialog', { name: 'Details of the location TATR_0001' }))
+    expect(mockedApi.listLocalLocations).toHaveBeenCalledWith('TATR')
+    expect(panel.getByRole('heading', { name: 'TATR_0001' })).toBeInTheDocument()
+    expect(panel.getByText('Ridge')).toBeInTheDocument()
+    expect(onOpenSettings).not.toHaveBeenCalled()                 // it goes to the settings from the panel, not at once
+    await userEvent.click(panel.getByRole('button', { name: 'Open it in the settings' }))
     expect(onOpenSettings).toHaveBeenCalledWith('locations', 'TATR', 'TATR_0001')
   })
 
@@ -167,7 +175,7 @@ describe('VisitBookPage', () => {
     expect(within(row('TATR_0001', 'R0002')).queryByRole('button', { name: /^Show the next visit to TATR_0001/ })).not.toBeInTheDocument()          // the last revision of the location
     expect(within(row('TATR_0002', 'R0001')).queryByRole('button', { name: /^Show the next visit to TATR_0002/ })).not.toBeInTheDocument()          // nothing after it
     // only what applies is there, View between the one before and the one after: the first revision has no one before; a visit made is not created again, its deployment is
-    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['Show the details of the visit R0001', 'Edit the visit R0001', 'View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
+    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').filter((b) => b.hasAttribute('aria-label')).map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['Show the details of the visit R0001', 'Edit the visit R0001', 'View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
 
     await userEvent.click(within(row('TATR_0001', 'R0002')).getByRole('button', { name: 'Show the previous visit to TATR_0001 (R0001)' }))
     // the revision before is picked and its visit to the location is open

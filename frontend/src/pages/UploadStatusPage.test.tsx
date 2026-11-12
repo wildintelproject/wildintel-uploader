@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeploymentUploadState, FieldDeployment, UploadEntry } from '../types'
 
-vi.mock('../api', () => ({ api: { fieldDeployments: vi.fn(), listResearchProjects: vi.fn(), getSettings: vi.fn() } }))
+vi.mock('../api', () => ({ api: { fieldDeployments: vi.fn(), listResearchProjects: vi.fn(), getSettings: vi.fn(), listVisits: vi.fn(), listLocalLocations: vi.fn(), collectionPath: vi.fn(), listLocalDeployments: vi.fn() } }))
 import { api } from '../api'
 import UploadStatusPage from './UploadStatusPage'
 
@@ -33,13 +33,13 @@ describe('UploadStatusPage', () => {
     render(<UploadStatusPage onBack={() => {}} />)
 
     const table = await screen.findByRole('table', { name: 'Uploads' })
-    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Details', 'Deployment', 'Where', 'When', 'Uploader', 'Status', 'What to do'])
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Details', 'Deployment', 'Location', 'Visit', 'Uploader', 'Status', 'What to do'])
     const cells = (row: HTMLElement) => within(row).getAllByRole('cell').map((c) => c.textContent)
     expect(within(table).getAllByRole('row').slice(1).map(cells)).toEqual([
-      ['', 'R0002-DONA_01', 'DONA_01', 'Visit R0002 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done20 Oct 2026', ''],
-      ['', 'R0002-DONA_02', 'DONA_02', 'Visit R0002 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Planned', ''],
-      ['', 'R0001-DONA_01', 'DONA_01', 'Visit R0001 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done1 Sep 2026', ''],
-      ['', 'R0001-DONA_02', 'DONA_02', 'Visit R0001 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Failed', ''],
+      ['', 'R0002-DONA_01', 'DONA_01', 'R0002 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done20 Oct 2026', ''],
+      ['', 'R0002-DONA_02', 'DONA_02', 'R0002 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Planned', ''],
+      ['', 'R0001-DONA_01', 'DONA_01', 'R0001 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done1 Sep 2026', ''],
+      ['', 'R0001-DONA_02', 'DONA_02', 'R0001 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Failed', ''],
     ])
     expect(within(table).queryByText('R0001-DONA_03')).not.toBeInTheDocument()   // the camera was stolen: there is no deployment to upload
   })
@@ -93,7 +93,7 @@ describe('UploadStatusPage', () => {
     expect(screen.getByRole('button', { name: 'Upload the deployment R0002-DONA_02' })).toBeDisabled()    // its images are not stored yet
     await userEvent.click(screen.getByRole('button', { name: 'Try again the upload of the deployment R0001-DONA_02' }))
     expect(onUpload).toHaveBeenCalledWith({ researchProjectId: 'DONA', collection: 'R0001' })
-    expect(screen.queryByRole('button', { name: /R0002-DONA_01$/ })).not.toBeInTheDocument() // done: nothing to upload
+    expect(screen.queryByRole('button', { name: /^(Upload|Try again the upload of) the deployment R0002-DONA_01$/ })).not.toBeInTheDocument() // done: nothing to upload
 
     await userEvent.click(screen.getByRole('button', { name: 'View the upload of R0002-DONA_01 to Trapper' }))
     const list = screen.getByRole('list', { name: 'Uploads of R0002-DONA_01' })
@@ -117,15 +117,48 @@ describe('UploadStatusPage', () => {
     expect(progress).toHaveTextContent('1/ 2')
   })
 
-  it('goes to the visit that started a deployment and to the details of a deployment', async () => {
-    const onShowVisit = vi.fn(), onShowDeployment = vi.fn()
-    render(<UploadStatusPage onBack={() => {}} onShowVisit={onShowVisit} onShowDeployment={onShowDeployment} />)
+  it('opens the visit that started a deployment, the deployment and its location in panels at the right, with a way on to each from the panel', async () => {
+    const stored = (over: object) => ({ location_id: 'DONA_01', session: 'R0001', date: '2026-06-10', time: '09:00:00', actions: ['Installation'], trappers: 'Ana', camera_id: 'P800', sd: 'A13', num_photos: null, ...over }) as never
+    vi.mocked(api.listVisits).mockResolvedValue({ results: [stored({})] })
+    vi.mocked(api.listLocalLocations).mockResolvedValue({ results: [{ location_id: 'DONA_01', name: 'Doñana site 1', latitude: 37.01, longitude: -6.44, timezone: 'UTC', coordinate_uncertainty: 5, trapper_pk: null }] } as never)
+    vi.mocked(api.collectionPath).mockResolvedValue({ path: '/collections/DONA/R0001', collection: 'R0001' } as never)
+    vi.mocked(api.listLocalDeployments).mockResolvedValue({ results: [{ deployment_id: 'R0001-DONA_01', location_id: 'DONA_01', start_date: '2026-06-10T09:00:00Z', camera_id: 'P800' }] } as never)
+    const onShowVisit = vi.fn(), onShowDeployment = vi.fn(), onOpenSettings = vi.fn()
+    render(<UploadStatusPage onBack={() => {}} onShowVisit={onShowVisit} onShowDeployment={onShowDeployment} onOpenSettings={onOpenSettings} />)
     await screen.findByRole('table', { name: 'Uploads' })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Show the visit R0001 to DONA_01' }))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Show the visit R0001 to DONA_01' })[0])
+    const visit = within(await screen.findByRole('dialog', { name: 'Details of the visit R0001 to DONA_01' }))
+    expect(api.listVisits).toHaveBeenCalledWith('DONA', 'DONA_01')
+    await userEvent.click(visit.getByRole('button', { name: /Open visit R0001/ }))
     expect(onShowVisit).toHaveBeenCalledWith({ session: 'R0001', site: 'DONA_01' })
+
     await userEvent.click(screen.getByRole('button', { name: 'Show the details of the deployment R0001-DONA_01' }))
+    const deployment = within(await screen.findByRole('dialog', { name: 'Details of the deployment R0001-DONA_01' }))
+    expect(await deployment.findByRole('region', { name: 'Location' })).toBeInTheDocument()
+    await userEvent.click(deployment.getByRole('button', { name: /Open it in the deployments dashboard/ }))
     expect(onShowDeployment).toHaveBeenCalledWith('R0001-DONA_01')
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'DONA_01' })[0])
+    const site = within(await screen.findByRole('dialog', { name: 'Details of the location DONA_01' }))
+    await userEvent.click(site.getByRole('button', { name: 'Open it in the settings' }))
+    expect(onOpenSettings).toHaveBeenCalledWith('locations', 'DONA', 'DONA_01')
+  })
+
+  it('shows the uploads as a table or as labels — two buttons at the right of Reset', async () => {
+    render(<UploadStatusPage onBack={() => {}} />)
+    await screen.findByRole('table', { name: 'Uploads' })
+    expect(screen.getAllByRole('button', { name: /^Show the uploads as/ }).map((b) => b.getAttribute('aria-label'))).toEqual(['Show the uploads as a table', 'Show the uploads as labels'])
+    expect(screen.queryByRole('button', { name: 'Show only the search field' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show the uploads as labels' }))
+    expect(screen.queryByRole('table', { name: 'Uploads' })).not.toBeInTheDocument()
+    const label = screen.getByRole('article', { name: 'Upload of R0002-DONA_01 to Trapper' })
+    expect(label).toHaveTextContent('Done')
+    expect(label).toHaveTextContent('R0002 · DONA_01')
+    expect(within(label).getByRole('button', { name: 'View the upload of R0002-DONA_01 to Trapper' })).toBeInTheDocument()
+    await userEvent.click(within(label).getByRole('button', { name: 'View the upload of R0002-DONA_01 to Trapper' }))
+    expect(within(label).getByRole('list', { name: 'Uploads of R0002-DONA_01' })).toBeInTheDocument()     // what was sent, in the label
   })
 
   it('opens the legend in a panel from its button in the header, folds away the revisions and the cards, and clears the search with its cross', async () => {

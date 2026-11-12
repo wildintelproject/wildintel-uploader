@@ -3,12 +3,17 @@ import { api } from '../api'
 import { Icon, StateCard } from '../components/Dashboard'
 import { ActiveFilters, ChevronCell, DashboardHeader, DetailsRow, HELP_ICONS, HelpButton, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from '../components/DashboardParts'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
+import DeploymentDetails from '../components/DeploymentDetails'
+import LocationDetails from '../components/LocationDetails'
+import VisitDetails from '../components/VisitDetails'
 import IconButton, { ICON_PATHS } from '../components/IconButton'
 import LinkButton from '../components/LinkButton'
 import UploadList from '../components/UploadList'
+import { Glyph, ViewSwitch, type View } from '../components/ViewSwitch'
 import { Breadcrumb, MENU_ICONS } from '../components/TaskCard'
 import { formatDay } from '../dateFormat'
-import type { DeploymentUploadState, FieldDeployment, UploadStateName, UploadTarget } from '../types'
+import { readDeployment } from '../deploymentDetails'
+import type { DeploymentFields, DeploymentUploadState, FieldDeployment, LocalLocation, StoredVisit, UploadStateName, UploadTarget } from '../types'
 import { destinationLabel } from '../uploadDestinations'
 import { btnOutline } from './ImportDeploymentPage'
 import type { VisitFocus } from './VisitBookPage'
@@ -30,6 +35,7 @@ interface Props {
 
 /** How many uploads a page has. */
 const PER_PAGE = 10
+const LABELS = 6
 
 const plural = (n: number) => `${n} ${n === 1 ? 'upload' : 'uploads'}`
 
@@ -58,13 +64,44 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   const [state, setState] = useState<'' | UploadStateName>('')
   const [text, setText] = useState(search ?? '')
   const [page, setPage] = useState(1)
+  // as a table, or as a label for each upload
+  const [view, setView] = useState<View>('table')
   // the upload whose details are open
   const [opened, setOpened] = useState<string | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   // The revisions and the status cards fold away, to leave the table alone.
   const [revisionsOpen, setRevisionsOpen] = useState(true)
   const [metricsOpen, setMetricsOpen] = useState(true)
+  // The panels at the right: what a deployment, a location and a visit say, from their links in the table.
+  const [deploymentPanel, setDeploymentPanel] = useState<{ deployment: FieldDeployment; fields: DeploymentFields | null | 'error' | undefined } | null>(null)
+  const [sitePanel, setSitePanel] = useState<{ site: string; location: LocalLocation | undefined } | null>(null)
+  const [visitPanel, setVisitPanel] = useState<{ visit: StoredVisit; end?: StoredVisit | null } | null>(null)
   const error = projectError ?? loadError
+
+  async function showDeployment(d: FieldDeployment) {
+    if (!project) return
+    setDeploymentPanel({ deployment: d, fields: undefined })
+    let fields: DeploymentFields | null | 'error'
+    try { fields = await readDeployment(project.acronym, d.deployment_id) } catch { fields = 'error' }
+    setDeploymentPanel((p) => (p && p.deployment.deployment_id === d.deployment_id ? { deployment: d, fields } : p))
+  }
+  async function showSite(site: string) {
+    if (!project) return
+    try {
+      const { results } = await api.listLocalLocations(project.acronym)
+      setSitePanel({ site, location: results.find((l) => l.location_id.toLowerCase() === site.toLowerCase()) })
+    } catch (e) { setLoadError(e instanceof Error ? e.message : 'Could not read the locations.') }
+  }
+  async function showVisit(d: FieldDeployment) {
+    if (!project) return
+    try {
+      const { results } = await api.listVisits(project.acronym, d.site)
+      const at = (session: string | null) => (session ? results.find((v) => v.session === session && v.location_id.toLowerCase() === d.site.toLowerCase()) : undefined)
+      const visit = at(d.start_session)
+      if (visit) setVisitPanel({ visit, end: at(d.end_session) ?? null })
+      else setLoadError(`The visit ${d.start_session ?? ''} to ${d.site} was not found.`)
+    } catch (e) { setLoadError(e instanceof Error ? e.message : 'Could not read the visit.') }
+  }
 
   useEffect(() => {
     setDeployments(null); setLoadError(null); setRevision('')
@@ -88,10 +125,35 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   const shown = own
     .filter((r) => !state || r.upload.state === state)
     .filter((r) => !needle || `${r.deployment.deployment_id} ${r.deployment.site} ${r.deployment.collection} ${destinationLabel(r.upload.destination)} ${STATE_LABEL[r.upload.state]}`.toLowerCase().includes(needle))
-  const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE))
+  const perPage = view === 'labels' ? LABELS : PER_PAGE
+  const pages = Math.max(1, Math.ceil(shown.length / perPage))
   const current = Math.min(page, pages)
-  const onPage = shown.slice((current - 1) * PER_PAGE, current * PER_PAGE)
+  const onPage = shown.slice((current - 1) * perPage, current * perPage)
   const key = (r: UploadRow) => `${r.deployment.deployment_id}/${r.upload.destination}`
+
+  // What an upload says of its state, and what can be done with it: as the table and the labels both show them.
+  const statusOf = (r: UploadRow) => (
+    <>
+                            <span title={r.upload.note ?? undefined} className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATE_BADGE[r.upload.state]}`}>{STATE_LABEL[r.upload.state]}</span>
+                            {r.upload.state === 'done' && <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">{r.upload.uploaded_at ? formatDay(r.upload.uploaded_at, true) : 'synced'}</span>}
+    </>
+  )
+  const optionsOf = (r: UploadRow) => {
+    const d = r.deployment
+    return (
+                            <RowOptions label={`Options of the upload of ${d.deployment_id} to ${destinationLabel(r.upload.destination)}`}>
+                              {r.upload.state === 'done' && (
+                                <IconButton compact label={`View the upload of ${d.deployment_id} to ${destinationLabel(r.upload.destination)}`} title="View the upload" expanded={opened === key(r)}
+                                            onClick={() => setOpened(opened === key(r) ? null : key(r))} path={ICON_PATHS.view} />
+                              )}
+                              {r.upload.state !== 'done' && onUpload && project && (
+                                <IconButton compact label={`${r.upload.state === 'failed' ? 'Try again the upload of' : 'Upload'} the deployment ${d.deployment_id}${uploaders.length > 1 ? ` to ${destinationLabel(r.upload.destination)}` : ''}`}
+                                            title={d.images_stored ? (r.upload.state === 'failed' ? 'Upload the images again' : 'Upload the images') : 'The deployment is not created yet: its images are not stored'}
+                                            disabled={!d.images_stored} onClick={() => onUpload({ researchProjectId: project.acronym, collection: d.collection })} path={ICON_PATHS.upload} />
+                              )}
+                            </RowOptions>
+    )
+  }
 
   const SQUARES: { state: UploadStateName; note: string; tone: string; badge: string; icon: React.ReactNode }[] = [
     { state: 'planned', note: 'Still to be uploaded', tone: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300', icon: <Icon path={<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>} className="h-5 w-5" /> },
@@ -130,14 +192,16 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
           <TableCard label="Uploads table">
             <TableToolbar searchLabel="Filter the uploads" placeholder="Search by deployment, site, revision, uploader, status…" text={text} onText={(t) => { setText(t); setPage(1) }}
               choice={{ label: 'Uploader', value: uploader, onChange: (v) => { setUploader(v); setPage(1) }, options: uploaders.map((u) => ({ value: u, label: destinationLabel(u) })) }}
+              trailing={<ViewSwitch view={view} items="uploads" views={['table', 'labels']} onChange={(v) => { setView(v); setPage(1) }} />}
               onReset={() => { setText(''); setUploader(''); setState(''); setRevision(''); setPage(1) }} />
             <ActiveFilters filters={[{ label: `Revision: ${revision || 'All'}`, tone: 'blue' }, { label: `Uploader: ${uploader ? destinationLabel(uploader) : 'All'}`, tone: 'blue' }, { label: `Status: ${state ? STATE_LABEL[state] : 'All'}`, tone: 'green' }]}
                            summary={`${shown.length} of ${every.length} uploads match`} />
 
+            {view === 'table' && (
             <div className="overflow-x-auto">
               <table className={TABLE.table} aria-label="Uploads">
                 <thead className={TABLE.head}>
-                  <tr><th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>{['Deployment', 'Where', 'When', 'Uploader', 'Status'].map((h) => <th key={h} scope="col" className={TABLE.th}>{h}</th>)}<th scope="col" className="px-4 py-3"><span className="sr-only">What to do</span></th></tr>
+                  <tr><th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>{['Deployment', 'Location', 'Visit', 'Uploader', 'Status'].map((h) => <th key={h} scope="col" className={TABLE.th}>{h}</th>)}<th scope="col" className="px-4 py-3"><span className="sr-only">What to do</span></th></tr>
                 </thead>
                 <tbody className={TABLE.body}>
                   {onPage.map((r) => {
@@ -147,39 +211,25 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
                         <tr className={TABLE.row(opened === key(r))}>
                           <ChevronCell open={opened === key(r)} available={r.upload.state === 'done'} label={`the details of the upload of ${d.deployment_id} to ${destinationLabel(r.upload.destination)}`} onToggle={() => setOpened(opened === key(r) ? null : key(r))} />
                           <td className={`${TABLE.cell} font-mono text-xs font-semibold`}>
-                            {onShowDeployment
-                              ? <LinkButton className="font-mono text-xs font-semibold" aria-label={`Show the details of the deployment ${d.deployment_id}`} onClick={() => onShowDeployment(d.deployment_id)}>{d.deployment_id}</LinkButton>
+                            {project
+                              ? <LinkButton className="font-mono text-xs font-semibold" aria-label={`Show the details of the deployment ${d.deployment_id}`} onClick={() => void showDeployment(d)}>{d.deployment_id}</LinkButton>
                               : d.deployment_id}
                           </td>
                           <td className={`${TABLE.cell} font-mono text-xs`}>
-                            {onOpenSettings && project
-                              ? <LinkButton title={`Show the details of the location ${d.site}`} onClick={() => onOpenSettings('locations', project.acronym, d.site)}>{d.site}</LinkButton>
+                            {project
+                              ? <LinkButton title={`Show the details of the location ${d.site}`} onClick={() => void showSite(d.site)}>{d.site}</LinkButton>
                               : d.site}
                           </td>
                           <td className={TABLE.cell}>
-                            {d.start_session && (onShowVisit
-                              ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => onShowVisit({ session: d.start_session!, site: d.site })}>Visit {d.start_session} · {d.site}</LinkButton>
-                              : <span className="block text-xs font-semibold">Visit {d.start_session} · {d.site}</span>)}
+                            {d.start_session && (project
+                              ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => void showVisit(d)}>{d.start_session} · {d.site}</LinkButton>
+                              : <span className="block text-xs font-semibold">{d.start_session} · {d.site}</span>)}
                             <span className="block font-mono text-xs">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
                           </td>
                           <td className={TABLE.cell}>{destinationLabel(r.upload.destination)}</td>
-                          <td className={TABLE.cell}>
-                            <span title={r.upload.note ?? undefined} className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATE_BADGE[r.upload.state]}`}>{STATE_LABEL[r.upload.state]}</span>
-                            {r.upload.state === 'done' && <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">{r.upload.uploaded_at ? formatDay(r.upload.uploaded_at, true) : 'synced'}</span>}
-                          </td>
+                          <td className={TABLE.cell}>{statusOf(r)}</td>
                           <td className={`${TABLE.cell} whitespace-nowrap`}>
-                            {/* only what can be done with the row: the options that do not apply to it are not there */}
-                            <RowOptions label={`Options of the upload of ${d.deployment_id} to ${destinationLabel(r.upload.destination)}`}>
-                              {r.upload.state === 'done' && (
-                                <IconButton compact label={`View the upload of ${d.deployment_id} to ${destinationLabel(r.upload.destination)}`} title="View the upload" expanded={opened === key(r)}
-                                            onClick={() => setOpened(opened === key(r) ? null : key(r))} path={ICON_PATHS.view} />
-                              )}
-                              {r.upload.state !== 'done' && onUpload && project && (
-                                <IconButton compact label={`${r.upload.state === 'failed' ? 'Try again the upload of' : 'Upload'} the deployment ${d.deployment_id}${uploaders.length > 1 ? ` to ${destinationLabel(r.upload.destination)}` : ''}`}
-                                            title={d.images_stored ? (r.upload.state === 'failed' ? 'Upload the images again' : 'Upload the images') : 'The deployment is not created yet: its images are not stored'}
-                                            disabled={!d.images_stored} onClick={() => onUpload({ researchProjectId: project.acronym, collection: d.collection })} path={ICON_PATHS.upload} />
-                              )}
-                            </RowOptions>
+                            {optionsOf(r)}
                           </td>
                         </tr>
                         {opened === key(r) && (
@@ -192,11 +242,63 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
                 </tbody>
               </table>
             </div>
+            )}
+            {view === 'labels' && (
+              <div role="group" aria-label="Uploads" className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+                {onPage.map((r) => {
+                  const d = r.deployment
+                  return (
+                    <article key={key(r)} aria-label={`Upload of ${d.deployment_id} to ${destinationLabel(r.upload.destination)}`} className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        {project
+                          ? <LinkButton className="font-mono text-base font-bold" aria-label={`Show the details of the deployment ${d.deployment_id}`} onClick={() => void showDeployment(d)}>{d.deployment_id}</LinkButton>
+                          : <span className="font-mono text-base font-bold">{d.deployment_id}</span>}
+                        <span>{statusOf(r)}</span>
+                      </div>
+                      <div className="my-3 border-t border-zinc-200 dark:border-zinc-700/70" />
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2 font-mono text-xs">
+                          <span className="text-blue-500"><Glyph><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" /></Glyph></span>
+                          {project
+                            ? <LinkButton title={`Show the details of the location ${d.site}`} onClick={() => void showSite(d.site)}>{d.site}</LinkButton>
+                            : d.site}
+                        </div>
+                        <div>
+                          {d.start_session && (project
+                            ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => void showVisit(d)}>{d.start_session} · {d.site}</LinkButton>
+                            : <span className="block text-xs font-semibold">{d.start_session} · {d.site}</span>)}
+                          <span className="block font-mono text-xs text-zinc-600 dark:text-zinc-400">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
+                        </div>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">To <span className="font-semibold text-zinc-800 dark:text-zinc-200">{destinationLabel(r.upload.destination)}</span></p>
+                      </div>
+                      <div className="mt-3 flex justify-end">{optionsOf(r)}</div>
+                      {opened === key(r) && <div className="mt-3 border-t border-zinc-200 dark:border-zinc-700/70 pt-3"><UploadList deployment={d.deployment_id} uploads={(d.uploads ?? []).filter((u) => u.destination === r.upload.destination)} /></div>}
+                    </article>
+                  )
+                })}
+                {shown.length === 0 && <p className="col-span-full py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">{every.length === 0 ? 'There is no upload yet: no deployment is planned, or no uploader is in use.' : 'No upload matches.'}</p>}
+              </div>
+            )}
 
             {shown.length > 0 && (
-              <TableFooter from={(current - 1) * PER_PAGE + 1} to={Math.min(current * PER_PAGE, shown.length)} total={shown.length} noun="uploads" page={current} pages={pages} onPage={setPage} />
+              <TableFooter from={(current - 1) * perPage + 1} to={Math.min(current * perPage, shown.length)} total={shown.length} noun="uploads" page={current} pages={pages} onPage={setPage} />
             )}
           </TableCard>
+
+          {deploymentPanel && (
+            <DeploymentDetails deployment={deploymentPanel.deployment} fields={deploymentPanel.fields}
+              creation={deploymentPanel.deployment.no_images ? 'not_created' : deploymentPanel.deployment.images_stored ? 'created' : 'planned'}
+              uploaded={(deploymentPanel.deployment.upload_states ?? []).some((u) => u.state === 'done')} onClose={() => setDeploymentPanel(null)}
+              onOpen={onShowDeployment ? () => { setDeploymentPanel(null); onShowDeployment(deploymentPanel.deployment.deployment_id) } : undefined} />
+          )}
+          {sitePanel && (
+            <LocationDetails site={sitePanel.site} location={sitePanel.location} onClose={() => setSitePanel(null)}
+              onOpenInSettings={onOpenSettings && project ? () => { setSitePanel(null); onOpenSettings('locations', project.acronym, sitePanel.site) } : undefined} />
+          )}
+          {visitPanel && (
+            <VisitDetails closed={visitPanel} onClose={() => setVisitPanel(null)}
+              onOpenVisit={onShowVisit ? (session) => { setVisitPanel(null); onShowVisit({ session, site: visitPanel.visit.location_id }) } : undefined} />
+          )}
 
           {helpOpen && (
             <HelpDrawer onClose={() => setHelpOpen(false)}>
