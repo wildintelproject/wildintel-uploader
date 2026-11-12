@@ -59,6 +59,16 @@ describe('DeploymentStatusPage', () => {
     expect(screen.getByText(/The SD card C7 is not one of the SD cards of this research project yet/)).toBeInTheDocument()
   })
 
+  it('tells the period of a deployment on the wall clock of its location, with the timezone beside in brackets', async () => {
+    mockedApi.fieldDeployments.mockResolvedValue({ results: [
+      deployment({ start: '2024-09-04T07:00:00Z', end: '2024-10-12T07:30:00Z', start_local: '2024-09-04T09:00:00', end_local: '2024-10-12T09:30:00', timezone: 'Europe/Madrid' }),
+    ] })
+    render(<DeploymentStatusPage onBack={vi.fn()} />)
+    const table = await screen.findByRole('table', { name: 'Deployments' })
+
+    expect(within(table).getByText('4 Sep 2024, 09:00 → 12 Oct 2024, 09:30 (Europe/Madrid)')).toBeInTheDocument()      // not the instants in UTC, which are two hours before
+  })
+
   it('has the deployments as a book: a square for each revision, the status squares of the one picked, and a table', async () => {
     render(<DeploymentStatusPage onBack={vi.fn()} />)
 

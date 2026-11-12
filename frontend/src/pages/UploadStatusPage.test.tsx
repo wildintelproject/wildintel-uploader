@@ -117,6 +117,16 @@ describe('UploadStatusPage', () => {
     expect(progress).toHaveTextContent('1/ 2')
   })
 
+  it('tells the period of a deployment on the wall clock of its location, with the timezone beside in brackets', async () => {
+    vi.mocked(api.fieldDeployments).mockResolvedValue({ results: [
+      deployment('R0001-DONA_01', [upload('done')], { start: '2026-06-10T07:00:00Z', end: '2026-08-05T06:00:00Z', start_local: '2026-06-10T09:00:00', end_local: '2026-08-05T08:00:00', timezone: 'Europe/Madrid' }),
+    ] })
+    render(<UploadStatusPage onBack={() => {}} />)
+    const table = await screen.findByRole('table', { name: 'Uploads' })
+
+    expect(within(table).getByText('10 Jun 2026, 09:00 → 5 Aug 2026, 08:00 (Europe/Madrid)')).toBeInTheDocument()
+  })
+
   it('opens the visit that started a deployment, the deployment and its location in panels at the right, with a way on to each from the panel', async () => {
     const stored = (over: object) => ({ location_id: 'DONA_01', session: 'R0001', date: '2026-06-10', time: '09:00:00', actions: ['Installation'], trappers: 'Ana', camera_id: 'P800', sd: 'A13', num_photos: null, ...over }) as never
     vi.mocked(api.listVisits).mockResolvedValue({ results: [stored({})] })

@@ -11,7 +11,7 @@ import LinkButton from '../components/LinkButton'
 import UploadList from '../components/UploadList'
 import { Glyph, ViewSwitch, type View } from '../components/ViewSwitch'
 import { Breadcrumb, MENU_ICONS } from '../components/TaskCard'
-import { formatDay } from '../dateFormat'
+import { formatDay, formatDeploymentPeriod } from '../dateFormat'
 import { readDeployment } from '../deploymentDetails'
 import type { DeploymentFields, DeploymentUploadState, FieldDeployment, LocalLocation, StoredVisit, UploadStateName, UploadTarget } from '../types'
 import { destinationLabel } from '../uploadDestinations'
@@ -39,7 +39,6 @@ const LABELS = 6
 
 const plural = (n: number) => `${n} ${n === 1 ? 'upload' : 'uploads'}`
 
-const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 
 /** One upload: a deployment going to an uploader, and where that is. */
 interface UploadRow { deployment: FieldDeployment; upload: DeploymentUploadState }
@@ -224,7 +223,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
                             {d.start_session && (project
                               ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => void showVisit(d)}>{d.start_session} · {d.site}</LinkButton>
                               : <span className="block text-xs font-semibold">{d.start_session} · {d.site}</span>)}
-                            <span className="block font-mono text-xs">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
+                            <span className="block font-mono text-xs">{formatDeploymentPeriod(d)}</span>
                           </td>
                           <td className={TABLE.cell}>{destinationLabel(r.upload.destination)}</td>
                           <td className={TABLE.cell}>{statusOf(r)}</td>
@@ -267,7 +266,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
                           {d.start_session && (project
                             ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => void showVisit(d)}>{d.start_session} · {d.site}</LinkButton>
                             : <span className="block text-xs font-semibold">{d.start_session} · {d.site}</span>)}
-                          <span className="block font-mono text-xs text-zinc-600 dark:text-zinc-400">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
+                          <span className="block font-mono text-xs text-zinc-600 dark:text-zinc-400">{formatDeploymentPeriod(d)}</span>
                         </div>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">To <span className="font-semibold text-zinc-800 dark:text-zinc-200">{destinationLabel(r.upload.destination)}</span></p>
                       </div>

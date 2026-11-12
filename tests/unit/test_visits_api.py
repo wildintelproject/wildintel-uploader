@@ -363,6 +363,9 @@ def test_a_stolen_camera_closes_its_deployment_with_no_images(tmp_path: Path):
     stolen, collected, still_out = sorted(found, key=lambda d: d["start"])  # the revision leaves a card too: its deployment is open
     assert (stolen["status"], stolen["no_images"], stolen["end"].startswith("2026-08-05"), stolen["images_stored"]) == ("closed", "stolen", True, False)
     assert (collected["status"], collected["no_images"], still_out["status"]) == ("closed", None, "open")
+    # each is told on the wall clock of its location too, with its timezone
+    assert collected["start_local"].startswith("2026-08-05T") and collected["end_local"].startswith("2026-10-02T") and collected["timezone"] == "UTC"
+    assert still_out["end_local"] is None
     started = {v["date"]: v for v in book}
     assert started["2026-06-10"]["deployment_status"] == "closed" and started["2026-06-10"]["deployment_no_images"] == "stolen"
     assert started["2026-08-05"]["deployment_no_images"] is None

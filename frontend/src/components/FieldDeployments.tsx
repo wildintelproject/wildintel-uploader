@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { formatDay } from '../dateFormat'
+import { formatDeploymentPeriod } from '../dateFormat'
 import type { DeploymentFields, DeploymentUploadState, FieldDeployment, SdCard, StoredVisit } from '../types'
 import { Icon, StateCard } from './Dashboard'
 import { ActiveFilters, HELP_ICONS, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from './DashboardParts'
@@ -24,7 +24,6 @@ const matches = (d: FieldDeployment, f: Filter) => !f || phaseOf(d) === f
 const DESTINATION_NAME: Record<string, string> = { trapper: 'Trapper', agouti: 'Agouti' }
 const STATE_NAME: Record<string, string> = { planned: 'planned', done: 'done', failed: 'failed' }
 
-const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
@@ -226,7 +225,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                         {d.start_session && (onShowVisit || loadVisits
                           ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => (loadVisits ? void showVisit(d) : onShowVisit?.({ session: d.start_session!, site: d.site }))}>{d.start_session} · {d.site}</LinkButton>
                           : <span className="block text-xs font-semibold">{d.start_session} · {d.site}</span>)}
-                        <span className="block font-mono text-xs">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
+                        <span className="block font-mono text-xs">{formatDeploymentPeriod(d)}</span>
                       </td>
                       <td className={`${TABLE.cell} text-xs text-zinc-600 dark:text-zinc-400`}>
                         {d.card && (onShowSd || sdCards
@@ -272,7 +271,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                         {d.start_session && (onShowVisit || loadVisits
                           ? <LinkButton className="block text-xs font-semibold" aria-label={`Show the visit ${d.start_session} to ${d.site}`} onClick={() => (loadVisits ? void showVisit(d) : onShowVisit?.({ session: d.start_session!, site: d.site }))}>{d.start_session} · {d.site}</LinkButton>
                           : <span className="block text-xs font-semibold">{d.start_session} · {d.site}</span>)}
-                        <span className="block font-mono text-xs text-zinc-600 dark:text-zinc-400">{when(d.start)} → {d.end ? when(d.end) : '…'}</span>
+                        <span className="block font-mono text-xs text-zinc-600 dark:text-zinc-400">{formatDeploymentPeriod(d)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-3 text-xs text-zinc-600 dark:text-zinc-400">
                         <span>

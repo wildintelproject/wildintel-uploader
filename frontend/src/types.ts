@@ -895,6 +895,10 @@ export interface FieldDeployment {
   photos_counted: number | null
   start_session: string | null
   end_session: string | null
+  /** The day and the time of the start and the end on the wall clock of the location (2026-09-14T08:30:00), and its timezone — what the period is told in. */
+  start_local?: string | null
+  end_local?: string | null
+  timezone?: string | null
   /** Whether the deployment was created and its images imported, and whether it is on Trapper (uploaded from here, or synced from there). */
   images_stored?: boolean
   /** Why there are no images, and never will be: the camera was stolen, so the visit that found it closed the deployment with nothing collected. */

@@ -355,6 +355,11 @@ def link_visit(req: LinkVisitRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
+def _wall_clock(visit: dict) -> str:
+    """The day and the time of a visit on the wall clock of its location (2026-09-14T08:30:00) — what the visit says, not the instant."""
+    return f"{visit.get('date')}T{visit.get('time')}"
+
+
 @router.post("/deployments")
 def deployments(req: ListVisitsRequest) -> dict:
     """The deployments the visits of a research project say — closed ones (a visit left the camera and a later one collected its card) and open ones (the camera is
@@ -367,11 +372,14 @@ def deployments(req: ListVisitsRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
     results = []
     failures = local_folder_service.list_upload_failures(root, req.research_project_id)
+    # each deployment is told in the timezone of its location, as the visits are: the day and the time on the wall clock there, besides the instants
+    zones = {str(l.get("location_id", "")).lower(): l.get("timezone") for l in local_folder_service.list_locations(root, req.research_project_id, include_deleted=True)}
     for d in found:
         imported = d["start_visit"].get("deployment_id")
         uploaded_at, on_trapper = _trapper_state(root, req.research_project_id, imported)
         results.append({k: v for k, v in d.items() if k not in ("start_visit", "end_visit")} | {
             "start_session": d["start_visit"].get("session"), "end_session": (d["end_visit"] or {}).get("session"),
+            "start_local": _wall_clock(d["start_visit"]), "end_local": _wall_clock(d["end_visit"]) if d["end_visit"] else None, "timezone": zones.get(str(d["site"]).lower()),
             # whether the deployment was created and its images imported (its visit says which deployment it gave), and whether it is on Trapper
             "images_stored": bool(imported), "uploaded_at": uploaded_at, "on_trapper": on_trapper,
             "uploads": _uploads_of(root / req.research_project_id / imported.split("-", 1)[0] / imported) if imported else [],
