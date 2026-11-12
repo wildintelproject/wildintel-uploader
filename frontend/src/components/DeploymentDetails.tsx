@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 import { daysBetween } from '../dateFormat'
-import { FEATURE_TYPE_OPTIONS } from '../pages/ImportDeploymentPage'
+import { FEATURE_TYPE_OPTIONS, btnOutline } from '../pages/ImportDeploymentPage'
 import type { DeploymentFields, FieldDeployment } from '../types'
 import SidePanel from './SidePanel'
+import { MENU_ICONS } from './TaskCard'
 
 /** A labelled value: the label in small capitals, the value under it. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -41,17 +42,15 @@ function whoWent(setupBy: string | null | undefined): { setUp: string | null; re
 
 const pill = 'rounded-full px-2.5 py-0.5 text-xs font-semibold'
 
-/** The icon of a deployment: a package — what is kept together and sent on — and not the camera, which is the icon of the cameras of the settings. */
-const DEPLOYMENT_ICON = (
-  <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 21.730a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.730l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.730z" /><path d="M12 22V12" /><path d="m3.300 7 8.700 5 8.700-5" /><path d="m7.500 4.270 9 5.150" />
-  </svg>
-)
+/** The icon of a deployment — the one of its menus. */
+const DEPLOYMENT_ICON = <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{MENU_ICONS.deployment}</svg>
 
 /** Everything a created deployment says of itself — where, when, the camera and how it was put up, the site and the notes — in a panel at the right, as the details of an image are.
  * `fields` is none while they are being read, and null when they could not be. */
-export default function DeploymentDetails({ deployment: d, fields, creation, uploaded, onClose }: {
+export default function DeploymentDetails({ deployment: d, fields, creation, uploaded, onClose, onOpen }: {
   deployment: FieldDeployment; fields: DeploymentFields | null | 'error' | undefined; creation: 'planned' | 'created' | 'not_created'; uploaded: boolean; onClose: () => void
+  /** Goes to the deployment in the dashboard of the deployments: a button under the cards, when it is given. */
+  onOpen?: () => void
 }) {
   const f = fields && fields !== 'error' ? fields : null
   const days = f?.start_date && f.end_date ? daysBetween(f.start_date, f.end_date) : null
@@ -126,6 +125,7 @@ export default function DeploymentDetails({ deployment: d, fields, creation, upl
             )}
           </>
         )}
+      {onOpen && <div className="mt-6 border-t border-zinc-200 dark:border-zinc-700 pt-4"><button type="button" className={btnOutline} onClick={onOpen}>Open it in the deployments dashboard <span aria-hidden="true">→</span></button></div>}
     </SidePanel>
   )
 }
