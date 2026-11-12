@@ -33,6 +33,20 @@ Trapper — creating the location and the deployment there if they are missing �
   </tr>
 </table>
 
+## 🚀 Quick start
+
+```bash
+git clone https://github.com/wildintelproject/wildintel-uploader.git
+cd wildintel-uploader
+./setup.sh
+source .venv/bin/activate
+uv run wucli dev
+```
+
+Or, once packaged, download the executable for your platform from the
+[releases page](https://github.com/wildintelproject/wildintel-uploader/releases) — no
+installation needed.
+
 ## ✨ Features
 
 **Field work**
@@ -86,27 +100,28 @@ images are renamed after the deployment and resized, and **authorship metadata**
 
 ## 📋 Requirements
 
+**To run it**
+
 - Python 3.12+ with [uv](https://docs.astral.sh/uv/)
 - Node.js 22+ / npm (to build the frontend)
+- [ExifTool](https://exiftool.org/) — reads the camera's make, model and serial number from the maker notes and writes the authorship metadata (XMP) into the images. It is bundled in the packaged executables; from source it has to be on the `PATH` (e.g. `sudo apt install libimage-exiftool-perl`). Without it the camera id isn't read and the metadata step is skipped
 - The [Trapper SDK](https://github.com/wildintelproject/wildintelproject-trapper-sdk), which `setup.sh` clones next to this repository
+
+**Technology stack**
+
+| Layer | Technologies |
+|---|---|
+| Backend | [FastAPI](https://fastapi.tiangolo.com/) served by [Uvicorn](https://www.uvicorn.org/), [Pydantic](https://docs.pydantic.dev/) 2, [Dynaconf](https://www.dynaconf.com/) (settings), [HTTPX](https://www.python-httpx.org/) |
+| Command line | [Typer](https://typer.tiangolo.com/) and [Rich](https://rich.readthedocs.io/) |
+| Images and metadata | [Pillow](https://python-pillow.org/) (resize, fallback reader), [ExifTool](https://exiftool.org/) (camera id, XMP authorship) |
+| Integrations | WildINTEL's Trapper SDK (uploads to [Trapper](https://trapper-project.readthedocs.io/)), [pyepicollect](https://github.com/ybarge/pyEpiCollect) (Epicollect5 forms) |
+| Frontend | [React](https://react.dev/) 19, [TypeScript](https://www.typescriptlang.org/), [Vite](https://vite.dev/), [Tailwind CSS](https://tailwindcss.com/) 4, [Leaflet](https://leafletjs.com/) (maps) |
+| Testing and quality | [pytest](https://pytest.org/), [Vitest](https://vitest.dev/) with Testing Library, [Playwright](https://playwright.dev/python/) (screenshots), [oxlint](https://oxc.rs/docs/guide/usage/linter) |
+| Packaging and docs | [PyInstaller](https://pyinstaller.org/) (executables), [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) with mike, GitHub Actions |
 
 ## 📚 Documentation
 
 Full documentation is available at  **https://wildintelproject.github.io/wildintel-uploader/**
-
-## 🚀 Quick start
-
-```bash
-git clone https://github.com/wildintelproject/wildintel-uploader.git
-cd wildintel-uploader
-./setup.sh
-source .venv/bin/activate
-uv run wucli dev
-```
-
-Or, once packaged, download the executable for your platform from the
-[releases page](https://github.com/wildintelproject/wildintel-uploader/releases) — no
-installation needed.
 
 ## 🤝 Contributing
 
