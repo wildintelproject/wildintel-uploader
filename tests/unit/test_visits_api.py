@@ -1278,6 +1278,27 @@ def test_the_revisions_in_a_row_that_are_unknown_are_told_once(tmp_path: Path):
     assert [n for n in notes if "unknown visits" in n] == ["The revisions R0001–R0004 are created, but there is no data of their visits to DONA_01: they are created as unknown visits, and the visits after them cannot be checked against them."]
 
 
+def test_a_real_download_of_the_new_form_is_read_as_each_case_says(tmp_path: Path):
+    """The download of the project `minuevotestinaki` (its form: no Date nor Time, Revision, Batteries Status and Card Status apart, Action after inspection): an OK
+    revision keeping the camera, an Altered camera replaced, a New site, an Inactive site and a theft after which nothing is done."""
+    text = (Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "real" / "minuevotestinaki_form_download.csv").read_text(encoding="utf-8")
+    with _in(tmp_path), patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=["Javitxu"]):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        for n in ("DONA_00", "DONA_01"):
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": n, "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.0, "longitude": -6.0, "status": "active"}})
+        result = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "epicollect-csv", "create": {"locations": True, "cameras": True, "sd_cards": True},
+                                                                  "defaults": {"timezone": "Europe/Madrid", "daylight_saving": "yes"}}).json()
+
+    by_site = {v["location_id"]: v for v in result["visits"]}
+    assert by_site["DONA_00"]["actions"] == ["Revision"] and by_site["DONA_00"]["num_photos"] == 23 and by_site["DONA_00"]["when"] == "2026-11-12T17:51:24Z"   # the time of the entry, not a typed one
+    assert by_site["DONA_01"]["actions"] == ["Revision", "Desinstallation", "Installation"] and by_site["DONA_01"]["camera_status"] == "Altered"
+    assert by_site["DONA_04"]["actions"] == ["Installation"]                    # an Inactive site gets its camera put up
+    assert by_site["DONA_06"]["actions"] == ["Stolen"] and by_site["DONA_06"]["camera_status"] == "Stolen"    # nothing is done after the theft
+    # the New site shares its camera (serial 3444) with the one that replaced the camera of DONA_01: it is refused for that, not for how it is read
+    assert [(p["row"], "3444 is installed at DONA_01" in p["message"]) for p in result["problems"]] == [(4, True)]
+    assert sorted(l["location_id"] for l in result["create"]["locations"]) == ["DONA_04", "DONA_06"]
+
+
 def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its_entry_was_created():
     from wildintel_uploader.core.services import epicollect_service
     text = "ec5_uuid,created_at,1_setupBy,4_locationID,5_Status_of_the_came,10_Action_after_the_\nr1,2026-09-14T08:30:00.000Z,Ana,DONA_01,OK,\n"
