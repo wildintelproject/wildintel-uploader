@@ -24,7 +24,8 @@ function Note({ note, strong, plain, className }: { note: string; strong?: strin
 /** A square for all the revisions and one for each of the five most recent — `revisions` newest first —, with a list on the right for the older ones.
  * The value is the id of the one picked, '' for all of them. */
 export default function RevisionSquares({ all, revisions, value, onPick, label = 'Revision', description, variablesInBold = false }: {
-  all: Omit<RevisionSquare, 'id'>; revisions: RevisionSquare[]; value: string; onPick: (id: string) => void; label?: string
+  /** The square for all the revisions — none when exactly one has to be picked. */
+  all?: Omit<RevisionSquare, 'id'>; revisions: RevisionSquare[]; value: string; onPick: (id: string) => void; label?: string
   /** What a revision is, above the squares: given, the list of the older ones goes at its height, at the right, not beside the squares. */
   description?: ReactNode
   /** The values of a square — the name of the revision and the number in its note — are in bold, and the words around them are not. */
@@ -44,7 +45,7 @@ export default function RevisionSquares({ all, revisions, value, onPick, label =
   )
   const body = (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" role="group" aria-label={label}>
-      {[{ id: '', ...all }, ...recent].map((r) => (
+      {[...(all ? [{ id: '', ...all }] : []), ...recent].map((r) => (
         <button key={r.id || 'all'} type="button" aria-pressed={value === r.id} onClick={() => onPick(r.id)} className={`${square} ${value === r.id ? pressed : idle}`}>
           {r.id === '' ? (
             <>

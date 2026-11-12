@@ -110,7 +110,7 @@ export const HELP_ICONS = {
 /** The section of the revisions: its title with the chevron that folds it, and the squares — or only the title when it is folded. */
 export function RevisionSelection({ open, onToggle, hint = 'Select one to filter the rows', all, revisions, value, onPick }: {
   open: boolean; onToggle: () => void; hint?: string
-  all: Omit<RevisionSquare, 'id'>; revisions: RevisionSquare[]; value: string; onPick: (id: string) => void
+  all?: Omit<RevisionSquare, 'id'>; revisions: RevisionSquare[]; value: string; onPick: (id: string) => void
 }) {
   const title = <><FoldButton open={open} onToggle={onToggle} name="the revision selection" /><span className="text-sm font-semibold text-zinc-900 dark:text-zinc-200">Revision selection</span>{' '}<span className="text-xs font-normal">({hint})</span></>
   return (

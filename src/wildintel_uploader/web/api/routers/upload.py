@@ -53,11 +53,9 @@ def classification_projects(req: UploadClassificationProjectsRequest) -> dict:
 
 @router.post("/check-selection")
 def check_selection(req: AccessCheckRequest) -> dict:
-    """Whether the account has access to the research project and the collection chosen — {"checks": [{"check", "ok", "message"}]},
+    """Whether the account has access to the research project — and to the collection, when one is chosen — {"checks": [{"check", "ok", "message"}]},
     always a 200 so a refusal says why."""
     credentials = resolve(req)
-    if not req.collection:
-        raise HTTPException(400, "Say which collection.")
     records = {p["acronym"]: p for p in local_folder_service.list_research_projects(config.collections_dir())}
     record = records.get(req.research_project_id)
     if record is None:

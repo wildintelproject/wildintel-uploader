@@ -12,7 +12,10 @@ import type { UploadItem } from '../components/UploadToTrapper'
 import Notice, { Mark } from '../components/Notice'
 import WizardStep from '../components/WizardStep'
 import { MENU_ICONS, PageHeader } from '../components/TaskCard'
-import { formatPeriod } from '../dateFormat'
+import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
+import { formatLocal } from '../dateFormat'
+import { Glyph, ViewSwitch, type View } from '../components/ViewSwitch'
+import { ActiveFilters, RevisionSelection, TABLE, TableCard, TableFooter, TableToolbar } from '../components/DashboardParts'
 import type { AccessCheck, ClassificationProject, LocalResearchProject, UploadCollection, UploadTarget, UploadDeploymentInfo, UploadEvent, UploadMode, UploadStep } from '../types'
 
 const btnPrimary = 'px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
@@ -70,6 +73,8 @@ function megabytes(bytes: number): string {
 }
 
 /** What can be sent: a preprocessed deployment (the yaml needs the dates its preprocessing recorded). */
+const UPLOAD_PER_PAGE = 8
+const UPLOAD_LABELS = 6
 const canUpload = (d: UploadDeploymentInfo) => d.preprocessed && d.images > 0
 
 /** Sends a deployment kept in a local collection to Trapper — pick the research project, the
@@ -86,6 +91,8 @@ interface Props {
 }
 
 export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }: Props = {}) {
+  // the research project is the default one — the card at the top right —, changed in the settings, not in a step
+  const { project: defaultProject, defaultAcronym } = useDefaultResearchProject()
   const [projects, setProjects] = useState<LocalResearchProject[]>([])
   const [projectId, setProjectId] = useState('')
   const [collections, setCollections] = useState<UploadCollection[]>([])
@@ -121,6 +128,13 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
   const [checkingSelection, setCheckingSelection] = useState(false)
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const [recheck, setRecheck] = useState(0)
+  // the revisions fold away as in the dashboards; the table of the deployments is searched and paged
+  const [revisionsOpen, setRevisionsOpen] = useState(true)
+  const [tableText, setTableText] = useState('')
+  const [tablePage, setTablePage] = useState(1)
+  // the deployments as a table, as labels or only the search field that picks from a list
+  const [tableView, setTableView] = useState<View>('table')
+  const [listOpen, setListOpen] = useState(false)
 
   useEffect(() => {
     if (initial) chooseProject(initial.researchProjectId, initial.collection)
@@ -168,6 +182,7 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
   }
 
   function chooseCollection(name: string) {
+    setTableText(''); setTablePage(1)
     setPrepared(null)
     setRuns({}); setOrder([]); setFinished(false)
     selectCollection(name, collections)
@@ -201,12 +216,13 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
 
   useEffect(() => {
     setSelectionChecks(null); setSelectionError(null)
-    if (!projectId || !collectionName || !connected) { setCheckingSelection(false); return }
+    // the research project is looked for in Trapper as soon as it is known — before a revision is asked for —, and the revision once it is chosen
+    if (!projectId || !connected) { setCheckingSelection(false); return }
     let cancelled = false
     setCheckingSelection(true)
     ;(async () => {
       try {
-        const { checks } = await api.checkUploadSelection(projectId, collectionName)
+        const { checks } = await api.checkUploadSelection(projectId, collectionName || undefined)
         if (!cancelled) setSelectionChecks(checks)
       } catch (e) {
         if (!cancelled) setSelectionError(e instanceof Error ? e.message : 'Could not check the access.')
@@ -219,6 +235,8 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
 
   // The research project is not in Trapper (or the account cannot reach it): nothing can be sent or rehearsed.
   const projectMissing = Boolean(selectionChecks?.some((c) => c.check === 'research_project' && !c.ok))
+  // With an account the research project has to be found in Trapper before anything else is asked: a revision is picked only then. Offline there is nothing to check.
+  const projectChecked = !connected || Boolean(selectionChecks?.some((c) => c.check === 'research_project' && c.ok))
   const classificationValue = classificationPk.trim() === '' ? null : Number(classificationPk)
   const classificationValid = classificationValue === null || (Number.isInteger(classificationValue) && classificationValue >= 1)
   // The yaml needs one: with an account it is the one picked (or the only one); offline, the pk typed in.
@@ -344,7 +362,8 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8">
       <PageHeader icon={MENU_ICONS.upload} title="Upload deployment to Trapper" description="Sends the deployments of a revision to Trapper. Anything missing there is created, then the images are sent for Trapper to process."
-        parent="Manage uploads" onParent={onBack} />
+        parent="Manage uploads" onParent={onBack}
+        aside={defaultProject !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={defaultProject} defaultAcronym={defaultAcronym} of="The upload" onOpenSettings={onOpenSettings ? () => onOpenSettings() : undefined} /> : undefined} />
 
       {trapper === null ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">Reading the settings…</p>
@@ -362,14 +381,15 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
 
       <WizardStep n={1} title="Choose what to upload" status={stepStatus(1)} canEdit={!uploading} onEdit={() => { setChosen(false); setModeChosen(false); setPrepared(null) }}
                   summary={collection && <>{projectId} › {collectionName} · {toUpload.length} {toUpload.length === 1 ? 'deployment' : 'deployments'} ({images(imagesToSend)})</>}
-                  description="The research project, revision and deployments kept in your collections folder.">
+                  description={projectId ? <>Select the revision and the deployments of the research project <strong className="font-mono">{projectId}</strong> that you want to upload.</> : 'Select the revision and the deployments that you want to upload.'}>
         <div className="mb-4">
-          <label className={labelClass} htmlFor="upload-research-project">Research project</label>
-          <Combobox
-            id="upload-research-project" options={projects.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))}
-            value={projectId} onChange={chooseProject} disabled={uploading}
-            placeholder={projects.length === 0 ? 'No research projects yet' : 'Select a research project…'} clearLabel="Clear research project"
-          />
+          {projectId && connected && checkingSelection && !selectionChecks && <p className="text-sm text-zinc-500 dark:text-zinc-400">Checking that {projectId} is in Trapper…</p>}
+          {selectionError && (
+            <Notice kind="error" role="alert" className="mt-2" action={<button type="button" className={btnOutline} disabled={checkingSelection} onClick={() => setRecheck((n) => n + 1)}>Check again</button>}>
+              Could not check that {projectId} is in Trapper: {selectionError}
+            </Notice>
+          )}
+          {!projectId && <p className="text-sm text-zinc-600 dark:text-zinc-300">{projects.length === 0 ? 'Nothing is kept in the collections folder yet — import a deployment first.' : 'There is no default research project: set it in the settings, with the card at the top right.'}</p>}
           {selectionChecks?.filter((c) => c.check === 'research_project' && c.ok).map((c) => (
             <p key={c.check} className="flex items-center gap-2 mt-2 text-sm text-emerald-600 dark:text-emerald-400">
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.5" /></svg>
@@ -384,22 +404,17 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
                 <button type="button" className={btnOutline} disabled={checkingSelection} onClick={() => setRecheck((n) => n + 1)}>Check again</button>
                 {trapper?.base_url && <a className={`${btnPrimary} no-underline`} href={trapper.base_url} target="_blank" rel="noreferrer">Open Trapper</a>}
               </div>
-              <p className="text-xs opacity-80 mt-2">You can still go “Only prepare the files” below without Trapper.</p>
             </Notice>
           ))}
-          {projects.length === 0 && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Nothing is kept in the collections folder yet — import a deployment first.</p>}
         </div>
 
-        {projectId && (
+        {projectId && projectChecked && (
           <div className="mb-4">
-            <label className={labelClass} htmlFor="upload-collection">Revision</label>
-            <Combobox
-              id="upload-collection" options={collections.map((c) => ({ value: c.name, label: `${c.name} · ${c.deployments.length} ${c.deployments.length === 1 ? 'deployment' : 'deployments'}` }))}
-              value={collectionName} onChange={chooseCollection} disabled={uploading}
-              placeholder={collections.length === 0 ? 'No revisions yet' : 'Select a revision…'} clearLabel="Clear revision"
-            />
-            {checkingSelection && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Checking your access in Trapper…</p>}
-            {selectionError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{selectionError}</p>}
+            {collections.length === 0
+              ? <p className="text-sm text-zinc-600 dark:text-zinc-300">No revisions yet.</p>
+              : <RevisionSelection open={revisionsOpen} onToggle={() => setRevisionsOpen(!revisionsOpen)} hint="Select the revision to upload"
+                  revisions={[...collections].sort((x, y) => y.name.localeCompare(x.name)).map((c) => ({ id: c.name, label: c.name, note: `${c.deployments.length} ${c.deployments.length === 1 ? 'deployment' : 'deployments'}` }))}
+                  value={collectionName} onPick={(id) => { if (id && !uploading) chooseCollection(id) }} />}
             {selectionChecks?.filter((c) => c.check === 'collection').map((c) => (
               c.ok ? (
                 <p key={c.check} className={`flex items-center gap-2 mt-2 text-sm ${c.found ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
@@ -417,42 +432,106 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
           <div className="mb-4">
             <p className={labelClass}>Deployments</p>
             {collection.deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This revision has no deployments.</p>}
-            {collection.deployments.length > 0 && (
-              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700">
-                <div className="flex items-center gap-3 flex-wrap px-4 py-2 text-xs border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
-                  <span className="text-zinc-500 dark:text-zinc-400">{selectable.filter((d) => selected.has(d.deployment_id)).length} of {selectable.length} selected · {images(imagesToSend)}</span>
-                  <span className="ml-auto flex items-center gap-3">
-                    <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50" disabled={uploading || selectable.length === 0}
-                            onClick={() => setSelected(new Set(selectable.map((d) => d.deployment_id)))}>Select all</button>
-                    <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50" disabled={uploading || selectable.every((d) => d.uploaded_at)}
-                            onClick={() => setSelected(new Set(selectable.filter((d) => !d.uploaded_at).map((d) => d.deployment_id)))}>Select the not uploaded</button>
-                    <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50" disabled={uploading || selected.size === 0}
-                            onClick={() => setSelected(new Set())}>Select none</button>
-                  </span>
-                </div>
-                <ul className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                  {collection.deployments.map((d) => (
-                    <li key={d.deployment_id} className="flex items-center gap-3 px-4 py-3">
-                      <input type="checkbox" aria-label={d.deployment_id} checked={selected.has(d.deployment_id) && canUpload(d)}
-                             disabled={!canUpload(d) || uploading} onChange={() => toggle(d.deployment_id)} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-mono text-sm text-zinc-900 dark:text-zinc-100">{d.deployment_id}</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{d.location_id} · {formatPeriod(d.start_date, d.end_date)}</p>
-                        {!d.preprocessed && (
-                          <p className="text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1 whitespace-nowrap">
-                        <p className="text-sm text-zinc-800 dark:text-zinc-200">{images(d.images)}</p>
-                        {canUpload(d) && (d.uploaded_at
-                          ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
-                          : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>)}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {collection.deployments.length > 0 && (() => {
+              const needle = tableText.trim().toLowerCase()
+              const found = collection.deployments.filter((d) => !needle || `${d.deployment_id} ${d.location_id ?? ''}`.toLowerCase().includes(needle))
+              const size = tableView === 'labels' ? UPLOAD_LABELS : UPLOAD_PER_PAGE
+              const pages = Math.max(1, Math.ceil(found.length / size))
+              const current = Math.min(tablePage, pages)
+              const visible = found.slice((current - 1) * size, current * size)
+              const searching = tableView === 'search'
+              const status = (d: typeof found[number]) => canUpload(d) && (d.uploaded_at
+                ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
+                : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>)
+              const link = 'text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50'
+              return (
+                <TableCard label="Deployments to upload">
+                  <TableToolbar searchLabel="Search the deployments" placeholder={searching ? 'Type to pick a deployment…' : 'Search by deployment or location…'} text={tableText} onText={(t) => { setTableText(t); setTablePage(1); if (searching) setListOpen(true) }}
+                                onReset={() => { setTableText(''); setTablePage(1); setListOpen(false) }} onSearchBlur={() => setListOpen(false)}
+                                trailing={<ViewSwitch view={tableView} items="deployments" onChange={(v) => { setTableView(v); setTablePage(1); setListOpen(false) }} />} />
+                  {searching && listOpen && needle !== '' && (
+                    <ul role="listbox" aria-label="Deployments" className="max-h-64 overflow-y-auto border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-1 text-sm">
+                      {found.map((d) => (
+                        <li key={d.deployment_id} role="option" aria-selected={selected.has(d.deployment_id) && canUpload(d)} aria-disabled={!canUpload(d) || uploading} onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { if (canUpload(d) && !uploading) toggle(d.deployment_id) }}
+                            className={`cursor-pointer px-4 py-2 font-mono text-xs ${selected.has(d.deployment_id) && canUpload(d) ? 'font-bold text-blue-700 dark:text-blue-300' : canUpload(d) ? 'text-zinc-800 dark:text-zinc-200' : 'text-zinc-400 dark:text-zinc-600'}`}>
+                          {selected.has(d.deployment_id) && canUpload(d) ? '✓ ' : ''}{d.deployment_id} · {images(d.images)}
+                        </li>
+                      ))}
+                      {found.length === 0 && <li className="px-4 py-2 text-xs text-zinc-500 dark:text-zinc-400">No deployment matches.</li>}
+                    </ul>
+                  )}
+                  {!searching && needle && <ActiveFilters filters={[{ label: `Search: ${tableText.trim()}`, tone: 'blue' }]} summary={`${found.length} of ${collection.deployments.length} deployments match`} />}
+                  <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-2 text-xs">
+                    <span className="text-zinc-500 dark:text-zinc-400">{selectable.filter((d) => selected.has(d.deployment_id)).length} of {selectable.length} selected · {images(imagesToSend)}</span>
+                    <span className="ml-auto flex items-center gap-3">
+                      <button type="button" className={link} disabled={uploading || selectable.length === 0} onClick={() => setSelected(new Set(selectable.map((d) => d.deployment_id)))}>Select all</button>
+                      <button type="button" className={link} disabled={uploading || selectable.every((d) => d.uploaded_at)} onClick={() => setSelected(new Set(selectable.filter((d) => !d.uploaded_at).map((d) => d.deployment_id)))}>Select the not uploaded</button>
+                      <button type="button" className={link} disabled={uploading || selected.size === 0} onClick={() => setSelected(new Set())}>Select none</button>
+                    </span>
+                  </div>
+                  {tableView === 'table' && (
+                  <div className="overflow-x-auto">
+                    <table aria-label="Deployments" className={TABLE.table}>
+                      <thead className={TABLE.head}>
+                        <tr>
+                          <th scope="col" className={`${TABLE.th} w-10`}><span className="sr-only">Selected</span></th>
+                          <th scope="col" className={TABLE.th}>Deployment</th><th scope="col" className={TABLE.th}>Period</th>
+                          <th scope="col" className={TABLE.th}>Images</th><th scope="col" className={TABLE.th}>In Trapper</th>
+                        </tr>
+                      </thead>
+                      <tbody className={TABLE.body}>
+                        {visible.length === 0 && <tr><td colSpan={5} className={`${TABLE.cell} text-zinc-500 dark:text-zinc-400`}>No deployment matches.</td></tr>}
+                        {visible.map((d) => (
+                          <tr key={d.deployment_id} className={TABLE.row(selected.has(d.deployment_id) && canUpload(d))}>
+                            <td className={`${TABLE.cell} w-10`}>
+                              <input type="checkbox" aria-label={d.deployment_id} checked={selected.has(d.deployment_id) && canUpload(d)} disabled={!canUpload(d) || uploading} onChange={() => toggle(d.deployment_id)} />
+                            </td>
+                            <td className={TABLE.cell}>
+                              <span className="block font-mono text-sm text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
+                              <span className="block text-xs text-zinc-500 dark:text-zinc-400">{d.location_id}</span>
+                              {!d.preprocessed && <span className="block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>}
+                            </td>
+                            <td className={`${TABLE.cell} font-mono text-xs`}>{d.start_date ? `${formatLocal(d.start_date)} → ${d.end_date ? formatLocal(d.end_date) : '…'}` : '—'}</td>
+                            <td className={`${TABLE.cell} whitespace-nowrap`}>{images(d.images)}</td>
+                            <td className={TABLE.cell}>
+                              {canUpload(d) && (d.uploaded_at
+                                ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
+                                : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  )}
+                  {tableView === 'labels' && (
+                    <div role="group" aria-label="Deployments" className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+                      {visible.map((d) => {
+                        const on = selected.has(d.deployment_id) && canUpload(d)
+                        return (
+                          <button key={d.deployment_id} type="button" aria-pressed={on} aria-label={`${on ? 'Unselect' : 'Select'} ${d.deployment_id}`} disabled={!canUpload(d) || uploading} onClick={() => toggle(d.deployment_id)}
+                                  className={`w-full rounded-2xl border p-4 text-left transition-all disabled:opacity-60 ${on ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 ring-1 ring-blue-500/50' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600'}`}>
+                            <span className="flex items-start justify-between gap-2">
+                              <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
+                              {on && <span className="text-blue-500"><Glyph className="h-5 w-5"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></Glyph></span>}
+                            </span>
+                            <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{d.location_id}</span>
+                            <span className="mt-2 block font-mono text-xs text-zinc-700 dark:text-zinc-300">{d.start_date ? `${formatLocal(d.start_date)} → ${d.end_date ? formatLocal(d.end_date) : '…'}` : '—'}</span>
+                            <span className="mt-2 flex items-center justify-between gap-2 text-sm text-zinc-800 dark:text-zinc-200"><span>{images(d.images)}</span>{status(d)}</span>
+                            {!d.preprocessed && <span className="mt-2 block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>}
+                          </button>
+                        )
+                      })}
+                      {visible.length === 0 && <p className="col-span-full py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">No deployment matches.</p>}
+                    </div>
+                  )}
+                  {!searching && (
+                  <TableFooter from={found.length === 0 ? 0 : (current - 1) * size + 1} to={Math.min(current * size, found.length)} total={found.length} noun="deployments" page={current} pages={pages} onPage={setTablePage} />
+                  )}
+                </TableCard>
+              )
+            })()}
           </div>
         )}
         {collection && (

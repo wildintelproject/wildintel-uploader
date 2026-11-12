@@ -7,7 +7,7 @@ import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { LocalResearchProject, UploadCollection, UploadDeploymentInfo, UploadEvent } from '../types'
 
 vi.mock('../api', () => ({
-  api: { listResearchProjects: vi.fn(), uploadCollections: vi.fn(), uploadDeployment: vi.fn(), openFolder: vi.fn(), trapperGetConfig: vi.fn(), checkUploadSelection: vi.fn(), uploadClassificationProjects: vi.fn(), saveUploadReport: vi.fn(), reportUrl: vi.fn() },
+  api: { getSettings: vi.fn(), listResearchProjects: vi.fn(), uploadCollections: vi.fn(), uploadDeployment: vi.fn(), openFolder: vi.fn(), trapperGetConfig: vi.fn(), checkUploadSelection: vi.fn(), uploadClassificationProjects: vi.fn(), saveUploadReport: vi.fn(), reportUrl: vi.fn() },
 }))
 
 const mockedApi = vi.mocked(api)
@@ -49,6 +49,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockedApi.saveUploadReport.mockResolvedValue({ report_id: '20261006-101500_upload_R0003' })
   mockedApi.reportUrl.mockImplementation((id, format) => `/api/reports/${id}/download?format=${format}`)
+  mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'DONA' } } as never)   // the research project is the default one: it is not picked in a step
   mockedApi.listResearchProjects.mockResolvedValue({ results: [PROJECT] })
   mockedApi.uploadCollections.mockResolvedValue({ results: COLLECTIONS })
   mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice@example.org', has_password: true })
@@ -75,10 +76,7 @@ async function proceedToStep3() {
 /** Picks the research project and the collection and goes on to step 2 — unless `go` is false (the classification project is yet to be settled). */
 async function pickCollection(name = 'R0003', go = true, toStep3 = false) {
   render(<UploadDeploymentPage />)
-  await userEvent.click(await screen.findByLabelText('Research project'))
-  await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-  await userEvent.click(await screen.findByLabelText('Revision'))
-  await userEvent.click(await screen.findByRole('option', { name: new RegExp(`^${name}`) }))
+  await userEvent.click(await within(await screen.findByRole('group', { name: 'Revision' })).findByRole('button', { name: new RegExp(`^${name}`) }))
   if (go) await proceed()
   if (go && toStep3) await proceedToStep3()
 }
@@ -127,25 +125,24 @@ describe('UploadDeploymentPage', () => {
     expect(await screen.findByText(/Nothing is kept in the collections folder yet — import a deployment first/)).toBeInTheDocument()
   })
 
-  it('asks for the collection only once a research project is picked, and for its deployments once a collection is', async () => {
+  it('opens on the default research project, asks for its revision as cards, and for its deployments once a revision is picked', async () => {
     render(<UploadDeploymentPage />)
-    await screen.findByLabelText('Research project')
-    expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByLabelText('Research project'))
-    await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
+    const revisions = within(await screen.findByRole('group', { name: 'Revision' }))
     expect(mockedApi.uploadCollections).toHaveBeenCalledWith('DONA')
-    await userEvent.click(await screen.findByLabelText('Revision'))
-    expect(await screen.findByRole('option', { name: 'R0001 · 1 deployment' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'R0003 · 4 deployments' })).toBeInTheDocument()
-    expect(screen.queryByText('Deployments')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Research project')).not.toBeInTheDocument()      // it is the card at the top right, not a step
+    expect(screen.getByText('Doñana', { exact: false })).toBeInTheDocument()
+    expect(revisions.getByRole('button', { name: /^R0001\s*1 deployment$/ })).toBeInTheDocument()
+    expect(revisions.getByRole('button', { name: /^R0003\s*4 deployments$/ })).toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Deployments' })).not.toBeInTheDocument()
+    await userEvent.click(revisions.getByRole('button', { name: /^R0003/ }))
+    expect(await screen.findByRole('table', { name: 'Deployments' })).toBeInTheDocument()
   })
 
   it('lists the deployments of the collection, with their images and dates', async () => {
     await pickCollection()
 
     expect(await screen.findByText('R0003-DONA_01')).toBeInTheDocument()
-    expect(screen.getAllByText(/4 Sep → 4 Nov 2024/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/4 Sep 2024, 13:10 → 4 Nov 2024, 14:28/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('120 images').length).toBeGreaterThanOrEqual(1) // its images
   })
 
@@ -293,8 +290,7 @@ describe('UploadDeploymentPage', () => {
     await proceedToStep3()
     await screen.findByText('Upload complete')
 
-    await userEvent.click(screen.getByLabelText('Revision'))
-    await userEvent.click(await screen.findByRole('option', { name: /^R0001/ }))
+    await userEvent.click(within(screen.getByRole('group', { name: 'Revision' })).getByRole('button', { name: /^R0001/ }))
 
     expect(screen.queryByText('Upload complete')).not.toBeInTheDocument()
     expect(await screen.findByRole('checkbox', { name: 'R0001-DONA_01' })).not.toBeChecked() // sent already
@@ -303,8 +299,6 @@ describe('UploadDeploymentPage', () => {
   it('shows why the collections could not be read', async () => {
     mockedApi.uploadCollections.mockRejectedValue(new Error('The research project id can only have letters, digits…'))
     render(<UploadDeploymentPage />)
-    await userEvent.click(await screen.findByLabelText('Research project'))
-    await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
 
     expect(await screen.findByText(/can only have letters, digits/)).toBeInTheDocument()
   })
@@ -433,9 +427,8 @@ describe('UploadDeploymentPage', () => {
   it('starts from the research project and collection a finished import went into', async () => {
     render(<UploadDeploymentPage initial={{ researchProjectId: 'DONA', collection: 'R0003' }} />)
 
-    expect(await screen.findByLabelText('Revision')).toHaveValue('R0003 · 4 deployments')
+    expect(await within(await screen.findByRole('group', { name: 'Revision' })).findByRole('button', { name: /^R0003/ })).toHaveAttribute('aria-pressed', 'true')
     expect(mockedApi.uploadCollections).toHaveBeenCalledWith('DONA')
-    expect(screen.getByLabelText('Research project')).toHaveValue('DONA — Doñana')
     // what is left to send is ticked, as when the collection is picked by hand
     expect(await screen.findByRole('checkbox', { name: 'R0003-DONA_01' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'R0003-DONA_04' })).not.toBeChecked() // uploaded before
@@ -445,9 +438,10 @@ describe('UploadDeploymentPage', () => {
     expect(await screen.findByText('Upload complete')).toBeInTheDocument()
   })
 
-  it('starts empty when it is not reached from an import', async () => {
+  it('starts empty when there is no default research project and it is not reached from an import', async () => {
+    mockedApi.getSettings.mockResolvedValue({ GENERAL: {} } as never)
     render(<UploadDeploymentPage />)
-    expect(await screen.findByLabelText('Research project')).toHaveValue('')
+    expect(await screen.findByText(/There is no default research project/)).toBeInTheDocument()
     expect(mockedApi.uploadCollections).not.toHaveBeenCalled()
   })
 
@@ -521,28 +515,25 @@ describe('UploadDeploymentPage', () => {
   })
 
   describe('the access to what was chosen', () => {
-    it('when the research project is not in Trapper: says so, offers to check again and to open Trapper, and holds the upload back', async () => {
+    it('when the research project is not in Trapper: says so, offers to check again and to open Trapper, and goes no further — no revision is asked for', async () => {
       mockedApi.checkUploadSelection.mockResolvedValue({ checks: [
         { check: 'research_project', ok: false, message: "The research project DONA doesn't exist in Trapper yet." },
       ] })
-      await pickCollection('R0003', false)
+      render(<UploadDeploymentPage />)
 
       expect(await screen.findByText(/doesn't exist in Trapper yet/)).toBeInTheDocument()
       expect(screen.getByText(/Research projects can’t be created from here/)).toBeInTheDocument()
       expect(screen.getByRole('link', { name: 'Open Trapper' })).toHaveAttribute('href', 'https://trapper.example.org')
-      expect(screen.getByLabelText('Classification project')).toBeDisabled()
-      expect(screen.getByText('Available once DONA is found in Trapper.')).toBeInTheDocument()
-      await proceed()
-      await proceedToStep3() // only rehearsing or sending is held back
-      expect(screen.getByText('DONA isn’t in Trapper yet.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Upload to Trapper' })).toBeDisabled()
+      expect(screen.queryByRole('group', { name: 'Revision' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Continue to step 2' })).not.toBeInTheDocument()
+      expect(mockedApi.checkUploadSelection).toHaveBeenCalledWith('DONA', undefined)   // looked for as soon as it is known, before a revision is picked
 
       mockedApi.checkUploadSelection.mockResolvedValue({ checks: [
         { check: 'research_project', ok: true, message: 'You have access to the research project DONA (#2) in Trapper.' },
       ] })
       await userEvent.click(screen.getByRole('button', { name: 'Check again' }))
       expect((await screen.findAllByText('Found in Trapper')).length).toBeGreaterThan(0)
-      expect(mockedApi.checkUploadSelection).toHaveBeenCalledTimes(2)
+      await userEvent.click(await within(await screen.findByRole('group', { name: 'Revision' })).findByRole('button', { name: /^R0003/ }))
       await proceed()
       await proceedToStep3()
       expect(await screen.findByText('Upload complete')).toBeInTheDocument()
@@ -551,12 +542,8 @@ describe('UploadDeploymentPage', () => {
     it('says both the research project and the collection are found in Trapper, once both are chosen', async () => {
       await pickCollection()
 
-      const [project, collection] = await screen.findAllByText('Found in Trapper')
+      expect((await screen.findAllByText('Found in Trapper')).length).toBeGreaterThanOrEqual(2)   // the research project and the collection
       expect(mockedApi.checkUploadSelection).toHaveBeenCalledWith('DONA', 'R0003')
-      // each message sits under its own field
-      expect(project.closest('div')).toContainElement(screen.getByLabelText('Research project'))
-      expect(project.closest('div')).not.toContainElement(screen.getByLabelText('Revision'))
-      expect(collection.closest('div')).toContainElement(screen.getByLabelText('Revision'))
     })
 
     it('says the collection is not in Trapper yet when the upload would create it', async () => {
@@ -575,9 +562,30 @@ describe('UploadDeploymentPage', () => {
         { check: 'research_project', ok: false, message: 'Trapper has no research project DONA.' },
         { check: 'collection', ok: false, message: 'Not checked: the research project couldn\u2019t be found.' },
       ] })
-      await pickCollection()
+      render(<UploadDeploymentPage />)
       expect(await screen.findByText(/Trapper has no research project DONA/)).toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: 'Revision' })).not.toBeInTheDocument()
     })
+  })
+
+  it('shows the deployments as a table, as labels or only the search field, with the same selection in the three', async () => {
+    await pickCollection('R0003', false)
+
+    expect(await screen.findByRole('table', { name: 'Deployments' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Show the deployments as labels' }))
+    expect(screen.queryByRole('table', { name: 'Deployments' })).not.toBeInTheDocument()
+    const labels = within(screen.getByRole('group', { name: 'Deployments' }))
+    expect(labels.getByRole('button', { name: 'Unselect R0003-DONA_01' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(labels.getByRole('button', { name: 'Unselect R0003-DONA_01' }))
+    expect(labels.getByRole('button', { name: 'Select R0003-DONA_01' })).toHaveAttribute('aria-pressed', 'false')
+    expect(labels.getByRole('button', { name: 'Select R0003-DONA_04' })).toBeEnabled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show only the search field' }))
+    await userEvent.type(screen.getByLabelText('Search the deployments'), 'DONA_01')
+    const list = within(await screen.findByRole('listbox', { name: 'Deployments' }))
+    await userEvent.click(list.getByRole('option', { name: /R0003-DONA_01/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Show the deployments as a table' }))
+    expect(screen.getByRole('checkbox', { name: 'R0003-DONA_01' })).toBeChecked()
   })
 
   it('has a Back, level with Continue, that leaves the task from the first step', async () => {

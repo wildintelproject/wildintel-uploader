@@ -305,7 +305,9 @@ def test_checking_the_selection_says_what_the_account_sees_of_the_project_and_th
 
     assert response.status_code == 200
     assert [(c["check"], c["ok"]) for c in response.json()["checks"]] == [("research_project", True), ("collection", True)]
-    assert unknown.status_code == 404 and no_collection.status_code == 400
+    assert unknown.status_code == 404
+    # with no collection only the research project is checked: it is looked for as soon as it is known, before a revision is chosen
+    assert no_collection.status_code == 200 and [(c["check"], c["ok"]) for c in no_collection.json()["checks"]] == [("research_project", True)]
 
 
 def test_the_report_of_an_upload_is_kept_with_the_others_and_downloads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
