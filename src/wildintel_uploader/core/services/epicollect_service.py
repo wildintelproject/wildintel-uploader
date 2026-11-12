@@ -345,7 +345,7 @@ VISIT_QUESTIONS: dict[str, str] = {
     "actionaftertheft": "action_after_theft", "cameraname": "camera_label", "cameramodel": "camera_model", "serialnumber": "camera_id",
     "cameraheight": "camera_height", "cameradelay": "camera_interval", "cameratilt": "camera_tilt", "cameraheading": "camera_heading",
     "detectiondistance": "detection_distance", "baituse": "bait_use", "featuretype": "feature_type", "habitat": "habitat", "sdtoinsert": "sd",
-    "actionafterthereview": "action", "calibration": "calibration", "observations": "comments", "coordinates": "coordinates", "time": "time",
+    "actionafterthereview": "action", "actionafterinspection": "action", "calibration": "calibration", "observations": "comments", "coordinates": "coordinates", "time": "time",
 }
 # what the form answers of the card and the batteries — one question — and what each of them is
 _CARD_CODES = {"ok": ("OK", "OK"), "card full": ("OK", "CardFull"), "no batteries": ("NoBatteries", "OK"), "card full and no batteries": ("NoBatteries", "CardFull")}
@@ -372,7 +372,7 @@ def visit_actions(status: str | None, action: str | None, action_after_theft: st
     if status in _NO_CAMERA:
         return "Installation"  # no camera at the site — new, or its camera was removed before — has one put up: the form asks the same questions in both
     if status == "stolen":
-        return {"camera replacement": "Stolen + Installation", "site removal": "Stolen + Archive", "camera removal": "Stolen"}.get((action_after_theft or "").strip().lower(), "")
+        return {"camera replacement": "Stolen + Installation", "site removal": "Stolen + Archive", "camera removal": "Stolen", "none": "Stolen"}.get((action_after_theft or "").strip().lower(), "")
     return {
         "camera inspection": "Revision", "keep the camera": "Revision", "camera replacement": "Revision + Desinstallation + Installation", "camera removal": "Revision + Desinstallation",
         "site removal": "Revision + Desinstallation + Archive",

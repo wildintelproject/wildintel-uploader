@@ -1208,6 +1208,8 @@ def test_an_inactive_site_has_a_camera_put_up_again_and_a_camera_removed_after_a
     assert actions("Stolen", None, "Camera replacement") == "Stolen + Installation"
     assert actions("Stolen", None, "Site removal") == "Stolen + Archive"
     assert actions("Stolen", None, "Camera removal") == "Stolen"          # the site stays open
+    assert actions("Stolen", None, "None") == "Stolen"                    # the form now says it too: nothing is done after the theft, the site stays open
+    assert actions("OK", "Keep the camera", None) == "Revision"
     assert actions("OK", "Camera removal", None) == "Revision + Desinstallation"
 
 
@@ -1253,6 +1255,17 @@ def test_a_file_can_close_the_revision_before_its_own_marking_the_locations_stil
     assert closing["problems"] == [] and [m["location_id"] for m in closing["closed"]] == ["DONA_02"] and any("marked as not visited" in n for n in closing["notes"])
     assert saved["problems"] == []
     assert [(v["location_id"], v["session"]) for v in marked] == [("DONA_02", "R0012")]
+
+
+def test_the_question_action_after_inspection_of_the_form_is_found_whole_and_cut_at_20_characters():
+    import csv
+    import io
+
+    from wildintel_uploader.core.services import epicollect_service
+    for header in ("10_Action_after_insp", "10_Action_after_inspection"):
+        text = f"ec5_uuid,created_at,4_locationID,5_Status_of_the_came,{header}\nr1,2026-09-14T08:30:00.000Z,DONA_01,OK,Camera removal\n"
+        [row] = list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+        assert row["actions"] == "Revision + Desinstallation"
 
 
 def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its_entry_was_created():
