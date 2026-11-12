@@ -144,7 +144,16 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
     if (!project) return
     let cancelled = false
     api.visitBook(project.acronym)
-      .then(({ results }) => { if (!cancelled) setVisits(results) })
+      .then(({ results }) => {
+        if (cancelled) return
+        setVisits(results)
+        // opens on the latest revision in the same render the visits come in — not after it: what is shown does not change under a click — unless a link brings to one visit
+        if (!defaulted.current) {
+          defaulted.current = true
+          const latest = [...new Set(results.map((v) => v.session))].sort((x, y) => y.localeCompare(x))[0]
+          if (!focus && latest) setRevision(latest)
+        }
+      })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not read the visits.') })
     return () => { cancelled = true }
   }, [project?.acronym, reloads]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -178,8 +187,6 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
     const target = visits.find((v) => !v.not_done && v.session === focus.session && v.location_id.toLowerCase() === focus.site.toLowerCase())
     if (target) showVisit(target)
   }, [focus, visits]) // eslint-disable-line react-hooks/exhaustive-deps
-  // on arrival the latest revision is the one picked (unless a link brings to one visit): the dashboard opens on what is current
-  useEffect(() => { if (!visits || defaulted.current) return; defaulted.current = true; if (!focus && revisions[0]) setRevision(revisions[0]) }, [visits]) // eslint-disable-line react-hooks/exhaustive-deps
   // the visit that was made to the same location in the closest revision after the one of a row
   const nextOf = (v: BookVisit) => everyRow
     .filter((w) => !w.not_done && w.location_id.toLowerCase() === v.location_id.toLowerCase() && w.session > v.session)

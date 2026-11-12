@@ -31,6 +31,14 @@ describe('UploadStatusPage', () => {
     vi.mocked(api.fieldDeployments).mockResolvedValue({ results: DEPLOYMENTS })
   })
 
+  it('opens on the latest revision from the first render of its table — not after it', async () => {
+    render(<UploadStatusPage onBack={() => {}} />)
+
+    const table = await screen.findByRole('table', { name: 'Uploads' })
+    expect(within(table).getAllByRole('row').slice(1).map((r) => r.textContent).every((t) => /R0002/.test(t ?? ''))).toBe(true)   // the first time it is there it is already the latest revision's
+    expect(within(table).queryByText(/R0001-DONA_01/)).not.toBeInTheDocument()
+  })
+
   it('lists the uploads — one for each deployment that will be made and each uploader in use — with where, when, the uploader and its status', async () => {
     render(<UploadStatusPage onBack={() => {}} />)
     await showAll()

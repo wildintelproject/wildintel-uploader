@@ -43,6 +43,17 @@ describe('VisitBookPage', () => {
     expect(download).toHaveBeenCalledWith('TATR_visits.csv', 'location_id,actions\r\n')
   })
 
+  it('opens on the latest revision from the first render of its table — not after it — and shows all of them again when asked', async () => {
+    await pickProject()
+
+    const table = await screen.findByRole('table', { name: 'Visits' })
+    // the first time the table is there it is already the latest revision's: it does not change under a click
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('R0004')
+    await showAll()
+    expect(within(await screen.findByRole('table', { name: 'Visits' })).getAllByRole('row').slice(1)).toHaveLength(3)
+  })
+
   it('lists the visits of a research project, the newest first, and filters them', async () => {
     await pickProject()
     await showAll()

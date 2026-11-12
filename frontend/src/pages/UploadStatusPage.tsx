@@ -108,7 +108,16 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
     if (!project) return
     let cancelled = false
     api.fieldDeployments(project.acronym)
-      .then(({ results }) => { if (!cancelled) setDeployments(results) })
+      .then(({ results }) => {
+        if (cancelled) return
+        setDeployments(results)
+        // opens on the latest revision in the same render the uploads come in — not after it: what is shown does not change under a click
+        if (!defaulted.current) {
+          defaulted.current = true
+          const latest = [...new Set(results.filter((d) => !d.no_images && (d.upload_states ?? []).length > 0).map((d) => d.collection))].sort((x, y) => y.localeCompare(x))[0]
+          if (latest) setRevision(latest)
+        }
+      })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not read the uploads.') })
     return () => { cancelled = true }
   }, [project?.acronym]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -117,8 +126,6 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   const every: UploadRow[] = (deployments ?? []).filter((d) => !d.no_images).flatMap((d) => (d.upload_states ?? []).map((u) => ({ deployment: d, upload: u })))
   const revisions = [...new Set(every.map((r) => r.deployment.collection))].sort((a, b) => b.localeCompare(a))
   const uploaders = [...new Set(every.map((r) => r.upload.destination))]
-  // on arrival the latest revision is the one picked: the dashboard opens on what is current
-  useEffect(() => { if (!deployments || defaulted.current) return; defaulted.current = true; if (revisions[0]) setRevision(revisions[0]) }, [deployments]) // eslint-disable-line react-hooks/exhaustive-deps
   // the cards and the table follow the revision and the uploader picked
   const own = every.filter((r) => (!revision || r.deployment.collection === revision) && (!uploader || r.upload.destination === uploader))
   const count = (s: UploadStateName) => own.filter((r) => r.upload.state === s).length
