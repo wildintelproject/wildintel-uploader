@@ -42,7 +42,7 @@ export interface PickMany<T> {
 
 /** The things to pick from — visits, SD cards — in the table of a dashboard: search, rows, pages, and a button to see them as labels. Pressing a row or a label picks its
  * item, the one picked marked, and pressing it again lets it go. */
-export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect, many, columns, searchText, renderLabel, names, searchPlaceholder, empty = 'Nothing matches.', perPage, optionLabel, filters, total }: {
+export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect, many, columns, searchText, renderLabel, names, searchPlaceholder, empty = 'Nothing matches.', perPage, optionLabel, filters, total, defaultView = 'table' }: {
   items: T[]; keyOf: (item: T) => string; selectedKey?: string; onSelect?: (item: T | undefined) => void
   /** Many can be picked, not one: the table has a box in each row, and the bar of the selection is over the rows. */
   many?: PickMany<T>
@@ -62,10 +62,12 @@ export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect,
   /** The filters already applied to `items` from outside — the revision picked, say —, told in the line of the active filters, and how many there were before them. */
   filters?: { label: string; tone: 'blue' | 'green' }[]
   total?: number
+  /** The view it opens on: the table when it is not said; the search field alone is the collapsed one. */
+  defaultView?: View
 }) {
   const [text, setText] = useState('')
   const [page, setPage] = useState(1)
-  const [view, setView] = useState<View>('table')
+  const [view, setView] = useState<View>(defaultView)
   // In the view of only the search field: whether its list is open, and the option the keys are on.
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)

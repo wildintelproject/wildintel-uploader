@@ -28,7 +28,9 @@ beforeEach(() => {
 
 async function pickCollection() {
   render(<RepairPage />)
-  await userEvent.click(await screen.findByRole('button', { name: 'Pick the revision R0003' }))      // the revision is picked in its table
+  // the revision opens collapsed — only the search field —: it is typed and picked from the list
+  await userEvent.type(await screen.findByLabelText('Search the revisions'), 'R0003')
+  await userEvent.click(await screen.findByRole('option', { name: /^R0003/ }))
 }
 
 const check = async () => userEvent.click(await screen.findByRole('button', { name: 'Check the deployments' }))

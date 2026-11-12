@@ -186,7 +186,7 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
                       <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{c.deployments.length} {c.deployments.length === 1 ? 'deployment' : 'deployments'}</span>
                     </LabelFrame>)}
                   names={{ table: 'Revisions', search: 'Search the revisions', items: 'revisions', pick: (c) => `the revision ${c.name}`, pickPlaceholder: 'Type to pick a revision…' }}
-                  optionLabel={(c) => `${c.name} · ${c.deployments.length} ${c.deployments.length === 1 ? 'deployment' : 'deployments'}`} searchPlaceholder="Search by revision…" empty="No revision matches." perPage={5}
+                  optionLabel={(c) => `${c.name} · ${c.deployments.length} ${c.deployments.length === 1 ? 'deployment' : 'deployments'}`} searchPlaceholder="Search by revision…" empty="No revision matches." perPage={5} defaultView="search"
                 />
               )}
           </div>
