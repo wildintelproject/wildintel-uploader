@@ -333,6 +333,14 @@ def test_a_visit_that_left_a_camera_is_closed_once_a_later_visit_collects_its_ca
     assert [(c["visit"]["location_id"], c["visit"]["date"], c["end"]["date"]) for c in closed] == [("DONA_01", "2026-08-05", "2026-10-02"), ("DONA_01", "2026-06-10", "2026-08-05")]
 
 
+def test_the_closed_visits_come_with_the_timezone_of_their_location(tmp_path: Path):
+    with _in(tmp_path):
+        _save_all([_visit("2026-06-10", ["Installation"]), _visit("2026-08-05", ["Revision"], num_photos=1620)])
+        [closed] = _closed()
+
+    assert closed["visit"]["timezone"] == "UTC" and closed["end"]["timezone"] == "UTC"   # the day and the time of a visit are told on the wall clock of its location
+
+
 def test_what_does_not_collect_a_card_leaves_the_visit_before_it_open(tmp_path: Path):
     with _in(tmp_path):
         _save_all([
@@ -623,7 +631,7 @@ def test_the_session_numbers_that_jump_are_warned_of_and_the_sites_not_visited_a
 
     assert "Session numbers jump from R0003 to R0005." in result["warnings"]
     text = EPI_HEADER + "2024-10-12T09:00:00.000Z,Ana,R0004,2024-10-12,DONA_01,P800,Revision,50,C7,09:00\n"
-    assert any(n.startswith("R0004: sites visited in R0003 and not on this trip, their cameras still out: DONA_02") for n in _parse(text, kept=kept, sites=sites)["notes"])
+    assert any(n.startswith("The revision R0004 has no visit to DONA_02, which was visited in R0003: the camera stays out in the field") for n in _parse(text, kept=kept, sites=sites)["notes"])
 
 
 def test_a_row_that_is_a_visit_kept_already_by_its_session_site_camera_and_actions_is_left_as_it_is():
@@ -1224,6 +1232,52 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
 
     _, rows = read("revision_1_installation.csv")
     assert rows[0]["sd"] == "SD 1" and rows[0]["camera_id"] == "BR5071050724" and rows[0]["trappers"] == "Ana Pérez"
+
+
+def test_a_file_can_close_the_revision_before_its_own_marking_the_locations_still_planned_as_not_visited(tmp_path: Path):
+    text = "location_id,session,date,time,actions,num_photos\nDONA_01,R0013,2026-10-02,08:00,Revision,5\n"
+    mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos")}
+
+    def read(close: bool, save: bool = False) -> dict:
+        return _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "close_revisions": close, "save": save}).json()
+
+    with _in(tmp_path):
+        _project(archived=(3,))
+        _installed((1,))                                    # R0012: only DONA_01 (DONA_03 is archived): DONA_02 is still planned in it
+        refused = read(False)
+        closing = read(True)
+        saved = read(True, save=True)
+        marked = [v for v in _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"] if v.get("camera_status") == "Not revised"]
+
+    assert refused["problems"] and "R0012 is not finished" in refused["problems"][0]["message"]    # without asking, the revision before has to be finished
+    assert closing["problems"] == [] and [m["location_id"] for m in closing["closed"]] == ["DONA_02"] and any("marked as not visited" in n for n in closing["notes"])
+    assert saved["problems"] == []
+    assert [(v["location_id"], v["session"]) for v in marked] == [("DONA_02", "R0012")]
+
+
+def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its_entry_was_created():
+    from wildintel_uploader.core.services import epicollect_service
+    text = "ec5_uuid,created_at,1_setupBy,4_locationID,5_Status_of_the_came,10_Action_after_the_\nr1,2026-09-14T08:30:00.000Z,Ana,DONA_01,OK,\n"
+    import csv
+    import io
+    [row] = list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+    assert row["location_id"] == "DONA_01" and row["created_at"] == "2026-09-14T08:30:00.000Z" and not row["date"] and not row["time"]
+
+
+def test_the_download_of_the_new_form_can_create_what_does_not_exist_with_the_place_of_the_visit_as_the_one_of_a_new_location(tmp_path: Path):
+    folder = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
+    text = (folder / "revision_1_installation.csv").read_text(encoding="utf-8")
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        trappers = {"Ana Pérez", "Luis Gómez"}
+        with patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=trappers):
+            result = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "epicollect-csv",
+                                                                     "create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"timezone": "Europe/Madrid", "daylight_saving": "yes"}}).json()
+
+    created = result["create"]
+    assert [l["location_id"] for l in created["locations"]] == ["WICP_02_001", "WICP_02_002", "WICP_02_003", "WICP_02_004"]
+    assert all(l["timezone"] == "Europe/Madrid" and l["ignore_dst"] is False and l["latitude"] is not None for l in created["locations"])
+    assert len(created["cameras"]) == 4 and len(created["sd_cards"]) == 4
 
 
 # ── a visit says a camera, an SD card or a trapper that exist, by hand and in a file ────────────────────────────

@@ -507,7 +507,10 @@ def visits_from_csv(text: str) -> str:
             if len(cut) == 1:
                 refs[cut.pop()] = header
                 cut_headers.remove((key, header))
-    missing = [name for name, field in (("locationID", "location_id"), ("Date", "date"), ("Status of the camera", "camera_status")) if field not in refs]
+    # the day and the time of a visit are when its entry was created (created_at): the form has no date or time to ask for
+    missing = [name for name, field in (("locationID", "location_id"), ("Status of the camera", "camera_status")) if field not in refs]
+    if "created_at" not in (reader.fieldnames or []):
+        missing.append("created_at")
     if missing:
         raise EpicollectError(f"The file is not the download of the form of a visit: it has no column for {', '.join(missing)}.")
     out = io.StringIO()

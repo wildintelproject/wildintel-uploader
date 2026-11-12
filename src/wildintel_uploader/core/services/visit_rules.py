@@ -543,14 +543,15 @@ def archive_errors(visit: dict, kept: list[dict], location: dict | None, unknown
     return errors
 
 
-def not_visited_records(previous: int, visits: list[dict], locations: list[dict]) -> list[dict]:
+def not_visited_records(previous: int, visits: list[dict], locations: list[dict], unknown: list[dict] | None = None) -> list[dict]:
     """The visits that finish revision `previous` as not visited: one for each location that is not archived when it starts and has no visit in it —
     status "Not revised", on the last day of the revision, with the camera that is at the site (none is asked of them)."""
     of = [v for v in visits if _session_number(v.get("session")) == previous]
     if not of:
         return []
     start, last = min(str(v["date"]) for v in of), max(str(v["date"]) for v in of)
-    visited = {str(v["location_id"]).lower() for v in of}
+    # a site that is unknown in the revision is not marked: nothing is known of it, and it counts as visited
+    visited = {str(v["location_id"]).lower() for v in of} | {site for n, site in _unknown_keys(unknown) if n == previous}
     records = []
     for l in locations:
         site = str(l.get("location_id") or "")
@@ -690,7 +691,9 @@ def history_notes(new: list[dict], kept: list[dict]) -> list[str]:
         before = {str(v["location_id"]) for v in everything if _session_number(v.get("session")) == session - 1}
         missing = sorted(s for s in before if s.lower() not in here)
         if missing:
-            notes.append(f"R{session:04d}: sites visited in R{session - 1:04d} and not on this trip, their cameras still out: {', '.join(missing)}.")
+            plural = len(missing) > 1
+            notes.append(f"The revision R{session:04d} has no visit to {', '.join(missing)}, which {'were' if plural else 'was'} visited in R{session - 1:04d}: "
+                         f"the camera{'s stay' if plural else ' stays'} out in the field and the deployment{'s stay' if plural else ' stays'} open until a visit collects the card.")
         current = [v for v in new if _session_number(v.get("session")) == session]
         skipped = sorted(v["location_id"] for v in current if str(v.get("camera_status") or "").lower() in NOT_REVISED)
         if skipped:

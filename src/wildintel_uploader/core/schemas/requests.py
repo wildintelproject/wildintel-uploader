@@ -530,6 +530,8 @@ class ImportVisitsCsvRequest(LocalLocationsRequest):
     # What to create when the file names a location, a camera or an SD card that does not exist: {"locations": bool, "cameras": bool, "sd_cards": bool}. The fields each one
     # needs become required (see visits_csv.CREATABLE).
     create: Optional[dict[str, bool]] = None
+    # The revision before the ones the file starts is closed when it has locations still planned: each is marked as not visited (an unknown one is not).
+    close_revisions: bool = False
     # The value of a field that the file has no column for, or whose cell is empty: {field: value}.
     defaults: Optional[dict[str, str]] = None
 

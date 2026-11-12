@@ -158,7 +158,7 @@ The places the visits of a research project can be taken from, besides entering 
 
 The visits are read from the **CSV file downloaded from the new WildINTEL Epicollect project**, the form of the field flow (*Register visits › WildINTEL Epicollect CSV*). The columns are found by the label of their question: there is nothing to say about them.
 
-- **The time of a visit** — *when its entry was created* (`created_at`, UTC; the default) or *the date and the hour typed in the form*. The hour typed is the wall clock of the visit's location, and is used when the row has a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.
+- **The time of a visit** — the form has no date or time to read: a visit happened when its entry was created (`created_at`, UTC), and it is told in the timezone of its location.
 
 #### Custom CSV
 

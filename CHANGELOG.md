@@ -8,6 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Added
+- **WildINTEL Epicollect CSV in Register visits**: it can create the locations, cameras and SD cards that do not exist, as the Custom CSV does — a new location takes the coordinates of its first visit and asks only for its timezone and its summer time —, and the file is read again when what is created changes. The CSV needs no *Date* or *Time* column: a visit happened when its entry was created (`created_at`), so the choice *The time of a visit is* is gone from Settings › Visit sources. In the visits registered by hand, the SD cards offered are only the ready ones.
+- **Photos of a created deployment** can be looked at from the number of photos in the dashboard of the deployments, in a panel with the table of the dashboards (`/api/deployment-import/photos` and `/photo`). The dashboards of the visits, the deployments and the uploads open on the latest revision, and every date the app shows has the format `14 Sep 2026, 13:15 (Europe/Madrid)`.
 - **Cameras** (Settings › Entities): how a camera is connected and what it runs on — *Mobile connection* (none, 4G or 5G), *Power* (cells — AA, AAA… —, or a battery) and, for a battery, whether it *can be taken out*. All three are optional; cells are always taken out to be changed, so only a battery says it.
 - **Import of visits**: how the card and the batteries were is also read as the form says it in English (*Card full*, *No batteries*, *Card full and no batteries*).
 - **Import of visits**: the id of a camera or an SD card is what its cell says, stripped, the same for both (`SD 7` is not `7`, `5.0` is not `5`); what already exists is still found ignoring the case.

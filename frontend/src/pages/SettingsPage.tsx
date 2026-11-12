@@ -153,7 +153,6 @@ const BackIcon = () => (
 /** Every field as typed — the tolerance can be briefly empty or invalid. */
 interface Draft {
   /** Field records: when a visit happened, the seconds of the logs, and the columns of the file of the field app. */
-  fieldlogTimeSource: 'created_at' | 'hour'
   fieldlogKeepSeconds: boolean
   logLevel: LogLevel
   workers: string
@@ -234,7 +233,7 @@ function toDraft(s: AppSettings): Draft {
     sd_card: post.sd_card, photo_count: post.photo_count,
   }
   return {
-    fieldlogTimeSource: s.FIELDLOG.time_source, fieldlogKeepSeconds: s.FIELDLOG.keep_seconds,
+    fieldlogKeepSeconds: s.FIELDLOG.keep_seconds,
     logLevel: s.GENERAL.log_level,
     workers: String(s.GENERAL.workers),
     defaultResearchProject: s.GENERAL.default_research_project ?? '',
@@ -326,7 +325,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
       trappers: d.trappers, sd_cards: d.sdCards, cameras: d.cameras, roles: d.roles,
     },
     FIELDLOG: {
-      time_source: d.fieldlogTimeSource, keep_seconds: d.fieldlogKeepSeconds,
+      time_source: 'created_at', keep_seconds: d.fieldlogKeepSeconds,
     },
   }
 }
@@ -2599,14 +2598,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
               <div className="space-y-5">
                 <ToggleCard title="Use WildINTEL Epicollect CSV" checked={draft.wildintelNewEnabled} onChange={(v) => set('wildintelNewEnabled', v)}
                             description="Offers to read the visits from the CSV downloaded from the new WildINTEL Epicollect project (the form of the field flow). Turned off, it is not offered in Register visits." />
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">The columns are found by the label of their question. Besides, say when a visit is taken to have happened.</p>
-                <SettingsCard>
-                  <CardBlock title="When did a visit happen?" description="A visit is read from the file of the field app. Its time can be when its entry was created, or the date and the hour typed in the form.">
-                    <SelectBox label="The time of a visit is" value={draft.fieldlogTimeSource} onChange={(v) => set('fieldlogTimeSource', v)}
-                               options={[{ value: 'created_at', label: 'When its entry was created (UTC)' }, { value: 'hour', label: 'The date and the hour typed in the form' }]} />
-                    <p className={hintClass}>The hour typed is the wall clock of the visit's location; the time of the entry is UTC, and is put in the timezone of the location. A row without a date and an hour typed is read by the time of its entry.</p>
-                  </CardBlock>
-                </SettingsCard>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">The columns are found by the label of their question. The form has no date or time to read: a visit happened when its entry was created (UTC), and is told in the timezone of its location.</p>
               </div>
             )}
             {visitSource === 'csv' && (

@@ -832,7 +832,7 @@ export interface VisitsCsvColumns {
 export type CsvEntity = 'locations' | 'cameras' | 'sd_cards'
 export type CsvCreate = Record<CsvEntity, boolean>
 /** What is asked of the import besides the file: the entities to create, and the value of the fields the file has no column for. */
-export interface ImportCsvOptions { create?: CsvCreate; defaults?: Record<string, string> }
+export interface ImportCsvOptions { create?: CsvCreate; defaults?: Record<string, string>; close_revisions?: boolean }
 
 /** What reading a CSV file of visits gave: the visits that can be kept, the rows that cannot (numbered as in the file, the header being 1),
  * those already kept, and how many were kept when asked to. */
@@ -857,6 +857,8 @@ export interface VisitsCsvResult {
   warnings: string[]
   /** The warnings that are not about a row of the file — told in the rows otherwise — */
   loose_warnings?: string[]
+  /** The locations of the revision before the file's own that were still planned and are marked as not visited — when the file was asked to close it. */
+  closed?: { location_id: string; session: string }[]
 }
 
 /** A visit as the visit book shows it: with the deployment it started — closed once a later visit collected its card, open while the camera is still out — and neither when it left no camera. */

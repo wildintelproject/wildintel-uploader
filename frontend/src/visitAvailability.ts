@@ -132,6 +132,18 @@ const revisionNumber = (session: string | undefined) => {
   return m ? Number(m[0]) : null
 }
 
+/** The revision the next visit to a site belongs to — worked out from where the revisions are, not from how many visits the site has had: the latest revision when the site has
+ * no visit in it (it is still planned there), and the one after it when it has — the sites not visited in the latest one are then marked as not visited, to finish it. R0001 with no
+ * visits. `latest` is the latest revision there is, and `starts` whether the visit starts a new one. */
+export function nextRevision(visits: StoredVisit[], site: string): { session: string; latest: number | null; starts: boolean } {
+  const numbers = visits.map((v) => revisionNumber(v.session)).filter((n): n is number => n !== null)
+  if (numbers.length === 0) return { session: 'R0001', latest: null, starts: false }
+  const latest = Math.max(...numbers)
+  const there = visits.some((v) => revisionNumber(v.session) === latest && same(v.location_id, site))
+  const number = there ? latest + 1 : latest
+  return { session: `R${String(number).padStart(4, '0')}`, latest, starts: there }
+}
+
 /** Why a revision cannot start: the one before it is not finished. A revision is one visit to each of the locations that are not archived when it
  * starts (the day of its first visit; an archived one with no day is archived for good). The first revision of the visits has none before it. */
 export function unfinishedRevision(number: number, visits: StoredVisit[], locations: { location_id: string; status?: string; status_date?: string | null }[], day = ''): { message: string; previous: string; missing: string[] } | null {

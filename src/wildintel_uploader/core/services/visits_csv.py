@@ -587,7 +587,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
     all_locations = [*locations, *new_locations.values()]
     numbers = [n for n in (visit_rules._session_number(v.get("session")) for v in [*kept, *visits]) if n is not None]
     floor = min(numbers) if numbers else 1
-    accepted, gate = list(kept), {}
+    accepted, gate, closing = list(kept), {}, []
 
     def fills_unknown(v: dict) -> bool:
         """Whether the visit takes the place of an unknown one of the visits kept: its site has none in its revision, that is unknown."""
@@ -600,6 +600,15 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         if number is not None and number not in gate and not fills:
             # a revision starts when the one before it is finished — said once for the revision, with the visits that were kept before it
             day = min(str(v["date"]) for v in visits if visit_rules._session_number(v.get("session")) == number)
+            if options.get("close_revisions"):
+                # the revision before is closed as the form does when asked: its locations still planned are marked as not visited (the unknown ones are not: nothing is known of them)
+                marks = visit_rules.not_visited_records(number - 1, accepted, all_locations, [*unknown_kept, *unknown])
+                for mark in marks:
+                    location = next((l for l in all_locations if str(l.get("location_id", "")).lower() == mark["location_id"].lower()), None)
+                    mark["when"] = visit_time.to_when(mark["date"], mark["time"], location)
+                    mark["comments"] = "Marked as not visited when the revision after it was added from a file."
+                accepted.extend(marks)
+                closing.extend(marks)
             gate[number] = visit_rules.unfinished_revision(number, accepted, all_locations, floor, day, [*unknown_kept, *unknown])
         n = row_of[id(visit)]
         reasons = [gate[number]] if number is not None and not fills and gate.get(number) else []
@@ -633,6 +642,9 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         said.append((message, sorted({row_of[id(v)] for v in about if id(v) in row_of})))
     warnings = list(dict.fromkeys(message for message, _ in said))
     notes = visit_rules.history_notes(visits, kept)
+    closed = [m for m in closing if any(visit_rules._session_number(v.get("session")) == visit_rules._session_number(m["session"]) + 1 for v in visits)]
+    for session in sorted({m["session"] for m in closed}):
+        notes.append(f"{session} is closed to start the revision after it: {', '.join(m['location_id'] for m in closed if m['session'] == session)} still planned in it, marked as not visited.")
     # a site that has no visit in a revision the file gives was not there: the revision after it has to put its camera up
     upwards = visit_rules.unknown_installation_warnings(visits, kept, [*unknown_kept, *unknown])
     warnings += [m for m in upwards if m not in warnings]
@@ -640,7 +652,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         by_revision: dict[str, list[str]] = {}
         for u in unknown:
             by_revision.setdefault(u["session"], []).append(u["location_id"])
-        notes += [f"{session}: no visit kept to {len(sites)} site(s), it is unknown — nothing could be checked against it: {', '.join(sites)}." for session, sites in by_revision.items()]
+        notes += [f"The revision {session} is created, but there is no data of its visits to {', '.join(sites)}: they are created as unknown visits, and the visits after them cannot be checked against them." for session, sites in by_revision.items()]
     # what is created is what the visits that are kept need: a location, a camera or an SD card that only a refused visit named is not
     kept_rows = {row_of[id(v)] for v in visits}
     sites = {v["location_id"].lower() for v in visits}
@@ -668,7 +680,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         if names and n in report and report[n]["result"] == "ok":
             report[n]["message"] = f"The visit is added, and creates {', '.join(names)}."
     return {"visits": visits, "problems": problems, "rows": [report[n] for n in sorted(report)], "skipped": skipped, "new_sites": new_sites,
-            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes, "unknown": unknown}
+            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes, "unknown": unknown, "closed": closed}
 
 
 # The columns of an export: the fields of a visit a CSV can give, by their names — which the import finds by themselves — less the two that are worked out

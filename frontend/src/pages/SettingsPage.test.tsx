@@ -271,7 +271,7 @@ describe('SettingsPage', () => {
       expect(screen.getByRole('heading', { name: 'Visit sources' })).toBeInTheDocument()
       expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['WildINTEL Epicollect CSV', 'Custom CSV', 'Epicollect'])
       expect(screen.getByRole('tab', { name: 'WildINTEL Epicollect CSV' })).toHaveAttribute('aria-selected', 'true')
-      expect(screen.getByLabelText('The time of a visit is')).toBeInTheDocument()
+      expect(screen.getByText(/a visit happened when its entry was created/)).toBeInTheDocument()
       await userEvent.click(screen.getByRole('tab', { name: 'Epicollect' }))
       expect(screen.getByRole('switch', { name: 'Use Epicollect' })).toBeInTheDocument()
     })
@@ -1709,18 +1709,17 @@ describe('SettingsPage — which sources and uploaders are used', () => {
 })
 
 describe('SettingsPage — WildINTEL Epicollect file', () => {
-  it('says when a visit happened — in the tab of the source — and whether the logs keep the seconds, in General — and saves them', async () => {
+  it('says that a visit happened when its entry was created — in the tab of the source — and whether the logs keep the seconds, in General — and saves it', async () => {
     render(<SettingsPage onClose={vi.fn()} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Visit sources' }))
 
-    expect(screen.getByLabelText('The time of a visit is')).toHaveValue('created_at')
-    await userEvent.selectOptions(screen.getByLabelText('The time of a visit is'), 'hour')
+    expect(screen.queryByLabelText('The time of a visit is')).not.toBeInTheDocument()   // the form has no date or time to choose from
     expect(screen.queryByLabelText('Column for Who went')).not.toBeInTheDocument() // the columns are found by their names: nothing to say
     await userEvent.click(screen.getByRole('button', { name: 'General' }))
     await userEvent.click(screen.getByRole('switch', { name: 'Keep the seconds in the logs' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(mockedApi.saveSettings).toHaveBeenCalled())
-    expect(mockedApi.saveSettings.mock.calls[0][0].FIELDLOG).toEqual({ time_source: 'hour', keep_seconds: true })
+    expect(mockedApi.saveSettings.mock.calls[0][0].FIELDLOG).toEqual({ time_source: 'created_at', keep_seconds: true })
   })
 })

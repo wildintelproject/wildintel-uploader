@@ -1,11 +1,13 @@
 import { inTheApp } from '../researchProjects'
+import { formatLocal, formatVisitWhen } from '../dateFormat'
+import { Glyph } from '../components/ViewSwitch'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import BackButton from '../components/BackButton'
 import Combobox from '../components/Combobox'
 import LocationPicker from '../components/LocationPicker'
 import type { ReactNode } from 'react'
-import TaskCard, { PageHeader } from '../components/TaskCard'
+import TaskCard, { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import ResearchProjectPicker from '../components/ResearchProjectPicker'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import ChoiceCards from '../components/ChoiceCards'
@@ -16,7 +18,7 @@ import IconButton from '../components/IconButton'
 import VisitSummary, { type SummaryRow, type SummaryTone, type VisitSummaryData } from '../components/VisitSummary'
 import { CamtrapDpContext, CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, DETAILS_SECTIONS, FEATURE_TYPE_OPTIONS, SwitchRow, roundPill, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
 import { shownErrors, validateDeployment } from '../deploymentValidation'
-import { availabilityErrors, cameraAtSite, cardBlock, unfinishedRevision } from '../visitAvailability'
+import { availabilityErrors, cameraAtSite, cardBlock, nextRevision, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, LocalLocation, LocalResearchProject, SdCard, StoredVisit, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, ImportCsvOptions } from '../types'
 
@@ -352,6 +354,10 @@ export function wallClockAgo(timezone: string | null | undefined, minutes: numbe
   return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`
 }
 
+/** The cards of the step that tells what was kept, as the one of Import deployment has them. */
+const REVIEW_CARD = 'rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5'
+const REVIEW_HEAD = 'flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700 pb-3 mb-4 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100'
+
 /** What a visit says, in the groups of cards to read before it is kept: only what was filled in. */
 export function visitSummary(v: Visit, session: string, timezone?: string | null): VisitSummaryData {
   const asked = askedOf(v)
@@ -371,7 +377,7 @@ export function visitSummary(v: Visit, session: string, timezone?: string | null
     overview: rows([
       ['Location', v.site.trim()],
       ['Revision code', session, 'code'],
-      ['When', v.when ? `${v.when.replace('T', ' ')}${timezone ? ` (${timezone})` : ''}` : ''],
+      ['When', v.when ? formatLocal(v.when, timezone) : ''],
       ['Who went', namesOf(v.trappers).join(', ')],
       ['Action performed', notVisitedVisit ? 'Not visited' : v.actions.join(' + ')],
     ]),
@@ -534,6 +540,8 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   const [filledFrom, setFilledFrom] = useState<string | null>(null)
   // A visit was just added: what is shown is that, and the choice of adding another or going back — the form comes back when another is wanted.
   const [justAdded, setJustAdded] = useState(false)
+  // the timezone of the location of each visit just added, to tell its day and time: the form is empty again once it is kept
+  const [zones, setZones] = useState<Record<string, string | null | undefined>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
   // The trappers kept in the settings, offered as who went.
   const [trappers, setTrappers] = useState<string[]>([])
@@ -569,6 +577,8 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   // What to create when the file names a location, a camera or an SD card that does not exist, and the value of a field the file has no column for.
   const [csvCreate, setCsvCreate] = useState<CsvCreate>({ locations: false, cameras: false, sd_cards: false })
   const [csvDefaults, setCsvDefaults] = useState<Record<string, string>>({})
+  // The revision before the ones of the file is closed when it has locations still planned: they are marked as not visited, as when a visit by hand asks for it.
+  const [csvClose, setCsvClose] = useState(false)
   // A location that is created starts as UTC, following summer time, unless the file or the defaults say otherwise.
   useEffect(() => {
     if (csvCreate.locations) setCsvDefaults((d) => ({ timezone: 'UTC', daylight_saving: 'yes', ...Object.fromEntries(Object.entries(d).filter(([, v]) => v !== '')) }))
@@ -576,10 +586,13 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   const csvFormat: VisitsCsvFormat = source === 'wildintel-new' ? 'epicollect-csv' : 'mapped'
   const chosen = SOURCE_OPTIONS.find((o) => o.value === source)
   // A camera put up while it is somewhere else, or a card left while it is in another camera, cannot be kept — said as soon as it is chosen.
-  const cardOptions = { cards: allSdCards, session: visit.session || (kept ? sessionOf(kept.length) : undefined) }
+  // The revision of the next visit to the location: the latest, when the location is still planned in it, and the one after it otherwise (see nextRevision).
+  const nextOne = allVisits && visit.site.trim() ? nextRevision(allVisits, visit.site.trim()) : null
+  const nextSession = nextOne?.session ?? (kept ? sessionOf(kept.length) : undefined)
+  const cardOptions = { cards: allSdCards, session: visit.session || nextSession }
   const conflicts = allVisits ? availabilityErrors(allVisits, visit, cardOptions) : {}
-  // Only the cards that can be left: not archived (from its day), not in another camera, not collected by this revision. The one already chosen stays, to show why it cannot be.
-  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (c.label === visit.sd || !cardBlock(allVisits ?? [], c.label, visit, cardOptions)))
+  // Only the cards that are ready — the settings say so: not planned (they are only there), not archived, not active (in a camera) —, and that no visit puts in another camera, not collected by this revision. The one already chosen stays, to show why it cannot be.
+  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (c.label === visit.sd || ((!c.status || c.status === 'ready') && !cardBlock(allVisits ?? [], c.label, visit, cardOptions))))
   // A Revision, a Desinstallation or a stolen camera is of the camera that is at the site: which one is not asked nor kept — the visit before says it —, unless the visit also installs another.
   const siteCamera = allVisits && visit.site.trim() ? cameraAtSite(allVisits, visit.site.trim(), visit.when || '9999-12-31T23:59:59') : null
   const ofTheSiteCamera = Boolean(siteCamera) && !visit.actions.includes('Installation') && visit.actions.some((x) => ['Revision', 'Desinstallation', 'Stolen'].includes(x))
@@ -717,15 +730,17 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   }
 
   // Another way to read the visits starts again from the file.
-  useEffect(() => { forgetCsv(); setCsvName(null); setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({}) }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { forgetCsv(); setCsvName(null); setCsvCreate({ locations: false, cameras: false, sd_cards: false }); setCsvDefaults({}); setCsvClose(false) }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // What a custom CSV is asked besides its columns — the entities to create and the defaults —, said only when there is something.
   const defaultsGiven = Object.fromEntries(Object.entries(csvDefaults).filter(([, v]) => v.trim()).map(([f, v]) => [f, v.trim()]))
-  const csvOptions: ImportCsvOptions | undefined = source === 'csv' && (Object.values(csvCreate).some(Boolean) || Object.keys(defaultsGiven).length > 0)
-    ? { ...(Object.values(csvCreate).some(Boolean) ? { create: csvCreate } : {}), ...(Object.keys(defaultsGiven).length > 0 ? { defaults: defaultsGiven } : {}) } : undefined
+  const csvOptions: ImportCsvOptions | undefined = (source === 'csv' || source === 'wildintel-new') && (Object.values(csvCreate).some(Boolean) || Object.keys(defaultsGiven).length > 0 || csvClose)
+    ? { ...(Object.values(csvCreate).some(Boolean) ? { create: csvCreate } : {}), ...(Object.keys(defaultsGiven).length > 0 ? { defaults: defaultsGiven } : {}), ...(csvClose ? { close_revisions: true } : {}) } : undefined
   // What follows the mapping in the call that reads the file: the options, when there are any (so none is sent when none is given)
   const readTail: [options?: ImportCsvOptions] = csvOptions ? [csvOptions] : []
   const csvReading = useRef(0)
+  // the options the file shown was read with
+  const readWith = useRef<string | null>(null)
   function forgetCsv() {
     csvReading.current++ // what an older file is still being answered is left out
     setCsvResult(null); setCsvError(null); setCsvSaved(null); setCsvColumns(null); setCsvMapping({}); setFileConfirmed(false)
@@ -746,6 +761,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
         const found = await api.visitsCsvColumns(text)
         if (reading === csvReading.current) { setCsvColumns(found); setCsvMapping(found.mapping) }
       } else {
+        readWith.current = JSON.stringify(csvOptions ?? null)
         const tail: [mapping?: Record<string, string>, options?: ImportCsvOptions] = csvOptions ? [undefined, csvOptions] : []
         const result = await api.importVisitsCsv(project.acronym, text, false, csvFormat, ...tail)
         if (reading === csvReading.current) setCsvResult(result)
@@ -776,6 +792,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   async function recheckCsv() {
     if (!project || !csvText) return
     setRechecking(true)
+    readWith.current = JSON.stringify(csvOptions ?? null)
     try {
       setCsvResult(await api.importVisitsCsv(project.acronym, csvText, false, source === 'csv' ? 'mapped' : csvFormat, source === 'csv' ? csvMapping : undefined, ...readTail))
       setCsvError(null)
@@ -791,6 +808,11 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   // The rows of the file are told by the row-by-row results; when there are none, the problems are listed.
   const listedProblems = (csvResult?.rows?.length ?? 0) > 0 ? [] : (csvResult?.problems ?? [])
   useEffect(() => { if (!settingsOpen && missingLocations) void recheckCsv() }, [settingsOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The file of the new form is read again when what is created changes — it has no matching of columns to press Check in.
+  useEffect(() => {
+    if (source !== 'wildintel-new' || !csvText || !csvResult) return
+    if (readWith.current !== JSON.stringify(csvOptions ?? null)) void recheckCsv()
+  }, [csvCreate, csvDefaults, csvClose]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** From another CSV file: reads the visits with the columns as they are mapped. */
   async function readMapped() {
@@ -831,6 +853,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
       ] as const).map(([entity, label, hint]) => (
         <SwitchRow key={entity} label={label} hint={hint} checked={csvCreate[entity]} onChange={(on) => setCsvCreate((c) => ({ ...c, [entity]: on }))} />
       ))}
+      <SwitchRow label="Close the revision before when it has locations still planned" hint="A revision starts when the one before it is finished. With this on, the locations still planned in it are marked as not visited, so the file can add the revision after it. An unknown revision is not closed: nothing is known of it." checked={csvClose} onChange={setCsvClose} />
     </div>
   )
   const mappedEnough = given('location_id') && given('actions') && (given('when') || given('created_at') || (given('date') && given('time'))) && createdNeeds.every((f) => given(f.field))
@@ -843,8 +866,8 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   ].filter(Boolean) as string[]
 
   // The revision of the visit is the next of its location; it cannot start while the one before it has locations still to be visited.
-  const revisionBlock = allVisits && location && !editingWhere
-    ? unfinishedRevision((kept?.length ?? 0) + 1, allVisits, projectLocations, visit.when.slice(0, 10)) : null
+  const revisionBlock = allVisits && location && !editingWhere && nextOne?.starts && nextOne.latest !== null
+    ? unfinishedRevision(nextOne.latest + 1, allVisits, projectLocations, visit.when.slice(0, 10)) : null
   const whereDone = !!project && !!location && !editingWhere && !revisionBlock
   const [marking, setMarking] = useState(false)
   // Marking the locations as not visited finishes the revision before: it is asked again before it is done.
@@ -893,16 +916,26 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   // Each visit the ones just added closed: its card was collected, so its images can be imported — a card of its own, with the way in on the right.
 
   const closedLinks = onImportImages && project && justClosed.length > 0 && (
-    <div className="mt-3 space-y-2">
-      {justClosed.map((c) => (
-        <Notice
-          key={`${c.visit.location_id}|${c.visit.date}|${c.visit.time}`} kind="info"
-          action={<button type="button" className={btnPrimary} onClick={() => onImportImages({ researchProjectId: project.acronym, visit: c.visit })}>Import the images of {c.visit.session}</button>}
-        >
-          The visit <strong>{c.visit.session}</strong> to {c.visit.location_id} is closed: its card was collected on {c.end.date}.
-        </Notice>
-      ))}
-    </div>
+    <section aria-label="Deployments" className={REVIEW_CARD}>
+      <h6 className={`${REVIEW_HEAD} justify-between`}>
+        <span className="flex items-center gap-2">
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-sky-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{MENU_ICONS.deployment}</svg>
+          Deployments
+        </span>
+        <span className="rounded-full px-2.5 py-1 text-xs font-semibold normal-case tracking-normal bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">To create</span>
+      </h6>
+      <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">The visits that were closed by the ones just added have their card collected: create its deployment now — its images are imported —, or do it later from the deployments menu.</p>
+      <div className="space-y-3">
+        {justClosed.map((c) => (
+          <div key={`${c.visit.location_id}|${c.visit.date}|${c.visit.time}`} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">The visit <strong>{c.visit.session}</strong> to {c.visit.location_id} is closed: its card was collected on {formatVisitWhen(c.end)}.</p>
+            <button type="button" className={`${btnPrimary} inline-flex shrink-0 items-center justify-center gap-2 !h-12`} aria-label={`Create the deployment of the visit ${c.visit.session} to ${c.visit.location_id}`} onClick={() => onImportImages({ researchProjectId: project.acronym, visit: c.visit })}>
+              <Glyph className="h-5 w-5">{MENU_ICONS.deployment}</Glyph>Create deployment
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 
   async function findClosed(by: { location_id: string; date: string; time: string }[]) {
@@ -931,7 +964,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
     if (incomplete) return
     setSaveError(null)
     // The session is worked out from the visits kept to the location, as its coordinates come from the location.
-    const complete: Visit = { ...visit, session: sessionOf(kept.length), site: visit.site.trim() }
+    const complete: Visit = { ...visit, session: nextSession ?? sessionOf(kept.length), site: visit.site.trim() }
     try {
       await api.saveVisit(project.acronym, toStored(complete))
     } catch (e) {
@@ -959,6 +992,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
       }
     }
     setVisits((list) => [...list, complete])
+    setZones((z) => ({ ...z, [`${complete.session}|${complete.site}`]: location?.timezone }))
     setJustAdded(true)
     setJustClosed([])
     setAllVisits((list) => (list ? [...list, toStored(complete)] : list))
@@ -978,7 +1012,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
       <PageHeader icon={<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />} title="Register visits" description="The visits to the camera traps, from which the deployments are worked out." parent="Manage visits" onParent={onBack}
         aside={defaultProject !== undefined || defaultAcronym !== null ? <DefaultResearchProject compact project={defaultProject} defaultAcronym={defaultAcronym} of="The visits" onOpenSettings={onOpenSettings && ((section) => onOpenSettings(section ?? 'general'))} /> : undefined} />
       <WizardStep
-        n={1} title="Where do the visits come from?" status={source ? 'done' : 'open'} canEdit onEdit={() => setSource(null)}
+        n={1} title="Where do the visits come from?" status={justAdded ? 'locked' : source ? 'done' : 'open'} canEdit={!justAdded} onEdit={() => setSource(null)} lockedSummary
         description="Enter them by hand, or read them from a file."
         summary={chosen?.title}
       >
@@ -989,6 +1023,20 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
 
       {byHand && (
         <>
+          {justAdded && visits.length > 0 && (() => {
+            const last = visits[visits.length - 1]
+            return (
+              <>
+                <WizardStep n={2} title="Where was the visit?" status="locked" lockedSummary canEdit={false} onEdit={() => {}} description="" summary={<>{project?.acronym} · {last.site}</>} />
+                <WizardStep n={3} title="Who went, and when?" status="locked" lockedSummary canEdit={false} onEdit={() => {}} description=""
+                            summary={<>{last.trappers.trim() ? `${last.trappers.trim()} · ` : ''}{formatLocal(last.when, zones[`${last.session}|${last.site}`])}</>} />
+                <WizardStep n={4} title="Enter the visit" status="locked" lockedSummary canEdit={false} onEdit={() => {}} description=""
+                            summary={[last.actions.length === 0 ? 'Not visited' : actionsText(last.actions), last.details.camera_id && `camera ${last.details.camera_id}`, last.sd && `SD card ${last.sd}`].filter(Boolean).join(' · ')} />
+                <WizardStep n={5} title="Check and add the visit" status="locked" lockedSummary canEdit={false} onEdit={() => {}} description=""
+                            summary={`${visits.length} ${visits.length === 1 ? 'visit' : 'visits'} added · ${last.session}`} />
+              </>
+            )
+          })()}
           {!justAdded && (
           <>
           <WizardStep
@@ -998,7 +1046,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
               : 'The research project and the location of the visit. They are kept in the collections folder — pick one that is already there, or add a new research project.'}
             summary={project && <>
               {project.acronym} · {visit.site}{location?.name ? `, ${location.name}` : ''}
-              {kept && <><br />Visit no. {kept.length + 1} · {sessionOf(kept.length)}{latest(made!) && <> — the last was on {latest(made!)!.date} ({actionsText(latest(made!)!.actions)})</>}</>}
+              {kept && <><br />Revision {nextSession}{latest(made!) && <> — the last was on {formatVisitWhen(latest(made!)!)} ({actionsText(latest(made!)!.actions)})</>}</>}
             </>}
           >
             {!defaultProject && <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={selectProject} />}
@@ -1025,7 +1073,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
             description={!location?.timezone
               ? 'Who made the visit, and the day and the time of it.'
               : <>Who made the visit, and the day and the time of it. Times are in <strong>{location.timezone}</strong>, which <strong>{location.ignore_dst ? 'has no daylight saving time' : 'follows daylight saving time'}</strong>.</>}
-            summary={visit.when && <>{visit.trappers.trim() ? `${visit.trappers.trim()} · ` : ''}{visit.when.replace('T', ' ')}</>}
+            summary={visit.when && <>{visit.trappers.trim() ? `${visit.trappers.trim()} · ` : ''}{formatLocal(visit.when, location?.timezone)}</>}
           >
             {/* who went is the deployment's setupBy, and when it was is where it starts and ends: fields of Camtrap DP */}
             <CamtrapDpContext.Provider value>
@@ -1106,7 +1154,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     </Notice>
                   ) : (
                     <Notice kind="info" action={<button type="button" className={btnOutline} onClick={() => { setVisit((v) => withoutWhatIsNotAsked(visitFrom(lastVisit, v))); setFilledFrom(lastVisit.session) }}>Fill in from {lastVisit.session}</button>}>
-                      This is not the first visit to <strong>{visit.site}</strong>: the last was <strong>{lastVisit.session}</strong>, on {lastVisit.date} ({actionsText(lastVisit.actions)}). Fill in the Camera, Site and Grouping sections with what it said (not the notes).
+                      This is not the first visit to <strong>{visit.site}</strong>: the last was <strong>{lastVisit.session}</strong>, on {formatVisitWhen(lastVisit)} ({actionsText(lastVisit.actions)}). Fill in the Camera, Site and Grouping sections with what it said (not the notes).
                     </Notice>
                   )}
                 </div>
@@ -1217,7 +1265,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
               >
                 {stolenCard && <Notice kind="info" className="mb-4">The SD card <strong>{stolenCard}</strong>, which was in the camera, was stolen with it and will be archived.</Notice>}
                 {on(asked.card) || on(asked.photos) ? (inCamera && cardVisit
-                  ? <Notice kind="info" className="mb-4">Tell the state and the number of photos obtained when removing the SD card <strong>{inCamera}</strong> from the camera (it was left there on {cardVisit.date}).</Notice>
+                  ? <Notice kind="info" className="mb-4">Tell the state and the number of photos obtained when removing the SD card <strong>{inCamera}</strong> from the camera (it was left there on {formatVisitWhen(cardVisit)}).</Notice>
                   : <Notice kind="info" className="mb-4">Tell the state and the number of photos obtained when removing the SD card from the camera (no card is known to have been left in it).</Notice>) : null}
                 {on(asked.card) && (
                 <div className="space-y-3 mb-4">
@@ -1227,7 +1275,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                 <div className="space-y-3">
                   {on(asked.photos) && (
                   <ControlRow id="visit-photos" label="Photos on the card collected" ask={asked.photos} error={shown('numPhotos')}
-                              hint={inCamera && cardVisit ? <>SD card collected: <strong>{inCamera}</strong> (left on {cardVisit.date}).</> : 'No card is known to have been left in the camera.'}>
+                              hint={inCamera && cardVisit ? <>SD card collected: <strong>{inCamera}</strong> (left on {formatVisitWhen(cardVisit)}).</> : 'No card is known to have been left in the camera.'}>
                     <input id="visit-photos" inputMode="numeric" className={`${inputClass} ${err('numPhotos') || (asked.photos === 'required' && !visit.numPhotos.trim() ? red : '')}`} value={visit.numPhotos} onChange={(e) => set('numPhotos', e.target.value)} />
                   </ControlRow>
                   )}
@@ -1242,7 +1290,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     </ControlRow>
                     {conflicts.sd ? <Notice kind="error" role="alert" className="mt-2">{conflicts.sd}</Notice> : shown('sd') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('sd')}</p>}
                     {allSdCards.every((c) => !ofProject(c.research_project)) && <p className={hintClass}>The settings have no SD cards yet.</p>}
-                    {sdCards.length === 0 && allSdCards.some((c) => ofProject(c.research_project)) && <p className={hintClass}>No SD card is available: they are archived, in a camera or were collected in this revision.</p>}
+                    {sdCards.length === 0 && allSdCards.some((c) => ofProject(c.research_project)) && <p className={hintClass}>No SD card is ready: they are planned, archived, in a camera or were collected in this revision.</p>}
                     {onOpenSettings && (
                       <p className={`${hintClass} mt-3`}>
                         The SD card is not here? A new SD card is created in the settings:{' '}
@@ -1333,71 +1381,109 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
           </WizardStep>
 
           <WizardStep n={5} title="Check and add the visit" status={confirming ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What is going to be kept, before it is.">
-            <VisitSummary data={visitSummary(visit, kept ? sessionOf(kept.length) : '', location?.timezone)} />
-            <Notice kind="warning" role="status" action={(
-              <span className="flex gap-2">
-                <button type="button" className={btnOutline} onClick={() => setConfirming(false)}>Back to the form</button>
-                <button type="button" className={btnPrimary} onClick={() => void add()}>Yes, add the visit</button>
-              </span>
-            )}>
-              A visit cannot be changed once it is created. Do you want to add the {notVisited ? 'visit that could not be made' : 'visit'} to <strong>{visit.site}</strong> ({kept ? sessionOf(kept.length) : ''}, {visit.when.replace('T', ' ')})?
-            </Notice>
+            <VisitSummary data={visitSummary(visit, nextSession ?? '', location?.timezone)} />
+            <div role="status" className="mt-4 mb-4 flex items-start gap-4 rounded-2xl border border-amber-300 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 px-6 py-5 text-amber-900 dark:text-amber-200">
+              <span className="mt-0.5 text-amber-500"><Glyph className="h-6 w-6"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Glyph></span>
+              <div>
+                <p className="text-lg font-semibold">A visit cannot be changed once it is created</p>
+                <p className="text-base leading-relaxed">Do you want to add the {notVisited ? 'visit that could not be made' : 'visit'} to <strong>{visit.site}</strong> ({nextSession ?? ''}, {formatLocal(visit.when, location?.timezone)})?</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <button type="button" className={`${btnOutline} flex items-center gap-2 !h-14 !px-6 text-lg`} onClick={() => setConfirming(false)}>
+                <Glyph className="h-5 w-5"><path d="M19 12H5M11 6l-6 6 6 6" /></Glyph>Back to the form
+              </button>
+              <button type="button" className={`${btnPrimary} flex items-center gap-2 !h-14 !px-6 text-lg`} onClick={() => void add()}>
+                <Glyph className="h-5 w-5"><path d="M5 3h11l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" /><path d="M8 3v5h7V3M7 21v-7h10v7" /></Glyph>Yes, add the visit
+              </button>
+            </div>
           </WizardStep>
 
           </>
           )}
 
           {visits.length > 0 && (
-            <Notice kind="success" role="status" className="mt-6">
-              <h5 className="text-sm font-semibold mb-2">{visits.length} {visits.length === 1 ? 'visit' : 'visits'} added</h5>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left opacity-75">
-                      <th className="pr-3 py-1 font-medium">Revision</th><th className="pr-3 font-medium">When</th>
-                      <th className="pr-3 font-medium">Site</th><th className="pr-3 font-medium">Camera</th><th className="font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visits.map((v, i) => (
-                      <tr key={i} className="border-t border-emerald-300/60 dark:border-emerald-800">
-                        <td className="pr-3 py-1">{v.session}</td><td className="pr-3">{v.when.replace('T', ' ')}</td>
-                        <td className="pr-3">{v.site}</td><td className="pr-3">{v.details.camera_id}</td><td>{v.actions.length === 0 ? 'Not visited' : actionsText(v.actions)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <WizardStep n={6} title="Review and continue" status="open" canEdit={false} onEdit={() => {}} description="What was saved, and what to do next.">
+              <div className="space-y-4">
+                <div role="status" className="rounded-xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-6 py-4 text-emerald-900 dark:text-emerald-100">
+                  <p className="text-lg font-semibold">{visits.length === 1 ? 'Visit saved' : 'Visits saved'}</p>
+                  <p className="text-sm text-emerald-800/90 dark:text-emerald-200/80">
+                    {visits.length === 1
+                      ? <><span className="font-mono font-semibold">{visits[0].session} · {visits[0].site}</span> is now kept in the visits file of {project?.acronym}.</>
+                      : <>The visits are now kept in the visits file of {project?.acronym}.</>}
+                  </p>
+                </div>
+
+                <section aria-label="What was saved" className={REVIEW_CARD}>
+                  <h6 className={REVIEW_HEAD}>
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-emerald-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
+                    What was saved
+                  </h6>
+                  <p className="mb-3 text-base text-zinc-900 dark:text-zinc-100">{visits.length} {visits.length === 1 ? 'visit' : 'visits'} added</p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-zinc-500 dark:text-zinc-400">
+                          <th className="pr-3 py-1 font-medium">Revision</th><th className="pr-3 font-medium">When</th>
+                          <th className="pr-3 font-medium">Site</th><th className="pr-3 font-medium">Camera</th><th className="font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visits.map((v, i) => (
+                          <tr key={i} className="border-t border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200">
+                            <td className="pr-3 py-1.5">{v.session}</td><td className="pr-3">{formatLocal(v.when, zones[`${v.session}|${v.site}`])}</td>
+                            <td className="pr-3">{v.site}</td><td className="pr-3">{v.details.camera_id}</td><td>{v.actions.length === 0 ? 'Not visited' : actionsText(v.actions)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">Kept in the visits file of {project?.acronym}.</p>
+                </section>
+
+                {closedLinks}
+
+                {justAdded && (
+                  <div role="group" aria-label="What next">
+                    <section aria-label="Next" className={REVIEW_CARD}>
+                      <h6 className={REVIEW_HEAD}>
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-sky-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                        Next
+                      </h6>
+                      <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">Do you want to add another visit?</p>
+                      <button type="button" className={`${btnPrimary} inline-flex w-full items-center justify-center gap-2 !h-14 text-base`} onClick={() => { setJustAdded(false); setVisits([]); setJustClosed([]) }}>
+                        <Glyph className="h-5 w-5"><path d="M12 5v14M5 12h14" /></Glyph>Add another visit
+                      </button>
+                    </section>
+                    <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
+                      <span>Or go back to</span>
+                      <button type="button" aria-label="Back to the visits menu" className="text-zinc-800 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400" onClick={onBack}><span aria-hidden="true">← </span>Visits menu</button>
+                      {onMainMenu && <button type="button" aria-label="Back to the main menu" className="text-zinc-800 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400" onClick={onMainMenu}><span aria-hidden="true">← </span>Main menu</button>}
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-xs opacity-75 mt-2">Kept in the visits file of {project?.acronym}.</p>
-            </Notice>
-          )}
-          {closedLinks}
-          {justAdded && (
-            <div className="mt-6 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
-              <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to add another visit?</p>
-              <button type="button" className={btnPrimary} onClick={() => { setJustAdded(false); setVisits([]); setJustClosed([]) }}>Add another visit</button>
-              <button type="button" className={btnOutline} onClick={onBack}>Back to the visits menu</button>
-              {onMainMenu && <button type="button" className={btnOutline} onClick={onMainMenu}>Back to the main menu</button>}
-            </div>
+            </WizardStep>
           )}
         </>
       )}
 
       {source !== null && !byHand && (
         <>
-          <WizardStep
-            n={2} title="Which research project?" status={project ? 'done' : 'open'} canEdit onEdit={() => { setProject(undefined); forgetCsv(); setCsvName(null) }}
-            description="The visits are kept in the visits file of a research project of the collections folder; the sites of the file must be its locations."
-            summary={project?.acronym}
-          >
-            {defaultProject
-              ? <p className="text-sm text-zinc-600 dark:text-zinc-300">The file is of the default research project, <span className="font-mono font-semibold">{defaultProject.acronym}</span> — it is changed in the settings, from the card at the top right.</p>
-              : <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={(picked) => { setProject(picked); forgetCsv(); setCsvName(null) }} />}
-          </WizardStep>
+          {/* the file is of the default research project: nothing to pick — the step is only for when there is none */}
+          {!defaultProject && (
+            <WizardStep
+              n={2} title="Which research project?" status={project ? 'done' : 'open'} canEdit onEdit={() => { setProject(undefined); forgetCsv(); setCsvName(null) }}
+              description="The visits are kept in the visits file of a research project of the collections folder; the sites of the file must be its locations."
+              summary={project?.acronym}
+            >
+              <ResearchProjectPicker value={project?.acronym ?? ''} onSelect={(picked) => { setProject(picked); forgetCsv(); setCsvName(null) }} />
+            </WizardStep>
+          )}
 
           <WizardStep
-            n={3} title={'Choose the spreadsheet file'} status={!project ? 'locked' : (csvResult || csvColumns) && fileConfirmed ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
-            description={source === 'wildintel-new' ? 'The CSV downloaded from the new WildINTEL Epicollect project: a row is a visit. Its columns are found by the label of their question, whatever the case or the number in front. The time of a visit is the day and the hour typed in the form.'
+            n={defaultProject ? 2 : 3} title={'Choose the spreadsheet file'} status={!project ? 'locked' : (csvResult || csvColumns) && fileConfirmed ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
+            description={source === 'wildintel-new' ? 'The CSV downloaded from the new WildINTEL Epicollect project: a row is a visit. Its columns are found by the label of their question, whatever the case or the number in front. A visit happened when its entry was created (the form has no date or time).'
               : 'Any spreadsheet file with a row per visit. Next, you say which column gives each field of a visit.'}
             summary={csvName}
           >
@@ -1432,13 +1518,28 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
               <p className={hintClass}>Visits that do not have a number yet get the next one for their site. A visit that is already kept (the same revision and site, whatever the day) is left as it is; one with no number, if it has the same site, day and time.</p>
             </div>
             )}
-            {source === 'csv' && (
+            {(source === 'csv' || source === 'wildintel-new') && (
               <fieldset className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-6 py-5 mt-4">
                 <legend className="px-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">Create what does not exist yet <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">optional</span></legend>
                 {source === 'csv'
                   ? <p className={`${hintClass} mb-3`}>When a visit names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. Each one asks for more fields in the matching of the columns, where a default value can also be given for a field the file has no column for. After changing it, check the file again.</p>
                   : <p className={`${hintClass} mb-3`}>When an entry names a location, a camera or an SD card that is not in {project?.acronym ?? 'the research project'}, it is created with the visits. The coordinates of a location, the camera and the card are those of the entry; what the form does not have is asked here, once for all of them. After changing it, check the file again.</p>}
                 {createSwitches}
+                {source === 'wildintel-new' && csvCreate.locations && (
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="epicollect-timezone" className={labelClass}>Timezone of the new locations</label>
+                      <input id="epicollect-timezone" className={inputClass} value={csvDefaults.timezone ?? ''} placeholder="Europe/Madrid" onChange={(e) => setCsvDefaults((d) => ({ ...d, timezone: e.target.value }))} />
+                      <p className={hintClass}>The form does not say it. The coordinates of a new location are the ones of its first visit.</p>
+                    </div>
+                    <div>
+                      <label htmlFor="epicollect-dst" className={labelClass}>Their cameras follow summer time</label>
+                      <select id="epicollect-dst" className={inputClass} value={csvDefaults.daylight_saving ?? 'yes'} onChange={(e) => setCsvDefaults((d) => ({ ...d, daylight_saving: e.target.value }))}>
+                        <option value="yes">Yes</option><option value="no">No</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </fieldset>
             )}
             {csvError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{csvError}</p>}
@@ -1450,7 +1551,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
 
           {source === 'csv' && (
             <WizardStep
-              n={4} title="Match the columns" status={!csvColumns || !fileConfirmed ? 'locked' : csvResult ? 'done' : 'open'} canEdit onEdit={() => { setCsvResult(null); setCsvSaved(null) }}
+              n={defaultProject ? 3 : 4} title="Match the columns" status={!csvColumns || !fileConfirmed ? 'locked' : csvResult ? 'done' : 'open'} canEdit onEdit={() => { setCsvResult(null); setCsvSaved(null) }}
               description="For each field of a visit, the column of the file that gives it. What the file has by the names a visit uses is already matched; leave a field with no column if the file does not have it."
             >
               {csvColumns && (
@@ -1515,7 +1616,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
             </WizardStep>
           )}
 
-          <WizardStep n={source === 'csv' ? 5 : 4} title="Check and add the visits" status={csvResult && fileConfirmed ? 'open' : 'locked'} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept."
+          <WizardStep n={(source === 'csv' ? 5 : 4) - (defaultProject ? 1 : 0)} title="Check and add the visits" status={csvResult && fileConfirmed && csvSaved === null ? 'open' : 'locked'} lockedSummary summary={csvSaved !== null ? `${csvSaved} ${csvSaved === 1 ? 'visit' : 'visits'} added` : undefined} canEdit={false} onEdit={() => {}} description="What the file says, before it is kept."
                       action={csvResult && csvSaved == null && (
                         <button type="button" className={`${btnOutline} flex items-center gap-2`} disabled={rechecking} onClick={() => void recheckCsv()}
                                 title="Check the file again against what is kept now: the visits, the locations and the settings">
@@ -1583,40 +1684,130 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     )}
                   </Notice>
                 )}
-                {csvSaved === null ? (
+                {csvSaved === null && (
                   <div className="mt-4 flex justify-end">
                     <button type="button" className={btnPrimary} disabled={csvResult.visits.length === 0} onClick={() => void addCsvVisits()}>
                       Add {csvResult.visits.length} {csvResult.visits.length === 1 ? 'visit' : 'visits'}
                     </button>
                   </div>
-                ) : (
-                  <>
-                    <Notice kind="success" role="status" className="mt-4 !items-center !rounded-2xl !px-6 !py-5 !text-base">
-                      <strong>{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added</strong> to {project?.acronym}.{' '}
-                      {justClosed.length > 0
-                        ? <>As a result of {csvSaved === 1 ? 'this new visit' : 'these new visits'}, {justClosed.length} other {justClosed.length === 1 ? 'visit is' : 'visits are'} now closed:{' '}
-                          {onImportImagesOf && project
-                            ? <button type="button" className="font-medium underline" onClick={() => onImportImagesOf(project.acronym)}>pick {justClosed.length === 1 ? 'its revision' : 'their revision'} and import {justClosed.length === 1 ? 'its images' : 'their images'}</button>
-                            : <>import {justClosed.length === 1 ? 'its images' : 'their images'} from the Visit dashboard</>}
-                          {' '}to make {justClosed.length === 1 ? 'its deployment' : 'their deployments'}.</>
-                        : <>A deployment can be made once the card of a visit is collected.</>}
-                      {csvResult?.report && <> The report of the import is with the other reports: <a className="font-medium underline" href={api.reportUrl(csvResult.report, 'csv')} download>Download report</a>.</>}
-                    </Notice>
-                    <div className="mt-6 flex flex-wrap items-center gap-3" role="group" aria-label="What next">
-                      <p className="mr-auto text-sm text-zinc-600 dark:text-zinc-300">Do you want to register more visits?</p>
-                      <button type="button" className={btnPrimary} onClick={() => { forgetCsv(); setCsvName(null); setProject(undefined); setSource(null) }}>Register more visits</button>
-                      <button type="button" className={btnOutline} onClick={onBack}>Back to the visits menu</button>
-                      {onMainMenu && <button type="button" className={btnOutline} onClick={onMainMenu}>Back to the main menu</button>}
-                    </div>
-                  </>
                 )}
               </>
             )}
           </WizardStep>
+
+          {csvSaved !== null && csvResult && (() => {
+            const added = csvResult.visits
+            const sessions = [...new Set(added.map((v) => v.session))].sort()
+            const sites = [...new Set(added.map((v) => v.location_id))]
+            const made = csvResult.create
+            const madeLine = (kind: 'locations' | 'cameras' | 'sd_cards', key: string) => (made?.[kind] ?? []).map((e) => String(e[key])).join(', ')
+            const lines: [string, ReactNode][] = [
+              ['Visits added', csvSaved],
+              ['Revisions', sessions.join(', ') || '—'],
+              ['Sites', `${sites.length}${sites.length > 0 && sites.length <= 6 ? ` · ${sites.join(', ')}` : ''}`],
+              ...(csvResult.skipped > 0 ? [['Already kept — left as they are', csvResult.skipped] as [string, ReactNode]] : []),
+              ...((csvResult.closed?.length ?? 0) > 0 ? [['Marked as not visited — to close the revision before', csvResult.closed!.map((m) => `${m.location_id} (${m.session})`).join(', ')] as [string, ReactNode]] : []),
+              ...(csvResult.problems.length > 0 ? [['Rows with a problem — not added', csvResult.problems.length] as [string, ReactNode]] : []),
+              ...((made?.locations.length ?? 0) > 0 ? [['Locations created', madeLine('locations', 'location_id')] as [string, ReactNode]] : []),
+              ...((made?.cameras.length ?? 0) > 0 ? [['Cameras created', madeLine('cameras', 'camera_id')] as [string, ReactNode]] : []),
+              ...((made?.sd_cards.length ?? 0) > 0 ? [['SD cards created', madeLine('sd_cards', 'label')] as [string, ReactNode]] : []),
+              ...(justClosed.length > 0 ? [['Visits closed — their deployment can be created', justClosed.length] as [string, ReactNode]] : []),
+            ]
+            const shownVisits = added.slice(0, 10)
+            return (
+              <WizardStep n={(source === 'csv' ? 6 : 5) - (defaultProject ? 1 : 0)} title="Review and continue" status="open" canEdit={false} onEdit={() => {}} description="What was saved, and what to do next.">
+                <div className="space-y-4">
+                  <div role="status" className="rounded-xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-6 py-4 text-emerald-900 dark:text-emerald-100">
+                    <p className="text-lg font-semibold">{csvSaved === 1 ? 'Visit saved' : 'Visits saved'}</p>
+                    <p className="text-sm text-emerald-800/90 dark:text-emerald-200/80">
+                      <strong>{csvSaved} {csvSaved === 1 ? 'visit' : 'visits'} added</strong> to the visits file of {project?.acronym}.
+                    </p>
+                  </div>
+
+                  <section aria-label="What was saved" className={REVIEW_CARD}>
+                    <h6 className={REVIEW_HEAD}>
+                      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-emerald-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
+                      What was saved
+                    </h6>
+                    <table aria-label="Summary" className="w-full text-sm">
+                      <tbody>
+                        {lines.map(([label, value]) => (
+                          <tr key={label} className="border-b border-zinc-200 dark:border-zinc-700 last:border-b-0">
+                            <th scope="row" className="py-2 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">{label}</th>
+                            <td className="py-2 font-mono text-zinc-900 dark:text-zinc-100">{value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {shownVisits.length > 0 && (
+                      <div className="mt-4 overflow-x-auto">
+                        <table aria-label="Visits added" className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-zinc-500 dark:text-zinc-400">
+                              <th className="pr-3 py-1 font-medium">Revision</th><th className="pr-3 font-medium">When</th><th className="pr-3 font-medium">Site</th><th className="font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {shownVisits.map((v) => (
+                              <tr key={`${v.session}|${v.location_id}|${v.date}|${v.time}`} className="border-t border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200">
+                                <td className="pr-3 py-1.5">{v.session}</td><td className="pr-3">{formatVisitWhen(v)}</td><td className="pr-3">{v.location_id}</td>
+                                <td>{v.actions.length === 0 ? 'Not visited' : actionsText(v.actions)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {added.length > shownVisits.length && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">…and {added.length - shownVisits.length} more.</p>}
+                      </div>
+                    )}
+                    {csvResult.report && <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">The report of the import is with the other reports: <a className="font-medium underline" href={api.reportUrl(csvResult.report, 'csv')} download>Download report</a>.</p>}
+                  </section>
+
+                  {justClosed.length > 0 && (
+                    <section aria-label="Deployments" className={REVIEW_CARD}>
+                      <h6 className={`${REVIEW_HEAD} justify-between`}>
+                        <span className="flex items-center gap-2">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-sky-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{MENU_ICONS.deployment}</svg>
+                          Deployments
+                        </span>
+                        <span className="rounded-full px-2.5 py-1 text-xs font-semibold normal-case tracking-normal bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">To create</span>
+                      </h6>
+                      <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">
+                        As a result of {csvSaved === 1 ? 'this new visit' : 'these new visits'}, {justClosed.length} other {justClosed.length === 1 ? 'visit is' : 'visits are'} now closed: their card was collected. Create {justClosed.length === 1 ? 'its deployment' : 'their deployments'} now — {justClosed.length === 1 ? 'its images are' : 'their images are'} imported —, or do it later from the deployments menu.
+                      </p>
+                      {onImportImagesOf && project && (
+                        <button type="button" className={`${btnPrimary} inline-flex w-full items-center justify-center gap-2 !h-14 text-base`} onClick={() => onImportImagesOf(project.acronym)}>
+                          <Glyph className="h-5 w-5">{MENU_ICONS.deployment}</Glyph>Create {justClosed.length === 1 ? 'deployment' : 'deployments'}
+                        </button>
+                      )}
+                    </section>
+                  )}
+
+                  <div role="group" aria-label="What next">
+                    <section aria-label="Next" className={REVIEW_CARD}>
+                      <h6 className={REVIEW_HEAD}>
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-sky-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                        Next
+                      </h6>
+                      <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">Do you want to register more visits?</p>
+                      <button type="button" className={`${btnPrimary} inline-flex w-full items-center justify-center gap-2 !h-14 text-base`} onClick={() => { forgetCsv(); setCsvName(null); setProject(undefined); setSource(null) }}>
+                        <Glyph className="h-5 w-5"><path d="M12 5v14M5 12h14" /></Glyph>Register more visits
+                      </button>
+                    </section>
+                    <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
+                      <span>Or go back to</span>
+                      <button type="button" aria-label="Back to the visits menu" className="text-zinc-800 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400" onClick={onBack}><span aria-hidden="true">← </span>Visits menu</button>
+                      {onMainMenu && <button type="button" aria-label="Back to the main menu" className="text-zinc-800 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400" onClick={onMainMenu}><span aria-hidden="true">← </span>Main menu</button>}
+                    </div>
+                  </div>
+                </div>
+              </WizardStep>
+            )
+          })()}
         </>
       )}
 
-      {!justAdded && (
+      {/* once the visits are kept the step of the end has its own way back: "Or go back to" */}
+      {!justAdded && csvSaved === null && (
         <div className="mt-6">
           <BackButton onClick={onBack} />
         </div>

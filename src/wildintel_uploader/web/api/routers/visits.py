@@ -271,13 +271,18 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
                 raise HTTPException(400, str(exc)) from exc
             fmt, mapping = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}
         if fmt == "epicollect-csv":
-            # the download of the new Epicollect5 project: its questions are found by their labels, and the time of a visit is the one the settings say (by default when the entry was created, UTC)
+            # the download of the new Epicollect5 project: its questions are found by their labels, and the day and the time of a visit are when its entry was created (UTC)
             try:
                 text = epicollect_service.visits_from_csv(text)
             except epicollect_service.EpicollectError as exc:
                 raise HTTPException(400, str(exc)) from exc
             fmt, mapping = "mapped", {c: c for c in epicollect_service.VISIT_COLUMNS}
-        result = visits_csv.parse_visits(text, locations, kept, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "defaults": req.defaults, "trappers": _trapper_names(),
+            time_source = "created_at"   # the form has no date or time: a visit happened when its entry was created
+        if req.format in ("epicollect-csv", "epicollect-api"):
+            # the form gives one place, the one of the visit: a location that is created from it has those coordinates (its timezone and its summer time are the defaults asked for)
+            text = _with_location_coordinates(text)
+            mapping = {**mapping, "location_latitude": "location_latitude", "location_longitude": "location_longitude"}
+        result = visits_csv.parse_visits(text, locations, kept, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "close_revisions": req.close_revisions, "defaults": req.defaults, "trappers": _trapper_names(),
                                                                                                                                   "unknown": local_folder_service.list_unknown(root, req.research_project_id)})
         saved = field_logs = report = None
         if req.save:
@@ -287,6 +292,9 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             for kind, kept_items in (("cameras", cameras), ("sd_cards", cards)):
                 if result["create"][kind]:
                     local_folder_service.write_field_items(root, req.research_project_id, kind, [*kept_items, *result["create"][kind]])
+            # the revision before is closed first, when asked: its locations still planned are kept as not visited
+            if result["closed"]:
+                local_folder_service.write_visits(root, req.research_project_id, [VisitRecord.model_validate(m).model_dump(mode="json") for m in result["closed"]])
             saved = local_folder_service.write_visits(root, req.research_project_id, result["visits"])
             local_folder_service.write_unknown(root, req.research_project_id, result["unknown"])
             _archive_locations(root, req.research_project_id, result["visits"])
@@ -296,7 +304,10 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             report = _save_report(req.research_project_id, result, saved)
     except (local_folder_service.LocalFolderError, visits_csv.VisitsCsvError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {**result, "saved": saved, "field_logs": field_logs, "report": report}
+    # each visit is told on the wall clock of its location: the timezone of the location goes with it (the ones this file creates, too)
+    zones = {str(l.get("location_id", "")).lower(): l.get("timezone") for l in [*locations, *result["create"]["locations"]]}
+    visits = [{**v, "timezone": zones.get(str(v.get("location_id", "")).lower())} for v in result["visits"]]
+    return {**result, "visits": visits, "saved": saved, "field_logs": field_logs, "report": report}
 
 
 @router.post("/export-csv")
@@ -338,7 +349,12 @@ def closed_visits(req: ListVisitsRequest) -> dict:
     try:
         closed = local_folder_service.closed_visits(config.collections_dir(), req.research_project_id)
         # with what the two visits say of the deployment, mixed as the FieldworkLog mixes them: what the form of the deployment starts from
-        return {"results": [{**c, "details": visit_deployments.merged_details(c["visit"], c["end"])} for c in closed]}
+        # each visit is told on the wall clock of its location: the timezone of the location goes with it
+        zones = {str(l.get("location_id", "")).lower(): l.get("timezone") for l in local_folder_service.list_locations(config.collections_dir(), req.research_project_id, include_deleted=True)}
+
+        def zoned(visit: dict) -> dict:
+            return {**visit, "timezone": zones.get(str(visit.get("location_id", "")).lower())}
+        return {"results": [{"visit": zoned(c["visit"]), "end": zoned(c["end"]), "details": visit_deployments.merged_details(c["visit"], c["end"])} for c in closed]}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -353,6 +369,22 @@ def link_visit(req: LinkVisitRequest) -> dict:
         return linked
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+def _with_location_coordinates(text: str) -> str:
+    """The CSV of the visits of Epicollect5 with two columns more, the coordinates of the location: the form says only the place of the visit, which a new location takes."""
+    import csv
+    import io
+    rows = list(csv.DictReader(io.StringIO(text)))
+    if not rows:
+        return text
+    names = [*rows[0].keys(), "location_latitude", "location_longitude"]
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=names, lineterminator="\n")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({**row, "location_latitude": row.get("latitude", ""), "location_longitude": row.get("longitude", "")})
+    return out.getvalue()
 
 
 def _wall_clock(visit: dict) -> str:

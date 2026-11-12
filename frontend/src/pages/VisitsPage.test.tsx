@@ -388,7 +388,12 @@ describe('VisitsPage', () => {
     expect(mockedApi.saveVisit).toHaveBeenCalledWith('TATR', expect.objectContaining({
       location_id: 'TATR_0001', session: 'R0003', date: '2026-10-02', time: '08:14:05', actions: ['Revision'], trappers: 'Ana Pérez', camera_id: null, camera_model: null, latitude: 49.2, longitude: 20.1,   // a revision does not say which camera: the visit before does
     }))
-    expect(screen.queryByText('Where was the visit?')).not.toBeInTheDocument() // the form is out of the way while the next step is asked
+    // the steps stay as they were kept: locked, each with its summary, and with no form to change them
+    expect(screen.queryByRole('button', { name: 'Edit Where was the visit?' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Trappers')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('img', { name: 'Locked' }).length).toBeGreaterThanOrEqual(5)
+    expect(screen.getByText(/TATR · TATR_0001/)).toBeInTheDocument()
+    expect(screen.getByText(/Ana Pérez · 2 Oct 2026, 08:14/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Add another visit' }))
     expect(screen.queryByText('1 visit added')).not.toBeInTheDocument()   // what was added is out of the way when another visit is made
     expect(screen.getAllByRole('img', { name: 'Locked' }).length).toBeGreaterThan(0)
@@ -437,8 +442,8 @@ describe('VisitsPage', () => {
     await openSection('Camera')
 
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
-    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['T1', 'T3'])  // ready and active ones; the archived one is not offered
-    await userEvent.click(screen.getByRole('option', { name: 'T1' }))
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['T3'])  // only the ready one: the active one is in a camera, and the archived one is out of use
+    await userEvent.click(screen.getByRole('option', { name: 'T3' }))
     await userEvent.click(screen.getByLabelText('Which camera will be installed?'))
     expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['CT', 'CR'])
   })
@@ -492,9 +497,9 @@ describe('VisitsPage', () => {
       mockedApi.closedVisits.mockResolvedValue({ results: [closing()] })
       const onImportImages = await addRevision()
 
-      await userEvent.click(await screen.findByRole('button', { name: 'Import the images of R0001' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'Create the deployment of the visit R0001 to TATR_0001' }))
 
-      expect(screen.getByText(/is closed: its card was collected on 2026-10-02/)).toBeInTheDocument()
+      expect(screen.getByText(/is closed: its card was collected on 2 Oct 2026/)).toBeInTheDocument()
       expect(screen.getByRole('status')).not.toHaveTextContent('is closed') // a card of its own, not part of the success one
       expect(onImportImages).toHaveBeenCalledWith({ researchProjectId: 'TATR', visit: left })
     })
@@ -600,11 +605,11 @@ describe('VisitsPage', () => {
     expect(await screen.findByText(/TATR · TATR_0007/)).toBeInTheDocument()
   })
 
-  it('says which visit this is to the location: the first when none is kept', async () => {
+  it('says which revision the visit is of: the first when none is kept', async () => {
     await chooseByHand()
     await pickWhere()
 
-    expect(await screen.findByText(/Visit no\. 1\b/)).toBeInTheDocument()
+    expect(await screen.findByText(/Revision R0001\b/)).toBeInTheDocument()
     expect(mockedApi.listVisits).toHaveBeenCalledWith('TATR', 'TATR_0001')
   })
 
@@ -614,7 +619,18 @@ describe('VisitsPage', () => {
     await chooseByHand()
     await pickWhere()
 
-    expect(await screen.findByText(/Visit no\. 3 · R0003 — the last was on 2026-08-05 \(Revision\)/)).toBeInTheDocument()
+    expect(await screen.findByText(/Revision R0012 — the last was on 5 Aug 2026, \d\d:\d\d \(Revision\)/)).toBeInTheDocument()
+  })
+
+  it('puts the visit in the latest revision when the location is still planned in it, and in the next one — which the others must finish — when it is not', async () => {
+    const at = (site: string, session: string, date: string) => toStored({ ...BLANK, session, when: `${date}T09:00:00`, site, actions: [session === 'R0001' ? 'Installation' : 'Revision'] })
+    const kept = [at('TATR_0001', 'R0001', '2026-06-10'), at('TATR_0002', 'R0001', '2026-06-10'), at('TATR_0002', 'R0002', '2026-08-05')]
+    mockedApi.listVisits.mockImplementation(async (_project, site) => ({ results: kept.filter((v) => !site || v.location_id === site) }))
+    mockedApi.listLocalLocations.mockResolvedValue({ results: [location('TATR_0001'), location('TATR_0002')] })
+    await chooseByHand()
+    await pickWhere()
+
+    expect(await screen.findByText(/Revision R0002\b/)).toBeInTheDocument()   // TATR_0001 has no visit in R0002, the latest: it is still planned there
   })
 
   it('keeps nothing and says why when the visit cannot be saved', async () => {
@@ -699,7 +715,7 @@ describe('VisitsPage', () => {
     const summary = visitSummary(v as never, 'R0001', 'Europe/Madrid')
     const of = (rows: { label: string; value: string }[]) => Object.fromEntries(rows.map((r) => [r.label, r.value]))
     const section = (key: string) => of(summary.sections.find((x) => x.key === key)!.rows)
-    expect(of(summary.overview)).toEqual({ Location: 'TATR_0001', 'Revision code': 'R0001', When: '2026-11-03 22:19:48 (Europe/Madrid)', 'Who went': 'Ana Pérez', 'Action performed': 'Installation' })
+    expect(of(summary.overview)).toEqual({ Location: 'TATR_0001', 'Revision code': 'R0001', When: '3 Nov 2026, 22:19 (Europe/Madrid)', 'Who went': 'Ana Pérez', 'Action performed': 'Installation' })
     expect(summary.gps).toBe('37.0258, -6.4527')
     expect(section('camera')).toMatchObject({ 'Camera id': 'RE5699252753', 'Camera model': 'Reconyx-PC800', 'Mounting height': '1 m', Tilt: '0°', Heading: '45°', 'Camera trigger delay': '20 s' })
     expect(section('sd')).toMatchObject({ 'SD card left': '2' })
@@ -794,7 +810,7 @@ describe('the visit filled in from the last one', () => {
   it('offers it when this is not the first visit to the location, and not when it is the first', async () => {
     await start()
 
-    expect(screen.getByText(/This is not the first visit to/)).toHaveTextContent('the last was R0001, on 2026-06-10 (Revision)')
+    expect(screen.getByText(/This is not the first visit to/)).toHaveTextContent('the last was R0001, on 10 Jun 2026, 09:00 (Revision)')
     expect(screen.getByRole('button', { name: 'Fill in from R0001' })).toBeInTheDocument()
   })
 
@@ -987,6 +1003,40 @@ describe('VisitsPage from a CSV file', () => {
     expect(await screen.findByText(/to add/)).toBeInTheDocument()
   })
 
+  it('can create what does not exist from the file of the new WildINTEL Epicollect form, asking only the timezone and the summer time of the new locations', async () => {
+    mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit()], problems: [], skipped: 0, saved: null, new_sites: [], warnings: [] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: /^wildintel epicollect csv\s*read the visits of a field trip from the csv downloaded from the new/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+
+    expect(screen.queryByLabelText('Timezone of the new locations')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('switch', { name: 'Create the locations that do not exist' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Create the cameras that do not exist' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Create the SD cards that do not exist' }))
+    expect(screen.getByLabelText('Timezone of the new locations')).toHaveValue('UTC')
+    await userEvent.clear(screen.getByLabelText('Timezone of the new locations'))
+    await userEvent.type(screen.getByLabelText('Timezone of the new locations'), 'Europe/Madrid')
+    await userEvent.upload(screen.getByLabelText('CSV file'), new File(['locationID,Date\n'], 'new.csv', { type: 'text/csv' }))
+    await continueFromTheFile()
+
+    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', 'locationID,Date\n', false, 'epicollect-csv', undefined,
+      { create: { locations: true, cameras: true, sd_cards: true }, defaults: { timezone: 'Europe/Madrid', daylight_saving: 'yes' } }))
+  })
+
+  it('can ask to close the revision before the ones of the file, and sends it with the file', async () => {
+    mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit()], problems: [], skipped: 0, saved: null, new_sites: [], warnings: [] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: /^wildintel epicollect csv\s*read the visits of a field trip from the csv downloaded from the new/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Close the revision before when it has locations still planned' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), new File(['locationID,Date\n'], 'new.csv', { type: 'text/csv' }))
+    await continueFromTheFile()
+
+    await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', 'locationID,Date\n', false, 'epicollect-csv', undefined, { close_revisions: true }))
+  })
+
   it('reads the visits with the columns as they are mapped, says what it found, and keeps them with the same mapping', async () => {
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit(), visit({ session: 'R0002', date: '2026-11-05', actions: ['Revision', 'Installation'] })], problems: [{ row: 4, message: "'many' is not a whole number." }], skipped: 1, saved: null, new_sites: [{ site: 'X', session: null, actions: ['Revision'], date: '2026-10-02', time: '08:00:00', latitude: 37.1, longitude: -6.4, visits: 1, nearest: { location_id: 'DONA_01', distance_m: 40 }, similar: ['DONA_01'] }], warnings: [] })
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, saved: 2, new_sites: [], warnings: [] })
@@ -1000,8 +1050,13 @@ describe('VisitsPage from a CSV file', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Add 2 visits' }))
     expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', expect.any(String), true, 'mapped', MAPPING)
-    expect(await screen.findByRole('status')).toHaveTextContent('2 visits added to TATR. A deployment can be made once the card of a visit is collected.')
-    expect(screen.queryAllByRole('table').map((t) => t.getAttribute('aria-label'))).toEqual([]) // no table of rows is shown: just the matching, in groups
+    // what was done, as a summary: the success, a table of what was kept and then the buttons
+    expect(await screen.findByText('Visits saved')).toBeInTheDocument()
+    const summary = await screen.findByRole('table', { name: 'Summary' })
+    expect(summary).toHaveTextContent('Visits added2')
+    expect(summary).toHaveTextContent('RevisionsR0001')
+    expect(screen.queryByRole('region', { name: 'Deployments' })).not.toBeInTheDocument()   // no visit was closed by them
+    expect(screen.queryAllByRole('table').map((t) => t.getAttribute('aria-label'))).not.toContain('Rows') // no table of rows is shown: just the matching, in groups
     expect(screen.getByRole('region', { name: 'Where' })).toHaveTextContent('of') // the visits are kept: the list of them goes, the mapping stays
     expect(screen.getByRole('button', { name: 'Back to the visits menu' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Back to the main menu' }))
@@ -1161,8 +1216,9 @@ describe('VisitsPage from a CSV file', () => {
     await continueFromTheFile()
     await userEvent.click(await screen.findByRole('button', { name: 'Add 1 visit' }))
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 visit added to TATR. As a result of this new visit, 1 other visit is now closed: import its images from the Visit dashboard to make its deployment.'))
-    expect(screen.queryByRole('button', { name: /Import the images of/ })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Deployments' })).toHaveTextContent('As a result of this new visit, 1 other visit is now closed'))
+    expect(screen.getByRole('table', { name: 'Summary' })).toHaveTextContent('Visits closed — their deployment can be created1')
+    expect(screen.queryByRole('button', { name: /Create the deployment of the visit/ })).not.toBeInTheDocument()
   })
 
   it('links the closed visits to Import deployment on the research project, where their revision is picked', async () => {
@@ -1178,7 +1234,7 @@ describe('VisitsPage from a CSV file', () => {
     await continueFromTheFile()
     await userEvent.click(await screen.findByRole('button', { name: 'Add 1 visit' }))
 
-    await userEvent.click(await screen.findByRole('button', { name: 'pick its revision and import its images' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Create deployment' }))
     expect(onImportImagesOf).toHaveBeenCalledWith('TATR')
   })
 

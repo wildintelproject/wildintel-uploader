@@ -184,7 +184,7 @@ export const api = {
   importVisitsCsv: (researchProjectId: string, csv: string, save = false, format: VisitsCsvFormat = 'mapped', mapping?: Record<string, string>, options?: ImportCsvOptions) =>
     post<VisitsCsvResult>('/api/visits/import-csv', {
       research_project_id: researchProjectId, csv, save, format, mapping: mapping ?? null,
-      ...(options?.create ? { create: options.create } : {}), ...(options?.defaults ? { defaults: options.defaults } : {}),
+      ...(options?.create ? { create: options.create } : {}), ...(options?.defaults ? { defaults: options.defaults } : {}), ...(options?.close_revisions ? { close_revisions: true } : {}),
     }),
 
   // The columns of a CSV file, a few of its rows, the fields of a visit it can give and the column that most likely gives each.
@@ -339,9 +339,9 @@ export const api = {
     post<Timeline>('/api/timefix/shift', { ...target, first, last, offset_seconds: offsetSeconds, reason }),
   timefixRemove: (target: TimeFixTarget, names: string[], reason: string) => post<Timeline>('/api/timefix/remove', { ...target, names, reason }),
 
-  // Whether the saved account has access to the research project and the collection chosen — changing nothing.
-  checkUploadSelection: (researchProjectId: string, collection: string) =>
-    post<{ checks: AccessCheck[] }>('/api/upload/check-selection', { research_project_id: researchProjectId, collection }),
+  // Whether the saved account has access to the research project — and to the collection, when one is chosen — changing nothing.
+  checkUploadSelection: (researchProjectId: string, collection?: string) =>
+    post<{ checks: AccessCheck[] }>('/api/upload/check-selection', { research_project_id: researchProjectId, ...(collection ? { collection } : {}) }),
 
   // The classification projects Trapper has for a research project kept locally — the collection goes to one of them.
   uploadClassificationProjects: (researchProjectId: string) =>
@@ -366,6 +366,12 @@ export const api = {
   // Opens a folder kept by the app (inside its data folder) in the system's file explorer.
   openFolder: (path: string) => post<{ opened: string }>('/api/deployment-import/open-folder', { path }),
   exiftoolStatus: () => req<{ available: boolean; path: string | null }>('/api/deployment-import/exiftool'),
+
+  /** The photos of a created deployment, in the order they were taken — to look at them — and each one as a JPEG: a thumbnail, or one to look at closely. */
+  deploymentPhotos: (researchProjectId: string, collection: string, deploymentId: string) =>
+    req<{ photos: { name: string; taken: string | null }[] }>(`/api/deployment-import/photos?${new URLSearchParams({ research_project_id: researchProjectId, collection, deployment_id: deploymentId })}`),
+  deploymentPhotoUrl: (researchProjectId: string, collection: string, deploymentId: string, name: string, size: 'thumb' | 'large' = 'thumb') =>
+    `/api/deployment-import/photo?${new URLSearchParams({ research_project_id: researchProjectId, collection, deployment_id: deploymentId, name, size })}`,
 
   listReports: () => req<ReportSummary[]>('/api/reports'),
   getReport: (id: string) => req<Report>(`/api/reports/${encodeURIComponent(id)}`),

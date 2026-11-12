@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
  * other). A step that runs has two more: running (a spinner, "In progress")
  * and error (a cross, "Error" — or the badge given). The content stays
  * mounted once reached, so closing a step keeps its choices. */
-export default function WizardStep({ n, title, description, status, summary, canEdit, onEdit, badge, action, expanded = false, children }: {
+export default function WizardStep({ n, title, description, status, summary, canEdit, onEdit, badge, action, expanded = false, lockedSummary = false, children }: {
   n: number
   title: string
   description: ReactNode
@@ -20,6 +20,8 @@ export default function WizardStep({ n, title, description, status, summary, can
   action?: ReactNode
   /** A done step that keeps its content showing (the one with the results). */
   expanded?: boolean
+  /** A locked step that tells its summary, with its padlock — a step that was done and can no longer be changed — instead of its description. */
+  lockedSummary?: boolean
   children?: ReactNode
 }) {
   const locked = status === 'locked'
@@ -53,7 +55,8 @@ export default function WizardStep({ n, title, description, status, summary, can
             {status === 'error' && <span className={`${pill} bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400`}>{badge ?? 'Error'}</span>}
           </div>
           {status === 'done' && summary && !expanded && <div className="text-sm text-zinc-600 dark:text-zinc-300 mt-1">{summary}</div>}
-          {(status === 'open' || status === 'locked' || status === 'idle' || (status === 'done' && !summary && !expanded)) && (
+          {status === 'locked' && lockedSummary && summary && <div className="text-sm text-zinc-600 dark:text-zinc-300 mt-1">{summary}</div>}
+          {(status === 'open' || (status === 'locked' && !(lockedSummary && summary)) || status === 'idle' || (status === 'done' && !summary && !expanded)) && (
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{description}</p>
           )}
         </div>
