@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import tempfile
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from wildintel_uploader.core import config
@@ -24,7 +27,8 @@ class ProjectInfoRequest(BaseModel):
 
 
 class CreateBackupRequest(BaseModel):
-    dest_dir: str
+    # The folder the backup is made in; with none, it is made to be downloaded by the browser: see /download.
+    dest_dir: str | None = None
     settings: bool = False
     research_project_id: str | None = None
     project_files: bool = False
@@ -45,6 +49,23 @@ class RestoreRequest(BaseModel):
     deployments: list[str] = Field(default_factory=list)
     images: bool = False
     replace: bool = False
+
+
+_DOWNLOADS = re.compile(r"^wildintel-backup_[A-Za-z0-9_.-]+_\d{8}-\d{6}\.zip$")
+_KEPT_FOR = 24 * 3600   # a backup made to be downloaded is kept a day: it can be downloaded again meanwhile
+
+
+def _staging_dir() -> Path:
+    """Where the backups that the browser downloads are made — the temporary folder —; the ones older than a day are removed."""
+    folder = Path(tempfile.gettempdir()) / "wildintel-uploader-backups"
+    folder.mkdir(parents=True, exist_ok=True)
+    for old in folder.iterdir():
+        try:
+            if old.is_file() and time.time() - old.stat().st_mtime > _KEPT_FOR:
+                old.unlink()
+        except OSError:
+            pass
+    return folder
 
 
 @router.post("/pick-file")
@@ -83,9 +104,10 @@ def _stream(events: Iterator[dict], what: str) -> StreamingResponse:
 def create(req: CreateBackupRequest) -> StreamingResponse:
     """Makes a backup in a folder. Answers NDJSON: a {"type": "step"} or {"type": "file"} per step, then {"type": "done", "path", "bytes", "manifest"}; a failure
     midway is an {"type": "error", "detail"} line. What cannot be made at all (nothing chosen, a folder that is not there) is a plain 400, before anything is written."""
+    staged = req.dest_dir is None
     try:
         events = backup_service.create_backup(
-            config.collections_dir(), Path(req.dest_dir).expanduser(), settings=req.settings, research_project_id=req.research_project_id, project_files=req.project_files,
+            config.collections_dir(), _staging_dir() if staged else Path(req.dest_dir).expanduser(), settings=req.settings, research_project_id=req.research_project_id, project_files=req.project_files,
             visits=req.visits, deployments=req.deployments, images=req.images, app_version=current_version(),
         )
         first = next(events)
@@ -93,10 +115,22 @@ def create(req: CreateBackupRequest) -> StreamingResponse:
         raise HTTPException(400, str(exc)) from exc
 
     def chained() -> Iterator[dict]:
-        yield first
-        yield from events
+        for event in (first, *events):
+            # made to be downloaded: the last event says which file the browser asks for
+            yield {**event, "download": Path(event["path"]).name} if staged and event.get("type") == "done" else event
 
     return _stream(chained(), "The backup")
+
+
+@router.get("/download/{name}")
+def download(name: str) -> FileResponse:
+    """A backup made to be downloaded (see /create with no folder): the browser gets it as a file to save. Only the backups made there are served."""
+    if not _DOWNLOADS.match(name):
+        raise HTTPException(404, "There is no such backup.")
+    path = _staging_dir() / name
+    if not path.is_file():
+        raise HTTPException(404, "That backup is not there any more: make it again.")
+    return FileResponse(path, media_type="application/zip", filename=name)
 
 
 @router.post("/read")

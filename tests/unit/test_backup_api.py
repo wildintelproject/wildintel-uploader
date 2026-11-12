@@ -48,6 +48,26 @@ def test_a_backup_is_made_read_and_restored_over_http(tmp_path: Path):
     assert (target / "DONA" / "R0001" / "R0001-DONA_01" / "IMG_0001.JPG").read_bytes() == b"jpeg"
 
 
+def test_a_backup_with_no_folder_is_made_to_be_downloaded_and_only_those_are_served(tmp_path: Path):
+    import zipfile
+
+    source = tmp_path / "source"
+    source.mkdir()
+    _project(source)
+    with patch("wildintel_uploader.web.api.routers.backup.config.collections_dir", return_value=source), patch("wildintel_uploader.web.api.routers.backup.tempfile.gettempdir", return_value=str(tmp_path)):
+        made = _events(_client().post("/api/backup/create", json={"research_project_id": "DONA", "project_files": True, "visits": True, "deployments": ["R0001-DONA_01"], "images": False}))
+        name = made[-1]["download"]
+        answer = _client().get(f"/api/backup/download/{name}")
+        other = _client().get("/api/backup/download/..%2Fsettings.toml")
+        missing = _client().get("/api/backup/download/wildintel-backup_DONA_20200101-000000.zip")
+    assert made[-1]["type"] == "done" and name.startswith("wildintel-backup_DONA_") and name.endswith(".zip")
+    assert answer.status_code == 200 and answer.headers["content-type"] == "application/zip" and f'filename="{name}"' in answer.headers["content-disposition"]
+    out = tmp_path / "got.zip"
+    out.write_bytes(answer.content)
+    assert "manifest.json" in zipfile.ZipFile(out).namelist()
+    assert other.status_code == 404 and missing.status_code == 404
+
+
 def test_what_cannot_be_backed_up_or_restored_is_a_plain_400_before_anything_is_touched(tmp_path: Path):
     with patch("wildintel_uploader.web.api.routers.backup.config.collections_dir", return_value=tmp_path):
         nothing = _client().post("/api/backup/create", json={"dest_dir": str(tmp_path)})

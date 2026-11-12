@@ -5,7 +5,7 @@ import type { BackupManifest, BackupProjectInfo, BackupRead } from '../types'
 
 vi.mock('../api', () => ({
   api: {
-    listResearchProjects: vi.fn(), getSettings: vi.fn(), backupProjectInfo: vi.fn(), browseFolder: vi.fn(), backupCreate: vi.fn(), backupPickFile: vi.fn(), backupRead: vi.fn(), backupRestore: vi.fn(), openFolder: vi.fn(),
+    listResearchProjects: vi.fn(), getSettings: vi.fn(), backupProjectInfo: vi.fn(), browseFolder: vi.fn(), backupCreate: vi.fn(), backupPickFile: vi.fn(), backupRead: vi.fn(), backupRestore: vi.fn(), openFolder: vi.fn(), backupDownloadUrl: vi.fn((name: string) => `/api/backup/download/${name}`),
   },
 }))
 import { api } from '../api'
@@ -46,10 +46,9 @@ describe('BackupPage', () => {
   })
 
   it('asks for the research project and what of it to back up — the visits, the deployments, and whether the images go — and makes the backup', async () => {
-    mocked.browseFolder.mockResolvedValue({ path: '/backups' })
     mocked.backupCreate.mockImplementation(async (_request, onEvent) => {
       onEvent({ type: 'file', index: 1, total: 2, name: 'manifest.json' })
-      onEvent({ type: 'done', path: '/backups/wildintel-backup_DONA_20261030.zip', bytes: 4096, files: 2, manifest: MANIFEST })
+      onEvent({ type: 'done', path: '/tmp/wildintel-backup_DONA_20261030.zip', bytes: 4096, files: 2, manifest: MANIFEST, download: 'wildintel-backup_DONA_20261030-101500.zip' })
     })
     render(<BackupPage onBack={vi.fn()} />)
 
@@ -71,16 +70,23 @@ describe('BackupPage', () => {
     await userEvent.click(images)
     await userEvent.click(screen.getByRole('button', { name: /Continue/ }))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
-    expect(await screen.findByLabelText('Folder of the backup')).toHaveTextContent('/backups')
+    // the step says what is going to be done, and the button makes it: no folder is asked, the browser downloads the file
+    const summary = within(screen.getByRole('region', { name: 'What the backup will hold' }))
+    expect(summary.getByText(/The global settings/)).toBeInTheDocument()
+    expect(summary.getByText(/The list of visits of/)).toHaveTextContent('(12)')
+    expect(summary.getByText(/1 deployment of/)).toHaveTextContent('with their images')
+    expect(screen.queryByRole('button', { name: 'Browse…' })).not.toBeInTheDocument()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     await userEvent.click(screen.getByRole('button', { name: 'Make the backup' }))
 
     await waitFor(() => expect(mocked.backupCreate).toHaveBeenCalled())
-    expect(mocked.backupCreate.mock.calls[0][0]).toEqual({ dest_dir: '/backups', settings: true, research_project_id: 'DONA', project_files: true, visits: true, deployments: ['R0001-DONA_01'], images: true })
+    expect(mocked.backupCreate.mock.calls[0][0]).toEqual({ settings: true, research_project_id: 'DONA', project_files: true, visits: true, deployments: ['R0001-DONA_01'], images: true })
     await screen.findByText(/Backup made — 4 KB/)
     const done = screen.getAllByRole('status').find((e) => /Backup made/.test(e.textContent ?? ''))!
     expect(done).toHaveTextContent('Backup made — 4 KB')
-    expect(done).toHaveTextContent('/backups/wildintel-backup_DONA_20261030.zip')
+    expect(done).toHaveTextContent('Your browser is downloading it: wildintel-backup_DONA_20261030-101500.zip')
+    expect(click).toHaveBeenCalledTimes(1)                                                          // the browser is asked for the file
+    click.mockRestore()
     expect(done).toHaveTextContent('2 deployments of DONA, with their images')   // as the manifest the server answers says
   })
 

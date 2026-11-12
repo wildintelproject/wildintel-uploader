@@ -1133,14 +1133,15 @@ export interface BackupRead {
   has_images: Record<string, boolean>
 }
 
-export interface BackupCreateRequest { dest_dir: string; settings: boolean; research_project_id: string | null; project_files: boolean; visits: boolean; deployments: string[]; images: boolean }
+export interface BackupCreateRequest { dest_dir?: string; settings: boolean; research_project_id: string | null; project_files: boolean; visits: boolean; deployments: string[]; images: boolean }
 export interface BackupRestoreRequest { path: string; settings: boolean; project_files: boolean; visits: boolean; deployments: string[]; images: boolean; replace: boolean }
 
 /** What a backup or a restoration says as it goes. */
 export type BackupEvent =
   | { type: 'step'; message: string }
   | { type: 'file'; index: number; total: number; name: string }
-  | { type: 'done'; path: string; bytes: number; files: number; manifest: BackupManifest }
+  /** `download` is the file the browser asks for when the backup was made to be downloaded (no folder was given). */
+  | { type: 'done'; path: string; bytes: number; files: number; manifest: BackupManifest; download?: string }
 
 export interface RestoreSummary {
   settings: boolean

@@ -84,10 +84,9 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
   const [pickedRevisions, setPickedRevisions] = useState<Set<string>>(new Set())
   const [withImages, setWithImages] = useState(false)
   const [selectionDone, setSelectionDone] = useState(false)
-  const [destDir, setDestDir] = useState('')
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<{ index: number; total: number } | null>(null)
-  const [made, setMade] = useState<{ path: string; bytes: number; manifest: BackupManifest } | null>(null)
+  const [made, setMade] = useState<{ path: string; bytes: number; manifest: BackupManifest; download: string | null } | null>(null)
 
   // ── restoring ──
   const [filePath, setFilePath] = useState('')
@@ -119,7 +118,7 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
   }, [projectId, mode])
 
   function startOver() {
-    setMode(null); setSelectionDone(false); setMade(null); setRestored(null); setRead(null); setFilePath(''); setError(null); setReadError(null); setDestDir(''); setProgress(null)
+    setMode(null); setSelectionDone(false); setMade(null); setRestored(null); setRead(null); setFilePath(''); setError(null); setReadError(null); setProgress(null)
   }
 
   // ── what goes in ──
@@ -137,11 +136,11 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
     setError(null); setRunning(true); setProgress(null); setMade(null)
     try {
       await api.backupCreate({
-        dest_dir: destDir, settings: withSettings, research_project_id: hasProject ? projectId : null, project_files: hasProject && withProjectFiles, visits: hasProject && withVisits,
+        settings: withSettings, research_project_id: hasProject ? projectId : null, project_files: hasProject && withProjectFiles, visits: hasProject && withVisits,
         deployments: hasProject ? [...chosen] : [], images: withImages,
       }, (e) => {
         if (e.type === 'file') setProgress({ index: e.index, total: e.total })
-        if (e.type === 'done') setMade({ path: e.path, bytes: e.bytes, manifest: e.manifest })
+        if (e.type === 'done') { setMade({ path: e.path, bytes: e.bytes, manifest: e.manifest, download: e.download ?? null }); if (e.download) saveFile(e.download) }
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The backup failed.')
@@ -150,13 +149,14 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
     }
   }
 
-  async function browseDestination() {
-    try {
-      const { path } = await api.browseFolder('Select the folder to keep the backup in')
-      if (path) setDestDir(path)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not open the folder dialog.')
-    }
+  /** Asks the browser for the backup: it shows what it shows for a download. */
+  function saveFile(name: string) {
+    const link = document.createElement('a')
+    link.href = api.backupDownloadUrl(name)
+    link.download = name
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
   }
 
   // ── what comes out ──
@@ -324,15 +324,26 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
             </div>
           </WizardStep>
 
-          <WizardStep n={3} title="Where to keep it?" status={!selectionDone ? 'locked' : running ? 'running' : made ? 'done' : error ? 'error' : 'open'} canEdit={false} onEdit={() => {}} expanded={Boolean(made)}
-                      description="A folder to put the backup file in. It is named after what it holds and the day.">
+          <WizardStep n={3} title="Make the backup" status={!selectionDone ? 'locked' : running ? 'running' : made ? 'done' : error ? 'error' : 'open'} canEdit={false} onEdit={() => {}} expanded={Boolean(made)}
+                      description="What is going to be done. The backup is a .zip that your browser downloads.">
             <div className="space-y-4">
+              <section aria-label="What the backup will hold" className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/30 p-5">
+                <h6 className="mb-3 border-b border-zinc-200 dark:border-zinc-700 pb-3 text-sm font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-100">It will hold</h6>
+                <ul className="space-y-1.5 text-sm text-zinc-800 dark:text-zinc-200">
+                  {withSettings && <li>The global settings <span className="text-zinc-500 dark:text-zinc-400">(without the passwords)</span></li>}
+                  {hasProject && withProjectFiles && info && <li>The data of <span className="font-mono">{projectId}</span>: {plural(info.locations, 'location', 'locations')}, {plural(info.cameras, 'camera', 'cameras')}, {plural(info.sd_cards, 'SD card', 'SD cards')}</li>}
+                  {hasProject && withVisits && info && <li>The list of visits of <span className="font-mono">{projectId}</span> ({info.visits})</li>}
+                  {hasProject && chosen.size > 0 && (
+                    <li>{plural(chosen.size, 'deployment', 'deployments')} of <span className="font-mono">{projectId}</span>, {withImages ? 'with their images' : 'without their images'}
+                      <span className="text-zinc-500 dark:text-zinc-400"> — about {formatBytes(pickedBytes)}</span></li>
+                  )}
+                </ul>
+              </section>
               <div className="flex items-center gap-3">
-                <button type="button" className={btnOutline} onClick={browseDestination} disabled={running}>Browse…</button>
-                <span aria-label="Folder of the backup" className="min-w-0 flex-1 truncate rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-xs text-zinc-700 dark:text-zinc-300">{destDir || 'No folder chosen'}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <button type="button" className={btnPrimary} disabled={!destDir || running || !somethingToBackUp} onClick={() => void makeBackup()}>Make the backup</button>
+                <button type="button" className={`${btnPrimary} inline-flex items-center gap-2`} disabled={running || !somethingToBackUp} onClick={() => void makeBackup()}>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></svg>
+                  Make the backup
+                </button>
                 {running && <span className="inline-flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400"><SmallSpinner />Making the backup…</span>}
               </div>
               {bar}
@@ -340,10 +351,10 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
               {made && (
                 <div role="status" className="rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-4 text-emerald-900 dark:text-emerald-200">
                   <p className="text-sm font-semibold">Backup made — {formatBytes(made.bytes)}</p>
-                  <p className="mt-1 break-all font-mono text-xs">{made.path}</p>
+                  <p className="mt-1 text-xs">Your browser is downloading it{made.download ? <>: <span className="font-mono break-all">{made.download}</span></> : '.'}</p>
                   <div className="mt-3 text-emerald-900 dark:text-emerald-200"><ManifestList manifest={made.manifest} /></div>
                   <div className="mt-3 flex gap-2">
-                    <button type="button" className={btnOutline} onClick={() => void api.openFolder(destDir)}>Open the folder</button>
+                    {made.download && <button type="button" className={btnOutline} onClick={() => saveFile(made.download!)}>Download again</button>}
                     <button type="button" className={btnOutline} onClick={startOver}>Done</button>
                   </div>
                 </div>

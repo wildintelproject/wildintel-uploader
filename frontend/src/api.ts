@@ -331,6 +331,8 @@ export const api = {
   backupRead: (path: string) => post<BackupRead>('/api/backup/read', { path }),
   backupCreate: (request: BackupCreateRequest, onEvent: (event: BackupEvent) => void) =>
     streamNdjson<BackupEvent>('/api/backup/create', request, onEvent, 'The backup ended unexpectedly.'),
+  /** Where the browser gets a backup made with no folder: it is a file to save. */
+  backupDownloadUrl: (name: string) => `/api/backup/download/${encodeURIComponent(name)}`,
   backupRestore: (request: BackupRestoreRequest, onEvent: (event: RestoreEvent) => void) =>
     streamNdjson<RestoreEvent>('/api/backup/restore', request, onEvent, 'The restoration ended unexpectedly.'),
   // Fixing the dates and times of the images in a folder, against the period of the visit that left the camera (see the backend's timefix_service).
