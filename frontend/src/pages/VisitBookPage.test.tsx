@@ -47,7 +47,7 @@ describe('VisitBookPage', () => {
     const table = await screen.findByRole('table', { name: 'Visits' })
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(3)
-    expect(rows[0]).toHaveTextContent('2024-10-12T09:00') // the Revision, the newest
+    expect(rows[0]).toHaveTextContent('12 Oct 2024, 09:00') // the Revision, the newest
     await userEvent.type(screen.getByLabelText('Filter the visits'), 'luis')
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1)
     expect(mockedApi.visitBook).toHaveBeenCalledWith('TATR')
@@ -110,15 +110,15 @@ describe('VisitBookPage', () => {
     expect(onCreateVisit).toHaveBeenCalledWith({ researchProjectId: 'TATR', site: 'TATR_0002' })
   })
 
-  it('shows when the visit was as ISO 8601 with the offset of its location from UTC', async () => {
+  it('shows when the visit was as the day and the time on the wall clock of its location, with the timezone of the location beside in brackets', async () => {
     mockedApi.visitBook.mockResolvedValue({ results: [
-      visit({ session: 'R0001', date: '2024-09-04', time: '13:10:00', when: '2024-09-04T11:10:00Z' }),
-      visit({ session: 'R0001', location_id: 'TATR_0002', date: '2024-01-04', time: '08:30:00', when: '2024-01-04T09:00:00Z' }),
+      visit({ session: 'R0001', date: '2024-09-04', time: '13:10:00', when: '2024-09-04T11:10:00Z', timezone: 'Europe/Madrid' }),
+      visit({ session: 'R0001', location_id: 'TATR_0002', date: '2024-01-04', time: '08:30:00', when: '2024-01-04T09:00:00Z' }),    // its location has no timezone said
     ] })
     await pickProject()
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getByText('2024-09-04T13:10+02:00')).toBeInTheDocument()
-    expect(within(table).getByText('2024-01-04T08:30-00:30')).toBeInTheDocument()
+    expect(within(table).getByText('4 Sep 2024, 13:10 (Europe/Madrid)')).toBeInTheDocument()
+    expect(within(table).getByText('4 Jan 2024, 08:30')).toBeInTheDocument()
   })
 
   it('says on each revision the days it went from and to', async () => {
@@ -297,12 +297,12 @@ describe('VisitBookPage', () => {
     const table = await screen.findByRole('table', { name: 'Visits' })
     const where = () => within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)
 
-    await userEvent.click(within(table).getByRole('button', { name: 'Where' }))
+    await userEvent.click(within(table).getByRole('button', { name: 'Location' }))
     expect(where()).toEqual(['TATR_0001', 'TATR_0002', 'TATR_0003', 'TATR_0004'])
-    expect(within(table).getByRole('columnheader', { name: /Where/ })).toHaveAttribute('aria-sort', 'ascending')
-    await userEvent.click(within(table).getByRole('button', { name: 'Where' }))
+    expect(within(table).getByRole('columnheader', { name: /Location/ })).toHaveAttribute('aria-sort', 'ascending')
+    await userEvent.click(within(table).getByRole('button', { name: 'Location' }))
     expect(where()).toEqual(['TATR_0004', 'TATR_0003', 'TATR_0002', 'TATR_0001'])
-    expect(within(table).getByRole('columnheader', { name: /Where/ })).toHaveAttribute('aria-sort', 'descending')
+    expect(within(table).getByRole('columnheader', { name: /Location/ })).toHaveAttribute('aria-sort', 'descending')
 
     await userEvent.click(within(table).getByRole('button', { name: 'When' }))
     expect(where()).toEqual(['TATR_0002', 'TATR_0004', 'TATR_0001', 'TATR_0003']) // oldest first, the one not made last
@@ -317,16 +317,16 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images'])
+    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Revision', 'Location', 'When', 'Actions', 'Status', 'Images'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12T09:00', 'Revision', 'Deployed', ''])
+    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '12 Oct 2024, 09:00', 'Revision', 'Deployed', ''])
     // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not
     expect(within(table).getAllByRole('button', { name: /^Details of the deployment/ })).toHaveLength(1) // a tick, not the id of the deployment
     expect(within(table).getByRole('button', { name: /^Details of the deployment/ })).toHaveAttribute('title', 'Show image details')
     expect(within(table).queryByText('R0003-TATR_0002')).not.toBeInTheDocument()
     // a visit that is closed and has no deployment yet has its button to store the images beside View, in the last column — not in Images, which says it is not stored
     expect(within(table).getAllByLabelText('Images not stored')).toHaveLength(2)
-    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04T09:00', 'Installation', 'Collected', ''])
+    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '4 Sep 2024, 09:00', 'Installation', 'Collected', ''])
     // the options are icons, and only the ones that apply: a closed visit without a deployment has its button to create it; the open one, nothing to create yet
     const options = (row: HTMLElement) => within(row).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.replace(/ to .*$/, '').replace(/ of the visit .*$/, '')).filter((l) => /^(View the visit|Create the visit|Create the deployment)/.test(l ?? ''))
     expect(options(second)).toEqual(['View the visit R0003', 'Create the deployment'])
@@ -385,7 +385,7 @@ describe('VisitBookPage', () => {
     await pickProject()
     const table = await screen.findByRole('table', { name: 'Visits' })
     expect(within(table).queryByRole('button', { name: /^(Show|Hide) the details of the visit/ })).not.toBeInTheDocument()
-    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images', 'What to do'])
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Revision', 'Location', 'When', 'Actions', 'Status', 'Images', 'What to do'])
   })
 
   it('shows the visits as a table or as labels — two buttons at the right of Reset', async () => {

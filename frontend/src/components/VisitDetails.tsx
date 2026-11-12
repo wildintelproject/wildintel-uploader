@@ -45,6 +45,28 @@ function Stage({ title, visit, kind, children }: { title: string; visit: StoredV
   )
 }
 
+/** Everything else a visit can say, in the order the details have always shown it: each with the name it is told by. */
+const MORE: [keyof StoredVisit, string][] = [
+  ['setup_by', 'Set up by'], ['camera_model', 'Camera model'], ['sd', 'SD card left'], ['camera_status', 'Status of the camera'], ['battery_status', 'Batteries'], ['card_status', 'SD card status'],
+  ['calibration', 'Camera calibrated'], ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['camera_interval', 'Camera delay (s)'], ['camera_height', 'Camera height (m)'], ['camera_depth', 'Camera depth (m)'],
+  ['camera_tilt', 'Camera tilt (°)'], ['camera_heading', 'Camera heading (°)'], ['detection_distance', 'Detection distance (m)'], ['timestamp_issues', 'Photo dates may be wrong'], ['bait_use', 'Bait use'],
+  ['feature_type', 'Feature type'], ['habitat', 'Habitat'], ['deployment_groups', 'Deployment groups'], ['tags', 'Tags'], ['actions', 'Actions'], ['when', 'Instant (UTC)'], ['deployment_id', 'Deployment imported'],
+]
+const told = (v: unknown) => (typeof v === 'boolean' ? (v ? 'Yes' : 'No') : Array.isArray(v) ? v.join(', ') : String(v))
+
+/** The rest of what a visit says — every field with something in it that the cards above do not tell —, so that nothing the visit holds is left out. */
+function MoreData({ visit, shown }: { visit: StoredVisit; shown: (keyof StoredVisit)[] }) {
+  const lines = MORE.filter(([k]) => !shown.includes(k)).map(([k, label]) => [label, visit[k]] as const)
+    .filter(([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0))
+  if (lines.length === 0) return null
+  return (
+    <div className="border-t border-zinc-200 dark:border-zinc-700/70 pt-4">
+      <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">More data</p>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4">{lines.map(([label, v]) => <Field key={label} label={label}>{told(v)}</Field>)}</dl>
+    </div>
+  )
+}
+
 const when = (v: StoredVisit) => `${v.date} ${v.time.slice(0, 5)}`
 
 /** The icon of a visit: the book the visits are kept in, as the visit dashboard has it. */
@@ -75,6 +97,7 @@ export default function VisitDetails({ closed, onClose, onOpenVisit }: { closed:
             {visit.num_photos != null && <Field label="Photos counted">{visit.num_photos.toLocaleString('en-US')}</Field>}
           </dl>
           {visit.comments && <Notes>{visit.comments}</Notes>}
+          <MoreData visit={visit} shown={['trappers', 'latitude', 'longitude', 'camera_id', 'camera_model', 'sd', 'num_photos', 'comments', 'date_time_ok']} />
           {onOpenVisit && <button type="button" className={btnOutline} onClick={() => onOpenVisit(visit.session)}>Open visit {visit.session} <span aria-hidden="true">→</span></button>}
         </Stage>
         {end && (
@@ -105,6 +128,7 @@ export default function VisitDetails({ closed, onClose, onOpenVisit }: { closed:
                 </dl>
               )}
               {end.comments && <Notes>{end.comments}</Notes>}
+            <MoreData visit={end} shown={['trappers', 'num_photos', 'camera_status', 'battery_status', 'card_status', 'date_time_ok', 'comments']} />
             {onOpenVisit && <button type="button" className={btnOutline} onClick={() => onOpenVisit(end.session)}>Open visit {end.session} <span aria-hidden="true">→</span></button>}
             </Stage>
           </>

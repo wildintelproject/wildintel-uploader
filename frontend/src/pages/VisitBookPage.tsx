@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { PHASE_BADGE, PHASE_LABEL } from '../visitPhases'
 import { api } from '../api'
+import { formatVisitWhen } from '../dateFormat'
 import { Icon, StateCard } from '../components/Dashboard'
 import { ActiveFilters, DashboardHeader, DownloadButton, HELP_ICONS, HelpButton, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from '../components/DashboardParts'
 import { Breadcrumb } from '../components/TaskCard'
@@ -35,7 +36,7 @@ interface Props {
 
 /** The columns the book can be sorted by. */
 type SortKey = 'session' | 'where' | 'when' | 'status' | 'actions' | 'stored'
-const COLUMNS: [SortKey, string][] = [['session', 'Revision'], ['where', 'Where'], ['when', 'When'], ['actions', 'Actions'], ['status', 'Status'], ['stored', 'Images']]
+const COLUMNS: [SortKey, string][] = [['session', 'Revision'], ['where', 'Location'], ['when', 'When'], ['actions', 'Actions'], ['status', 'Status'], ['stored', 'Images']]
 
 /** What a row says in a column, to sort by it: the rows not made go last whatever the direction (they have no day, no actions…). */
 function sortValue(v: BookVisit, key: SortKey): string | number {
@@ -67,15 +68,6 @@ const byDefault = (a: BookVisit, b: BookVisit) =>
   b.session.localeCompare(a.session) || Number(a.not_done) - Number(b.not_done) || (a.not_done ? a.location_id.localeCompare(b.location_id) : `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))
 const keyOf = (v: BookVisit) => `${v.session}|${v.location_id}|${v.date}|${v.time}`
 
-/** The visit's wall clock as ISO 8601 with its offset from UTC (2024-09-04T13:10+02:00): the offset is what the instant kept (UTC) differs from the wall clock of the location. Without the instant, the wall clock alone. */
-function isoWithOffset(v: BookVisit): string {
-  const local = `${v.date}T${v.time.slice(0, 5)}`
-  if (!v.when) return local
-  const minutes = Math.round((Date.parse(`${v.date}T${v.time.length > 5 ? v.time : `${v.time}:00`}Z`) - Date.parse(v.when)) / 60000)
-  if (Number.isNaN(minutes)) return local
-  const abs = Math.abs(minutes)
-  return `${local}${minutes < 0 ? '-' : '+'}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`
-}
 
 /** The days a revision went from and to — its first and its last visit made, as the wall clock of their locations says —, or nothing when none was made. The end is only
  * told when the revision is complete (no visit left planned): one still going has its end open ("2024-09-04 → …"). */
@@ -351,7 +343,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                                 ? <LinkButton title={`Show the details of the location ${v.location_id}`} className="font-mono" onClick={() => void showSite(v.location_id)}>{v.location_id}</LinkButton>
                                 : v.location_id}
                             </td>
-                            <td className="px-4 py-3 font-mono text-[11px] whitespace-nowrap text-zinc-600 dark:text-zinc-300">{v.not_done || v.unknown || phaseOf(v) === 'not_visited' ? <span className="font-sans text-zinc-400">—</span> : isoWithOffset(v)}</td>
+                            <td className="px-4 py-3 font-mono text-[11px] whitespace-nowrap text-zinc-600 dark:text-zinc-300">{v.not_done || v.unknown || phaseOf(v) === 'not_visited' ? <span className="font-sans text-zinc-400">—</span> : formatVisitWhen(v)}</td>
                             <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{v.actions.length === 0 && !v.not_done ? '—' : v.actions.join(' + ')}</td>
                             <td className="px-4 py-3">{phaseOf2(v)}</td>
                             <td className="px-4 py-3">{imagesOf(v)}</td>
@@ -378,7 +370,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
                       <p className="mt-1 font-mono text-sm text-zinc-500 dark:text-zinc-400">{v.session}{v.actions.length > 0 ? ` · ${v.actions.join(' + ')}` : ''}</p>
                       <div className="my-3 border-t border-zinc-200 dark:border-zinc-700/70" />
                       <div className="flex items-center justify-between gap-3 text-xs">
-                        <span className="font-mono text-zinc-600 dark:text-zinc-300">{v.not_done || v.unknown || phaseOf(v) === 'not_visited' ? '—' : isoWithOffset(v)}</span>
+                        <span className="font-mono text-zinc-600 dark:text-zinc-300">{v.not_done || v.unknown || phaseOf(v) === 'not_visited' ? '—' : formatVisitWhen(v)}</span>
                         <span className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400">Images {imagesOf(v)}</span>
                       </div>
                       <div className="mt-3 flex justify-end">{optionsOf(v)}</div>

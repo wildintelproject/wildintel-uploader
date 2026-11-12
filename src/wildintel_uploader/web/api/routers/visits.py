@@ -411,8 +411,11 @@ def visit_book(req: ListVisitsRequest) -> dict:
         locations = local_folder_service.list_locations(root, req.research_project_id) if req.location_id is None else None
         book = visit_deployments.visit_book(visits, config.load_settings().FIELDLOG.keep_seconds, locations,
                                             [u for u in local_folder_service.list_unknown(root, req.research_project_id) if req.location_id is None or u["location_id"].lower() == req.location_id.lower()])
+        # a visit is told on the wall clock of its location: the timezone of the location goes with it
+        zones = {str(l.get("location_id", "")).lower(): l.get("timezone") for l in local_folder_service.list_locations(root, req.research_project_id, include_deleted=True)}
         for visit in book:
             visit["uploaded_at"], visit["on_trapper"] = _trapper_state(root, req.research_project_id, visit.get("deployment_id"))
+            visit["timezone"] = zones.get(str(visit.get("location_id", "")).lower())
         return {"results": book}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc

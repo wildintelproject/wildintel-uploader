@@ -861,6 +861,8 @@ export interface VisitsCsvResult {
 
 /** A visit as the visit book shows it: with the deployment it started — closed once a later visit collected its card, open while the camera is still out — and neither when it left no camera. */
 export interface BookVisit extends StoredVisit {
+  /** The timezone of the location of the visit: what its day and time are told in. */
+  timezone?: string | null
   deployment: string | null
   deployment_status: 'closed' | 'open' | null
   /** The deployment this visit gave was closed with no images: the camera was stolen. */

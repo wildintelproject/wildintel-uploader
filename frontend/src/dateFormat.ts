@@ -28,3 +28,8 @@ export function formatDeploymentPeriod(d: { start: string; end: string | null; s
   const end = d.start_local ? d.end_local : d.end
   return `${stamp(start)} → ${end ? stamp(end) : '…'}${d.start_local && d.timezone ? ` (${d.timezone})` : ''}`
 }
+
+/** The day and the time of a visit as a line — 14 Sep 2026, 08:30 (Europe/Madrid) —: on the wall clock of its location, with the timezone of the location beside when it is known. */
+export function formatVisitWhen(visit: { date: string; time: string; timezone?: string | null }): string {
+  return `${stamp(`${visit.date}T${visit.time}`)}${visit.timezone ? ` (${visit.timezone})` : ''}`
+}

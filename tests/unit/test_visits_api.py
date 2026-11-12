@@ -367,6 +367,7 @@ def test_a_stolen_camera_closes_its_deployment_with_no_images(tmp_path: Path):
     assert collected["start_local"].startswith("2026-08-05T") and collected["end_local"].startswith("2026-10-02T") and collected["timezone"] == "UTC"
     assert still_out["end_local"] is None
     started = {v["date"]: v for v in book}
+    assert all(v["timezone"] == "UTC" for v in book if not v.get("not_done"))          # a visit comes with the timezone of its location
     assert started["2026-06-10"]["deployment_status"] == "closed" and started["2026-06-10"]["deployment_no_images"] == "stolen"
     assert started["2026-08-05"]["deployment_no_images"] is None
     # nothing is offered to import for the stolen one: there are no images; the other deployment is closed by its revision
