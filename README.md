@@ -37,14 +37,39 @@ Trapper — creating the location and the deployment there if they are missing �
 
 **Field work**
 
-- Register visits by hand, with the rules of the field work: one visit to each location in a revision, a revision starts when the one before it is finished, where each camera and each SD card is
-- Read the visits from a CSV file — with the columns matched by hand — or from the CSV of a WildINTEL Epicollect5 project, creating the locations, cameras and SD cards that do not exist (a *New site* makes its site on the spot)
-- Visit dashboard by revision and state — deployed, collected, stolen, not visited —, with a panel for each visit and its deployment
+The app controls the **life cycle** of the visits, the deployments, the SD cards and the cameras, to minimise the typical errors of the field sheets. Locations, cameras and SD cards
+are *planned*, *ready*, *active* or *archived*, and what a visit does moves them — an Installation makes the site, the camera and the card active; taking them away makes them ready again; a
+theft archives the camera and its card —, so where each camera and each card is, is always worked out from the visits. A visit — entered by hand, or read from a file — is refused, with the reason, when it
+breaks any of these controls:
+
+- the site is not a location of the research project, or there is already a visit to it at that time;
+- a site is visited twice in a revision, a visit is not after the last one to its site, or a revision is out of order;
+- a revision starts before the one before it is finished (every location that is not archived has to have its visit), or is added to once it is closed;
+- the first visit to a site is not an Installation;
+- what its actions ask is missing: the camera and the card an Installation leaves, the photos a Revision or a Desinstallation collected (not when the card was full);
+- the camera is not the one at the site, is put up where it already is, or is at another site; the camera or the SD card does not exist in the research project; the person who went is not in the settings;
+- the SD card left is archived, is the one the visit collects, is in the camera of another site, or was collected in the same revision;
+- a visit comes after the site was archived, or an archiving visit leaves a camera up.
+
+And it warns, keeping the visit, of what is only odd: a Revision with no photos, a camera or a card at two sites in a revision, a visit whose GPS is more than a kilometre from its site. What an unknown revision hides —
+one before the first visit kept to a site — is not checked, and a later visit takes its place.
+
+- Register visits by hand, or read them from a CSV file — with the columns matched by hand — or from the CSV of a WildINTEL Epicollect5 project, creating the locations, cameras and SD cards that do not exist (a *New site* makes its site on the spot)
+- Visit dashboard by revision and state — planned, deployed, collected, stolen, not visited, unknown —, with a panel for each visit and the deployment it gives; the deployments are worked out from the visits
 
 **Deployments**
 
-- Import a deployment, or a session of several at once, from a local folder: validation checks, dates from the visits, the images or the timestamp log of the collection, and a form with the details Trapper's own deployment form asks
-- Organize the images renamed, resized and tagged with metadata, and seal the deployment so that any later change is noticed
+The images go through a series of **quality controls** before anything is copied, to avoid the errors that a deployment carries from the field into Trapper. Each control can be run or not, and a required
+one that does not pass stops the import:
+
+- *validation*, over the images alone: corrupted images, the shooting order against the order of the file names, the folder structure, one camera for all the images, the required EXIF fields and duplicates;
+- *postvalidation*, once the deployment is known: the format of its id, its collection and its location, the camera, and the dates of the images against the start and the end of the deployment;
+- *statistical* checks against the earlier revisions of the same location — the number of images, the number of sequences and how long they are —, so that a camera that fired non-stop or died early shows up before it is uploaded.
+
+The images are then **modified** in the copy kept in the collections folder — the source is never touched: the dates are read from the EXIF as the camera's local time and converted to UTC, the
+images are renamed after the deployment and resized, and **authorship metadata** — creator, owner, publisher, rights, license and coverage — is written into each one as XMP, with ExifTool. The deployment is sealed afterwards, so that any later change of an image or of its details is noticed.
+
+- Import a deployment, or a session of several at once, from a local folder, with the dates taken from the visits, the images or the timestamp log of the collection, and a form with the details Trapper's own deployment form asks
 - Dashboard of the deployments with their visit, card and images, and a browser of their photos; repair of the ones that are not valid any more
 
 **Upload to Trapper**
