@@ -4,7 +4,7 @@ import CheckResultsTable from '../components/CheckResultsTable'
 import ValidationDashboard, { formatRun } from '../components/ValidationDashboard'
 import TimezoneCombobox from '../components/TimezoneCombobox'
 import WizardStep from '../components/WizardStep'
-import { formatDay } from '../dateFormat'
+import { formatDay, formatLocal, formatVisitWhen } from '../dateFormat'
 import TrapperAccountNotice, { trapperAccountReady } from '../components/TrapperAccountNotice'
 import type { TrapperAccount } from '../components/TrapperAccountNotice'
 import { Fragment, createContext, useContext, useEffect, useRef, useState } from 'react'
@@ -563,7 +563,7 @@ export const isoPeriod = (start: string | null | undefined, end: string | null |
 }
 export const visitKey = closedVisitKey
 export const visitLabel = (c: ClosedVisit) =>
-  `${c.visit.date} ${c.visit.time} · ${c.visit.location_id} · ${c.visit.session} · ${c.visit.actions.join(' + ')}${c.visit.sd ? ` · card ${c.visit.sd}` : ''} · collected on ${c.end.date}${c.end.num_photos != null ? ` (${c.end.num_photos} photos)` : ''}`
+  `${formatVisitWhen(c.visit)} · ${c.visit.location_id} · ${c.visit.session} · ${c.visit.actions.join(' + ')}${c.visit.sd ? ` · card ${c.visit.sd}` : ''} · collected on ${formatVisitWhen(c.end)}${c.end.num_photos != null ? ` (${c.end.num_photos} photos)` : ''}`
 
 export const EMPTY_LOCATION_DRAFT = { location_id: '', name: '', timezone: 'UTC', ignore_dst: 'no', latitude: '', longitude: '', coordinate_uncertainty: '' }
 
@@ -1287,7 +1287,7 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
       {validation.sequence_issues !== undefined && (
         <p className={validation.sequence_issues.length ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
           {validation.sequence_issues.length
-            ? mark('warning', `${validation.sequence_issues.length} out-of-order shot(s): ${validation.sequence_issues.map((i) => `${i.path_a} (${i.date_a.slice(0, 10)}) → ${i.path_b} (${i.date_b.slice(0, 10)})`).join('; ')}`)
+            ? mark('warning', `${validation.sequence_issues.length} out-of-order shot(s): ${validation.sequence_issues.map((i) => `${i.path_a} (${formatLocal(i.date_a)}) → ${i.path_b} (${formatLocal(i.date_b)})`).join('; ')}`)
             : mark('success', 'Shots are in chronological order.')}
         </p>
       )}
@@ -1408,7 +1408,7 @@ export function DeploymentCheckReport({ result, toleranceHours }: { result: Depl
             <ul className="list-disc ml-6">
               {result.out_of_range.map((o) => (
                 <li key={o.path}>
-                  <span className="font-mono">{o.path}</span> — {o.date.replace('T', ' ')}, {RANGE_RULE_LABELS[o.rule ?? 'between']}{o.expected ? ` (${o.expected.replace(/T/g, ' ')})` : ''}
+                  <span className="font-mono">{o.path}</span> — {formatLocal(o.date)}, {RANGE_RULE_LABELS[o.rule ?? 'between']}{o.expected ? ` (${o.expected.replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?/g, (m) => formatLocal(m.replace(" ", "T")))})` : ''}
                 </li>
               ))}
             </ul>
@@ -1862,10 +1862,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   function progressChips(upTo: 'images' | 'dates' | 'details') {
     const chip = 'rounded-full border border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300'
     const mono = `${chip} font-mono`
-    const day = (iso: string | null | undefined, year: boolean) => (iso ? formatDay(iso, year) : '…')
+    const day = (iso: string | null | undefined, year: boolean) => (iso ? (year ? formatLocal(iso, timezone) : formatDay(iso, false)) : '…')
     const chips: ReactNode[] = []
     if (selectedProjectId) chips.push(<span key="rp" className={chip}>{selectedProject?.acronym ?? selectedProjectId}</span>)
-    if (linkedVisit) chips.push(<span key="visit" className={chip}>Visit <span className="font-mono">{linkedVisit.visit.location_id}</span> · {linkedVisit.visit.date} → {linkedVisit.end.date}</span>)
+    if (linkedVisit) chips.push(<span key="visit" className={chip}>Visit <span className="font-mono">{linkedVisit.visit.location_id}</span> · {formatVisitWhen(linkedVisit.visit)} → {formatVisitWhen(linkedVisit.end)}</span>)
     if (upTo !== 'images') {
       if (scan) chips.push(<span key="photos" className={chip}>{scan.image_count.toLocaleString('en-US')} {scan.image_count === 1 ? 'image' : 'images'}</span>)
       if (sdCard) chips.push(<span key="sd" className={chip}>SD card <span className="font-mono">{sdCard}</span></span>)
@@ -3070,7 +3070,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                       description={!timezone
                         ? <span className="text-red-600 dark:text-red-400">The location <strong>{deployment.location_id}</strong> has no timezone, and a deployment needs it: add it to the location.</span>
                         : <>Tell us when the images of <strong>{deployment.location_id}</strong> were collected. Times are in <strong>{timezone}</strong>, which {ignoreDst ? 'has no daylight saving time' : 'follows daylight saving time'}.</>}
-                      summary={deployment.start_date && <>{deployment.deployment_id}<br />{deployment.start_date.slice(0, 10)} → {deployment.end_date?.slice(0, 10) ?? '…'}</>}>
+                      summary={deployment.start_date && <>{deployment.deployment_id}<br />{formatLocal(deployment.start_date, timezone)} → {deployment.end_date ? formatLocal(deployment.end_date, timezone) : '…'}</>}>
             {guessing && <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">Reading the dates and the camera from the images…</p>}
               {/* With a visit chosen the revision, and so the id of the deployment, are the visit's: nothing is asked, and the card is only there for what has to be said */}
               {(!linkedVisit || previousRevision || (epicollectEntry && !epicollectImported) || (epicollectDone && epicollectMissing !== null && !epicollectMessage) || epicollectMessage || existingFolder || fieldErrors.deployment_id) && (
@@ -3150,7 +3150,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                   name={deployment.deployment_id || 'deployment'} value={dateSource} onPick={pickSource} start={deployment.start_date || null} end={deployment.end_date ?? null} timezone={timezone}
                   options={[
                     ...(linkedVisit ? [{ source: 'visit' as const, title: 'Visits of the field work', period: periodOf('visit'),
-                      hint: `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), where the card was left, to ${linkedVisit.end.session} (${linkedVisit.end.date}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
+                      hint: `From the visit ${linkedVisit.visit.session} (${formatVisitWhen(linkedVisit.visit)}), where the card was left, to ${linkedVisit.end.session} (${formatVisitWhen(linkedVisit.end)}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
                     ...(logEntry?.timestamps ? [{ source: 'log' as const, title: 'Log files', period: periodOf('log'),
                       hint: `From the FileTimestampLog of ${logEntry.collection}, which has a row for ${deployment.deployment_id}: the camera's wall-clock time, in the timezone of the location.` }] : []),
                     { source: 'exif', title: 'Camera data in the photos', period: periodOf('exif'),
@@ -3176,7 +3176,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                 <div role="radiogroup" aria-label="Source of the details" className="space-y-2">
                   {([
                     { source: 'visit' as const, title: 'What the field sheet says', found: linkedVisit ? visitFound : null, available: Boolean(linkedVisit),
-                      hint: linkedVisit ? `From the visit ${linkedVisit.visit.session} (${linkedVisit.visit.date}), as it was written in the field${visitFound.parts ? `: ${visitFound.parts}` : ''}. The visits (the field sheet) are not changed.`
+                      hint: linkedVisit ? `From the visit ${linkedVisit.visit.session} (${formatVisitWhen(linkedVisit.visit)}), as it was written in the field${visitFound.parts ? `: ${visitFound.parts}` : ''}. The visits (the field sheet) are not changed.`
                         : 'No visit is linked to this deployment: choose a closed visit in the origin.' },
                     { source: 'previous' as const, title: 'What the previous deployment says', found: previousRevision ? previousFound : null, available: Boolean(previousRevision),
                       hint: previousRevision ? `From ${previousRevision.deployment_id}, the previous deployment at this location${previousFound.parts ? `: ${previousFound.parts}` : ''}. Dates are never copied.`

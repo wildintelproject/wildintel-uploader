@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { formatDay } from '../dateFormat'
+import { formatLocal } from '../dateFormat'
 
 /** Where the period of a deployment comes from: Epicollect5, the collection's timestamp log, the images' EXIF data — in that order of
  * preference — or typed by hand, the only one that lets it be edited. */
@@ -28,7 +28,7 @@ export function against(period: Period, exif: Period): string | null {
   return `Starts ${spanBetween(period.start, exif.start)} ${startsBefore ? 'before' : 'after'} the first photo and ends ${spanBetween(exif.end, period.end)} ${endsAfter ? 'after' : 'before'} the last.`
 }
 
-const periodText = (p: Period) => (p.start ? `${formatDay(p.start)}, ${p.start.slice(11, 16)} → ${p.end ? `${formatDay(p.end)}, ${p.end.slice(11, 16)}` : '…'}` : '')
+const periodText = (p: Period, timezone?: string) => (p.start ? `${formatLocal(p.start, timezone)} → ${p.end ? formatLocal(p.end, timezone) : '…'}` : '')
 
 export interface SourceOption {
   source: DateSource
@@ -89,8 +89,8 @@ export default function DateSourcePicker({ name, options, value, onPick, start, 
         {value === 'manual' ? manualForm : (
           <>
             <div className="grid grid-cols-2 gap-4 text-zinc-900 dark:text-zinc-100">
-              <div><span className="block text-xs text-zinc-500 dark:text-zinc-400">Start date and time</span><span className="text-base font-semibold">{start ? `${formatDay(start)}, ${start.slice(11, 16)}` : '—'}</span></div>
-              <div><span className="block text-xs text-zinc-500 dark:text-zinc-400">End date and time</span><span className="text-base font-semibold">{end ? `${formatDay(end)}, ${end.slice(11, 16)}` : '—'}</span></div>
+              <div><span className="block text-xs text-zinc-500 dark:text-zinc-400">Start date and time</span><span className="text-base font-semibold">{start ? formatLocal(start, timezone) : '—'}</span></div>
+              <div><span className="block text-xs text-zinc-500 dark:text-zinc-400">End date and time</span><span className="text-base font-semibold">{end ? formatLocal(end, timezone) : '—'}</span></div>
             </div>
             {duration && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Duration: {duration}</p>}
           </>

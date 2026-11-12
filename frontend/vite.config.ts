@@ -2,6 +2,9 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// The instants of the app are told on the wall clock of the browser's timezone: the tests read them on this one.
+process.env.TZ = 'Europe/Madrid'
+
 export default defineConfig({
   plugins: [
     tailwindcss(),

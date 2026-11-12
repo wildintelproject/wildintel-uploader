@@ -32,6 +32,8 @@ async function pickProject() {
   await screen.findByText('Tatra', { exact: false })
 }
 
+const showAll = async () => { await userEvent.click(await screen.findByRole('button', { name: /^All revisions/ })) }  // the dashboard opens on the latest revision
+
 describe('VisitBookPage', () => {
   it('exports the visits of the research project as a CSV file', async () => {
     mockedApi.exportVisitsCsv.mockResolvedValue({ csv: 'location_id,actions\r\n', filename: 'TATR_visits.csv', count: 3 })
@@ -43,6 +45,7 @@ describe('VisitBookPage', () => {
 
   it('lists the visits of a research project, the newest first, and filters them', async () => {
     await pickProject()
+    await showAll()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     const rows = within(table).getAllByRole('row').slice(1)
@@ -167,6 +170,7 @@ describe('VisitBookPage', () => {
       visit({ session: 'R0002', location_id: 'TATR_0003', date: '', time: '', actions: [], not_done: true, sd: null, camera_id: null, trappers: null, when: null }),
     ] })
     await pickProject()
+    await showAll()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     const row = (site: string, session: string) => within(table).getAllByRole('row').find((r) => { const cells = within(r).queryAllByRole('cell'); return cells[0]?.textContent === session && cells[1]?.textContent === site })!
@@ -194,6 +198,7 @@ describe('VisitBookPage', () => {
       visit({ session: 'R0002', location_id: 'TATR_0002', camera_status: 'Not revised', not_visited: true, state: 'not_visited' }),
     ] })
     await pickProject()
+    await showAll()
 
     const squares = await screen.findByRole('region', { name: 'Visits by status' })
     expect(within(squares).getByRole('button', { name: /^Collected/ })).toHaveTextContent('1')
@@ -210,6 +215,7 @@ describe('VisitBookPage', () => {
       visit({ session: 'R0002', location_id: 'TATR_0002', date: '', time: '', actions: [], not_done: true, sd: null, camera_id: null, trappers: null }),
     ] })
     await pickProject()
+    await showAll()
     const squares = await screen.findByRole('region', { name: 'Visits by status' })
     const square = (name: RegExp) => within(squares).getByRole('button', { name })
 
@@ -269,6 +275,7 @@ describe('VisitBookPage', () => {
   it('pages the visits, ten at a time, and goes back to the first page when the filter changes', async () => {
     mockedApi.visitBook.mockResolvedValue({ results: Array.from({ length: 23 }, (_, n) => visit({ session: `R${String(n + 1).padStart(4, '0')}`, date: `2024-09-${String(n + 1).padStart(2, '0')}`, location_id: n === 22 ? 'TATR_0099' : 'TATR_0001' })) })
     await pickProject()
+    await showAll()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(10)
@@ -315,6 +322,7 @@ describe('VisitBookPage', () => {
 
   it('has the session first, then where and when, the status of the visit (closed or open), the actions and whether its images are stored (a tick, or the button to create the deployment)', async () => {
     await pickProject()
+    await showAll()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Revision', 'Location', 'When', 'Actions', 'Status', 'Images'])
@@ -336,6 +344,7 @@ describe('VisitBookPage', () => {
   it('links the tick of a visit with a deployment to the status of the deployment', async () => {
     const onShowDeployment = vi.fn()
     render(<VisitBookPage onBack={vi.fn()} onShowDeployment={onShowDeployment} />)
+    await showAll()
     await screen.findByRole('table', { name: 'Visits' })
 
     expect(screen.queryByRole('tab')).not.toBeInTheDocument() // the deployments are on Manage deployments, not here
@@ -346,6 +355,7 @@ describe('VisitBookPage', () => {
   it('shows the details of a visit, and creates the deployment of a closed visit that has none yet', async () => {
     const onImportImages = vi.fn()
     render(<VisitBookPage onBack={vi.fn()} onImportImages={onImportImages} />)
+    await showAll()
     await screen.findByRole('table', { name: 'Visits' })
 
     await userEvent.click(screen.getByRole('button', { name: 'View the visit R0004 to TATR_0001' }))
@@ -408,6 +418,7 @@ describe('VisitBookPage', () => {
       visit({ session: 'R0002', deployment: 'R0002-TATR_0001', deployment_status: 'open' }),
     ] })
     await pickProject()
+    await showAll()
     const active = await screen.findByLabelText('Active filters')
     expect(active).toHaveTextContent('Revision: All'); expect(active).toHaveTextContent('Status: All'); expect(active).toHaveTextContent('2 of 2 visits match')
 
@@ -485,6 +496,7 @@ describe('VisitBookPage', () => {
     ] })
     mockedApi.updateVisit.mockRejectedValueOnce(new Error('R0002 TATR_0001 would no longer be possible'))
     await pickProject()
+    await showAll()
 
     expect(await screen.findByRole('button', { name: 'Edit the visit R0002 to TATR_0002' })).toBeDisabled()   // it closes a deployment that is imported
     await userEvent.click(screen.getByRole('button', { name: 'Edit the visit R0001 to TATR_0001' }))
@@ -510,6 +522,7 @@ describe('VisitBookPage', () => {
       sd_cards: [{ label: 'A13', research_project: 'TATR', status: 'active' }], trappers: [{ name: 'Ana', affiliation: null }],
     } } as never)
     await pickProject()
+    await showAll()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     expect(within(table).getByText('Unknown')).toBeInTheDocument()

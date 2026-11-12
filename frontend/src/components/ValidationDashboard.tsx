@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
+import { formatInstant } from '../dateFormat'
 import type { Report } from '../types'
 import CheckFailures from './CheckFailures'
 import { StatusIcon } from './Notice'
@@ -20,7 +21,7 @@ export interface DashboardContext {
   onFilters?: (filters: ResultFilters) => void
 }
 
-export const formatRun = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+export const formatRun = (iso: string) => formatInstant(iso)
 
 function Kpi({ icon, tone, value, label }: { icon: 'success' | 'warning' | 'info'; tone: string; value: number | string; label: string }) {
   return (

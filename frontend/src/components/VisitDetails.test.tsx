@@ -43,8 +43,20 @@ describe('VisitDetails', () => {
     }
     expect(left.queryByText('Camera date & time OK')).not.toBeInTheDocument()          // that one is with the state of the camera of the visit that collected the card
     const collected = within(screen.getByRole('region', { name: 'The visit that collected it' }))
-    expect(collected.getByText('Camera calibrated')).toBeInTheDocument()
-    expect(collected.getByText('Camera delay (s)')).toBeInTheDocument()
-    expect(collected.getByText('Instant (UTC)')).toBeInTheDocument()
+    expect(collected.queryByText('More data')).not.toBeInTheDocument()                 // the visit that collected the card does not show it
+    expect(collected.queryByText('Camera calibrated')).not.toBeInTheDocument()
+  })
+
+  it('says that the visit left the camera, not the card, when it left no SD card', () => {
+    render(<VisitDetails closed={{ visit: stored({ sd: null }), end: closed.end }} onClose={vi.fn()} />)
+    expect(screen.getByRole('region', { name: 'The visit that left the camera' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'The visit that left the card' })).not.toBeInTheDocument()
+  })
+
+  it('puts a dot on the line for each revision between the two visits that says nothing, so that it is told why the card goes from one revision to a later one', () => {
+    render(<VisitDetails closed={{ ...closed, between: [{ session: 'R0004', label: 'Not visited' }, { session: 'R0005', label: 'Unknown' }] }} onClose={vi.fn()} />)
+    expect(screen.getByText('R0004')).toBeInTheDocument()
+    expect(screen.getByText(/Not visited/)).toBeInTheDocument()
+    expect(screen.getByText(/Unknown/)).toBeInTheDocument()
   })
 })

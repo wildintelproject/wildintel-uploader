@@ -21,6 +21,8 @@ const DEPLOYMENTS = [
   deployment('R0001-DONA_03', [], { images_stored: false, no_images: 'stolen' }),                       // a stolen camera: the card is gone, nothing to upload
 ]
 
+const showAll = async () => { await userEvent.click(await screen.findByRole('button', { name: /^All revisions/ })) }  // the dashboard opens on the latest revision
+
 describe('UploadStatusPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -31,14 +33,15 @@ describe('UploadStatusPage', () => {
 
   it('lists the uploads — one for each deployment that will be made and each uploader in use — with where, when, the uploader and its status', async () => {
     render(<UploadStatusPage onBack={() => {}} />)
+    await showAll()
 
     const table = await screen.findByRole('table', { name: 'Uploads' })
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Details', 'Deployment', 'Location', 'Visit', 'Uploader', 'Status', 'What to do'])
     const cells = (row: HTMLElement) => within(row).getAllByRole('cell').map((c) => c.textContent)
     expect(within(table).getAllByRole('row').slice(1).map(cells)).toEqual([
-      ['', 'R0002-DONA_01', 'DONA_01', 'R0002 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done20 Oct 2026', ''],
+      ['', 'R0002-DONA_01', 'DONA_01', 'R0002 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done20 Oct 2026, 12:00 (Europe/Madrid)', ''],
       ['', 'R0002-DONA_02', 'DONA_02', 'R0002 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Planned', ''],
-      ['', 'R0001-DONA_01', 'DONA_01', 'R0001 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done1 Sep 2026', ''],
+      ['', 'R0001-DONA_01', 'DONA_01', 'R0001 · DONA_0110 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Done1 Sep 2026, 10:30 (Europe/Madrid)', ''],
       ['', 'R0001-DONA_02', 'DONA_02', 'R0001 · DONA_0210 Jun 2026, 09:00 → 5 Aug 2026, 08:00', 'Trapper', 'Failed', ''],
     ])
     expect(within(table).queryByText('R0001-DONA_03')).not.toBeInTheDocument()   // the camera was stolen: there is no deployment to upload
@@ -46,6 +49,7 @@ describe('UploadStatusPage', () => {
 
   it('starts on the uploads of one deployment when it is reached from its tick in the deployments dashboard', async () => {
     render(<UploadStatusPage onBack={() => {}} search="R0001-DONA_01" />)
+    await showAll()
 
     const table = await screen.findByRole('table', { name: 'Uploads' })
     expect(screen.getByLabelText('Filter the uploads')).toHaveValue('R0001-DONA_01')
@@ -55,6 +59,7 @@ describe('UploadStatusPage', () => {
 
   it('counts the planned, the done and the failed, over every upload there is — the deployments times the uploaders —, and a card shows only its uploads', async () => {
     render(<UploadStatusPage onBack={() => {}} />)
+    await showAll()
 
     const region = await screen.findByRole('region', { name: 'Uploads by status' })
     expect(region).toHaveTextContent('2/ 4')
@@ -88,6 +93,7 @@ describe('UploadStatusPage', () => {
   it('lets a planned upload be made once its deployment is created, and a failed one be tried again — a done one has its details instead', async () => {
     const onUpload = vi.fn()
     render(<UploadStatusPage onBack={() => {}} onUpload={onUpload} />)
+    await showAll()
     await screen.findByRole('table', { name: 'Uploads' })
 
     expect(screen.getByRole('button', { name: 'Upload the deployment R0002-DONA_02' })).toBeDisabled()    // its images are not stored yet
@@ -97,7 +103,7 @@ describe('UploadStatusPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'View the upload of R0002-DONA_01 to Trapper' }))
     const list = screen.getByRole('list', { name: 'Uploads of R0002-DONA_01' })
-    expect(list).toHaveTextContent('TrapperUploaded on 20 Oct 2026, 10:00 · 2 packages · location and deployment created there')
+    expect(list).toHaveTextContent('TrapperUploaded on 20 Oct 2026, 12:00 (Europe/Madrid) · 2 packages · location and deployment created there')
     expect(within(list).getByRole('link', { name: 'Open R0002-DONA_01 in Trapper' })).toHaveAttribute('href', 'https://trapper.example.org/geomap/deployment/detail/7/')
     await userEvent.click(screen.getByRole('button', { name: 'View the upload of R0002-DONA_01 to Trapper' }))
     expect(screen.queryByRole('list', { name: 'Uploads of R0002-DONA_01' })).not.toBeInTheDocument()
@@ -135,6 +141,7 @@ describe('UploadStatusPage', () => {
     vi.mocked(api.listLocalDeployments).mockResolvedValue({ results: [{ deployment_id: 'R0001-DONA_01', location_id: 'DONA_01', start_date: '2026-06-10T09:00:00Z', camera_id: 'P800' }] } as never)
     const onShowVisit = vi.fn(), onShowDeployment = vi.fn(), onOpenSettings = vi.fn()
     render(<UploadStatusPage onBack={() => {}} onShowVisit={onShowVisit} onShowDeployment={onShowDeployment} onOpenSettings={onOpenSettings} />)
+    await showAll()
     await screen.findByRole('table', { name: 'Uploads' })
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Show the visit R0001 to DONA_01' })[0])
@@ -173,6 +180,7 @@ describe('UploadStatusPage', () => {
 
   it('opens the legend in a panel from its button in the header, folds away the revisions and the cards, and clears the search with its cross', async () => {
     render(<UploadStatusPage onBack={() => {}} />)
+    await showAll()
     await screen.findByRole('table', { name: 'Uploads' })
 
     await userEvent.click(screen.getByRole('button', { name: /Help & Legend/ }))

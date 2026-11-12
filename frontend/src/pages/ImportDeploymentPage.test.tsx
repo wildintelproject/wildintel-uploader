@@ -408,8 +408,8 @@ describe('ImportDeploymentPage', () => {
         const table = await screen.findByRole('table', { name: 'Closed visits' })
         const rows = within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').slice(1).map((c) => c.textContent))
         expect(rows).toEqual([
-          ['R0002', 'DONA_01', 'Collected', 'B2', '2026-08-05 08:14:05', '2026-10-02', '1620', ''],
-          ['R0001', 'DONA_01', 'Collected', 'A13', '2026-06-10 09:00:00', '2026-08-05', '300', ''],
+          ['R0002', 'DONA_01', 'Collected', 'B2', '5 Aug 2026, 08:14', '2 Oct 2026, 09:00', '1620', ''],
+          ['R0001', 'DONA_01', 'Collected', 'A13', '10 Jun 2026, 09:00', '5 Aug 2026, 09:00', '300', ''],
         ])
         expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeDisabled()
@@ -495,9 +495,9 @@ describe('ImportDeploymentPage', () => {
         await userEvent.click(within(table).getByRole('button', { name: 'Show the details of the visit R0002 to DONA_01' }))
         const panel = within(screen.getByRole('dialog', { name: 'Details of the visit R0002 to DONA_01' }))
         expect(panel.getByRole('heading', { name: 'DONA_01' })).toBeInTheDocument()
-        expect(panel.getByText('R0002 · 2026-08-05 08:14 → 2026-10-02')).toBeInTheDocument()         // the revision and the days it went from and to, under the site
+        expect(panel.getByText('R0002 · 5 Aug 2026, 08:14 → 2 Oct 2026, 09:00')).toBeInTheDocument()         // the revision and the days it went from and to, under the site
         const left = within(panel.getByRole('region', { name: 'The visit that left the card' }))
-        expect(left.getByText('2026-08-05 08:14')).toBeInTheDocument()
+        expect(left.getByText('5 Aug 2026, 08:14')).toBeInTheDocument()
         expect(left.getByText('B2')).toBeInTheDocument()                                   // the card it left
         expect(panel.getByText('58 days in the field')).toBeInTheDocument()
         const collected = within(panel.getByRole('region', { name: 'The visit that collected it' }))
@@ -552,11 +552,11 @@ describe('ImportDeploymentPage', () => {
         expect(screen.queryByRole('listbox')).not.toBeInTheDocument()          // and when it is emptied again, nothing again
         await userEvent.type(field, 'R0001')
         const options = within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
-        expect(options).toEqual(['2026-06-10 09:00:00 · DONA_01 · R0001 · Collected · card A13 · collected on 2026-08-05 (300 photos)'])
+        expect(options).toEqual(['10 Jun 2026, 09:00 · DONA_01 · R0001 · Collected · card A13 · collected on 5 Aug 2026, 09:00 (300 photos)'])
 
         await userEvent.click(screen.getByRole('option', { name: /R0001/ }))
         await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
-        expect(field).toHaveValue('2026-06-10 09:00:00 · DONA_01 · R0001 · Collected · card A13 · collected on 2026-08-05 (300 photos)')
+        expect(field).toHaveValue('10 Jun 2026, 09:00 · DONA_01 · R0001 · Collected · card A13 · collected on 5 Aug 2026, 09:00 (300 photos)')
       })
 
       it('shows the closed visits as labels when asked, and a label picks its visit as a row does', async () => {
@@ -572,8 +572,8 @@ describe('ImportDeploymentPage', () => {
         expect(label).toHaveTextContent('Collected')
         expect(label).toHaveTextContent('R0002 · card B2')
         expect(label).toHaveTextContent('58 days in the field')                    // from the day it left to the day it was collected
-        expect(label).toHaveTextContent('Left on2026-08-05 08:14')
-        expect(label).toHaveTextContent('Collected on2026-10-02')
+        expect(label).toHaveTextContent('Left on5 Aug 2026, 08:14')
+        expect(label).toHaveTextContent('Collected on2 Oct 2026, 09:00')
         expect(within(labels).getByRole('button', { name: /R0002/ })).toHaveTextContent('1620 photos')
 
         await userEvent.click(within(labels).getByRole('button', { name: /R0002/ }))
@@ -591,7 +591,7 @@ describe('ImportDeploymentPage', () => {
         await waitFor(() => expect(screen.getByRole('button', { name: /Continue to the images/ })).toBeEnabled())
         await continueToDates()
         await screen.findByText('Dates of the deployment')
-        expect(screen.getByText((_, el) => el?.textContent === 'Visit DONA_01 · 2026-08-05 → 2026-10-02')).toBeInTheDocument() // the research project and the visit, with its range
+        expect(screen.getByText((_, el) => el?.textContent === 'Visit DONA_01 · 5 Aug 2026, 08:14 → 2 Oct 2026, 09:00')).toBeInTheDocument() // the research project and the visit, with its range
         expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
         expect(screen.queryByLabelText('Deployment Id')).not.toBeInTheDocument() // its id is the visit's: it is not asked, nor shown in a card of its own
       })
@@ -645,7 +645,7 @@ describe('ImportDeploymentPage', () => {
         expect(screen.queryByLabelText('Revision')).not.toBeInTheDocument() // the visit gives it: it is not asked
         expect(screen.queryByLabelText('Deployment Id')).not.toBeInTheDocument() // its id is the visit's: it is not asked, nor shown in a card of its own
         expect(screen.getByRole('radio', { name: /Visits of the field work/ })).toBeChecked()
-        expect(screen.getByText(/From the visit R0001 \(2026-06-10\)/)).toHaveTextContent('the visits are not changed')
+        expect(screen.getByText(/From the visit R0001 \(10 Jun 2026, 09:30\)/)).toHaveTextContent('the visits are not changed')
         await userEvent.click(screen.getByRole('button', { name: 'Continue to more details' }))
         expect(await screen.findByRole('radio', { name: 'What the field sheet says' })).toBeChecked()
         expect(screen.getByText(/The visits \(the field sheet\) are not changed/)).toBeInTheDocument()
@@ -1200,7 +1200,7 @@ describe('ImportDeploymentPage', () => {
 
     expect(mockedApi.guessDetails).toHaveBeenCalledTimes(1)
     expect(mockedApi.guessDetails).toHaveBeenCalledWith(expect.stringContaining('/'))
-    expect(screen.getByText('4 Sep 2024, 13:10')).toBeInTheDocument()
+    expect(screen.getByText('4 Sep 2024, 13:10 (Europe/Madrid)')).toBeInTheDocument()
     expect(screen.queryByLabelText('Start')).not.toBeInTheDocument() // only a manual entry can be edited
     await manualEntry()
     expect(screen.getByLabelText('Start')).toHaveValue('2024-09-04T13:10')
@@ -1888,7 +1888,7 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getByText(/the first image should be at the start/)).toBeInTheDocument()
       expect(screen.getByText(/the last image should be at the end/)).toBeInTheDocument()
       expect(screen.getByText(/it should be within the deployment/)).toBeInTheDocument()
-      expect(screen.getByText(/2024-09-04 12:00:00, the first image should be at the start \(2024-09-04 10:00:00 ± 1h\)/)).toBeInTheDocument()
+      expect(screen.getByText(/4 Sep 2024, 12:00, the first image should be at the start \(4 Sep 2024, 10:00 ± 1h\)/)).toBeInTheDocument()
     })
 
     it('offers to fix the dates and times when images fell outside them, and comes back to the checks', async () => {
@@ -2705,7 +2705,7 @@ describe('ImportDeploymentPage', () => {
       await userEvent.type(screen.getByLabelText('Revision'), '2')
       await userEvent.click(await screen.findByRole('button', { name: 'Import from Epicollect5' }))
 
-      expect(await screen.findByText(/Filled in from “DONA_01 · sent 1 Oct 2026”/)).toBeInTheDocument()
+      expect(await screen.findByText(/Filled in from “DONA_01 · sent 1 Oct 2026, 12:00 \(Europe\/Madrid\)”/)).toBeInTheDocument()
       expect(mockedApi.epicollectEntries).toHaveBeenCalledWith('DONA_01', 2)
       expect(screen.queryByRole('radio', { name: 'Epicollect5' })).not.toBeInTheDocument()
       await openMoreDetails()
@@ -2723,7 +2723,7 @@ describe('ImportDeploymentPage', () => {
       expect(await screen.findByText(/Epicollect5 has an entry for/)).toBeInTheDocument()
 
       await userEvent.click(screen.getByRole('button', { name: 'Import from Epicollect5' }))
-      expect(await screen.findByText(/Filled in from “DONA_01 · sent 1 Oct 2026”/)).toBeInTheDocument()
+      expect(await screen.findByText(/Filled in from “DONA_01 · sent 1 Oct 2026, 12:00 \(Europe\/Madrid\)”/)).toBeInTheDocument()
       expect(screen.queryByText(/Epicollect5 has an entry for/)).not.toBeInTheDocument()
     })
 

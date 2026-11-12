@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -21,7 +21,7 @@ from wildintel_uploader.core.schemas.requests import (
     DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
     NextRevisionRequest, UpdateLocationRequest, UpdateResearchProjectRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
-from wildintel_uploader.core.services import camera_info, card_copy_service, deployment_import_service, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service
+from wildintel_uploader.core.services import camera_info, card_copy_service, deployment_import_service, deployment_photos, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
 
 router = APIRouter(prefix="/api/deployment-import", tags=["deployment-import"])
@@ -456,3 +456,23 @@ def open_folder(req: OpenFolderRequest) -> dict:
     except OSError as exc:
         raise HTTPException(500, f"Could not open the file explorer: {exc}") from exc
     return {"opened": str(target)}
+
+
+@router.get("/photos")
+def deployment_photos_list(research_project_id: str, collection: str, deployment_id: str) -> dict:
+    """The photos of a created deployment, to look at them: {"photos": [{"name", "taken"}]}."""
+    try:
+        return {"photos": deployment_photos.list_photos(config.collections_dir(), research_project_id, collection, deployment_id)}
+    except deployment_photos.DeploymentPhotosError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.get("/photo")
+def deployment_photo(research_project_id: str, collection: str, deployment_id: str, name: str, size: str = "thumb") -> Response:
+    """A photo of a created deployment, as a JPEG: a thumbnail, or (size=large) one to look at closely."""
+    try:
+        body = deployment_photos.photo_jpeg(config.collections_dir(), research_project_id, collection, deployment_id, name,
+                                            deployment_photos.LARGE if size == "large" else deployment_photos.THUMBNAIL)
+    except deployment_photos.DeploymentPhotosError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return Response(body, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})

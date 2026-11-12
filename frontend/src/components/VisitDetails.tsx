@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { daysBetween } from '../dateFormat'
+import { daysBetween, formatVisitWhen } from '../dateFormat'
 import type { StoredVisit } from '../types'
 import { btnOutline } from '../pages/ImportDeploymentPage'
 import SidePanel from './SidePanel'
@@ -54,7 +54,7 @@ const MORE: [keyof StoredVisit, string][] = [
 ]
 const told = (v: unknown) => (typeof v === 'boolean' ? (v ? 'Yes' : 'No') : Array.isArray(v) ? v.join(', ') : String(v))
 
-/** The rest of what a visit says — every field with something in it that the cards above do not tell —, so that nothing the visit holds is left out. */
+/** The rest of what a visit says (only the visit that left the card shows it: the one that collected it has just its own state and photos) — every field with something in it that the cards above do not tell —, so that nothing the visit holds is left out. */
 function MoreData({ visit, shown }: { visit: StoredVisit; shown: (keyof StoredVisit)[] }) {
   const lines = MORE.filter(([k]) => !shown.includes(k)).map(([k, label]) => [label, visit[k]] as const)
     .filter(([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0))
@@ -67,7 +67,7 @@ function MoreData({ visit, shown }: { visit: StoredVisit; shown: (keyof StoredVi
   )
 }
 
-const when = (v: StoredVisit) => `${v.date} ${v.time.slice(0, 5)}`
+const when = (v: StoredVisit) => formatVisitWhen(v)
 
 /** The icon of a visit: the book the visits are kept in, as the visit dashboard has it. */
 const VISIT_ICON = (
@@ -75,23 +75,25 @@ const VISIT_ICON = (
 )
 
 /** Everything a closed visit says — the visit that left the card and the one that collected it, on a line of the days between them — in a panel at the right, as the details of an image are. */
-export default function VisitDetails({ closed, onClose, onOpenVisit }: { closed: { visit: StoredVisit; end?: StoredVisit | null }; onClose: () => void
+export default function VisitDetails({ closed, onClose, onOpenVisit }: { closed: { visit: StoredVisit; end?: StoredVisit | null
+  /** The revisions of the location that lie between the two visits and say nothing — not made, not visited or unknown —: dots on the line, so that it is told why the card goes from one revision to a later one. */
+  between?: { session: string; label: string }[] }; onClose: () => void
   /** Goes to the visit — the one that left the card, or the one that collected it — in the dashboard of the visits: a button under each, when it is given. */
   onOpenVisit?: (session: string) => void }) {
-  const { visit, end } = closed
+  const { visit, end, between = [] } = closed
   const days = end ? daysBetween(visit.date, end.date) : null
   const coordinates = visit.latitude != null && visit.longitude != null ? `${visit.latitude}, ${visit.longitude}` : null
   const camera = [visit.camera_id, visit.camera_model].filter(Boolean).join(' · ')
   return (
-    <SidePanel label={`Details of the visit ${visit.session} to ${visit.location_id}`} title={visit.location_id} icon={VISIT_ICON} subtitle={end ? `${visit.session} · ${when(visit)} → ${end.date}` : `${visit.session} · ${when(visit)} · the camera is still out`} onClose={onClose}>
+    <SidePanel label={`Details of the visit ${visit.session} to ${visit.location_id}`} title={visit.location_id} icon={VISIT_ICON} subtitle={end ? `${visit.session} · ${when(visit)} → ${formatVisitWhen(end)}` : `${visit.session} · ${when(visit)} · the camera is still out`} onClose={onClose}>
       <div className="relative mt-6">
-        <span aria-hidden="true" className="absolute bottom-2 left-[7px] top-3 w-px bg-zinc-300 dark:bg-zinc-700" />
-        <Stage title="The visit that left the card" visit={visit} kind="left">
+        <span aria-hidden="true" className={`absolute bottom-2 left-[7px] top-3 w-0 border-l ${between.length > 0 ? 'border-dashed' : ''} border-zinc-300 dark:border-zinc-700`} />
+        <Stage title={visit.sd ? 'The visit that left the card' : 'The visit that left the camera'} visit={visit} kind="left">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
             <Field label="When">{when(visit)}</Field>
             {visit.trappers && <Field label="Who went">{visit.trappers}</Field>}
             <Field label="Location">{visit.location_id}</Field>
-            {coordinates && <Field label="Coordinates">{coordinates}</Field>}
+            {coordinates && <Field label="Visit coordinates">{coordinates}</Field>}
             {camera && <Field label="Camera">{camera}</Field>}
             {visit.sd && <Field label="SD card">{visit.sd}</Field>}
             {visit.num_photos != null && <Field label="Photos counted">{visit.num_photos.toLocaleString('en-US')}</Field>}
@@ -105,6 +107,12 @@ export default function VisitDetails({ closed, onClose, onOpenVisit }: { closed:
             <div className="relative my-5 pl-10">
               {days !== null && <span className="inline-block rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1 text-xs text-zinc-500 dark:text-zinc-400">{days === 1 ? '1 day' : `${days} days`} in the field</span>}
             </div>
+            {between.map((b) => (
+              <div key={b.session} className="relative mb-5 pl-10 text-sm text-zinc-500 dark:text-zinc-400">
+                <span aria-hidden="true" className="absolute left-[2px] top-1 h-2.5 w-2.5 rounded-full border-2 border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-900" />
+                <span className="font-mono text-xs">{b.session}</span> · {b.label}
+              </div>
+            ))}
             <Stage title="The visit that collected it" visit={end} kind="collected">
               <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="When">{when(end)}</Field>
@@ -128,7 +136,6 @@ export default function VisitDetails({ closed, onClose, onOpenVisit }: { closed:
                 </dl>
               )}
               {end.comments && <Notes>{end.comments}</Notes>}
-            <MoreData visit={end} shown={['trappers', 'num_photos', 'camera_status', 'battery_status', 'card_status', 'date_time_ok', 'comments']} />
             {onOpenVisit && <button type="button" className={btnOutline} onClick={() => onOpenVisit(end.session)}>Open visit {end.session} <span aria-hidden="true">→</span></button>}
             </Stage>
           </>

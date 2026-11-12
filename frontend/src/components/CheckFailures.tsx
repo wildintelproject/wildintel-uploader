@@ -37,7 +37,7 @@ export function ImageDetails({ report, path, onClose }: { report: Report; path: 
             <h4 className="font-mono text-lg font-bold break-all text-zinc-900 dark:text-zinc-100">{path}</h4>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">{formatTaken(entries.find((e) => e.taken)?.taken)}</p>
           </div>
-          <button type="button" className={`${btnOutline} !px-3 !py-1.5`} onClick={onClose}>Close</button>
+          <button type="button" className={`${btnOutline} !px-3 !py-1.5 inline-flex items-center gap-1.5`} onClick={onClose}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>Close</button>
         </div>
         <Thumbnail reportId={report.id} path={path} size="large" className="w-full max-h-96 rounded-xl border border-zinc-200 dark:border-zinc-700" />
         <h5 className="mt-6 mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Test results of this image</h5>

@@ -24,6 +24,8 @@ beforeEach(() => {
   ] })
 })
 
+const showAll = async () => { await userEvent.click(await screen.findByRole('button', { name: /^All revisions/ })) }  // the dashboard opens on the latest revision
+
 describe('DeploymentStatusPage', () => {
   it('is of the default research project, with the link to the settings where it is changed', async () => {
     const onOpenSettings = vi.fn()
@@ -42,6 +44,7 @@ describe('DeploymentStatusPage', () => {
     ] } } as never)
     const onOpenSettings = vi.fn()
     render(<DeploymentStatusPage onBack={vi.fn()} onOpenSettings={onOpenSettings} />)
+    await showAll()
 
     const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
     await userEvent.click(within(region).getAllByRole('button', { name: 'Show the state of the SD card A13' })[0])
@@ -71,6 +74,7 @@ describe('DeploymentStatusPage', () => {
 
   it('has the deployments as a book: a square for each revision, the status squares of the one picked, and a table', async () => {
     render(<DeploymentStatusPage onBack={vi.fn()} />)
+    await showAll()
 
     const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
     const revisions = within(region).getByRole('region', { name: 'Revision' })
@@ -96,6 +100,7 @@ describe('DeploymentStatusPage', () => {
 
   it('shows the deployments as labels, with their options, or only the search field that lists what matches as it is written and goes to the one picked', async () => {
     render(<DeploymentStatusPage onBack={vi.fn()} />)
+    await showAll()
     const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
     expect(within(region).getAllByRole('button', { name: /^Show (the deployments as|only the search)/ }).map((b) => b.getAttribute('aria-label')))
       .toEqual(['Show the deployments as a table', 'Show the deployments as labels', 'Show only the search field'])
@@ -180,6 +185,7 @@ describe('DeploymentStatusPage', () => {
   it('says when the visit of a deployment is not among the visits kept', async () => {
     mockedApi.listVisits.mockResolvedValue({ results: [] })
     render(<DeploymentStatusPage onBack={vi.fn()} onShowVisit={vi.fn()} />)
+    await showAll()
     await screen.findByRole('table', { name: 'Deployments' })
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Show the visit R0003 to TATR_0001' })[0])
@@ -194,6 +200,7 @@ describe('DeploymentStatusPage', () => {
       detection_distance: 10, camera_height: 1.2, camera_tilt: 0, camera_heading: 90, feature_type: 'trailHiking', habitat: 'Holm oak', bait_use: false, comments: 'Setup: First camera | SD card: SD 1',
     }] } as never)
     render(<DeploymentStatusPage onBack={vi.fn()} />)
+    await showAll()
     await screen.findByRole('table', { name: 'Deployments' })
 
     expect(screen.queryByRole('button', { name: 'View the deployment R0003-TATR_0003' })).not.toBeInTheDocument() // not created: nothing to see
@@ -209,7 +216,7 @@ describe('DeploymentStatusPage', () => {
     expect(within(panel.getByRole('region', { name: 'Location' })).getByText('37.0123, -6.4412')).toBeInTheDocument()
     expect(within(panel.getByRole('region', { name: 'Location' })).getByText('± 5 m')).toBeInTheDocument()
     const period = within(panel.getByRole('region', { name: 'Period' }))
-    expect(period.getByText('2024-09-04T09:00:00Z')).toBeInTheDocument()                 // as it is kept: the offset says the timezone
+    expect(period.getByText('4 Sep 2024, 09:00')).toBeInTheDocument()                     // the wall clock the date says, in the format of the app
     expect(period.getByText('Ana Pérez')).toBeInTheDocument()                             // the mix of the two visits, told as who set it up…
     expect(period.getByText('Luis Gómez')).toBeInTheDocument()                            // …and who retrieved it
     expect(period.getByText('38 days in the field')).toBeInTheDocument()
@@ -251,6 +258,7 @@ describe('DeploymentStatusPage', () => {
       deployment({ deployment_id: 'R0003-TATR_0001', collection: 'R0003', start_session: 'R0003' }),
     ] })
     render(<DeploymentStatusPage onBack={vi.fn()} onOpenSettings={onOpenSettings} onShowVisit={vi.fn()} />)
+    await showAll()
     const table = await screen.findByRole('table', { name: 'Deployments' })
     const rowOf = (id: string) => within(table).getAllByRole('row').find((r) => within(r).queryByRole('button', { name: new RegExp(`^View the deployment ${id}`) }))!
 
@@ -298,6 +306,7 @@ describe('DeploymentStatusPage', () => {
     mockedApi.visitBook.mockResolvedValue({ results: [{ ...visit, location_id: 'TATR_0001' }, visit] } as never)
     const onImportImages = vi.fn()
     render(<DeploymentStatusPage onBack={vi.fn()} onImportImages={onImportImages} />)
+    await showAll()
 
     const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
     // the one that is created, the one that is still open and the one that is planned with the card collected: only the last can be made now

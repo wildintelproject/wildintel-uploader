@@ -6,7 +6,7 @@ import SessionResults from '../components/SessionResults'
 import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import WizardStep from '../components/WizardStep'
-import { formatDay } from '../dateFormat'
+import { formatLocal, formatVisitWhen } from '../dateFormat'
 import { api } from '../api'
 import { applyEntry } from '../epicollectImport'
 import DateSourcePicker, { SOURCE_ORDER, against } from '../components/DateSourcePicker'
@@ -665,7 +665,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     const cv = visitOf(d.name)
     const options: SourceOption[] = [
       ...(cv ? [{ source: 'visit' as const, title: 'Visits of the field work', period: periodOf(d, 'visit', entry.timezone),
-        hint: `From the visit ${cv.visit.session} (${cv.visit.date}), where the card was left, to ${cv.end.session} (${cv.end.date}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
+        hint: `From the visit ${cv.visit.session} (${formatVisitWhen(cv.visit)}), where the card was left, to ${cv.end.session} (${formatVisitWhen(cv.end)}), where it was collected — in the timezone of the location. You can change the dates here; the visits are not changed.` }] : []),
       { source: 'exif', title: 'Camera data in the photos', period: exif,
         hint: `First and last photo of the deployment.${d.image_count > 0 && exif ? ` ${plural(d.image_count, 'photo', 'photos')}, read from their EXIF data.` : ''}` },
       { source: 'log', title: 'Timestamp log file', period: log,
@@ -899,7 +899,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       chips.push(<span key="count" className={chip}>{deploymentsCount}</span>)
       const starts = chosen.map((d) => drafts[d.name]?.fields.start_date).filter(Boolean) as string[]
       const ends = chosen.map((d) => drafts[d.name]?.fields.end_date).filter(Boolean) as string[]
-      if (starts.length > 0) chips.push(<span key="dates" className={chip}>{formatDay([...starts].sort()[0], true)} → {ends.length > 0 ? formatDay([...ends].sort().reverse()[0], true) : '…'}</span>)
+      if (starts.length > 0) chips.push(<span key="dates" className={chip}>{formatLocal([...starts].sort()[0])} → {ends.length > 0 ? formatLocal([...ends].sort().reverse()[0]) : '…'}</span>)
     }
     return chips.length > 0 ? <div className="flex flex-wrap gap-2 mb-6">{chips}</div> : null
   }
@@ -1139,14 +1139,14 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                           {d.warnings.map((w, i) => <p key={i} className="text-xs font-sans text-amber-600 dark:text-amber-400"><Mark kind="warning" />{w}</p>)}
                         </td>
                         <td className="px-3 py-2 text-right">{d.image_count}</td>
-                        <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">{d.from_timestamp_log ? `${d.start_date?.slice(0, 10) ?? '?'} → ${d.end_date?.slice(0, 10) ?? '?'}` : <span title="Read from the images when the details are asked for">—</span>}</td>
+                        <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">{d.from_timestamp_log ? `${d.start_date ? formatLocal(d.start_date) : '?'} → ${d.end_date ? formatLocal(d.end_date) : '?'}` : <span title="Read from the images when the details are asked for">—</span>}</td>
                         {visitsMode && (
                           <td className="px-3 py-2">
                             {included.has(d.name) && (
                               <select aria-label={`Visit of ${d.name}`} className={inputClass} value={folderVisit[d.name] ?? ''} onChange={(e) => linkFolder(d.name, e.target.value)}>
                                 <option value="">Choose a visit</option>
                                 {pickedList.filter((c) => !Object.entries(folderVisit).some(([other, k]) => other !== d.name && k === visitKey(c))).map((c) => (
-                                  <option key={visitKey(c)} value={visitKey(c)}>{`${c.visit.location_id} · ${c.visit.session} · ${c.visit.date}`}</option>
+                                  <option key={visitKey(c)} value={visitKey(c)}>{`${c.visit.location_id} · ${c.visit.session} · ${formatVisitWhen(c.visit)}`}</option>
                                 ))}
                               </select>
                             )}
@@ -1520,7 +1520,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                 const datesOk = Boolean(start && end && !errors.start_date && !errors.end_date)
                 const clash = existingFolder(d.name) ? 'Already exists' : duplicated(d.name) ? 'Duplicate id' : null
                 const label = clash ?? (datesOk ? 'Ready' : start ? 'To fix' : 'Dates needed')
-                const shown = (iso: string) => `${formatDay(iso)}, ${iso.slice(11, 16)}`
+                const shown = (iso: string) => formatLocal(iso, entry?.timezone)
                 return (
                   <li key={d.name}>
                     <button type="button" aria-expanded={open} aria-label={`${open ? 'Close' : 'Open'} ${d.name}`} onClick={() => selectDeployment(d.name)}
@@ -1611,7 +1611,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                         const source = detailsPick[d.name] ?? 'visit'
                         const options = [
                           { source: 'visit' as const, title: 'What the field sheet says', found: visitFound, available: true,
-                            hint: `From the visit ${cv.visit.session} (${cv.visit.date}), as it was written in the field${visitFound.parts ? `: ${visitFound.parts}` : ''}. The visits (the field sheet) are not changed.` },
+                            hint: `From the visit ${cv.visit.session} (${formatVisitWhen(cv.visit)}), as it was written in the field${visitFound.parts ? `: ${visitFound.parts}` : ''}. The visits (the field sheet) are not changed.` },
                           { source: 'previous' as const, title: 'What the previous deployment says', found: previous ? previousFound_ : null, available: Boolean(previous),
                             hint: previous ? `From ${previous.deployment_id}, the previous deployment at this location${previousFound_.parts ? `: ${previousFound_.parts}` : ''}. Dates are never copied.` : 'No earlier revision of this location is on file.' },
                           { source: 'manual' as const, title: 'Fill in by hand', found: null, available: true, hint: 'Type them yourself, starting from the values the last source gave.' },

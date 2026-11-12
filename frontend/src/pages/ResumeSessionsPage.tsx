@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
+import { formatInstant } from '../dateFormat'
 import type { SessionSummary } from '../types'
 
 interface Props {
@@ -28,11 +29,7 @@ const btnPrimary = 'px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-bl
 const btnDanger = 'px-4 py-2 text-sm border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50'
 
 function formatDate(value: string): string {
-  try {
-    return new Date(value).toLocaleString()
-  } catch {
-    return value
-  }
+  return formatInstant(value)
 }
 
 function SessionCard({ session, onResume, onDiscarded }: { session: SessionSummary; onResume: () => void; onDiscarded: (taskId: string) => void }) {

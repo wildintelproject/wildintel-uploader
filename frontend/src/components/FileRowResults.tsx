@@ -4,6 +4,7 @@ import { ActiveFilters, ChevronCell, DetailLine, DetailsRow, MetricsSection, Pro
 import { Icon, StateCard } from './Dashboard'
 import IconButton, { ICON_PATHS } from './IconButton'
 import { plural } from './SessionResults'
+import { formatLocal } from '../dateFormat'
 
 export interface FileRow {
   row: number
@@ -229,7 +230,7 @@ export default function FileRowResults({ rows: allRows, labels = {} }: {
                           <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-zinc-200">{r.session || '—'}</td>
                           <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-zinc-200">{r.site || '—'}</td>
                           <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.actions || '—'}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.date ? <>{r.date}{r.time && <span className="text-zinc-500 dark:text-zinc-400"> {r.time}</span>}</> : '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">{r.date ? formatLocal(r.time ? `${r.date}T${r.time}` : r.date) : '—'}</td>
                           <td className="whitespace-nowrap px-4 py-3">
                             <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${toneOf(r)}`}>
                               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>

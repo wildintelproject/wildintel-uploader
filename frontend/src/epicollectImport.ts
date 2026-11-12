@@ -1,5 +1,6 @@
 import type { DeploymentFields } from './types'
 import { stampTimezone } from './deploymentValidation'
+import { formatInstant } from './dateFormat'
 
 /** An entry of the Epicollect5 form, as the backend reads it through the mapping — one row is one deployment. The day and the time of
  * the start and of the end come apart, as the form asks them apart. */
@@ -60,6 +61,6 @@ export function applyEntry(current: DeploymentFields, fields: EntryFields, timez
 /** "4 Sep 2024" — an entry told apart from another by when it was sent. */
 export function entryLabel(entry: EpicollectEntry): string {
   const sent = entry.created_at ? new Date(entry.created_at) : null
-  const when = sent && !Number.isNaN(sent.getTime()) ? sent.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+  const when = sent && !Number.isNaN(sent.getTime()) ? formatInstant(entry.created_at) : ''
   return [entry.title || 'Entry', when && `sent ${when}`].filter(Boolean).join(' · ')
 }

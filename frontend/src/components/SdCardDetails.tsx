@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { btnOutline } from '../pages/ImportDeploymentPage'
 import type { SdCard } from '../types'
 import { DetailLine } from './DashboardParts'
+import { formatDay } from '../dateFormat'
 import SidePanel from './SidePanel'
 
 const STATUS: Record<string, string> = { planned: 'Planned', ready: 'Ready', active: 'Active', archived: 'Archived' }
@@ -16,10 +17,10 @@ function linesOf(c: SdCard): [string, ReactNode][] {
   const lines: [string, ReactNode | null | undefined | false][] = [
     ['Brand', c.brand],
     ['Capacity', c.capacity],
-    ['Status', c.status && `${STATUS[c.status] ?? c.status}${c.status_date ? ` since ${c.status_date}` : ''}`],
+    ['Status', c.status && `${STATUS[c.status] ?? c.status}${c.status_date ? ` since ${formatDay(c.status_date)}` : ''}`],
     ['Why it was archived', c.status === 'archived' && c.archive_reason],
     ['Note on the status', c.status_note],
-    ['In production since', c.in_service],
+    ['In production since', c.in_service && formatDay(c.in_service)],
     ['Research project', c.research_project],
   ]
   return lines.filter((x): x is [string, ReactNode] => x[1] !== null && x[1] !== undefined && x[1] !== false && x[1] !== '')

@@ -8,6 +8,7 @@ import LinkButton from './LinkButton'
 import { Glyph, ViewSwitch, type View } from './ViewSwitch'
 import DeploymentDetails from './DeploymentDetails'
 import SdCardDetails from './SdCardDetails'
+import DeploymentPhotos from './DeploymentPhotos'
 import { MENU_ICONS } from './TaskCard'
 import VisitDetails from './VisitDetails'
 
@@ -28,7 +29,7 @@ const STATE_NAME: Record<string, string> = { planned: 'planned', done: 'done', f
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** The deployments the visits of a research project say, as a book: a square for each revision (collection), the status squares of the one picked, and a table — the one a link of the visit book goes to is highlighted. */
-export default function FieldDeployments({ deployments: every, onShowSd, onShowLocation, onShowUploads, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload, onCreate, loadVisits, sdCards, helpOpen = false, onCloseHelp }: {
+export default function FieldDeployments({ deployments: every, onShowSd, onShowLocation, onShowUploads, highlight, initialFilter = '', onShowVisit, loadDetails, onUpload, onCreate, loadVisits, sdCards, researchProjectId, helpOpen = false, onCloseHelp }: {
   /** The help and the legend are open: the panel that says them is this component's, as it knows the states. */
   helpOpen?: boolean
   onCloseHelp?: () => void
@@ -49,6 +50,8 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   loadVisits?: (deployment: FieldDeployment) => Promise<{ visit: StoredVisit; end?: StoredVisit | null } | null>
   /** The SD cards of the research project: the link of a card opens its data in a panel — with a way on to the settings, by `onShowSd` — instead of going to the settings at once. */
   sdCards?: SdCard[]
+  /** The research project of the deployments: with it, the photos of a created deployment can be looked at in a panel. */
+  researchProjectId?: string
 }) {
   // Every card that was left is a deployment to make; the ones whose camera was stolen will not be made (Not created).
   const deployments = every
@@ -91,6 +94,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   }
   // the deployment whose panel is open
   const [panelId, setPanelId] = useState<string | null>(null)
+  const [photosPanel, setPhotosPanel] = useState<FieldDeployment | null>(null)
   const showPanel = (id: string) => { setPanelId(id); read(id) }
   const revisions = [...new Set(deployments.map((d) => d.collection))].sort((a, b) => b.localeCompare(a))
   const inRevision = revision ? deployments.filter((d) => d.collection === revision) : deployments
@@ -112,6 +116,13 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
     setPage(Math.floor(position / perPage) + 1)
   }, [focus, deployments])
   useEffect(() => { marked.current?.scrollIntoView?.({ block: 'center' }) })
+  // on arrival the latest revision is the one picked (unless a link brings to one deployment): the dashboard opens on what is current
+  const defaulted = useRef(false)
+  useEffect(() => {
+    if (defaulted.current || deployments.length === 0) return
+    defaulted.current = true
+    if (!focus && revisions[0]) setRevision(revisions[0])
+  }, [deployments]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // of everything that was planned: a deployment that will not be made was planned too
   const percent = inRevision.length > 0 ? Math.round((count('created') / inRevision.length) * 100) : 0
@@ -127,6 +138,10 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   const goTo = (d: FieldDeployment) => { setJump(d.deployment_id); setView('table'); setListOpen(false); setText('') }
 
   // What a deployment says of itself, as the table and the labels both show it.
+  // the photos counted: a link to look at them when the deployment is created — its images are in the collections folder
+  const photos = (d: FieldDeployment) => (researchProjectId && phaseOf(d) === 'created'
+    ? <LinkButton className="font-semibold" aria-label={`Show the photos of the deployment ${d.deployment_id}`} onClick={() => setPhotosPanel(d)}>{d.photos_counted} photos</LinkButton>
+    : `${d.photos_counted} photos`)
   const creation = (d: FieldDeployment) => (
     phaseOf(d) === 'not_created'
                           ? <span title="The camera was stolen: the card is gone, so the deployment will not be created" className="rounded-full px-2.5 py-1 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Not created</span>
@@ -232,7 +247,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                         {d.card && (onShowSd || sdCards
                           ? <LinkButton className="font-semibold" aria-label={`Show the state of the SD card ${d.card}`} onClick={() => (sdCards ? setCardPanel(d.card!) : onShowSd?.(d.card!))}>SD {d.card}</LinkButton>
                           : <>SD {d.card}</>)}
-                        {d.card && d.photos_counted != null && ' · '}{d.photos_counted != null && `${d.photos_counted} photos`}
+                        {d.card && d.photos_counted != null && ' · '}{d.photos_counted != null && photos(d)}
                       </td>
                       <td className={TABLE.cell}>
                         {creation(d)}
@@ -279,7 +294,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                           {d.card && (onShowSd || sdCards
                             ? <LinkButton className="font-semibold" aria-label={`Show the state of the SD card ${d.card}`} onClick={() => (sdCards ? setCardPanel(d.card!) : onShowSd?.(d.card!))}>SD {d.card}</LinkButton>
                             : <>SD {d.card}</>)}
-                          {d.card && d.photos_counted != null && ' · '}{d.photos_counted != null && `${d.photos_counted} photos`}
+                          {d.card && d.photos_counted != null && ' · '}{d.photos_counted != null && photos(d)}
                         </span>
                         <span className="flex items-center gap-2"><span className="text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Upload</span>{uploadMark(d)}</span>
                       </div>
@@ -304,6 +319,10 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
           {visitPanel && (
             <VisitDetails closed={visitPanel} onClose={() => setVisitPanel(null)}
               onOpenVisit={onShowVisit ? (session) => { setVisitPanel(null); onShowVisit({ session, site: visitPanel.visit.location_id }) } : undefined} />
+          )}
+
+          {photosPanel && researchProjectId && (
+            <DeploymentPhotos researchProjectId={researchProjectId} collection={photosPanel.collection} deploymentId={photosPanel.deployment_id} timezone={photosPanel.timezone} onClose={() => setPhotosPanel(null)} />
           )}
 
           {cardPanel && (

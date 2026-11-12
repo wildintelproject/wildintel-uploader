@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { PHASE_BADGE, PHASE_LABEL } from '../visitPhases'
 import { api } from '../api'
 import { formatVisitWhen } from '../dateFormat'
@@ -112,6 +112,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
   // A revision is one visit to every site: the book can be of one of them, or of all.
   const [revision, setRevision] = useState('')
+  const defaulted = useRef(false)
   const [page, setPage] = useState(1)
   // Sorted by a column when one is chosen — pressing it again turns it round —; else the latest revision first.
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
@@ -137,7 +138,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
   const [editing, setEditing] = useState<BookVisit | null>(null)
   const [reloads, setReloads] = useState(0)
   useEffect(() => {
-    setVisits(null); setLoadError(null); setPage(1); setMarked(null); setRevision('')
+    setVisits(null); setLoadError(null); setPage(1); setMarked(null); setRevision(''); defaulted.current = false
   }, [project?.acronym])
   useEffect(() => {
     if (!project) return
@@ -177,10 +178,21 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
     const target = visits.find((v) => !v.not_done && v.session === focus.session && v.location_id.toLowerCase() === focus.site.toLowerCase())
     if (target) showVisit(target)
   }, [focus, visits]) // eslint-disable-line react-hooks/exhaustive-deps
+  // on arrival the latest revision is the one picked (unless a link brings to one visit): the dashboard opens on what is current
+  useEffect(() => { if (!visits || defaulted.current) return; defaulted.current = true; if (!focus && revisions[0]) setRevision(revisions[0]) }, [visits]) // eslint-disable-line react-hooks/exhaustive-deps
   // the visit that was made to the same location in the closest revision after the one of a row
   const nextOf = (v: BookVisit) => everyRow
     .filter((w) => !w.not_done && w.location_id.toLowerCase() === v.location_id.toLowerCase() && w.session > v.session)
     .sort((a, b) => a.session.localeCompare(b.session) || `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0]
+  // the visit that collected the card of a row — the closest later one that was made: the revisions not made, not visited or unknown say nothing and are left between, as dots —
+  const closedOf = (v: BookVisit) => {
+    if (v.deployment_status !== 'closed') return { visit: v, end: null }
+    const later = everyRow.filter((w) => w.location_id.toLowerCase() === v.location_id.toLowerCase() && w.session > v.session).sort((a, b) => a.session.localeCompare(b.session))
+    const end = later.find((w) => !w.not_done && !w.not_visited && !w.unknown)
+    if (!end) return { visit: v, end: null }
+    const label = (w: BookVisit) => (w.unknown ? 'Unknown' : w.not_visited ? 'Not visited' : 'Not made')
+    return { visit: v, end, between: later.filter((w) => w.session < end.session).map((w) => ({ session: w.session, label: label(w) })) }
+  }
   // the visit that was made to the same location in the closest revision before the one of a row
   const previousOf = (v: BookVisit) => everyRow
     .filter((w) => !w.not_done && w.location_id.toLowerCase() === v.location_id.toLowerCase() && w.session < v.session)
@@ -391,7 +403,7 @@ export default function VisitBookPage({ onBack, onImportImages, onOpenSettings, 
 
       {siteError && <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{siteError}</p>}
       {panelVisit && (
-        <VisitDetails onClose={() => setPanelVisit(null)} closed={{ visit: panelVisit, end: panelVisit.deployment_status === 'closed' ? (() => { const n = nextOf(panelVisit); return n && !n.unknown ? n : null })() : null }} />
+        <VisitDetails onClose={() => setPanelVisit(null)} closed={closedOf(panelVisit)} />
       )}
       {sitePanel && (
         <LocationDetails site={sitePanel.site} location={sitePanel.location} onClose={() => setSitePanel(null)}

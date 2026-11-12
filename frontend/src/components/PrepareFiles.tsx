@@ -1,6 +1,7 @@
 import { BadgeIcon, StatusIcon } from './Notice'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { formatInstant } from '../dateFormat'
 
 export const btnPrimary = 'px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
 export const btnOutline = 'px-4 py-2 text-sm border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50'
@@ -171,7 +172,7 @@ export function FilesReady({ collection, items, outputDir, startedAt, finishedAt
   const unique = new Map(allFiles.map((f) => [f.name, f.bytes]))
   const totalBytes = [...unique.values()].reduce((sum, b) => sum + b, 0)
   const finished = new Date(finishedAt)
-  const when = `${finished.getUTCDate()} ${finished.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })} ${finished.getUTCFullYear()}, ${String(finished.getUTCHours()).padStart(2, '0')}:${String(finished.getUTCMinutes()).padStart(2, '0')} UTC`
+  const when = formatInstant(finished.toISOString())
   const copy = async () => {
     if (!outputDir) return
     try { await navigator.clipboard.writeText(outputDir); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* the path stays on screen to select */ }

@@ -21,6 +21,28 @@ export function daysBetween(from: string, to: string): number | null {
 
 const stamp = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
 
+/** The day and the time of a wall clock reading (2026-09-14T08:30:00) with its timezone beside when it is known — 14 Sep 2026, 08:30 (Europe/Madrid). A day alone is told as a day. */
+export function formatLocal(iso: string | null | undefined, timezone?: string | null): string {
+  if (!iso) return ''
+  if (iso.length < 16) return formatDay(iso)
+  return `${stamp(iso)}${timezone ? ` (${timezone})` : ''}`
+}
+
+/** An instant (2026-09-14T11:15:00+00:00) told on the wall clock of a timezone — the browser's when none is given — as 14 Sep 2026, 13:15 (Europe/Madrid). */
+export function formatInstant(iso: string | null | undefined, timeZone?: string | null): string {
+  if (!iso) return ''
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return iso
+  let zone = timeZone || ''
+  if (!zone) { try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone } catch { zone = '' } }
+  zone = zone || 'UTC'
+  let parts: Intl.DateTimeFormatPart[]
+  try { parts = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).formatToParts(at) }
+  catch { zone = 'UTC'; parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).formatToParts(at) }
+  const n = (t: string) => parts.find((x) => x.type === t)?.value ?? ''
+  return `${Number(n('day'))} ${MONTHS[Number(n('month')) - 1]} ${n('year')}, ${n('hour')}:${n('minute')} (${zone})`
+}
+
 /** The period of a deployment as a line — 14 Sep 2026, 08:30 → 19 Oct 2026, 08:30 (Europe/Madrid) —: the day and the time on the wall clock of its location, with the
  * timezone of the location beside, when they are known; the instants (UTC) otherwise. An end that is not there yet is told as "…". */
 export function formatDeploymentPeriod(d: { start: string; end: string | null; start_local?: string | null; end_local?: string | null; timezone?: string | null }): string {

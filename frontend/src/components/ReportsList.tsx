@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { formatInstant } from '../dateFormat'
 import ReportPanel from './ReportPanel'
 import type { ReportKind, ReportSummary } from '../types'
 
@@ -14,7 +15,7 @@ const KIND_TONES: Record<ReportKind, string> = {
 }
 const PAGE = 6
 
-const formatDate = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const formatDate = (iso: string) => formatInstant(iso)
 
 const pill = 'px-3 py-1 text-xs rounded-full border transition-colors'
 const rowBtn = 'px-3 h-9 inline-flex items-center gap-1 text-sm border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors no-underline cursor-pointer'

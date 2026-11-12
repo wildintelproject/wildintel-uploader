@@ -1,8 +1,8 @@
-import { formatDay } from '../dateFormat'
+import { formatInstant } from '../dateFormat'
 import type { UploadEntry } from '../types'
 import { destinationLabel } from '../uploadDestinations'
 
-const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
+const when = (iso: string) => formatInstant(iso)
 
 /** What an upload did, in a few words: how many packages, and whether its location and its deployment were created there. */
 function whatItDid(u: UploadEntry): string {

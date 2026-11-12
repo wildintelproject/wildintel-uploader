@@ -99,7 +99,7 @@ describe('BackupPage', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'Restore a backup' }))
     await userEvent.click(screen.getByRole('button', { name: 'Choose the backup…' }))
 
-    expect(await screen.findByText(/Made on 29 Oct 2026, 10:30, by version 1\.2\.3/)).toBeInTheDocument()
+    expect(await screen.findByText(/Made on 29 Oct 2026, 11:30 \(Europe\/Madrid\), by version 1\.2\.3/)).toBeInTheDocument()
     expect(screen.getByText('The global settings (without passwords)')).toBeInTheDocument()
     expect(screen.getByText('10 of 12 already here')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: /R0001-DONA_01/ }).closest('label')).toHaveTextContent('already here')

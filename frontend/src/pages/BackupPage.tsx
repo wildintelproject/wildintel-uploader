@@ -8,7 +8,7 @@ import { formatBytes } from '../components/PrepareFiles'
 import { PageHeader, UTIL_ICONS } from '../components/TaskCard'
 import WizardStep from '../components/WizardStep'
 import { defaultResearchProject } from '../defaultResearchProject'
-import { formatDay } from '../dateFormat'
+import { formatInstant } from '../dateFormat'
 import type { BackupManifest, BackupProjectInfo, BackupRead, LocalResearchProject, RestoreSummary } from '../types'
 import { SmallSpinner, btnOutline, btnPrimary, hintClass } from './ImportDeploymentPage'
 
@@ -20,7 +20,7 @@ interface Props {
   settingsOpen?: boolean
 }
 
-const when = (iso: string) => `${formatDay(iso, true)}, ${iso.slice(11, 16)}`
+const when = (iso: string) => formatInstant(iso)
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** A row with a check: what it is, a few words more, and a note at the right. */

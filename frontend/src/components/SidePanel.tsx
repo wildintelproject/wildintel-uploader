@@ -19,7 +19,7 @@ export default function SidePanel({ label, title, subtitle, icon, onClose, child
             <h4 className="flex items-center gap-2 font-mono text-lg font-bold break-all text-zinc-900 dark:text-zinc-100">{icon && <span aria-hidden="true" className="shrink-0 text-blue-500">{icon}</span>}{title}</h4>
             {subtitle && <p className="text-sm text-zinc-500 dark:text-zinc-400">{subtitle}</p>}
           </div>
-          <button type="button" className={`${btnOutline} !px-3 !py-1.5`} onClick={onClose}>Close</button>
+          <button type="button" className={`${btnOutline} !px-3 !py-1.5 inline-flex items-center gap-1.5`} onClick={onClose}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>Close</button>
         </div>
         {children}
       </aside>

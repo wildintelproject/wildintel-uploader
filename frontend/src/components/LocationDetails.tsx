@@ -3,6 +3,7 @@ import { btnOutline } from '../pages/ImportDeploymentPage'
 import type { LocalLocation } from '../types'
 import { DetailLine } from './DashboardParts'
 import LocationMap from './LocationMap'
+import { formatDay } from '../dateFormat'
 import SidePanel from './SidePanel'
 
 const STATUS: Record<string, string> = { planned: 'Planned', ready: 'Ready', active: 'Active', archived: 'Archived' }
@@ -14,9 +15,9 @@ function linesOf(l: LocalLocation): [string, ReactNode][] {
     ['Longitude', l.longitude],
     ['Coordinate uncertainty', l.coordinate_uncertainty != null && `${l.coordinate_uncertainty} m`],
     ['Timezone', l.timezone && `${l.timezone}${l.ignore_dst === true ? ' · cameras ignore summer time' : l.ignore_dst === false ? ' · cameras follow summer time' : ''}`],
-    ['Status', l.status && `${STATUS[l.status] ?? l.status}${l.status_date ? ` since ${l.status_date}` : ''}`],
+    ['Status', l.status && `${STATUS[l.status] ?? l.status}${l.status_date ? ` since ${formatDay(l.status_date)}` : ''}`],
     ['Note on the status', l.status_note],
-    ['In production since', l.in_service],
+    ['In production since', l.in_service && formatDay(l.in_service)],
     ['From Trapper', l.trapper_pk != null && 'Yes'],
   ]
   return lines.filter((x): x is [string, ReactNode] => x[1] !== null && x[1] !== undefined && x[1] !== false && x[1] !== '')

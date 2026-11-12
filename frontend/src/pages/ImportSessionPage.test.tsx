@@ -399,12 +399,12 @@ describe('ImportSessionPage', () => {
 
     await expectIdLater('R0003-DONA_01')
     expect(screen.getByLabelText('Location of DONA_01')).toHaveValue('DONA_01')
-    expect(screen.getByText('4 Sep 2024, 13:10')).toBeInTheDocument()
+    expect(screen.getByText('4 Sep 2024, 13:10 (Europe/Madrid)')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Camera metadata (EXIF)' })).toBeChecked() // nothing better is there
     await userEvent.click(screen.getByRole('button', { name: 'Open DONA_02' }))
     expect(screen.getByLabelText('Location of DONA_02')).toHaveValue('DONA_02')
     expectId('R0003-DONA_02')
-    expect(screen.getByText('5 Sep 2024, 09:00')).toBeInTheDocument()
+    expect(screen.getByText('5 Sep 2024, 09:00 (Europe/Madrid)')).toBeInTheDocument()
     expect(screen.queryByLabelText('Start')).not.toBeInTheDocument() // only a manual entry can be edited
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
@@ -706,10 +706,10 @@ describe('ImportSessionPage', () => {
       mockedApi.epicollectEntriesBatch.mockResolvedValue({ results: { DONA_01: { ...ENTRY, fields: dates }, DONA_02: null } })
       await toDetails()
 
-      expect(await screen.findByText('1 Sep 2024, 08:00')).toBeInTheDocument()
+      expect(await screen.findByText('1 Sep 2024, 08:00 (Europe/Madrid)')).toBeInTheDocument()
       expect(screen.queryByRole('radio', { name: /Epicollect5/ })).not.toBeInTheDocument()
       expect(screen.getByRole('radio', { name: 'Timestamp log file' })).toBeChecked()
-      expect(await screen.findByText('1 Sep 2024, 08:00')).toBeInTheDocument()
+      expect(await screen.findByText('1 Sep 2024, 08:00 (Europe/Madrid)')).toBeInTheDocument()
 
       await userEvent.click(screen.getByRole('button', { name: 'Open DONA_02' })) // nothing in Epicollect5 nor in a log for it
       expect(screen.getByRole('radio', { name: /Timestamp log file/ })).toBeDisabled()
@@ -1164,8 +1164,8 @@ describe('an import session of visits', () => {
   it('links each folder to the visit of the location its name says, and asks its SD card', async () => {
     await toTheFolders()
 
-    expect(screen.getByLabelText('Visit of DONA_01')).toHaveDisplayValue('DONA_01 · R0002 · 2026-08-05')
-    expect(screen.getByLabelText('Visit of DONA_02')).toHaveDisplayValue('DONA_02 · R0002 · 2026-08-05')
+    expect(screen.getByLabelText('Visit of DONA_01')).toHaveDisplayValue('DONA_01 · R0002 · 5 Aug 2026, 08:14')
+    expect(screen.getByLabelText('Visit of DONA_02')).toHaveDisplayValue('DONA_02 · R0002 · 5 Aug 2026, 09:30')
     expect(screen.getByText(/Every folder has its visit/)).toBeInTheDocument()
     const cards = within(screen.getByLabelText('SD card of DONA_01')).getAllByRole('option').map((o) => o.textContent)
     expect(cards).toEqual(['None said', 'A13 — SanDisk 64 GB', 'B2'])
@@ -1193,7 +1193,7 @@ describe('an import session of visits', () => {
     expect(screen.getByRole('button', { name: /Continue to the checks/ })).toBeDisabled()
     // the visit left is offered to the folder without one, and not to the other that has its own
     const options = within(screen.getByLabelText('Visit of DONA_01')).getAllByRole('option').map((o) => o.textContent)
-    expect(options).toEqual(['Choose a visit', 'DONA_01 · R0002 · 2026-08-05'])
+    expect(options).toEqual(['Choose a visit', 'DONA_01 · R0002 · 5 Aug 2026, 08:14'])
   })
 
   it('takes the location, the revision, the dates and the camera from the visits', async () => {

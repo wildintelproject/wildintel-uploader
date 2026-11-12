@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Icon, StateCard } from '../components/Dashboard'
 import { ActiveFilters, ChevronCell, DashboardHeader, DetailsRow, HELP_ICONS, HelpButton, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from '../components/DashboardParts'
@@ -11,7 +11,7 @@ import LinkButton from '../components/LinkButton'
 import UploadList from '../components/UploadList'
 import { Glyph, ViewSwitch, type View } from '../components/ViewSwitch'
 import { Breadcrumb, MENU_ICONS } from '../components/TaskCard'
-import { formatDay, formatDeploymentPeriod } from '../dateFormat'
+import { formatDeploymentPeriod, formatInstant } from '../dateFormat'
 import { readDeployment } from '../deploymentDetails'
 import type { DeploymentFields, DeploymentUploadState, FieldDeployment, LocalLocation, StoredVisit, UploadStateName, UploadTarget } from '../types'
 import { destinationLabel } from '../uploadDestinations'
@@ -57,6 +57,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   const [deployments, setDeployments] = useState<FieldDeployment[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [revision, setRevision] = useState('')
+  const defaulted = useRef(false)
   // the uploads of one uploader, or '' for all of them
   const [uploader, setUploader] = useState('')
   // the uploads in one state, or '' for all of them
@@ -103,7 +104,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   }
 
   useEffect(() => {
-    setDeployments(null); setLoadError(null); setRevision('')
+    setDeployments(null); setLoadError(null); setRevision(''); defaulted.current = false
     if (!project) return
     let cancelled = false
     api.fieldDeployments(project.acronym)
@@ -116,6 +117,8 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   const every: UploadRow[] = (deployments ?? []).filter((d) => !d.no_images).flatMap((d) => (d.upload_states ?? []).map((u) => ({ deployment: d, upload: u })))
   const revisions = [...new Set(every.map((r) => r.deployment.collection))].sort((a, b) => b.localeCompare(a))
   const uploaders = [...new Set(every.map((r) => r.upload.destination))]
+  // on arrival the latest revision is the one picked: the dashboard opens on what is current
+  useEffect(() => { if (!deployments || defaulted.current) return; defaulted.current = true; if (revisions[0]) setRevision(revisions[0]) }, [deployments]) // eslint-disable-line react-hooks/exhaustive-deps
   // the cards and the table follow the revision and the uploader picked
   const own = every.filter((r) => (!revision || r.deployment.collection === revision) && (!uploader || r.upload.destination === uploader))
   const count = (s: UploadStateName) => own.filter((r) => r.upload.state === s).length
@@ -134,7 +137,7 @@ export default function UploadStatusPage({ onBack, onOpenSettings, settingsOpen,
   const statusOf = (r: UploadRow) => (
     <>
                             <span title={r.upload.note ?? undefined} className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATE_BADGE[r.upload.state]}`}>{STATE_LABEL[r.upload.state]}</span>
-                            {r.upload.state === 'done' && <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">{r.upload.uploaded_at ? formatDay(r.upload.uploaded_at, true) : 'synced'}</span>}
+                            {r.upload.state === 'done' && <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">{r.upload.uploaded_at ? formatInstant(r.upload.uploaded_at) : 'synced'}</span>}
     </>
   )
   const optionsOf = (r: UploadRow) => {

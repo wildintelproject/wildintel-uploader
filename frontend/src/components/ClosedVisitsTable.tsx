@@ -1,5 +1,5 @@
 import type { ClosedVisit, LocalLocation, SdCard } from '../types'
-import { daysBetween } from '../dateFormat'
+import { daysBetween, formatVisitWhen } from '../dateFormat'
 import { PHASE_BADGE, PHASE_LABEL } from '../visitPhases'
 import { useState } from 'react'
 import { RowOptions } from './DashboardParts'
@@ -18,7 +18,7 @@ const stateOf = (c: ClosedVisit) => c.visit.state ?? 'collected'
 
 /** The cells of a closed visit, as the table shows them — also what its search looks at. */
 const cellsOf = (c: ClosedVisit): string[] => [
-  c.visit.session, c.visit.location_id, `${c.visit.date} ${c.visit.time}`, PHASE_LABEL[stateOf(c)], c.visit.sd ?? '—', c.end.date, c.end.num_photos != null ? String(c.end.num_photos) : '—',
+  c.visit.session, c.visit.location_id, formatVisitWhen(c.visit), PHASE_LABEL[stateOf(c)], c.visit.sd ?? '—', formatVisitWhen(c.end), c.end.num_photos != null ? String(c.end.num_photos) : '—',
 ]
 
 const mono = 'px-4 py-3 font-mono'
@@ -50,7 +50,7 @@ const columnsOf = (onSite: (locationId: string) => void, onCard: (label: string)
 /** A closed visit as a label: its site and state, its revision and card, how long the camera was in the field between the day it left and the day it was collected, and its photos. */
 function VisitLabel({ visit, picked, onPress }: { visit: ClosedVisit; picked: boolean; onPress: () => void }) {
   const [session, site, , status, card, collected, photos] = cellsOf(visit)
-  const left = `${visit.visit.date} ${visit.visit.time.slice(0, 5)}`
+  const left = formatVisitWhen(visit.visit)
   const days = daysBetween(visit.visit.date, visit.end.date)
   return (
     <LabelFrame picked={picked} name={`the visit ${session} to ${site}`} onPress={onPress}>

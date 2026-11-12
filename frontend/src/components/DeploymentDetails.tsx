@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { daysBetween } from '../dateFormat'
+import { daysBetween, formatLocal } from '../dateFormat'
 import { FEATURE_TYPE_OPTIONS, btnOutline } from '../pages/ImportDeploymentPage'
 import type { DeploymentFields, FieldDeployment } from '../types'
 import SidePanel from './SidePanel'
@@ -80,8 +80,8 @@ export default function DeploymentDetails({ deployment: d, fields, creation, upl
             </Card>
             <Card title="Period" tone="stroke-violet-400" icon={<><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></>} aside={days !== null ? `${days === 1 ? '1 day' : `${days} days`} in the field` : undefined}>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <Field label="Start">{f.start_date}</Field>
-                {present(f.end_date) && <Field label="End">{f.end_date}</Field>}
+                <Field label="Start">{formatLocal(f.start_date, d.timezone)}</Field>
+                {present(f.end_date) && <Field label="End">{formatLocal(f.end_date, d.timezone)}</Field>}
                 {present(who.setUp) && <Field label="Set up by">{who.setUp}</Field>}
                 {present(who.retrieved) && <Field label="Retrieved by">{who.retrieved}</Field>}
               </dl>

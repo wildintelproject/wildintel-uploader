@@ -43,7 +43,7 @@ describe('filling a deployment in from an entry', () => {
 
 describe('telling the entries apart', () => {
   it('names an entry by its title and when it was sent', () => {
-    expect(entryLabel({ uuid: 'u', title: 'dona_0006', created_at: '2026-10-01T10:00:00.000Z', fields: {} })).toBe('dona_0006 · sent 1 Oct 2026')
+    expect(entryLabel({ uuid: 'u', title: 'dona_0006', created_at: '2026-10-01T10:00:00.000Z', fields: {} })).toBe('dona_0006 · sent 1 Oct 2026, 12:00 (Europe/Madrid)')
     expect(entryLabel({ uuid: 'u', title: '', created_at: '', fields: {} })).toBe('Entry')
   })
 })
