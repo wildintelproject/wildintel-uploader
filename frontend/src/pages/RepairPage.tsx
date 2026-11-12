@@ -2,7 +2,7 @@ import { listWorking } from '../researchProjects'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { defaultResearchProject } from '../defaultResearchProject'
-import Combobox from '../components/Combobox'
+import PickTable, { LabelFrame, PickedTick } from '../components/PickTable'
 import { Mark, mark } from '../components/Notice'
 import BackButton from '../components/BackButton'
 import ReportPanel from '../components/ReportPanel'
@@ -109,7 +109,6 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
     setSelected(new Set((collections.find((c) => c.name === name)?.deployments ?? []).filter((d) => !d.synced).map((d) => d.deployment_id)))
   }
 
-  const toggle = (id: string) => setSelected((s) => { const next = new Set(s); if (!next.delete(id)) next.add(id); return next })
   const toggleRepair = (id: string) => setToRepair((s) => { const next = new Set(s); if (!next.delete(id)) next.add(id); return next })
 
   /** Looks at the chosen deployments: which seals still match, and what is wrong with the others. */
@@ -160,72 +159,61 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8">
       <PageHeader icon={UTIL_ICONS.repair} title="Repair local deployments" parent="Utilities" onParent={onBack} aside={<ActiveProjectCard of="The repair" onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} />}
-        description={<>A deployment is <strong>valid</strong> when its <span className="font-mono">seal.json</span> still matches it. For the ones that are not, the metadata files are written again
-        from what the folder holds — the dates of the images, their camera, the location&rsquo;s details — and the images are validated and postvalidated again. If the
-        collection&rsquo;s <span className="font-mono">FileTimestampLog.csv</span> has the deployment, it says its period.</>} />
+        description="Checks the deployments of a revision and repairs the ones that are not valid." />
 
       <WizardStep n={1} title="Choose what to check" status={chosen ? 'done' : 'open'} canEdit={!busy} onEdit={startOver}
                   summary={collection && <>{projectId} › {collectionName} · {toCheck.length} {toCheck.length === 1 ? 'deployment' : 'deployments'}</>}
-                  description="The research project, collection and deployments kept in your collections folder.">
-        <div className="mb-4">
-          <label className={labelClass} htmlFor="repair-research-project">Research project</label>
-          <Combobox
-            id="repair-research-project" options={projects.map((p) => ({ value: p.acronym, label: `${p.acronym} — ${p.name}` }))}
-            value={projectId} onChange={chooseProject} disabled={busy}
-            placeholder={projects.length === 0 ? 'No research projects yet' : 'Select a research project…'} clearLabel="Clear research project"
-          />
-        </div>
+                  description={projectId ? <>Select the revision and the deployments of the research project <strong className="font-mono">{projectId}</strong> that you want to check.</> : 'Select the revision and the deployments that you want to check.'}>
+        {!projectId && <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">{projects.length === 0 ? 'Nothing is kept in the collections folder yet.' : 'There is no default research project: set it in the settings, with the card at the top right.'}</p>}
 
         {projectId && (
           <div className="mb-4">
-            <label className={labelClass} htmlFor="repair-collection">Collection</label>
-            <Combobox
-              id="repair-collection" options={collections.map((c) => ({ value: c.name, label: `${c.name} — ${c.deployments.length} deployment(s)` }))}
-              value={collectionName} onChange={chooseCollection} disabled={busy}
-              placeholder={collections.length === 0 ? 'No collections yet' : 'Select a collection…'} clearLabel="Clear collection"
-            />
+            <p className={labelClass}>Revision</p>
+            {collections.length === 0
+              ? <p className="text-sm text-zinc-500 dark:text-zinc-400">No revisions yet.</p>
+              : (
+                <PickTable
+                  items={[...collections].sort((x, y) => y.name.localeCompare(x.name))} keyOf={(c) => c.name} selectedKey={collectionName} onSelect={(c) => { if (!busy) chooseCollection(c?.name ?? '') }}
+                  columns={[
+                    { label: 'Revision', className: 'px-4 py-3 font-mono text-sm', cell: (c) => c.name },
+                    { label: 'Deployments', cell: (c) => `${c.deployments.length} ${c.deployments.length === 1 ? 'deployment' : 'deployments'}` },
+                    { label: 'Images', cell: (c) => c.deployments.reduce((n, d) => n + d.images, 0).toLocaleString('en-US') },
+                  ]}
+                  searchText={(c) => c.name}
+                  renderLabel={(c, on, press) => (
+                    <LabelFrame picked={on} name={`the revision ${c.name}`} onPress={press}>
+                      <span className="flex items-start justify-between gap-2"><span className="font-mono text-sm font-semibold">{c.name}</span>{on && <PickedTick />}</span>
+                      <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{c.deployments.length} {c.deployments.length === 1 ? 'deployment' : 'deployments'}</span>
+                    </LabelFrame>)}
+                  names={{ table: 'Revisions', search: 'Search the revisions', items: 'revisions', pick: (c) => `the revision ${c.name}`, pickPlaceholder: 'Type to pick a revision…' }}
+                  optionLabel={(c) => `${c.name} · ${c.deployments.length} ${c.deployments.length === 1 ? 'deployment' : 'deployments'}`} searchPlaceholder="Search by revision…" empty="No revision matches." perPage={5}
+                />
+              )}
           </div>
         )}
 
         {collection && (
           <div className="mb-4">
             <p className={labelClass}>Deployments</p>
-            {deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This collection has no deployment folders.</p>}
+            {deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This revision has no deployment folders.</p>}
             {deployments.length > 0 && (
-              <div className="overflow-x-auto rounded border border-zinc-200 dark:border-zinc-700">
-                <div className="flex items-center gap-3 flex-wrap px-3 py-2 text-xs border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
-                  <span className="text-zinc-500 dark:text-zinc-400">{toCheck.length} of {checkable.length} selected</span>
-                  <button type="button" className={linkButton} disabled={checkable.length === 0} onClick={() => setSelected(new Set(checkable.map((d) => d.deployment_id)))}>Select all</button>
-                  <button type="button" className={linkButton} disabled={selected.size === 0} onClick={() => setSelected(new Set())}>Select none</button>
-                </div>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
-                      <th scope="col" className="px-3 py-2 w-10">
-                        <input type="checkbox" aria-label="Select all deployments" disabled={checkable.length === 0}
-                               checked={checkable.length > 0 && toCheck.length === checkable.length}
-                               ref={(el) => { if (el) el.indeterminate = toCheck.length > 0 && toCheck.length < checkable.length }}
-                               onChange={() => setSelected(toCheck.length === checkable.length ? new Set() : new Set(checkable.map((d) => d.deployment_id)))} />
-                      </th>
-                      <th scope="col" className="px-3 py-2 font-medium">Deployment</th>
-                      <th scope="col" className="px-3 py-2 font-medium text-right">Images</th>
-                      <th scope="col" className="px-3 py-2 font-medium" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                    {deployments.map((d) => (
-                      <tr key={d.deployment_id}>
-                        <td className="px-3 py-2">
-                          <input type="checkbox" aria-label={d.deployment_id} checked={selected.has(d.deployment_id) && !d.synced} disabled={d.synced} onChange={() => toggle(d.deployment_id)} />
-                        </td>
-                        <td className="px-3 py-2 font-mono text-zinc-900 dark:text-zinc-100">{d.deployment_id}</td>
-                        <td className="px-3 py-2 text-right">{d.images}</td>
-                        <td className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">{d.synced && 'From Trapper — nothing to repair'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <PickTable
+                items={deployments} keyOf={(d) => d.deployment_id}
+                many={{ selected, onChange: setSelected, selectable: (d) => !d.synced, disabled: busy, noun: 'selected', detail: (ds) => `${ds.reduce((n, d) => n + d.images, 0).toLocaleString('en-US')} images` }}
+                columns={[
+                  { label: 'Deployment', className: 'px-4 py-3 font-mono text-sm', cell: (d) => d.deployment_id },
+                  { label: 'Images', className: 'px-4 py-3 text-right', cell: (d) => d.images },
+                  { label: 'State', className: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400', cell: (d) => (d.synced ? 'From Trapper — nothing to repair' : '') },
+                ]}
+                searchText={(d) => d.deployment_id}
+                renderLabel={(d, on, press) => (
+                  <LabelFrame picked={on} name={d.deployment_id} onPress={press}>
+                    <span className="flex items-start justify-between gap-2"><span className="font-mono text-sm font-semibold">{d.deployment_id}</span>{on && <PickedTick />}</span>
+                    <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{d.images} images{d.synced ? ' · From Trapper — nothing to repair' : ''}</span>
+                  </LabelFrame>)}
+                names={{ table: 'Deployments', search: 'Search the deployments', items: 'deployments', pick: (d) => d.deployment_id, pickPlaceholder: 'Type to pick a deployment…' }}
+                optionLabel={(d) => `${d.deployment_id} · ${d.images} images`} searchPlaceholder="Search by deployment…" empty="No deployment matches." perPage={8}
+              />
             )}
           </div>
         )}
@@ -308,7 +296,9 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
       </WizardStep>
 
       <WizardStep n={3} title="Repairs" status={step3Status} canEdit={false} onEdit={() => {}} expanded
-                  description="Only needed when some deployment is not valid: its metadata files are written again.">
+                  description={<>Only needed when some deployment is not valid. A deployment is <strong>valid</strong> when its <span className="font-mono">seal.json</span> still matches it. For the ones that are not, the metadata
+                  files are written again from what the folder holds — the dates of the images, their camera, the location&rsquo;s details — and the images are validated and postvalidated again. If the
+                  revision&rsquo;s <span className="font-mono">FileTimestampLog.csv</span> has the deployment, it says its period.</>}>
         <div className="space-y-3" aria-live="polite">
           {order.map((id) => {
             const run = runs[id] ?? EMPTY_RUN
@@ -342,7 +332,7 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
               <p className={`text-sm ${failures ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                 {order.length - failures} deployment(s) repaired{failures ? `, ${failures} failed` : ''}.
               </p>
-              <button type="button" className={btnOutline} onClick={startOver}>Check another collection</button>
+              <button type="button" className={btnOutline} onClick={startOver}>Check another revision</button>
             </div>
           )}
         </div>

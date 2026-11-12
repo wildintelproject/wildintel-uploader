@@ -10,7 +10,7 @@ const choices = (pick: (n: string) => void) => [
 describe('SelectionBar', () => {
   it('says what is picked, with a dash when only some are, a tick when all are and nothing when none', () => {
     const { rerender } = render(<SelectionBar total={3} selected={1} detail="24 images" choices={[]} onToggleAll={vi.fn()} onClear={vi.fn()} />)
-    expect(screen.getByRole('status')).toHaveTextContent('1 of 3 selected · 24 images')
+    expect(document.querySelector('[data-selection-count]')).toHaveTextContent('1 of 3 selected · 24 images')
     expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'mixed')
     rerender(<SelectionBar total={3} selected={3} choices={[]} onToggleAll={vi.fn()} onClear={vi.fn()} />)
     expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'true')

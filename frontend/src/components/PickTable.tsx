@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ActiveFilters, TABLE, TableCard, TableFooter, TableToolbar } from './DashboardParts'
+import SelectionBar from './SelectionBar'
 import { Glyph, ViewSwitch, type View } from './ViewSwitch'
 
 export { Glyph }
@@ -24,10 +25,27 @@ export function LabelFrame({ picked, name, onPress, children }: { picked: boolea
 
 export interface PickColumn<T> { label: string; cell: (item: T) => ReactNode; className?: string }
 
+/** What a list needs to let many be picked, not one: the keys picked and how they change, which can be picked at all, what the ones picked come to, and the choices of the chevron of the bar. */
+export interface PickMany<T> {
+  selected: Set<string>
+  onChange: (next: Set<string>) => void
+  /** Which of the items can be picked: all of them when it is not said. Those that cannot have a box that is off. */
+  selectable?: (item: T) => boolean
+  /** What the ones picked come to — "24 images" —, told after how many they are. */
+  detail?: (picked: T[]) => string
+  /** The choices of the chevron, each giving the items it picks out of the ones that match the search; "All results" and "None" when it is not said. */
+  choices?: { label: string; pick: (items: T[]) => T[]; showCount?: boolean }[]
+  /** What is told of the count: "selected". */
+  noun?: string
+  disabled?: boolean
+}
+
 /** The things to pick from — visits, SD cards — in the table of a dashboard: search, rows, pages, and a button to see them as labels. Pressing a row or a label picks its
  * item, the one picked marked, and pressing it again lets it go. */
-export default function PickTable<T>({ items, keyOf, selectedKey, onSelect, columns, searchText, renderLabel, names, searchPlaceholder, empty = 'Nothing matches.', perPage, optionLabel, filters, total }: {
-  items: T[]; keyOf: (item: T) => string; selectedKey: string; onSelect: (item: T | undefined) => void
+export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect, many, columns, searchText, renderLabel, names, searchPlaceholder, empty = 'Nothing matches.', perPage, optionLabel, filters, total }: {
+  items: T[]; keyOf: (item: T) => string; selectedKey?: string; onSelect?: (item: T | undefined) => void
+  /** Many can be picked, not one: the table has a box in each row, and the bar of the selection is over the rows. */
+  many?: PickMany<T>
   columns: PickColumn<T>[]
   /** What the search looks at in an item. */
   searchText: (item: T) => string
@@ -56,10 +74,23 @@ export default function PickTable<T>({ items, keyOf, selectedKey, onSelect, colu
   const size = perPage ?? (view === 'labels' ? CARDS : PER_PAGE)
   const pages = Math.max(1, Math.ceil(shown.length / size)), current = Math.min(page, pages)
   const onPage = shown.slice((current - 1) * size, current * size)
-  const press = (c: T) => onSelect(keyOf(c) === selectedKey ? undefined : c)
+  const canPick = (c: T) => !many || !many.selectable || many.selectable(c)
+  const isPicked = (c: T) => (many ? many.selected.has(keyOf(c)) && canPick(c) : keyOf(c) === selectedKey)
+  const press = (c: T) => {
+    if (many) {
+      if (!canPick(c) || many.disabled) return
+      const next = new Set(many.selected)
+      if (next.has(keyOf(c))) next.delete(keyOf(c)); else next.add(keyOf(c))
+      many.onChange(next)
+    } else onSelect?.(keyOf(c) === selectedKey ? undefined : c)
+  }
   const picked = items.find((c) => keyOf(c) === selectedKey)
+  // the bar of the selection: over what matches the search
+  const pool = items.filter(canPick), matching = shown.filter(canPick), pickedNow = pool.filter(isPicked)
+  const choices = (many?.choices ?? [{ label: 'All results', pick: (x: T[]) => x }, { label: 'None', pick: () => [] as T[], showCount: false }])
+  const setPicked = (list: T[]) => many?.onChange(new Set(list.map(keyOf)))
   const searching = view === 'search'
-  const choose = (c: T) => { press(c); setOpen(false); setText('') }
+  const choose = (c: T) => { press(c); if (!many) { setOpen(false); setText('') } }
   function onKey(e: KeyboardEvent<HTMLInputElement>) {
     if (!searching) return
     if (e.key === 'ArrowDown') { e.preventDefault(); if (text.trim() !== '') setOpen(true); setActive((i) => Math.min(i + 1, shown.length - 1)) }
@@ -76,11 +107,16 @@ export default function PickTable<T>({ items, keyOf, selectedKey, onSelect, colu
       {searching && open && text.trim() !== '' && (
         <ul role="listbox" aria-label={names.table} className="max-h-64 overflow-y-auto border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-1 text-sm">
           {shown.map((c, i) => (
-            <li key={keyOf(c)} role="option" aria-selected={keyOf(c) === selectedKey} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(c)}
-                className={`cursor-pointer px-4 py-2 font-mono text-xs ${i === active ? 'bg-blue-50 dark:bg-zinc-800' : ''} ${keyOf(c) === selectedKey ? 'font-bold text-blue-700 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-200'}`}>{optionLabel(c)}</li>
+            <li key={keyOf(c)} role="option" aria-selected={isPicked(c)} aria-disabled={!canPick(c) || undefined} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(c)}
+                className={`cursor-pointer px-4 py-2 font-mono text-xs ${i === active ? 'bg-blue-50 dark:bg-zinc-800' : ''} ${isPicked(c) ? 'font-bold text-blue-700 dark:text-blue-300' : canPick(c) ? 'text-zinc-800 dark:text-zinc-200' : 'text-zinc-400 dark:text-zinc-600'}`}>{many && isPicked(c) ? '✓ ' : ''}{optionLabel(c)}</li>
           ))}
           {shown.length === 0 && <li className="px-4 py-2 text-xs text-zinc-500 dark:text-zinc-400">{empty}</li>}
         </ul>
+      )}
+      {many && (
+        <SelectionBar total={pool.length} selected={pickedNow.length} detail={many.detail?.(pickedNow)} disabled={many.disabled} noun={many.noun}
+          onToggleAll={() => setPicked(matching.length > 0 && matching.every(isPicked) ? [] : matching)} onClear={() => setPicked([])}
+          choices={choices.map((c) => ({ label: c.label, count: c.showCount === false ? undefined : c.pick(matching).length, disabled: c.showCount === false ? false : c.pick(matching).length === 0, onPick: () => setPicked(c.pick(matching)) }))} />
       )}
       {!searching && (
         <ActiveFilters filters={[...(filters ?? []), { label: `Search: ${text.trim() ? `“${text.trim()}”` : 'None'}`, tone: 'green' }]} summary={`${shown.length} of ${total ?? items.length} ${names.items} match`} />
@@ -90,18 +126,22 @@ export default function PickTable<T>({ items, keyOf, selectedKey, onSelect, colu
           <table className={TABLE.table} aria-label={names.table}>
             <thead className={TABLE.head}>
               <tr>
-                <th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Pick</span></th>
+                <th scope="col" className="w-10 px-2 py-3"><span className="sr-only">{many ? 'Selected' : 'Pick'}</span></th>
                 {columns.map((col) => <th key={col.label} scope="col" className={TABLE.th}>{col.label}</th>)}
               </tr>
             </thead>
             <tbody className={TABLE.body}>
               {onPage.map((c) => {
-                const key = keyOf(c), picked = key === selectedKey
+                const key = keyOf(c), picked = isPicked(c)
                 return (
-                  <tr key={key} className={`${TABLE.row(picked)} cursor-pointer`} onClick={() => press(c)}>
+                  <tr key={key} className={`${TABLE.row(picked)} ${many && !canPick(c) ? '' : 'cursor-pointer'}`} onClick={() => press(c)}>
                     <td className={`w-10 border-l-2 px-2 py-3 text-center ${picked ? 'border-l-blue-500' : 'border-l-transparent'}`}>
-                      <button type="button" aria-pressed={picked} aria-label={`${picked ? 'Let go of' : 'Pick'} ${names.pick(c)}`} title={picked ? 'Let go of this one' : 'Pick this one'}
-                              className={`h-4 w-4 rounded-full border-2 align-middle ${picked ? 'border-blue-500 bg-blue-500 ring-2 ring-blue-500/30' : 'border-zinc-400 dark:border-zinc-600'}`} />
+                      {many ? (
+                        <input type="checkbox" aria-label={names.pick(c)} checked={picked} disabled={!canPick(c) || many.disabled} onClick={(e) => e.stopPropagation()} onChange={() => press(c)} />
+                      ) : (
+                        <button type="button" aria-pressed={picked} aria-label={`${picked ? 'Let go of' : 'Pick'} ${names.pick(c)}`} title={picked ? 'Let go of this one' : 'Pick this one'}
+                                className={`h-4 w-4 rounded-full border-2 align-middle ${picked ? 'border-blue-500 bg-blue-500 ring-2 ring-blue-500/30' : 'border-zinc-400 dark:border-zinc-600'}`} />
+                      )}
                     </td>
                     {columns.map((col) => <td key={col.label} className={col.className ?? 'px-4 py-3'}>{col.cell(c)}</td>)}
                   </tr>
@@ -115,7 +155,7 @@ export default function PickTable<T>({ items, keyOf, selectedKey, onSelect, colu
         </div>
       ) : (
         <div role="group" aria-label={names.table} className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
-          {onPage.map((c) => <div key={keyOf(c)}>{renderLabel(c, keyOf(c) === selectedKey, () => press(c))}</div>)}
+          {onPage.map((c) => <div key={keyOf(c)}>{renderLabel(c, isPicked(c), () => press(c))}</div>)}
           {onPage.length === 0 && <p className="col-span-full py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">{empty}</p>}
         </div>
       )}

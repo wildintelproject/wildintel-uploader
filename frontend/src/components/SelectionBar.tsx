@@ -47,7 +47,7 @@ export default function SelectionBar({ total, selected, detail, choices, onToggl
               className="rounded-md p-1 text-zinc-500 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60 disabled:opacity-50">
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
       </button>
-      <span role="status" className="text-zinc-900 dark:text-zinc-100">{selected} of {total} {noun}{detail ? <span className="text-zinc-500 dark:text-zinc-400"> · {detail}</span> : null}</span>
+      <span aria-live="polite" data-selection-count className="text-zinc-900 dark:text-zinc-100">{selected} of {total} {noun}{detail ? <span className="text-zinc-500 dark:text-zinc-400"> · {detail}</span> : null}</span>
       {selected > 0 && (
         <button type="button" disabled={disabled} onClick={onClear} className="ml-auto text-blue-600 dark:text-blue-300 hover:underline disabled:opacity-50">Clear selection</button>
       )}

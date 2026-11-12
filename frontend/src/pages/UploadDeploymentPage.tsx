@@ -15,11 +15,11 @@ import { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import { formatLocal } from '../dateFormat'
 import DeploymentDetails from '../components/DeploymentDetails'
-import SelectionBar from '../components/SelectionBar'
+import PickTable from '../components/PickTable'
 import IconButton, { ICON_PATHS } from '../components/IconButton'
 import { readDeployment } from '../deploymentDetails'
-import { Glyph, ViewSwitch, type View } from '../components/ViewSwitch'
-import { ActiveFilters, RevisionSelection, TABLE, TableCard, TableFooter, TableToolbar } from '../components/DashboardParts'
+import { Glyph } from '../components/ViewSwitch'
+import { RevisionSelection } from '../components/DashboardParts'
 import type { AccessCheck, ClassificationProject, DeploymentFields, FieldDeployment, LocalResearchProject, UploadCollection, UploadTarget, UploadDeploymentInfo, UploadEvent, UploadMode, UploadStep } from '../types'
 
 const btnPrimary = 'px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
@@ -77,8 +77,6 @@ function megabytes(bytes: number): string {
 }
 
 /** What can be sent: a preprocessed deployment (the yaml needs the dates its preprocessing recorded). */
-const UPLOAD_PER_PAGE = 8
-const UPLOAD_LABELS = 6
 const canUpload = (d: UploadDeploymentInfo) => d.preprocessed && d.images > 0
 
 /** Sends a deployment kept in a local collection to Trapper — pick the research project, the
@@ -134,8 +132,6 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
   const [recheck, setRecheck] = useState(0)
   // the revisions fold away as in the dashboards; the table of the deployments is searched and paged
   const [revisionsOpen, setRevisionsOpen] = useState(true)
-  const [tableText, setTableText] = useState('')
-  const [tablePage, setTablePage] = useState(1)
   // the details of a deployment, in a panel at the right: what it says of itself, read from its folder
   const [panel, setPanel] = useState<{ deployment: FieldDeployment; fields: DeploymentFields | null | 'error' | undefined } | null>(null)
   async function showDeployment(d: UploadDeploymentInfo) {
@@ -149,8 +145,6 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
     setPanel((p) => (p && p.deployment.deployment_id === d.deployment_id ? { deployment, fields } : p))
   }
   // the deployments as a table, as labels or only the search field that picks from a list
-  const [tableView, setTableView] = useState<View>('table')
-  const [listOpen, setListOpen] = useState(false)
 
   useEffect(() => {
     if (initial) chooseProject(initial.researchProjectId, initial.collection)
@@ -198,7 +192,6 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
   }
 
   function chooseCollection(name: string) {
-    setTableText(''); setTablePage(1)
     setPrepared(null)
     setRuns({}); setOrder([]); setFinished(false)
     selectCollection(name, collections)
@@ -211,13 +204,6 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
     setSelected(new Set((found?.deployments ?? []).filter((d) => canUpload(d) && !d.uploaded_at).map((d) => d.deployment_id)))
   }
 
-  function toggle(id: string) {
-    setSelected((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }
 
   const collection = collections.find((c) => c.name === collectionName)
   const connected = Boolean(trapper?.base_url && trapper.user_name && trapper.has_password)
@@ -257,7 +243,6 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
   const classificationValid = classificationValue === null || (Number.isInteger(classificationValue) && classificationValue >= 1)
   // The yaml needs one: with an account it is the one picked (or the only one); offline, the pk typed in.
   const classificationReady = classificationValue !== null && classificationValid
-  const selectable = (collection?.deployments ?? []).filter(canUpload)
   const toUpload = (collection?.deployments ?? []).filter((d) => selected.has(d.deployment_id) && canUpload(d))
 
   async function handleUpload(runMode: UploadMode = mode) {
@@ -448,112 +433,59 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
           <div className="mb-4">
             <p className={labelClass}>Deployments</p>
             {collection.deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This revision has no deployments.</p>}
-            {collection.deployments.length > 0 && (() => {
-              const needle = tableText.trim().toLowerCase()
-              const found = collection.deployments.filter((d) => !needle || `${d.deployment_id} ${d.location_id ?? ''}`.toLowerCase().includes(needle))
-              const size = tableView === 'labels' ? UPLOAD_LABELS : UPLOAD_PER_PAGE
-              const pages = Math.max(1, Math.ceil(found.length / size))
-              const current = Math.min(tablePage, pages)
-              const visible = found.slice((current - 1) * size, current * size)
-              const searching = tableView === 'search'
-              const status = (d: typeof found[number]) => canUpload(d) && (d.uploaded_at
-                ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
-                : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>)
-              return (
-                <TableCard label="Deployments to upload">
-                  <TableToolbar searchLabel="Search the deployments" placeholder={searching ? 'Type to pick a deployment…' : 'Search by deployment or location…'} text={tableText} onText={(t) => { setTableText(t); setTablePage(1); if (searching) setListOpen(true) }}
-                                onReset={() => { setTableText(''); setTablePage(1); setListOpen(false) }} onSearchBlur={() => setListOpen(false)}
-                                trailing={<ViewSwitch view={tableView} items="deployments" onChange={(v) => { setTableView(v); setTablePage(1); setListOpen(false) }} />} />
-                  {searching && listOpen && needle !== '' && (
-                    <ul role="listbox" aria-label="Deployments" className="max-h-64 overflow-y-auto border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-1 text-sm">
-                      {found.map((d) => (
-                        <li key={d.deployment_id} role="option" aria-selected={selected.has(d.deployment_id) && canUpload(d)} aria-disabled={!canUpload(d) || uploading} onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => { if (canUpload(d) && !uploading) toggle(d.deployment_id) }}
-                            className={`cursor-pointer px-4 py-2 font-mono text-xs ${selected.has(d.deployment_id) && canUpload(d) ? 'font-bold text-blue-700 dark:text-blue-300' : canUpload(d) ? 'text-zinc-800 dark:text-zinc-200' : 'text-zinc-400 dark:text-zinc-600'}`}>
-                          {selected.has(d.deployment_id) && canUpload(d) ? '✓ ' : ''}{d.deployment_id} · {images(d.images)}
-                        </li>
-                      ))}
-                      {found.length === 0 && <li className="px-4 py-2 text-xs text-zinc-500 dark:text-zinc-400">No deployment matches.</li>}
-                    </ul>
-                  )}
-                  {!searching && needle && <ActiveFilters filters={[{ label: `Search: ${tableText.trim()}`, tone: 'blue' }]} summary={`${found.length} of ${collection.deployments.length} deployments match`} />}
-                  <SelectionBar total={selectable.length} selected={selectable.filter((d) => selected.has(d.deployment_id)).length} detail={images(imagesToSend)} disabled={uploading}
-                    onToggleAll={() => setSelected(selectable.every((d) => selected.has(d.deployment_id)) ? new Set() : new Set(selectable.map((d) => d.deployment_id)))}
-                    onClear={() => setSelected(new Set())}
-                    choices={[
-                      { label: 'All results', count: selectable.length, disabled: selectable.length === 0, onPick: () => setSelected(new Set(selectable.map((d) => d.deployment_id))) },
-                      { label: 'Not uploaded', count: selectable.filter((d) => !d.uploaded_at).length, disabled: selectable.every((d) => d.uploaded_at), onPick: () => setSelected(new Set(selectable.filter((d) => !d.uploaded_at).map((d) => d.deployment_id))) },
-                      { label: 'None', onPick: () => setSelected(new Set()) },
-                    ]} />
-                  {tableView === 'table' && (
-                  <div className="overflow-x-auto">
-                    <table aria-label="Deployments" className={TABLE.table}>
-                      <thead className={TABLE.head}>
-                        <tr>
-                          <th scope="col" className={`${TABLE.th} w-10`}><span className="sr-only">Selected</span></th>
-                          <th scope="col" className={TABLE.th}>Deployment</th><th scope="col" className={TABLE.th}>Period</th>
-                          <th scope="col" className={TABLE.th}>Images</th><th scope="col" className={TABLE.th}>In Trapper</th>
-                          <th scope="col" className={TABLE.th}><span className="sr-only">Details</span></th>
-                        </tr>
-                      </thead>
-                      <tbody className={TABLE.body}>
-                        {visible.length === 0 && <tr><td colSpan={6} className={`${TABLE.cell} text-zinc-500 dark:text-zinc-400`}>No deployment matches.</td></tr>}
-                        {visible.map((d) => (
-                          <tr key={d.deployment_id} className={TABLE.row(selected.has(d.deployment_id) && canUpload(d))}>
-                            <td className={`${TABLE.cell} w-10`}>
-                              <input type="checkbox" aria-label={d.deployment_id} checked={selected.has(d.deployment_id) && canUpload(d)} disabled={!canUpload(d) || uploading} onChange={() => toggle(d.deployment_id)} />
-                            </td>
-                            <td className={TABLE.cell}>
-                              <span className="block font-mono text-sm text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
-                              <span className="block text-xs text-zinc-500 dark:text-zinc-400">{d.location_id}</span>
-                              {!d.preprocessed && <span className="block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>}
-                            </td>
-                            <td className={`${TABLE.cell} font-mono text-xs`}>{d.start_date ? `${formatLocal(d.start_date)} → ${d.end_date ? formatLocal(d.end_date) : '…'}` : '—'}</td>
-                            <td className={`${TABLE.cell} whitespace-nowrap`}>{images(d.images)}</td>
-                            <td className={TABLE.cell}>
-                              {canUpload(d) && (d.uploaded_at
-                                ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
-                                : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>)}
-                            </td>
-                            <td className={`${TABLE.cell} text-right`}>
-                              <IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" onClick={() => void showDeployment(d)} path={ICON_PATHS.view} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            {collection.deployments.length > 0 && (
+              <PickTable
+                items={collection.deployments} keyOf={(d) => d.deployment_id}
+                many={{
+                  selected, onChange: setSelected, selectable: canUpload, disabled: uploading, detail: () => images(imagesToSend),
+                  choices: [
+                    { label: 'All results', pick: (x) => x },
+                    { label: 'Not uploaded', pick: (x) => x.filter((d) => !d.uploaded_at) },
+                    { label: 'None', pick: () => [], showCount: false },
+                  ],
+                }}
+                columns={[
+                  { label: 'Deployment', cell: (d) => (
+                    <>
+                      <span className="block font-mono text-sm text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
+                      <span className="block text-xs text-zinc-500 dark:text-zinc-400">{d.location_id}</span>
+                      {!d.preprocessed && <span className="block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>}
+                    </>) },
+                  { label: 'Period', className: 'px-4 py-3 font-mono text-xs', cell: (d) => (d.start_date ? `${formatLocal(d.start_date)} → ${d.end_date ? formatLocal(d.end_date) : '…'}` : '—') },
+                  { label: 'Images', className: 'px-4 py-3 whitespace-nowrap', cell: (d) => images(d.images) },
+                  { label: 'In Trapper', cell: (d) => canUpload(d) && (d.uploaded_at
+                    ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
+                    : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>) },
+                  { label: 'Details', className: 'px-4 py-3 text-right', cell: (d) => (
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" onClick={() => void showDeployment(d)} path={ICON_PATHS.view} />
+                    </span>) },
+                ]}
+                searchText={(d) => `${d.deployment_id} ${d.location_id ?? ''}`}
+                renderLabel={(d, on, press) => (
+                  <div className="relative">
+                    <button type="button" aria-pressed={on} aria-label={`${on ? 'Unselect' : 'Select'} ${d.deployment_id}`} disabled={!canUpload(d) || uploading} onClick={press}
+                            className={`w-full rounded-2xl border p-4 text-left transition-all disabled:opacity-60 ${on ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 ring-1 ring-blue-500/50' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600'}`}>
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
+                        {on && <span className="text-blue-500"><Glyph className="h-5 w-5"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></Glyph></span>}
+                      </span>
+                      <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{d.location_id}</span>
+                      <span className="mt-2 block font-mono text-xs text-zinc-700 dark:text-zinc-300">{d.start_date ? `${formatLocal(d.start_date)} → ${d.end_date ? formatLocal(d.end_date) : '…'}` : '—'}</span>
+                      <span className="mt-2 flex items-center justify-between gap-2 text-sm text-zinc-800 dark:text-zinc-200"><span>{images(d.images)}</span>
+                        {canUpload(d) && (d.uploaded_at
+                          ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
+                          : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>)}
+                      </span>
+                      {!d.preprocessed && <span className="mt-2 block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>}
+                    </button>
+                    <div className="absolute bottom-3 right-3"><IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" onClick={() => void showDeployment(d)} path={ICON_PATHS.view} /></div>
                   </div>
-                  )}
-                  {tableView === 'labels' && (
-                    <div role="group" aria-label="Deployments" className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
-                      {visible.map((d) => {
-                        const on = selected.has(d.deployment_id) && canUpload(d)
-                        return (
-                          <div key={d.deployment_id} className="relative">
-                          <button type="button" aria-pressed={on} aria-label={`${on ? 'Unselect' : 'Select'} ${d.deployment_id}`} disabled={!canUpload(d) || uploading} onClick={() => toggle(d.deployment_id)}
-                                  className={`w-full rounded-2xl border p-4 text-left transition-all disabled:opacity-60 ${on ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 ring-1 ring-blue-500/50' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600'}`}>
-                            <span className="flex items-start justify-between gap-2">
-                              <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
-                              {on && <span className="text-blue-500"><Glyph className="h-5 w-5"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></Glyph></span>}
-                            </span>
-                            <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{d.location_id}</span>
-                            <span className="mt-2 block font-mono text-xs text-zinc-700 dark:text-zinc-300">{d.start_date ? `${formatLocal(d.start_date)} → ${d.end_date ? formatLocal(d.end_date) : '…'}` : '—'}</span>
-                            <span className="mt-2 flex items-center justify-between gap-2 text-sm text-zinc-800 dark:text-zinc-200"><span>{images(d.images)}</span>{status(d)}</span>
-                            {!d.preprocessed && <span className="mt-2 block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>}
-                          </button>
-                          <div className="absolute bottom-3 right-3"><IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" onClick={() => void showDeployment(d)} path={ICON_PATHS.view} /></div>
-                          </div>
-                        )
-                      })}
-                      {visible.length === 0 && <p className="col-span-full py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">No deployment matches.</p>}
-                    </div>
-                  )}
-                  {!searching && (
-                  <TableFooter from={found.length === 0 ? 0 : (current - 1) * size + 1} to={Math.min(current * size, found.length)} total={found.length} noun="deployments" page={current} pages={pages} onPage={setTablePage} />
-                  )}
-                </TableCard>
-              )
-            })()}
+                )}
+                names={{ table: 'Deployments', search: 'Search the deployments', items: 'deployments', pick: (d) => d.deployment_id, pickPlaceholder: 'Type to pick a deployment…' }}
+                optionLabel={(d) => `${d.deployment_id} · ${images(d.images)}`} searchPlaceholder="Search by deployment or location…" empty="No deployment matches." perPage={undefined}
+              />
+            )}
             {panel && (
               <DeploymentDetails deployment={panel.deployment} fields={panel.fields} creation="created" uploaded={Boolean(panel.deployment.uploaded_at)} onClose={() => setPanel(null)} />
             )}

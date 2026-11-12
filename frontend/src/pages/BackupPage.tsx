@@ -4,6 +4,7 @@ import { api } from '../api'
 import ActiveProjectCard from '../components/ActiveProjectCard'
 import ChoiceCards from '../components/ChoiceCards'
 import Combobox from '../components/Combobox'
+import PickTable, { LabelFrame, PickedTick } from '../components/PickTable'
 import { formatBytes } from '../components/PrepareFiles'
 import { PageHeader, UTIL_ICONS } from '../components/TaskCard'
 import WizardStep from '../components/WizardStep'
@@ -122,6 +123,9 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
   // ── what goes in ──
   const allDeployments = (info?.collections ?? []).flatMap((c) => c.deployments)
   const picked = allDeployments.filter((d) => chosen.has(d.id))
+  // the deployments with the revision they are of, and the revisions all of whose deployments are chosen
+  const everyDeployment = (info?.collections ?? []).flatMap((c) => c.deployments.map((d) => ({ ...d, revision: c.name })))
+  const chosenRevisions = new Set((info?.collections ?? []).filter((c) => c.deployments.length > 0 && c.deployments.every((d) => chosen.has(d.id))).map((c) => c.name))
   const imageBytes = picked.reduce((n, d) => n + d.image_bytes, 0)
   const pickedBytes = picked.reduce((n, d) => n + d.bytes - (withImages ? 0 : d.image_bytes), 0)
   const hasProject = Boolean(projectId)
@@ -246,31 +250,63 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
                               note={`${plural(info.locations, 'location', 'locations')} · ${plural(info.cameras, 'camera', 'cameras')} · ${plural(info.sd_cards, 'SD card', 'SD cards')}`} checked={withProjectFiles} onChange={setWithProjectFiles} />
                     <CheckRow label="The list of visits" note={plural(info.visits, 'visit', 'visits')} checked={withVisits} onChange={setWithVisits} />
                   </div>
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                      <p className="text-sm font-semibold">Deployments</p>
-                      <div className="flex gap-3 text-xs">
-                        <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => setChosen(new Set(allDeployments.map((d) => d.id)))}>Select all</button>
-                        <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={() => setChosen(new Set())}>Select none</button>
+                  {info.collections.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">{projectId} has no deployments yet.</p>}
+                  {info.collections.length > 0 && (
+                    <>
+                      <div>
+                        <p className="mb-2 text-sm font-semibold">Revisions</p>
+                        <PickTable
+                          items={info.collections} keyOf={(c) => c.name}
+                          many={{
+                            selected: chosenRevisions, noun: 'revisions', selectable: (c) => c.deployments.length > 0,
+                            detail: (rs) => plural(rs.reduce((n, c) => n + c.deployments.length, 0), 'deployment', 'deployments'),
+                            onChange: (next) => setChosen((cur) => {
+                              const out = new Set(cur)
+                              for (const c of info.collections) {
+                                const was = chosenRevisions.has(c.name), now = next.has(c.name)
+                                if (was !== now) c.deployments.forEach((d) => (now ? out.add(d.id) : out.delete(d.id)))
+                              }
+                              return out
+                            }),
+                          }}
+                          columns={[
+                            { label: 'Revision', className: 'px-4 py-3 font-mono text-sm', cell: (c) => c.name },
+                            { label: 'Deployments', cell: (c) => plural(c.deployments.length, 'deployment', 'deployments') },
+                            { label: 'Size', className: 'px-4 py-3 whitespace-nowrap', cell: (c) => formatBytes(c.deployments.reduce((n, d) => n + d.bytes, 0)) },
+                          ]}
+                          searchText={(c) => c.name}
+                          renderLabel={(c, on, press) => (
+                            <LabelFrame picked={on} name={`Revision ${c.name}`} onPress={press}>
+                              <span className="flex items-start justify-between gap-2"><span className="font-mono text-sm font-semibold">{c.name}</span>{on && <PickedTick />}</span>
+                              <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{plural(c.deployments.length, 'deployment', 'deployments')} · {formatBytes(c.deployments.reduce((n, d) => n + d.bytes, 0))}</span>
+                            </LabelFrame>)}
+                          names={{ table: 'Revisions', search: 'Search the revisions', items: 'revisions', pick: (c) => `Revision ${c.name}`, pickPlaceholder: 'Type to pick a revision…' }}
+                          optionLabel={(c) => `${c.name} · ${plural(c.deployments.length, 'deployment', 'deployments')}`} searchPlaceholder="Search by revision…" empty="No revision matches." perPage={5}
+                        />
                       </div>
-                    </div>
-                    {info.collections.length === 0 && <p className="px-3 pb-2 text-sm text-zinc-500 dark:text-zinc-400">{projectId} has no deployments yet.</p>}
-                    {info.collections.map((c) => {
-                      const ids = c.deployments.map((d) => d.id)
-                      const all = ids.length > 0 && ids.every((id) => chosen.has(id))
-                      return (
-                        <div key={c.name} role="group" aria-label={`Deployments of ${c.name}`} className="border-t border-zinc-200 dark:border-zinc-700 pt-1 first:border-t-0">
-                          <CheckRow label={`Revision ${c.name}`} note={plural(ids.length, 'deployment', 'deployments')} checked={all} disabled={ids.length === 0}
-                                    onChange={(on) => setChosen((cur) => { const next = new Set(cur); ids.forEach((id) => (on ? next.add(id) : next.delete(id))); return next })} />
-                          <div className="ml-7">
-                            {c.deployments.map((d) => (
-                              <CheckRow key={d.id} label={d.id} note={`${formatBytes(d.bytes)}${d.images > 0 ? ` · ${plural(d.images, 'image', 'images')}` : ''}`} checked={chosen.has(d.id)} onChange={(on) => setChosen((cur) => toggle(cur, d.id, on))} />
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                      <div>
+                        <p className="mb-2 text-sm font-semibold">Deployments</p>
+                        <PickTable
+                          items={everyDeployment} keyOf={(d) => d.id}
+                          many={{ selected: chosen, onChange: setChosen, noun: 'deployments', detail: (ds) => formatBytes(ds.reduce((n, d) => n + d.bytes, 0)) }}
+                          columns={[
+                            { label: 'Deployment', className: 'px-4 py-3 font-mono text-sm', cell: (d) => d.id },
+                            { label: 'Revision', cell: (d) => d.revision },
+                            { label: 'Size', className: 'px-4 py-3 whitespace-nowrap', cell: (d) => formatBytes(d.bytes) },
+                            { label: 'Images', className: 'px-4 py-3 whitespace-nowrap', cell: (d) => (d.images > 0 ? plural(d.images, 'image', 'images') : '—') },
+                          ]}
+                          searchText={(d) => `${d.id} ${d.revision}`}
+                          renderLabel={(d, on, press) => (
+                            <LabelFrame picked={on} name={d.id} onPress={press}>
+                              <span className="flex items-start justify-between gap-2"><span className="font-mono text-sm font-semibold">{d.id}</span>{on && <PickedTick />}</span>
+                              <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{d.revision} · {formatBytes(d.bytes)}{d.images > 0 ? ` · ${plural(d.images, 'image', 'images')}` : ''}</span>
+                            </LabelFrame>)}
+                          names={{ table: 'Deployments', search: 'Search the deployments', items: 'deployments', pick: (d) => d.id, pickPlaceholder: 'Type to pick a deployment…' }}
+                          optionLabel={(d) => `${d.id} · ${formatBytes(d.bytes)}`} searchPlaceholder="Search by deployment or revision…" empty="No deployment matches." perPage={8}
+                        />
+                      </div>
+                    </>
+                  )}
                   <Option label="Include the images of the deployments" checked={withImages} onChange={setWithImages} disabled={chosen.size === 0}
                           hint={chosen.size === 0 ? 'Choose a deployment first.' : withImages ? `The images go in: ${formatBytes(imageBytes)} more. The backup is about ${formatBytes(pickedBytes)}.` : `Off: only what describes each deployment goes in (${formatBytes(pickedBytes)}); its images (${formatBytes(imageBytes)}) stay out.`} />
                 </div>

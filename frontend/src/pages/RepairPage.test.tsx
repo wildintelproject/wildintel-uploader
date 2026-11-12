@@ -6,7 +6,7 @@ import { api } from '../api'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { RepairState } from '../types'
 
-vi.mock('../api', () => ({ api: { listResearchProjects: vi.fn(), repairCollections: vi.fn(), repairInspect: vi.fn(), repairDeployment: vi.fn(), getReport: vi.fn(), reportUrl: vi.fn() } }))
+vi.mock('../api', () => ({ api: { getSettings: vi.fn(), listResearchProjects: vi.fn(), repairCollections: vi.fn(), repairInspect: vi.fn(), repairDeployment: vi.fn(), getReport: vi.fn(), reportUrl: vi.fn() } }))
 const mockedApi = vi.mocked(api, true)
 
 const FILES = { 'deployment.json': true, 'images.json': true, 'preprocessing.json': true, 'seal.json': true }
@@ -17,6 +17,7 @@ const state = (deployment_id: string, over: Partial<RepairState> = {}): RepairSt
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'DONA' } } as never)   // the research project is the default one: it is not asked in a step
   mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...EMPTY_RESEARCH_PROJECT, name: 'Doñana', acronym: 'DONA', trapper_pk: 2 }] })
   mockedApi.repairCollections.mockResolvedValue({ results: [{ name: 'R0003', path: '/c/DONA/R0003', deployments: [dep('R0003-DONA_01'), dep('R0003-DONA_02'), dep('R0003-DONA_03', { synced: true })] }] })
   mockedApi.repairInspect.mockImplementation(async (_rp, _c, id) => (
@@ -27,22 +28,19 @@ beforeEach(() => {
 
 async function pickCollection() {
   render(<RepairPage />)
-  await userEvent.click(await screen.findByLabelText('Research project'))
-  await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
-  await userEvent.click(await screen.findByLabelText('Collection'))
-  await userEvent.click(await screen.findByRole('option', { name: /^R0003/ }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Pick the revision R0003' }))      // the revision is picked in its table
 }
 
 const check = async () => userEvent.click(await screen.findByRole('button', { name: 'Check the deployments' }))
 
 describe('RepairPage', () => {
-  it('asks for a local research project and a collection, and lists the deployment folders to check', async () => {
+  it('opens on the default research project, asks for a revision in a table, and lists the deployment folders to check', async () => {
     await pickCollection()
 
     expect(mockedApi.repairCollections).toHaveBeenCalledWith('DONA')
     expect(await screen.findByText('R0003-DONA_01')).toBeInTheDocument()
     expect(screen.getByText('R0003-DONA_02')).toBeInTheDocument()
-    expect(screen.getByText('2 of 2 selected')).toBeInTheDocument() // the one from Trapper can't be
+    expect(document.querySelector('[data-selection-count]')).toHaveTextContent('2 of 2 selected') // the one from Trapper can't be
     expect(screen.getByRole('checkbox', { name: 'R0003-DONA_03' })).toBeDisabled()
     expect(screen.getAllByRole('img', { name: 'Locked' })).toHaveLength(2) // the results and the repairs wait
   })
@@ -77,7 +75,7 @@ describe('RepairPage', () => {
     await check()
     await screen.findByText('Not valid')
 
-    await userEvent.click(screen.getAllByRole('button', { name: 'Select none' })[1]) // the one of the results
+    await userEvent.click(screen.getAllByRole('button', { name: 'Select none' }).at(-1)!) // the one of the results
     expect(screen.getByRole('button', { name: 'Repair 0 deployments' })).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Select the not valid' }))
     expect(screen.getByRole('button', { name: 'Repair 1 deployment' })).toBeEnabled()
@@ -103,7 +101,7 @@ describe('RepairPage', () => {
     expect(await within(card).findByText(/Valid again — wrote deployment.json, seal.json/)).toBeInTheDocument()
     expect(await screen.findByText('1 deployment(s) repaired.')).toBeInTheDocument()
     await waitFor(() => expect(screen.getAllByText('Valid')).toHaveLength(2)) // both are valid now
-    await userEvent.click(screen.getByRole('button', { name: 'Check another collection' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Check another revision' }))
     expect(await screen.findByRole('button', { name: 'Check the deployments' })).toBeInTheDocument()
   })
 
@@ -125,8 +123,6 @@ describe('RepairPage', () => {
   it('says why when the collections cannot be read', async () => {
     mockedApi.repairCollections.mockRejectedValue(new Error('The research project id is no folder name.'))
     render(<RepairPage />)
-    await userEvent.click(await screen.findByLabelText('Research project'))
-    await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
 
     expect(await screen.findByText('The research project id is no folder name.')).toBeInTheDocument()
   })
