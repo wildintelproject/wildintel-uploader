@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api'
@@ -85,7 +85,7 @@ describe('VisitBookPage', () => {
 
     const table = await screen.findByRole('table', { name: 'Visits' })
     const [done, notDone] = within(table).getAllByRole('row').slice(1)
-    expect(within(notDone).getAllByRole('cell').slice(1, 6).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', '', 'Planned'])
+    expect(within(notDone).getAllByRole('cell').slice(0, 5).map((c) => c.textContent)).toEqual(['R0001', 'TATR_0002', '—', '', 'Planned'])
     // only the options that apply to the row are there: nothing to look at, and no deployment to create, where nothing was done
     expect(within(notDone).queryByRole('button', { name: /^View the visit/ })).not.toBeInTheDocument()
     expect(within(notDone).queryByRole('button', { name: /^Create the deployment/ })).not.toBeInTheDocument()
@@ -169,23 +169,23 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    const row = (site: string, session: string) => within(table).getAllByRole('row').find((r) => { const cells = within(r).queryAllByRole('cell'); return cells[1]?.textContent === session && cells[2]?.textContent === site })!
+    const row = (site: string, session: string) => within(table).getAllByRole('row').find((r) => { const cells = within(r).queryAllByRole('cell'); return cells[0]?.textContent === session && cells[1]?.textContent === site })!
     expect(within(row('TATR_0001', 'R0001')).queryByRole('button', { name: /^Show the previous visit to TATR_0001/ })).not.toBeInTheDocument()   // the first revision of the location
     expect(within(row('TATR_0003', 'R0002')).queryByRole('button', { name: /^Show the previous visit to TATR_0003/ })).not.toBeInTheDocument()   // nothing before it
     expect(within(row('TATR_0001', 'R0002')).queryByRole('button', { name: /^Show the next visit to TATR_0001/ })).not.toBeInTheDocument()          // the last revision of the location
     expect(within(row('TATR_0002', 'R0001')).queryByRole('button', { name: /^Show the next visit to TATR_0002/ })).not.toBeInTheDocument()          // nothing after it
     // only what applies is there, View between the one before and the one after: the first revision has no one before; a visit made is not created again, its deployment is
-    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').filter((b) => b.hasAttribute('aria-label')).map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['Show the details of the visit R0001', 'Edit the visit R0001', 'View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
+    expect(within(row('TATR_0001', 'R0001')).getAllByRole('button').filter((b) => b.hasAttribute('aria-label')).map((b) => b.getAttribute('aria-label')?.split(' to ')[0])).toEqual(['Edit the visit R0001', 'View the visit R0001', 'Show the next visit', 'Create the deployment of the visit R0001'])
 
     await userEvent.click(within(row('TATR_0001', 'R0002')).getByRole('button', { name: 'Show the previous visit to TATR_0001 (R0001)' }))
-    // the revision before is picked and its visit to the location is open
+    // the revision before is picked and its visit to the location is the current one
     expect(screen.getByRole('button', { name: /^R0001/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByLabelText('Details of the visit R0001 to TATR_0001', { selector: 'dl' })).toBeInTheDocument()
+    expect(row('TATR_0001', 'R0001')).toHaveAttribute('aria-current', 'true')                // and its row is the current one
 
     // and the one after goes back to the revision of the row
     await userEvent.click(within(row('TATR_0001', 'R0001')).getByRole('button', { name: 'Show the next visit to TATR_0001 (R0002)' }))
     expect(screen.getByRole('button', { name: /^R0002/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByLabelText('Details of the visit R0002 to TATR_0001', { selector: 'dl' })).toBeInTheDocument()
+    expect(row('TATR_0001', 'R0002')).toHaveAttribute('aria-current', 'true')
   })
 
   it('shows the state the visit is kept with, whatever its deployment says', async () => {
@@ -249,7 +249,7 @@ describe('VisitBookPage', () => {
     expect(within(squares).getByRole('button', { name: /^Deployed/ })).toHaveTextContent('1')
     expect(squares).toHaveTextContent('50%'); expect(within(squares).getByText('1 pending visit')).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual(['R0002', 'R0002'])
+    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0002', 'R0002'])
 
     await userEvent.click(pick(/^All revisions/))
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(5)
@@ -295,7 +295,7 @@ describe('VisitBookPage', () => {
     ] })
     await pickProject()
     const table = await screen.findByRole('table', { name: 'Visits' })
-    const where = () => within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[2].textContent)
+    const where = () => within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)
 
     await userEvent.click(within(table).getByRole('button', { name: 'Where' }))
     expect(where()).toEqual(['TATR_0001', 'TATR_0002', 'TATR_0003', 'TATR_0004'])
@@ -317,16 +317,16 @@ describe('VisitBookPage', () => {
     await pickProject()
 
     const table = await screen.findByRole('table', { name: 'Visits' })
-    expect(within(table).getAllByRole('columnheader').slice(1, 7).map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images'])
+    expect(within(table).getAllByRole('columnheader').slice(0, 6).map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images'])
     const [first, second] = within(table).getAllByRole('row').slice(1)
-    expect(within(first).getAllByRole('cell').slice(1, 7).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12T09:00', 'Revision', 'Deployed', ''])
+    expect(within(first).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0004', 'TATR_0001', '2024-10-12T09:00', 'Revision', 'Deployed', ''])
     // a tick when the images are stored — the deployment is created and imported —, a button to create it when the visit is closed and they are not
     expect(within(table).getAllByRole('button', { name: /^Details of the deployment/ })).toHaveLength(1) // a tick, not the id of the deployment
     expect(within(table).getByRole('button', { name: /^Details of the deployment/ })).toHaveAttribute('title', 'Show image details')
     expect(within(table).queryByText('R0003-TATR_0002')).not.toBeInTheDocument()
     // a visit that is closed and has no deployment yet has its button to store the images beside View, in the last column — not in Images, which says it is not stored
     expect(within(table).getAllByLabelText('Images not stored')).toHaveLength(2)
-    expect(within(second).getAllByRole('cell').slice(1, 7).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04T09:00', 'Installation', 'Collected', ''])
+    expect(within(second).getAllByRole('cell').slice(0, 6).map((c) => c.textContent)).toEqual(['R0003', 'TATR_0001', '2024-09-04T09:00', 'Installation', 'Collected', ''])
     // the options are icons, and only the ones that apply: a closed visit without a deployment has its button to create it; the open one, nothing to create yet
     const options = (row: HTMLElement) => within(row).getAllByRole('button').map((b) => b.getAttribute('aria-label')?.replace(/ to .*$/, '').replace(/ of the visit .*$/, '')).filter((l) => /^(View the visit|Create the visit|Create the deployment)/.test(l ?? ''))
     expect(options(second)).toEqual(['View the visit R0003', 'Create the deployment'])
@@ -349,9 +349,12 @@ describe('VisitBookPage', () => {
     await screen.findByRole('table', { name: 'Visits' })
 
     await userEvent.click(screen.getByRole('button', { name: 'View the visit R0004 to TATR_0001' }))
-    expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('pilas cambiadas')
-    expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('P800') // the camera, the card and the photos are in the details
-    expect(screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })).toHaveTextContent('241')
+    const panel = within(await screen.findByRole('dialog', { name: 'Details of the visit R0004 to TATR_0001' }))      // in a panel at the right
+    expect(panel.getByText('pilas cambiadas')).toBeInTheDocument()
+    expect(panel.getByText('P800')).toBeInTheDocument()                                    // the camera, the card and the photos are in the details
+    expect(panel.getByText('B2')).toBeInTheDocument()
+    expect(panel.getByText('241')).toBeInTheDocument()
+    await userEvent.click(panel.getByRole('button', { name: 'Close' }))
     expect(within(screen.getByRole('table', { name: 'Visits' })).queryByRole('columnheader', { name: 'Camera' })).not.toBeInTheDocument()
 
     // only a closed visit offers it — not the open one, nor the closed one already imported
@@ -370,21 +373,33 @@ describe('VisitBookPage', () => {
     expect(onBack).toHaveBeenCalled()
   })
 
-  it('opens on the visit a link of the deployments dashboard goes to: its revision picked and its details open', async () => {
+  it('opens on the visit a link of the deployments dashboard goes to: its revision picked and its row the current one', async () => {
     render(<VisitBookPage onBack={vi.fn()} focus={{ session: 'R0003', site: 'TATR_0002' }} />)
 
-    expect(await screen.findByLabelText('Details of the visit R0003 to TATR_0002', { selector: 'dl' })).toHaveTextContent('P900')
+    const row = await screen.findByRole('row', { name: /R0003.*TATR_0002/ })
+    await waitFor(() => expect(row).toHaveAttribute('aria-current', 'true'))
     expect(within(screen.getByRole('region', { name: 'Revision' })).getByRole('button', { name: /^R0003/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('says that the photos of a visit are those of the card it collects — the one left before —, not of the card it leaves', async () => {
+  it('has no chevron to open the details inside the table: the eye of the row opens them in a panel', async () => {
     await pickProject()
     const table = await screen.findByRole('table', { name: 'Visits' })
-    await userEvent.click(within(table).getByRole('button', { name: /View the visit R0004 to TATR_0001/ }))
+    expect(within(table).queryByRole('button', { name: /^(Show|Hide) the details of the visit/ })).not.toBeInTheDocument()
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Revision', 'Where', 'When', 'Actions', 'Status', 'Images', 'What to do'])
+  })
 
-    const details = screen.getByLabelText('Details of the visit R0004 to TATR_0001', { selector: 'dl' })
-    expect(details).toHaveTextContent('SD card collectedA13 (241)')
-    expect(details).toHaveTextContent('SD card leftB2')
+  it('shows the visits as a table or as labels — two buttons at the right of Reset', async () => {
+    await pickProject()
+    await screen.findByRole('table', { name: 'Visits' })
+    expect(screen.getAllByRole('button', { name: /^Show the visits as/ }).map((b) => b.getAttribute('aria-label'))).toEqual(['Show the visits as a table', 'Show the visits as labels'])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show the visits as labels' }))
+    expect(screen.queryByRole('table', { name: 'Visits' })).not.toBeInTheDocument()
+    const label = screen.getByRole('article', { name: 'Visit R0004 to TATR_0001' })
+    expect(label).toHaveTextContent('R0004 · Revision')
+    expect(label).toHaveTextContent('Deployed')
+    await userEvent.click(within(label).getByRole('button', { name: 'View the visit R0004 to TATR_0001' }))
+    expect(await screen.findByRole('dialog', { name: 'Details of the visit R0004 to TATR_0001' })).toBeInTheDocument()
   })
 
   it('tells the filters that are on, clears the search with its cross, and puts all of them back with Reset', async () => {
@@ -446,17 +461,6 @@ describe('VisitBookPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /Help & Legend/ }))
     await userEvent.click(screen.getAllByRole('button', { name: 'Close the help' })[0])
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('says that the card a visit collects is unknown when no visit before it is known, instead of leaving it out', async () => {
-    mockedApi.visitBook.mockResolvedValue({ results: [visit({ session: 'R0006', actions: ['Revision'], num_photos: 1340, sd: '8' })] })
-    render(<VisitBookPage onBack={vi.fn()} />)
-    await userEvent.click(await screen.findByRole('button', { name: /View the visit R0006 to/ }))
-
-    const details = screen.getByLabelText(/Details of the visit R0006 to/, { selector: 'dl' })
-    expect(details).toHaveTextContent('SD card collectedunknown: no visit before it is known')
-    expect(details).toHaveTextContent('Photos counted1340')
-    expect(details).toHaveTextContent('SD card left8')
   })
 
   it('says Stolen of the visit whose camera was stolen, with no button to create a deployment', async () => {

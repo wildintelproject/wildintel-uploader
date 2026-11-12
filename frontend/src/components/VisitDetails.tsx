@@ -72,6 +72,7 @@ export default function VisitDetails({ closed, onClose, onOpenVisit }: { closed:
             {coordinates && <Field label="Coordinates">{coordinates}</Field>}
             {camera && <Field label="Camera">{camera}</Field>}
             {visit.sd && <Field label="SD card">{visit.sd}</Field>}
+            {visit.num_photos != null && <Field label="Photos counted">{visit.num_photos.toLocaleString('en-US')}</Field>}
           </dl>
           {visit.comments && <Notes>{visit.comments}</Notes>}
           {onOpenVisit && <button type="button" className={btnOutline} onClick={() => onOpenVisit(visit.session)}>Open visit {visit.session} <span aria-hidden="true">→</span></button>}
