@@ -1305,6 +1305,21 @@ def test_the_examples_of_the_new_form_for_wicp_02_are_imported_in_order_with_no_
     assert [l["location_id"] for l in made["locations"]] == ["WICP_02_005"] and [c["camera_id"] for c in made["cameras"]] == ["GP1122334455"] and [c["label"] for c in made["sd_cards"]] == ["9"]
 
 
+def test_a_visit_that_says_new_site_makes_its_site_with_no_need_of_the_switch_and_says_which_timezone_it_has(tmp_path: Path):
+    examples = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
+    text = (examples / "revision_6_new_site.csv").read_text(encoding="utf-8")
+    with _in(tmp_path), patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
+        _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "name": "WICP_02", "acronym": "WICP_02"})
+        asked = _client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": text, "format": "epicollect-csv", "create": {"cameras": True, "sd_cards": True}}).json()
+        given = _client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": text, "format": "epicollect-csv", "create": {"cameras": True, "sd_cards": True},
+                                                                 "defaults": {"timezone": "Europe/Madrid", "daylight_saving": "yes"}}).json()
+
+    made = {l["location_id"]: l for l in asked["create"]["locations"]}
+    assert list(made) == ["WICP_02_005"] and made["WICP_02_005"]["timezone"] == "UTC" and made["WICP_02_005"]["latitude"] == 37.0602   # the place of its visit
+    assert any("WICP_02_005 is made because its visit says New site" in n for n in asked["notes"])
+    assert {l["location_id"]: l["timezone"] for l in given["create"]["locations"]} == {"WICP_02_005": "Europe/Madrid"}
+
+
 def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its_entry_was_created():
     from wildintel_uploader.core.services import epicollect_service
     text = "ec5_uuid,created_at,1_setupBy,4_locationID,5_Status_of_the_came,10_Action_after_the_\nr1,2026-09-14T08:30:00.000Z,Ana,DONA_01,OK,\n"

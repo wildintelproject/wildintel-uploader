@@ -498,19 +498,27 @@ describe('UploadDeploymentPage', () => {
   })
 
   describe('choosing the deployments', () => {
-    it('selects all of them, or only the ones not uploaded yet, or none', async () => {
+    it('selects all of them, or only the ones not uploaded yet, or none — with the bar of the selection: the box, the chevron and Clear selection', async () => {
       await pickCollection()
       const ticked = () => ['01', '02', '03', '04'].filter((n) => (screen.getByRole('checkbox', { name: `R0003-DONA_${n}` }) as HTMLInputElement).checked)
       await screen.findByText(/^2 of 3 selected/) // 03 can't be uploaded at all
+      const bar = screen.getByRole('checkbox', { name: 'Select all' })
+      expect(bar).toHaveAttribute('aria-checked', 'mixed')   // some of them, the dash
 
-      await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
+      await userEvent.click(bar)
       expect(ticked()).toEqual(['01', '02', '04'])
+      expect(screen.getByRole('checkbox', { name: 'Select none' })).toHaveAttribute('aria-checked', 'true')
 
-      await userEvent.click(screen.getByRole('button', { name: 'Select the not uploaded' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Choose what to select' }))
+      const menu = within(screen.getByRole('menu', { name: 'What to select' }))
+      expect(menu.getByRole('menuitem', { name: /All results/ })).toHaveTextContent('3')
+      expect(menu.getByRole('menuitem', { name: /Not uploaded/ })).toHaveTextContent('2')
+      await userEvent.click(menu.getByRole('menuitem', { name: /Not uploaded/ }))
       expect(ticked()).toEqual(['01', '02'])
 
-      await userEvent.click(screen.getByRole('button', { name: 'Select none' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
       expect(ticked()).toEqual([])
+      expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument()
     })
   })
 

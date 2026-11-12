@@ -282,7 +282,10 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             # the form gives one place, the one of the visit: a location that is created from it has those coordinates (its timezone and its summer time are the defaults asked for)
             text = _with_location_coordinates(text)
             mapping = {**mapping, "location_latitude": "location_latitude", "location_longitude": "location_longitude"}
-        result = visits_csv.parse_visits(text, locations, kept, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "close_revisions": req.close_revisions, "defaults": req.defaults, "trappers": _trapper_names(),
+        # the form of Epicollect5 lets a site be made on the spot (New site): its timezone is the one asked for, UTC when none was
+        from_epicollect = req.format in ("epicollect-csv", "epicollect-api")
+        defaults = {"timezone": "UTC", "daylight_saving": "no", **(req.defaults or {})} if from_epicollect else req.defaults
+        result = visits_csv.parse_visits(text, locations, kept, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "close_revisions": req.close_revisions, "defaults": defaults, "new_site_makes_location": from_epicollect, "trappers": _trapper_names(),
                                                                                                                                   "unknown": local_folder_service.list_unknown(root, req.research_project_id)})
         saved = field_logs = report = None
         if req.save:

@@ -1483,7 +1483,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
 
           <WizardStep
             n={defaultProject ? 2 : 3} title={'Choose the spreadsheet file'} status={!project ? 'locked' : (csvResult || csvColumns) && fileConfirmed ? 'done' : 'open'} canEdit onEdit={() => { forgetCsv(); setCsvName(null) }}
-            description={source === 'wildintel-new' ? 'The CSV downloaded from the new WildINTEL Epicollect project: a row is a visit. Its columns are found by the label of their question, whatever the case or the number in front. A visit happened when its entry was created (the form has no date or time).'
+            description={source === 'wildintel-new' ? 'The CSV downloaded from the new WildINTEL Epicollect project: a row is a visit. Its columns are found by the label of their question, whatever the case or the number in front. A visit happened when its entry was created (the form has no date or time). A visit that says New site makes its site, at the place of the visit, in the timezone UTC unless the switch below gives another.'
               : 'Any spreadsheet file with a row per visit. Next, you say which column gives each field of a visit.'}
             summary={csvName}
           >

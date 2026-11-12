@@ -476,6 +476,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         problems.append({"row": n, "message": message})
         report[n] = {**report.get(n, {"row": n, "site": ""}), "result": "problem", "label": error_label(code), "message": message}
 
+    by_new_site: list[dict] = []   # the locations that a visit that says New site made
     for n, row in enumerate(rows, start=2):
         found = re.search(r"\d+", row.get("session", ""))
         report[n] = {"row": n, "site": row.get("location_id", ""), "session": f"R{int(found.group(0)):04d}" if found else "", "actions": row.get("actions", ""), "result": "ok", "label": "", "message": "", "data": dict(row)}
@@ -484,10 +485,14 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         unknown = location is None
         made: dict[str, list[dict]] = {"locations": [], "cameras": [], "sd_cards": []}
         try:
-            if unknown and create.get("locations"):
+            # a visit that says New site makes its site — the form lets a site be made on the spot —, when the file is asked to (the one of Epicollect5 is), with no need of the switch
+            says_new_site = bool(options.get("new_site_makes_location")) and str(row.get("camera_status") or "").strip().lower() == "new site"
+            if unknown and (create.get("locations") or says_new_site):
                 location = _new_location(site, row)
                 made["locations"].append(location)
                 unknown = False
+                if says_new_site and not create.get("locations"):
+                    by_new_site.append(location)
         except RowError as exc:
             problem(n, str(exc), exc.code)
             continue
@@ -642,6 +647,11 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         said.append((message, sorted({row_of[id(v)] for v in about if id(v) in row_of})))
     warnings = list(dict.fromkeys(message for message, _ in said))
     notes = visit_rules.history_notes(visits, kept)
+    made_here = {l["location_id"].lower() for l in create_out_locations(new_locations, visits)}
+    for location in by_new_site:
+        if location["location_id"].lower() in made_here:
+            notes.append(f"The location {location['location_id']} is made because its visit says New site: its place is the one of the visit and its timezone is {location['timezone']} — "
+                         f"change it in the settings if it is not that one.")
     closed = [m for m in closing if any(visit_rules._session_number(v.get("session")) == visit_rules._session_number(m["session"]) + 1 for v in visits)]
     for session in sorted({m["session"] for m in closed}):
         notes.append(f"{session} is closed to start the revision after it: {', '.join(m['location_id'] for m in closed if m['session'] == session)} still planned in it, marked as not visited.")
@@ -721,6 +731,12 @@ def export_visits(visits: list[dict]) -> str:
     for visit in sorted(visits, key=lambda v: (str(v.get("date")), str(v.get("time")))):
         writer.writerow([cell(visit, f) for f in EXPORT_FIELDS])
     return "\ufeff" + out.getvalue()
+
+
+def create_out_locations(new_locations: dict[str, dict], visits: list[dict]) -> list[dict]:
+    """The locations a file makes that a visit kept needs."""
+    sites = {v["location_id"].lower() for v in visits}
+    return [l for site, l in new_locations.items() if site in sites]
 
 
 def _new_location(site: str, row: dict[str, str]) -> dict:

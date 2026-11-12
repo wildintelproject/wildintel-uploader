@@ -15,6 +15,7 @@ import { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import { formatLocal } from '../dateFormat'
 import DeploymentDetails from '../components/DeploymentDetails'
+import SelectionBar from '../components/SelectionBar'
 import IconButton, { ICON_PATHS } from '../components/IconButton'
 import { readDeployment } from '../deploymentDetails'
 import { Glyph, ViewSwitch, type View } from '../components/ViewSwitch'
@@ -458,7 +459,6 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
               const status = (d: typeof found[number]) => canUpload(d) && (d.uploaded_at
                 ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
                 : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>)
-              const link = 'text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50'
               return (
                 <TableCard label="Deployments to upload">
                   <TableToolbar searchLabel="Search the deployments" placeholder={searching ? 'Type to pick a deployment…' : 'Search by deployment or location…'} text={tableText} onText={(t) => { setTableText(t); setTablePage(1); if (searching) setListOpen(true) }}
@@ -477,14 +477,14 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
                     </ul>
                   )}
                   {!searching && needle && <ActiveFilters filters={[{ label: `Search: ${tableText.trim()}`, tone: 'blue' }]} summary={`${found.length} of ${collection.deployments.length} deployments match`} />}
-                  <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-2 text-xs">
-                    <span className="text-zinc-500 dark:text-zinc-400">{selectable.filter((d) => selected.has(d.deployment_id)).length} of {selectable.length} selected · {images(imagesToSend)}</span>
-                    <span className="ml-auto flex items-center gap-3">
-                      <button type="button" className={link} disabled={uploading || selectable.length === 0} onClick={() => setSelected(new Set(selectable.map((d) => d.deployment_id)))}>Select all</button>
-                      <button type="button" className={link} disabled={uploading || selectable.every((d) => d.uploaded_at)} onClick={() => setSelected(new Set(selectable.filter((d) => !d.uploaded_at).map((d) => d.deployment_id)))}>Select the not uploaded</button>
-                      <button type="button" className={link} disabled={uploading || selected.size === 0} onClick={() => setSelected(new Set())}>Select none</button>
-                    </span>
-                  </div>
+                  <SelectionBar total={selectable.length} selected={selectable.filter((d) => selected.has(d.deployment_id)).length} detail={images(imagesToSend)} disabled={uploading}
+                    onToggleAll={() => setSelected(selectable.every((d) => selected.has(d.deployment_id)) ? new Set() : new Set(selectable.map((d) => d.deployment_id)))}
+                    onClear={() => setSelected(new Set())}
+                    choices={[
+                      { label: 'All results', count: selectable.length, disabled: selectable.length === 0, onPick: () => setSelected(new Set(selectable.map((d) => d.deployment_id))) },
+                      { label: 'Not uploaded', count: selectable.filter((d) => !d.uploaded_at).length, disabled: selectable.every((d) => d.uploaded_at), onPick: () => setSelected(new Set(selectable.filter((d) => !d.uploaded_at).map((d) => d.deployment_id))) },
+                      { label: 'None', onPick: () => setSelected(new Set()) },
+                    ]} />
                   {tableView === 'table' && (
                   <div className="overflow-x-auto">
                     <table aria-label="Deployments" className={TABLE.table}>
