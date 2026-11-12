@@ -74,14 +74,14 @@ describe('DeploymentStatusPage', () => {
 
     await userEvent.click(within(revisions).getByRole('button', { name: /^R0003/ }))
     const table = within(region).getByRole('table', { name: 'Deployments' })
-    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Details', 'Deployment', 'Visit', 'SD and photos', 'Creation', 'Upload', 'What to do'])
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Deployment', 'Visit', 'SD and photos', 'Creation', 'Upload', 'What to do'])
     const first = within(table).getAllByRole('row')[1]
-    expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['', 'R0003-TATR_0001', 'R0003 · TATR_00014 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'SD A13 · 241 photos', 'Created', '', ''])
+    expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['R0003-TATR_0001', 'R0003 · TATR_00014 Sep 2024, 09:00 → 12 Oct 2024, 09:30', 'SD A13 · 241 photos', 'Created', '', ''])
     expect(within(first).getByRole('button', { name: 'View the deployment R0003-TATR_0001' })).toBeInTheDocument()
     expect(within(first).getByRole('img', { name: 'Uploaded' })).toBeInTheDocument() // it was uploaded: a tick
 
     await userEvent.click(square(/^Created/))
-    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual(['R0003-TATR_0001', 'R0003-TATR_0002'])   // both have their images stored — what was uploaded is another state
+    expect(within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(['R0003-TATR_0001', 'R0003-TATR_0002'])   // both have their images stored — what was uploaded is another state
   })
 
   it('shows the deployments as labels, with their options, or only the search field that lists what matches as it is written and goes to the one picked', async () => {
@@ -116,7 +116,7 @@ describe('DeploymentStatusPage', () => {
     expect(within(table).getAllByRole('row').find((r) => r.getAttribute('aria-current') === 'true')).toHaveTextContent('R0003-TATR_0003')
   })
 
-  it('opens the legend in a panel from its button in the header, folds away the revisions and the cards, and opens the details with the chevron of the row', async () => {
+  it('opens the legend in a panel from its button in the header, and folds away the revisions and the cards', async () => {
     render(<DeploymentStatusPage onBack={vi.fn()} />)
     const region = await screen.findByRole('region', { name: 'Deployments the visits say' })
 
@@ -131,10 +131,7 @@ describe('DeploymentStatusPage', () => {
     await userEvent.click(within(region).getByRole('button', { name: 'Fold away the status metrics' }))
     expect(within(region).queryAllByRole('button', { name: /^Created/ })).toHaveLength(0)
 
-    const chevron = within(region).getAllByRole('button', { name: /^Show the details of the deployment/ })[0]
-    expect(chevron).toHaveAttribute('aria-expanded', 'false')
-    await userEvent.click(chevron)
-    expect(await within(region).findByRole('button', { name: /^Hide the details of the deployment/ })).toHaveAttribute('aria-expanded', 'true')
+    expect(within(region).queryByRole('button', { name: /^(Show|Hide) the details of the deployment/ })).not.toBeInTheDocument()   // no chevron to fold the details of a row: its eye opens them in a panel
   })
 
   it('shows highlighted the deployment a link of the visit book goes to, on its revision', async () => {
@@ -214,9 +211,6 @@ describe('DeploymentStatusPage', () => {
     await userEvent.click(panel.getByRole('button', { name: 'Close' }))
     expect(screen.queryByRole('dialog', { name: /Details of the deployment/ })).not.toBeInTheDocument()
 
-    // the chevron of the row still opens its details in the table
-    await userEvent.click(screen.getByRole('button', { name: 'Show the details of the deployment R0003-TATR_0002' }))
-    expect(await screen.findByLabelText('Details of the deployment R0003-TATR_0002', { selector: 'dl' })).toHaveTextContent('Camera height (m)1.2')
   })
 
   it('lists the deployment of a stolen camera as Not created — nothing to create or upload — and counts it in what was planned', async () => {
@@ -239,7 +233,7 @@ describe('DeploymentStatusPage', () => {
     expect(within(stolen).queryByRole('button', { name: /View the deployment|Upload the deployment/ })).not.toBeInTheDocument()
   })
 
-  it('links the visit and the SD card in the same style, and goes to the deployment before and after at the same site', async () => {
+  it('links the visit and the SD card in the same style, and has no buttons to jump to the deployments before and after at the same site', async () => {
     const onOpenSettings = vi.fn()
     mockedApi.fieldDeployments.mockResolvedValue({ results: [
       deployment({ deployment_id: 'R0001-TATR_0001', collection: 'R0001', start_session: 'R0001' }),
@@ -256,12 +250,8 @@ describe('DeploymentStatusPage', () => {
       expect(within(first).getByRole('button', { name })).toHaveClass('underline', 'decoration-dotted')
     }
 
-    // nothing before the first revision of the site, nothing after the last
-    expect(within(first).queryByRole('button', { name: /^Show the previous deployment/ })).not.toBeInTheDocument()
-    expect(within(rowOf('R0003-TATR_0001')).queryByRole('button', { name: /^Show the next deployment/ })).not.toBeInTheDocument()
-    await userEvent.click(within(rowOf('R0002-TATR_0001')).getByRole('button', { name: 'Show the next deployment of TATR_0001 (R0003)' }))
-    expect(screen.getByRole('button', { name: /^R0003/ })).toHaveAttribute('aria-pressed', 'true')   // the revision of the deployment it went to
-    expect(rowOf('R0003-TATR_0001')).toHaveAttribute('aria-current', 'true')
+    // the row has the options of the deployment, and not those that jumped to the one before or after at the same site
+    expect(within(table).queryByRole('button', { name: /^Show the (previous|next) deployment/ })).not.toBeInTheDocument()
   })
 
   it('has, in the Upload column, a tick when the deployment was uploaded — it goes to its uploads — and a cross when it was not, and the button to upload its images', async () => {
@@ -276,8 +266,8 @@ describe('DeploymentStatusPage', () => {
     ] })
     render(<DeploymentStatusPage onBack={vi.fn()} onUpload={onUpload} onShowUploads={onShowUploads} />)
     const table = await screen.findByRole('table', { name: 'Deployments' })
-    const rowOf = (site: string) => within(table).getAllByRole('row').find((r) => within(r).queryAllByRole('cell')[1]?.textContent?.endsWith(`-${site}`))!
-    const uploadCell = (site: string) => within(rowOf(site)).getAllByRole('cell')[5]
+    const rowOf = (site: string) => within(table).getAllByRole('row').find((r) => within(r).queryAllByRole('cell')[0]?.textContent?.endsWith(`-${site}`))!
+    const uploadCell = (site: string) => within(rowOf(site)).getAllByRole('cell')[4]
 
     // uploaded: a tick that goes to the uploads of the deployment
     await userEvent.click(within(uploadCell('TATR_0001')).getByRole('button', { name: 'Show the uploads of the deployment R0003-TATR_0001' }))

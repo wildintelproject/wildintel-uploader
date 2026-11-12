@@ -41,6 +41,13 @@ function whoWent(setupBy: string | null | undefined): { setUp: string | null; re
 
 const pill = 'rounded-full px-2.5 py-0.5 text-xs font-semibold'
 
+/** The icon of a deployment: a package — what is kept together and sent on — and not the camera, which is the icon of the cameras of the settings. */
+const DEPLOYMENT_ICON = (
+  <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 21.730a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.730l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.730z" /><path d="M12 22V12" /><path d="m3.300 7 8.700 5 8.700-5" /><path d="m7.500 4.270 9 5.150" />
+  </svg>
+)
+
 /** Everything a created deployment says of itself — where, when, the camera and how it was put up, the site and the notes — in a panel at the right, as the details of an image are.
  * `fields` is none while they are being read, and null when they could not be. */
 export default function DeploymentDetails({ deployment: d, fields, creation, uploaded, onClose }: {
@@ -59,7 +66,7 @@ export default function DeploymentDetails({ deployment: d, fields, creation, upl
     </span>
   )
   return (
-    <SidePanel label={`Details of the deployment ${d.deployment_id}`} title={d.deployment_id} subtitle={subtitle} onClose={onClose}>
+    <SidePanel label={`Details of the deployment ${d.deployment_id}`} title={d.deployment_id} icon={DEPLOYMENT_ICON} subtitle={subtitle} onClose={onClose}>
       {fields === undefined ? <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">Reading the deployment…</p>
         : !f ? <p role="alert" className="mt-6 text-sm text-amber-700 dark:text-amber-400">The details of this deployment could not be read from the collections folder.</p>
         : (

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatDay } from '../dateFormat'
 import type { DeploymentFields, DeploymentUploadState, FieldDeployment, SdCard, StoredVisit } from '../types'
 import { Icon, StateCard } from './Dashboard'
-import { ActiveFilters, ChevronCell, DetailLine, DetailsRow, HELP_ICONS, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from './DashboardParts'
+import { ActiveFilters, HELP_ICONS, HelpCard, HelpDrawer, MetricsSection, ProgressCard, RevisionSelection, RowOptions, TABLE, TableCard, TableFooter, TableToolbar } from './DashboardParts'
 import IconButton, { ICON_PATHS } from './IconButton'
 import LinkButton from './LinkButton'
 import { Glyph, ViewSwitch, type View } from './ViewSwitch'
@@ -19,14 +19,6 @@ export type Filter = '' | 'planned' | 'created' | 'not_created'
 const phaseOf = (d: FieldDeployment): Exclude<Filter, ''> => d.no_images ? 'not_created' : d.images_stored ? 'created' : 'planned'
 const matches = (d: FieldDeployment, f: Filter) => !f || phaseOf(d) === f
 
-/** The fields of a deployment the details show, in this order, when it has them. */
-const DEPLOYMENT_DETAILS: [keyof DeploymentFields, string][] = [
-  ['location_id', 'Location'], ['location_name', 'Location name'], ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['coordinate_uncertainty', 'Coordinate uncertainty (m)'],
-  ['start_date', 'Start'], ['end_date', 'End'], ['setup_by', 'Set up by'], ['camera_id', 'Camera'], ['camera_model', 'Camera model'], ['camera_interval', 'Camera delay (s)'],
-  ['camera_height', 'Camera height (m)'], ['camera_depth', 'Camera depth (m)'], ['camera_tilt', 'Camera tilt (°)'], ['camera_heading', 'Camera heading (°)'], ['detection_distance', 'Detection distance (m)'],
-  ['timestamp_issues', 'Timestamp issues'], ['bait_use', 'Bait use'], ['feature_type', 'Feature type'], ['habitat', 'Habitat'], ['deployment_groups', 'Deployment groups'], ['tags', 'Tags'], ['comments', 'Notes'],
-]
-const shownValue = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') : Array.isArray(v) ? v.join(', ') : String(v))
 
 /** What a destination is called. */
 const DESTINATION_NAME: Record<string, string> = { trapper: 'Trapper', agouti: 'Agouti' }
@@ -79,12 +71,6 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   // a deployment the previous and next buttons go to: it takes the place of the one a link of another page said, and is brought into view
   const [jump, setJump] = useState<string | undefined>(undefined)
   const focus = jump ?? highlight
-  // the deployment of the same site in the revision before (-1) or after (1)
-  const neighbour = (d: FieldDeployment, step: -1 | 1) => deployments
-    .filter((o) => o.site.toLowerCase() === d.site.toLowerCase() && (step < 0 ? o.collection < d.collection : o.collection > d.collection))
-    .sort((x, y) => (step < 0 ? y.collection.localeCompare(x.collection) : x.collection.localeCompare(y.collection)))[0]
-  // the deployment whose details are open
-  const [opened, setOpened] = useState<string | null>(null)
   // the visit whose panel is open, and why one could not be shown
   const [visitPanel, setVisitPanel] = useState<{ visit: StoredVisit; end?: StoredVisit | null } | null>(null)
   const [visitError, setVisitError] = useState<string | null>(null)
@@ -102,11 +88,6 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   // what a deployment says of itself is read once, for the row that opens it and for the panel of its eye
   function read(id: string) {
     if (loadDetails && !(id in details)) loadDetails(id).then((fields) => setDetails((d) => ({ ...d, [id]: fields }))).catch(() => setDetails((d) => ({ ...d, [id]: 'error' })))
-  }
-  function toggle(id: string) {
-    if (opened === id) { setOpened(null); return }
-    setOpened(id)
-    read(id)
   }
   // the deployment whose panel is open
   const [panelId, setPanelId] = useState<string | null>(null)
@@ -171,17 +152,9 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   const rowOptions = (d: FieldDeployment) => (
     // only what can be done with the row: the options that do not apply to it are not there
                         <RowOptions label={`Options of the deployment ${d.deployment_id}`}>
-                          {(() => {
-                            const before = neighbour(d, -1)
-                            return before && <IconButton compact label={`Show the previous deployment of ${d.site} (${before.collection})`} title={`The previous revision of this location: ${before.collection}`} onClick={() => setJump(before.deployment_id)} path={ICON_PATHS.before} />
-                          })()}
                           {phaseOf(d) === 'created' && (
                             <IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" onClick={() => showPanel(d.deployment_id)} path={ICON_PATHS.view} />
                           )}
-                          {(() => {
-                            const after = neighbour(d, 1)
-                            return after && <IconButton compact label={`Show the next deployment of ${d.site} (${after.collection})`} title={`The next revision of this location: ${after.collection}`} onClick={() => setJump(after.deployment_id)} path={ICON_PATHS.after} />
-                          })()}
                           {/* the card was collected and the images are not stored: the deployment can be made now */}
                           {phaseOf(d) === 'planned' && d.status === 'closed' && onCreate && (
                             <IconButton compact label={`Create the deployment ${d.deployment_id}`} title="Create the deployment" onClick={() => onCreate(d)}
@@ -191,16 +164,6 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                             <IconButton compact label={`Upload the deployment ${d.deployment_id}`} title={statesOf(d).some((u) => u.state === 'failed') ? 'Upload the images again' : 'Upload the images'} onClick={() => onUpload(d)} path={ICON_PATHS.upload} />
                           )}
                         </RowOptions>
-  )
-  const detailList = (d: FieldDeployment) => (
-    details[d.deployment_id] === undefined ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Reading the deployment…</p>
-                          : details[d.deployment_id] === 'error' || details[d.deployment_id] === null ? <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">The details of this deployment could not be read from the collections folder.</p>
-                          : (
-                            <dl aria-label={`Details of the deployment ${d.deployment_id}`} className="grid grid-cols-1 gap-x-8 gap-y-2 text-xs md:grid-cols-2">
-                              {DEPLOYMENT_DETAILS.filter(([k]) => { const value = (details[d.deployment_id] as DeploymentFields)[k]; return value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0) })
-                                .map(([k, label]) => <DetailLine key={k} name={label} kind={k === 'comments' ? 'plain' : 'mono'}>{shownValue((details[d.deployment_id] as DeploymentFields)[k])}</DetailLine>)}
-                            </dl>
-                          )
   )
 
   return (
@@ -252,13 +215,12 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
             <div className="overflow-x-auto">
               <table className={TABLE.table} aria-label="Deployments">
                 <thead className={TABLE.head}>
-                  <tr><th scope="col" className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>{['Deployment', 'Visit', 'SD and photos', 'Creation', 'Upload'].map((h) => <th key={h} scope="col" className={TABLE.th}>{h}</th>)}<th scope="col" className="px-4 py-3"><span className="sr-only">What to do</span></th></tr>
+                  <tr>{['Deployment', 'Visit', 'SD and photos', 'Creation', 'Upload'].map((h) => <th key={h} scope="col" className={TABLE.th}>{h}</th>)}<th scope="col" className="px-4 py-3"><span className="sr-only">What to do</span></th></tr>
                 </thead>
                 <tbody className={TABLE.body}>
                   {onPage.map((d) => (
                     <Fragment key={d.deployment_id}>
-                    <tr ref={d.deployment_id === focus ? marked : undefined} aria-current={d.deployment_id === focus ? 'true' : undefined} className={`${TABLE.row(opened === d.deployment_id)} ${d.deployment_id === focus ? 'bg-blue-50 dark:bg-blue-950/40' : ''}`}>
-                      <ChevronCell open={opened === d.deployment_id} available={phaseOf(d) === 'created'} label={`the details of the deployment ${d.deployment_id}`} onToggle={() => toggle(d.deployment_id)} />
+                    <tr ref={d.deployment_id === focus ? marked : undefined} aria-current={d.deployment_id === focus ? 'true' : undefined} className={`${TABLE.row(false)} ${d.deployment_id === focus ? 'bg-blue-50 dark:bg-blue-950/40' : ''}`}>
                       <td className={`${TABLE.cell} font-mono text-xs font-semibold`}>{d.deployment_id}</td>
                       <td className={TABLE.cell}>
                         {d.start_session && (onShowVisit || loadVisits
@@ -282,14 +244,9 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                         {rowOptions(d)}
                       </td>
                     </tr>
-                    {opened === d.deployment_id && (
-                      <DetailsRow colSpan={7}>
-                        {detailList(d)}
-                      </DetailsRow>
-                    )}
                     </Fragment>
                   ))}
-                  {shown.length === 0 && <tr><td colSpan={7} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">No deployment matches.</td></tr>}
+                  {shown.length === 0 && <tr><td colSpan={6} className="px-4 py-3 text-zinc-500 dark:text-zinc-400">No deployment matches.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -328,7 +285,6 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
                       </div>
                     </div>
                     <div className="mt-3 flex justify-end">{rowOptions(d)}</div>
-                    {opened === d.deployment_id && <div className="mt-3 border-t border-zinc-200 dark:border-zinc-700/70 pt-3">{detailList(d)}</div>}
                   </article>
                 ))}
                 {shown.length === 0 && <p className="col-span-full py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">No deployment matches.</p>}
