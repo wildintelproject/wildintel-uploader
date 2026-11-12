@@ -415,9 +415,12 @@ def visit_row(entry: dict, refs: dict[str, str]) -> dict[str, str]:
         row["date_time_ok"] = "Yes" if text.lower().startswith("ok") else "No"
     if (text := _text(raw.get("camera_id")) or _text(raw.get("camera_label"))) is not None:
         row["camera_id"] = text
-    for field in ("camera_model", "feature_type", "habitat", "sd", "comments"):
+    for field in ("camera_model", "feature_type", "habitat", "comments"):
         if (text := _text(raw.get(field))) is not None:
             row[field] = text
+    # the card is what the SD cards of the project are called — its number: the form is a free text, where it is written "SD 7", "sd-7" or "7"
+    if (text := _text(raw.get("sd"))) is not None:
+        row["sd"] = re.sub(r"^sd\s*[-_#.:]?\s*", "", text, flags=re.IGNORECASE) or text
     if (number := _number(raw.get("camera_height"))) is not None:
         row["camera_height"] = str(round(number / 100, 4))
     for field in ("camera_interval", "camera_tilt", "camera_heading", "detection_distance"):

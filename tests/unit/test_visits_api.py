@@ -1225,7 +1225,7 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
         return text, list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
 
     text, rows = read("revision_5_replacement_removal_and_site_given_up.csv")
-    assert all(h in text for h in ("5_Status_of_the_came", "8_N_pictures_collect", "10_Action_after_the_", "11_Action_after_thef"))   # as Epicollect5 cuts them
+    assert all(h in text for h in ("4_Status_of_the_came", "7_N_pictures_collect", "9_Action_after_inspe", "10_Action_after_thef"))   # as Epicollect5 cuts them
     assert [r["actions"] for r in rows] == ["Revision + Desinstallation + Installation", "Revision + Desinstallation", "Installation", "Revision + Desinstallation + Archive"]
 
     _, rows = read("revision_2_all_revised.csv")
@@ -1233,7 +1233,7 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
     assert (rows[0]["num_photos"], rows[0]["card_status"], rows[2]["card_status"], rows[3]["battery_status"]) == ("1420", "OK", "Full Card", "No batteries")
 
     _, rows = read("revision_1_installation.csv")
-    assert rows[0]["sd"] == "SD 1" and rows[0]["camera_id"] == "BR5071050724" and rows[0]["trappers"] == "Ana Pérez"
+    assert rows[0]["sd"] == "1" and rows[0]["camera_id"] == "BR5071050724" and rows[0]["trappers"] == "Ana Pérez"
 
 
 def test_a_file_can_close_the_revision_before_its_own_marking_the_locations_still_planned_as_not_visited(tmp_path: Path):
@@ -1278,25 +1278,31 @@ def test_the_revisions_in_a_row_that_are_unknown_are_told_once(tmp_path: Path):
     assert [n for n in notes if "unknown visits" in n] == ["The revisions R0001–R0004 are created, but there is no data of their visits to DONA_01: they are created as unknown visits, and the visits after them cannot be checked against them."]
 
 
-def test_a_real_download_of_the_new_form_is_read_as_each_case_says(tmp_path: Path):
-    """The download of the project `minuevotestinaki` (its form: no Date nor Time, Revision, Batteries Status and Card Status apart, Action after inspection): an OK
-    revision keeping the camera, an Altered camera replaced, a New site, an Inactive site and a theft after which nothing is done."""
-    text = (Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "real" / "minuevotestinaki_form_download.csv").read_text(encoding="utf-8")
-    with _in(tmp_path), patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=["Javitxu"]):
-        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        for n in ("DONA_00", "DONA_01"):
-            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": {"location_id": n, "timezone": "Europe/Madrid", "ignore_dst": False, "latitude": 37.0, "longitude": -6.0, "status": "active"}})
-        result = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "epicollect-csv", "create": {"locations": True, "cameras": True, "sd_cards": True},
-                                                                  "defaults": {"timezone": "Europe/Madrid", "daylight_saving": "yes"}}).json()
+def test_the_examples_of_the_new_form_for_wicp_02_are_imported_in_order_with_no_problem(tmp_path: Path):
+    """The six downloads of examples/visits_example/wildintel_csv/wicp_02, one after the other on the entities of examples/entities_example/wicp_02: the last makes a new site."""
+    import csv
 
-    by_site = {v["location_id"]: v for v in result["visits"]}
-    assert by_site["DONA_00"]["actions"] == ["Revision"] and by_site["DONA_00"]["num_photos"] == 23 and by_site["DONA_00"]["when"] == "2026-11-12T17:51:24Z"   # the time of the entry, not a typed one
-    assert by_site["DONA_01"]["actions"] == ["Revision", "Desinstallation", "Installation"] and by_site["DONA_01"]["camera_status"] == "Altered"
-    assert by_site["DONA_04"]["actions"] == ["Installation"]                    # an Inactive site gets its camera put up
-    assert by_site["DONA_06"]["actions"] == ["Stolen"] and by_site["DONA_06"]["camera_status"] == "Stolen"    # nothing is done after the theft
-    # the New site shares its camera (serial 3444) with the one that replaced the camera of DONA_01: it is refused for that, not for how it is read
-    assert [(p["row"], "3444 is installed at DONA_01" in p["message"]) for p in result["problems"]] == [(4, True)]
-    assert sorted(l["location_id"] for l in result["create"]["locations"]) == ["DONA_04", "DONA_06"]
+    from wildintel_uploader.core.services import local_folder_service as lfs
+    examples = Path(__file__).parents[2] / "examples"
+    rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
+    order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up", "revision_6_new_site"]
+    answers = []
+    with _in(tmp_path), patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
+        _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "name": "WICP_02", "acronym": "WICP_02"})
+        for l in rows("locations.csv"):
+            _client().post("/api/deployment-import/locations/save", json={"research_project_id": "WICP_02", "location": {
+                "location_id": l["location_id"], "name": l["name"], "timezone": l["timezone"], "ignore_dst": l["ignore_dst"] == "true", "latitude": float(l["latitude"]),
+                "longitude": float(l["longitude"]), "coordinate_uncertainty": int(l["coordinate_uncertainty"]), "status": l["status"]}})
+        lfs.write_field_items(tmp_path, "WICP_02", "cameras", [{"label": r["label"], "camera_id": r["camera_id"], "camera_model": r["camera_model"], "status": r["status"]} for r in rows("cameras.csv")])
+        lfs.write_field_items(tmp_path, "WICP_02", "sd_cards", [{"label": r["label"], "brand": r["brand"], "capacity": r["capacity"], "status": r["status"]} for r in rows("sd_cards.csv")])
+        for name in order:
+            text = (examples / "visits_example" / "wildintel_csv" / "wicp_02" / f"{name}.csv").read_text(encoding="utf-8")
+            extra = {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"timezone": "UTC", "daylight_saving": "no"}} if name == order[-1] else {}
+            answers.append(_client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": text, "format": "epicollect-csv", "save": True, **extra}).json())
+
+    assert [(a["problems"], a["saved"]) for a in answers] == [([], 4)] * 6
+    made = answers[-1]["create"]
+    assert [l["location_id"] for l in made["locations"]] == ["WICP_02_005"] and [c["camera_id"] for c in made["cameras"]] == ["GP1122334455"] and [c["label"] for c in made["sd_cards"]] == ["9"]
 
 
 def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its_entry_was_created():
