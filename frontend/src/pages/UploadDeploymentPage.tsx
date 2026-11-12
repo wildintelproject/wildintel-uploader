@@ -14,9 +14,12 @@ import WizardStep from '../components/WizardStep'
 import { MENU_ICONS, PageHeader } from '../components/TaskCard'
 import DefaultResearchProject, { useDefaultResearchProject } from '../components/DefaultResearchProject'
 import { formatLocal } from '../dateFormat'
+import DeploymentDetails from '../components/DeploymentDetails'
+import IconButton, { ICON_PATHS } from '../components/IconButton'
+import { readDeployment } from '../deploymentDetails'
 import { Glyph, ViewSwitch, type View } from '../components/ViewSwitch'
 import { ActiveFilters, RevisionSelection, TABLE, TableCard, TableFooter, TableToolbar } from '../components/DashboardParts'
-import type { AccessCheck, ClassificationProject, LocalResearchProject, UploadCollection, UploadTarget, UploadDeploymentInfo, UploadEvent, UploadMode, UploadStep } from '../types'
+import type { AccessCheck, ClassificationProject, DeploymentFields, FieldDeployment, LocalResearchProject, UploadCollection, UploadTarget, UploadDeploymentInfo, UploadEvent, UploadMode, UploadStep } from '../types'
 
 const btnPrimary = 'px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
 const btnOutline = 'px-4 py-2 text-sm border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50'
@@ -132,6 +135,18 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
   const [revisionsOpen, setRevisionsOpen] = useState(true)
   const [tableText, setTableText] = useState('')
   const [tablePage, setTablePage] = useState(1)
+  // the details of a deployment, in a panel at the right: what it says of itself, read from its folder
+  const [panel, setPanel] = useState<{ deployment: FieldDeployment; fields: DeploymentFields | null | 'error' | undefined } | null>(null)
+  async function showDeployment(d: UploadDeploymentInfo) {
+    const deployment: FieldDeployment = {
+      deployment_id: d.deployment_id, collection: collectionName, site: d.location_id ?? '', status: 'closed', start: d.start_date ?? '', end: d.end_date, setup_by: null, camera_id: null, card: null,
+      photos_counted: null, start_session: null, end_session: null, images_stored: true, uploaded_at: d.uploaded_at, on_trapper: Boolean(d.uploaded_at),
+    }
+    setPanel({ deployment, fields: undefined })
+    let fields: DeploymentFields | null | 'error'
+    try { fields = await readDeployment(projectId, d.deployment_id) } catch { fields = 'error' }
+    setPanel((p) => (p && p.deployment.deployment_id === d.deployment_id ? { deployment, fields } : p))
+  }
   // the deployments as a table, as labels or only the search field that picks from a list
   const [tableView, setTableView] = useState<View>('table')
   const [listOpen, setListOpen] = useState(false)
@@ -478,10 +493,11 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
                           <th scope="col" className={`${TABLE.th} w-10`}><span className="sr-only">Selected</span></th>
                           <th scope="col" className={TABLE.th}>Deployment</th><th scope="col" className={TABLE.th}>Period</th>
                           <th scope="col" className={TABLE.th}>Images</th><th scope="col" className={TABLE.th}>In Trapper</th>
+                          <th scope="col" className={TABLE.th}><span className="sr-only">Details</span></th>
                         </tr>
                       </thead>
                       <tbody className={TABLE.body}>
-                        {visible.length === 0 && <tr><td colSpan={5} className={`${TABLE.cell} text-zinc-500 dark:text-zinc-400`}>No deployment matches.</td></tr>}
+                        {visible.length === 0 && <tr><td colSpan={6} className={`${TABLE.cell} text-zinc-500 dark:text-zinc-400`}>No deployment matches.</td></tr>}
                         {visible.map((d) => (
                           <tr key={d.deployment_id} className={TABLE.row(selected.has(d.deployment_id) && canUpload(d))}>
                             <td className={`${TABLE.cell} w-10`}>
@@ -499,6 +515,9 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
                                 ? <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Already in Trapper</span>
                                 : <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">New in Trapper</span>)}
                             </td>
+                            <td className={`${TABLE.cell} text-right`}>
+                              <IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" onClick={() => void showDeployment(d)} path={ICON_PATHS.view} />
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -510,7 +529,8 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
                       {visible.map((d) => {
                         const on = selected.has(d.deployment_id) && canUpload(d)
                         return (
-                          <button key={d.deployment_id} type="button" aria-pressed={on} aria-label={`${on ? 'Unselect' : 'Select'} ${d.deployment_id}`} disabled={!canUpload(d) || uploading} onClick={() => toggle(d.deployment_id)}
+                          <div key={d.deployment_id} className="relative">
+                          <button type="button" aria-pressed={on} aria-label={`${on ? 'Unselect' : 'Select'} ${d.deployment_id}`} disabled={!canUpload(d) || uploading} onClick={() => toggle(d.deployment_id)}
                                   className={`w-full rounded-2xl border p-4 text-left transition-all disabled:opacity-60 ${on ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 ring-1 ring-blue-500/50' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600'}`}>
                             <span className="flex items-start justify-between gap-2">
                               <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-100">{d.deployment_id}</span>
@@ -521,6 +541,8 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
                             <span className="mt-2 flex items-center justify-between gap-2 text-sm text-zinc-800 dark:text-zinc-200"><span>{images(d.images)}</span>{status(d)}</span>
                             {!d.preprocessed && <span className="mt-2 block text-xs text-red-600 dark:text-red-400">Not preprocessed — import it again through the wizard before uploading it.</span>}
                           </button>
+                          <div className="absolute bottom-3 right-3"><IconButton compact label={`View the deployment ${d.deployment_id}`} title="View the deployment" onClick={() => void showDeployment(d)} path={ICON_PATHS.view} /></div>
+                          </div>
                         )
                       })}
                       {visible.length === 0 && <p className="col-span-full py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">No deployment matches.</p>}
@@ -532,6 +554,9 @@ export default function UploadDeploymentPage({ initial, onOpenSettings, onBack }
                 </TableCard>
               )
             })()}
+            {panel && (
+              <DeploymentDetails deployment={panel.deployment} fields={panel.fields} creation="created" uploaded={Boolean(panel.deployment.uploaded_at)} onClose={() => setPanel(null)} />
+            )}
           </div>
         )}
         {collection && (

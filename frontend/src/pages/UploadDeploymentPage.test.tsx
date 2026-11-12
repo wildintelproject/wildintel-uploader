@@ -7,7 +7,7 @@ import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { LocalResearchProject, UploadCollection, UploadDeploymentInfo, UploadEvent } from '../types'
 
 vi.mock('../api', () => ({
-  api: { getSettings: vi.fn(), listResearchProjects: vi.fn(), uploadCollections: vi.fn(), uploadDeployment: vi.fn(), openFolder: vi.fn(), trapperGetConfig: vi.fn(), checkUploadSelection: vi.fn(), uploadClassificationProjects: vi.fn(), saveUploadReport: vi.fn(), reportUrl: vi.fn() },
+  api: { collectionPath: vi.fn(), listLocalDeployments: vi.fn(), getSettings: vi.fn(), listResearchProjects: vi.fn(), uploadCollections: vi.fn(), uploadDeployment: vi.fn(), openFolder: vi.fn(), trapperGetConfig: vi.fn(), checkUploadSelection: vi.fn(), uploadClassificationProjects: vi.fn(), saveUploadReport: vi.fn(), reportUrl: vi.fn() },
 }))
 
 const mockedApi = vi.mocked(api)
@@ -204,7 +204,7 @@ describe('UploadDeploymentPage', () => {
     await screen.findByText('Upload complete')
     expect(screen.getByText(/All the images are in Trapper/)).toBeInTheDocument()
     expect(screen.getByText(/Trapper is now processing the images/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /R0003-DONA_01/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^R0003-DONA_01/ }))
     expect(screen.getAllByText('Already in Trapper').length).toBeGreaterThan(1) // the step's label, as well as the pill in the list
     expect(screen.getByText(/Deployment R0003-DONA_01 was already in Trapper\./)).toBeInTheDocument()
     expect(screen.getByText('120 images in 1 package.')).toBeInTheDocument()
@@ -252,7 +252,7 @@ describe('UploadDeploymentPage', () => {
     expect(mockedApi.saveUploadReport).toHaveBeenCalledTimes(1)
     expect(mockedApi.saveUploadReport.mock.calls[0][4]).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'R0003-DONA_01', state: 'failed' })]))
     expect(screen.getByText(/Last run/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /R0003-DONA_02/ })).toBeInTheDocument() // the other one went up
+    expect(screen.getByRole('button', { name: /^R0003-DONA_02/ })).toBeInTheDocument() // the other one went up
     expect(mockedApi.uploadDeployment).toHaveBeenCalledTimes(2)
   })
 
@@ -487,7 +487,7 @@ describe('UploadDeploymentPage', () => {
       await proceedToStep3()
 
       await screen.findByText('Upload complete')
-      await userEvent.click(screen.getByRole('button', { name: /R0003-DONA_01/ }))
+      await userEvent.click(screen.getByRole('button', { name: /^R0003-DONA_01/ }))
       const links = screen.getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href'), a.getAttribute('target')])
       expect(links).toEqual(expect.arrayContaining([
         ['Open the location', 'https://trapper.example.org/geomap/location/detail/12/', '_blank'],
@@ -583,9 +583,23 @@ describe('UploadDeploymentPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Show only the search field' }))
     await userEvent.type(screen.getByLabelText('Search the deployments'), 'DONA_01')
     const list = within(await screen.findByRole('listbox', { name: 'Deployments' }))
-    await userEvent.click(list.getByRole('option', { name: /R0003-DONA_01/ }))
+    await userEvent.click(list.getByRole('option', { name: /^R0003-DONA_01/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Show the deployments as a table' }))
     expect(screen.getByRole('checkbox', { name: 'R0003-DONA_01' })).toBeChecked()
+  })
+
+  it('has an eye on each deployment that opens its details in a panel at the right, in the table and in the labels', async () => {
+    mockedApi.collectionPath.mockResolvedValue({ path: '/c/DONA/R0003' } as never)
+    mockedApi.listLocalDeployments.mockResolvedValue({ results: [{ deployment_id: 'R0003-DONA_01', location_id: 'DONA_01', latitude: 37, longitude: -6, start_date: '2024-09-04T13:10:00+02:00', end_date: '2024-11-04T14:28:00+01:00', tags: [] }] } as never)
+    await pickCollection('R0003', false)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'View the deployment R0003-DONA_01' }))
+    const panel = within(await screen.findByRole('dialog', { name: 'Details of the deployment R0003-DONA_01' }))
+    expect(await panel.findByText('4 Sep 2024, 13:10')).toBeInTheDocument()
+    await userEvent.click(panel.getByRole('button', { name: 'Close' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show the deployments as labels' }))
+    expect(screen.getByRole('button', { name: 'View the deployment R0003-DONA_02' })).toBeInTheDocument()
   })
 
   it('has a Back, level with Continue, that leaves the task from the first step', async () => {
