@@ -339,12 +339,18 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
                   )}
                 </ul>
               </section>
-              <div className="flex items-center gap-3">
-                <button type="button" className={`${btnPrimary} inline-flex items-center gap-2`} disabled={running || !somethingToBackUp} onClick={() => void makeBackup()}>
-                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></svg>
-                  Make the backup
+              <div className="flex items-center justify-between gap-3">
+                <button type="button" className={`${btnOutline} inline-flex items-center gap-2`} disabled={running} onClick={() => { setSelectionDone(false); setMade(null); setError(null) }}>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
+                  Back
                 </button>
-                {running && <span className="inline-flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400"><SmallSpinner />Making the backup…</span>}
+                <div className="flex items-center gap-3">
+                  {running && <span className="inline-flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400"><SmallSpinner />Making the backup…</span>}
+                  <button type="button" className={`${btnPrimary} inline-flex items-center gap-2`} disabled={running || !somethingToBackUp} onClick={() => void makeBackup()}>
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></svg>
+                    Make the backup
+                  </button>
+                </div>
               </div>
               {bar}
               {error && !made && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -426,9 +432,12 @@ export default function BackupPage({ onBack, onOpenSettings, settingsOpen }: Pro
         </>
       )}
 
-      <div className="mt-10">
-        <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>
-      </div>
+      {/* the step that makes the backup has its own Back, level with the button that makes it */}
+      {!(mode === 'backup' && selectionDone) && (
+        <div className="mt-10">
+          <button type="button" className={btnOutline} onClick={onBack}><span aria-hidden="true">← </span>Back</button>
+        </div>
+      )}
     </div>
   )
 }

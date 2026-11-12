@@ -77,6 +77,7 @@ describe('BackupPage', () => {
     expect(summary.getByText(/1 deployment of/)).toHaveTextContent('with their images')
     expect(screen.queryByRole('button', { name: 'Browse…' })).not.toBeInTheDocument()
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()                          // on the left of the button that makes it
     await userEvent.click(screen.getByRole('button', { name: 'Make the backup' }))
 
     await waitFor(() => expect(mocked.backupCreate).toHaveBeenCalled())
