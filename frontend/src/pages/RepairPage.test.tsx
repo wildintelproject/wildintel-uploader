@@ -6,7 +6,7 @@ import { api } from '../api'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { RepairState } from '../types'
 
-vi.mock('../api', () => ({ api: { getSettings: vi.fn(), listResearchProjects: vi.fn(), repairCollections: vi.fn(), repairInspect: vi.fn(), repairDeployment: vi.fn(), getReport: vi.fn(), reportUrl: vi.fn() } }))
+vi.mock('../api', () => ({ api: { fieldDeployments: vi.fn(), getSettings: vi.fn(), listResearchProjects: vi.fn(), repairCollections: vi.fn(), repairInspect: vi.fn(), repairDeployment: vi.fn(), getReport: vi.fn(), reportUrl: vi.fn() } }))
 const mockedApi = vi.mocked(api, true)
 
 const FILES = { 'deployment.json': true, 'images.json': true, 'preprocessing.json': true, 'seal.json': true }
@@ -18,6 +18,7 @@ const state = (deployment_id: string, over: Partial<RepairState> = {}): RepairSt
 beforeEach(() => {
   vi.clearAllMocks()
   mockedApi.getSettings.mockResolvedValue({ GENERAL: { default_research_project: 'DONA' } } as never)   // the research project is the default one: it is not asked in a step
+  mockedApi.fieldDeployments.mockResolvedValue({ results: [{ deployment_id: 'R0003-DONA_01', collection: 'R0003', site: 'DONA_01', start_session: 'R0002', card: '5' }, { deployment_id: 'R0003-DONA_02', collection: 'R0003', site: 'DONA_02', start_session: 'R0002', card: '6' }] } as never)
   mockedApi.listResearchProjects.mockResolvedValue({ results: [{ ...EMPTY_RESEARCH_PROJECT, name: 'Doñana', acronym: 'DONA', trapper_pk: 2 }] })
   mockedApi.repairCollections.mockResolvedValue({ results: [{ name: 'R0003', path: '/c/DONA/R0003', deployments: [dep('R0003-DONA_01'), dep('R0003-DONA_02'), dep('R0003-DONA_03', { synced: true })] }] })
   mockedApi.repairInspect.mockImplementation(async (_rp, _c, id) => (
@@ -43,7 +44,9 @@ describe('RepairPage', () => {
     expect(await screen.findByText('R0003-DONA_01')).toBeInTheDocument()
     expect(screen.getByText('R0003-DONA_02')).toBeInTheDocument()
     expect(document.querySelector('[data-selection-count]')).toHaveTextContent('2 of 2 selected') // the one from Trapper can't be
-    expect(screen.getByRole('checkbox', { name: 'R0003-DONA_03' })).toBeDisabled()
+    expect(screen.queryByRole('checkbox', { name: 'R0003-DONA_03' })).not.toBeInTheDocument()      // the one from Trapper has nothing to repair: it is not listed
+    expect(screen.getByText('R0002 · DONA_01')).toBeInTheDocument()                                    // the visit that started it, and its card
+    expect(screen.getByRole('table', { name: 'Deployments' })).toHaveTextContent('R0002 · DONA_015')
     expect(screen.getAllByRole('img', { name: 'Locked' })).toHaveLength(2) // the results and the repairs wait
   })
 

@@ -10,7 +10,7 @@ import ActiveProjectCard from '../components/ActiveProjectCard'
 import { PageHeader, UTIL_ICONS } from '../components/TaskCard'
 import WizardStep from '../components/WizardStep'
 import { SmallSpinner, btnOutline, btnPrimary } from './ImportDeploymentPage'
-import type { LocalResearchProject, RepairCollection, RepairEvent, RepairState, RepairStep } from '../types'
+import type { FieldDeployment, LocalResearchProject, RepairCollection, RepairEvent, RepairState, RepairStep } from '../types'
 
 const labelClass = 'block text-sm font-semibold mb-1.5 text-zinc-700 dark:text-zinc-300'
 
@@ -55,6 +55,8 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
   const [projects, setProjects] = useState<LocalResearchProject[]>([])
   const [projectId, setProjectId] = useState('')
   const [collections, setCollections] = useState<RepairCollection[]>([])
+  // what the visits say of each deployment — its visit and its card —, by its id
+  const [fields, setFields] = useState<Record<string, FieldDeployment>>({})
   const [collectionName, setCollectionName] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set()) // what to check
   const [chosen, setChosen] = useState(false)
@@ -81,8 +83,9 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
   }, [])
 
   const collection = collections.find((c) => c.name === collectionName)
-  const deployments = collection?.deployments ?? []
-  const checkable = deployments.filter((d) => !d.synced)
+  // the deployments that are kept here: the ones taken from Trapper have nothing to repair and are not listed
+  const deployments = (collection?.deployments ?? []).filter((d) => !d.synced)
+  const checkable = deployments
   const busy = checking || repairing !== null
   const toCheck = checkable.filter((d) => selected.has(d.deployment_id))
   const checkedList = deployments.filter((d) => states[d.deployment_id])
@@ -99,6 +102,8 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
     if (!id) return
     try {
       setCollections((await api.repairCollections(id)).results)
+      // the visit and the card of each deployment: told besides it when the visits are kept
+      api.fieldDeployments(id).then(({ results }) => setFields(Object.fromEntries(results.map((d) => [d.deployment_id, d])))).catch(() => setFields({}))
     } catch (e) {
       setError(message(e, 'Could not read the collections.'))
     }
@@ -176,8 +181,8 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
                   items={[...collections].sort((x, y) => y.name.localeCompare(x.name))} keyOf={(c) => c.name} selectedKey={collectionName} onSelect={(c) => { if (!busy) chooseCollection(c?.name ?? '') }}
                   columns={[
                     { label: 'Revision', className: 'px-4 py-3 font-mono text-sm', cell: (c) => c.name },
-                    { label: 'Deployments', cell: (c) => `${c.deployments.length} ${c.deployments.length === 1 ? 'deployment' : 'deployments'}` },
-                    { label: 'Images', cell: (c) => c.deployments.reduce((n, d) => n + d.images, 0).toLocaleString('en-US') },
+                    { label: 'Deployments', cell: (c) => `${c.deployments.filter((d) => !d.synced).length} ${c.deployments.filter((d) => !d.synced).length === 1 ? 'deployment' : 'deployments'}` },
+                    { label: 'Images', cell: (c) => c.deployments.filter((d) => !d.synced).reduce((n, d) => n + d.images, 0).toLocaleString('en-US') },
                   ]}
                   searchText={(c) => c.name}
                   renderLabel={(c, on, press) => (
@@ -195,21 +200,22 @@ export default function RepairPage({ onBack, onOpenSettings, settingsOpen }: { o
         {collection && (
           <div className="mb-4">
             <p className={labelClass}>Deployments</p>
-            {deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This revision has no deployment folders.</p>}
+            {deployments.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">This revision has no deployments of its own to repair.</p>}
             {deployments.length > 0 && (
               <PickTable
                 items={deployments} keyOf={(d) => d.deployment_id}
-                many={{ selected, onChange: setSelected, selectable: (d) => !d.synced, disabled: busy, noun: 'selected', detail: (ds) => `${ds.reduce((n, d) => n + d.images, 0).toLocaleString('en-US')} images` }}
+                many={{ selected, onChange: setSelected, disabled: busy, noun: 'selected', detail: (ds) => `${ds.reduce((n, d) => n + d.images, 0).toLocaleString('en-US')} images` }}
                 columns={[
                   { label: 'Deployment', className: 'px-4 py-3 font-mono text-sm', cell: (d) => d.deployment_id },
+                  { label: 'Visit', cell: (d) => (fields[d.deployment_id]?.start_session ? `${fields[d.deployment_id].start_session} · ${fields[d.deployment_id].site}` : '—') },
+                  { label: 'SD card', cell: (d) => fields[d.deployment_id]?.card ?? '—' },
                   { label: 'Images', className: 'px-4 py-3 text-right', cell: (d) => d.images },
-                  { label: 'State', className: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400', cell: (d) => (d.synced ? 'From Trapper — nothing to repair' : '') },
                 ]}
                 searchText={(d) => d.deployment_id}
                 renderLabel={(d, on, press) => (
                   <LabelFrame picked={on} name={d.deployment_id} onPress={press}>
                     <span className="flex items-start justify-between gap-2"><span className="font-mono text-sm font-semibold">{d.deployment_id}</span>{on && <PickedTick />}</span>
-                    <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{d.images} images{d.synced ? ' · From Trapper — nothing to repair' : ''}</span>
+                    <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{fields[d.deployment_id]?.start_session ? `${fields[d.deployment_id].start_session} · ${fields[d.deployment_id].site}` : '—'}{fields[d.deployment_id]?.card ? ` · SD ${fields[d.deployment_id].card}` : ''} · {d.images} images</span>
                   </LabelFrame>)}
                 names={{ table: 'Deployments', search: 'Search the deployments', items: 'deployments', pick: (d) => d.deployment_id, pickPlaceholder: 'Type to pick a deployment…' }}
                 optionLabel={(d) => `${d.deployment_id} · ${d.images} images`} searchPlaceholder="Search by deployment…" empty="No deployment matches." perPage={8}
