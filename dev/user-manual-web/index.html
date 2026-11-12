@@ -2261,7 +2261,7 @@ images of each deployment are uploaded in packages of this size at most (500 by 
 <h4 id="wildintel-epicollect-csv">WildINTEL Epicollect CSV<a class="headerlink" href="#wildintel-epicollect-csv" title="Permanent link">&para;</a></h4>
 <p>The visits are read from the <strong>CSV file downloaded from the new WildINTEL Epicollect project</strong>, the form of the field flow (<em>Register visits › WildINTEL Epicollect CSV</em>). The columns are found by the label of their question: there is nothing to say about them.</p>
 <ul>
-<li><strong>The time of a visit</strong> — <em>when its entry was created</em> (<code>created_at</code>, UTC; the default) or <em>the date and the hour typed in the form</em>. The hour typed is the wall clock of the visit's location, and is used when the row has a date and an hour; otherwise the time of the entry. The day typed that differs from the day of the entry is warned of.</li>
+<li><strong>The time of a visit</strong> — the form has no date or time to read: a visit happened when its entry was created (<code>created_at</code>, UTC), and it is told in the timezone of its location.</li>
 </ul>
 <h4 id="custom-csv">Custom CSV<a class="headerlink" href="#custom-csv" title="Permanent link">&para;</a></h4>
 <p>Always offered in <em>Register visits</em>, and it cannot be turned off. There is nothing to set up: the columns are matched when each file is read (see <a href="#custom-csv">Custom CSV</a>).</p>
