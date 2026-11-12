@@ -59,7 +59,8 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   const statesOf = (d: FieldDeployment): DeploymentUploadState[] => d.upload_states ?? [
     { destination: 'trapper', state: d.on_trapper ? 'done' : 'planned', kind: d.on_trapper ? (d.uploaded_at ? 'uploaded' : 'synced') : null, uploaded_at: d.uploaded_at ?? null, note: null },
   ]
-  const [revision, setRevision] = useState('')
+  // opens on the latest revision — from the first render, not after it: what is shown does not change under a click —, unless a link brings to one deployment
+  const [revision, setRevision] = useState(() => (highlight ? '' : [...new Set(every.map((d) => d.collection))].sort((a, b) => b.localeCompare(a))[0] ?? ''))
   const [filter, setFilter] = useState<Filter>(initialFilter)
   const [page, setPage] = useState(1)
   const [text, setText] = useState('')
@@ -117,7 +118,7 @@ export default function FieldDeployments({ deployments: every, onShowSd, onShowL
   }, [focus, deployments])
   useEffect(() => { marked.current?.scrollIntoView?.({ block: 'center' }) })
   // on arrival the latest revision is the one picked (unless a link brings to one deployment): the dashboard opens on what is current
-  const defaulted = useRef(false)
+  const defaulted = useRef(every.length > 0)   // it was settled with the first render when the deployments were there
   useEffect(() => {
     if (defaulted.current || deployments.length === 0) return
     defaulted.current = true
