@@ -151,7 +151,8 @@ wildintel-uploader/
 │       └── test/                # Vitest setup and fixtures
 ├── tools/
 │   ├── make_example_deployment.py   # a deployment of sample images, with camera EXIF
-│   └── screenshots/         # the manual's screenshots: capture.py + mock_api.js
+│   ├── make_screenshots.py  # the manual's screenshots, driving a copy of the real app
+│   └── screenshots/         # the manual's screenshots with a faked backend: capture.py + mock_api.js
 ├── examples/                    # small folders of images for trying the wizard (see below)
 ├── docs/                        # this documentation (MkDocs Material)
 ├── .github/workflows/           # CI, docs, release
@@ -599,6 +600,10 @@ no real folders, no account. Streaming endpoints send their events and can be he
 (`hold: true`), so a screenshot shows a run midway — the upload's second deployment is. They are
 1100 px wide, in dark mode, with an `en-GB` locale. Long pages are cropped to the part that matters
 (`save(…, top=, bottom=)`).
+
+There is a second way, `tools/make_screenshots.py`, that takes them from **a copy of the real app**: it starts it on a free port with a HOME of its own, fills it with the entities of
+`examples/entities_example/wicp_02` and drives it with Playwright (`.venv/bin/python tools/make_screenshots.py [NAME …]`, `--list` to see them, `--explore "Settings"` to print the buttons and fields
+of a page). The pictures are of the real pages with real data, not of a faked backend.
 
 When the UI changes, run it again and review the images. A step or label that no longer matches
 makes its screenshot fail, and `_failed-NAME.png` shows where it stopped. Playwright uses the

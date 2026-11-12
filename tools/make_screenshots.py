@@ -3,10 +3,10 @@
 The app is started on a free port with a HOME of its own (a temporary folder), so that what it keeps — the settings, the collections — is not yours, and it is filled
 in with the entities of examples/entities_example/wicp_02. Playwright's Chromium takes the pictures: dark theme, 1100 px wide, as the ones already there.
 
-    .venv/bin/python scripts/make_screenshots.py                 # all of them
-    .venv/bin/python scripts/make_screenshots.py settings-entities settings-preprocessing
-    .venv/bin/python scripts/make_screenshots.py --list
-    .venv/bin/python scripts/make_screenshots.py --explore "Settings"   # prints the buttons and fields of a page, to write a new one
+    .venv/bin/python tools/make_screenshots.py                 # all of them
+    .venv/bin/python tools/make_screenshots.py settings-entities settings-preprocessing
+    .venv/bin/python tools/make_screenshots.py --list
+    .venv/bin/python tools/make_screenshots.py --explore "Settings"   # prints the buttons and fields of a page, to write a new one
 
 Needs a browser: Playwright's Chromium (.venv/bin/playwright install chromium) or Google Chrome installed in the system.
 """
