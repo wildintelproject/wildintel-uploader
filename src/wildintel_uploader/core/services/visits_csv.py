@@ -652,7 +652,18 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         by_revision: dict[str, list[str]] = {}
         for u in unknown:
             by_revision.setdefault(u["session"], []).append(u["location_id"])
-        notes += [f"The revision {session} is created, but there is no data of its visits to {', '.join(sites)}: they are created as unknown visits, and the visits after them cannot be checked against them." for session, sites in by_revision.items()]
+        # the revisions in a row that have the same sites are told once: R0005–R0009
+        groups: list[tuple[list[str], list[str]]] = []
+        for session, sites in sorted(by_revision.items()):
+            number, wanted = visit_rules._session_number(session), sorted(sites)
+            if groups and groups[-1][1] == wanted and visit_rules._session_number(groups[-1][0][-1]) == (number or 0) - 1:
+                groups[-1][0].append(session)
+            else:
+                groups.append(([session], wanted))
+        for sessions, sites in groups:
+            name = sessions[0] if len(sessions) == 1 else f"{sessions[0]}–{sessions[-1]}"
+            notes.append(f"The {'revision' if len(sessions) == 1 else 'revisions'} {name} {'is' if len(sessions) == 1 else 'are'} created, but there is no data of {'its' if len(sessions) == 1 else 'their'} visits to {', '.join(sites)}: "
+                         f"they are created as unknown visits, and the visits after them cannot be checked against them.")
     # what is created is what the visits that are kept need: a location, a camera or an SD card that only a refused visit named is not
     kept_rows = {row_of[id(v)] for v in visits}
     sites = {v["location_id"].lower() for v in visits}

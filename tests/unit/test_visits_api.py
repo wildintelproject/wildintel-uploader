@@ -1268,6 +1268,16 @@ def test_the_question_action_after_inspection_of_the_form_is_found_whole_and_cut
         assert row["actions"] == "Revision + Desinstallation"
 
 
+def test_the_revisions_in_a_row_that_are_unknown_are_told_once(tmp_path: Path):
+    text = "location_id,session,date,time,actions,num_photos\nDONA_01,R0005,2026-10-02,08:00,Revision,5\n"
+    mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos")}
+    with _in(tmp_path):
+        _project()
+        notes = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping}).json()["notes"]
+
+    assert [n for n in notes if "unknown visits" in n] == ["The revisions R0001–R0004 are created, but there is no data of their visits to DONA_01: they are created as unknown visits, and the visits after them cannot be checked against them."]
+
+
 def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its_entry_was_created():
     from wildintel_uploader.core.services import epicollect_service
     text = "ec5_uuid,created_at,1_setupBy,4_locationID,5_Status_of_the_came,10_Action_after_the_\nr1,2026-09-14T08:30:00.000Z,Ana,DONA_01,OK,\n"
