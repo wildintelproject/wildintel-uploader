@@ -22,7 +22,7 @@
         
       
       
-      <link rel="icon" href="../img/wildIntel_logo.webp">
+      <link rel="icon" href="../img/wildintel-uploader-icon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
@@ -943,7 +943,7 @@
 
 <h1 id="wildintel-uploader-user-manual-command-line">WildINTEL Uploader — User Manual (command line)<a class="headerlink" href="#wildintel-uploader-user-manual-command-line" title="Permanent link">&para;</a></h1>
 <p>The <code>wildintel-uploader</code> command does part of what the <a href="../user-manual-web/">web app</a> does, from a
-terminal: test the connection to Trapper, find its ids, change the settings, and import a
+terminal: test the connection to TRAPPER, find its ids, change the settings, and import a
 deployment.</p>
 <p>The command line and the web app are two faces of one application: they share <strong>the same
 settings and the same log</strong>, and the deployments they import end up in the same collections
@@ -954,8 +954,8 @@ they are on your machine.</p>
 <p class="admonition-title">The web app does more</p>
 <p>The command line is the app's first, simpler flow. It <strong>does not</strong> run the validation and
 postvalidation checks, preprocess the images (rename, resize, metadata), seal the deployment,
-import a session, upload the deployment's images, or sync collections. For anything beyond
-a quick import into Trapper, use the <a href="../user-manual-web/">web app</a>.</p>
+import a collection, upload the deployment's images, or sync collections. For anything beyond
+a quick import into TRAPPER, use the <a href="../user-manual-web/">web app</a>.</p>
 </div>
 <hr />
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
@@ -990,7 +990,7 @@ it as <code>wildintel-uploader</code>.</p>
 <p>From the source code (see the developer manual), <code>uv run wildintel-uploader …</code> runs it too.</p>
 <p>Every command has its <code>--help</code>: <code>wildintel-uploader import-deployment --help</code>.</p>
 <h2 id="2-getting-started">2. Getting started<a class="headerlink" href="#2-getting-started" title="Permanent link">&para;</a></h2>
-<p>Tell it where Trapper is and who you are — once. The values are saved in <code>settings.toml</code>, shared
+<p>Tell it where TRAPPER is and who you are — once. The values are saved in <code>settings.toml</code>, shared
 with the web app:</p>
 <div class="termy">
 
@@ -1008,7 +1008,7 @@ with the web app:</p>
 
 </div>
 
-<p>The Trapper username is the <strong>email</strong> of your account — Trapper's import form only accepts that.</p>
+<p>The TRAPPER username is the <strong>email</strong> of your account — its import form only accepts that.</p>
 <h2 id="3-settings">3. Settings<a class="headerlink" href="#3-settings" title="Permanent link">&para;</a></h2>
 <p><code>wildintel-uploader config</code> is the command-line face of the web app's ⚙️ page: the same
 <code>settings.toml</code>.</p>
@@ -1092,7 +1092,7 @@ command line follows it.</p>
 
 </div>
 
-<p><code>--rp</code> is short for <code>--research-project</code>. A value that Trapper doesn't have shows as <code>—</code>.</p>
+<p><code>--rp</code> is short for <code>--research-project</code>. A value that TRAPPER doesn't have shows as <code>—</code>.</p>
 <h2 id="5-importing-a-deployment">5. Importing a deployment<a class="headerlink" href="#5-importing-a-deployment" title="Permanent link">&para;</a></h2>
 <p><code>import-deployment</code> walks through the import by asking:</p>
 <div class="termy">
@@ -1138,7 +1138,7 @@ command line follows it.</p>
 <p>What it asks, in order:</p>
 <ol>
 <li><strong>Research project</strong>, <strong>classification project</strong> (optional — pick <em>(none)</em>) and <strong>location</strong>,
-   from your Trapper account.</li>
+   from your TRAPPER account.</li>
 <li><strong>Source images folder</strong> — it reports how many files and images it found, then reads their
    capture dates and camera, and reports the date range and any warnings.</li>
 <li><strong>Revision number</strong> — the deployment id (<code>R0003-DONA_01</code>) is built from it and the location.</li>
@@ -1151,7 +1151,7 @@ command line follows it.</p>
 </ol>
 <p>Then the images are <strong>copied</strong> into the collections folder —
 <code>collections/&lt;research project&gt;/&lt;R0003&gt;/&lt;deployment id&gt;</code> — with <code>deployment.json</code> and the
-collection's own metadata beside them, and the deployment is <strong>registered in Trapper</strong>. The fields
+collection's own metadata beside them, and the deployment is <strong>registered in TRAPPER</strong>. The fields
 are validated as in the web app: dates in order, coordinates in range, height or depth but not
 both.</p>
 <div class="admonition info">
@@ -1182,7 +1182,7 @@ error, printed as <code>✘  …</code> on the standard error.</p>
 </tr>
 <tr>
 <td><code>test-connection</code> (<code>tc</code>)</td>
-<td>Tests the connection to Trapper with the account in the settings.</td>
+<td>Tests the connection to TRAPPER with the account in the settings.</td>
 </tr>
 <tr>
 <td><code>config show</code></td>
@@ -1209,6 +1209,14 @@ error, printed as <code>✘  …</code> on the standard error.</p>
 <td>A research project's locations, with their timezones.</td>
 </tr>
 <tr>
+<td><code>statistics collection RP REVISION</code></td>
+<td>Each deployment of a revision against the previous revisions of its location, with the thresholds of Settings › Postvalidation.</td>
+</tr>
+<tr>
+<td><code>statistics compare RP DEPLOYMENT DEPLOYMENT</code></td>
+<td>Two deployments side by side — the same location in two revisions —, with what changed in %.</td>
+</tr>
+<tr>
 <td><code>import-deployment</code></td>
 <td>Imports a deployment, interactively — see <a href="#5-importing-a-deployment">above</a>.</td>
 </tr>
@@ -1217,7 +1225,7 @@ error, printed as <code>✘  …</code> on the standard error.</p>
 <h2 id="7-troubleshooting">7. Troubleshooting<a class="headerlink" href="#7-troubleshooting" title="Permanent link">&para;</a></h2>
 <dl>
 <dt><strong><code>✘  Missing Trapper username, password — …</code></strong></dt>
-<dd>A Trapper setting is missing — it names which. Set the URL, the username and the password as in
+<dd>A TRAPPER setting is missing — it names which. Set the URL, the username and the password as in
 <a href="#2-getting-started">Getting started</a>.</dd>
 <dt><strong><code>✘  Incorrect Trapper username or password.</code></strong></dt>
 <dd>The username is the <strong>email</strong> of your account. Check with <code>config show</code> and set it again.</dd>
@@ -1227,9 +1235,9 @@ error, printed as <code>✘  …</code> on the standard error.</p>
 <dd>The key doesn't exist: it is <code>SECTION.field</code>, in the section's own case — <code>TRAPPER.base_url</code>.</dd>
 <dt><strong><code>✘  Nothing to choose from.</code></strong></dt>
 <dd>The account sees no research project, or the research project has no location. Create them in
-Trapper first, or check the account's permissions.</dd>
-<dt><strong>A deployment was copied but Trapper refused it</strong></dt>
-<dd>Trapper refuses a deployment that already exists with that id. What was copied isn't undone: it
+TRAPPER first, or check the account's permissions.</dd>
+<dt><strong>A deployment was copied but TRAPPER refused it</strong></dt>
+<dd>TRAPPER refuses a deployment that already exists with that id. What was copied isn't undone: it
 is in the collections folder, and importing the same revision again would be refused locally
 too — choose another revision or move the folder away.</dd>
 <dt><strong>More detail</strong></dt>

@@ -22,7 +22,7 @@
         
       
       
-      <link rel="icon" href="../img/wildIntel_logo.webp">
+      <link rel="icon" href="../img/wildintel-uploader-icon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
@@ -1220,10 +1220,10 @@
 
 
 <h1 id="wildintel-uploader-user-manual">WildINTEL Uploader — User Manual<a class="headerlink" href="#wildintel-uploader-user-manual" title="Permanent link">&para;</a></h1>
-<p><strong>WildINTEL Uploader</strong> is an application for camera-trap projects. It takes a set of images — copied off the camera's 
-memory card —, checks them, organizes them in a local folder with their metadata (renamed, resized, tagged with 
-authorship and license and sealed), and sends them to different camera-trap projects like <a href="https://gitlab.com/trapper-project/trapper">Trapper</a>. 
-It runs on your own  computer, nothing leaves it but what you send to the Trapper server you configure, and it comes in
+<p><strong>WildINTEL Uploader</strong> is an application for camera-trap projects. It takes a set of images — copied off the camera's
+SD card —, checks them, organizes them in a local folder with their metadata (renamed, resized, tagged with
+authorship and license and sealed), and sends them to different camera-trap projects like <a href="https://gitlab.com/trapper-project/trapper">TRAPPER</a>.
+It runs on your own computer; features such as TRAPPER uploads, Epicollect connections and background maps use external services. It comes in
 two faces that share the same settings, the same log and the same collections folder:</p>
 <ul>
 <li>a <strong>web application</strong>, with a guided interface in your browser — the complete one;</li>
@@ -1292,7 +1292,7 @@ verify…"). Either:</p>
 <h3 id="21-research-projects">2.1 Research projects<a class="headerlink" href="#21-research-projects" title="Permanent link">&para;</a></h3>
 <p>A <strong>research project</strong> is the study that everything else belongs to: its locations, cameras, SD cards, roles, visits, deployments and collections are all kept in its own folder, and are never mixed with those of another. It says:</p>
 <ul>
-<li><strong>What</strong> is studied and <strong>how</strong>: to establish it, the project is given a <strong>description</strong>, an <strong>abstract</strong>, the <strong>methods</strong> used, some <strong>keywords</strong> and the choices that Trapper's own form asks — the <em>sampling design</em>, the <em>sensor method</em>, the <em>animal types</em>, the <em>use of bait</em> and the <em>interval between events</em>. The project itself is identified by its <strong>name</strong> and its <strong>acronym</strong>.</li>
+<li><strong>What</strong> is studied and <strong>how</strong>: to establish it, the project is given a <strong>description</strong>, an <strong>abstract</strong>, the <strong>methods</strong> used, some <strong>keywords</strong> and the choices that TRAPPER's own form asks — the <em>sampling design</em>, the <em>sensor method</em>, the <em>animal types</em>, the <em>use of bait</em> and the <em>interval between events</em>. The project itself is identified by its <strong>name</strong> and its <strong>acronym</strong>.</li>
 <li><strong>Where</strong>: its locations (see <a href="#23-locations">Locations</a>).</li>
 <li><strong>Who</strong>: its trappers and their roles (see <a href="#22-trappers-and-roles">Trappers and roles</a>).</li>
 </ul>
@@ -1402,7 +1402,7 @@ verify…"). Either:</p>
 <p>The images a camera takes say <strong>when</strong> they were taken, but <strong>not in which timezone</strong>. An image that says <em>2:00</em> may have been taken at 2, at 3 or at 4 o'clock of the real time, or at any other, depending on the timezone of the place where the camera is. So the timezone — and whether the cameras there <strong>ignore summer time</strong>, that is, whether their clocks are changed in summer or not — is what the app uses to turn the time of the camera into a complete date and time in <strong>ISO 8601</strong> form, with its offset to UTC, such as <code>2025-07-15T02:00:00+02:00</code>.</p>
 <p>In our example the camera says <em>2:00</em> on a July day. If the location is in the timezone of Madrid and its cameras follow summer time, the real time is 2:00 of the summer time, <code>02:00:00+02:00</code>, which is 00:00 UTC. If the cameras there ignore summer time, their clocks are always in winter time, and the same <em>2:00</em> is <code>02:00:00+01:00</code>, which is 01:00 UTC.</p>
 </div>
-<p>A location is always in one of four states:</p>
+<p>A location is always in one of five states:</p>
 <div class="states">
 <table>
 <thead>
@@ -1415,6 +1415,10 @@ verify…"). Either:</p>
 <tr>
 <td><strong>Planned</strong></td>
 <td>The site is planned. It is only in <strong>Settings</strong>, to link cameras and cards to it: it is <strong>not in the app</strong> — no visit is kept to it and no list offers it.</td>
+</tr>
+<tr>
+<td><strong>Pending</strong></td>
+<td>The site is in the app but has not started yet. Its first visit starts it; earlier revisions do not wait for it. New sites from initial setup and TRAPPER imports are pending.</td>
 </tr>
 <tr>
 <td><strong>Ready</strong></td>
@@ -1431,18 +1435,19 @@ verify…"). Either:</p>
 </tbody>
 </table>
 </div>
-<p>The following diagram shows the <strong>transitions allowed</strong> between the states. Where it says <strong>by settings</strong>, the change is made <strong>by hand</strong>, in the settings of the application.</p>
-<p><img alt="The life of a location: a GPS coordinate with more information; planned, ready, active and archived, and what moves it from one to the other" src="../img/location.svg" /></p>
+<p>The diagram shows the main transitions. Settings can also change non-archived states, subject to the visits and the restrictions described below.</p>
+<p><img alt="The life of a location: planned, pending, ready, active and archived, and the transitions between them" src="../img/location.svg" /></p>
 <p>The <strong>actions done in a visit</strong> (see <a href="#the-actions-of-a-visit">the actions of a visit</a>) can change the state of a site, and so can the <strong>settings</strong> of the application, where you can set it by hand. In particular, what moves a location from one state to another:</p>
 <ul>
-<li><strong>Planned → Ready</strong>: you say so in Settings, when the site is ready to be used.</li>
+<li><strong>Planned → Pending</strong>: you say so in Settings, when the site is ready to be used.</li>
+<li><strong>Pending → Ready or Active</strong>: a visit starts the site; if it also installs a camera, the site becomes active.</li>
 <li><strong>Ready → Active</strong>: a visit does an <strong>Installation</strong>, which puts a camera up. Only a visit makes a site active: it cannot be set by hand.</li>
 <li><strong>Active → Ready</strong>: a visit takes the camera away (<strong>Desinstallation</strong>) or finds it stolen (<strong>Stolen</strong>), and puts no other one up. A replacement — the camera is taken away and another put up — keeps it active.</li>
-<li><strong>Ready → Planned</strong>: in Settings, to take the site out of the app again.</li>
+<li><strong>Ready or Pending → Planned</strong>: in Settings, to take the site out of the app again.</li>
 <li><strong>→ Archived</strong>: an <strong>Archive</strong> visit gives the site up (it goes with a Desinstallation or a Stolen visit, as no camera can be left), or you archive it in Settings, <strong>from any state</strong> — a planned site that is given up before it is used included. It never goes back.</li>
 </ul>
 <p>What Settings can do is limited by what the visits say. A site goes <strong>out of the app</strong> — to <em>Planned</em> or to <em>Archived</em> — only when <strong>no camera is out</strong> there (no visit of it is <em>Deployed</em>) and <strong>no visit is still to be made</strong> in a revision that has begun: a revision needs the visit of every site in it. Until then Settings says what is in the way, and the site stays as it was.</p>
-<p>The dashboards and the revisions consider the sites that are <strong>ready or active</strong>: a revision is one visit to each of them.</p>
+<p>The dashboards and revisions wait for the sites that have started and are <strong>ready or active</strong>. A pending site is not waited for until its first visit starts it.</p>
 <p><strong>The location owns the timezone.</strong> A camera's clock has no timezone of its own: its images say "13:10", and the same camera, elsewhere, would say it too. So the timezone (and whether the cameras there ignore summer time) belongs to the location, never to a deployment. They are asked for when a location is added, and every deployment there is read in them; the deployment's details say it before you fill anything in. A location without a timezone is reported — the app doesn't guess one.</p>
 <h3 id="24-cameras">2.4 Cameras<a class="headerlink" href="#24-cameras" title="Permanent link">&para;</a></h3>
 <p>A <strong>camera</strong> is one device — its serial number, its model and how it is set up — and it is <strong>put up at a site</strong> by a visit. A site has <strong>one camera at a time</strong>, and a camera is at <strong>one site at a time</strong>: it cannot be put up where it already is, nor at a second site before it is taken away from the first, and no other camera can be put up at a site that has one until it is taken away — a replacement is a Revision, a Desinstallation and an Installation in one visit.</p>
@@ -1529,9 +1534,9 @@ verify…"). Either:</p>
 </ul>
 <p>A card that is in a camera is <strong>Active</strong>, and only a visit makes it so or takes it out of that state — it leaves the card in a camera, or collects it. So Settings cannot change an active card, and cannot make one active.</p>
 <h3 id="26-visits-and-revisions">2.6 Visits and revisions<a class="headerlink" href="#26-visits-and-revisions" title="Permanent link">&para;</a></h3>
-<p>A <strong>visit</strong> is one trip to one camera trap, to do something with it. It is the field record: it says when it was, at which site, who went, what was done to the camera and the card, and what was found. The visits of a research project are registered in the application, in <em>Manage visits</em>, and everything else is worked out from them.</p>
+<p>A <strong>visit</strong> is one trip to one camera trap, to do something with it. It is the field record: it says when it was, at which site, who went, what was done to the camera and the card, and what was found. The visits of a research project are registered in the application, with <strong>Register the visits</strong>, and everything else is worked out from them.</p>
 <p><img alt="A visit: one trip to one camera trap, recorded with when, where, who went, what was done, the SD card, the camera and what was found" src="../img/visit.svg" /></p>
-<p>A <strong>revision</strong> is one visit to every site: the round of visits to all the locations of a research project that are not archived — the 1st, the 2nd, the 3rd one, called <code>R0001</code>, <code>R0002</code>, <code>R0003</code>… A site is visited <strong>once</strong> in a revision, and a revision does not start until the one before it is finished (every location has its visit in it). Revisions are in order: every visit of a revision is after those of the revisions before it.</p>
+<p>A <strong>revision</strong> is a round of visits to the sites of a research project — the 1st, the 2nd, the 3rd one, called <code>R0001</code>, <code>R0002</code>, <code>R0003</code>… A site is visited <strong>once</strong> in a revision, and a revision does not start until the one before it is finished (every expected location has its visit). Pending sites are not expected before they start; archived sites are not expected after they are archived. Revisions are in order: every visit of a revision is after those of the revisions before it.</p>
 <p><img alt="Revisions: a row for each site and a column for each revision, with one visit in each cell" src="../img/revision.svg" /></p>
 <h4 id="the-states-of-a-visit">The states of a visit<a class="headerlink" href="#the-states-of-a-visit" title="Permanent link">&para;</a></h4>
 <p>A visit has a state that follows its life. A visit that left no camera has none.</p>
@@ -1613,12 +1618,12 @@ verify…"). Either:</p>
 <tr>
 <td><strong>Revision</strong></td>
 <td>The camera is looked at: its card is collected and another one may be left.</td>
-<td>The camera and the photos on the card collected (not when the card was full). The card left is optional.</td>
+<td>The camera and the images on the card collected (not when the card was full). The card left is optional.</td>
 </tr>
 <tr>
 <td><strong>Desinstallation</strong></td>
 <td>The camera is taken away, with its card.</td>
-<td>The camera and the photos collected.</td>
+<td>The camera and the images collected.</td>
 </tr>
 <tr>
 <td><strong>Stolen</strong></td>
@@ -1635,7 +1640,7 @@ verify…"). Either:</p>
 <p>A visit can do several things at once: <em>Revision + Desinstallation + Installation</em> (the camera is looked at, taken away and another put up: a replacement), <em>Revision + Desinstallation</em>, <em>Stolen + Installation</em> (stolen and replaced) or <em>Stolen + Archive</em> (stolen and the site given up). A visit that <strong>could not be made</strong> — the status <em>Not revised</em> — has no action: nothing was done at it.</p>
 <h4 id="what-a-visit-records">What a visit records<a class="headerlink" href="#what-a-visit-records" title="Permanent link">&para;</a></h4>
 <p>Every visit — the one typed in the form and each row of a file alike — is <strong>checked before it is kept</strong>: a visit that does not pass is not kept, and the app says which field is wrong. It checks <strong>each field on its own</strong> (its kind, its range, the values it may take) and a few of them <strong>together</strong>.</p>
-<p>Depending on the actions done during a visit, some of the fields of a visit <strong>must be filled in</strong>: an Installation asks for the camera, the card it leaves and how the camera is set up; a Revision or a Desinstallation, for the camera and the photos collected; a Stolen visit, for the camera… The table of the actions above says what each one asks. Nothing is asked of a visit that could not be made.</p>
+<p>Depending on the actions done during a visit, some of the fields of a visit <strong>must be filled in</strong>: an Installation asks for the camera, the card it leaves and how the camera is set up; a Revision or a Desinstallation, for the camera and the images collected; a Stolen visit, for the camera… The table of the actions above says what each one asks. Nothing is asked of a visit that could not be made.</p>
 <p><strong>What the form asks of a visit by hand</strong>, by what is done in it — <em>required</em> is what has to be filled in and <em>not asked</em> what the visit does not need; the rest is optional:</p>
 <table>
 <thead>
@@ -1649,16 +1654,16 @@ verify…"). Either:</p>
 <tr>
 <td><strong>Installation</strong></td>
 <td>The camera and how it is set up (height or depth, delay, tilt, heading, bait use), the card left, the <strong>calibration</strong></td>
-<td>The batteries, the date and time of the camera, the state of the camera, the state of the card, the photos</td>
+<td>The batteries, the date and time of the camera, the state of the camera, the state of the card, the images</td>
 </tr>
 <tr>
 <td><strong>Revision</strong></td>
-<td>The <strong>state of the camera</strong> (never <em>Stolen</em>), the <strong>batteries</strong>, the <strong>state of the card</strong>, the <strong>photos collected</strong> — not when the card is <em>full</em>: they are not counted —, the <strong>date and time of the camera</strong>, the <strong>calibration</strong>, the <strong>card left</strong></td>
+<td>The <strong>state of the camera</strong> (never <em>Stolen</em>), the <strong>batteries</strong>, the <strong>state of the card</strong>, the <strong>images collected</strong> — not when the card is <em>full</em>: they are not counted —, the <strong>date and time of the camera</strong>, the <strong>calibration</strong>, the <strong>card left</strong></td>
 <td>The camera itself: it is the one that was there, and the visit before says it — it is not filled in again, nor kept</td>
 </tr>
 <tr>
 <td><strong>Revision + Desinstallation</strong> (and <strong>Archive</strong>)</td>
-<td>The <strong>photos collected</strong> — not when the card is <em>full</em> —, the <strong>state of the camera</strong>, the <strong>batteries</strong>, the <strong>state of the card</strong>, the <strong>date and time of the camera</strong></td>
+<td>The <strong>images collected</strong> — not when the card is <em>full</em> —, the <strong>state of the camera</strong>, the <strong>batteries</strong>, the <strong>state of the card</strong>, the <strong>date and time of the camera</strong></td>
 <td>The card left (it goes with the camera), the calibration, and everything about putting a camera up: its set-up</td>
 </tr>
 <tr>
@@ -1674,7 +1679,7 @@ verify…"). Either:</p>
 <tr>
 <td><strong>Stolen + Installation</strong></td>
 <td>The new camera, its set-up, the card left and the calibration</td>
-<td>The photos, the states and the batteries</td>
+<td>The images, the states and the batteries</td>
 </tr>
 <tr>
 <td><strong>Archive</strong> alone, or a visit that could not be made</td>
@@ -1683,7 +1688,7 @@ verify…"). Either:</p>
 </tr>
 </tbody>
 </table>
-<p>A Revision, a Desinstallation or a Stolen visit does not say which camera it is of: it is the one at the site, which the visit that put it up says. With the card full — <em>Card full</em> — the photos are not counted, and their number cannot be given: it is not asked. A Desinstallation does not come alone: it goes with a Revision. A CSV file is checked by the server, which asks less than the form: the camera and the card left, and the photos of a revision.</p>
+<p>A Revision, a Desinstallation or a Stolen visit does not say which camera it is of: it is the one at the site, which the visit that put it up says. With the card full — <em>Card full</em> — the images are not counted, and their number cannot be given: it is not asked. A Desinstallation does not come alone: it goes with a Revision. A CSV file is checked by the server, which asks less than the form: the camera and the card left, and the images of a revision.</p>
 <p>The following table sums up what a visit records and what is validated in each field.</p>
 <table>
 <thead>
@@ -1712,12 +1717,12 @@ verify…"). Either:</p>
 <tr>
 <td><strong>The SD card</strong></td>
 <td><code>sd</code>, <code>num_photos</code>, <code>card_status</code></td>
-<td>The photos counted are a whole number, zero or more. The state of the card (<code>card_status</code>) is <em>OK</em> or <em>CardFull</em>. With the card full its photos are <strong>not counted</strong>, and their number <strong>cannot be given</strong>: a visit that says both is refused.</td>
+<td>The number of images counted is a whole number, zero or more. The state of the card (<code>card_status</code>) is <em>OK</em> or <em>CardFull</em>. With the card full its images are <strong>not counted</strong>, and their number <strong>cannot be given</strong>: a visit that says both is refused.</td>
 </tr>
 <tr>
 <td><strong>The camera</strong></td>
 <td><code>camera_id</code>, <code>camera_model</code>, <code>camera_interval</code>, <code>camera_height</code>, <code>camera_depth</code>, <code>camera_tilt</code>, <code>camera_heading</code>, <code>detection_distance</code>, <code>bait_use</code>, <code>feature_type</code>, <code>habitat</code>, <code>camera_status</code>, <code>battery_status</code>, <code>date_time_ok</code>, <code>timestamp_issues</code>, <code>calibration</code></td>
-<td>The state of the batteries (<code>battery_status</code>) is <em>OK</em> or <em>NoBatteries</em> (there were none). A CSV that has one column for both, <code>card_batteries_ok</code> (<em>OK</em>, <em>CarFull</em>, <em>NoBatteries</em>, <em>CarFullNoBatteries</em>, or <em>SinPilas</em>), is read as the two. The status of the camera (<code>camera_status</code>; a CSV may call its column <em>Status of the camera</em> or <em>status</em>) is one of <em>OK</em>, <em>Altered</em> (moved or changed), <em>Knocked down</em> (fallen or tilted), <em>Damaged</em> (broken or harmed), <em>Stolen</em>, <em>Not revised</em> (the visit could not be made), and, from the field form, <em>New site</em> and <em>Inactive site</em>. The interval, the height, the depth and the detection distance are zero or more; the tilt is between -90 and 90 degrees and the heading between 0 and 360; the bait use and the calibration are yes or no; the feature type is one of the values of Camtrap DP.</td>
+<td>The state of the batteries (<code>battery_status</code>) is <em>OK</em> or <em>NoBatteries</em> (there were none). A CSV that has one column for both, <code>card_batteries_ok</code> (<em>OK</em>, <em>CarFull</em>, <em>NoBatteries</em>, <em>CarFullNoBatteries</em>, or <em>SinPilas</em>), is read as the two. The status of the camera (<code>camera_status</code>; a CSV may call its column <em>Status of the camera</em> or <em>status</em>) is one of <em>OK</em>, <em>Altered</em> (moved or changed), <em>Stolen</em>, <em>Not revised</em> (the visit could not be made), and, from the field form, <em>New site</em> and <em>Inactive site</em>. The interval, the height, the depth and the detection distance are zero or more; the tilt is between -90 and 90 degrees and the heading between 0 and 360; the bait use and the calibration are yes or no; the feature type is one of the values of Camtrap DP.</td>
 </tr>
 <tr>
 <td><strong>The site and the notes</strong></td>
@@ -1761,7 +1766,7 @@ verify…"). Either:</p>
 <p>A card is in a camera from the visit that leaves it until a visit collects it. So the card a visit leaves cannot be <strong>archived</strong>, nor be <strong>in the camera of another site</strong> (it has to be collected first), nor be <strong>the one the same visit collects</strong> (the card left has to be another), nor have been <strong>collected in the same revision</strong>.</p>
 <p><strong>What exists</strong></p>
 <p>The camera, the SD card and who went have to <strong>exist</strong> in the research project and in the settings, unless the import is asked to create the camera or the card.</p>
-<p>What the app only <strong>questions</strong> — it asks the one who knows the field, it does not refuse the visit — is: a Revision with no photos (no deployment comes out of it); an Installation while the card left before was not collected (no Revision or Desinstallation closed that deployment); a camera or a card at two sites in the same revision; a visit whose time is not after the one of an earlier revision; and a jump in the numbers of the revisions (a trip is missing).</p>
+<p>What the app only <strong>questions</strong> — it asks the one who knows the field, it does not refuse the visit — is: a Revision with no images (no deployment comes out of it); an Installation while the card left before was not collected (no Revision or Desinstallation closed that deployment); a camera or a card at two sites in the same revision; a visit whose time is not after the one of an earlier revision; and a jump in the numbers of the revisions (a trip is missing).</p>
 <p><strong>What cannot be known cannot be checked.</strong> An <em>unknown</em> visit — a revision of a site of which nothing is known — has no camera, no card and no day, so nothing is checked against it. And what was left at a site before an unknown revision cannot be trusted after it: the camera or the card may have been moved in it. That is why the first visit to a site after an unknown revision may be any, and a file is only excused this: what depends on a revision that nobody knows.</p>
 <h3 id="27-deployments-and-collections">2.7 Deployments and collections<a class="headerlink" href="#27-deployments-and-collections" title="Permanent link">&para;</a></h3>
 <p>A <strong>deployment</strong> is the set of images taken by one camera, at one <strong>location</strong> (see <a href="#23-locations">Locations</a>), between two <strong>consecutive visits</strong> to it: the one that <strong>left</strong> the camera and its card, and the next one that <strong>collected</strong> the card. Between them the camera was set up under specific configuration conditions (height, tilt, delay between triggers…). A deployment whose camera is still out, because the card has not been collected, is <em>open</em>; when the card is collected, it is <em>closed</em> and its images can be imported. The deployment of a camera that was stolen has no images.</p>
@@ -1796,7 +1801,7 @@ verify…"). Either:</p>
 <p>A visit that <strong>collects</strong> the card (a Revision, or a Desinstallation) closes the deployment and its images can be imported. A <strong>Stolen</strong> visit also closes it, but there are no images to import. Nothing in the settings changes the state of a deployment: only the visits do.</p>
 <p>All the deployments of a revision form a <strong>collection</strong>. There is a parallel between the two: a <strong>revision</strong> is a set of <strong>visits</strong>, one to each location, and a <strong>collection</strong> is the set of <strong>deployments</strong> that come out of them. They are not the same: the revision is the field work, what was done at the locations, and the collection is the images that it gave. A deployment belongs to the revision of the visit that <strong>left</strong> the camera — the deployment from the visits of <code>R0001</code> to the visits of <code>R0002</code> is of <code>R0001</code>. <img alt="A collection: all the deployments of a revision, one for each site, closed when the next visit has collected the card and open while it has not" src="../img/collection.svg" /></p>
 <h3 id="28-uploads">2.8 Uploads<a class="headerlink" href="#28-uploads" title="Permanent link">&para;</a></h3>
-<p>A <strong>collection</strong> is kept in your computer. To share it, its deployments are <strong>uploaded</strong> — their images and their metadata — to a camera-trap portal. The one the app uploads to is <a href="https://gitlab.com/trapper-project/trapper">Trapper</a>; the settings have a place for others, to come.</p>
+<p>A <strong>collection</strong> is kept in your computer. To share it, its deployments are <strong>uploaded</strong> — their images and their metadata — to a camera-trap portal. The one the app uploads to is <a href="https://gitlab.com/trapper-project/trapper">TRAPPER</a>; the settings have a place for others, to come.</p>
 <p>For each deployment the upload creates its <strong>location</strong> and the <strong>deployment</strong> in the portal if they are not there, packs the images and uploads them, and tells the portal to process them into a <strong>collection</strong> — so a collection in the portal is the one of a revision here. The app remembers <strong>where and when</strong> each deployment was uploaded, to show which ones are still to be.</p>
 <p>Where a deployment has been uploaded is said <strong>for each portal</strong>, so a deployment is, for each one, in one of two <strong>states</strong>:</p>
 <div class="states">
@@ -1847,8 +1852,8 @@ verify…"). Either:</p>
 <p>Your <strong>source folder is never touched</strong>: the images are copied, and the copy is what gets renamed,
 resized and tagged.</p>
 <div class="admonition warning">
-<p class="admonition-title">Copy the images off the camera's memory card first</p>
-<p>Point the app at a folder on your computer, not at the memory card. The app only <em>reads</em> the
+<p class="admonition-title">Copy the images off the camera's SD card first</p>
+<p>Point the app at a folder on your computer, not at the SD card. The app only <em>reads</em> the
 source folder, but working from the card is slow and risks losing files if it is removed
 half-way.</p>
 </div>
@@ -1901,7 +1906,7 @@ half-way.</p>
 <td><a href="../user-manual-web/">User manual — web app</a></td>
 </tr>
 <tr>
-<td>Test the connection, change the settings, look up Trapper's ids or make a quick import from a terminal</td>
+<td>Test the connection, change the settings, look up TRAPPER's ids or make a quick import from a terminal</td>
 <td><a href="../user-manual-cli/">User manual — command line</a></td>
 </tr>
 <tr>

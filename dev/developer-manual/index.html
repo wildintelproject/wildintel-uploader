@@ -22,7 +22,7 @@
         
       
       
-      <link rel="icon" href="../img/wildIntel_logo.webp">
+      <link rel="icon" href="../img/wildintel-uploader-icon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
@@ -1492,12 +1492,12 @@ and built the same way, so what you know of one carries over.</p>
         API --&gt; FS[("settings.toml&lt;br/&gt;sessions/&lt;br/&gt;collections/, packages/")]
         SRC[("Source folder&lt;br/&gt;(read only)")] --&gt; API
     end
-    API -- "wildintel-trapper-sdk (httpx)" --&gt; T["Trapper"]</code></pre>
+    API -- "wildintel-trapper-sdk (httpx)" --&gt; T["TRAPPER"]</code></pre>
 <p>(The command line takes the backend's place in the diagram: it calls the same services
 directly, in the same process, without HTTP.)</p>
 <ul>
 <li><strong>Local first.</strong> The app's own data — the <strong>collections folder</strong> — is plain files and JSON
-  (see the <a href="../user-manual/#the-collections-folder">user manual</a>); there is no database. Trapper
+  (see the <a href="../user-manual/#the-collections-folder">user manual</a>); there is no database. TRAPPER
   is only talked to when asked: looking things up, registering and uploading deployments, syncing.
   The source folder of an import is only ever <em>read</em>.</li>
 <li><strong>No server-side login session.</strong> Every request carries the credentials it needs; blank ones
@@ -1581,7 +1581,7 @@ wins over the settings page's. Both can also go in <code>src/wildintel_uploader/
 <div class="admonition note">
 <p class="admonition-title">Two kinds of settings</p>
 <p><code>web/settings.py</code> is the <strong>server's</strong> (port, log level, CORS — environment variables).
-<code>core/config.py</code> is the <strong>app's</strong> own <code>settings.toml</code> (Trapper account, the data folder,
+<code>core/config.py</code> is the <strong>app's</strong> own <code>settings.toml</code> (TRAPPER account, the data folder,
 checks, preprocessing — the ⚙️ page, and <code>wildintel-uploader config</code>).</p>
 </div>
 <h2 id="3-repository-layout">3. Repository layout<a class="headerlink" href="#3-repository-layout" title="Permanent link">&para;</a></h2>
@@ -1604,7 +1604,7 @@ checks, preprocessing — the ⚙️ page, and <code>wildintel-uploader config</
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>│   │   ├── app.py               # the Typer app: config, trapper lookups, import-deployment
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>│   │   └── common.py            # the console, credentials, errors
 <a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>│   └── wucli.py                 # the development CLI (uv run wucli …)
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>├── tests/unit/                  # pytest — Trapper always faked
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>├── tests/unit/                  # pytest — TRAPPER always faked
 <a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>├── frontend/
 <a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>│   └── src/
 <a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>│       ├── api.ts               # every backend call, and the NDJSON stream reader
@@ -1615,14 +1615,15 @@ checks, preprocessing — the ⚙️ page, and <code>wildintel-uploader config</
 <a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>│       └── test/                # Vitest setup and fixtures
 <a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>├── tools/
 <a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>│   ├── make_example_deployment.py   # a deployment of sample images, with camera EXIF
-<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>│   └── screenshots/         # the manual's screenshots: capture.py + mock_api.js
-<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>├── examples/                    # small folders of images for trying the wizard (see below)
-<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>├── docs/                        # this documentation (MkDocs Material)
-<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>├── .github/workflows/           # CI, docs, release
-<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>├── wildintel-uploader.spec      # PyInstaller
-<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>├── setup.sh                     # installs everything for development
-<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>├── mkdocs.yml
-<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>└── CHANGELOG.md
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>│   ├── make_screenshots.py  # the manual's screenshots, driving a copy of the real app
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>│   └── screenshots/         # the manual's screenshots with a faked backend: capture.py + mock_api.js
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>├── examples/                    # small folders of images for trying the wizard (see below)
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>├── docs/                        # this documentation (MkDocs Material)
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>├── .github/workflows/           # CI, docs, release
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>├── wildintel-uploader.spec      # PyInstaller
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>├── setup.sh                     # installs everything for development
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>├── mkdocs.yml
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>└── CHANGELOG.md
 </code></pre></div>
 <p><code>examples/</code> holds folders to try each case with: a good deployment (<code>deployment_examples/valid</code>) and
 ones with corrupted images, duplicates, missing EXIF, mixed cameras, subfolders and unordered
@@ -1659,7 +1660,7 @@ something to say for each check.</p>
 </tr>
 <tr>
 <td><code>statistics_service</code></td>
-<td>The statistical postvalidation: sequences, and whether this revision is like the earlier ones of the location.</td>
+<td>The statistical postvalidation: sequences, and whether this revision is like the earlier ones of the location. Also the statistics of a whole revision (<code>collection_statistics</code>, <code>POST /api/statistics/revision</code>, the CLI's <code>statistics</code>), with each deployment's metrics kept in <code>statistics.json</code> beside its <code>images.json</code>.</td>
 </tr>
 <tr>
 <td><code>report_service</code></td>
@@ -1695,7 +1696,7 @@ something to say for each check.</p>
 </tr>
 <tr>
 <td><code>sync_service</code></td>
-<td>Fills the collections folder from a Trapper classification project.</td>
+<td>Fills the collections folder from a TRAPPER classification project.</td>
 </tr>
 <tr>
 <td><code>session_store</code></td>
@@ -1712,7 +1713,7 @@ something to say for each check.</p>
 <p>Six fields are not typed, the app fills them in: <code>id</code> (a UUID that never changes), <code>when</code> (the instant, ISO 8601 in UTC with a <code>Z</code>, worked out from the day and the time of the wall clock of the location), <code>state</code> (<code>deployed</code>, <code>collected</code>, <code>stolen</code>, <code>not_visited</code> or <code>no_camera</code>, worked out by <code>visit_deployments.visit_states</code> and refreshed whenever a visit is added), <code>deployment_id</code> (the deployment the visit closed, once its images are imported) and <code>created_at</code> / <code>updated_at</code> (written each time the visit is kept, as an ORM does: a visit saved again with nothing changed keeps both). What a visit points to — location, camera, SD card, trappers — is kept by id: see <em>Storage</em>.</p>
 <p>What the visits do to the <strong>entities</strong> is <code>visit_rules.entity_changes</code>, applied by the visits router when visits are kept (by hand and from a file): the camera and the card put in the field are <em>active</em>, the ones taken away are <em>ready</em>, and a camera found stolen is archived with its card.</p>
 <h3 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h3>
-<p>The <strong>records</strong> — the research projects and, for each, its locations, visits, unknown visits, cameras, SD cards and failed uploads — are kept through a <strong>layer of
+<p>The <strong>records</strong> — the research projects and, for each, its locations, visits, unknown visits, planned revisions, cameras, SD cards and failed uploads — are kept through a <strong>layer of
 abstraction</strong>, <code>core/storage</code>: today they are JSON files in the collections folder, and a database can be added later <strong>without changing the code that uses them</strong>.</p>
 <ul>
 <li><code>storage.base.ProjectStore</code> is the interface — a few methods: the research projects (<code>list_projects</code>, <code>has_project</code>, <code>get_project</code>, <code>add_project</code>, <code>save_project</code>,
@@ -1733,7 +1734,7 @@ abstraction</strong>, <code>core/storage</code>: today they are JSON files in th
 <li><strong>The trappers</strong> are global records (<code>ProjectStore.read_global</code> / <code>write_global</code>, <code>trappers.json</code> beside the projects): the people belong to no research project. Those an earlier version kept in the settings are moved to the store the first time they are asked for.</li>
 <li><strong>What is not in the layer yet.</strong> With a database, <em>all</em> the information should go to it, except the images. For now the layer has the records of the research projects and the trappers; the metadata of collections and deployments (<code>deployment.json</code>, <code>images.json</code>…) and the settings themselves (which say where the records are, so they stay a file) are not through it. The reports and the sessions stay files, for now.</li>
 </ul>
-<p><strong>Not planned for now</strong> — it has no effect until a database is used, and that is not foreseen. What was decided for when it is, so it is not lost: the metadata of collections and deployments would be <em>documents</em> of the store (by research project, collection, deployment and name; the JSON backend would keep them in the same files and paths as now, so nothing would be migrated); the modules that read them (<code>seal_service</code>, <code>repair_service</code>, <code>preprocessing_service</code>, <code>trapper_upload_service</code>, <code>statistics_service</code>, <code>sync_service</code>, <code>timefix_service</code>, <code>backup_service</code>) would be converted one by one, from paths to those names. The CSV logs of a collection (<code>FileTimestampLog</code>, <code>FieldworkLog</code>) and the packages to upload stay files: they are what <code>wildintel-tools</code> and Trapper ask for. <strong>The seal is made over the content of the documents</strong>, not over their files: <code>deployment.json</code> is hashed as <code>json.dumps(document, indent=2, ensure_ascii=False)</code>, which is what its file holds today, so the seals already made still verify.</p>
+<p><strong>Not planned for now</strong> — it has no effect until a database is used, and that is not foreseen. What was decided for when it is, so it is not lost: the metadata of collections and deployments would be <em>documents</em> of the store (by research project, collection, deployment and name; the JSON backend would keep them in the same files and paths as now, so nothing would be migrated); the modules that read them (<code>seal_service</code>, <code>repair_service</code>, <code>preprocessing_service</code>, <code>trapper_upload_service</code>, <code>statistics_service</code>, <code>sync_service</code>, <code>timefix_service</code>, <code>backup_service</code>) would be converted one by one, from paths to those names. The CSV logs of a collection (<code>FileTimestampLog</code>, <code>FieldworkLog</code>) and the packages to upload stay files: they are what <code>wildintel-tools</code> and TRAPPER ask for. <strong>The seal is made over the content of the documents</strong>, not over their files: <code>deployment.json</code> is hashed as <code>json.dumps(document, indent=2, ensure_ascii=False)</code>, which is what its file holds today, so the seals already made still verify.</p>
 <p>To keep the records somewhere else — a database, say — <strong>add a backend</strong>; nothing else is touched:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">wildintel_uploader.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">storage</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
@@ -1807,8 +1808,8 @@ themselves.</p>
 </tr>
 </tbody>
 </table>
-<p>The wizard's import does <strong>not</strong> talk to Trapper: the deployment is registered when it is
-<strong>uploaded</strong>. <code>/api/deployment-import/import</code> — copy, then register it through Trapper's classic
+<p>The wizard's import does <strong>not</strong> talk to TRAPPER: the deployment is registered when it is
+<strong>uploaded</strong>. <code>/api/deployment-import/import</code> — copy, then register it through TRAPPER's classic
 deployment form — is the command line's flow.</p>
 <p>The <strong>timezone</strong> is read from the location, in the research project's <code>locations.json</code>
 (<code>local_folder_service.location_time</code>), never from the request: <code>import-local</code> refuses a location
@@ -1880,16 +1881,16 @@ here, and it isn't modified (<code>local_folder_service.is_synced</code>).</p>
 file goes up and a final <code>done</code>. Three modes:</p>
 <ul>
 <li><code>upload</code> — all of it;</li>
-<li><code>dry_run</code> — the same decisions, reading Trapper only (nothing created, sent or written);</li>
+<li><code>dry_run</code> — the same decisions, reading TRAPPER only (nothing created, sent or written);</li>
 <li><code>generate</code> — only <code>package</code> and <code>csv</code>: the zips, yamls and <code>&lt;collection&gt;_deployments.csv</code>
   under <code>&lt;data dir&gt;/packages/&lt;research project&gt;/</code>. It needs no connection if the research project's
-  pk in Trapper is known (<code>trapper_pk</code> in <code>research_project.json</code>).</li>
+  pk in TRAPPER is known (<code>trapper_pk</code> in <code>research_project.json</code>).</li>
 </ul>
 <p>Packing splits a deployment's images in zips of at most <code>max_zip_mb</code> (<code>split_by_size</code>; a bigger
 file goes alone). The yaml names the <strong>classification project's</strong> pk — not the research
-project's — the deployment in lower case, as Trapper keeps it, and the location's timezone and
-summer-time setting, which Trapper checks against the location it has. Locations and deployments
-are found ignoring case: Trapper keeps its ids in lower case, the collections folder in upper.</p>
+project's — the deployment in lower case, as TRAPPER keeps it, and the location's timezone and
+summer-time setting, which TRAPPER checks against the location it has. Locations and deployments
+are found ignoring case: TRAPPER keeps its ids in lower case, the collections folder in upper.</p>
 <h3 id="repair">Repair<a class="headerlink" href="#repair" title="Permanent link">&para;</a></h3>
 <p><code>repair_service.inspect</code> is the state of a deployment: <em>valid</em> is <code>seal_service.verify</code> saying so, nothing else. <code>repair_stream</code>
 rebuilds, in this order: the dates (<code>pre._camera_time</code> of every image — the camera's wall clock — then the period: the
@@ -1899,15 +1900,15 @@ the period, validated as <code>DeploymentFields</code>), <code>preprocessing.jso
 the old file's, else the settings' with the location's timezone), and <code>seal_service.seal(dest, dest, …, recovered=True)</code>,
 which runs the validation and postvalidation over the folder's own images. <code>report_service.repair_report</code> joins what it wrote,
 the seal's per-image results and <code>_preprocessing_problems</code> (names, size, XMP identifier, hash). A deployment synced from
-Trapper is refused. The routes are <code>POST /api/repair/collections</code>, <code>/inspect</code> and <code>/deployment</code> (the stream).</p>
+TRAPPER is refused. The routes are <code>POST /api/repair/collections</code>, <code>/inspect</code> and <code>/deployment</code> (the stream).</p>
 <h3 id="sync">Sync<a class="headerlink" href="#sync" title="Permanent link">&para;</a></h3>
-<p><code>sync_service.sync_stream</code> reads Trapper only. Collections are those of the classification project
+<p><code>sync_service.sync_stream</code> reads TRAPPER only. Collections are those of the classification project
 whose name starts with <code>R</code>; a deployment goes to the one its id starts with
-(<code>R0003-DONA_01</code> → <code>R0003</code>); what the folder already has is kept; and <code>images.json</code> is built from the resources Trapper lists, in the location's
+(<code>R0003-DONA_01</code> → <code>R0003</code>); what the folder already has is kept; and <code>images.json</code> is built from the resources TRAPPER lists, in the location's
 timezone. The images are downloaded only with <code>download_images</code>: <code>trapper_service.list_deployment_media</code> lists the files through the
-classification project's media — the URL that carries the access token (<code>?rt=</code>), without which Trapper answers 404 — and
+classification project's media — the URL that carries the access token (<code>?rt=</code>), without which TRAPPER answers 404 — and
 <code>file_downloader</code> fetches them, <code>DOWNLOAD_WORKERS</code> at a time, each written as <code>*.part</code> and moved into place; an image the project doesn't
-hold is reported in <code>downloaded.not_held</code>. Deployments Trapper holds in a way that isn't a valid <code>DeploymentFields</code> are reported
+hold is reported in <code>downloaded.not_held</code>. Deployments TRAPPER holds in a way that isn't a valid <code>DeploymentFields</code> are reported
 in <code>failed</code>, not raised.</p>
 <h3 id="sessions">Sessions<a class="headerlink" href="#sessions" title="Permanent link">&para;</a></h3>
 <p>A <strong>session</strong> is one wizard run's own directory under <code>&lt;Documents&gt;/wildintel-uploader/sessions/&lt;task_id&gt;/</code>,
@@ -1918,7 +1919,7 @@ start-up until the import reaches <code>done</code>, which discards it. Credenti
 <h3 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h3>
 <p><code>core/logging_setup.py</code>: console and a rotating file (<code>wildintel-uploader.log</code>, 5 MB × 5, in <code>platformdirs.user_log_dir</code> — <code>~/.local/state/wildintel-uploader/log</code> on Linux; the sessions are in <code>user_state_dir()/sessions</code>; neither is configurable, and what an earlier version left beside <code>settings.toml</code> or in Documents is moved at start) at
 <code>GENERAL.log_level</code>, changed on the fly when the settings are saved. At <code>DEBUG</code> each file and each
-Trapper query is logged, and tracebacks are kept; the libraries' byte-level chatter stays at INFO.
+TRAPPER query is logged, and tracebacks are kept; the libraries' byte-level chatter stays at INFO.
 The command line only prints warnings unless given <code>-v</code>.</p>
 <h3 id="streaming-endpoints">Streaming endpoints<a class="headerlink" href="#streaming-endpoints" title="Permanent link">&para;</a></h3>
 <p>Every router that streams does it the same way: the checks that can fail before starting are done
@@ -1958,7 +1959,7 @@ the current task and shows one page.</p>
 </tr>
 <tr>
 <td><code>ImportSessionPage</code></td>
-<td>The same stages for a folder of deployments; with closed visits ticked in the origin, each folder is linked to a visit and the location, details and dates come from it. Reuses the wizard's pieces, exported from <code>ImportDeploymentPage</code>.</td>
+<td>The same stages for a collection folder of deployments; with collected visits ticked in the origin, each folder is linked to a visit and the location, details and dates come from it. Reuses the wizard's pieces, exported from <code>ImportDeploymentPage</code>.</td>
 </tr>
 <tr>
 <td><code>UploadDeploymentPage</code></td>
@@ -1966,7 +1967,7 @@ the current task and shows one page.</p>
 </tr>
 <tr>
 <td><code>VisitsPage</code></td>
-<td><em>Register visits</em>: the visits of a research project, by hand, from the Epicollect download or from a CSV. Stored in the project's <code>visits.json</code>; <code>POST /api/visits/closed</code> lists the closed visits that have no deployment yet and <code>POST /api/visits/link</code> links one to the deployment it gave.</td>
+<td><em>Register the visits</em>: the visits of a research project, by hand, from the Epicollect download or from a CSV. Stored in the project's <code>visits.json</code>; <code>POST /api/visits/closed</code> lists the collected visits that have no deployment yet and <code>POST /api/visits/link</code> links one to the deployment it gave.</td>
 </tr>
 <tr>
 <td><code>UtilsPage</code></td>
@@ -2003,7 +2004,7 @@ has sample backend payloads.</p>
 <p>The backend's own interactive docs are at <code>/docs</code> when it runs. All paths are under <code>/api</code> (the
 routers' own prefixes are <code>/trapper</code>, <code>/deployment-import</code>, <code>/settings</code>, <code>/sessions</code>, <code>/upload</code> and
 <code>/sync</code>; health is <code>/api/health</code> and <code>/api/version</code>); all
-bodies are JSON, and every <code>POST</code> that talks to Trapper takes optional <code>url</code>, <code>username</code> and
+bodies are JSON, and every <code>POST</code> that talks to TRAPPER takes optional <code>url</code>, <code>username</code> and
 <code>password</code> that default to the settings'.</p>
 <table>
 <thead>
@@ -2062,7 +2063,7 @@ bodies are JSON, and every <code>POST</code> that talks to Trapper takes optiona
 <tr>
 <td></td>
 <td><code>…/scan-folder</code>, <code>/scan-session</code></td>
-<td>Scan a deployment's / a session's folder: only count its files and images (a session's also say which dates a timestamp log gives).</td>
+<td>Scan a deployment's / a collection folder: only count its files and images (a collection scan also says which dates a timestamp log gives).</td>
 </tr>
 <tr>
 <td></td>
@@ -2117,7 +2118,7 @@ bodies are JSON, and every <code>POST</code> that talks to Trapper takes optiona
 <tr>
 <td></td>
 <td><code>…/import-local</code></td>
-<td><strong>Streams</strong> both at once (the session wizard's import).</td>
+<td><strong>Streams</strong> both at once (the collection wizard's import).</td>
 </tr>
 <tr>
 <td></td>
@@ -2240,7 +2241,7 @@ an image check <code>x</code>:</p>
 </code></pre></div>
 <ul>
 <li><strong>Backend</strong> — <code>tests/unit/</code>: services directly and the routers through FastAPI's <code>TestClient</code>.
-  <strong>Trapper is always faked</strong> — nothing needs a server or an account. Tests that need ExifTool are
+  <strong>TRAPPER is always faked</strong> — nothing needs a server or an account. Tests that need ExifTool are
   skipped without it (CI installs it). Image fixtures are generated into <code>tmp_path</code>; the folders
   in <code>examples/</code> are for trying the wizard by hand.</li>
 <li><strong>Frontend</strong> — Vitest and Testing Library, a <code>.test.tsx</code> beside each page and component, with
@@ -2302,11 +2303,14 @@ from <a href="https://github.com/fastapi/typer">Typer</a>'s docs): a <code>conso
 </code></pre></div>
 <p><code>tools/screenshots/capture.py</code> serves the built frontend and drives it with Playwright, through
 the same steps a user takes. <code>tools/screenshots/mock_api.js</code> replaces <code>fetch</code> in the page with a
-fake backend that uses sample data (the DONA project, revision 3, three locations): no Trapper,
+fake backend that uses sample data (the DONA project, revision 3, three locations): no TRAPPER,
 no real folders, no account. Streaming endpoints send their events and can be held open
 (<code>hold: true</code>), so a screenshot shows a run midway — the upload's second deployment is. They are
 1100 px wide, in dark mode, with an <code>en-GB</code> locale. Long pages are cropped to the part that matters
 (<code>save(…, top=, bottom=)</code>).</p>
+<p>There is a second way, <code>tools/make_screenshots.py</code>, that takes them from <strong>a copy of the real app</strong>: it starts it on a free port with a HOME of its own, fills it with the entities of
+<code>examples/entities_example/wicp_02</code> and drives it with Playwright (<code>.venv/bin/python tools/make_screenshots.py [NAME …]</code>, <code>--list</code> to see them, <code>--explore "Settings"</code> to print the buttons and fields
+of a page). The pictures are of the real pages with real data, not of a faked backend.</p>
 <p>When the UI changes, run it again and review the images. A step or label that no longer matches
 makes its screenshot fail, and <code>_failed-NAME.png</code> shows where it stopped. Playwright uses the
 system's Chrome or Chromium if it finds one, otherwise its own

@@ -22,7 +22,7 @@
         
       
       
-      <link rel="icon" href="../img/wildIntel_logo.webp">
+      <link rel="icon" href="../img/wildintel-uploader-icon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
@@ -790,10 +790,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#sessions-of-deployments" class="md-nav__link">
+  <a href="#collections-of-deployments" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sessions of deployments
+        Collections of deployments
       
     </span>
   </a>
@@ -820,7 +820,7 @@
   <a href="#uploading-to-trapper" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Uploading to Trapper
+        Uploading to TRAPPER
       
     </span>
   </a>
@@ -1112,10 +1112,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#sessions-of-deployments" class="md-nav__link">
+  <a href="#collections-of-deployments" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sessions of deployments
+        Collections of deployments
       
     </span>
   </a>
@@ -1142,7 +1142,7 @@
   <a href="#uploading-to-trapper" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Uploading to Trapper
+        Uploading to TRAPPER
       
     </span>
   </a>
@@ -1228,7 +1228,7 @@
 <h2 id="visits-and-revisions">Visits and revisions<a class="headerlink" href="#visits-and-revisions" title="Permanent link">&para;</a></h2>
 <p>The visits to the camera traps are the field record the deployments are worked out from: who went, when, to
 which site and what was done (an installation, a revision, a desinstallation, a stolen camera, a site given
-up). They are entered <strong>by hand</strong>, or read from a <strong>CSV file</strong> — an Epicollect download, or any spreadsheet whose
+up). They are entered <strong>by hand</strong>, or read from a <strong>CSV file</strong> — a field app's download, or any spreadsheet whose
 columns you match to the fields of a visit — and kept in the research project's folder.</p>
 <h3 id="revisions">Revisions<a class="headerlink" href="#revisions" title="Permanent link">&para;</a></h3>
 <p>A <strong>revision</strong> is one visit to every site of a research project. A site is visited once in each, and a
@@ -1249,10 +1249,10 @@ deployments the visits say — the closed ones, whose images can be imported, an
 still out. The deployments and the uploads have their own dashboards, with the same layout.</p>
 <h2 id="importing-a-deployment">Importing a deployment<a class="headerlink" href="#importing-a-deployment" title="Permanent link">&para;</a></h2>
 <h3 id="local-first">Local first<a class="headerlink" href="#local-first" title="Permanent link">&para;</a></h3>
-<p>An import never touches Trapper: it organizes the images in a <strong>collections folder</strong> on your
+<p>An import never touches TRAPPER: it organizes the images in a <strong>collections folder</strong> on your
 computer — <code>collections/&lt;research project&gt;/&lt;R0003&gt;/&lt;deployment id&gt;</code> — and sends them later, from
 the upload page. The source folder is only read; the copy is what is renamed, resized and tagged.
-Nothing is lost if the memory card — or the app — goes away half-way.</p>
+Nothing is lost if the SD card — or the app — goes away half-way.</p>
 <h3 id="checks-before-anything-is-copied">Checks before anything is copied<a class="headerlink" href="#checks-before-anything-is-copied" title="Permanent link">&para;</a></h3>
 <p><strong>Validation</strong>, over the images alone: corrupted images, shooting order against file-name order,
 folder structure, one camera for all, required EXIF fields, and duplicates (same content). Each
@@ -1263,13 +1263,13 @@ own rules — and three <strong>statistical</strong> checks against the <strong>
 location</strong>: the number of images, the number of sequences and how long they are. A camera that
 fired non-stop or died early shows up before it is uploaded. What a sequence is, what counts as
 similar, and whether to compare with the median, the mean, the last revision or the range they
-span, are settings. Revisions that were <em>synced</em> from Trapper count too.</p>
+span, are settings. Revisions that were <em>synced</em> from TRAPPER count too.</p>
 <h3 id="the-location-owns-the-timezone">The location owns the timezone<a class="headerlink" href="#the-location-owns-the-timezone" title="Permanent link">&para;</a></h3>
 <p>A camera's clock has no timezone, so the <strong>timezone</strong> — and whether the cameras ignore summer
 time — is a property of the <strong>location</strong>, set once and used by every deployment there. It is
 never asked for again, and a location without one is reported rather than guessed.</p>
 <h3 id="deployment-details">Deployment details<a class="headerlink" href="#deployment-details" title="Permanent link">&para;</a></h3>
-<p>The same fields as Trapper's own deployment form, following
+<p>The same fields as TRAPPER's own deployment form, following
 <a href="https://camtrap-dp.tdwg.org">Camtrap DP</a>'s deployments table and its constraints; only the dates
 are required, and the camera model and id and the dates are guessed from the images. The
 revision starts as the next one expected for the location, and an earlier revision can <strong>fill the
@@ -1299,37 +1299,37 @@ did with its YAML files, from the interface.</p>
 <p>Every import writes <code>seal.json</code>: which checks each image and the deployment passed, tied by hash
 to their content. If something is edited by mistake afterwards, the seal says so. It is not a
 signature, and doesn't pretend to be.</p>
-<h3 id="sessions-of-deployments">Sessions of deployments<a class="headerlink" href="#sessions-of-deployments" title="Permanent link">&para;</a></h3>
-<p>A folder with one subfolder per deployment, imported in one go: the revision, the checks and the
+<h3 id="collections-of-deployments">Collections of deployments<a class="headerlink" href="#collections-of-deployments" title="Permanent link">&para;</a></h3>
+<p>A collection folder with one subfolder per deployment, imported in one go: the revision, the checks and the
 preprocessing are common, while location, dates and camera are asked for each deployment — with a
 filterable list, <em>next incomplete</em>, and filling in from the previous revision (one deployment
 or all).</p>
 <h3 id="resumable-runs">Resumable runs<a class="headerlink" href="#resumable-runs" title="Permanent link">&para;</a></h3>
 <p>The wizard saves its progress. A run left unfinished is offered back when the app starts, to
 resume or discard. Passwords are never saved with it.</p>
-<h2 id="uploading-to-trapper">Uploading to Trapper<a class="headerlink" href="#uploading-to-trapper" title="Permanent link">&para;</a></h2>
+<h2 id="uploading-to-trapper">Uploading to TRAPPER<a class="headerlink" href="#uploading-to-trapper" title="Permanent link">&para;</a></h2>
 <p>wildintel-tools' three commands, in one:</p>
 <ul>
-<li>the <strong>location</strong> and the <strong>deployment</strong> are created in Trapper if the research project doesn't
+<li>the <strong>location</strong> and the <strong>deployment</strong> are created in TRAPPER if the research project doesn't
   have them — from the deployment's own coordinates and details;</li>
 <li>the images are <strong>packed</strong> in zips, split at a size, with the yaml that describes them;</li>
-<li>each part is <strong>uploaded</strong>, and Trapper is told to process them into the collection.</li>
+<li>each part is <strong>uploaded</strong>, and TRAPPER is told to process them into the collection.</li>
 </ul>
-<p>A <strong>dry run</strong> reads Trapper only and says what would be created and how the images would be
+<p>A <strong>dry run</strong> reads TRAPPER only and says what would be created and how the images would be
 packed. <strong>Only generate the files</strong> writes the zips, yamls and <code>_deployments.csv</code> to leave them
-for another route — with no Trapper account if the project is known. The upload page says
+for another route — with no TRAPPER account if the project is known. The upload page says
 whether the account reaches the research project and the collection before anything is sent, and
 <strong>Test connection</strong> (Settings › Trapper) checks the login.</p>
 <p>Progress is shown per deployment, step by step, with a bar while a file goes up; if one
-deployment fails the others go on. Ids are matched ignoring case, as Trapper keeps them in lower
+deployment fails the others go on. Ids are matched ignoring case, as TRAPPER keeps them in lower
 case.</p>
 <h2 id="sync">Sync<a class="headerlink" href="#sync" title="Permanent link">&para;</a></h2>
-<p>For deployments Trapper holds that this computer doesn't know: a classification project's
+<p>For deployments TRAPPER holds that this computer doesn't know: a classification project's
 collections (those starting with <code>R</code>), its research project, locations and chosen deployments are
-created in the collections folder — nothing is changed in Trapper, nothing already there is
-overwritten, and no image is downloaded unless asked for (four at a time, only those of the classification project: Trapper gives a file's access token only there). Their <code>images.json</code>, marked <code>"source": "trapper"</code>, is
-built from what Trapper lists for each image, so they feed the statistical checks of later
-revisions. Deployments Trapper holds in an invalid way are reported, not fatal.</p>
+created in the collections folder — nothing is changed in TRAPPER, nothing already there is
+overwritten, and no image is downloaded unless asked for (four at a time, only those of the classification project: TRAPPER gives a file's access token only there). Their <code>images.json</code>, marked <code>"source": "trapper"</code>, is
+built from what TRAPPER lists for each image, so they feed the statistical checks of later
+revisions. Deployments TRAPPER holds in an invalid way are reported, not fatal.</p>
 <h2 id="repair">Repair<a class="headerlink" href="#repair" title="Permanent link">&para;</a></h2>
 <p>A deployment kept locally is <strong>valid</strong> when its <code>seal.json</code> still matches it. For one that isn't — lost metadata files,
 images that changed — <strong>Repair</strong> writes <code>deployment.json</code>, <code>preprocessing.json</code>, <code>images.json</code> and <code>seal.json</code> again from
@@ -1337,14 +1337,14 @@ what its folder holds: the capture dates and camera of the images, the location'
 <code>FileTimestampLog.csv</code>, which always prevails over what the images say (a deployment it doesn't have gets its row). The images
 are validated, postvalidated and checked against what preprocessing leaves, and a report says what was found.</p>
 <h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
-<p>Trapper account, data folder, how many images are worked on at once, which checks are shown
+<p>TRAPPER account, data folder, how many images are worked on at once, which checks are shown
 and what they mean, the preprocessing — all in <code>settings.toml</code>, edited from the ⚙️ page. You can keep
 <strong>several configs</strong> (a test server and the real one) and switch between them. The log is
 downloadable from there.</p>
 <h2 id="command-line">Command line<a class="headerlink" href="#command-line" title="Permanent link">&para;</a></h2>
 <p><code>wildintel-uploader</code> shares the settings and log with the web app: test the connection, edit the
-settings, look up Trapper's ids, and an interactive import that copies a deployment into the
-collections folder and registers it in Trapper. The checks, the preprocessing, sessions, upload
+settings, look up TRAPPER's ids, and an interactive import that copies a deployment into the
+collections folder and registers it in TRAPPER. The checks, the preprocessing, collection imports, upload
 and sync are the web app's. See the <a href="../user-manual-cli/">command-line manual</a>.</p>
 <h2 id="differences-from-wildintel-tools">Differences from wildintel-tools<a class="headerlink" href="#differences-from-wildintel-tools" title="Permanent link">&para;</a></h2>
 <table>
