@@ -258,12 +258,17 @@ it has; a blank secret is the saved one. The **Import deployment information fro
 Which of the [folder checks](#stage-2-images) the wizard shows. Each is an entry with a switch;
 turn off the ones you never want to see. They are all on by default.
 
+The gear of each check says **how it starts in each import**: **Must pass** (it has to pass to go on),
+**Warn** (it only says what it found) or **Skip** (it is offered unticked). Each import can still
+change it. The folder checks start as *Warn*; in the postvalidation, *Image dates fit the deployment*
+and the SD card start as *Must pass* and the rest as *Warn*.
+
 ### Postvalidation
 
 ![Settings › Postvalidation](img/screenshots/settings-postvalidation.png)
 
-Which of the [postvalidation checks](#stage-4-check-details) the wizard shows, and what the ones
-that take a value mean:
+Which of the [postvalidation checks](#stage-4-check-details) the wizard shows, how each starts in an
+import — its gear, as in [Validation](#validation) — and what the ones that take a value mean:
 
 | Setting | Default | |
 |---|---|---|

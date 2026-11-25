@@ -466,20 +466,28 @@ describe('SettingsPage', () => {
 
       for (const label of IMAGE_CHECKS) expect(screen.getByRole('switch', { name: new RegExp(label.replace(/[()]/g, '\\$&')) })).toBeChecked()
       expect(screen.getAllByRole('switch')).toHaveLength(6)
-      expect(screen.queryAllByRole('button', { name: /^Configure/ })).toHaveLength(0) // none of them has anything to configure
+      expect(screen.queryAllByRole('button', { name: /^Configure/ })).toHaveLength(6) // every one has a gear: how it starts in each import
     })
 
-    it('turns checks off, and saves which are shown', async () => {
+    it('turns checks off, says how each starts in an import, and saves both', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await section('Validation')
 
       await userEvent.click(screen.getByRole('switch', { name: /Duplicate images/ }))
       await userEvent.click(screen.getByRole('switch', { name: /Required EXIF fields/ }))
+      // the gear of every check opens how it starts in each import
+      await userEvent.click(screen.getByRole('button', { name: /Configure Required EXIF fields/ }))
+      expect(within(screen.getByRole('radiogroup', { name: /How Required EXIF fields.* starts/ })).getByRole('radio', { name: 'Warn' })).toBeDisabled()   // a check turned off does not start at all
+      await userEvent.click(screen.getByRole('button', { name: /Configure Folder structure/ }))
+      await userEvent.click(within(screen.getByRole('radiogroup', { name: /How Folder structure.* starts/ })).getByRole('radio', { name: 'Skip' }))
+      await userEvent.click(screen.getByRole('button', { name: /Configure Corrupted images/ }))
+      await userEvent.click(within(screen.getByRole('radiogroup', { name: /How Corrupted images.* starts/ })).getByRole('radio', { name: 'Must pass' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION).toEqual({
         corrupted: true, sequence: true, structure: true, camera: true, exif: false, duplicates: false,
+        defaults: { corrupted: 'required', sequence: 'warn', structure: 'skip', camera: 'warn', exif: 'warn', duplicates: 'warn' },
       })
       await screen.findByText('Settings saved.')
       expect(screen.getByRole('switch', { name: /Duplicate images/ })).not.toBeChecked()
@@ -525,15 +533,15 @@ describe('SettingsPage', () => {
       for (const label of CHECKS) expect(screen.getByRole('switch', { name: label })).toBeChecked()
     })
 
-    it('puts a gear only on the checks that have something to configure', async () => {
+    it('puts a gear on every check: how it starts first, then what else it has to configure', async () => {
       await open()
 
-      const gears = screen.getAllByRole('button', { name: /^Configure/ }).map((b) => b.getAttribute('aria-label'))
-      expect(gears).toEqual([
-        'Configure Image dates fit the deployment', 'Configure Number of images is like the previous revisions',
-        'Configure Number of sequences is like the previous revisions', 'Configure Length of the sequences is like the previous revisions',
-      ])
+      expect(screen.getAllByRole('button', { name: /^Configure/ })).toHaveLength(11)
       expect(screen.queryByLabelText('Tolerance')).not.toBeInTheDocument() // closed until the gear is pressed
+      await userEvent.click(screen.getByRole('button', { name: 'Configure Image dates fit the deployment' }))
+      const panel = within(screen.getByRole('group', { name: 'Image dates fit the deployment settings' }))
+      expect(panel.getByRole('radio', { name: 'Must pass' })).toHaveAttribute('aria-checked', 'true')   // as before it could be set
+      expect(panel.getByLabelText('Tolerance')).toBeInTheDocument()
     })
 
     it('turns every check off, or on, at once', async () => {
@@ -569,6 +577,8 @@ describe('SettingsPage', () => {
         image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true, tolerance_hours: 2.5,
         sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
         image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
+        defaults: { deployment_id: 'warn', collection_prefix: 'warn', collection_name: 'warn', location: 'warn', time_range: 'required', camera: 'warn',
+          image_count: 'warn', sequence_count: 'warn', sequence_length: 'warn', sd_card: 'required', photo_count: 'warn' },
       })
     })
 

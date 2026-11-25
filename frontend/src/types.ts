@@ -497,10 +497,15 @@ export interface SessionSummary {
 export type LogLevel = 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG'
 
 /** Which of the "Validate folder contents" checks the wizard shows — and so runs. */
-export type ValidationSettings = Record<ImageCheck, boolean>
+/** How a check starts in each import, when it is on: it has to pass (required), it only warns (warn), or it is offered unticked (skip). */
+export type CheckLevel = 'required' | 'warn' | 'skip'
+
+/** Which image checks the wizard shows, and how each starts. */
+export type ValidationSettings = Record<ImageCheck, boolean> & { defaults: Record<ImageCheck, CheckLevel> }
 
 /** Which postvalidation checks the wizard shows, and the tolerance it starts from. */
 export interface PostvalidationSettings extends Record<DeploymentCheck, boolean> {
+  defaults: Record<DeploymentCheck, CheckLevel>
   tolerance_hours: number
   sequence_gap_seconds: number
   min_revisions: number

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
-import ImportDeploymentPage, { resizeSummaryText } from './ImportDeploymentPage'
+import ImportDeploymentPage, { DEFAULT_CHECK_SETTINGS, resizeSummaryText, startingChecks } from './ImportDeploymentPage'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { DeploymentCheckResult, LocalLocation, LocalResearchProject, Report } from '../types'
 import { APP_SETTINGS, DETAILED_SESSION, SESSION } from '../test/fixtures'
@@ -2781,5 +2781,21 @@ describe('resizeSummaryText', () => {
     // none wider than the width: no size before and after, only what they weigh
     expect(resizeSummaryText({ resized: 0, images: 30, before: '1920×1080', after: '1920×1080', before_bytes: 27_000_000, after_bytes: 27_000_000 }))
       .toBe('0 of 30 resized: 27.0 MB → 27.0 MB')
+  })
+})
+
+describe('startingChecks', () => {
+  it('starts each check as the settings say: required and warn ticked, skip unticked, required having to pass', () => {
+    // by default, as before it could be set: every check ticked, the dates of the images and the SD card required
+    const start = startingChecks(DEFAULT_CHECK_SETTINGS)
+    expect([start.image.size, start.requiredImage.size]).toEqual([6, 0])
+    expect([...start.requiredDeployment].sort()).toEqual(['sd_card', 'time_range'])
+
+    const set = startingChecks({ ...DEFAULT_CHECK_SETTINGS,
+      VALIDATION: { ...DEFAULT_CHECK_SETTINGS.VALIDATION, defaults: { ...DEFAULT_CHECK_SETTINGS.VALIDATION.defaults, structure: 'skip', corrupted: 'required' } },
+      POSTVALIDATION: { ...DEFAULT_CHECK_SETTINGS.POSTVALIDATION, defaults: { ...DEFAULT_CHECK_SETTINGS.POSTVALIDATION.defaults, time_range: 'warn' } } })
+    expect(set.image.has('structure')).toBe(false)
+    expect([...set.requiredImage]).toEqual(['corrupted'])
+    expect(set.deployment.has('time_range') && !set.requiredDeployment.has('time_range')).toBe(true)   // ticked, only warning
   })
 })

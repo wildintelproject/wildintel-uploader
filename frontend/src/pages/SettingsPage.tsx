@@ -8,7 +8,7 @@ import CheckboxList from '../components/CheckboxList'
 import Combobox from '../components/Combobox'
 import { download, itemsToCsv, readItems } from '../csvFile'
 import { defaultResearchProject } from '../defaultResearchProject'
-import { ANIMAL_TYPES_OPTIONS, BAIT_USE_OPTIONS, NO_CREDENTIALS, SAMPLING_DESIGN_OPTIONS, SENSOR_METHOD_OPTIONS } from './ImportDeploymentPage'
+import { ANIMAL_TYPES_OPTIONS, BAIT_USE_OPTIONS, DEPLOYMENT_CHECK_DEFAULTS, IMAGE_CHECK_DEFAULTS, NO_CREDENTIALS, SAMPLING_DESIGN_OPTIONS, SENSOR_METHOD_OPTIONS } from './ImportDeploymentPage'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
 import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS, SD_CARD_CAPACITIES } from '../entities'
 import Notice from '../components/Notice'
@@ -18,7 +18,7 @@ import ReportsList from '../components/ReportsList'
 import { isUtcZone, isValidTimezone } from '../deploymentValidation'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { Location, LocationStatus, ResearchProject, ResearchProjectStatus } from '../types'
-import type { AppSettings, AppSettingsUpdate, ConfigInfo, DeploymentCheck, ImageCheck, Camera, LocalLocation, LocalResearchProject, LogLevel, SdCard, SimilarityMethod, StoredVisit, Trapper, TrapperRole, TrapperRoleName, UpdateCheck } from '../types'
+import type { AppSettings, AppSettingsUpdate, CheckLevel, ConfigInfo, DeploymentCheck, ImageCheck, Camera, LocalLocation, LocalResearchProject, LogLevel, SdCard, SimilarityMethod, StoredVisit, Trapper, TrapperRole, TrapperRoleName, UpdateCheck } from '../types'
 
 const hintClass = 'text-xs text-zinc-500 dark:text-zinc-400'
 const btnPrimary = 'px-6 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -181,8 +181,11 @@ interface Draft {
   epicollectClientId: string
   epicollectClientSecret: string
   epicollectMapping: Record<string, string>
-  validation: AppSettings['VALIDATION']
+  validation: Record<ImageCheck, boolean>
   postvalidation: Record<DeploymentCheck, boolean>
+  // how each check starts in an import: required, warn or skip (#208)
+  validationDefaults: Record<ImageCheck, CheckLevel>
+  postvalidationDefaults: Record<DeploymentCheck, CheckLevel>
   toleranceHours: string
   sequenceGap: string
   minRevisions: string
@@ -256,8 +259,10 @@ function toDraft(s: AppSettings): Draft {
     epicollectClientId: s.EPICOLLECT5.client_id ?? '',
     epicollectClientSecret: '',
     epicollectMapping: { ...s.EPICOLLECT5.mapping },
-    validation: { ...s.VALIDATION },
+    validation: { corrupted: s.VALIDATION.corrupted, sequence: s.VALIDATION.sequence, structure: s.VALIDATION.structure, camera: s.VALIDATION.camera, exif: s.VALIDATION.exif, duplicates: s.VALIDATION.duplicates },
     postvalidation: checks,
+    validationDefaults: { ...IMAGE_CHECK_DEFAULTS, ...(s.VALIDATION.defaults ?? {}) },
+    postvalidationDefaults: { ...DEPLOYMENT_CHECK_DEFAULTS, ...(s.POSTVALIDATION.defaults ?? {}) },
     toleranceHours: String(post.tolerance_hours),
     sequenceGap: String(post.sequence_gap_seconds),
     minRevisions: String(post.min_revisions),
@@ -313,9 +318,9 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
     AGOUTI: { enabled: d.agoutiEnabled, base_url: d.agoutiUrl.trim() || null, api_key: d.agoutiKey, project_id: d.agoutiProject.trim() || null },
     EPICOLLECTCSV: { enabled: d.wildintelNewEnabled },
     DATA: { dir: d.dataDir.trim() || null, collections_dir: d.collectionsDir.trim() || null, reports_dir: d.reportsDir.trim() || null, packages_dir: d.packagesDir.trim() || null },
-    VALIDATION: d.validation,
+    VALIDATION: { ...d.validation, defaults: d.validationDefaults },
     POSTVALIDATION: {
-      ...d.postvalidation, tolerance_hours: Number(d.toleranceHours), sequence_gap_seconds: Number(d.sequenceGap),
+      ...d.postvalidation, defaults: d.postvalidationDefaults, tolerance_hours: Number(d.toleranceHours), sequence_gap_seconds: Number(d.sequenceGap),
       min_revisions: Number(d.minRevisions), similarity_method: d.similarityMethod, image_count_tolerance: Number(d.imageTolerance),
       sequence_count_tolerance: Number(d.sequenceCountTolerance), sequence_length_tolerance: Number(d.sequenceLengthTolerance),
     },
@@ -511,8 +516,12 @@ const iconBtn = 'w-10 h-10 shrink-0 flex items-center justify-center rounded-xl 
 
 /** One check as an entry of its own: its name and what it looks at, a switch to turn it on or off at once, and — only when
  * it has something to configure — a gear that opens its settings. An entry whose settings are wrong opens them by itself. */
-function CheckEntry({ label, hint, enabled, onToggle, settings, invalid }: {
+const LEVELS: { value: CheckLevel; label: string }[] = [{ value: 'required', label: 'Must pass' }, { value: 'warn', label: 'Warn' }, { value: 'skip', label: 'Skip' }]
+
+function CheckEntry({ label, hint, enabled, onToggle, settings, invalid, level, onLevel }: {
   label: string; hint: string; enabled: boolean; onToggle: (v: boolean) => void; settings?: ReactNode; invalid?: boolean
+  /** How the check starts in each import: Must pass, Warn or Skip (offered unticked). */
+  level?: CheckLevel; onLevel?: (level: CheckLevel) => void
 }) {
   const [open, setOpen] = useState(false)
   const shown = open || Boolean(invalid)
@@ -523,7 +532,7 @@ function CheckEntry({ label, hint, enabled, onToggle, settings, invalid }: {
           <p className={`text-base ${enabled ? 'text-zinc-800 dark:text-zinc-200' : 'text-zinc-500 dark:text-zinc-400'}`}>{label}</p>
           <p className={hintClass}>{hint}</p>
         </div>
-        {settings !== undefined && (
+        {(settings !== undefined || (level && onLevel)) && (
           <button type="button" className={`${iconBtn} ${shown ? 'bg-zinc-200 dark:bg-zinc-700' : ''}`} aria-label={`Configure ${label}`} aria-expanded={shown}
                   title="Its settings" onClick={() => setOpen((o) => !o)}>
             <GearIcon />
@@ -534,8 +543,22 @@ function CheckEntry({ label, hint, enabled, onToggle, settings, invalid }: {
           <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : ''}`} />
         </button>
       </div>
-      {settings !== undefined && shown && (
-        <div role="group" aria-label={`${label} settings`} className="px-4 pb-4 pt-3 space-y-3 border-t border-zinc-200 dark:border-zinc-700">{settings}</div>
+      {shown && (settings !== undefined || (level && onLevel)) && (
+        <div role="group" aria-label={`${label} settings`} className="px-4 pb-4 pt-3 space-y-3 border-t border-zinc-200 dark:border-zinc-700">
+          {level && onLevel && (
+            <div>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">How it starts in each import</p>
+              <div role="radiogroup" aria-label={`How ${label} starts`} className="mt-1.5 inline-flex rounded-lg border border-zinc-300 dark:border-zinc-600 p-1">
+                {LEVELS.map((l) => (
+                  <button key={l.value} type="button" role="radio" aria-checked={level === l.value} disabled={!enabled} onClick={() => onLevel(l.value)}
+                          className={`px-3 h-8 rounded-md text-sm font-semibold disabled:opacity-50 ${level === l.value ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}>{l.label}</button>
+                ))}
+              </div>
+              <p className={`${hintClass} mt-1`}>{enabled ? 'Must pass: it has to pass to go on. Warn: it only says what it found. Skip: it is offered unticked. Each import can still change it.' : 'The check is off: it is neither shown nor run.'}</p>
+            </div>
+          )}
+          {settings}
+        </div>
       )}
     </div>
   )
@@ -2690,11 +2713,12 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
               </p>
             </div>
             <AllChecksButtons on={IMAGE_CHECKS.filter((c) => draft.validation[c.key]).length} total={IMAGE_CHECKS.length}
-                              onAll={(on) => set('validation', Object.fromEntries(IMAGE_CHECKS.map((c) => [c.key, on])) as typeof draft.validation)} />
+                              onAll={(on) => set('validation', Object.fromEntries(IMAGE_CHECKS.map((c) => [c.key, on])) as Record<ImageCheck, boolean>)} />
             <div className="space-y-3">
               {IMAGE_CHECKS.map(({ key, label, hint }) => (
                 <CheckEntry key={key} label={label} hint={hint} enabled={draft.validation[key]}
-                            onToggle={(v) => set('validation', { ...draft.validation, [key]: v })} />
+                            onToggle={(v) => set('validation', { ...draft.validation, [key]: v })}
+                            level={draft.validationDefaults[key]} onLevel={(l) => set('validationDefaults', { ...draft.validationDefaults, [key]: l })} />
               ))}
             </div>
           </div>
@@ -2714,6 +2738,7 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
               {DEPLOYMENT_CHECKS.map(({ key, label, hint }) => (
                 <CheckEntry key={key} label={label} hint={hint} enabled={draft.postvalidation[key]}
                             onToggle={(v) => set('postvalidation', { ...draft.postvalidation, [key]: v })}
+                            level={draft.postvalidationDefaults[key]} onLevel={(l) => set('postvalidationDefaults', { ...draft.postvalidationDefaults, [key]: l })}
                             settings={checkSettings(key)} invalid={checkSettingsInvalid(key)} />
               ))}
             </div>

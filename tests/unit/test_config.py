@@ -34,11 +34,27 @@ def test_data_dir_honors_override():
     assert config.data_dir(settings) == Path("/tmp/somewhere")
 
 
+def test_each_check_starts_at_a_level_that_can_be_set_as_it_started_before():
+    """#208: how each check starts in an import — required, warn or skip — is a setting; by default the dates of the images and the SD card have to pass,
+    and the rest warn, as before it could be set. One given is kept, the rest keep their default, and a name that is not a check is refused."""
+    settings = config.Settings()
+    assert set(settings.VALIDATION.defaults.values()) == {"warn"}
+    assert {k for k, v in settings.POSTVALIDATION.defaults.items() if v == "required"} == {"time_range", "sd_card"}
+
+    post = config.PostvalidationSettings(defaults={"time_range": "warn"})
+    assert post.defaults["time_range"] == "warn" and post.defaults["sd_card"] == "required"
+    with pytest.raises(ValueError):
+        config.ValidationSettings(defaults={"nothing": "warn"})
+    with pytest.raises(ValueError):
+        config.ValidationSettings(defaults={"structure": "sometimes"})
+
+
 def test_the_validation_checks_are_all_shown_by_default():
     settings = config.Settings()
 
-    assert all(vars(settings.VALIDATION).values())
-    assert set(vars(settings.VALIDATION)) == {"corrupted", "sequence", "structure", "camera", "exif", "duplicates"}
+    shown = {k: v for k, v in vars(settings.VALIDATION).items() if isinstance(v, bool)}
+    assert all(shown.values())
+    assert set(shown) == {"corrupted", "sequence", "structure", "camera", "exif", "duplicates"}
     checks = {k: v for k, v in vars(settings.POSTVALIDATION).items() if isinstance(v, bool)}
     assert all(checks.values())
     assert set(checks) == {
