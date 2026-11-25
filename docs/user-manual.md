@@ -389,7 +389,7 @@ A camera is at a site from the visit that puts it up (an Installation, or a Revi
 
 **Where the SD card is**
 
-A card is in a camera from the visit that leaves it until a visit collects it. So the card a visit leaves cannot be **archived**, nor be **in the camera of another site** (it has to be collected first), nor be **the one the same visit collects** (the card left has to be another), nor have been **collected in the same revision**.
+A card is in a camera from the visit that leaves it until a visit collects it. So the card a visit leaves cannot be **archived**, nor be **in the camera of another site** (it has to be collected first), nor have been **collected in the same revision**. It can be **the one the same visit collects** — the card was empty, or it was downloaded in the field and put back —, but that is asked: a file says it among its warnings, with the row, and the form under the card.
 
 **What exists**
 

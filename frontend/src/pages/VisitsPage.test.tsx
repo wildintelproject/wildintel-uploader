@@ -221,8 +221,12 @@ describe('VisitsPage', () => {
 
     await openSection('SD card')
     await userEvent.click(screen.getByLabelText('SD card left in the camera'))
-    expect(screen.queryByRole('option', { name: 'A13 — SanDisk 64 GB' })).not.toBeInTheDocument() // the one this revision collects cannot be left
+    // the one this revision collects can be left again (#207): it is offered, and asked about
+    await userEvent.click(await screen.findByRole('option', { name: 'A13 — SanDisk 64 GB' }))
+    expect(screen.getByText(/The SD card A13 is the one this visit collects .*, and it is left again/)).toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText('SD card left in the camera'))
     await userEvent.click(await screen.findByRole('option', { name: 'B2' }))
+    expect(screen.queryByText(/and it is left again/)).not.toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('Images on the card collected'), '1620')
     await userEvent.click(screen.getByRole('switch', { name: 'Card OK' }))
     expect(screen.getByRole('switch', { name: 'Card OK' })).toHaveAttribute('aria-checked', 'false')

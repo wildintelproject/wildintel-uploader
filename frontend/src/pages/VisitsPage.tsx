@@ -23,7 +23,7 @@ import IconButton from '../components/IconButton'
 import VisitSummary, { type SummaryRow, type SummaryTone, type VisitSummaryData } from '../components/VisitSummary'
 import { CamtrapDpContext, CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, DETAILS_SECTIONS, FEATURE_TYPE_OPTIONS, SwitchRow, roundPill, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
 import { shownErrors, validateDeployment } from '../deploymentValidation'
-import { availabilityErrors, cameraAtSite, cardBlock, nextRevision, unfinishedRevision } from '../visitAvailability'
+import { availabilityErrors, cameraAtSite, cardAtSite, cardBlock, nextRevision, sameCardAgain, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, LocalLocation, LocalResearchProject, SdCard, StoredVisit, Trapper, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, ImportCsvOptions, CloseAfter } from '../types'
 import { PAGE_CLASS } from '../components/PageBar'
@@ -651,7 +651,10 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   const cardOptions = { cards: allSdCards, session: visit.session || nextSession }
   const conflicts = allVisits ? availabilityErrors(allVisits, visit, cardOptions) : {}
   // Only the cards that are ready — the settings say so: not planned (they are only there), not archived, not active (in a camera) —, and that no visit puts in another camera, not collected by this revision. The one already chosen stays, to show why it cannot be.
-  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (c.label === visit.sd || ((!c.status || c.status === 'ready') && !cardBlock(allVisits ?? [], c.label, visit, cardOptions))))
+  // The card this visit collects can be left again too (#207): it is in the camera, so the settings say it is active, but it is offered.
+  const collectedHere = allVisits && visit.site.trim() && visit.actions.some((x) => ['Revision', 'Desinstallation'].includes(x)) ? cardAtSite(allVisits, visit.site.trim(), visit.when || '9999-12-31T23:59:59')?.label : undefined
+  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (c.label === visit.sd || c.label === collectedHere || ((!c.status || c.status === 'ready') && !cardBlock(allVisits ?? [], c.label, visit, cardOptions))))
+  const cardAgain = allVisits && visit.sd ? sameCardAgain(allVisits, visit.sd, visit) : undefined
   // A Revision, a Desinstallation or a stolen camera is of the camera that is at the site: which one is not asked nor kept — the visit before says it —, unless the visit also installs another.
   const siteCamera = allVisits && visit.site.trim() ? cameraAtSite(allVisits, visit.site.trim(), visit.when || '9999-12-31T23:59:59') : null
   const ofTheSiteCamera = Boolean(siteCamera) && !visit.actions.includes('Installation') && visit.actions.some((x) => ['Revision', 'Desinstallation', 'Stolen'].includes(x))
@@ -1492,6 +1495,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     />
                     </ControlRow>
                     {conflicts.sd ? <Notice kind="error" role="alert" className="mt-2">{conflicts.sd}</Notice> : shown('sd') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('sd')}</p>}
+                    {!conflicts.sd && cardAgain && <Notice kind="warning" role="status" className="mt-2">{cardAgain}</Notice>}
                     {allSdCards.every((c) => !ofProject(c.research_project)) && <p className={hintClass}>The settings have no SD cards yet.</p>}
                     {sdCards.length === 0 && allSdCards.some((c) => ofProject(c.research_project)) && <p className={hintClass}>No SD card is ready: they are planned, archived, in a camera or were collected in this revision.</p>}
                     {onOpenSettings && (
