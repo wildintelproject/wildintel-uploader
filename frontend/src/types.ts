@@ -339,12 +339,12 @@ export type ImportEvent =
   | { type: 'copy'; index: number; total: number; name: string }
   | { type: 'registering' }
   /** The images are done and their metadata is being written. */
-  | { type: 'metadata'; total: number }
+  | { type: 'metadata'; total: number; index?: number }   // index: the files written so far (0 when it starts)
   /** An image that couldn't be processed — the rest go on. */
   | { type: 'skipped'; name: string; detail: string }
   /** The images are being checked and the deployment sealed (see seal.json). */
   | { type: 'sealing' }
-  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean | null; report_id?: string | null }
+  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean | null; report_id?: string | null; resize?: ResizeSummary }
 
 /** What is done to the images as they are imported, and the values it uses — see
  * core.services.preprocessing_service. */
@@ -390,6 +390,9 @@ export interface SyncCollection {
 }
 
 /** What the sync reports as it goes: a message per step, and at the end the result. */
+/** What resizing did to the images of a deployment: how many of how many, the most common size before and after, and how much they all weighed. */
+export interface ResizeSummary { resized: number; images: number; before: string | null; after: string | null; before_bytes: number; after_bytes: number }
+
 export type SyncEvent = { type: 'progress'; message: string } | ({ type: 'done' } & SyncResult)
 
 /** What the upload page starts from when it is reached from a finished import: the research project and collection just imported into. */

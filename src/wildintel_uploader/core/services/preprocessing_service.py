@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 import time
+from collections import Counter
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -206,8 +207,15 @@ def xmp_tags(options: PreprocessOptions, deployment: DeploymentFields, *, camera
 
 
 def write_xmp(exiftool: str, items: list[tuple[Path, dict[str, str]]]) -> None:
+    """Writes each file's own tags, in place (see write_xmp_batches)."""
+    for _ in write_xmp_batches(exiftool, items):
+        pass
+
+
+def write_xmp_batches(exiftool: str, items: list[tuple[Path, dict[str, str]]]) -> Iterator[int]:
     """Writes each file's own tags, in place, with one ExifTool run per batch — the
-    files and their tags go in on stdin, so no command line limit is in the way.
+    files and their tags go in on stdin, so no command line limit is in the way —, yielding
+    how many files are written after each batch, for the progress and the time left.
 
     ExifTool writes each file to a "<file>_exiftool_tmp" and renames it over the original; one it was
     interrupted in the middle of (a failure, the app being stopped) is left behind, so those are
@@ -224,6 +232,7 @@ def write_xmp(exiftool: str, items: list[tuple[Path, dict[str, str]]]) -> None:
             )
             if completed.returncode != 0 or "error" in completed.stderr.lower():
                 raise DeploymentImportError(f"ExifTool could not write the metadata: {(completed.stderr or completed.stdout).strip()[:300]}")
+            yield min(start + _XMP_BATCH, len(items))
     finally:
         for folder in {path.parent for path, _ in items}:
             for leftover in folder.glob(f"*{EXIFTOOL_TMP_SUFFIX}"):
@@ -260,14 +269,33 @@ def _process(index: int, path: Path, source_dir: Path, dest: Path, deployment: D
     target = dest / name
     target.parent.mkdir(parents=True, exist_ok=True)
     source_hash = _sha1(path)
+    original_width, original_height = _dimensions(path)   # only the header is read
     if options.resize:
         resized = resize_to_width(path, target, options.resize_width)
     else:
         shutil.copy2(path, target)
         resized = False
+    width, height = _dimensions(target) if resized else (original_width, original_height)
     return {
         "original": str(relative), "name": name, "date": date.isoformat(), "date_source": date_source, "resized": resized,
+        # how big the image was and is — before the metadata, which adds a few kilobytes — to see that it was resized as asked
+        "original_width": original_width, "original_height": original_height, "original_bytes": path.stat().st_size,
+        "width": width, "height": height, "bytes": target.stat().st_size,
         "source_hash": source_hash, "hash": _sha1(target), "camera": cameras[path].model, "_target": target, "_date": date, "_local": naive,
+    }
+
+
+def resize_summary(records: list[dict]) -> dict:
+    """What resizing did to the images of a deployment, to see it at a glance: how many were resized of how many, the most common size before and
+    after, and how much they weighed before and after — all the images, the ones not resized too."""
+    def common(keys: tuple[str, str]) -> str | None:
+        sizes = Counter(f"{r[keys[0]]}×{r[keys[1]]}" for r in records if r.get(keys[0]) and r.get(keys[1]))
+        return sizes.most_common(1)[0][0] if sizes else None
+    resized = [r for r in records if r.get("resized")]
+    return {
+        "resized": len(resized), "images": len(records),
+        "before": common(("original_width", "original_height")), "after": common(("width", "height")),
+        "before_bytes": sum(r.get("original_bytes") or 0 for r in records), "after_bytes": sum(r.get("bytes") or 0 for r in records),
     }
 
 
@@ -335,8 +363,8 @@ def preprocess_stream(
     moves it to its place and freezes it.
     Events, as the other imports': {"type": "copy", index, total, name} per file,
     {"type": "skipped", name, detail} for one that couldn't be processed (the rest go
-    on), {"type": "metadata", total} once the XMP is being written, and finally
-    {"type": "done", dest_dir, processed, skipped} — dest_dir is where the deployment is: its place in the collection once it is
+    on), {"type": "metadata", index, total} as the XMP is written — index 0 when it starts, then the files written after each batch —, and finally
+    {"type": "done", dest_dir, processed, skipped, resize} — resize, when the images are resized, is resize_summary —; dest_dir is where the deployment is: its place in the collection once it is
     saved, its staging folder while it is pending.
 
     Raises:
@@ -396,13 +424,14 @@ def preprocess_stream(
             yield {"type": "copy", "index": done, "total": total, "name": str(path.relative_to(source))}
 
         if options.metadata and records:
-            yield {"type": "metadata", "total": len(records)}
+            yield {"type": "metadata", "index": 0, "total": len(records)}
             items = [
                 (r["_target"], xmp_tags(options, deployment, camera=r["camera"], date=r["_date"], mime=_mime(r["_target"]),
                                         source_hash=r["source_hash"], image_hash=r["hash"]))
                 for r in records
             ]
-            write_xmp(exiftool, items)  # type: ignore[arg-type] — checked above
+            for written in write_xmp_batches(exiftool, items):  # type: ignore[arg-type] — checked above
+                yield {"type": "metadata", "index": written, "total": len(records)}
 
         for r in records:  # the file as it ends up, metadata included — what sha1sum gives; the XMP can't hold its own hash
             r["final_hash"] = _sha1(r["_target"])
@@ -429,7 +458,8 @@ def preprocess_stream(
             report_id = report_service.save(report_service.preprocessing_report(records, skipped_items, deployment.deployment_id, source, dest, asdict(options)))
         except Exception as exc:  # the import is done: not having its report is no reason to fail it
             logger.warning("Could not write the report of the preprocessing of %s: %s", deployment.deployment_id, exc)
-        yield {"type": "done", "dest_dir": str(where), "processed": len(records), "skipped": skipped, "sealed": sealed, "report_id": report_id}
+        yield {"type": "done", "dest_dir": str(where), "processed": len(records), "skipped": skipped, "sealed": sealed, "report_id": report_id,
+               **({"resize": resize_summary(records)} if options.resize else {})}
 
     return events()
 

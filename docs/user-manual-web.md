@@ -336,7 +336,7 @@ What each report holds:
 | **Validation** | each image and check — corrupted, shooting order, EXIF fields, duplicates —, and the folder for the structure and camera checks | The ones that passed too, so the report says what was checked, not only what failed. |
 | **Postvalidation** | the deployment for the naming and statistical checks, and each image for its date and camera | Why a check failed — *241 images — like the previous revisions (median 238, ±50 %)*. |
 | **Repair** | each image and check, and each metadata file | What the repair wrote and what the images passed, as the new seal says — and the preprocessing checks: names, size, metadata. |
-| **Processing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized* — and the ones that were **skipped**, with the reason. |
+| **Processing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized 6000×4000, 8.7 MB → 2400×1600, 1.4 MB*, or *not resized: 1920 px wide, no wider than 2400* — and the ones that were **skipped**, with the reason. |
 
 **Settings › Reports** lists all of them, newest first, with *View*, *CSV*, *JSON* and *Delete* (which
 asks again). They are kept in the `reports` folder of the data folder until you delete them. A check you run twice
@@ -761,10 +761,13 @@ failed it (*Out of range*, *Other camera*) as thumbnails. The [report](#reports)
 3. **Rename the images** — `<DEPLOYMENT>__<YYYYMMDD>_<n>.<EXT>` in upper case, `.jpg` becoming
    `.jpeg`, e.g. `R0003-DONA_01__20240904_1.JPEG`; *n* is the image's place in file-name order.
 4. **Resize the images** — to the width of the settings, keeping proportions, EXIF and colour
-   profile. Unlike wildintel-tools, the resized image is the one that is kept.
+   profile. Unlike wildintel-tools, the resized image is the one that is kept. Once prepared, the step
+   says how many were resized, their size before and after and what they weighed — *1,620 of 1,620
+   resized: 6000×4000 → 2400×1600, 14.1 GB → 2.3 GB* —, and the report says it of each image.
 5. **Add metadata** — authorship, rights and license, written into each image as XMP with
    ExifTool: *Creator*, *Owner*, *Publisher*, *Rights*, *License*, *Coverage* and the hash of the
-   original and of the image kept, so each can be traced back. It is switched off, with the reason
+   original and of the image kept, so each can be traced back. They are written in batches of 200:
+   while it runs, a bar says how many images are written and the time left. It is switched off, with the reason
    given, if ExifTool isn't available. Check the owner and publisher in the settings first: if
    they're blank, the step says so.
 

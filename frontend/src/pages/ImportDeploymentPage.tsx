@@ -1,5 +1,6 @@
 import { inTheApp, listWorking } from '../researchProjects'
 import { TABLE, TableCard } from '../components/DashboardParts'
+import TimeLeftBar, { type BatchTiming } from '../components/TimeLeftBar'
 import CheckResultsTable from '../components/CheckResultsTable'
 import ValidationDashboard, { formatRun } from '../components/ValidationDashboard'
 import WizardStep from '../components/WizardStep'
@@ -38,7 +39,7 @@ import type { EpicollectEntry } from '../epicollectImport'
 import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } from '../researchProjectValidation'
 import { isUtcZone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import type {
-  Report, AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, SimilarityMethod, StatisticCheck, StatisticsParams, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
+  Report, AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, ResizeSummary, SimilarityMethod, StatisticCheck, StatisticsParams, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   FeatureType, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
   SessionSummary, UploadTarget, ValidationResult,
 } from '../types'
@@ -662,6 +663,13 @@ export const DEFAULT_CHECK_SETTINGS: WizardSettings = {
 }
 
 export type PreprocessStep = 'rename' | 'resize' | 'metadata'
+
+const sizeText = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${(bytes / 1e6).toFixed(1)} MB`)
+/** What resizing did, in one line: "1,620 of 1,620 resized: 6000×4000 → 2400×1600, 14.1 GB → 2.3 GB". */
+export function resizeSummaryText(s: ResizeSummary): string {
+  const sizes = s.resized > 0 && s.before && s.after && s.before !== s.after ? `${s.before} → ${s.after}, ` : ''
+  return `${s.resized.toLocaleString('en-US')} of ${s.images.toLocaleString('en-US')} resized: ${sizes}${sizeText(s.before_bytes)} → ${sizeText(s.after_bytes)}`
+}
 
 /** The statistical parameters as typed (strings), from the settings. */
 export function statParamsOf(post: AppSettings['POSTVALIDATION']) {
@@ -1658,6 +1666,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   // The preprocessing runs in its own step and leaves the deployment pending; the import step then consolidates (seals) it.
   const [preprocessing, setPreprocessing] = useState(false)
   const [preprocessEvents, setPreprocessEvents] = useState<ImportEvent[]>([])
+  // how far Add metadata has gone, batch by batch, for its bar and its time left
+  const [metadataTiming, setMetadataTiming] = useState<BatchTiming | null>(null)
   // Whether the results of the preprocessing were gone over: step 2 shuts, and the saving opens.
   const [resultsDone, setResultsDone] = useState(false)
   const [preprocessError, setPreprocessError] = useState<string | null>(null)
@@ -1970,10 +1980,19 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
 
   // The cards of the project chosen — and those free for any.
   const projectSdCards = sdCards.filter((c) => (c.research_project ?? '').toLowerCase() === selectedProjectId.toLowerCase())
+  // the card the visit says was left in the camera, among the cards of the research project: it is chosen for the images when the visit is, and can be changed
+  const leftCard = linkedVisit?.visit.sd ? projectSdCards.find((c) => c.label.toLowerCase() === String(linkedVisit.visit.sd).toLowerCase()) : undefined
+  const cardChosenFor = useRef<string | null>(null)
+  useEffect(() => {
+    const key = linkedVisit ? `${linkedVisit.visit.session}|${linkedVisit.visit.location_id}` : null
+    if (key === cardChosenFor.current || (linkedVisit?.visit.sd && !leftCard)) return   // chosen once for each visit, when the cards of the settings are read
+    cardChosenFor.current = key
+    if (leftCard) setSdCard(leftCard.label)
+  }, [linkedVisit, leftCard])
 
   function selectProject(project: LocalResearchProject | undefined) {
     setSelectedProjectId(project?.acronym ?? '')
-    setSelectedLocationId(''); setOriginError(null); setLinkedVisit(null); setSdCard('')
+    setSelectedLocationId(''); setOriginError(null); setLinkedVisit(null); setSdCard(''); cardChosenFor.current = null
     setOrigin({ researchProject: project ? `${project.acronym} — ${project.name}` : '', locationId: '', locationName: '', timezone: '' })
     applyOriginLocation(undefined)
   }
@@ -2395,7 +2414,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   }
 
   async function handlePreprocess() {
-    setPreprocessing(true); setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
+    setPreprocessing(true); setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null); setMetadataTiming(null)
     try {
       // Into its collection in the collections folder (a new one is named like the deployment's R0003 prefix) — still pending: not sealed.
       await api.preprocess(
@@ -2403,6 +2422,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         (event) => {
           setPreprocessEvents((prev) => [...prev, event])
           if (event.type === 'done') setPreprocessed(event)
+          if (event.type === 'metadata') {
+            const now = Date.now(), done = event.index ?? 0
+            setMetadataTiming((t) => (t && done > 0 ? { ...t, at: now, done } : { start: now, at: now, done, total: event.total }))
+          }
         },
       )
     } catch (e) {
@@ -2453,7 +2476,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     setRevision(''); revisionTouched.current = false; setRevisionHint(null)
     setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set(DEFAULT_REQUIRED_DEPLOYMENT_CHECKS))
     setTimestampLogError(null)
-    setSdCard('')
+    setSdCard(''); cardChosenFor.current = null
     setEvents([]); setImportError(null); setDestDir(null); setCopied(false)
     setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
     setTaskId(null)
@@ -2494,15 +2517,23 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         parent="Menu" onParent={onBack} />
 
       {queue && (
-        <div role="status" aria-label="The deployment in the queue" className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/30 px-5 py-3 text-sm text-blue-900 dark:text-blue-100">
-          <span className="font-semibold">Deployment {queue.index + 1} of {queue.total}</span>
-          <span className="font-mono">{queue.current}</span>
-          {!destDir && (
-            <span className="ml-auto flex items-center gap-2">
-              <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={queue.onSkip}>Skip this one</button>
-              <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={queue.onStop}>Stop here</button>
-            </span>
-          )}
+        // which deployment of the queue is being imported: big, with how far the queue has gone, and kept at the top while the page scrolls
+        <div role="status" aria-label="The deployment in the queue" className="sticky top-0 z-20 mb-6 overflow-hidden rounded-xl border-2 border-blue-400 dark:border-blue-700 bg-blue-50 dark:bg-zinc-900 text-blue-900 dark:text-blue-100 shadow-md">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Deployment {queue.index + 1} of {queue.total}</p>
+              <p className="font-mono text-2xl font-bold text-zinc-900 dark:text-zinc-50 break-all">{queue.current}</p>
+            </div>
+            {!destDir && (
+              <span className="ml-auto flex items-center gap-2">
+                <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={queue.onSkip}>Skip this one</button>
+                <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={queue.onStop}>Stop here</button>
+              </span>
+            )}
+          </div>
+          <div role="progressbar" aria-label="Deployments of the queue" aria-valuemin={0} aria-valuemax={queue.total} aria-valuenow={queue.index} className="h-1.5 bg-blue-100 dark:bg-blue-950">
+            <div className="h-full bg-blue-500 transition-[width] duration-500" style={{ width: `${(queue.index / Math.max(queue.total, 1)) * 100}%` }} />
+          </div>
         </div>
       )}
 
@@ -2554,6 +2585,17 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
           <WizardStep n={1} title="Select the folder" status={imagesStatus(1)} canEdit={!validating} onEdit={() => setImagesOpen(1)}
                       description="Where the deployment's camera-trap images are, on this computer."
                       summary={scan && <>{folderName}<br />{imageCount}</>}>
+            {selectedProjectId && (
+              <div className="mb-4"><FormCard title="Which SD card is it?" description={`The label written on the card the images come from — one of ${selectedProjectId}'s, or one with no project.`}>
+                <Notice kind="info" className="mb-3">
+                  {leftCard
+                    ? <span>The visit <strong>{linkedVisit!.visit.session}</strong> to <strong>{linkedVisit!.visit.location_id}</strong> says the SD card <strong>{leftCard.label}</strong> was left in the camera: it is chosen. If the label on the card is another, choose that one.</span>
+                    : <span>It is checked against the card the visit says was left in the camera.</span>}
+                </Notice>
+                <SdCardsTable cards={projectSdCards} selected={sdCard} onSelect={setSdCard}
+                  empty={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet.` : 'No SD card matches.'} />
+              </FormCard></div>
+            )}
             <fieldset className="mb-4">
               <legend className={labelClass}>Are the images on an SD card?</legend>
               <ChoiceCards<'sd' | 'folder'> label="Are the images on an SD card?" value={imageSource} onChange={chooseImageSource}
@@ -2634,13 +2676,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
             ) : sourceDir ? (
               <button type="button" className={btnOutline} onClick={() => handleScan()}>Scan</button>
             ) : null}
-            {scan && selectedProjectId && (
-              <div className="mt-4"><FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project.`}>
-                <Notice kind="info" className="mb-3">It is checked against the card the visit says was left in the camera.</Notice>
-                <SdCardsTable cards={projectSdCards} selected={sdCard} onSelect={setSdCard}
-                  empty={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet.` : 'No SD card matches.'} />
-              </FormCard></div>
-            )}
             <div className="flex justify-end items-center mt-4">
               <button type="button" aria-label="Continue to the checks" className={btnPrimary} disabled={!scan || scanning} onClick={() => openImagesStep(2)}>Continue<span aria-hidden="true"> →</span></button>
             </div>
@@ -3263,9 +3298,13 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                                 <span className="font-medium">{r.label}</span>
                                 <span className="block text-xs text-zinc-500 dark:text-zinc-400">{r.text}</span>
                                 {r.disabledReason && <span className="block text-xs text-red-600 dark:text-red-400">{r.disabledReason}</span>}
+                                {r.key === 'resize' && doneRun && preprocessed?.type === 'done' && preprocessed.resize && (
+                                  <span className="mt-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300" aria-label="What resizing did">{resizeSummaryText(preprocessed.resize)}</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-right">
                                 {active(r) && preprocessing && stepStatus(r) === 'running' && <span role="status" aria-label={`${r.label}: running`} className="inline-flex"><SmallSpinner /></span>}
+                                {r.key === 'metadata' && preprocessing && stepStatus(r) === 'running' && metadataTiming && <div className="ml-auto w-56 text-left"><TimeLeftBar timing={metadataTiming} noun="images" label="Images with their metadata written" /></div>}
                                 {active(r) && preprocessing && stepStatus(r) === 'done' && <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Done</span>}
                                 {doneRun && active(r) && (r.key === 'copy' && skipped > 0 ? (
                                   <button type="button" aria-label={`${openCheck === 'preprocessing' ? 'Close' : 'Open'} the skipped images`} aria-expanded={openCheck === 'preprocessing'}

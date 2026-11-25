@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
-import ImportDeploymentPage from './ImportDeploymentPage'
+import ImportDeploymentPage, { resizeSummaryText } from './ImportDeploymentPage'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { DeploymentCheckResult, LocalLocation, LocalResearchProject, Report } from '../types'
 import { APP_SETTINGS, DETAILED_SESSION, SESSION } from '../test/fixtures'
@@ -692,11 +692,17 @@ describe('ImportDeploymentPage', () => {
           await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
           await userEvent.click(within(await screen.findByRole('table', { name: 'Collected visits' })).getByRole('row', { name: /R0001/ }))
           await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
-          await scanTheFolder()
           if (card) {
-            // asked once the folder is chosen
-            await userEvent.click(within(await screen.findByRole('table', { name: 'SD cards' })).getByRole('row', { name: new RegExp(`\\b${card}\\b`) }))
+            // asked first, with the card the visit left already chosen: another one is picked
+            const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
+            if (!cards.queryByRole('button', { name: new RegExp(`\\b${card}\\b`), pressed: true })) await userEvent.click(cards.getByRole('row', { name: new RegExp(`\\b${card}\\b`) }))
+          } else {
+            // no card said: the one the visit left, chosen for it, is let go
+            const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
+            const chosen = cards.queryByRole('button', { name: /A13/, pressed: true })
+            if (chosen) await userEvent.click(cards.getByRole('row', { name: /A13/ }))
           }
+          await scanTheFolder()
           await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
           await screen.findByText('Choose the checks')
           await runTheImageChecks()
@@ -708,7 +714,7 @@ describe('ImportDeploymentPage', () => {
           await screen.findByText('Check the details', { selector: 'h4' })
         }
 
-        it('offers, with the research project, the cards of that project', async () => {
+        it('asks first which SD card it is, with the cards of the research project and the one the visit left already chosen', async () => {
           SD_SETTINGS()
           storedProjects = [DONA_PROJECT]
           storedLocations = { DONA: [DONA_01] }
@@ -718,17 +724,18 @@ describe('ImportDeploymentPage', () => {
           expect(screen.queryByRole('table', { name: 'SD cards' })).not.toBeInTheDocument() // not in the origin: it is asked after the folder
           await pickTheVisit()
           await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
-          expect(screen.queryByRole('table', { name: 'SD cards' })).not.toBeInTheDocument() // nor before the folder is chosen
-          await scanTheFolder()
 
-          expect(screen.getByText(/It is checked against the card the visit says was left in the camera/)).toBeInTheDocument()           // what it is for is in a box above the table
+          // before the folder: the card is what says which deployment the images are of
+          expect(screen.queryByLabelText('Folder')).not.toBeInTheDocument()
+          expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && /says the SD card A13 was left in the camera: it is chosen/.test(el.textContent ?? ''))).toBeInTheDocument()
           const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
           expect(cards.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').slice(1).map((c) => c.textContent))).toEqual([['A13', 'SanDisk', '64 GB', 'Active'], ['B2', '—', '—', 'Active']])
+          expect(cards.getByRole('button', { name: /A13/, pressed: true })).toBeInTheDocument()   // the one the visit left
           // a row picks its card, and a second press lets it go
-          await userEvent.click(cards.getByRole('row', { name: /A13/ }))
-          expect(cards.getByRole('button', { name: /A13/, pressed: true })).toBeInTheDocument()
-          await userEvent.click(cards.getByRole('row', { name: /A13/ }))
-          expect(cards.getByRole('button', { name: /A13/, pressed: false })).toBeInTheDocument()
+          await userEvent.click(cards.getByRole('row', { name: /B2/ }))
+          expect(cards.getByRole('button', { name: /B2/, pressed: true })).toBeInTheDocument()
+          await userEvent.click(cards.getByRole('row', { name: /B2/ }))
+          expect(cards.getByRole('button', { name: /B2/, pressed: false })).toBeInTheDocument()
           // and the labels view offers the same cards
           await userEvent.click(screen.getByRole('button', { name: 'Show the SD cards as labels' }))
           expect(within(screen.getByRole('group', { name: 'SD cards' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Pick the SD card A13', 'Pick the SD card B2'])
@@ -2520,6 +2527,7 @@ describe('ImportDeploymentPage', () => {
       await goToOriginStep()
 
       expect(screen.getByRole('status', { name: 'The deployment in the queue' })).toHaveTextContent('Deployment 2 of 3R0001-DONA_01')
+      expect(screen.getByRole('progressbar', { name: 'Deployments of the queue' })).toHaveAttribute('aria-valuenow', '1')   // one of the three done
       await userEvent.click(screen.getByRole('button', { name: 'Skip this one' }))
       expect(queue.onSkip).toHaveBeenCalledTimes(1)
       await userEvent.click(screen.getByRole('button', { name: 'Stop here' }))
@@ -2763,5 +2771,15 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getByText(/which follows daylight saving time/)).toBeInTheDocument()
       for (const bold of ['DONA_01', 'Europe/Madrid']) expect(screen.getAllByText(bold).some((el) => el.tagName === 'STRONG')).toBe(true)
     })
+  })
+})
+
+describe('resizeSummaryText', () => {
+  it('says how many images were resized, their size before and after, and how much they all weighed', () => {
+    expect(resizeSummaryText({ resized: 1620, images: 1620, before: '6000×4000', after: '2400×1600', before_bytes: 14_100_000_000, after_bytes: 2_300_000_000 }))
+      .toBe('1,620 of 1,620 resized: 6000×4000 → 2400×1600, 14.1 GB → 2.3 GB')
+    // none wider than the width: no size before and after, only what they weigh
+    expect(resizeSummaryText({ resized: 0, images: 30, before: '1920×1080', after: '1920×1080', before_bytes: 27_000_000, after_bytes: 27_000_000 }))
+      .toBe('0 of 30 resized: 27.0 MB → 27.0 MB')
   })
 })
