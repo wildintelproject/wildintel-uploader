@@ -39,11 +39,12 @@ import type { EpicollectEntry } from '../epicollectImport'
 import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } from '../researchProjectValidation'
 import { isUtcZone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import type {
-  Report, AppSettings, CameraGroup, CollectionPath, CheckLevel, PreprocessingOptions, ResizeSummary, SimilarityMethod, StatisticCheck, StatisticsParams, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
+  Report, AppSettings, CameraGroup, CollectionPath, CheckLevel, PreprocessingOptions, ResizeSummary, SimilarityMethod, StatisticCheck, StatisticsParams, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   FeatureType, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
   SessionSummary, UploadTarget, ValidationResult,
 } from '../types'
 import { PAGE_CLASS } from '../components/PageBar'
+import { exifTagLabel } from '../exifTags'
 
 export const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
 export const labelClass = 'block text-sm font-semibold mb-1.5 text-zinc-700 dark:text-zinc-300'
@@ -668,7 +669,7 @@ export function startingChecks(settings: WizardSettings): { image: Set<ImageChec
 }
 
 export const DEFAULT_CHECK_SETTINGS: WizardSettings = {
-  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true, defaults: IMAGE_CHECK_DEFAULTS },
+  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true, defaults: IMAGE_CHECK_DEFAULTS, exif_fields: ['Model'] },
   POSTVALIDATION: {
     defaults: DEPLOYMENT_CHECK_DEFAULTS,
     deployment_id: true, collection_prefix: true, collection_name: true, location: true, time_range: true, camera: true,
@@ -760,7 +761,6 @@ export function buildDeploymentId(revision: string, locationId: string | null | 
   return `R${String(n).padStart(4, '0')}-${locationId.trim()}`
 }
 
-export const EXIF_FIELD_LABELS: Record<ExifField, string> = { date: 'a capture date', camera_model: 'a camera model', camera_id: 'a camera id' }
 
 /** "Reconyx HC600 · id P800HG08", whichever of the two is known. */
 export function describeCamera(camera: CameraGroup): string {
@@ -1355,12 +1355,12 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
       {validation.exif_missing !== undefined && (
         <div className={imageCheckPassed('exif', validation) ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
           {imageCheckPassed('exif', validation) ? (
-            <p><Mark kind="success" />Every image has its capture date, camera model and camera id.</p>
+            <p><Mark kind="success" />Every image has the EXIF fields expected: {Object.keys(validation.exif_missing).map((f) => exifTagLabel(f).toLowerCase()).join(', ')}.</p>
           ) : (
             <ul className="list-disc ml-6">
-              {(Object.keys(EXIF_FIELD_LABELS) as ExifField[]).filter((f) => validation.exif_missing![f].count > 0).map((f) => (
+              {Object.entries(validation.exif_missing).filter(([, m]) => m.count > 0).map(([f, m]) => (
                 <li key={f}>
-                  <Mark kind="warning" />{validation.exif_missing![f].count} image(s) without {EXIF_FIELD_LABELS[f]}, e.g. {validation.exif_missing![f].examples.join(', ')}
+                  <Mark kind="warning" />{m.count} image(s) without {exifTagLabel(f).toLowerCase()} (<span className="font-mono">{f}</span>), e.g. {m.examples.join(', ')}
                 </li>
               ))}
             </ul>

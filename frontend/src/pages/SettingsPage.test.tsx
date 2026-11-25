@@ -469,6 +469,33 @@ describe('SettingsPage', () => {
       expect(screen.queryAllByRole('button', { name: /^Configure/ })).toHaveLength(6) // every one has a gear: how it starts in each import
     })
 
+    it('says which EXIF fields are expected: the capture date always, and the ones chosen from the list or typed', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await section('Validation')
+      await userEvent.click(screen.getByRole('button', { name: /Configure Required EXIF fields/ }))
+
+      const expected = () => within(screen.getByRole('list', { name: 'EXIF fields expected' }))
+      expect(expected().getByText('DateTimeOriginal')).toBeInTheDocument()
+      expect(expected().queryByRole('button', { name: /Do not expect DateTimeOriginal/ })).not.toBeInTheDocument()   // the app needs it: it cannot be taken out
+      expect(expected().getByText('Model')).toBeInTheDocument()
+
+      const field = screen.getByLabelText('EXIF field to expect')
+      await userEvent.type(field, 'iso')
+      await userEvent.click(screen.getByRole('button', { name: 'Add' }))   // completed as the list writes it
+      await userEvent.type(field, 'AmbientTemperature{Enter}')
+      await userEvent.type(field, 'model')
+      expect(screen.getByText('It is expected already.')).toBeInTheDocument()
+      await userEvent.clear(field)
+      await userEvent.type(field, 'not a field')
+      expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.clear(field)
+      await userEvent.click(expected().getByRole('button', { name: 'Do not expect Model' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION.exif_fields).toEqual(['ISO', 'AmbientTemperature'])
+    })
+
     it('turns checks off, says how each starts in an import, and saves both', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
@@ -488,6 +515,7 @@ describe('SettingsPage', () => {
       expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION).toEqual({
         corrupted: true, sequence: true, structure: true, camera: true, exif: false, duplicates: false,
         defaults: { corrupted: 'required', sequence: 'warn', structure: 'skip', camera: 'warn', exif: 'warn', duplicates: 'warn' },
+        exif_fields: ['Model'],
       })
       await screen.findByText('Settings saved.')
       expect(screen.getByRole('switch', { name: /Duplicate images/ })).not.toBeChecked()
@@ -511,7 +539,7 @@ describe('SettingsPage', () => {
       await section('Validation')
 
       expect(screen.getByText('Files with exactly the same content.')).toBeInTheDocument()
-      expect(screen.getByText(/Capture date, camera model and camera id on every image/)).toBeInTheDocument()
+      expect(screen.getByText(/The capture date, and the fields the gear adds, on every image/)).toBeInTheDocument()
     })
   })
 

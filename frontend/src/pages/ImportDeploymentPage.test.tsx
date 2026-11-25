@@ -1269,7 +1269,7 @@ describe('ImportDeploymentPage', () => {
     })
 
     describe('the EXIF fields the wizard needs', () => {
-      const COMPLETE = { date: { count: 0, examples: [] }, camera_model: { count: 0, examples: [] }, camera_id: { count: 0, examples: [] } }
+      const COMPLETE = { DateTimeOriginal: { count: 0, examples: [] }, Model: { count: 0, examples: [] }, SerialNumber: { count: 0, examples: [] } }
 
       it('is one of the checks, on by default (it warns)', async () => {
         await goToValidateStep()
@@ -1282,37 +1282,38 @@ describe('ImportDeploymentPage', () => {
         await goToValidateStep()
         await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-        expect(await screen.findByText('Every image has its capture date, camera model and camera id.')).toBeInTheDocument()
+        expect(await screen.findByText(/Every image has the EXIF fields expected: capture date, model of the camera \(with its make\), serial number of the camera\./)).toBeInTheDocument()
       })
 
       it('says how many images lack each field, with examples, and leaves out the fields nobody lacks', async () => {
         mockedApi.validateImages.mockResolvedValue({
           checked_count: 10,
           exif_missing: {
-            date: { count: 0, examples: [] },
-            camera_model: { count: 2, examples: ['a.jpg', 'b.jpg'] },
-            camera_id: { count: 10, examples: ['a.jpg', 'b.jpg', 'c.jpg'] },
+            DateTimeOriginal: { count: 0, examples: [] },
+            Model: { count: 2, examples: ['a.jpg', 'b.jpg'] },
+            AmbientTemperature: { count: 10, examples: ['a.jpg', 'b.jpg', 'c.jpg'] },
           },
         })
         await goToValidateStep()
         await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-        expect(await screen.findByText(/2 image\(s\) without a camera model, e\.g\. a\.jpg, b\.jpg/)).toBeInTheDocument()
-        expect(screen.getByText(/10 image\(s\) without a camera id, e\.g\. a\.jpg, b\.jpg, c\.jpg/)).toBeInTheDocument()
-        expect(screen.queryByText(/without a capture date/)).not.toBeInTheDocument()
+        const item = (re: RegExp) => (_: string, el: Element | null) => el?.tagName === 'LI' && re.test(el.textContent ?? '')
+        expect(await screen.findByText(item(/2 image\(s\) without model of the camera \(with its make\) \(Model\), e\.g\. a\.jpg, b\.jpg/))).toBeInTheDocument()
+        expect(screen.getByText(item(/10 image\(s\) without ambient temperature \(some camera traps\) \(AmbientTemperature\), e\.g\. a\.jpg, b\.jpg, c\.jpg/))).toBeInTheDocument()
+        expect(screen.queryByText(/without capture date/)).not.toBeInTheDocument()
       })
 
       it('blocks continuing when it is required and a field is missing, and lets go once it is not', async () => {
-        mockedApi.validateImages.mockResolvedValue({ checked_count: 2, exif_missing: { ...COMPLETE, date: { count: 1, examples: ['a.jpg'] } } })
+        mockedApi.validateImages.mockResolvedValue({ checked_count: 2, exif_missing: { ...COMPLETE, DateTimeOriginal: { count: 1, examples: ['a.jpg'] } } })
         await goToValidateStep()
         await chooseStrictness(4, 'Must pass') // the fifth check
         await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
-        await screen.findByText(/1 image\(s\) without a capture date/)
+        await screen.findByText(/1 image\(s\) without capture date/)
         expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
 
         mockedApi.validateImages.mockResolvedValue({ checked_count: 2, exif_missing: COMPLETE })
         await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
-        await screen.findByText(/Every image has its capture date/)
+        await screen.findByText(/Every image has the EXIF fields expected/)
         expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
       })
     })

@@ -127,8 +127,8 @@ def validation_report(found: dict, source: Path, checks: Iterable[str] | None = 
         missing: dict[str, list[str]] = {}
         for field, info in found.get("exif_missing", {}).items():
             for name in info.get("files", []):
-                missing.setdefault(name, []).append(field.replace("_", " "))
-        b.per_image("exif", images, {name: "no " + ", no ".join(fields) for name, fields in missing.items()}, "has its capture date, camera model and camera id",
+                missing.setdefault(name, []).append(info.get("label") or field.replace("_", " "))
+        b.per_image("exif", images, {name: "no " + ", no ".join(fields) for name, fields in missing.items()}, "has the EXIF fields expected",
                     tags={name: ", ".join(f"No {field}" if i == 0 else f"no {field}" for i, field in enumerate(fields)) for name, fields in missing.items()})
     if "duplicates" in ran:
         problems = {name: "same content as " + ", ".join(f for f in g["files"] if f != name) for g in found.get("duplicates", []) for name in g["files"]}

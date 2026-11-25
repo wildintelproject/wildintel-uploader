@@ -89,7 +89,7 @@ export const APP_SETTINGS: AppSettings = {
   EPICOLLECTCSV: { enabled: true },
   DATA: { dir: '/home/me/Documents/wildintel-uploader', collections_dir: null, reports_dir: null, packages_dir: null,
     default_collections_dir: '/home/me/Documents/wildintel-uploader/collections', default_reports_dir: '/home/me/Documents/wildintel-uploader/reports', default_packages_dir: '/home/me/Documents/wildintel-uploader/packages' },
-  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true, defaults: { corrupted: 'warn', sequence: 'warn', structure: 'warn', camera: 'warn', exif: 'warn', duplicates: 'warn' } },
+  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true, exif_fields: ['Model'], defaults: { corrupted: 'warn', sequence: 'warn', structure: 'warn', camera: 'warn', exif: 'warn', duplicates: 'warn' } },
   POSTVALIDATION: {
     defaults: { deployment_id: 'warn', collection_prefix: 'warn', collection_name: 'warn', location: 'warn', time_range: 'required', camera: 'warn', image_count: 'warn', sequence_count: 'warn', sequence_length: 'warn', sd_card: 'required', photo_count: 'warn' },
     deployment_id: true, collection_prefix: true, collection_name: true, location: true, time_range: true, camera: true,

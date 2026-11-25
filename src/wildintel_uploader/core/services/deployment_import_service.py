@@ -437,6 +437,8 @@ def _corruption_error(path: Path) -> str | None:
 
 # The image checks validate_images can run — see its own docstring. A
 # caller may ask for any subset; None (the default) means all of them.
+# The EXIF fields the camera information already reads (camera_info): the model — the make with it — and the serial number, under any of its names.
+_CAMERA_FIELDS = {"model", "serialnumber", "internalserialnumber", "bodyserialnumber", "cameraserialnumber"}
 IMAGE_CHECKS = frozenset({"corrupted", "sequence", "structure", "camera", "exif", "duplicates"})
 
 
@@ -505,7 +507,7 @@ def _reporting(progress: Callable[[str, int, int], None] | None, step: str, tota
 
 def validate_images(
     source_dir: Path, checks: frozenset[str] | None = None, *, detail: bool = False, imported: dict[str, list[dict]] | None = None,
-    progress: Callable[[str, int, int], None] | None = None,
+    progress: Callable[[str, int, int], None] | None = None, exif_fields: list[str] | None = None,
 ) -> dict:
     """Independent, opt-in checks over a scanned folder's images — only
     "checked_count" plus whichever of these were asked for are present in
@@ -572,16 +574,22 @@ def validate_images(
         taken = dict(zip(images, parallel.pmap(_image_datetime, images, progress=_reporting(progress, "dates", len(images)))))
 
     if "exif" in checks:
-        missing: dict[str, list[Path]] = {"date": [], "camera_model": [], "camera_id": []}
+        # the capture date, always (the app needs it), and the fields the settings expect (VALIDATION.exif_fields): the model and the serial number as the
+        # camera information has them, any other as it is read
+        fields = ["DateTimeOriginal", *(f for f in (exif_fields if exif_fields is not None else ["Model"]) if f.lower() != "datetimeoriginal")]
+        others = [f for f in fields[1:] if f.lower() not in _CAMERA_FIELDS]
+        tags = camera_info.read_tags(sorted(images), others) if others else {}
+        missing: dict[str, list[Path]] = {f: [] for f in fields}
         for path in sorted(images):
-            if taken[path] is None:
-                missing["date"].append(path)
-            if cameras[path].model is None:
-                missing["camera_model"].append(path)
-            if cameras[path].camera_id is None:
-                missing["camera_id"].append(path)
+            for field in fields:
+                key = field.lower()
+                found = (taken[path] if key == "datetimeoriginal" else cameras[path].model if key == "model"
+                         else cameras[path].camera_id if key in _CAMERA_FIELDS else tags.get(path, {}).get(field))
+                if found is None:
+                    missing[field].append(path)
         result["exif_missing"] = {
             field: {
+                "label": "capture date" if field == "DateTimeOriginal" else field,
                 "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]],
                 **({"files": [str(p.relative_to(source_dir)) for p in paths]} if detail else {}),
             }
