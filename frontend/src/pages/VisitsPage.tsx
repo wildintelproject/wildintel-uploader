@@ -7,8 +7,6 @@ import { actionLabel, actionsLabel, revisionNumber } from '../visitActions'
 import { useEffect, useRef, useState } from 'react'
 import TimezoneCombobox from '../components/TimezoneCombobox'
 import { api } from '../api'
-import { download } from '../csvFile'
-import visitsTemplate from '../visitsTemplate.csv?raw'
 import BackButton from '../components/BackButton'
 import PickTable, { LabelFrame, PickedTick } from '../components/PickTable'
 import Combobox from '../components/Combobox'
@@ -29,6 +27,7 @@ import { availabilityErrors, cameraAtSite, cardBlock, nextRevision, unfinishedRe
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, LocalLocation, LocalResearchProject, SdCard, StoredVisit, Trapper, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, ImportCsvOptions, CloseAfter } from '../types'
 import { PAGE_CLASS } from '../components/PageBar'
+import VisitFormatsPanel from '../components/VisitFormatsPanel'
 
 export type VisitSource = 'manual' | 'wildintel-new' | 'csv'
 
@@ -612,6 +611,8 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   const [csvOrigin, setCsvOrigin] = useState<'file' | 'epicollect'>('file')
   const [importRulesOpen, setImportRulesOpen] = useState(false)
   const [draggingCsv, setDraggingCsv] = useState(false)
+  // the panel at the right with the formats of the files of visits that are read
+  const [formatsOpen, setFormatsOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [csvText, setCsvText] = useState('')
   // Whether the file is being checked again — with the visits kept now, the locations now, the settings now.
@@ -1019,7 +1020,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
       <SwitchRow label="The images were not counted" hint="For old datasheets: a visit that collected a card but has no image count is accepted, and the count is left empty." checked={csvPhotosNotCounted} onChange={setCsvPhotosNotCounted} />
       <SwitchRow label="Use the coordinates of the location when a row has none" hint="A row with no coordinates takes those of its location. Off, a row with no coordinates is refused." checked={csvLocationCoordinates} onChange={setCsvLocationCoordinates} />
       <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40">
-        <div className="px-5"><SwitchRow plain label="Close the revision before when it has locations still planned" hint="A revision can only be added when the one before it is complete. On, the locations with no visit in the revision before are marked as not visited." checked={csvClose} onChange={setCsvClose} /></div>
+        <div className="px-5"><SwitchRow plain label="Mark the locations with no visit as not visited" hint="A revision can only be added when the one before it is finished. On, the locations that have no visit in the revision before are marked as not visited, so that it is finished. Below, the day that is written for them." checked={csvClose} onChange={setCsvClose} /></div>
         {csvClose && <CloseDuration value={csvCloseOn} onChange={setCsvCloseOn} />}
       </div>
     </div>
@@ -1682,9 +1683,10 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
 
           <WizardStep
             n={defaultProject ? 2 : 3} title={'Choose the spreadsheet file'} status={!project ? 'locked' : (csvResult || csvColumns || checking) && fileConfirmed ? 'done' : 'open'} sealed={csvSaved !== null} canEdit={csvSaved === null} onEdit={() => { forgetCsv(); setCsvName(null) }}
-            description="The CSV downloaded from the WildINTEL form in Epicollect5, or any other with one row per visit. WildINTEL Uploader detects which one it is."
+            description={<>Choose a file in one of the <button type="button" className="underline decoration-dotted underline-offset-4 hover:text-blue-600 dark:hover:text-blue-400" aria-haspopup="dialog" aria-expanded={formatsOpen} onClick={() => setFormatsOpen(true)}>supported formats</button>: WildINTEL Uploader detects which one it is.</>}
             summary={csvName}
           >
+            {formatsOpen && <VisitFormatsPanel onClose={() => setFormatsOpen(false)} />}
             {!(fileReady && csvColumns) && sourcesUsed.epicollect && (
               <div role="radiogroup" aria-label="Where the CSV is" className="flex gap-2 mb-4">
                 {([['file', 'A file on this computer'], ['epicollect', 'Epicollect5 project']] as const).map(([v, label]) => (
@@ -1708,9 +1710,6 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-6 py-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Spreadsheet file</h5>
-                <button type="button" className={`${btnOutline} inline-flex items-center gap-2`} onClick={() => download('visits_template.csv', visitsTemplate)}>
-                  <Glyph className="h-4 w-4"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></Glyph>Download a template
-                </button>
               </div>
               <label htmlFor="visits-csv" aria-label="Drop CSV file" onDragOver={(e) => { e.preventDefault(); setDraggingCsv(true) }}
                      onDragLeave={() => setDraggingCsv(false)}

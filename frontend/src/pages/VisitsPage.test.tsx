@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import VisitsPage, { detailsErrors, addName, namesOf, removeName, sessionName, sessionOf, toStored, visitErrors, batteryStatus, cardStatus, onlyNotes, withoutWhatIsNotAsked, fieldsFor, installationErrors, wallClockAgo, visitSummary } from './VisitsPage'
+import visitsTemplate from '../visitsTemplate.csv?raw'
 import { APP_SETTINGS } from '../test/fixtures'
 import { api } from '../api'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
@@ -961,7 +962,8 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Download a template' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'supported formats' }))
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Supported formats' })).getByRole('button', { name: 'Download the template of the Custom CSV' }))
 
     expect(click).toHaveBeenCalledTimes(1)
     const blob = (createObjectURL.mock.calls[0] as unknown as [Blob])[0]
@@ -970,6 +972,31 @@ describe('VisitsPage from a CSV file', () => {
     expect(lines.length - 1).toBeGreaterThanOrEqual(6)   // several rows of visits, not one
     expect(lines.some((l) => l.includes(',Revision + Desinstallation + Installation,'))).toBe(true)   // and visits that say several actions
     click.mockRestore()
+  })
+
+  it('says the supported formats in a panel at the right — what goes in each column of each one, and the template of the Custom CSV only', async () => {
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /^from a file/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+
+    await userEvent.click(await screen.findByRole('button', { name: 'supported formats' }))
+    const panel = within(screen.getByRole('dialog', { name: 'Supported formats' }))
+    expect(panel.getByRole('region', { name: 'WildINTEL Epicollect CSV' })).toBeInTheDocument()
+    expect(panel.queryByRole('button', { name: 'Download the template of the WildINTEL Epicollect CSV' })).not.toBeInTheDocument()   // read as Epicollect5 gives it: no template
+
+    await userEvent.click(panel.getByRole('button', { name: 'What goes in each column of the Custom CSV' }))
+    const names = within(panel.getByLabelText('Columns')).getAllByRole('term').map((t) => t.querySelector('.font-mono')?.textContent)
+    expect(names.join(',')).toBe(visitsTemplate.split('\n')[0].trim())   // the same columns as the template, in its order
+    expect(panel.getByText(/Several are joined with \+/)).toBeInTheDocument()
+    expect(within(panel.getByLabelText('Columns')).getAllByText('Required')).toHaveLength(4)   // the location, the date, the time and the actions
+
+    await userEvent.click(panel.getByRole('button', { name: /The supported formats/ }))
+    await userEvent.click(panel.getByRole('button', { name: 'What goes in each column of the WildINTEL Epicollect CSV' }))
+    expect(panel.getByText(/the form has no date nor time/)).toBeInTheDocument()
+
+    await userEvent.click(panel.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog', { name: 'Supported formats' })).not.toBeInTheDocument()
   })
 
   it('says what the file is once it is read — and lets the user say it is the other one, keeping the file', async () => {
@@ -1027,13 +1054,14 @@ describe('VisitsPage from a CSV file', () => {
     expect(await screen.findByLabelText('Columns of the file and fields of the visit')).toBeInTheDocument()
   })
 
-  it('offers the template to download as soon as the file is to be chosen, whatever it turns out to be', async () => {
+  it('offers the supported formats, with the template, as soon as the file is to be chosen, whatever it turns out to be', async () => {
     render(<VisitsPage onBack={vi.fn()} />)
     await chooseTheForm()
     await userEvent.click(await screen.findByLabelText('Research project'))
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await screen.findByLabelText('Drop CSV file')
-    expect(screen.getByRole('button', { name: 'Download a template' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'supported formats' }))
+    expect(screen.getByRole('button', { name: 'Download the template of the Custom CSV' })).toBeInTheDocument()
   })
 
   it('accepts a dropped CSV, reports invalid drops, and lets the user choose a replacement', async () => {
@@ -1097,13 +1125,13 @@ describe('VisitsPage from a CSV file', () => {
     if (option.test('from a file')) {   // closing the revision before starts on: most of these tests are of what happens when it is not
       await waitFor(() => expect(screen.getByRole('button', { name: /^Continue( with .+)?$/ })).toBeEnabled())
       await userEvent.click(await screen.findByRole('button', { name: 'Customize' }))
-      const close = await screen.findByRole('switch', { name: 'Close the revision before when it has locations still planned' })
+      const close = await screen.findByRole('switch', { name: 'Mark the locations with no visit as not visited' })
       if (close.getAttribute('aria-checked') === 'true') await userEvent.click(close)
     }
     await continueFromTheFile()
   }
 
-  it('has \'Close the revision before when it has locations still planned\' on by default, and sends it: a revision left open for sites that were skipped is found weeks later', async () => {
+  it('has \'Mark the locations with no visit as not visited\' on by default, and sends it: a revision left open for sites that were skipped is found weeks later', async () => {
     mockedApi.visitsCsvColumns.mockResolvedValue(COLUMNS)
     mockedApi.importVisitsCsv.mockResolvedValue({ visits: [visit()], problems: [], skipped: 0, saved: null, new_sites: [], warnings: [] })
     render(<VisitsPage onBack={vi.fn()} />)
@@ -1112,7 +1140,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), file)
     await userEvent.click(screen.getByRole('button', { name: 'Customize' }))
-    expect(await screen.findByRole('switch', { name: 'Close the revision before when it has locations still planned' })).toBeChecked()
+    expect(await screen.findByRole('switch', { name: 'Mark the locations with no visit as not visited' })).toBeChecked()
     await continueFromTheFile()
     await screen.findByLabelText('Site (a location of the research project)')
     await userEvent.selectOptions(screen.getByLabelText('Photos on the card collected'), 'Fotos')
@@ -1433,7 +1461,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), new File(['locationID,Date\n'], 'new.csv', { type: 'text/csv' }))
     await userEvent.click(screen.getByRole('button', { name: 'Customize' }))
-    const toggle = screen.getByRole('switch', { name: 'Close the revision before when it has locations still planned' })
+    const toggle = screen.getByRole('switch', { name: 'Mark the locations with no visit as not visited' })
     expect(toggle).toBeChecked()
     await userEvent.click(toggle)
     await continueFromTheFile()
@@ -1449,7 +1477,10 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
     await userEvent.upload(screen.getByLabelText('CSV file'), new File(['locationID,Date\n'], 'new.csv', { type: 'text/csv' }))
     await userEvent.click(screen.getByRole('button', { name: 'Customize' }))
-    const card = within(screen.getByRole('region', { name: 'When each revision is closed' }))
+    const card = within(screen.getByRole('region', { name: 'The day of the not visited mark' }))
+    expect(card.getByLabelText('The day')).toHaveTextContent('On the day of the last visit of the revision.')   // folded: only the day it is
+    expect(card.queryByRole('radio', { name: /After its last visit/ })).not.toBeInTheDocument()
+    await userEvent.click(card.getByRole('button', { name: 'Customize' }))
     expect(card.getByRole('radio', { name: /After its last visit/ })).toBeChecked()
     expect(card.getByRole('textbox', { name: 'How long' })).toHaveValue('0')
     expect(card.getByLabelText('The day')).toHaveTextContent('On the day of the last visit of the revision.')
@@ -1459,6 +1490,8 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(card.getByRole('button', { name: '2w' }))
     await userEvent.click(card.getByRole('button', { name: 'One more' }))
     expect(card.getByLabelText('The day')).toHaveTextContent('3 weeks before the first visit of the next revision.')
+    await userEvent.click(card.getByRole('button', { name: 'Done' }))
+    expect(card.getByLabelText('The day')).toHaveTextContent('3 weeks before the first visit of the next revision.')   // folded again, with the day chosen
     await continueFromTheFile()
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', 'locationID,Date\n', false, 'epicollect-csv', undefined, { ...EVERYTHING, close_after: { amount: 3, unit: 'weeks', anchor: 'before_next' } }))
   })
