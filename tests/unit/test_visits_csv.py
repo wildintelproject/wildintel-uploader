@@ -417,13 +417,39 @@ def test_a_visit_is_not_checked_against_what_an_unknown_revision_between_it_and_
     result = _parse(text, locations, kept, mapping, {"unknown": unknown})
     assert not result["problems"] and len(result["visits"]) == 1
 
-    # with nothing unknown between them, R0002 would collect card 1 and leave it again: the visit is refused
+    # with nothing unknown between them, R0002 collects card 1 and leaves it again: that is asked, not refused (#207), so R0001 is kept too
     kept, unknown = _later_revision("R0002", 1)
     result = _parse(text, locations, kept, mapping, {"unknown": unknown})
-    assert result["visits"] == [] and "SD card 1 is the one this visit collects" in result["problems"][0]["message"]
+    assert not result["problems"] and len(result["visits"]) == 1
 
 
 # ── each rule a visit breaks has its own label ───────────────────────────────────────
+
+def test_the_card_collected_and_left_again_is_kept_and_asked():
+    """#207: the same SD card collected and left again in the same camera happens in the field — it was empty, or downloaded there and put back —, and it is
+    also how a card is written down by mistake: the visit is kept, and a warning says which row to look at."""
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"}]
+    kept = [{"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "09:00:00", "when": "2026-09-14T09:00:00Z", "actions": ["Installation"], "camera_id": "C1", "sd": "58"}]
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "WICP_0001,Revision,2026-10-19,09:00:00,R0002,C1,58,120\n")
+    result = _parse(text, locations, kept, visits_csv.suggest_mapping(text)["mapping"])
+
+    assert not result["problems"] and [v["sd"] for v in result["visits"]] == ["58"]
+    assert any("the SD card 58 is collected and left again" in w for w in result["warnings"])
+
+
+def test_a_card_in_the_camera_of_another_site_is_still_refused():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": s, "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"} for s in ("WICP_0001", "WICP_0002")]
+    kept = [{"location_id": "WICP_0002", "session": "R0001", "date": "2026-09-14", "time": "08:00:00", "when": "2026-09-14T08:00:00Z", "actions": ["Installation"], "camera_id": "C2", "sd": "58"},
+            {"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "09:00:00", "when": "2026-09-14T09:00:00Z", "actions": ["Installation"], "camera_id": "C1", "sd": "7"}]
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "WICP_0001,Revision,2026-10-19,09:00:00,R0002,C1,58,120\n")
+    result = _parse(text, locations, kept, visits_csv.suggest_mapping(text)["mapping"])
+
+    assert "SD card 58 is in the camera at WICP_0002" in result["problems"][0]["message"]
+
 
 def test_every_rule_of_a_visit_has_a_label_of_its_own():
     import re
