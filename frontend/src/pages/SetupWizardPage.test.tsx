@@ -91,7 +91,7 @@ describe('SetupWizardPage', () => {
     expect(summary).toHaveTextContent('Trappers addedAna Pérez')
     expect(summary).toHaveTextContent('Locations addedDONA_01')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Register the first visit' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Register the visits' }))
     expect(onRegisterVisit).toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Back to Utilities' }))
     await userEvent.click(screen.getByRole('button', { name: 'Back to the main menu' }))
@@ -334,5 +334,43 @@ describe('SetupWizardPage', () => {
 
     expect(screen.getAllByText('Skipped')).toHaveLength(5)   // the trappers, the roles, the locations, the cameras and the SD cards
     expect(screen.getAllByText('Completed')).toHaveLength(2)   // the research project and the data folder
+  })
+
+  it('adds the trapper typed and not added when going on, and says so when it is not complete: what is typed is not lost', async () => {
+    render(<SetupWizardPage onBack={vi.fn()} />)
+    await project()
+    await userEvent.type(await screen.findByLabelText('Username *'), 'luis')
+    await next()
+    expect(screen.getByRole('alert')).toHaveTextContent('You typed a trapper but did not add it')
+    expect(screen.getByLabelText('Username *')).toHaveValue('luis')   // still on the step, with what was typed
+
+    await userEvent.type(screen.getByLabelText('Full name *'), 'Luis Gómez')
+    await next()
+    expect(await screen.findByText('1 trapper entered: Luis Gómez')).toBeInTheDocument()   // the summary of the step passed
+    await userEvent.click(await screen.findByRole('button', { name: 'Add the role' }))   // the roles step: the trapper is one to give a role to
+  })
+
+  it('empties the form after a trapper is added and lists the ones added, to add the next', async () => {
+    render(<SetupWizardPage onBack={vi.fn()} />)
+    await project()
+    for (const [user, full] of [['ana', 'Ana Pérez'], ['luis', 'Luis Gómez']]) {
+      await userEvent.type(await screen.findByLabelText('Username *'), user)
+      await userEvent.type(screen.getByLabelText('Full name *'), full)
+      await userEvent.click(screen.getByRole('button', { name: 'Add the trapper' }))
+      expect(screen.getByLabelText('Username *')).toHaveValue('')
+    }
+    expect(screen.getByText(/The trappers added \(2\)/)).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'The trappers entered' })).toHaveTextContent('Ana Pérez')
+    expect(screen.getByRole('list', { name: 'The trappers entered' })).toHaveTextContent('Luis Gómez')
+  })
+
+  it('says in the review that the data folder is the same for every research project when it is not asked for', async () => {
+    mocked.listResearchProjects.mockResolvedValue({ results: [{ acronym: 'TATR' }] } as never)
+    render(<SetupWizardPage onBack={vi.fn()} />)
+    expect(await screen.findByText('Create a research project. The rest is optional.')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Acronym *'), 'DONA')
+    await userEvent.type(screen.getByLabelText('Name *'), 'Doñana')
+    await userEvent.click(await screen.findByRole('button', { name: /^Finish setup/ }))
+    expect(await screen.findByRole('table', { name: 'Plan' })).toHaveTextContent('it is changed in Settings › General')
   })
 })
