@@ -10,7 +10,7 @@ const STEPS: { badge: ReactNode; title: string; text: string }[] = [
   { badge: 'project', title: 'Create a research project', text: 'Define trappers, locations, cameras and SD cards once, or switch anytime from the top bar.' },
   { badge: '1', title: 'Register the visits', text: 'Log field visits (who, when, location, actions) by hand or from your field CSV. Field visits are organized in revisions.' },
   { badge: '2', title: 'Import the images', text: 'Pair collected visits with SD card images to validate, rename and store them in a Camtrap DP-compatible deployment. Deployments are organized in collections.' },
-  { badge: '3', title: 'Upload the images', text: 'Send curated local deployments or collections to your remote repository (e.g., TRAPPER).' },
+  { badge: '3', title: 'Upload the images', text: 'Send to your remote repository (e.g., TRAPPER) either whole collections or any set of deployments.' },
 ]
 
 /** The button of the title of the menu that opens the quick guide. */

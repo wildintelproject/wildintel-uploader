@@ -73,7 +73,7 @@ describe('MenuPage', () => {
     expect(panel.getByText('End-to-end workflow')).toBeInTheDocument()
     expect(panel.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Create a research project', 'Register the visits', 'Import the images', 'Upload the images'])
     expect(panel.getByText('Define trappers, locations, cameras and SD cards once, or switch anytime from the top bar.')).toBeInTheDocument()
-    expect(panel.getByText('Send curated local deployments or collections to your remote repository (e.g., TRAPPER).')).toBeInTheDocument()
+    expect(panel.getByText('Send to your remote repository (e.g., TRAPPER) either whole collections or any set of deployments.')).toBeInTheDocument()
     expect(panel.getByText('Dashboards')).toBeInTheDocument()
     expect(panel.getByText('Utils')).toBeInTheDocument()
 
