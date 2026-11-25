@@ -66,7 +66,7 @@ In the optional steps you can add entries one by one or use **Import from CSV** 
 
 New sites are **Pending**: their first visit starts them, and earlier revisions do not wait for them. The timezone is important for interpreting camera dates and cannot be changed after the location is created; see [Locations](user-manual.md#23-locations).
 
-After setup, choose **Register the first visit** or return to **Main menu**. To create another project later, use **Create a new research project** on the welcome screen or in the research project selector.
+After setup, choose **Register the visits** — from a file (your field history, or a download of Epicollect) or one by hand — or return to **Main menu**. To create another project later, use **Create a new research project** on the welcome screen or in the research project selector.
 
 ![Initial setup: the research project, the data folder and the way to finish or to configure the optional entities](img/screenshots/initial-setup.png)
 
