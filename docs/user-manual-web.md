@@ -154,7 +154,7 @@ Once the checks pass, WildINTEL Uploader prepares the images before they can be 
 **Add metadata.** This optional step writes information such as the creator, owner, publisher, rights, license and location into each image as XMP.
 
 !!! note "Add metadata"
-    The notice under **What gets written into each image** warns when **Owner** or **Publisher** has not been set in **Settings › Preprocessing**. If either is missing, its value will be written as **Unknown**; the notice does not prevent you from continuing. Set these values in Settings if you want the images to carry the correct attribution. This step also needs ExifTool; if it is unavailable, WildINTEL Uploader disables the step and explains why.
+    The notice under **What gets written into each image** warns when **Owner** or **Publisher** has not been set in **Settings › Processing**. If either is missing, its value will be written as **Unknown**; the notice does not prevent you from continuing. Set these values in Settings if you want the images to carry the correct attribution. This step also needs ExifTool; if it is unavailable, WildINTEL Uploader disables the step and explains why.
 
 When you start preprocessing, WildINTEL Uploader copies and processes the images. How long this takes depends on the number of images and the processing steps you selected. If everything completes successfully, WildINTEL Uploader shows a summary of what was done and asks you to confirm saving the deployment in your local collection. Saving seals it so WildINTEL Uploader can detect later changes.
 
@@ -274,9 +274,9 @@ that take a value mean:
 | Number of images / sequences / length of sequences | 50 % each | How different a value can be and still count as similar. |
 | SD card / Photo count | on | The two checks of a deployment [of a visit](#stage-4-check-details): that the card is the one the visit left and that the images are those it counted. |
 
-### Preprocessing
+### Processing
 
-![Settings › Preprocessing](img/screenshots/settings-preprocessing.png)
+![Settings › Processing](img/screenshots/settings-preprocessing.png)
 
 What a new import does to the images — the wizard lists it before preparing, and a run can still
 switch each step off.
@@ -289,7 +289,14 @@ switch each step off.
 - **License** — picked from a list: **CC0** (any use, no requirements), **CC BY** (any use with
   attribution) or **CC BY-NC** (with attribution, not for commercial purposes), the default. What is
   written into each image is the license's URL, shown beside each name.
-- **Dates** — **Ignore summer time**, and **Convert the dates to UTC**.
+- **Dates** — the capture dates give the day in the name of each image and its date in the metadata.
+  They are read from each image as the clock of the camera, in the timezone of its location; **the
+  dates in the images are never changed**. With a location in UTC, neither option changes anything.
+  - **Ignore summer time** — for cameras whose clock was set once and never changed: in summer,
+    08:00 on the camera is 09:00 on the clock of the location. Used when the location does not say it.
+  - **Convert the dates to UTC** — 08:30 in Madrid in July is written 06:30 UTC; off, the date keeps
+    the offset of the location (08:30+02:00). Only the name and the metadata change: near midnight, the
+    day in the name can be the day before.
 
 ### Entities
 
@@ -329,7 +336,7 @@ What each report holds:
 | **Validation** | each image and check — corrupted, shooting order, EXIF fields, duplicates —, and the folder for the structure and camera checks | The ones that passed too, so the report says what was checked, not only what failed. |
 | **Postvalidation** | the deployment for the naming and statistical checks, and each image for its date and camera | Why a check failed — *241 images — like the previous revisions (median 238, ±50 %)*. |
 | **Repair** | each image and check, and each metadata file | What the repair wrote and what the images passed, as the new seal says — and the preprocessing checks: names, size, metadata. |
-| **Preprocessing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized* — and the ones that were **skipped**, with the reason. |
+| **Processing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized* — and the ones that were **skipped**, with the reason. |
 
 **Settings › Reports** lists all of them, newest first, with *View*, *CSV*, *JSON* and *Delete* (which
 asks again). They are kept in the `reports` folder of the data folder until you delete them. A check you run twice
@@ -746,9 +753,11 @@ failed it (*Out of range*, *Other camera*) as thumbnails. The [report](#reports)
 **1. Processing steps.** Choose what to do to the images; the table says what each step does. Press **Start preparing**.
 
 1. **Copy into the collection** — always. Anything that isn't an image is copied as it is.
-2. **Read the capture dates** — always. From each image's EXIF, as the camera's local time in the
-   location's timezone — ignoring summer time and converting to UTC, as the settings say. An image
-   with no EXIF date uses its file's date.
+2. **Read the capture dates** — always. From each image, as the clock of the camera in the
+   location's timezone — ignoring summer time and converting to UTC, as the settings say; when the
+   cameras keep UTC, as they are. They give the day in the name of each image and its date in the
+   metadata: the dates in the images are never changed. An image with no date of its own uses its
+   file's date.
 3. **Rename the images** — `<DEPLOYMENT>__<YYYYMMDD>_<n>.<EXT>` in upper case, `.jpg` becoming
    `.jpeg`, e.g. `R0003-DONA_01__20240904_1.JPEG`; *n* is the image's place in file-name order.
 4. **Resize the images** — to the width of the settings, keeping proportions, EXIF and colour
@@ -760,7 +769,7 @@ failed it (*Out of range*, *Other camera*) as thumbnails. The [report](#reports)
    they're blank, the step says so.
 
 Each optional step can be switched off for this run (its checkbox). Its values come from the
-[Preprocessing settings](#preprocessing). The images go into the deployment's folder in the collections folder; the
+[Processing settings](#processing). The images go into the deployment's folder in the collections folder; the
 originals are never touched. Nothing is final yet: you can go back, change something and **Prepare again** — the folder is
 simply redone.
 

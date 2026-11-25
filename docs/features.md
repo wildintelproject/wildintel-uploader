@@ -70,12 +70,12 @@ form in** — everything but the dates. A deployment that already exists is refu
 When the collection has a `_FileTimestampLog.csv` — the file wildintel-tools asks for — the
 dates come from it, and the app keeps that file up to date.
 
-### Preprocessing
+### Processing
 
 What wildintel-tools did to a collection before uploading it, and a bit more:
 
 - **dates** read from the EXIF as the camera's local time — optionally ignoring summer time —
-  and converted to UTC;
+  and converted to UTC, for the names and the metadata: the dates in the images are never changed;
 - **rename** to `<DEPLOYMENT>__<YYYYMMDD>_<n>.<EXT>`;
 - **resize** to a width (2400 px) — and unlike wildintel-tools, the resized image is the one that
   is kept;
