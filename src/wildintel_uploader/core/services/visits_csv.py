@@ -661,7 +661,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         return (v["location_id"].lower(), str(v["session"]).upper()) in unknown_kept_keys
 
     # the visits that fill an unknown one come last: each is checked with the visits after it that it touches, and those need the other visits of its revision to be there
-    for visit in sorted(visits, key=lambda v: (fills_unknown(v), visit_rules._stamp(v))):
+    # at the same instant, a visit that takes a camera away is taken first: the camera it takes can be put up at another site at that same minute
+    for visit in sorted(visits, key=lambda v: (fills_unknown(v), *visit_rules.by_time_takings_first(v))):
         number = visit_rules._session_number(visit.get("session"))
         fills = fills_unknown(visit)
         if number is not None and number not in gate and not fills:
