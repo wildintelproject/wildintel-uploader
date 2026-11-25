@@ -92,6 +92,21 @@ def test_a_preprocessing_report_lists_what_was_done_and_what_was_skipped(source:
     assert report["totals"] == {"entries": 2, "ok": 1, "failed": 1, "images_with_issues": 1}
 
 
+def test_a_preprocessing_report_says_the_size_of_each_image_before_and_after_it_was_resized(source: Path, tmp_path: Path):
+    base = {"date": "2024-09-04T08:00:00+00:00", "date_source": "exif"}
+    records = [
+        {**base, "original": "IMG_0001.JPG", "name": "A.JPEG", "resized": True, "original_width": 6000, "original_height": 4000, "original_bytes": 8_700_000,
+         "width": 2400, "height": 1600, "bytes": 1_400_000},
+        {**base, "original": "IMG_0002.JPG", "name": "B.JPEG", "resized": False, "original_width": 1920, "original_height": 1080, "original_bytes": 900_000,
+         "width": 1920, "height": 1080, "bytes": 900_000},
+    ]
+
+    report = rs.preprocessing_report(records, [], "R0003-DONA_01", source, tmp_path / "out", {"resize": True, "resize_width": 2400})
+
+    assert _entry(report, "IMG_0001.JPG", "preprocessing")["message"].endswith("; resized 6000×4000, 8.7 MB → 2400×1600, 1.4 MB")
+    assert _entry(report, "IMG_0002.JPG", "preprocessing")["message"].endswith("; not resized: 1920 px wide, no wider than 2400")
+
+
 def test_a_report_is_kept_read_listed_and_deleted(source: Path, reports: Path):
     report = rs.validation_report(dis.validate_images(source, None, detail=True), source)
 

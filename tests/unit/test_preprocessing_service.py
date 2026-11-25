@@ -198,7 +198,11 @@ def test_the_images_are_renamed_resized_and_kept_flat_in_the_deployments_folder(
         with Image.open(image) as img:
             assert img.width == 2400
     assert [e["type"] for e in events] == ["copy", "copy", "copy", "sealing", "done"]
-    assert {k: v for k, v in events[-1].items() if k != "report_id"} == {"type": "done", "dest_dir": str(dest), "processed": 3, "skipped": 0, "sealed": True}
+    assert {k: v for k, v in events[-1].items() if k not in ("report_id", "resize")} == {"type": "done", "dest_dir": str(dest), "processed": 3, "skipped": 0, "sealed": True}
+    # what resizing did, at a glance: the three 3000×2000 are 2400×1600 now
+    summary = events[-1]["resize"]
+    assert (summary["resized"], summary["images"], summary["before"], summary["after"]) == (3, 3, "3000×2000", "2400×1600")
+    assert 0 < summary["after_bytes"] and 0 < summary["before_bytes"]
     assert events[-1]["report_id"].endswith("_preprocessing_R0003-DONA_01")
     assert events[0]["name"] == "R0003-DONA_01__20240701_1.JPEG"
     assert json.loads((dest / "deployment.json").read_text())["deployment_id"] == "R0003-DONA_01"
@@ -381,6 +385,17 @@ def test_without_metadata_exiftool_is_not_needed(tmp_path: Path, monkeypatch: py
     assert events[-1]["type"] == "done"
 
 
+def test_the_xmp_is_written_in_batches_saying_how_many_files_are_written_after_each(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """For the progress of Add metadata and its time left: one ExifTool run per batch, and the files written so far after each one."""
+    runs: list[int] = []
+    monkeypatch.setattr(pre, "_XMP_BATCH", 2)
+    monkeypatch.setattr(pre.subprocess, "run", lambda *a, **k: (runs.append(k["input"].count("-execute")), subprocess.CompletedProcess(a, 0, "", ""))[1])
+    items = [(tmp_path / f"IMG_{n}.JPG", {"XMP-dc:Creator": "x"}) for n in range(5)]
+
+    assert list(pre.write_xmp_batches("exiftool", items)) == [2, 4, 5]
+    assert runs == [2, 2, 1]
+
+
 @needs_exiftool
 def test_the_xmp_metadata_is_written_into_each_image(tmp_path: Path):
     source = _source(tmp_path, 2)
@@ -390,7 +405,7 @@ def test_the_xmp_metadata_is_written_into_each_image(tmp_path: Path):
 
     events = _run(source, tmp_path / "out", options)
 
-    assert "metadata" in [e["type"] for e in events]
+    assert [(e["index"], e["total"]) for e in events if e["type"] == "metadata"] == [(0, 2), (2, 2)]   # when it starts, and after the one batch
     dest = tmp_path / "out" / "R0003-DONA_01"
     log = json.loads((dest / "preprocessing.json").read_text())
     first = log["images"][0]

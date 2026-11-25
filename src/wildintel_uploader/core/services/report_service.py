@@ -194,6 +194,15 @@ def repair_report(deployment_id: str, dest: Path, files: list[tuple[str, bool, s
     return b.build()
 
 
+def _megabytes(size: int | None) -> str:
+    return f"{(size or 0) / 1_000_000:.1f} MB"
+
+
+def _size(record: dict, prefix: str) -> str:
+    """An image's size, as the report says it: 6000×4000, 8.7 MB — `prefix` "original_" for the one it had before it was processed."""
+    return f"{record[prefix + 'width']}×{record[prefix + 'height']}, {_megabytes(record.get(prefix + 'bytes'))}"
+
+
 def preprocessing_report(records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> dict:
     """What preprocessing did to each image — and the ones it couldn't process."""
     b = _Builder("preprocessing", f"Processing of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters={**options, "destination": str(dest)})
@@ -201,7 +210,9 @@ def preprocessing_report(records: list[dict], skipped: list[dict], deployment_id
     for r in records:
         steps = [f"{r['original']} → {r['name']}" if r["name"] != r["original"] else r["original"], f"date {r['date']} ({r['date_source']})"]
         if r.get("resized"):
-            steps.append("resized")
+            steps.append(f"resized {_size(r, 'original_')} → {_size(r, '')}" if r.get("width") and r.get("original_width") else "resized")
+        elif options.get("resize") and r.get("original_width"):
+            steps.append(f"not resized: {r['original_width']} px wide, no wider than {options.get('resize_width')}")
         b.add(r["original"], "preprocessing", True, "; ".join(steps))
     for item in skipped:
         b.add(item["name"], "preprocessing", False, item["detail"])
