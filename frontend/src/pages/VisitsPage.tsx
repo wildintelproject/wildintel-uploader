@@ -972,7 +972,10 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   const given = (field: string) => !!csvMapping[field] || !!csvDefaults[field]?.trim()
   // What creating asks for: the fields each entity that is created needs.
   // The fields that are asked: those of an entity only when it is created.
-  const fieldsShown = (csvColumns?.fields ?? []).filter((f) => f.field !== 'setup_by' && (!f.entity || csvCreate[f.entity])) // who set up is who went: one field
+  // who set up is who went: one field. When the entry was created (created_at) is the time of the entries of Epicollect5, which have none of their own: it is offered for
+  // them, and for a file that has that column, not for a file of one's own
+  const fieldsShown = (csvColumns?.fields ?? []).filter((f) => f.field !== 'setup_by' && (!f.entity || csvCreate[f.entity])
+    && (f.field !== 'created_at' || csvOrigin === 'epicollect' || !!csvMapping.created_at))
   const createdNeeds = (csvColumns?.fields ?? []).filter((f) => (f.required_with ?? []).some((e) => csvCreate[e]))
   // every option of the box, marked or cleared together
   const optionsOn = [...Object.values(csvCreate), csvPhotosNotCounted, csvLocationCoordinates, csvClose].filter(Boolean).length
