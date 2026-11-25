@@ -31,6 +31,35 @@ def test_export_is_read_back_as_the_same_visits():
             assert got.get(field) == value, field
 
 
+def test_a_camera_taken_from_a_site_and_put_up_at_another_at_the_same_minute_is_taken_away_first():
+    """As the field form often has it (DONA, R0013: camera 4 from DONA_0026 to DONA_0026_B at 16:15): whatever order the rows come in, at the same instant what
+    is taken away is taken away before what is put up, and the camera is not at two sites at once."""
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "A", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"},
+                 {"location_id": "A_B", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC", "status": "pending"}]   # a new site: it starts with its first visit
+    kept = [{"location_id": "A", "session": "R0001", "date": "2026-09-14", "time": "09:00:00", "when": "2026-09-14T09:00:00Z", "actions": ["Installation"], "camera_id": "CAM4", "sd": "1"}]
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "A_B,Installation,2026-10-10,16:15:00,R0002,CAM4,2,\n"                    # put up first in the file
+            "A,Revision + Desinstallation,2026-10-10,16:15:00,R0002,CAM4,,120\n")     # and taken away at the same minute
+    result = _parse(text, locations, kept, visits_csv.suggest_mapping(text)["mapping"])
+
+    assert result["problems"] == []
+    assert sorted((v["location_id"], v["actions"]) for v in result["visits"]) == [("A", ["Revision", "Desinstallation"]), ("A_B", ["SiteStart", "Installation"])]
+
+
+def test_a_camera_still_at_a_site_cannot_be_put_up_at_another_at_the_same_minute():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "A", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"},
+                 {"location_id": "A_B", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC", "status": "pending"}]   # a new site: it starts with its first visit
+    kept = [{"location_id": "A", "session": "R0001", "date": "2026-09-14", "time": "09:00:00", "when": "2026-09-14T09:00:00Z", "actions": ["Installation"], "camera_id": "CAM4", "sd": "1"}]
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "A_B,Installation,2026-10-10,16:15:00,R0002,CAM4,2,\n"
+            "A,Revision,2026-10-10,16:15:00,R0002,CAM4,3,120\n")                      # revised and kept there: it is not taken away
+    result = _parse(text, locations, kept, visits_csv.suggest_mapping(text)["mapping"])
+
+    assert [p["row"] for p in result["problems"]] == [2] and "installed at A" in result["problems"][0]["message"]
+
+
 def test_every_row_says_what_became_of_it():
     from wildintel_uploader.core.services import visits_csv
     locations = [{"location_id": "WICP_0001", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"}]

@@ -385,7 +385,7 @@ A camera is at a site from the visit that puts it up (an Installation, or a Revi
 - A **Revision**, a **Desinstallation** or a **Stolen** visit is of **the camera that is at the site**. If it was replaced, the visit adds a Desinstallation and an Installation.
 - A site has **one camera at a time**: another is not put up where one is, until it is taken away (a Desinstallation, or a Stolen visit).
 - Where the camera was taken away or found stolen, the site has **none**: there is nothing to look at, to take away or to find stolen. Only an **Installation**, an **Archive** or a **visit that is not made** can follow.
-- A camera is **not put up where it already is**, nor while it is at **another site**: it has to be uninstalled there first.
+- A camera is **not put up where it already is**, nor while it is at **another site**: it has to be uninstalled there first. At the **same instant**, what is taken away is taken away first: a camera taken from one site and put up at another at the same minute — as the field form often has it — is accepted, whatever the order of the rows.
 
 **Where the SD card is**
 

@@ -277,6 +277,17 @@ def _last_touch(group: list[dict], when: str, touches) -> dict | None:
     return None
 
 
+def _taken_away_at(group: list[dict], when: str, camera: str) -> bool:
+    """Whether a visit to a site at the very instant `when` takes `camera` away from it: at the same instant, what is taken away is taken away before what is
+    put up — a camera taken from one site and put up at another at the same minute, as the field form often has them."""
+    return any(_stamp(v) == when and _takes_away(v) and not (_leaves_camera(v) and _same_gear(v.get("camera_id") or "", camera)) for v in group)
+
+
+def by_time_takings_first(v: dict) -> tuple[str, int]:
+    """The order visits are taken in: by their instants and, at the same instant, the ones that take a camera away first."""
+    return _stamp(v), 0 if _takes_away(v) else 1
+
+
 def _touches_camera(v: dict) -> bool:
     return _takes_away(v) or bool(_leaves_camera(v) and v.get("camera_id"))
 
@@ -332,7 +343,7 @@ def camera_at(visits: list[dict], camera: str, when: str, unknown: list[dict] | 
         best = None
         for group in visits.sites_by_time():
             last = _last_touch(group, when, _touches_camera)
-            if last is None or not (_leaves_camera(last) and last.get("camera_id") and _same_gear(last["camera_id"], camera)):
+            if last is None or not (_leaves_camera(last) and last.get("camera_id") and _same_gear(last["camera_id"], camera)) or _taken_away_at(group, when, camera):
                 continue
             first = next(v for v in group if _touches_camera(v))
             key = (_stamp(first), visits._pos[id(first)])
@@ -347,6 +358,9 @@ def camera_at(visits: list[dict], camera: str, when: str, unknown: list[dict] | 
             here[site] = None
         if _leaves_camera(v) and v.get("camera_id"):
             here[site] = {"camera": v["camera_id"], "site": v["location_id"], "date": v["date"], "session": v.get("session")}
+    for site, h in here.items():   # at the same instant, what is taken away is taken away first
+        if h and _taken_away_at([v for v in visits if str(v["location_id"]).lower() == site], when, camera):
+            here[site] = None
     at = next(({"site": h["site"], "date": h["date"], "session": h["session"]} for h in here.values() if h and _same_gear(h["camera"], camera)), None)
     return None if at is None or _stale(at, at["site"], unknown, number) else at
 
