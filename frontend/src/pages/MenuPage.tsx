@@ -62,13 +62,15 @@ export default function MenuPage({ onAction, onDashboard, onChoose }: Props) {
   const [guideOpen, setGuideOpen] = useState(false)
   // the glossary: what each word means, in a panel at the right
   const [glossaryOpen, setGlossaryOpen] = useState(false)
+  // the word of the glossary whose entry the panel shows first, when it is opened from the quick guide
+  const [glossaryTerm, setGlossaryTerm] = useState<string | undefined>()
   useTrail([{ label: 'Menu', icon: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></> }])
   return (
     <div className={PAGE_CLASS}>
       <PageTitle title="What do you want to do?" description="Choose one of the following." label="Menu actions"
-                 actions={<div className="flex flex-wrap gap-2"><GlossaryButton expanded={glossaryOpen} onClick={() => setGlossaryOpen(true)} /><QuickGuideButton expanded={guideOpen} onClick={() => setGuideOpen(true)} /></div>} />
-      {guideOpen && <QuickGuide onClose={() => setGuideOpen(false)} />}
-      {glossaryOpen && <Glossary onClose={() => setGlossaryOpen(false)} />}
+                 actions={<div className="flex flex-wrap gap-2"><GlossaryButton expanded={glossaryOpen} onClick={() => { setGlossaryTerm(undefined); setGlossaryOpen(true) }} /><QuickGuideButton expanded={guideOpen} onClick={() => setGuideOpen(true)} /></div>} />
+      {guideOpen && <QuickGuide onClose={() => setGuideOpen(false)} onTerm={(term) => { setGuideOpen(false); setGlossaryTerm(term); setGlossaryOpen(true) }} />}
+      {glossaryOpen && <Glossary focus={glossaryTerm} onClose={() => setGlossaryOpen(false)} />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {ACTIONS.map((t, i) => <ActionCard key={t.value} number={i + 1} icon={ICONS[t.icon]} title={t.title} subtitle={t.subtitle} description={t.description} onClick={() => onAction(t.value)} />)}
       </div>
