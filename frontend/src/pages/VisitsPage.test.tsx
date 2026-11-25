@@ -968,7 +968,7 @@ describe('VisitsPage from a CSV file', () => {
     expect(click).toHaveBeenCalledTimes(1)
     const blob = (createObjectURL.mock.calls[0] as unknown as [Blob])[0]
     const lines = (await blob.text()).trim().split('\n')
-    expect(lines[0]).toBe('location_id,session,date,time,actions,trappers,status,camera_id,camera_model,sd,card_batteries_ok,num_photos,date_time_ok,camera_height,camera_interval,comments,latitude,longitude')
+    expect(lines[0]).toBe('location_id,session,date,time,actions,trappers,camera_status,camera_id,camera_model,sd,battery_status,card_status,num_photos,date_time_ok,camera_height,camera_interval,comments,latitude,longitude')
     expect(lines.length - 1).toBeGreaterThanOrEqual(6)   // several rows of visits, not one
     expect(lines.some((l) => l.includes(',Revision + Desinstallation + Installation,'))).toBe(true)   // and visits that say several actions
     click.mockRestore()
@@ -1494,6 +1494,29 @@ describe('VisitsPage from a CSV file', () => {
     expect(card.getByLabelText('The day')).toHaveTextContent('3 weeks before the first visit of the next revision.')   // folded again, with the day chosen
     await continueFromTheFile()
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenLastCalledWith('TATR', 'locationID,Date\n', false, 'epicollect-csv', undefined, { ...EVERYTHING, close_after: { amount: 3, unit: 'weeks', anchor: 'before_next' } }))
+  })
+
+  it('does not offer when the entry was created for a file of one\'s own, only for one that has that column', async () => {
+    const created = { field: 'created_at', label: 'Created at (UTC, as Epicollect writes it)', required: false }
+    mockedApi.visitsCsvColumns.mockResolvedValue({ ...COLUMNS, fields: [...COLUMNS.fields, created] })
+    const { unmount } = render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /^from a file/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
+    await screen.findByLabelText('Photos on the card collected')
+    expect(screen.queryByLabelText(created.label)).not.toBeInTheDocument()
+    unmount()
+
+    mockedApi.visitsCsvColumns.mockResolvedValue({ ...COLUMNS, columns: [...COLUMNS.columns, 'created_at'], mapping: { ...COLUMNS.mapping, created_at: 'created_at' }, fields: [...COLUMNS.fields, created] })
+    render(<VisitsPage onBack={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /^from a file/i }))
+    await userEvent.click(await screen.findByLabelText('Research project'))
+    await userEvent.click(await screen.findByRole('option', { name: 'TATR — Tatra' }))
+    await userEvent.upload(screen.getByLabelText('CSV file'), file)
+    await continueFromTheFile()
+    expect(await screen.findByLabelText(created.label)).toBeInTheDocument()   // the file has the column: it is matched, and shown
   })
 
   it('reads the visits with the columns as they are mapped, says what it found, and keeps them with the same mapping', async () => {
