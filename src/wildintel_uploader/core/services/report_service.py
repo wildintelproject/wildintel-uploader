@@ -39,10 +39,10 @@ LABELS = {
     "collection_name": "Collection name", "location": "The id's location is the one chosen", "time_range": "Image dates fit the deployment",
     "sd_card": "The SD card is the visit's", "photo_count": "Number of images is the visit's",
     "image_count": "Number of images", "sequence_count": "Number of sequences", "sequence_length": "Length of the sequences",
-    "preprocessing": "Preprocessing",
+    "preprocessing": "Processing",
     "metadata_files": "Metadata files", "camera_match": "The camera is the deployment's",
-    "preprocessing_names": "Names of the preprocessed images", "preprocessing_size": "Size of the preprocessed images",
-    "preprocessing_metadata": "XMP metadata of the images", "preprocessing_hash": "Images unchanged since they were preprocessed",
+    "preprocessing_names": "Names of the processed images", "preprocessing_size": "Size of the processed images",
+    "preprocessing_metadata": "XMP metadata of the images", "preprocessing_hash": "Images unchanged since they were processed",
 }
 
 
@@ -196,7 +196,7 @@ def repair_report(deployment_id: str, dest: Path, files: list[tuple[str, bool, s
 
 def preprocessing_report(records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> dict:
     """What preprocessing did to each image — and the ones it couldn't process."""
-    b = _Builder("preprocessing", f"Preprocessing of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters={**options, "destination": str(dest)})
+    b = _Builder("preprocessing", f"Processing of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters={**options, "destination": str(dest)})
     b.checked = len(records) + len(skipped)
     for r in records:
         steps = [f"{r['original']} → {r['name']}" if r["name"] != r["original"] else r["original"], f"date {r['date']} ({r['date_source']})"]

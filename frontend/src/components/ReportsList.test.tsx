@@ -12,7 +12,7 @@ vi.mock('../api', () => ({
 const SUMMARIES: ReportSummary[] = [
   { id: '20261006-153012_validation_R0003-DONA_01', kind: 'validation', title: 'Validation of R0003-DONA_01', created_at: '2026-10-06T15:30:12+00:00',
     source_dir: '/home/me/R0003-DONA_01', deployment_id: null, checked: 241, totals: { entries: 1000, ok: 998, failed: 2 } },
-  { id: '20261006-153500_preprocessing_R0003-DONA_01', kind: 'preprocessing', title: 'Preprocessing of R0003-DONA_01', created_at: '2026-10-06T15:35:00+00:00',
+  { id: '20261006-153500_preprocessing_R0003-DONA_01', kind: 'preprocessing', title: 'Processing of R0003-DONA_01', created_at: '2026-10-06T15:35:00+00:00',
     source_dir: '/home/me/R0003-DONA_01', deployment_id: 'R0003-DONA_01', checked: 241, totals: { entries: 241, ok: 241, failed: 0 } },
 ]
 
@@ -27,7 +27,7 @@ describe('ReportsList', () => {
 
     const validation = await screen.findByRole('listitem', { name: 'Validation of R0003-DONA_01' })
     expect(validation).toHaveTextContent('2 problem(s)')
-    expect(screen.getByRole('listitem', { name: 'Preprocessing of R0003-DONA_01' })).toHaveTextContent('nothing failed')
+    expect(screen.getByRole('listitem', { name: 'Processing of R0003-DONA_01' })).toHaveTextContent('nothing failed')
     expect(screen.getAllByRole('link', { name: 'CSV' })[0]).toHaveAttribute('href', `/api/reports/${SUMMARIES[0].id}/download?format=csv`)
   })
 

@@ -362,7 +362,7 @@ const SECTIONS: { id: SectionId; label: string; icon: () => ReactNode }[] = [
   { id: 'sources', label: 'Visit sources', icon: FileIcon },
   { id: 'validation', label: 'Validation', icon: CheckIcon },
   { id: 'postvalidation', label: 'Postvalidation', icon: ShieldIcon },
-  { id: 'preprocessing', label: 'Preprocessing', icon: ImageIcon },
+  { id: 'preprocessing', label: 'Processing', icon: ImageIcon },
   { id: 'entities', label: 'Entities', icon: UsersIcon },
   { id: 'reports', label: 'Reports', icon: ReportIcon },
   { id: 'config', label: 'Config', icon: FileIcon },
@@ -2763,10 +2763,10 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
                 What is written into each image: <span className="font-mono break-all">{draft.licenseUrl || '(none)'}</span>
               </p>
             </Row>
-            <Row label="Dates" description="The capture dates go into the image names and the metadata. They are read from the EXIF as the camera's local time, in the timezone given in the deployment's details.">
-              <CheckOption label="Ignore summer time" hint="Read the camera's clock as if it never changed, using the timezone's standard offset — for cameras whose clock was set once and never adjusted."
+            <Row label="Dates" description="The capture dates give the day in the name of each image and its date in the metadata. They are read from each image as the clock of the camera, in the timezone of its location; the dates in the images are never changed. With a location in UTC, neither option changes anything.">
+              <CheckOption label="Ignore summer time" hint="For cameras whose clock was set once and never changed: in summer, 08:00 on the camera is 09:00 on the clock of the location. Used when the location does not say it."
                            checked={draft.ignoreDst} onChange={(v) => set('ignoreDst', v)} />
-              <CheckOption label="Convert the dates to UTC" hint="Otherwise they keep the timezone's own offset."
+              <CheckOption label="Convert the dates to UTC" hint="08:30 in Madrid in July is written 06:30 UTC. Off, the date keeps the offset of the location (08:30+02:00). Only the name and the metadata change: near midnight, the day in the name can be the day before."
                            checked={draft.convertToUtc} onChange={(v) => set('convertToUtc', v)} />
             </Row>
           </div>

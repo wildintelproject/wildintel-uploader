@@ -4,7 +4,7 @@ import { formatInstant } from '../dateFormat'
 import ReportPanel from './ReportPanel'
 import type { ReportKind, ReportSummary } from '../types'
 
-const KIND_LABELS: Record<ReportKind, string> = { validation: 'Validation', postvalidation: 'Postvalidation', preprocessing: 'Preprocessing', repair: 'Repair', upload: 'Upload', visits: 'Visits' }
+const KIND_LABELS: Record<ReportKind, string> = { validation: 'Validation', postvalidation: 'Postvalidation', preprocessing: 'Processing', repair: 'Repair', upload: 'Upload', visits: 'Visits' }
 const KIND_TONES: Record<ReportKind, string> = {
   validation: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   postvalidation: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',

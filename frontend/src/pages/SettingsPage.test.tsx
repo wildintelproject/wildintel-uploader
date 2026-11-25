@@ -684,13 +684,13 @@ describe('SettingsPage', () => {
     })
   })
 
-  describe('Preprocessing', () => {
+  describe('Processing', () => {
     it('is a section of its own, with the steps, the width, the authorship, the license and the dates', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Preprocessing')
+      await section('Processing')
 
-      expect(screen.getByRole('button', { name: 'Preprocessing' })).toHaveAttribute('aria-current', 'page')
+      expect(screen.getByRole('button', { name: 'Processing' })).toHaveAttribute('aria-current', 'page')
       for (const name of [/Rename the images/, /Resize the images/, /Add metadata/, /Ignore summer time/, /Convert the dates to UTC/]) {
         expect(screen.getByRole('checkbox', { name })).toBeChecked()
       }
@@ -706,7 +706,7 @@ describe('SettingsPage', () => {
     it('saves the steps, the width, the authorship, the license and the dates', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Preprocessing')
+      await section('Processing')
 
       await userEvent.click(screen.getByRole('checkbox', { name: /Rename the images/ }))
       await userEvent.click(screen.getByRole('checkbox', { name: /Ignore summer time/ }))
@@ -731,7 +731,7 @@ describe('SettingsPage', () => {
       async function open() {
         const view = render(<SettingsPage onClose={vi.fn()} />)
         await screen.findByLabelText('Level')
-        await section('Preprocessing')
+        await section('Processing')
         return view
       }
 
@@ -790,7 +790,7 @@ describe('SettingsPage', () => {
     it.each(['', '99', '20001', 'abc', '2400.5'])('marks the width "%s" as invalid, and its section, and cannot save', async (bad) => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Preprocessing')
+      await section('Processing')
       await userEvent.clear(screen.getByLabelText('Width'))
       if (bad) await userEvent.type(screen.getByLabelText('Width'), bad)
 
@@ -802,7 +802,7 @@ describe('SettingsPage', () => {
     it('says a blank owner or publisher is written as Unknown, and a blank coverage falls back to the location', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Preprocessing')
+      await section('Processing')
 
       expect(screen.getByText(/blank owner or publisher is written as “Unknown”/)).toBeInTheDocument()
       expect(screen.getByText(/Left blank, the deployment.s location is used/)).toBeInTheDocument()

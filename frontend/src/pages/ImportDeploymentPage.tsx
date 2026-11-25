@@ -36,7 +36,7 @@ import Notice, { BadgeIcon, Mark, mark, StatusIcon } from '../components/Notice'
 import type { DateSource, Period } from '../components/DateSourcePicker'
 import type { EpicollectEntry } from '../epicollectImport'
 import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } from '../researchProjectValidation'
-import { shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
+import { isUtcZone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import type {
   Report, AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, SimilarityMethod, StatisticCheck, StatisticsParams, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   FeatureType, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
@@ -3117,7 +3117,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
       {stepKey === 'prepare' && (() => {
         const rows: { key: string; label: string; always?: boolean; step?: PreprocessStep; text: ReactNode; disabledReason?: string }[] = [
           { key: 'copy', label: 'Copy into the collection', always: true, text: <>Copies every image into the deployment&rsquo;s folder. Anything that isn&rsquo;t an image is copied as it is.</> },
-          { key: 'dates', label: 'Read the capture dates', always: true, text: <>From each image&rsquo;s EXIF, as the camera&rsquo;s local time in <span className="font-mono">{timezone || 'the timezone of the details'}</span>{ignoreDst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}. An image with no EXIF date uses its file&rsquo;s date.</> },
+          { key: 'dates', label: 'Read the capture dates', always: true, text: timezone && isUtcZone(timezone)
+            ? <>The cameras keep UTC: the dates are read as they are. They give the day in the name of each image and its date in the metadata. The dates in the images are never changed. An image with no date of its own uses its file&rsquo;s date.</>
+            : <>Read from each image as the clock of the camera in <span className="font-mono">{timezone || 'the timezone of the details'}</span>{ignoreDst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}. They give the day in the name of each image and its date in the metadata. The dates in the images are never changed. An image with no date of its own uses its file&rsquo;s date.</> },
           { key: 'rename', label: 'Rename the images', step: 'rename', text: <><span className="font-mono">{'<deployment>__<YYYYMMDD>_<n>.<EXT>'}</span> in upper case — for example <span className="font-mono">{exampleImageName}</span>.</> },
           { key: 'resize', label: 'Resize the images', step: 'resize', text: <>Images wider than <strong>{preSettings.resize_width} px</strong> are resized to that width, keeping their proportions, EXIF and colour profile.</> },
           { key: 'metadata', label: 'Add metadata', step: 'metadata', text: <>Authorship, rights and license, written into each image as XMP.</>, disabledReason: exiftool === false ? 'ExifTool is not installed, and writing the metadata needs it.' : undefined },
@@ -3239,7 +3241,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
               )}
               <ValidationDashboard
                 variant="steps" preprocessing lastRunLine
-                title="Preprocessing" subtitle={scan ? `${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'image' : 'images'}` : ''}
+                title="Processing" subtitle={scan ? `${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'image' : 'images'}` : ''}
                 reportId={preprocessed?.type === 'done' ? preprocessed.report_id ?? null : null}
                 running={preprocessing} canRun={Boolean(plannedCollection) && !preprocessing} onRun={handlePreprocess} runLabel="Start preparing" runningLabel="Preparing…"
               >

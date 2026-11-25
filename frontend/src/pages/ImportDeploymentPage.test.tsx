@@ -1999,10 +1999,26 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
 
-      expect(screen.getByText(/as the camera.s local time in/)).toHaveTextContent('Europe/Madrid, converted to UTC') // a new location follows summer time
+      expect(screen.getByText(/as the clock of the camera in/)).toHaveTextContent('Europe/Madrid, converted to UTC') // a new location follows summer time
 
     })
 
+
+    it('says the dates are read as they are when the cameras keep UTC, and that the dates in the images are never changed', async () => {
+      await goToOriginStep()
+      await addProjectByHand('Doñana', 'DONA', { timezone: 'UTC' })
+      await addLocationByHand()
+      await continueToDates()
+      await screen.findByText('Dates of the deployment')
+      await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
+      await toMoreDetails()
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await screen.findByText('Check the details', { selector: 'h4' })
+      await advanceToPreprocessing()
+
+      expect(screen.getByText(/The cameras keep UTC: the dates are read as they are/)).toHaveTextContent('The dates in the images are never changed.')
+      expect(screen.queryByText(/converted to UTC/)).not.toBeInTheDocument()
+    })
 
     /** Locations kept before the summer-time setting was asked: they do not say it, so the setting's default stands. */
     const locationsWithoutSummerTime = () => mockedApi.saveLocalLocation.mockImplementation(async (id, location) => {
@@ -2017,8 +2033,8 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
 
-      await waitFor(() => expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('ignoring summer time'))
-      expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('converted to UTC')
+      await waitFor(() => expect(screen.getByText(/as the clock of the camera in/)).not.toHaveTextContent('ignoring summer time'))
+      expect(screen.getByText(/as the clock of the camera in/)).not.toHaveTextContent('converted to UTC')
     })
 
     it('reads the summer-time setting from the location rather than from the settings', async () => {
@@ -2031,7 +2047,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
 
-      await waitFor(() => expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('ignoring summer time'))
+      await waitFor(() => expect(screen.getByText(/as the clock of the camera in/)).not.toHaveTextContent('ignoring summer time'))
     })
 
     it('shows the name an image will get, built from the deployment id and the first date', async () => {

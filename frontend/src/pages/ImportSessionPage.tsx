@@ -1767,7 +1767,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       {stepKey === 'prepare' && (() => {
         const rows: { key: string; label: string; always?: boolean; step?: PreprocessStep; text: ReactNode; disabledReason?: string }[] = [
           { key: 'copy', label: 'Copy into the collection', always: true, text: <>Copies the images of each deployment into its own folder in the revision&rsquo;s collection. Anything that isn&rsquo;t an image is copied as it is.</> },
-          { key: 'dates', label: 'Read the capture dates', always: true, text: <>From each image&rsquo;s EXIF, as the camera&rsquo;s local time in its location&rsquo;s timezone, ignoring summer time where the location says so{preSettings.convert_to_utc ? ', converted to UTC' : ''}.</> },
+          { key: 'dates', label: 'Read the capture dates', always: true, text: <>Read from each image as the clock of the camera in the timezone of its location, ignoring summer time where the location says so{preSettings.convert_to_utc ? ', converted to UTC' : ''}; in a location in UTC, as they are. They give the day in the name of each image and its date in the metadata. The dates in the images are never changed.</> },
           { key: 'rename', label: 'Rename the images', step: 'rename', text: <><span className="font-mono">{'<deployment>__<YYYYMMDD>_<n>.<EXT>'}</span> in upper case.</> },
           { key: 'resize', label: 'Resize the images', step: 'resize', text: <>Images wider than <strong>{preSettings.resize_width} px</strong> are resized to that width, keeping their proportions.</> },
           { key: 'metadata', label: 'Add metadata', step: 'metadata', text: <>Authorship, rights and license, written into each image as XMP — owner <span className="font-mono">{preSettings.owner || 'Unknown'}</span>, publisher <span className="font-mono">{preSettings.publisher || 'Unknown'}</span>.</>, disabledReason: exiftool === false ? 'ExifTool is not installed, and writing the metadata needs it.' : undefined },
@@ -1815,7 +1815,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Each optional step can be switched off for this run; its values come from Settings › Preprocessing.</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Each optional step can be switched off for this run; its values come from Settings › Processing.</p>
               <div className="flex justify-end mt-4">
                 <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={importing || pending.length === 0} onClick={handleImport}>
                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current"><path d="M6 4l14 8-14 8z" /></svg>
