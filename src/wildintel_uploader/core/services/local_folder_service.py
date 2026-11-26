@@ -526,51 +526,24 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
 # The people who go to the field are the same whatever the research project: they belong to none, and are kept beside them (the store's global records). What each is in a
 # project is its role, which is the project's.
 
-def _legacy_trappers(root: Path) -> None:
-    """The trappers that an earlier version kept in the settings go to the store — the first time they are asked for — and are taken out of the settings."""
-    settings = config.load_settings()
-    legacy = settings.FIELDWORK.trappers
-    if not legacy:
-        return
-    store = _store(root)
-    kept = store.read_global("trappers")
-    have = {str(t.get("username", "")).lower() for t in kept}
-    store.write_global("trappers", [*kept, *[t.model_dump(mode="json") for t in legacy if t.username.lower() not in have]])
-    settings.FIELDWORK.trappers = []
-    config.save_settings(settings)
+def _catalog(root: Path):
+    """The catalog kept in this collections folder (modules.catalog, #248), put together as the entry points put it (entrypoints.wiring)."""
+    from wildintel_uploader.entrypoints import wiring   # here: wiring puts together modules that import this one
+    return wiring.build_catalog(root, wiring.build_settings())
 
 
 def list_trappers(root: Path, include_deleted: bool = False) -> list[dict]:
-    """The trappers — the people, whatever the research project. One that was deleted is kept, but is not listed (`include_deleted` lists it too: the visits it made still say who it was)."""
-    store = _store(root)
-    records = store.read_global("trappers")
-    if not records:
-        _legacy_trappers(root)
-        records = store.read_global("trappers")
-    # kept before the ids existed: the same id whenever it is read, and kept with it the next time the trappers are written (reading writes nothing)
-    given = [t if t.get("id") else {**t, "id": ids.legacy_id("trapper", t.get("username") or t.get("name") or "")} for t in records]
-    return given if include_deleted else audit.alive(given)
+    """The trappers — the people, whatever the research project —, as records. One that was deleted is kept, but is not listed (`include_deleted`
+    lists it too: the visits it made still say who it was). The catalog's (modules.catalog): see CatalogService.trappers."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import trapper_to_record
+    return [trapper_to_record(t) for t in _catalog(root).trappers(include_deleted)]
 
 
 def write_trappers(root: Path, trappers: list[dict]) -> None:
-    """Keeps these trappers as all of them: one the list no longer has is not deleted for good — it gets `deleted_at` and stays — and one that is listed again comes back. A trapper is
-    the one that was kept when it says its `id` — so one that is renamed, or whose username is corrected, is the same one, and what points to it still does — or, if it says none, when
-    it has the same username. An archived one is out of use for good: it is kept as it was. Each keeps its `id` and its `created_at`, and gets a new `updated_at` when it changed (see audit)."""
-    kept = list_trappers(root, include_deleted=True)
-    by_id = {t["id"]: t for t in kept}
-    by_username = {str(t.get("username", "")).lower(): t for t in kept}
-    at = audit.now()
-    out, listed = [], set()
-    for trapper in trappers:
-        before = by_id.get(trapper.get("id")) or by_username.get(str(trapper.get("username", "")).lower())
-        if before is not None:
-            listed.add(before["id"])
-        if before is not None and before.get("status") == "archived":
-            out.append(before)   # archived is for good: it is never changed
-            continue
-        out.append(audit.stamped(trapper, before, at))
-    out += [audit.deleted(t, at) for t in kept if t["id"] not in listed]
-    _store(root).write_global("trappers", out)
+    """Keeps these trappers as all of them, by the rules of the catalog (modules.catalog.domain.rules.saved_trappers): one is the one kept when it says
+    its `id`, or its username; an archived one is kept as it was; one no longer listed is deleted logically, and one listed again comes back."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import trapper_from_record
+    _catalog(root).save_trappers([trapper_from_record({**t, "id": t.get("id") or None}) for t in trappers])
 
 
 def _trapper_records(root: Path, trappers=None) -> list[dict]:

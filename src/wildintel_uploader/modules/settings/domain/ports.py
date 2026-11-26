@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from wildintel_uploader.modules.settings.domain.models import DataSettings, GeneralSettings, Settings
+from wildintel_uploader.modules.settings.domain.models import DataSettings, GeneralSettings, LegacyFieldwork, Settings
 
 
 # ── what both sides speak of ──
@@ -159,6 +159,13 @@ class SettingsService(Protocol):
     def save_section(self, section: str, values: dict[str, Any]) -> SectionView:
         """Changes the settings of one section that `values` names — the others stay —, with the rules of save_settings. UnknownSetting: a section or a
         setting that is not one; SettingsError: a value it does not take."""
+
+    # what the settings still hold of the field work
+    def legacy_fieldwork(self) -> LegacyFieldwork:
+        """The cameras, SD cards, trappers and roles versions before kept in the settings — not settings: they go to the catalog."""
+
+    def forget_legacy_fieldwork(self, kind: str) -> None:
+        """Takes one kind of them out of the settings — "trappers", "cameras", "sd_cards", "roles" — once the catalog keeps them."""
 
     # the General section
     def general(self) -> GeneralView:

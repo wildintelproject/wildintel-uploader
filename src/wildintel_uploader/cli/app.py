@@ -15,6 +15,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, FloatPrompt, IntPrompt, Prompt
 from rich.table import Table
 
+from wildintel_uploader.entrypoints.cli.catalog import catalog_app
 from wildintel_uploader.entrypoints.cli.settings import settings_app
 from wildintel_uploader.cli.common import call, console, err_console, fail, trapper_credentials
 from wildintel_uploader.core import config
@@ -62,6 +63,10 @@ app.command("tc", hidden=True, help="Alias for test-connection.")(test_connectio
 # ── config: the module of the settings (see entrypoints/cli/settings.py) ──
 
 app.add_typer(settings_app, name="config")
+
+# ── catalog: the module of the catalog (see entrypoints/cli/catalog.py) ──
+
+app.add_typer(catalog_app, name="catalog")
 
 
 # ── Trapper lookups ───────────────────────────────────────────────────────────

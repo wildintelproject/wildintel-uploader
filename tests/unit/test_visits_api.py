@@ -69,6 +69,10 @@ def _in(tmp_path: Path):
         stack.enter_context(patch("wildintel_uploader.web.api.routers.visits.config.collections_dir", return_value=tmp_path))
         if not isinstance(config.load_settings, Mock):   # a test that gives its own settings keeps them
             stack.enter_context(patch("wildintel_uploader.web.api.routers.visits.config.load_settings", side_effect=_settings))
+        # the trappers Ana and Luis, in the catalog — which takes those versions before left in the settings from the settings files, not from a
+        # load_settings that is patched (#248)
+        from wildintel_uploader.core.services import local_folder_service
+        local_folder_service.write_trappers(tmp_path, [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}])
         yield
 
 

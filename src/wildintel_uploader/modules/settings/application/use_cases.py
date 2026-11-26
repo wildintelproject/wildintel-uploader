@@ -13,7 +13,7 @@ from typing import Any
 
 from wildintel_uploader.modules.settings.domain import folders as folder_rules
 from wildintel_uploader.modules.settings.domain.models import (
-    MAX_WORKERS, DataSettings, GeneralSettings, Settings, SettingsError, keep_secrets, secret_fields,
+    MAX_WORKERS, DataSettings, GeneralSettings, LegacyFieldwork, Settings, SettingsError, keep_secrets, secret_fields,
 )
 from wildintel_uploader.modules.settings.domain.ports import (
     ActivityLog, ConfigInfo, Folders, GeneralView, Machine, NoLogFile, NoSettingsFile, Places, RecordStorage, SectionView, SettingsService, SettingsStore,
@@ -228,6 +228,18 @@ class SettingsUseCases(SettingsService):
         data = folder_rules.data_dir(settings.data, self.default_data_dir)
         return Places(settings_file=self.store.path_of(self.store.active_id()), data=data, collections=folder_rules.collections_dir(settings.data, data),
                       reports=folder_rules.reports_dir(settings.data, data), packages=folder_rules.packages_dir(settings.data, data))
+
+    # ── what the settings still hold of the field work ──
+
+    def legacy_fieldwork(self) -> LegacyFieldwork:
+        return self.store.load().legacy_fieldwork
+
+    def forget_legacy_fieldwork(self, kind: str) -> None:
+        if kind not in {f.name for f in fields(LegacyFieldwork)}:
+            raise UnknownSetting(f"FIELDWORK.{kind}")
+        settings = self.store.load()
+        if getattr(settings.legacy_fieldwork, kind):
+            self.store.save(replace(settings, legacy_fieldwork=replace(settings.legacy_fieldwork, **{kind: ()})))
 
     # ── the General section ──
 

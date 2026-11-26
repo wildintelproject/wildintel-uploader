@@ -1,25 +1,54 @@
-"""Where the modules are put together (#248) — the composition root, as Dishka providers: the one place that chooses the implementation of each module's
-port in (its use cases) and of its ports out (the adapters). Dishka works out the rest: to give a SettingsService it makes the SettingsStore that
-SettingsUseCases asks for.
+"""Where the modules are put together (#248) — the composition root: the one place that chooses the implementation of each module's port in (its use
+cases) and of its ports out (the adapters).
+
+Each module is built by a function here (`build_…`): the Dishka providers below use them, and so does the code from before that still calls the old
+services (core/services/local_folder_service.py), so that there is one way of putting a module together. Dishka works out the rest: to give a
+CatalogService it gives the SettingsService the catalog asks for.
 
 The entry points take the modules from the container made here — the web API through dishka's FastAPI integration (`web/main.py`), the command line
-through `entrypoints.cli.injection` — and ask only for contracts: `FromDishka[SettingsService]`.
+through `entrypoints.cli.injection` — and ask only for contracts: `FromDishka[SettingsService]`, `FromDishka[CatalogService]`.
 
 What is made for a request or a command is made then (Scope.REQUEST), from the settings files config points at: so a test that points them elsewhere
-is heeded. What should live as long as the app — a cache, a connection — would be Scope.APP."""
+is heeded. What lives as long as the app — with nothing to read anew — is Scope.APP."""
 from __future__ import annotations
+
+from pathlib import Path
 
 from dishka import Container, Provider, Scope, make_container, provide
 
 from wildintel_uploader.core import config
+from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseCases
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService, Clock
+from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
+from wildintel_uploader.modules.catalog.infrastructure.legacy import SystemClock, TrappersFromTheSettings
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
+from wildintel_uploader.shared import storage
+
+# ── how each module is built ──
+
+
+def build_settings(store: SettingsStore | None = None, *, activity_log: ActivityLog | None = None, machine: Machine | None = None,
+                   record_storage: RecordStorage | None = None) -> SettingsService:
+    """The settings: their use cases over the TOML files of the user's config folder, the log of the app, this computer and the backends of the
+    records."""
+    return SettingsUseCases(store or config.settings_store(), config.default_data_dir(), activity_log=activity_log or AppActivityLog(),
+                            machine=machine or ThisMachine(), record_storage=record_storage or AppRecordStorage())
+
+
+def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock | None = None) -> CatalogService:
+    """The catalog kept in a collections folder — the one of the settings, or one a caller of before names —, taking what versions before left in
+    the settings through their module."""
+    return CatalogUseCases(StoreCatalogRepository(storage.open_store(collections_dir)), legacy_trappers=TrappersFromTheSettings(settings),
+                           clock=clock or SystemClock())
+
+
+# ── the providers of the container ──
 
 
 class SettingsProvider(Provider):
-    """The module of the settings: its use cases over the TOML files of the user's config folder, the log of the app, this computer and the backends of
-    the records — those three, with nothing to read anew, for as long as the app lives."""
+    """The module of the settings."""
 
     @provide(scope=Scope.REQUEST)
     def store(self) -> SettingsStore:
@@ -39,9 +68,21 @@ class SettingsProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     def service(self, store: SettingsStore, activity_log: ActivityLog, machine: Machine, record_storage: RecordStorage) -> SettingsService:
-        return SettingsUseCases(store, config.default_data_dir(), activity_log=activity_log, machine=machine, record_storage=record_storage)
+        return build_settings(store, activity_log=activity_log, machine=machine, record_storage=record_storage)
+
+
+class CatalogProvider(Provider):
+    """The module of the catalog, kept in the collections folder the settings say."""
+
+    @provide(scope=Scope.APP)
+    def clock(self) -> Clock:
+        return SystemClock()
+
+    @provide(scope=Scope.REQUEST)
+    def service(self, settings: SettingsService, clock: Clock) -> CatalogService:
+        return build_catalog(config.collections_dir(), settings, clock)
 
 
 def make_app_container() -> Container:
     """The container of the app: every module's provider."""
-    return make_container(SettingsProvider())
+    return make_container(SettingsProvider(), CatalogProvider())

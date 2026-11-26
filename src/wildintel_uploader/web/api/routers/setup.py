@@ -1,6 +1,6 @@
-"""FastAPI router — the initial setup of the application, step by step (see the wizard in Utilities): the trappers, their roles in a research project, and its cameras and SD cards
+"""FastAPI router — the initial setup of the application, step by step (see the wizard in Utilities): the roles of the trappers in a research project, and its cameras and SD cards
 are *added* to what is kept — never replaced — so a step can be done again, or later in the settings, without losing anything. The research project and its locations have their own
-endpoints (deployment-import)."""
+endpoints (deployment-import), and the trappers are the catalog's (entrypoints/api/catalog.py, at /api/setup/trappers)."""
 from __future__ import annotations
 
 from typing import Literal
@@ -14,17 +14,6 @@ from wildintel_uploader.core.services import local_folder_service
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
 ROLES = ("contact", "principalInvestigator", "rightsHolder", "publisher", "contributor")
-
-
-class TrapperItem(BaseModel):
-    username: str = Field(min_length=1)
-    name: str = Field(min_length=1)
-    affiliation: str | None = None
-    email: str | None = None
-
-
-class TrappersRequest(BaseModel):
-    trappers: list[TrapperItem]
 
 
 class RoleItem(BaseModel):
@@ -54,27 +43,6 @@ class FieldItemsRequest(BaseModel):
 
 def _clean(values: dict) -> dict:
     return {k: (v.strip() if isinstance(v, str) else v) for k, v in values.items() if v not in (None, "")}
-
-
-@router.post("/trappers")
-def add_trappers(req: TrappersRequest) -> dict:
-    """Adds the trappers that are not kept yet — one with the username of another, whatever its case, is left out. {"added": [usernames], "skipped": [usernames]}."""
-    root = config.collections_dir()
-    kept = local_folder_service.list_trappers(root)
-    have = {str(t.get("username", "")).lower() for t in kept}
-    added, skipped, new = [], [], []
-    for item in req.trappers:
-        data = _clean(item.model_dump())
-        key = data["username"].lower()
-        if key in have:
-            skipped.append(data["username"])
-            continue
-        have.add(key)
-        new.append({**data, "status": "active"})
-        added.append(data["username"])
-    if new:
-        local_folder_service.write_trappers(root, [*kept, *new])
-    return {"added": added, "skipped": skipped}
 
 
 @router.post("/roles")
