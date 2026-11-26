@@ -13,10 +13,10 @@ from typing import Any
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 
 from wildintel_uploader.core.services import file_manager
 from wildintel_uploader.modules.settings.domain.models import DataSettings, GeneralSettings, SettingsError
+from wildintel_uploader.modules.settings.infrastructure.api_schemas import DataDirRequest, FoldersRequest, GeneralRequest, NewConfigRequest, ShowWelcomeRequest
 from wildintel_uploader.modules.settings.domain.ports import GeneralView, NoLogFile, NoSettingsFile, SettingsService, UnknownConfig, UnknownSetting
 
 # Each endpoint is given what it asks for as FromDishka[...] by the container of entrypoints.wiring, in a scope of its own for each request.
@@ -35,10 +35,6 @@ def _config_file(service: SettingsService, config_id: str) -> Path:
 
 
 # ── the configs ──
-
-class NewConfigRequest(BaseModel):
-    name: str
-
 
 @router.get("/configs")
 def get_configs(service: Service) -> list[dict]:
@@ -84,18 +80,10 @@ def open_config_folder(config_id: str, service: Service) -> dict:
 
 # ── what the app changes on its own ──
 
-class ShowWelcomeRequest(BaseModel):
-    show: bool
-
-
 @router.put("/show-welcome")
 def set_show_welcome(req: ShowWelcomeRequest, service: Service) -> dict:
     """Changes only whether the welcome page is shown when the app opens — what its tick does."""
     return {"show_welcome": service.set_show_welcome(req.show).general.show_welcome}
-
-
-class DataDirRequest(BaseModel):
-    dir: str | None = None
 
 
 @router.put("/data-dir")
@@ -121,22 +109,6 @@ def _json(value: Any) -> Any:
 
 def _general(view: GeneralView) -> dict:
     return _json(asdict(view))
-
-
-class FoldersRequest(BaseModel):
-    dir: str | None = None
-    collections_dir: str | None = None
-    reports_dir: str | None = None
-    packages_dir: str | None = None
-
-
-class GeneralRequest(BaseModel):
-    log_level: str
-    workers: int
-    default_research_project: str | None = None
-    show_welcome: bool = True
-    # left out, the folders stay as they are
-    folders: FoldersRequest | None = None
 
 
 @router.get("/general")

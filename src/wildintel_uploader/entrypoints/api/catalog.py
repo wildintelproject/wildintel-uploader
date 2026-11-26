@@ -11,14 +11,13 @@ from typing import Any
 
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
 from pathlib import Path
-from typing import Literal
 
-from wildintel_uploader.core.schemas.requests import (
-    DeleteLocationRequest, LocalLocationsRequest, LocationRecord, ResearchProjectRecord, SaveLocationRequest, UpdateLocationRequest,
-    UpdateResearchProjectRequest,
+from wildintel_uploader.modules.catalog.infrastructure.api_schemas import (
+    CameraIdentityRequest, DefaultResearchProjectRequest, DeleteLocationRequest, FieldItemsRequest, FieldItemStatusRequest, LocalLocationsRequest,
+    LocationRecord, MoveCatalogRequest, NewTrappers, RebuildStatusHistoryRequest, ResearchProjectRecord, RoleBody, RolesRequest, SaveLocationRequest,
+    StatusHistoryRequest, TrapperBody, UpdateLocationRequest, UpdateResearchProjectRequest,
 )
 from wildintel_uploader.entrypoints.catalog_storage import move_catalog
 from wildintel_uploader.modules.catalog.application.migration import TargetNotEmpty
@@ -56,21 +55,6 @@ def _refused(exc: CatalogError) -> HTTPException:
 
 # ── the people ──
 
-class TrapperBody(BaseModel):
-    """A trapper as the page sends it: with its id when it is one that was kept."""
-    username: str
-    name: str
-    affiliation: str | None = None
-    email: str | None = None
-    status: str = "active"
-    trapper_pk: int | None = None
-    id: str | None = None
-
-    def to_domain(self) -> Trapper:
-        return Trapper(username=self.username, name=self.name, affiliation=self.affiliation, email=self.email, status=self.status,
-                       trapper_pk=self.trapper_pk, audit=Audit(id=self.id))
-
-
 @router.get("/trappers")
 def get_trappers(catalog: Catalog, include_deleted: bool = False) -> list[dict]:
     """The people. The removed ones only with include_deleted: the visits they made still say who they were."""
@@ -85,17 +69,6 @@ def save_trappers(trappers: list[TrapperBody], catalog: Catalog) -> list[dict]:
         return [_trapper(t) for t in catalog.save_trappers([t.to_domain() for t in trappers])]
     except CatalogError as exc:
         raise _refused(exc) from exc
-
-
-class NewTrapper(BaseModel):
-    username: str = Field(min_length=1)
-    name: str = Field(min_length=1)
-    affiliation: str | None = None
-    email: str | None = None
-
-
-class NewTrappers(BaseModel):
-    trappers: list[NewTrapper]
 
 
 @setup_router.post("/trappers")
@@ -214,12 +187,6 @@ def delete_research_project(req: LocalLocationsRequest, catalog: Catalog) -> dic
 
 
 # ── where the catalog is kept ──
-
-class MoveCatalogRequest(BaseModel):
-    to: Literal["json", "sqlite"]
-    database: str | None = None      # the SQLite database — else catalog.sqlite3 in the data folder
-    replace: bool = False
-
 
 @router.post("/migrate")
 def migrate_catalog(req: MoveCatalogRequest, settings: FromDishka[SettingsService]) -> dict:
@@ -412,12 +379,6 @@ def get_roles(project: str, catalog: Catalog, include_deleted: bool = False) -> 
     return [_role_json(r, project) for r in catalog.roles(project, include_deleted)]
 
 
-class RoleBody(BaseModel):
-    trapper: str = Field(min_length=1)
-    role: Literal["contact", "principalInvestigator", "rightsHolder", "publisher", "contributor"] = "contributor"
-    id: str | None = None
-
-
 @router.put("/projects/{project}/roles")
 def save_roles(project: str, roles: list[RoleBody], catalog: Catalog) -> list[dict]:
     """Keeps these as all the roles of a research project, each by the id of its trapper."""
@@ -449,13 +410,6 @@ def rebuild_history(project: str, catalog: Catalog) -> dict:
 
 # ── at the addresses of before ──
 
-class CameraIdentityRequest(BaseModel):
-    research_project_id: str = Field(min_length=1)
-    label: str = Field(min_length=1)
-    make: str | None = None
-    model: str | None = None
-
-
 @import_router.post("/camera-identity")
 def camera_identity(req: CameraIdentityRequest, catalog: Catalog) -> dict:
     """Keeps in a camera's record the make and the model its images say — what Camera consistency compares them with from then on."""
@@ -463,11 +417,6 @@ def camera_identity(req: CameraIdentityRequest, catalog: Catalog) -> dict:
         return _item_json(catalog.set_camera_identity(req.research_project_id, req.label, req.make, req.model), req.research_project_id)
     except (UnknownCamera, CatalogError, StorageError) as exc:
         raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
-
-
-class RolesRequest(BaseModel):
-    research_project_id: str
-    roles: list[RoleBody]
 
 
 @setup_router.post("/roles")
@@ -483,21 +432,6 @@ def add_roles(req: RolesRequest, catalog: Catalog) -> dict:
     return {"added": [list(a) for a in added]}
 
 
-class FieldItem(BaseModel):
-    label: str = Field(min_length=1)
-    camera_id: str | None = None
-    camera_make: str | None = None
-    camera_model: str | None = None
-    brand: str | None = None
-    capacity: str | None = None
-
-
-class FieldItemsRequest(BaseModel):
-    research_project_id: str
-    kind: Literal["cameras", "sd_cards"]
-    items: list[FieldItem]
-
-
 @setup_router.post("/field-items")
 def add_field_items(req: FieldItemsRequest, catalog: Catalog) -> dict:
     """Adds cameras or SD cards to a research project, active: one with the label of another is left out. {"added": [labels], "skipped": [labels]}."""
@@ -511,15 +445,6 @@ def add_field_items(req: FieldItemsRequest, catalog: Catalog) -> dict:
     return {"added": added.added, "skipped": added.skipped}
 
 
-class FieldItemStatusRequest(BaseModel):
-    research_project_id: str
-    kind: Literal["cameras", "sd_cards"]
-    key: str                  # what the visits call it: a camera's serial number, or its label; an SD card's label
-    status: Literal["archived", "stolen", "lost", "broken"]   # stolen, lost or broken are the reason it is archived
-    status_date: str | None = None
-    status_note: str | None = None
-
-
 @settings_router.post("/field-item-status")
 def set_field_item_status(req: FieldItemStatusRequest, catalog: Catalog) -> dict:
     """Marks a camera or an SD card of a research project as no longer available (stolen, lost…) — what a visit that finds a camera stolen says of
@@ -529,12 +454,6 @@ def set_field_item_status(req: FieldItemStatusRequest, catalog: Catalog) -> dict
         return {"updated": catalog.retire_equipment(req.research_project_id, req.kind, req.key, req.status, req.status_date, req.status_note)}
     except (UnknownProject, CatalogError, StorageError) as exc:
         raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
-
-
-class StatusHistoryRequest(BaseModel):
-    research_project_id: str
-    kind: Literal["locations", "cameras", "sd_cards"] | None = None
-    name: str | None = None
 
 
 @settings_router.post("/status-history")
@@ -547,10 +466,6 @@ def status_history_of(req: StatusHistoryRequest, catalog: Catalog) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
-class RebuildStatusHistoryRequest(BaseModel):
-    research_project_id: str
-
-
 @settings_router.post("/status-history/rebuild")
 def rebuild_status_history(req: RebuildStatusHistoryRequest, catalog: Catalog) -> dict:
     """Rebuilds the history of the status of a research project from its visits, adding the lines it lacks — nothing of it is overwritten nor
@@ -559,10 +474,6 @@ def rebuild_status_history(req: RebuildStatusHistoryRequest, catalog: Catalog) -
         return {"added": catalog.rebuild_status_history(req.research_project_id)}
     except (UnknownProject, StorageError) as exc:
         raise HTTPException(400, str(exc)) from exc
-
-
-class DefaultResearchProjectRequest(BaseModel):
-    acronym: str
 
 
 @settings_router.put("/default-research-project")
