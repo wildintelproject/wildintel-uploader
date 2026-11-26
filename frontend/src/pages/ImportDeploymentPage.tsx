@@ -39,7 +39,7 @@ import type { EpicollectEntry } from '../epicollectImport'
 import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } from '../researchProjectValidation'
 import { isUtcZone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import type {
-  Report, AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, ResizeSummary, SimilarityMethod, StatisticCheck, StatisticsParams, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
+  Report, AppSettings, CameraGroup, CollectionPath, CheckLevel, PreprocessingOptions, ResizeSummary, SimilarityMethod, StatisticCheck, StatisticsParams, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   FeatureType, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
   SessionSummary, UploadTarget, ValidationResult,
 } from '../types'
@@ -648,9 +648,29 @@ export const DEFAULT_TOLERANCE_HOURS = 1
 /** Every check shown, as before anything is configured (or when the settings can't be read). */
 export type WizardSettings = Pick<AppSettings, 'VALIDATION' | 'POSTVALIDATION' | 'PREPROCESSING'>
 
+/** How each check starts in an import when the settings do not say it — as they started before it could be set: the dates of the images and the SD card have to
+ * pass, the rest warn. The settings (VALIDATION.defaults, POSTVALIDATION.defaults) say it, and each import can still change it. */
+export const IMAGE_CHECK_DEFAULTS: Record<ImageCheck, CheckLevel> = { corrupted: 'warn', sequence: 'warn', structure: 'warn', camera: 'warn', exif: 'warn', duplicates: 'warn' }
+export const DEPLOYMENT_CHECK_DEFAULTS: Record<DeploymentCheck, CheckLevel> = {
+  deployment_id: 'warn', collection_prefix: 'warn', collection_name: 'warn', location: 'warn', time_range: 'required', camera: 'warn',
+  image_count: 'warn', sequence_count: 'warn', sequence_length: 'warn', sd_card: 'required', photo_count: 'warn',
+}
+
+/** The checks an import starts with, ticked and required, as the settings say how each starts: required and warn are ticked, skip is not, and required has to pass. */
+export function startingChecks(settings: WizardSettings): { image: Set<ImageCheck>; requiredImage: Set<ImageCheck>; deployment: Set<DeploymentCheck>; requiredDeployment: Set<DeploymentCheck> } {
+  const image = { ...IMAGE_CHECK_DEFAULTS, ...(settings.VALIDATION.defaults ?? {}) }
+  const deployment = { ...DEPLOYMENT_CHECK_DEFAULTS, ...(settings.POSTVALIDATION.defaults ?? {}) }
+  const pick = <K extends string>(levels: Record<K, CheckLevel>, keep: (l: CheckLevel) => boolean) => new Set((Object.keys(levels) as K[]).filter((k) => keep(levels[k])))
+  return {
+    image: pick(image, (l) => l !== 'skip'), requiredImage: pick(image, (l) => l === 'required'),
+    deployment: pick(deployment, (l) => l !== 'skip'), requiredDeployment: pick(deployment, (l) => l === 'required'),
+  }
+}
+
 export const DEFAULT_CHECK_SETTINGS: WizardSettings = {
-  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },
+  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true, defaults: IMAGE_CHECK_DEFAULTS },
   POSTVALIDATION: {
+    defaults: DEPLOYMENT_CHECK_DEFAULTS,
     deployment_id: true, collection_prefix: true, collection_name: true, location: true, time_range: true, camera: true,
     image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true, tolerance_hours: DEFAULT_TOLERANCE_HOURS,
     sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
@@ -1649,6 +1669,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   // Which checks the settings page turns on, and the tolerance and the statistical parameters the postvalidation uses — read again
   // when the validate and postvalidation steps are shown, since the settings can change meanwhile.
   const [checkSettings, setCheckSettings] = useState<WizardSettings>(DEFAULT_CHECK_SETTINGS)
+  // Whether the checks of this import have started as the settings say (see startingChecks): once, so what the user changes in it is kept.
+  const checksStarted = useRef(false)
   const [preprocessSteps, setPreprocessSteps] = useState<Set<PreprocessStep>>(new Set(['rename', 'resize', 'metadata']))
   // Set the moment a value is edited here (a ref, so a settings response arriving meanwhile never puts it back).
   const preprocessTouched = useRef(false)
@@ -1702,6 +1724,12 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         if (cancelled) return
         setSdCards(s.FIELDWORK?.sd_cards ?? [])
         setCheckSettings({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+        if (!checksStarted.current) {
+          // each check starts as the settings say: required, warn or skip (unticked)
+          const start = startingChecks({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+          setImageChecks(start.image); setRequiredImageChecks(start.requiredImage); setDeploymentChecks(start.deployment); setRequiredDeploymentChecks(start.requiredDeployment)
+          checksStarted.current = true
+        }
         // What can be edited in the wizard starts from the settings, until it has been.
         if (!preprocessTouched.current) setPreprocessSteps(new Set((['rename', 'resize', 'metadata'] as const).filter((step) => s.PREPROCESSING[step])))
       })
@@ -2465,7 +2493,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     setSavedOpen(false); setStep(0); setImagesOpen(1); setImagesReached(1); setOriginOpen(1); setOriginReached(1)
     setSourceDir(''); setScan(null); setScanError(null); setValidation(null); setValidationError(null)
     setGuess(null); guessedFor.current = null; sourcePicked.current = false; setDateSource(undefined)
-    setImageChecks(new Set(['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates'])); setRequiredImageChecks(new Set())
+    const start = startingChecks(checkSettings)   // as the settings say, again; read again when the images are reached
+    setImageChecks(start.image); setRequiredImageChecks(start.requiredImage); checksStarted.current = false
     resetOriginChoice()
     setConn({ status: 'idle', message: '' })
     setResearchProjects([])
@@ -2474,7 +2503,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     setDeploymentCheck(null); setDeploymentCheckError(null)
     preprocessTouched.current = false
     setRevision(''); revisionTouched.current = false; setRevisionHint(null)
-    setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set(DEFAULT_REQUIRED_DEPLOYMENT_CHECKS))
+    setDeploymentChecks(start.deployment); setRequiredDeploymentChecks(start.requiredDeployment)
     setTimestampLogError(null)
     setSdCard(''); cardChosenFor.current = null
     setEvents([]); setImportError(null); setDestDir(null); setCopied(false)

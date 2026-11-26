@@ -183,6 +183,27 @@ class DataSettings(BaseModel):
         return value.strip()
 
 
+# How a check starts in each import, when it is on: it has to pass to go on (required), it only warns (warn), or it is offered unticked (skip). Each import can still change it.
+CheckLevel = Literal["required", "warn", "skip"]
+
+
+def _check_defaults(value: object, checks: tuple[str, ...], start: dict[str, str]) -> dict[str, str]:
+    """The level each check starts at: the ones given, and the default of the rest. A name that is not a check is refused."""
+    given = dict(value or {}) if isinstance(value, dict) else {}
+    unknown = sorted(set(given) - set(checks))
+    if unknown:
+        raise ValueError(f"not checks: {', '.join(unknown)}")
+    return {**start, **given}
+
+
+_IMAGE_CHECKS = ("corrupted", "sequence", "structure", "camera", "exif", "duplicates")
+_DEPLOYMENT_CHECKS = ("deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera", "image_count", "sequence_count",
+                      "sequence_length", "sd_card", "photo_count")
+# As they started before they could be set: the dates of the images and the SD card have to pass, the rest warn.
+IMAGE_CHECK_DEFAULTS: dict[str, str] = {c: "warn" for c in _IMAGE_CHECKS}
+DEPLOYMENT_CHECK_DEFAULTS: dict[str, str] = {c: ("required" if c in ("time_range", "sd_card") else "warn") for c in _DEPLOYMENT_CHECKS}
+
+
 class ValidationSettings(BaseModel):
     """Which of the "Validate folder contents" checks the wizard shows — and
     so runs. Each looks at the folder alone, without knowing the deployment."""
@@ -193,6 +214,15 @@ class ValidationSettings(BaseModel):
     camera: bool = Field(default=True, description="Same camera (model and id) on every image. (VALIDATION.camera)")
     exif: bool = Field(default=True, description="Required EXIF fields (capture date, camera model and id). (VALIDATION.exif)")
     duplicates: bool = Field(default=True, description="Duplicate images (same content). (VALIDATION.duplicates)")
+    defaults: dict[str, CheckLevel] = Field(
+        default_factory=lambda: dict(IMAGE_CHECK_DEFAULTS),
+        description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (VALIDATION.defaults)",
+    )
+
+    @field_validator("defaults", mode="before")
+    @classmethod
+    def _defaults(cls, value):
+        return _check_defaults(value, _IMAGE_CHECKS, IMAGE_CHECK_DEFAULTS)
 
 
 class PostvalidationSettings(BaseModel):
@@ -211,6 +241,15 @@ class PostvalidationSettings(BaseModel):
     sequence_length: bool = Field(default=True, description="The length of the sequences is like the previous revisions'. (POSTVALIDATION.sequence_length)")
     sd_card: bool = Field(default=True, description="The SD card is the one the visit left in the camera. (POSTVALIDATION.sd_card)")
     photo_count: bool = Field(default=True, description="The folder has the number of images the visit counted on the card. (POSTVALIDATION.photo_count)")
+    defaults: dict[str, CheckLevel] = Field(
+        default_factory=lambda: dict(DEPLOYMENT_CHECK_DEFAULTS),
+        description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (POSTVALIDATION.defaults)",
+    )
+
+    @field_validator("defaults", mode="before")
+    @classmethod
+    def _defaults(cls, value):
+        return _check_defaults(value, _DEPLOYMENT_CHECKS, DEPLOYMENT_CHECK_DEFAULTS)
     sequence_gap_seconds: float = Field(
         default=60.0, gt=0, le=86400,
         description="What a sequence is: a new one starts when the gap to the previous image is at least this many seconds. (POSTVALIDATION.sequence_gap_seconds)",

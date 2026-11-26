@@ -41,7 +41,7 @@ def test_the_defaults_have_every_section_and_every_check_shown():
     body = _client().get("/api/settings").json()
 
     assert set(body) == {"GENERAL", "TRAPPER", "EPICOLLECT5", "AGOUTI", "EPICOLLECTCSV", "DATA", "VALIDATION", "POSTVALIDATION", "PREPROCESSING", "FIELDLOG", "FIELDWORK"}
-    assert all(body["VALIDATION"].values())
+    assert all(v for k, v in body["VALIDATION"].items() if k != "defaults")
     assert body["POSTVALIDATION"]["tolerance_hours"] == 1.0
     assert body["GENERAL"]["log_level"] == "INFO"
     assert body["GENERAL"]["log_file"].endswith("wildintel-uploader.log")
@@ -317,6 +317,15 @@ def test_which_checks_are_shown_and_the_tolerance_are_saved():
     assert saved["VALIDATION"]["corrupted"] is True
     assert saved["POSTVALIDATION"]["location"] is False and saved["POSTVALIDATION"]["tolerance_hours"] == 2.5
     assert _client().get("/api/settings").json()["POSTVALIDATION"]["tolerance_hours"] == 2.5
+
+
+def test_how_each_check_starts_is_saved_and_read_back():
+    saved = _put(VALIDATION={"defaults": {"structure": "skip"}}, POSTVALIDATION={"defaults": {"time_range": "warn", "camera": "required"}})
+
+    assert saved["VALIDATION"]["defaults"]["structure"] == "skip" and saved["VALIDATION"]["defaults"]["corrupted"] == "warn"
+    assert saved["POSTVALIDATION"]["defaults"]["time_range"] == "warn" and saved["POSTVALIDATION"]["defaults"]["sd_card"] == "required"
+    read = _client().get("/api/settings").json()
+    assert read["POSTVALIDATION"]["defaults"]["camera"] == "required" and read["VALIDATION"]["defaults"]["structure"] == "skip"
 
 
 @pytest.mark.parametrize("tolerance", [-1, 10_000])

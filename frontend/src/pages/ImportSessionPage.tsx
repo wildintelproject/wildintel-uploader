@@ -32,7 +32,7 @@ import type {
 import {
   ALL_DEPLOYMENT_CHECKS, DEFAULT_CHECK_SETTINGS, DEPLOYMENT_CHECK_DISPLAY, DEPLOYMENT_CHECK_OPTIONS, DeploymentCheckReport, Field,
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
-  DEFAULT_REQUIRED_DEPLOYMENT_CHECKS, DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
+  DEFAULT_REQUIRED_DEPLOYMENT_CHECKS, startingChecks, DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, hintClass, statParamsOf, statParamsValid, toggled, fillFromClosedVisit, visitKey, visitLabel,
   FieldLabel, DetailsFromContext, LockedDetailsContext, mergedDetails, visitApplies, detailsFound, fieldworkVisits, revisionOfVisit,
 } from './ImportDeploymentPage'
@@ -127,6 +127,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   // ── Common to the whole session ──
   const [checkSettings, setCheckSettings] = useState<WizardSettings>(DEFAULT_CHECK_SETTINGS)
+  // Whether the checks have started as the settings say (see startingChecks): once, so what the user changes is kept.
+  const checksStarted = useRef(false)
   const [imageChecks, setImageChecks] = useState<Set<ImageCheck>>(new Set(['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates']))
   const [requiredImageChecks, setRequiredImageChecks] = useState<Set<ImageCheck>>(new Set())
   const [deploymentChecks, setDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set(ALL_DEPLOYMENT_CHECKS))
@@ -252,6 +254,11 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       .then((s) => {
         if (cancelled) return
         setCheckSettings({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+        if (!checksStarted.current) {
+          const start = startingChecks({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+          setImageChecks(start.image); setRequiredImageChecks(start.requiredImage); setDeploymentChecks(start.deployment); setRequiredDeploymentChecks(start.requiredDeployment)
+          checksStarted.current = true
+        }
         setSdCards(s.FIELDWORK?.sd_cards ?? [])
         if (!preprocessTouched.current) setPreprocessSteps(new Set((['rename', 'resize', 'metadata'] as const).filter((k) => s.PREPROCESSING[k])))
       })
