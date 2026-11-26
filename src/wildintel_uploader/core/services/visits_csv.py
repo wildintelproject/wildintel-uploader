@@ -32,8 +32,10 @@ COLUMN_NAMES: dict[str, tuple[str, ...]] = {
     "num_photos": ("numphotos", "photos", "numimages", "numfotos", "numberofpictures"),
     "sd": ("sd", "sdcard"),
     "date_time_ok": ("datetimeok", "fechahoraok", "dateandhour"),
-    "camera_id": ("camera", "cameraid", "camara"),
+    "camera_id": ("camera", "cameraid", "camara", "cameralabel", "cameraname"),
     "camera_model": ("cameramodel",),
+    "camera_serial": ("cameraserial", "serialnumber", "serial", "numerodeserie"),
+    "camera_make": ("cameramake", "make", "marca"),
     "comments": ("notes", "comments", "deploymentcomments", "observaciones", "observation"),
     "setup_by": ("setupby",),
     "latitude": ("latitude", "lat", "latitud", "lat13coordenates", "lat13localizacinactua"),
@@ -72,8 +74,10 @@ FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("num_photos", "Images on the card collected", False),
     ("sd", "SD card left", False),
     ("date_time_ok", "Date and time of the camera OK", False),
-    ("camera_id", "Camera id", False),
-    ("camera_model", "Camera model", False),
+    ("camera_id", "Camera (its label: what it is called in the field)", False),
+    ("camera_model", "Camera model (to create or complete its record)", False),
+    ("camera_serial", "Serial number of the camera (to find it, or to create or complete its record)", False),
+    ("camera_make", "Make of the camera (to create or complete its record)", False),
     ("comments", "Notes", False),
     ("setup_by", "Set up by", False),
     ("latitude", "Latitude of the visit (where the trapper was when it was noted; the location's when the file has none)", False),
@@ -107,13 +111,13 @@ REQUIRED = tuple(f for f, _, required in FIELDS if required)
 # when it is; the coordinates of the location are its own (location_latitude, location_longitude), apart from those of the visit, which a row gives or, when it has none, are those of its location.
 CREATABLE: dict[str, dict] = {
     "locations": {"required": ["location_latitude", "location_longitude", "timezone", "daylight_saving"], "extra": ["location_name", "coordinate_uncertainty"]},
-    "cameras": {"required": ["camera_id"], "extra": ["camera_model"]},
+    "cameras": {"required": ["camera_id"], "extra": ["camera_model", "camera_make", "camera_serial"]},
     "sd_cards": {"required": ["sd"], "extra": ["sd_brand", "sd_capacity"]},
     # the people who went are what the visits say they are called (who went, who set up): nothing else is asked of them — their username is worked out from the name
     "trappers": {"required": [], "extra": []},
 }
 # The fields that are not a visit's but an entity's.
-ENTITY_ONLY = {f: entity for entity, spec in CREATABLE.items() for f in [*spec["required"], *spec["extra"]] if f in ("location_name", "location_latitude", "location_longitude", "timezone", "daylight_saving", "coordinate_uncertainty", "sd_brand", "sd_capacity")}
+ENTITY_ONLY = {f: entity for entity, spec in CREATABLE.items() for f in [*spec["required"], *spec["extra"]] if f in ("location_name", "location_latitude", "location_longitude", "timezone", "daylight_saving", "coordinate_uncertainty", "sd_brand", "sd_capacity", "camera_make")}
 ACTIONS = {a.lower(): a for a in ("SiteStart", "Installation", "Revision", "Desinstallation", "Stolen", "Archive")} | {
     # the start of a site, as it is told
     "site start": "SiteStart", "site_start": "SiteStart", "start of site": "SiteStart", "site setup": "SiteStart",
@@ -216,6 +220,8 @@ class CsvVisit(BaseModel):
     date_time_ok: str | None = None
     camera_id: str | None = None
     camera_model: str | None = None
+    camera_serial: str | None = None   # #231: the serial number finds the camera, or creates or completes its record
+    camera_make: str | None = None
     comments: str | None = None
     setup_by: str | None = None
     battery_status: str | None = None
@@ -493,6 +499,15 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
     # What a row creates when its location, camera or SD card does not exist and it is asked to: {row: {"locations": [...], "cameras": [...], "sd_cards": [...]}}, and the
     # locations made from the first row that gave each site (the other rows of it are read in its timezone).
     cameras_known = {str(c.get(k) or "") for c in options.get("cameras") or [] if c.get("status") != "planned" for k in ("camera_id", "label")} - {""}   # as written: 7b and 7B are two
+    # the record of each camera by what a row may call it — its label or its serial number (#231): a row is resolved to it once, and points to it by its id
+    camera_by: dict[str, dict] = {}
+    for c in options.get("cameras") or []:
+        if c.get("status") != "planned":
+            for k in ("label", "camera_id"):
+                if str(c.get(k) or "").strip():
+                    camera_by.setdefault(str(c[k]).strip(), c)
+    completed: dict[str, dict] = {}   # what the rows add to records that lacked it: {label: {field: value}}
+    camera_warnings: list[tuple[int, str]] = []
     cards_known = {str(c.get("label") or "") for c in options.get("cards") or [] if c.get("status") != "planned"} - {""}
     made_by_row: dict[int, dict[str, list[dict]]] = {}
     new_locations: dict[str, dict] = {}
@@ -557,14 +572,25 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
                 raise RowError("coordinates_missing", "The row has only one of the coordinates of the visit: it needs a latitude and a longitude" + (", or none (then those of its location are used)." if from_location else "."))
             actions = cells.actions
             # a camera and an SD card are what their cell says, stripped; the ones that exist are found ignoring the case
-            if create.get("cameras") and cells.camera_id and cells.camera_id not in cameras_known:
-                made["cameras"].append(_new_camera(cells.camera_id, row))
+            named = cells.camera_id or cells.camera_serial
+            record_of = camera_by.get(named or "") or camera_by.get(cells.camera_serial or "")
+            if record_of is not None:
+                _complete_camera(record_of, cells, completed, camera_warnings, n)
+            elif create.get("cameras") and named and named not in cameras_known:
+                made["cameras"].append(_new_camera(named, row, cells))
             if create.get("sd_cards") and cells.sd and cells.sd not in cards_known:
                 made["sd_cards"].append(_new_card(cells.sd, row))
             # an id that is out of the ordinary is said once for its card, in the rows it is in; the card that is kept already was accepted as it is
             if cells.sd and cells.sd not in cards_known and visit_rules.unusual_card_id(cells.sd):
                 row_warnings.append((n, visit_rules.unusual_card_message(cells.sd)))
-            data = cells.model_dump(exclude_unset=True, exclude={"actions"})
+            data = cells.model_dump(exclude_unset=True, exclude={"actions", "camera_make"})
+            if record_of is not None:   # told by its label, pointing to its record; what the camera is, is the record's (#231)
+                data["camera_id"] = str(record_of.get("label") or record_of.get("camera_id"))
+                if record_of.get("id"):
+                    data["camera_ref"] = record_of["id"]
+                data.pop("camera_serial", None)
+            elif named:
+                data["camera_id"] = named
             if "card_batteries_ok" in data:   # one column for both, as it was: the batteries and the card each in its own field
                 battery, card = visit_rules.split_card_batteries(data.pop("card_batteries_ok"))
                 data.setdefault("battery_status", battery)
@@ -739,7 +765,7 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
     visits = [v for v in visits if id(v) not in refused_ids]
     new_sites = [visit_rules.new_site(site, records, locations) for site, records in sorted(held.items())]
     # what is odd and still kept, said once and told in the rows it is about: the visits that make it odd are rows of the file
-    said: list[tuple[str, list[int]]] = [(message, [n]) for n, message in row_warnings]
+    said: list[tuple[str, list[int]]] = [(message, [n]) for n, message in [*row_warnings, *camera_warnings]]
     for message, about in [*visit_rules.session_jump_items(visits, kept), *visit_rules.history_warning_items(visits, kept, options.get("cards"), [*unknown_kept, *unknown], bool(options.get("photos_not_counted")))]:
         said.append((message, sorted({row_of[id(v)] for v in about if id(v) in row_of})))
     warnings = list(dict.fromkeys(message for message, _ in said))
@@ -783,7 +809,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
     # what is created is what the visits that are kept need: a location, a camera or an SD card that only a refused visit named is not
     kept_rows = {row_of[id(v)] for v in visits}
     sites = {v["location_id"].lower() for v in visits}
-    create_out: dict[str, list[dict]] = {"locations": [l for site, l in new_locations.items() if site in sites], "cameras": [], "sd_cards": [], "trappers": []}
+    create_out: dict[str, list[dict]] = {"locations": [l for site, l in new_locations.items() if site in sites], "cameras": [], "sd_cards": [], "trappers": [],
+                                         "complete_cameras": [{"label": label, **fields} for label, fields in completed.items()]}
     # the people the visits that are kept say went, who are not trappers yet: made as they are called, when the import is asked to
     trapper_rows: dict[int, list[str]] = {}
     if create.get("trappers") and options.get("trappers") is not None:
@@ -904,9 +931,27 @@ def _new_location(site: str, row: dict[str, str]) -> dict:
         raise RowError("create_invalid", f"To create the location {site}: {_first(exc) if isinstance(exc, ValidationError) else exc}") from exc
 
 
-def _new_camera(camera_id: str, row: dict[str, str]) -> dict:
-    """The camera a row creates: called by its id, with the model of the row when it has one."""
-    return config.Camera(label=camera_id, camera_id=camera_id, camera_model=row.get("camera_model") or None).model_dump(mode="json")
+def _new_camera(name: str, row: dict[str, str], cells: "CsvVisit | None" = None) -> dict:
+    """The camera a row creates (#231): called as the row calls it — its label, or its serial number when it gives only that —, with the serial number, the
+    make and the model the row gives."""
+    serial = (cells.camera_serial if cells is not None else None) or None
+    return config.Camera(label=name, camera_id=serial, camera_make=(cells.camera_make if cells is not None else None) or None,
+                         camera_model=row.get("camera_model") or None).model_dump(mode="json")
+
+
+def _complete_camera(record: dict, cells: "CsvVisit", completed: dict[str, dict], warnings: list[tuple[int, str]], n: int) -> None:
+    """What a row says of a camera that has a record (#231): it completes what the record lacks — its serial number, make and model — and never overwrites it;
+    when it says otherwise, a warning says so."""
+    label = str(record.get("label") or record.get("camera_id"))
+    for given, field, name in ((cells.camera_serial, "camera_id", "serial number"), (cells.camera_make, "camera_make", "make"), (cells.camera_model, "camera_model", "model")):
+        given = (given or "").strip()
+        if not given:
+            continue
+        kept = str(record.get(field) or completed.get(label, {}).get(field) or "").strip()
+        if not kept:
+            completed.setdefault(label, {})[field] = given
+        elif " ".join(kept.split()).casefold() != " ".join(given.split()).casefold() and field != "camera_model":
+            warnings.append((n, f"Row {n}: the camera {label} has the {name} {kept} in its record, and the row says {given}: the record is kept as it is."))
 
 
 def _new_card(label: str, row: dict[str, str]) -> dict:

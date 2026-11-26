@@ -813,6 +813,9 @@ export interface LocalLocation {
 /** A visit to a camera trap kept in a research project's visits.json (see the backend's VisitRecord): the visit's own fields, and
  * what the visit says of the deployment — named as DeploymentFields names them. */
 export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'location_id' | 'location_name' | 'coordinate_uncertainty' | 'start_date' | 'end_date' | 'latitude' | 'longitude'> {
+  /** The id of the record of its camera (#231): what the visit points to. camera_id is its label, to tell it; camera_model and camera_serial are the record's. */
+  camera_ref?: string | null
+  camera_serial?: string | null
   location_id: string
   session: string
   /** YYYY-MM-DD */

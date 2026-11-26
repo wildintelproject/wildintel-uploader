@@ -114,6 +114,12 @@ def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
     return {names[k]: (" | ".join(v) if isinstance(v, list) else v) for k, v in merged.items()}, notes
 
 
+def _camera_id(visit: dict) -> str | None:
+    """The cameraID of the deployment a visit left (#231): the serial number of its camera, as its record says it, else what the visit calls it (its label).
+    The deployment keeps it as it is then: it points to nothing."""
+    return _text(visit.get("camera_serial")) or _text(visit.get("camera_id"))
+
+
 def merged_details(start: dict, end: dict | None) -> dict:
     """What the two visits of a deployment say of it, as the fields of the form of a deployment have them — the same mix the FieldworkLog gets: who set it up
     (the setup's, with the retrieval's beside when it differs), the camera, the details of the camera and the site, the tags of both, and the comments of
@@ -121,7 +127,7 @@ def merged_details(start: dict, end: dict | None) -> dict:
     merged, notes = _merged(start, end)
     details = {k: (" | ".join(v) if k == "deployment_groups" and isinstance(v, list) else v) for k, v in merged.items()}
     setup_by = _both(start.get("setup_by") or start.get("trappers"), (end or {}).get("trappers"))
-    for key, value in (("setup_by", setup_by), ("camera_id", _text(start.get("camera_id"))), ("comments", _comments(start, end, notes))):
+    for key, value in (("setup_by", setup_by), ("camera_id", _camera_id(start)), ("comments", _comments(start, end, notes))):
         if value:
             details[key] = value
     return details
@@ -155,7 +161,7 @@ def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bo
     return {
         "deployment_id": f"{collection_name(collection)}-{start['location_id']}", "collection": collection_name(collection), "site": start["location_id"],
         "status": "closed" if end else "open", "start": _utc(start.get("when"), keep_seconds), "end": _utc(end.get("when"), keep_seconds) if end else None,
-        "setup_by": _both(start.get("setup_by") or start.get("trappers"), (end or {}).get("trappers")), "camera_id": _text(start.get("camera_id")), "card": _text(start.get("sd")),
+        "setup_by": _both(start.get("setup_by") or start.get("trappers"), (end or {}).get("trappers")), "camera_id": _camera_id(start), "card": _text(start.get("sd")),
         "photos_counted": end.get("num_photos") if end else None,
         # the card was full when it was collected: its photos are not counted, and the number is not given — the dashboards say so instead of it
         "card_full": bool(end and end.get("card_status") == "CardFull"), "comments": _comments(start, end, notes), "fields": fields,

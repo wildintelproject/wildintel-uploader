@@ -972,7 +972,7 @@ describe('VisitsPage from a CSV file', () => {
     expect(click).toHaveBeenCalledTimes(1)
     const blob = (createObjectURL.mock.calls[0] as unknown as [Blob])[0]
     const lines = (await blob.text()).trim().split('\n')
-    expect(lines[0]).toBe('location_id,session,date,time,actions,trappers,camera_status,camera_id,camera_model,sd,battery_status,card_status,num_photos,date_time_ok,camera_height,camera_interval,comments,latitude,longitude')
+    expect(lines[0]).toBe('location_id,session,date,time,actions,trappers,camera_status,camera,camera_model,sd,battery_status,card_status,num_photos,date_time_ok,camera_height,camera_interval,comments,latitude,longitude')
     expect(lines.length - 1).toBeGreaterThanOrEqual(6)   // several rows of visits, not one
     expect(lines.some((l) => l.includes(',Revision + Desinstallation + Installation,'))).toBe(true)   // and visits that say several actions
     click.mockRestore()

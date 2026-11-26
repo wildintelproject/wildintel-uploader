@@ -406,8 +406,12 @@ class VisitRecord(BaseModel):
     updated_at: Optional[str] = None
 
     setup_by: Optional[str] = None
+    # The camera of the visit (#231): the id of its record in the research project (camera_ref) — what the visit points to — and its label (camera_id), to tell
+    # it. What the camera is — its model as Camtrap DP says it and its serial number — is told from the record, and not kept in the visit.
+    camera_ref: Optional[str] = None
     camera_id: Optional[str] = None
     camera_model: Optional[str] = None
+    camera_serial: Optional[str] = None
     camera_interval: Optional[int] = Field(default=None, ge=0)
     camera_height: Optional[float] = Field(default=None, ge=0)
     camera_depth: Optional[float] = Field(default=None, ge=0)

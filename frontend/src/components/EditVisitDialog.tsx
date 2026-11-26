@@ -14,7 +14,8 @@ const CARD_CODES = ['', 'OK', 'CardFull'] as const
 const BOOK_ONLY = ['deployment', 'deployment_status', 'deployment_no_images', 'uploaded_at', 'on_trapper', 'not_done', 'not_visited', 'unknown', 'locked', 'state', 'when']
 
 const label = 'block text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1'
-const cameraKey = (c: Camera) => c.camera_id || c.label
+// a visit tells its camera by its label (#231)
+const cameraKey = (c: Camera) => c.label
 const inUse = (status?: string) => !status || status === 'active' || status === 'ready'
 const names = (text: string) => text.split(',').map((n) => n.trim()).filter(Boolean)
 const number = (t: string) => (t.trim() === '' ? null : Number(t))
@@ -135,7 +136,7 @@ export default function EditVisitDialog({ projectId, visit, onClose, onSaved }: 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={label} htmlFor="ev-camera">Camera</label>
-            <Combobox id="ev-camera" options={cameras.map((c) => ({ value: cameraKey(c), label: c.label === cameraKey(c) ? c.label : `${c.label} (${cameraKey(c)})` }))} value={form.camera} onChange={(v) => set({ camera: v })}
+            <Combobox id="ev-camera" options={cameras.map((c) => ({ value: cameraKey(c), label: c.camera_id && c.camera_id !== c.label ? `${c.label} (${c.camera_id})` : c.label }))} value={form.camera} onChange={(v) => set({ camera: v })}
                       placeholder={entities ? 'Pick a camera' : 'Reading the cameras…'} clearLabel="Clear camera" />
             {model && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Model: {model}</p>}
           </div>
