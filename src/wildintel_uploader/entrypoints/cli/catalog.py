@@ -11,7 +11,12 @@ from rich.table import Table
 from wildintel_uploader.cli.common import console, fail
 from wildintel_uploader.entrypoints.cli.injection import inject
 from wildintel_uploader.modules.catalog.domain.models import PROJECT_STATUSES, CatalogError, ResearchProject, Trapper, UnknownProject
+from pathlib import Path
+
+from wildintel_uploader.entrypoints.catalog_storage import move_catalog
+from wildintel_uploader.modules.catalog.application.migration import TargetNotEmpty
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.settings.domain.ports import SettingsService
 
 catalog_app = typer.Typer(help="The catalog: the research projects, their locations, cameras and SD cards, and the people who go to the field.",
                           no_args_is_help=True)
@@ -145,3 +150,36 @@ def projects_delete(catalog: FromDishka[CatalogService], acronym: Annotated[str,
     except CatalogError as exc:
         raise fail(exc.message) from exc
     console.print(f"[green]✔[/green] {acronym} removed.")
+
+
+# ── where the catalog is kept ──
+
+@catalog_app.command("where")
+@inject
+def where(settings: FromDishka[SettingsService]) -> None:
+    """Where the catalog is kept: the JSON files of the collections folder, or a SQLite database."""
+    places = settings.places()
+    # a path as it is, on one line, to be copied
+    console.print(f"SQLite database: {places.catalog_database}" if places.catalog_storage == "sqlite" else f"JSON files of {places.collections}",
+                  soft_wrap=True)
+
+
+@catalog_app.command("migrate")
+@inject
+def migrate(
+    settings: FromDishka[SettingsService],
+    to: Annotated[str, typer.Option("--to", help="json — the files of the collections folder — or sqlite — a database.")],
+    database: Annotated[Optional[Path], typer.Option(help="The SQLite database — else catalog.sqlite3 in the data folder.")] = None,
+    replace: Annotated[bool, typer.Option("--replace", help="Overwrite a catalog that is there already.")] = False,
+) -> None:
+    """Move the catalog — the people and the research projects — to another place, and keep it there from now on. What is left where it was is not
+    deleted."""
+    if to not in ("json", "sqlite"):
+        raise fail("--to is json or sqlite.")
+    try:
+        copied = move_catalog(settings, to, database=database, replace=replace)
+    except TargetNotEmpty as exc:
+        raise fail(f"{exc.message} (--replace)") from exc
+    except CatalogError as exc:
+        raise fail(exc.message) from exc
+    console.print(f"[green]✔[/green] {copied.trappers} people and {copied.projects} research projects moved to {to}: the catalog is kept there now.")

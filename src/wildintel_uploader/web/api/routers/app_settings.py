@@ -118,8 +118,10 @@ def save_settings(new: config.Settings, service: FromDishka[SettingsService]) ->
     """Replaces every setting by the rules of the module of the settings (see SettingsService.save_settings), and the field work of the page goes to
     the research projects."""
     current = config.load_settings()
-    if "storage" not in new.DATA.model_fields_set:   # the page does not show where the records are kept: it is not its to change
-        new.DATA.storage = current.DATA.storage
+    # the page does not show where the records and the catalog are kept: they are not its to change
+    for name in ("storage", "catalog_storage", "catalog_database"):
+        if name not in new.DATA.model_fields_set:
+            setattr(new.DATA, name, getattr(current.DATA, name))
     try:
         service.check_settings(to_domain(new))      # before anything is written to the research projects
     except domain.SettingsError as exc:

@@ -133,6 +133,10 @@ class Epicollect5Settings:
         _set(self, "client_id", _blank_is_none(self.client_id))
 
 
+# Where the catalog — the research projects, the people, their equipment — can be kept.
+CATALOG_STORAGES = ("json", "sqlite")
+
+
 @dataclass(frozen=True)
 class DataSettings:
     """Where the app keeps what it makes. A folder left as None is the default one — see domain.folders."""
@@ -141,9 +145,12 @@ class DataSettings:
     reports_dir: str | None = None                       # else <data folder>/reports
     packages_dir: str | None = None                      # else <data folder>/packages
     storage: str = "json"                                # where the records of the research projects are kept
+    catalog_storage: str = "json"                        # where the catalog is kept: the JSON files of the collections folder, or a SQLite database
+    catalog_database: str | None = None                  # the SQLite database of the catalog; else <data folder>/catalog.sqlite3
 
     def __post_init__(self) -> None:
-        for name in ("dir", "collections_dir", "reports_dir", "packages_dir"):
+        _one_of("DATA.catalog_storage", self.catalog_storage, CATALOG_STORAGES)
+        for name in ("dir", "collections_dir", "reports_dir", "packages_dir", "catalog_database"):
             value = _blank_is_none(getattr(self, name))
             if value is not None and not Path(value).expanduser().is_absolute():
                 raise SettingsError(f"DATA.{name}", "must be an absolute path (or start with ~)")

@@ -12,7 +12,13 @@ from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from pathlib import Path
+from typing import Literal
+
 from wildintel_uploader.core.schemas.requests import LocalLocationsRequest, ResearchProjectRecord, UpdateResearchProjectRequest
+from wildintel_uploader.entrypoints.catalog_storage import move_catalog
+from wildintel_uploader.modules.catalog.application.migration import TargetNotEmpty
+from wildintel_uploader.modules.settings.domain.ports import SettingsService
 from wildintel_uploader.modules.catalog.domain.models import (
     Audit, CatalogError, ProjectExists, ProjectNotEmpty, ResearchProject, Trapper, UnknownProject,
 )
@@ -198,3 +204,24 @@ def delete_research_project(req: LocalLocationsRequest, catalog: Catalog) -> dic
     except CatalogError as exc:
         raise HTTPException(400, exc.message) from exc
     return {"deleted": req.research_project_id}
+
+
+# ── where the catalog is kept ──
+
+class MoveCatalogRequest(BaseModel):
+    to: Literal["json", "sqlite"]
+    database: str | None = None      # the SQLite database — else catalog.sqlite3 in the data folder
+    replace: bool = False
+
+
+@router.post("/migrate")
+def migrate_catalog(req: MoveCatalogRequest, settings: FromDishka[SettingsService]) -> dict:
+    """Moves the catalog to `to`, and keeps it there from now on: {"trappers", "projects"} copied. 409: the place holds a catalog already (replace
+    it); 422: it is there already, or what was copied does not read back as it was — the catalog then stays where it was."""
+    try:
+        copied = move_catalog(settings, req.to, database=Path(req.database) if req.database else None, replace=req.replace)
+    except TargetNotEmpty as exc:
+        raise HTTPException(409, exc.message) from exc
+    except CatalogError as exc:
+        raise _refused(exc) from exc
+    return {"trappers": copied.trappers, "projects": copied.projects}

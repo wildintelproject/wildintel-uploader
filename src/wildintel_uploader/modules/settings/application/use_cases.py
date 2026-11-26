@@ -227,7 +227,8 @@ class SettingsUseCases(SettingsService):
         settings = self.store.load()
         data = folder_rules.data_dir(settings.data, self.default_data_dir)
         return Places(settings_file=self.store.path_of(self.store.active_id()), data=data, collections=folder_rules.collections_dir(settings.data, data),
-                      reports=folder_rules.reports_dir(settings.data, data), packages=folder_rules.packages_dir(settings.data, data))
+                      reports=folder_rules.reports_dir(settings.data, data), packages=folder_rules.packages_dir(settings.data, data),
+                      catalog_storage=settings.data.catalog_storage, catalog_database=folder_rules.catalog_database(settings.data, data))
 
     # ── what the settings still hold of the field work ──
 

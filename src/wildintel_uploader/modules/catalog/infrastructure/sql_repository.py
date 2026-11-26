@@ -8,6 +8,7 @@ now, are still kept there as JSON (its visits, its locations…)."""
 from __future__ import annotations
 
 from collections.abc import Iterable
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
@@ -98,10 +99,16 @@ def _set_project(row: ProjectRow, project: ResearchProject) -> ProjectRow:
 
 # ── the repository ──
 
+@lru_cache(maxsize=8)
+def _engine(url: str) -> Engine:
+    return create_engine(url)
+
+
 def sqlite_engine(path: Path) -> Engine:
-    """An engine for a SQLite database in a file — made, with its folder, the first time it is used."""
+    """An engine for a SQLite database in a file — its folder made the first time —, one for each file for as long as the app lives."""
+    path = path.expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{path}")
+    return _engine(f"sqlite:///{path}")
 
 
 class SqlCatalogRepository(CatalogRepository):

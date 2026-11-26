@@ -126,8 +126,16 @@ class DataSettings(BaseModel):
         default=None,
         description="A folder of its own for the packages made to upload to TRAPPER, instead of the \"packages\" folder inside DATA.dir: <folder>/<research project id>/<collection>. (DATA.packages_dir)",
     )
+    catalog_storage: Literal["json", "sqlite"] = Field(
+        default="json",
+        description="Where the catalog is kept — the research projects, the people, their equipment —: \"json\" (files in the collections folder) or \"sqlite\" (a database, see DATA.catalog_database). Change it with `catalog migrate`, which takes what is kept along. (DATA.catalog_storage)",
+    )
+    catalog_database: Optional[str] = Field(
+        default=None,
+        description="The SQLite database of the catalog, when DATA.catalog_storage is \"sqlite\": instead of catalog.sqlite3 inside DATA.dir. (DATA.catalog_database)",
+    )
 
-    @field_validator("dir", "collections_dir", "reports_dir", "packages_dir")
+    @field_validator("dir", "collections_dir", "reports_dir", "packages_dir", "catalog_database")
     @classmethod
     def _absolute(cls, value: Optional[str]) -> Optional[str]:
         if value is None or not value.strip():

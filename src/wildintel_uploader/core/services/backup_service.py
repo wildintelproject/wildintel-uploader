@@ -129,7 +129,7 @@ def create_backup(
         pdir = local_folder_service.project_dir(root, research_project_id)  # type: ignore[arg-type]
         store = storage.open_store(root)
         if project_files:
-            project = store.get_project(research_project_id)  # type: ignore[arg-type]
+            project = local_folder_service.project_record(root, research_project_id)  # type: ignore[arg-type]   # wherever the catalog is kept
             if project is not None:
                 entries.append((f"project/{PROJECT}", None, project))
             for kind, name in PROJECT_RECORDS.items():
@@ -332,12 +332,9 @@ def restore_backup(
         if wants_project and project_files:
             yield {"type": "step", "message": f"Restoring the data of {project}…"}
             if f"project/{PROJECT}" in names:
-                if replace or not store.has_project(project):  # type: ignore[arg-type]
-                    record = json.loads(zf.read(f"project/{PROJECT}"))
-                    if store.has_project(project):  # type: ignore[arg-type]
-                        store.save_project(project, record)  # type: ignore[arg-type]
-                    else:
-                        store.add_project(record)
+                if replace or local_folder_service.project_record(root, project) is None:  # type: ignore[arg-type]
+                    # as the backup has it — its id and dates too —, wherever the catalog is kept
+                    local_folder_service.put_project_record(root, json.loads(zf.read(f"project/{PROJECT}")))
                     local_folder_service.project_dir(root, project).mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
                     summary["project_files"]["research_project"] = "written"
                 else:

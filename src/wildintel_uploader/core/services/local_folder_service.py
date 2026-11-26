@@ -18,7 +18,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from wildintel_uploader.core import config, identity, storage
+from wildintel_uploader.core import identity, storage
 from wildintel_uploader.core.config import migrate_gear
 from wildintel_uploader.core.services import audit, ids, status_history, visit_rules, visit_time
 
@@ -208,7 +208,7 @@ def write_research_project(root: Path, project: dict) -> dict:
 
 
 def _project_status(root: Path, research_project_id: str) -> str:
-    project = _store(root).get_project(research_project_id)
+    project = project_record(root, research_project_id)
     return str((project or {}).get("status") or "active")
 
 
@@ -517,6 +517,31 @@ def _catalog(root: Path):
     """The catalog kept in this collections folder (modules.catalog, #248), put together as the entry points put it (entrypoints.wiring)."""
     from wildintel_uploader.entrypoints import wiring   # here: wiring puts together modules that import this one
     return wiring.build_catalog(root, wiring.build_settings())
+
+
+def _catalog_repository(root: Path):
+    """Where the catalog of this collections folder is kept, as the settings say (DATA.catalog_storage): what is read and written as it is kept —
+    a backup, a move to another storage — goes there, not through the use cases, which would date it anew."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.catalog_repository(root, wiring.build_settings())
+
+
+def project_record(root: Path, research_project_id: str) -> dict | None:
+    """The record of a research project as it is kept — removed or not —, or None: wherever the catalog is kept."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import project_to_record
+    project = _catalog_repository(root).read_project(research_project_id)
+    return project_to_record(project) if project is not None else None
+
+
+def put_project_record(root: Path, record: dict) -> None:
+    """Keeps the record of a research project as it is given — its id and dates too, as a backup has them —, in place of the one kept, or as a new
+    one (with its folder): wherever the catalog is kept."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import project_from_record
+    repository, project = _catalog_repository(root), project_from_record(record)
+    if repository.read_project(project.acronym) is not None:
+        repository.save_project(project)
+    else:
+        repository.add_project(project)
 
 
 def list_trappers(root: Path, include_deleted: bool = False) -> list[dict]:

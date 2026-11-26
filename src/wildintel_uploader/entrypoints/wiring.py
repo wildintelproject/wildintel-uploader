@@ -21,6 +21,7 @@ from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseC
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
 from wildintel_uploader.modules.catalog.infrastructure.legacy import SystemClock, TrappersFromTheSettings
+from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
@@ -40,11 +41,19 @@ def build_settings(store: SettingsStore | None = None, *, activity_log: Activity
 
 def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock | None = None, repository: CatalogRepository | None = None) -> CatalogService:
     """The catalog of a collections folder — the one of the settings, or one a caller of before names —, taking what versions before left in the
-    settings through their module. Its records are kept in `repository`: by default the JSON files of the collections folder
-    (StoreCatalogRepository); a SqlCatalogRepository keeps them in a database instead."""
+    settings through their module. Its records are kept in `repository`, or — none given — where the settings say (see catalog_repository)."""
     store = storage.open_store(collections_dir)
-    return CatalogUseCases(repository or StoreCatalogRepository(store, collections_dir), legacy_trappers=TrappersFromTheSettings(settings),
+    return CatalogUseCases(repository or catalog_repository(collections_dir, settings), legacy_trappers=TrappersFromTheSettings(settings),
                            visits=StoredVisits(store), clock=clock or SystemClock())
+
+
+def catalog_repository(collections_dir: Path, settings: SettingsService, kind: str | None = None, database: Path | None = None) -> CatalogRepository:
+    """Where the catalog is kept, as the settings say (DATA.catalog_storage, DATA.catalog_database) — asked of their module —, or as `kind` and
+    `database` say: "json", the files of the collections folder; "sqlite", a database (SqlCatalogRepository)."""
+    places = settings.places()
+    if (kind or places.catalog_storage) == "sqlite":
+        return SqlCatalogRepository(sqlite_engine(database or places.catalog_database), collections_dir)
+    return StoreCatalogRepository(storage.open_store(collections_dir), collections_dir)
 
 
 # ── the providers of the container ──

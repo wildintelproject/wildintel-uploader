@@ -35,20 +35,28 @@ def packages_dir(data_settings: DataSettings, data: Path) -> Path:
     return _own_or_inside(data_settings.packages_dir, data, "packages")
 
 
+def catalog_database(data_settings: DataSettings, data: Path) -> Path:
+    """The SQLite database of the catalog: DATA.catalog_database if set, else <data folder>/catalog.sqlite3."""
+    return Path(data_settings.catalog_database).expanduser() if data_settings.catalog_database else data / "catalog.sqlite3"
+
+
 def follow_data_dir(before: DataSettings, after: DataSettings, default: Path) -> DataSettings:
-    """When the data folder changes, the collections, reports and packages folders that were inside the old one go inside the new one: a folder kept
+    """When the data folder changes, the collections, reports and packages folders — and the database of the catalog — that were inside the old one go
+    inside the new one: a folder kept
     elsewhere stays where it is, and one that was just <old data folder>/<its name> goes back to being the default one (None)."""
     old_dir, new_dir = data_dir(before, default), data_dir(after, default)
     if old_dir == new_dir:
         return after
     moved = {}
-    for key in ("collections", "reports", "packages"):
-        value = getattr(after, f"{key}_dir")
+    # the folders, and the database of the catalog: each was, inside the old one, at its default place (it goes back to none) or another one
+    for name, default_name in (("collections_dir", "collections"), ("reports_dir", "reports"), ("packages_dir", "packages"),
+                               ("catalog_database", "catalog.sqlite3")):
+        value = getattr(after, name)
         if not value:
             continue
         try:
             inside = Path(value).expanduser().relative_to(old_dir)
         except ValueError:
             continue
-        moved[f"{key}_dir"] = None if str(inside) == key else str(new_dir / inside)
+        moved[name] = None if str(inside) == default_name else str(new_dir / inside)
     return replace(after, **moved)

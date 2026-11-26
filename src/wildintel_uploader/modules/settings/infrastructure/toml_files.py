@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import threading
 from pathlib import Path
 
 from dynaconf import Dynaconf, loaders
@@ -19,13 +20,32 @@ DEFAULT_CONFIG_ID = "default"
 ENV_PREFIX = "WILDINTEL_UPLOADER"
 
 
+# What was read of each settings file, while it is the same file and the environment says the same: reading one with Dynaconf takes time, and the app
+# reads the settings at almost every step. A copy is given each time: code of before changes what it is given.
+_read: dict[Path, tuple[tuple, Settings]] = {}
+_reading = threading.Lock()
+
+
+def _version(config_file: Path) -> tuple:
+    """What a settings file is now: its size and when it was last changed, and the variables of the environment that override it."""
+    status = config_file.stat()
+    return status.st_size, status.st_mtime_ns, tuple(sorted((k, v) for k, v in os.environ.items() if k.startswith(ENV_PREFIX)))
+
+
 def read_settings_file(config_file: Path) -> Settings:
     """The settings of a file — written with the defaults first if there is none —, as the schema validates them: what was kept before a field existed
-    gets it."""
+    gets it. Read again only when the file or the environment changed."""
     if not config_file.exists():
         write_settings_file(Settings(), config_file)
-    dynaconf_settings = Dynaconf(settings_files=[str(config_file)], envvar_prefix=ENV_PREFIX)
-    return Settings.model_validate(dynaconf_settings.to_dict(), context={"migrate": True})
+    version = _version(config_file)
+    with _reading:
+        kept = _read.get(config_file)
+    if kept is None or kept[0] != version:
+        dynaconf_settings = Dynaconf(settings_files=[str(config_file)], envvar_prefix=ENV_PREFIX)
+        kept = (version, Settings.model_validate(dynaconf_settings.to_dict(), context={"migrate": True}))
+        with _reading:
+            _read[config_file] = kept
+    return kept[1].model_copy(deep=True)
 
 
 def write_settings_file(settings: Settings, config_file: Path) -> None:
@@ -37,6 +57,8 @@ def write_settings_file(settings: Settings, config_file: Path) -> None:
     try:
         loaders.toml_loader.write(tmp, settings.model_dump(mode="json", exclude_none=True), merge=False)
         os.replace(tmp, config_file)
+        with _reading:
+            _read.pop(config_file, None)   # written in the same instant as it was read, it could look the same: it is read again
     finally:
         Path(tmp).unlink(missing_ok=True)
 

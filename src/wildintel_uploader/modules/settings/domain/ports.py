@@ -45,6 +45,8 @@ class Places:
     collections: Path
     reports: Path
     packages: Path
+    catalog_storage: str           # where the catalog is kept: "json" (the collections folder) or "sqlite"
+    catalog_database: Path         # the SQLite database it is in, when it is
 
 
 @dataclass(frozen=True)
