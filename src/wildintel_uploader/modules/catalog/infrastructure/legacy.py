@@ -2,6 +2,8 @@
 does not know where or how the settings are kept: it asks their module."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from wildintel_uploader.modules.catalog.domain.models import Trapper
 from wildintel_uploader.modules.catalog.domain.ports import Clock, LegacyTrappers
 from wildintel_uploader.modules.catalog.infrastructure.mapping import trapper_from_record
@@ -25,3 +27,7 @@ class SystemClock(Clock):
 
     def now(self) -> str:
         return audit.now()
+
+    def today(self) -> str:
+        """The day here — as the day a location is put into production always was."""
+        return datetime.now().date().isoformat()

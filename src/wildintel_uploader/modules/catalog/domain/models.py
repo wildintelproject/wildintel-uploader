@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -174,3 +175,120 @@ class ProjectNotActive(CatalogError):
 
     def __init__(self, acronym: str, status: str) -> None:
         super().__init__("status", f"The research project '{acronym}' is {status}: new visits are only kept to an active one (change its status in Settings).")
+
+
+# ── the locations ──
+
+LOCATION_STATUSES = ("planned", "pending", "ready", "active", "archived")
+_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+DEFAULT_TIMEZONE = "UTC"
+# The names of UTC — as core.services.visit_time has them: a location is UTC for the catalog when it is for the visits.
+_UTC_ZONES = frozenset({"utc", "etc/utc", "etc/uct", "uct", "gmt", "etc/gmt", "zulu", "etc/zulu", "universal", "etc/universal", "z"})
+
+
+def is_utc(zone: str | None) -> bool:
+    """Whether a timezone is UTC, which has no summer time."""
+    return (zone or "").strip().lower() in _UTC_ZONES
+
+
+def _number(field_name: str, value: object, low: float, high: float) -> None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+        raise CatalogError(field_name, f"must be a number from {low:g} to {high:g}")
+
+
+@dataclass(frozen=True)
+class Location:
+    """A location of a research project, where a camera trap is put up. Its timezone and whether its cameras ignore summer time belong to it — never
+    to a deployment — and are fixed when it is made: every instant kept for it (a visit's) was worked out with them.
+
+    The web API asks a new one for its timezone, its summer-time setting and where it is; the code that makes one from a field file, or one kept by a
+    version that did not ask for them, may leave them out — so they are optional here, and checked when they are said."""
+    location_id: str
+    timezone: str | None = None
+    ignore_dst: bool | None = None
+    latitude: float | None = None          # WGS84 decimal degrees, as Camtrap DP has them
+    longitude: float | None = None
+    name: str | None = None
+    coordinate_uncertainty: int | None = None
+    in_service: str | None = None          # the day it was put into production, YYYY-MM-DD
+    trapper_pk: int | None = None          # taken from TRAPPER: it is only read here
+    # pending: new, its first visit starts it; ready: a visit said Location start; active: a camera is up there; planned and archived: not offered
+    status: str = "pending"
+    status_date: str | None = None         # when it changed, YYYY-MM-DD
+    status_note: str | None = None
+    audit: Audit = field(default_factory=Audit)
+    extra: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not (1 <= len(self.location_id or "") <= 100):
+            raise CatalogError("location_id", "must have 1 to 100 characters")
+        if self.timezone is not None:
+            try:
+                ZoneInfo(self.timezone)
+            except (ZoneInfoNotFoundError, ValueError, TypeError):
+                raise CatalogError("timezone", "is not a known IANA timezone") from None
+        for name, low, high in (("latitude", -90, 90), ("longitude", -180, 180)):
+            if getattr(self, name) is not None:
+                _number(name, getattr(self, name), low, high)
+        if self.coordinate_uncertainty is not None and (isinstance(self.coordinate_uncertainty, bool) or not isinstance(self.coordinate_uncertainty, int)
+                                                        or self.coordinate_uncertainty < 1):
+            raise CatalogError("coordinate_uncertainty", "must be a whole number from 1 up")
+        for name in ("in_service", "status_date"):
+            if getattr(self, name) is not None and not _DAY.match(getattr(self, name)):
+                raise CatalogError(name, "must be a day: YYYY-MM-DD")
+        if self.status not in LOCATION_STATUSES:
+            raise CatalogError("status", f"must be one of {', '.join(LOCATION_STATUSES)}")
+
+    @property
+    def deleted(self) -> bool:
+        return self.audit.deleted
+
+
+
+class UnknownLocation(LookupError):
+    def __init__(self, project: str, location_id: str) -> None:
+        super().__init__(f"The location '{location_id}' isn't in {project}.")
+
+
+class LocationExists(CatalogError):
+    def __init__(self, project: str, location_id: str) -> None:
+        super().__init__("location_id", f"The location '{location_id}' already exists in {project}.")
+
+
+class NewLocationStatus(CatalogError):
+    """A location made by hand starts pending, or planned: a visit makes it ready (Location start) or active (an Installation)."""
+
+    def __init__(self, location_id: str, status: str) -> None:
+        super().__init__("status", f"A new location is pending, or planned: a visit makes it ready (Location start) or active (an Installation), and "
+                                   f"{location_id} cannot start as {status}.")
+
+
+class LocationArchived(CatalogError):
+    def __init__(self, location_id: str) -> None:
+        super().__init__("status", f"The status of a location can't be changed once it is archived: {location_id} is archived for good.")
+
+
+class LocationTimeFixed(CatalogError):
+    """Its timezone, and whether its cameras ignore summer time, are fixed when it is made."""
+
+    def __init__(self, location_id: str, label: str, now: object) -> None:
+        super().__init__("timezone" if label == "timezone" else "ignore_dst", f"The {label} of a location can't be changed once it is created: {location_id} is {now}.")
+
+
+class SiteStatusRefused(CatalogError):
+    """What the visits say against the status asked for by hand — the reason is theirs."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__("status", reason)
+
+
+class LocationFromTrapper(CatalogError):
+    def __init__(self, location_id: str) -> None:
+        super().__init__("location_id", f"The location '{location_id}' comes from TRAPPER, so it can't be deleted here.")
+
+
+class LocationHasVisits(CatalogError):
+    def __init__(self, location_id: str, visits: int) -> None:
+        super().__init__("location_id", f"The location '{location_id}' still has {visits} visit{'s' if visits != 1 else ''}: it can't be deleted — mark it as archived instead.")

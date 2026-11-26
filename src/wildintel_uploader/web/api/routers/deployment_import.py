@@ -21,8 +21,8 @@ from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
 from wildintel_uploader.core.schemas.requests import (
     BrowseFolderRequest, CardRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
-    DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, SaveLocationRequest, ScanFolderRequest,
-    NextRevisionRequest, UpdateLocationRequest, ValidateDeploymentRequest, ValidateImagesRequest,
+    ExistingDeploymentsRequest, PreviousDeploymentsRequest, ScanFolderRequest,
+    NextRevisionRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
 from wildintel_uploader.core.services import camera_info, card_copy_service, deployment_import_service, deployment_photos, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service, visit_deployments
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
@@ -68,47 +68,6 @@ def check_collection(req: CheckCollectionRequest) -> dict:
     name if it does (see services.local_folder_service.check_collection) —
     the "Local folder" destination's own first step."""
     return local_folder_service.check_collection(Path(req.path).expanduser())
-
-
-@router.post("/locations/list")
-def list_locations(req: LocalLocationsRequest) -> dict:
-    """The locations kept for a research project in the collections folder."""
-    try:
-        return {"results": local_folder_service.list_locations(config.collections_dir(), req.research_project_id)}
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.post("/locations/save")
-def save_location(req: SaveLocationRequest) -> dict:
-    """Adds a location to a research project already kept in the collections
-    folder (by hand, or as filled in from Trapper) — 409 if its id is used."""
-    try:
-        return local_folder_service.write_location(config.collections_dir(), req.research_project_id, req.location.model_dump(), by_hand=req.by_hand)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(409 if "already exists" in str(exc) else 400, str(exc)) from exc
-
-
-@router.post("/locations/update")
-def update_location(req: UpdateLocationRequest) -> dict:
-    """Changes a kept location — its name, where it is, its status. Its timezone and its summer-time setting belong to the location and are fixed
-    when it is created: asking for a different one is a 409. The fields left out stay as they are; 404 if the location isn't there."""
-    changes = req.model_dump(include={"name", "latitude", "longitude", "coordinate_uncertainty", "timezone", "ignore_dst", "in_service", "status", "status_date", "status_note"}, exclude_unset=True)
-    if changes.get("status") is None:
-        changes.pop("status", None)
-    try:
-        return local_folder_service.update_location(config.collections_dir(), req.research_project_id, req.location_id, changes)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(404 if "isn't in" in str(exc) else 409 if "can't be changed" in str(exc) else 400, str(exc)) from exc
-
-
-@router.post("/locations/delete")
-def delete_location(req: DeleteLocationRequest) -> dict:
-    """Deletes a kept location — 409 when visits were made to it (or it comes from Trapper), 404 if it isn't there."""
-    try:
-        return local_folder_service.delete_location(config.collections_dir(), req.research_project_id, req.location_id)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(404 if "isn't in" in str(exc) else 409 if "still has" in str(exc) or "comes from TRAPPER" in str(exc) else 400, str(exc)) from exc
 
 
 @router.get("/exiftool")

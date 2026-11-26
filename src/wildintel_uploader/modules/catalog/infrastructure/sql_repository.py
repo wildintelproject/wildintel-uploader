@@ -2,7 +2,7 @@
 kept in a database — SQLite in a file by default, or any database SQLAlchemy reaches — without the domain or the use cases knowing.
 
 Each record is a row: a column for each field of the domain, its id and dates, and `extra` — a JSON column — for what a record says that this
-version does not know, as the files keep it. The people keep the order they were written in. A research project still has its folder in the
+version does not know, as the files keep it. The people and the locations keep the order they were written in; a location says its research project. A research project still has its folder in the
 collections folder, where its collections go; what the folder holds besides is what counts as held by it — not the files of the records that, for
 now, are still kept there as JSON (its visits, its locations…)."""
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any, Optional
 from sqlalchemy import JSON, Engine, delete, func
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-from wildintel_uploader.modules.catalog.domain.models import Audit, ResearchProject, Trapper
+from wildintel_uploader.modules.catalog.domain.models import Audit, Location, ResearchProject, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
 from wildintel_uploader.shared.storage import StorageError
 from wildintel_uploader.shared.storage.json_files import PROJECT_FILE, RECORD_FILES
@@ -63,9 +63,29 @@ class ProjectRow(_Audited, table=True):
     trapper_pk: Optional[int] = None
 
 
-_TABLES = [TrapperRow.__table__, ProjectRow.__table__]  # type: ignore[attr-defined]
+class LocationRow(_Audited, table=True):
+    __tablename__ = "locations"
+    row: Optional[int] = Field(default=None, primary_key=True)   # the order they were written in
+    project: str = Field(index=True)                              # the acronym of its research project
+    location_id: str = Field(index=True)
+    name: Optional[str] = None
+    timezone: Optional[str] = None
+    ignore_dst: Optional[bool] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    coordinate_uncertainty: Optional[int] = None
+    in_service: Optional[str] = None
+    trapper_pk: Optional[int] = None
+    status: str = "pending"
+    status_date: Optional[str] = None
+    status_note: Optional[str] = None
+
+
+_TABLES = [TrapperRow.__table__, ProjectRow.__table__, LocationRow.__table__]  # type: ignore[attr-defined]
 _AUDIT = ("id", "created_at", "updated_at", "deleted_at")
 _TRAPPER = ("username", "name", "affiliation", "email", "status", "trapper_pk")
+_LOCATION = ("location_id", "name", "timezone", "ignore_dst", "latitude", "longitude", "coordinate_uncertainty", "in_service", "trapper_pk", "status",
+             "status_date", "status_note")
 _PROJECT = ("acronym", "name", "sampling_design", "sensor_method", "animal_types", "bait_use", "event_interval", "status", "keywords", "abstract",
             "methods", "description", "trapper_pk")
 
@@ -86,6 +106,15 @@ def _trapper_row(trapper: Trapper) -> TrapperRow:
 
 def _project(row: ProjectRow) -> ResearchProject:
     return ResearchProject(**{k: getattr(row, k) for k in _PROJECT}, audit=_audit(row), extra=dict(row.extra or {}))
+
+
+def _location(row: LocationRow) -> Location:
+    return Location(**{k: getattr(row, k) for k in _LOCATION}, audit=_audit(row), extra=dict(row.extra or {}))
+
+
+def _location_row(project: str, location: Location) -> LocationRow:
+    return LocationRow(project=project, **{k: getattr(location, k) for k in _LOCATION}, **{k: getattr(location.audit, k) for k in _AUDIT},
+                       extra=dict(location.extra))
 
 
 def _set_project(row: ProjectRow, project: ResearchProject) -> ProjectRow:
@@ -162,3 +191,16 @@ class SqlCatalogRepository(CatalogRepository):
     def held_by_project(self, acronym: str) -> list[str]:
         folder = self.collections_dir / acronym
         return sorted(e.name for e in folder.iterdir() if e.name not in _RECORD_FILE_NAMES) if folder.is_dir() else []
+
+    # the locations
+
+    def read_locations(self, project: str) -> list[Location]:
+        with Session(self.engine) as session:
+            return [_location(r) for r in session.exec(select(LocationRow).where(LocationRow.project == project).order_by(LocationRow.row))]
+
+    def write_locations(self, project: str, locations: list[Location]) -> None:
+        """All the locations of the research project at once, in one transaction: what it had is replaced."""
+        with Session(self.engine) as session:
+            session.exec(delete(LocationRow).where(LocationRow.project == project))  # type: ignore[call-overload]
+            session.add_all([_location_row(project, loc) for loc in locations])
+            session.commit()

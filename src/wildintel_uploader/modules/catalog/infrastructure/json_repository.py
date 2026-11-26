@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.domain.models import ResearchProject, Trapper
+from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
-from wildintel_uploader.modules.catalog.infrastructure.mapping import project_from_record, project_to_record, trapper_from_record, trapper_to_record
-from wildintel_uploader.shared.storage import ProjectStore
+from wildintel_uploader.modules.catalog.infrastructure.mapping import (
+    location_from_record, location_to_record, project_from_record, project_to_record, trapper_from_record, trapper_to_record,
+)
+from wildintel_uploader.shared.storage import ProjectStore, StorageError
 
 
 class StoreCatalogRepository(CatalogRepository):
@@ -38,3 +40,12 @@ class StoreCatalogRepository(CatalogRepository):
         folder = self.collections_dir / acronym
         own = self.store.owned_names(acronym)
         return sorted(e.name for e in folder.iterdir() if e.name not in own) if folder.is_dir() else []
+
+    def read_locations(self, project: str) -> list[Location]:
+        try:
+            return [location_from_record(r, project) for r in self.store.read_records(project, "locations")]
+        except StorageError:   # a research project id that can't be a folder name has no locations
+            return []
+
+    def write_locations(self, project: str, locations: list[Location]) -> None:
+        self.store.write_records(project, "locations", [location_to_record(loc) for loc in locations])

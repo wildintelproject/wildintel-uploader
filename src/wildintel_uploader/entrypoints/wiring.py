@@ -22,7 +22,7 @@ from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, C
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
 from wildintel_uploader.modules.catalog.infrastructure.legacy import SystemClock, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
-from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
+from wildintel_uploader.modules.catalog.infrastructure.visits import StoredStatusHistory, StoredVisits
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
@@ -44,7 +44,7 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
     settings through their module. Its records are kept in `repository`, or — none given — where the settings say (see catalog_repository)."""
     store = storage.open_store(collections_dir)
     return CatalogUseCases(repository or catalog_repository(collections_dir, settings), legacy_trappers=TrappersFromTheSettings(settings),
-                           visits=StoredVisits(store), clock=clock or SystemClock())
+                           visits=StoredVisits(store, collections_dir), status_history=StoredStatusHistory(collections_dir), clock=clock or SystemClock())
 
 
 def catalog_repository(collections_dir: Path, settings: SettingsService, kind: str | None = None, database: Path | None = None) -> CatalogRepository:

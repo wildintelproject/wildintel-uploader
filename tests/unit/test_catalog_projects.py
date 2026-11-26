@@ -39,6 +39,7 @@ class Repository:
     def __init__(self) -> None:
         self.projects: dict[str, ResearchProject] = {}
         self.held: dict[str, list[str]] = {}
+        self.locations: dict[str, list] = {}
 
     def read_trappers(self):
         return []
@@ -61,13 +62,25 @@ class Repository:
     def held_by_project(self, acronym):
         return self.held.get(acronym, [])
 
+    def read_locations(self, project):
+        return list(self.locations.get(project, []))
+
+    def write_locations(self, project, locations) -> None:
+        self.locations[project] = list(locations)
+
 
 class Visits:
     def __init__(self, of=()) -> None:
-        self.of = set(of)
+        self.of, self.at, self.refusal = set(of), {}, None
 
     def has_visits(self, acronym):
         return acronym in self.of
+
+    def visits_at(self, project, location_id):
+        return self.at.get(location_id, 0)
+
+    def site_status_refusal(self, project, locations, location, wanted):
+        return self.refusal
 
 
 class Clock:
@@ -77,17 +90,29 @@ class Clock:
     def now(self):
         return self.at
 
+    def today(self):
+        return "2026-11-27"
+
 
 class NoLegacy:
     def take(self):
         return []
 
 
+class History:
+    def __init__(self) -> None:
+        self.lines: list[tuple] = []
+
+    def record_location(self, project, before, after) -> None:
+        if before is None or before.status != after.status:
+            self.lines.append((project, after.location_id, before.status if before else None, after.status))
+
+
 @pytest.fixture
 def world():
     repository, visits, clock = Repository(), Visits(), Clock()
     ids = iter(f"id-{n}" for n in range(100))
-    catalog = CatalogUseCases(repository, legacy_trappers=NoLegacy(), visits=visits, clock=clock, new_id=lambda: next(ids))
+    catalog = CatalogUseCases(repository, legacy_trappers=NoLegacy(), visits=visits, status_history=History(), clock=clock, new_id=lambda: next(ids))
     return catalog, repository, visits, clock
 
 
@@ -200,3 +225,9 @@ def test_the_command_line_of_the_research_projects(tmp_path: Path):
         assert "DONA" in listed and "active" in listed and "1 research project" in listed
         assert run.invoke(cli, ["catalog", "projects", "delete", "DONA", "--yes"]).exit_code == 0
         assert "0 research projects" in run.invoke(cli, ["catalog", "projects", "list"]).output
+
+
+def test_utc_is_the_same_for_the_catalog_and_for_the_visits():
+    from wildintel_uploader.core.services import visit_time
+    from wildintel_uploader.modules.catalog.domain import models
+    assert models._UTC_ZONES == visit_time._UTC_ZONES and models.DEFAULT_TIMEZONE == visit_time.DEFAULT_TIMEZONE

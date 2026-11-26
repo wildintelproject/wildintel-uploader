@@ -1,5 +1,6 @@
 """#248: the repositories of the catalog are one port with two adapters — the JSON files of the collections folder and a SQL database (SQLModel) —:
 the same tests, on both, say they keep the same; and the whole catalog works the same on the database."""
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,22 @@ def test_what_a_research_project_holds_is_what_its_folder_has_besides_its_record
     assert repository.held_by_project("NOPE") == []
 
 
+def test_the_locations_are_kept_for_each_research_project_in_their_order(repository):
+    from wildintel_uploader.modules.catalog.domain.models import Location
+
+    madrid = Location(location_id="DONA_02", timezone="Europe/Madrid", ignore_dst=True, latitude=37.1, longitude=-6.4, name="Two", status="active",
+                      in_service="2026-01-01", audit=Audit(id="l2", created_at="T1"), extra={"habitat": "scrub"})
+    bare = Location(location_id="DONA_01", audit=Audit(id="l1", deleted_at="T2"))     # one kept by a version that did not ask for where it is
+    repository.add_project(ResearchProject(acronym="DONA", name="Doñana"))
+    repository.add_project(ResearchProject(acronym="ALBA", name="Albacete"))
+    repository.write_locations("DONA", [madrid, bare])
+    repository.write_locations("ALBA", [replace(bare, location_id="ALBA_01")])
+
+    assert repository.read_locations("DONA") == [madrid, bare] and [loc.location_id for loc in repository.read_locations("ALBA")] == ["ALBA_01"]
+    repository.write_locations("DONA", [madrid])
+    assert repository.read_locations("DONA") == [madrid] and repository.read_locations("NOPE") == []
+
+
 def test_the_whole_catalog_works_the_same_on_a_database(tmp_path: Path):
     class NoLegacy:
         def take(self):
@@ -72,8 +89,15 @@ def test_the_whole_catalog_works_the_same_on_a_database(tmp_path: Path):
         def now(self):
             return "2026-11-27T10:00:00Z"
 
+        def today(self):
+            return "2026-11-27"
+
+    class NoHistory:
+        def record_location(self, project, before, after):
+            pass
+
     catalog = CatalogUseCases(SqlCatalogRepository(sqlite_engine(tmp_path / "catalog.sqlite3"), tmp_path), legacy_trappers=NoLegacy(),
-                              visits=NoVisits(), clock=Clock())
+                              visits=NoVisits(), status_history=NoHistory(), clock=Clock())
     catalog.add_trappers([Trapper(username="ana", name="Ana")])
     catalog.add_project(ResearchProject(acronym="DONA", name="Doñana"))
     with pytest.raises(ProjectExists):

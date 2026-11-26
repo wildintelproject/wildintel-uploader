@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 from contextlib import contextmanager
+from dataclasses import replace
 import json
 import logging
 import re
@@ -19,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 from wildintel_uploader.core import identity, storage
+from wildintel_uploader.core.storage import valid_project_id
 from wildintel_uploader.core.config import migrate_gear
 from wildintel_uploader.core.services import audit, ids, status_history, visit_rules, visit_time
 
@@ -241,15 +243,15 @@ def delete_research_project(root: Path, research_project_id: str) -> dict:
 
 
 def list_locations(root: Path, research_project_id: str, include_deleted: bool = False) -> list[dict]:
-    """The locations kept for a research project — empty until one is added. One that was deleted is kept, but is not listed (`include_deleted` lists it too: the visits
-    made there still say their time in its timezone).
+    """The locations kept for a research project — empty until one is added. A removed one is kept, but is not listed (`include_deleted` lists it
+    too: the visits made there still say their time in its timezone). The catalog's: see CatalogService.locations.
 
     Raises:
         LocalFolderError: the research project id can't be a folder name.
     """
-    # what was kept as "retired" is archived now
-    kept = [{**l, "status": "archived"} if l.get("status") == "retired" else l for l in _read_with_ids(root, research_project_id, "locations", _LOCATION_KEY)]
-    return kept if include_deleted else audit.alive(kept)
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import location_to_record
+    valid_project_id(research_project_id)
+    return [location_to_record(loc) for loc in _catalog(root).locations(research_project_id, include_deleted)]
 
 
 def _read_with_ids(root: Path, research_project_id: str, kind: str, key_of) -> list[dict]:
@@ -271,70 +273,30 @@ def _index_of(locations: list[dict], location_id: str, deleted: bool = False) ->
 
 
 def write_location(root: Path, research_project_id: str, location: dict, by_hand: bool = False) -> dict:
-    """Adds a location to a research project that's already kept here, with the day it was created. One that was deleted comes back, as the one now said.
+    """Adds a location to a research project that's already kept here — CatalogService.add_location.
 
     Raises:
-        LocalFolderError: the research project isn't there, or the location
-            id is already used in it.
+        LocalFolderError: the research project isn't there or is archived, the location id is already used in it, or — by hand — it would not start
+            pending or planned.
     """
-    _require_modifiable(root, research_project_id)
-    require_research_project(root, research_project_id)
-    if by_hand and (location.get("status") or "pending") not in ("pending", "planned"):
-        raise LocalFolderError(f"A new location is pending, or planned: a visit makes it ready (Location start) or active (an Installation), and {location['location_id']} cannot start as {location['status']}.")
-    locations = list_locations(root, research_project_id, include_deleted=True)
-    if _index_of(locations, location["location_id"]) is not None:
-        raise LocalFolderError(f"The location '{location['location_id']}' already exists in {research_project_id}.")
-    # the day it was put into production is the day it was created, when it is not said
-    location = {**location, "in_service": location.get("in_service") or datetime.now().date().isoformat()}
-    back = _index_of(locations, location["location_id"], deleted=True)
-    kept = audit.stamped(location, locations[back] if back is not None else None)
-    if back is not None:
-        locations[back] = kept
-    else:
-        locations.append(kept)
-    _store(root).write_records(research_project_id, "locations", locations)
-    status_history.record_changes(root, research_project_id, "locations", [], [kept], lambda l: str(l["location_id"]), lambda item, old: None)
-    return kept
+    from wildintel_uploader.modules.catalog.domain.models import Audit
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import location_from_record, location_to_record
+    with _as_local_folder_error():
+        record = {k: v for k, v in location.items() if k not in audit.AUDIT_FIELDS and k != "id"}
+        new = replace(location_from_record(record, research_project_id), audit=Audit())   # a new one: its id and dates are the catalog's to give
+        return location_to_record(_catalog(root).add_location(research_project_id, new, by_hand=by_hand))
 
 
 def update_location(root: Path, research_project_id: str, location_id: str, changes: dict, by_visit: bool = False) -> dict:
-    """Changes a kept location's fields (found ignoring case) — only the keys in changes, the rest stay. Its timezone, and whether its cameras ignore
-    summer time, are fixed when it is created: every instant kept for it (a visit's `when`) was worked out with them, so they say the same or are refused.
-
-    An archived location is archived for good: it never goes back to active or to planned. By hand (not `by_visit`: a visit that puts a camera up or takes it away, or
-    gives the site up, moves it as it moves) the status is changed only where the visits allow: a site is active when a camera is put up there, which a visit does; and it
-    leaves the app — planned, archived — only with no camera out and no visit still to be made in a revision that has begun.
+    """Changes a kept location's fields — CatalogService.update_location: its timezone and summer-time setting are fixed, an archived one stays
+    archived, and by hand its status changes only where the visits allow.
 
     Raises:
-        LocalFolderError: the research project or the location isn't there, the timezone (or the summer-time setting) is changed, or an archived location is given another status.
+        LocalFolderError: the research project is archived, the location isn't there, or what is asked can't be.
     """
-    _require_modifiable(root, research_project_id)
-    locations = list_locations(root, research_project_id, include_deleted=True)
-    index = _index_of(locations, location_id)
-    if index is None:
-        raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
-    if locations[index].get("status") == "archived" and changes.get("status", "archived") != "archived":
-        raise LocalFolderError(f"The status of a location can't be changed once it is archived: {location_id} is archived for good.")
-    wanted = changes.get("status")
-    if not by_visit and wanted and wanted != locations[index].get("status"):
-        why = _site_status_refusal(root, research_project_id, locations, locations[index], wanted)
-        if why:
-            raise LocalFolderError(why)
-    zone = locations[index].get("timezone") or visit_time.DEFAULT_TIMEZONE
-    # UTC has no summer time: what a location kept in it says of it does not count
-    now = {"timezone": zone, "ignore_dst": bool(locations[index].get("ignore_dst")) and not visit_time.is_utc(zone)}
-    for key, label in (("timezone", "timezone"), ("ignore_dst", "summer-time setting")):
-        if key in changes:
-            wanted = (changes[key] or visit_time.DEFAULT_TIMEZONE) if key == "timezone" else bool(changes[key])
-            if wanted != now[key]:
-                raise LocalFolderError(f"The {label} of a location can't be changed once it is created: {location_id} is {now[key]}.")
-            changes = {k: v for k, v in changes.items() if k != key}
-    changes = {k: v for k, v in changes.items() if k not in audit.AUDIT_FIELDS}
-    before = locations[index]
-    locations[index] = audit.stamped({**locations[index], **changes}, locations[index])
-    _store(root).write_records(research_project_id, "locations", locations)
-    status_history.record_changes(root, research_project_id, "locations", [before], [locations[index]], lambda l: str(l["location_id"]), lambda item, old: old[0])
-    return locations[index]
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import location_to_record
+    with _as_local_folder_error():
+        return location_to_record(_catalog(root).update_location(research_project_id, location_id, changes, by_visit=by_visit))
 
 
 def _site_status_refusal(root: Path, research_project_id: str, locations: list[dict], location: dict, wanted: str) -> str | None:
@@ -357,27 +319,15 @@ def _site_status_refusal(root: Path, research_project_id: str, locations: list[d
 
 
 def delete_location(root: Path, research_project_id: str, location_id: str) -> dict:
-    """Deletes a location (found ignoring case) — *logically*: it gets `deleted_at` and is no longer listed, but it is kept, as the visits made there still need its timezone.
-    One that holds visits stays listed, as they would be left with no place; so does one taken from Trapper, which is only read here — mark a location as archived
-    instead and it is no longer offered.
+    """Removes a location — logically — unless it comes from TRAPPER or visits were made to it: CatalogService.delete_location.
 
     Raises:
         LocalFolderError: the location isn't there, it comes from Trapper, or visits were made to it.
     """
-    _require_modifiable(root, research_project_id)
-    locations = list_locations(root, research_project_id, include_deleted=True)
-    index = _index_of(locations, location_id)
-    if index is None:
-        raise LocalFolderError(f"The location '{location_id}' isn't in {research_project_id}.")
-    if locations[index].get("trapper_pk") is not None:
-        raise LocalFolderError(f"The location '{location_id}' comes from TRAPPER, so it can't be deleted here.")
-    visits = len(list_visits(root, research_project_id, location_id))
-    if visits:
-        raise LocalFolderError(f"The location '{location_id}' still has {visits} visit{'s' if visits != 1 else ''}: it can't be deleted — mark it as archived instead.")
-    removed = locations[index]
-    locations[index] = audit.deleted(removed)
-    _store(root).write_records(research_project_id, "locations", locations)
-    return {"deleted": removed["location_id"]}
+    with _as_local_folder_error():
+        location = _catalog(root).location(research_project_id, location_id)
+        _catalog(root).delete_location(research_project_id, location_id)
+    return {"deleted": location.location_id}
 
 
 # ── The cameras and the SD cards of a research project ──────────────────────────────────────────────────────────
@@ -504,10 +454,10 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
 @contextmanager
 def _as_local_folder_error():
     """The errors of the catalog as the callers of before catch them: a LocalFolderError, with the same words — some still read them."""
-    from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownProject
+    from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownLocation, UnknownProject
     try:
         yield
-    except UnknownProject as exc:
+    except (UnknownProject, UnknownLocation) as exc:
         raise LocalFolderError(str(exc)) from exc
     except CatalogError as exc:
         raise LocalFolderError(exc.message) from exc
@@ -542,6 +492,18 @@ def put_project_record(root: Path, record: dict) -> None:
         repository.save_project(project)
     else:
         repository.add_project(project)
+
+
+def location_records(root: Path, research_project_id: str) -> list[dict]:
+    """The locations of a research project as they are kept — the removed ones too —: wherever the catalog is kept."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import location_to_record
+    return [location_to_record(loc) for loc in _catalog_repository(root).read_locations(research_project_id)]
+
+
+def put_location_records(root: Path, research_project_id: str, records: list[dict]) -> None:
+    """Keeps these as all the locations of a research project, as they are given — their ids and dates too, as a backup has them."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import location_from_record
+    _catalog_repository(root).write_locations(research_project_id, [location_from_record(r, research_project_id) for r in records])
 
 
 def list_trappers(root: Path, include_deleted: bool = False) -> list[dict]:
@@ -1071,23 +1033,23 @@ def link_visit(root: Path, research_project_id: str, location_id: str, date: str
 
 
 def location_time(root: Path, research_project_id: str, location_id: str | None) -> dict:
-    """The timezone and summer-time setting kept for a location (found ignoring case) — only the ones it has. They belong
-    to the location, so they are what every deployment there is read in; empty when it isn't kept, or has neither.
+    """The timezone and summer-time setting kept for a location (found ignoring case) — only the ones it has: CatalogService.location_time.
 
     Raises:
         LocalFolderError: the research project id can't be a folder name.
     """
-    return location_time_in(project_dir(root, research_project_id), location_id)
+    valid_project_id(research_project_id)
+    return _catalog(root).location_time(research_project_id, location_id)
 
 
 def location_time_in(project_folder: Path, location_id: str | None) -> dict:
-    """location_time for a research project's folder, wherever it is: the folder is named by the research project, and the collections folder is the one that holds it."""
+    """location_time for a research project's folder, wherever it is: the folder is named by the research project, and the collections folder is the
+    one that holds it. Empty when its name can't be a research project's."""
     try:
-        locations = _store(project_folder.parent).read_records(project_folder.name, "locations")
+        valid_project_id(project_folder.name)
     except LocalFolderError:
         return {}
-    found = next((l for l in locations if location_id and str(l.get("location_id", "")).lower() == location_id.lower()), None)
-    return {k: found[k] for k in ("timezone", "ignore_dst") if found and found.get(k) is not None}
+    return _catalog(project_folder.parent).location_time(project_folder.name, location_id)
 
 
 # ── the collection's timestamp log ──────────────────────────────────────────

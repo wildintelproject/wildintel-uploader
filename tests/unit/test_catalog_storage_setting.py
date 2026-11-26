@@ -37,7 +37,7 @@ def test_the_database_of_the_catalog_follows_the_data_folder_like_the_folders():
 
 class Memory:
     def __init__(self, trappers=(), projects=()) -> None:
-        self.trappers, self.projects = list(trappers), {p.acronym: p for p in projects}
+        self.trappers, self.projects, self.locations = list(trappers), {p.acronym: p for p in projects}, {}
 
     def read_trappers(self):
         return list(self.trappers)
@@ -59,6 +59,12 @@ class Memory:
 
     def held_by_project(self, acronym):
         return []
+
+    def read_locations(self, project):
+        return list(self.locations.get(project, []))
+
+    def write_locations(self, project, locations) -> None:
+        self.locations[project] = list(locations)
 
 
 def test_the_catalog_is_copied_as_it_is_kept_and_not_over_another_unless_asked():

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from wildintel_uploader.modules.catalog.domain.models import Audit, ResearchProject, Trapper
+from wildintel_uploader.modules.catalog.domain.models import Audit, Location, ResearchProject, Trapper
 from wildintel_uploader.shared import ids
 
 def _extra(record: dict[str, Any], known: tuple[str, ...]) -> dict[str, Any]:
@@ -44,4 +44,27 @@ def project_to_record(project: ResearchProject) -> dict[str, Any]:
     """As it is written: every field — the empty ones too —, and the dates it has."""
     record: dict[str, Any] = {**project.extra, **{k: getattr(project, k) for k in _PROJECT}}
     record.update({k: getattr(project.audit, k) for k in _AUDIT if getattr(project.audit, k) is not None})
+    return record
+
+
+_LOCATION = ("location_id", "name", "timezone", "ignore_dst", "latitude", "longitude", "coordinate_uncertainty", "in_service", "trapper_pk", "status",
+             "status_date", "status_note")
+
+
+def location_from_record(record: dict[str, Any], project: str) -> Location:
+    """A location as it is kept — one kept before the ids existed gets the same id whenever it is read; one kept as "retired" is archived."""
+    values = {k: record[k] for k in _LOCATION if k in record and record[k] is not None}
+    if values.get("status") == "retired":
+        values["status"] = "archived"
+    audit = Audit(**{k: record.get(k) for k in _AUDIT})
+    if not audit.id:
+        audit = Audit(id=ids.legacy_id("locations", record.get("location_id", ""), project), created_at=audit.created_at, updated_at=audit.updated_at,
+                      deleted_at=audit.deleted_at)
+    return Location(**values, audit=audit, extra=_extra(record, _LOCATION))
+
+
+def location_to_record(location: Location) -> dict[str, Any]:
+    """As it is written: every field — the empty ones too —, and the dates it has."""
+    record: dict[str, Any] = {**location.extra, **{k: getattr(location, k) for k in _LOCATION}}
+    record.update({k: getattr(location.audit, k) for k in _AUDIT if getattr(location.audit, k) is not None})
     return record

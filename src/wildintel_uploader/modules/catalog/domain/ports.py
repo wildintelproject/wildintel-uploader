@@ -5,14 +5,14 @@
 - **Out** — what it needs from outside: `CatalogRepository`, where its records are kept (the JSON files of the collections folder,
   `infrastructure.json_repository`); `LegacyTrappers`, the people versions before kept in the settings (`infrastructure.legacy`, through the contract
   of the module of the settings); `VisitHistory`, what the visits say, read only (`infrastructure.visits` — the module of the visits, once there is
-  one); `Clock`, the instant."""
+  one); `StatusHistory`, where each change of status is written down; `Clock`, the instant and the day."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-from wildintel_uploader.modules.catalog.domain.models import ResearchProject, Trapper
+from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject, Trapper
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,30 @@ class CatalogService(Protocol):
         """Removes a research project — logically: it is no longer listed, and everything it has is kept. UnknownProject, ProjectArchived,
         ProjectNotEmpty (its folder holds collections, deployments or images)."""
 
+    # the locations of a research project
+    def locations(self, project: str, include_deleted: bool = False) -> list[Location]:
+        """Its locations — a removed one only when asked for: the visits made there still need its timezone."""
+
+    def location(self, project: str, location_id: str) -> Location:
+        """One location, by its id, whatever its case. UnknownLocation."""
+
+    def add_location(self, project: str, location: Location, *, by_hand: bool = False) -> Location:
+        """A new location, put into production today unless it says another day; one removed comes back, as the one now said. By hand it starts
+        pending or planned (NewLocationStatus). UnknownProject, ProjectArchived, LocationExists."""
+
+    def update_location(self, project: str, location_id: str, changes: Mapping[str, Any], *, by_visit: bool = False) -> Location:
+        """Changes the fields of a location that `changes` names; its timezone and summer-time setting are fixed (LocationTimeFixed), an archived one
+        stays archived (LocationArchived), and by hand — not by a visit — its status changes only as the visits allow (SiteStatusRefused).
+        ProjectArchived, UnknownLocation."""
+
+    def delete_location(self, project: str, location_id: str) -> None:
+        """Removes a location — logically: it is kept, its visits still need its timezone. Not one from TRAPPER (LocationFromTrapper) nor one with
+        visits (LocationHasVisits). ProjectArchived, UnknownLocation."""
+
+    def location_time(self, project: str, location_id: str | None) -> dict[str, Any]:
+        """The timezone and the summer-time setting kept for a location — only the ones it has; empty when it is not kept: what every deployment
+        there is read in."""
+
     def require_project(self, acronym: str, *, active: bool = False, modifiable: bool = False) -> ResearchProject:
         """The research project, if it is kept — and, asked for, being worked on (ProjectNotActive: what new visits need) or one that can be modified
         (ProjectArchived). UnknownProject."""
@@ -85,12 +109,33 @@ class CatalogRepository(Protocol):
     def held_by_project(self, acronym: str) -> list[str]:
         """What the folder of the research project holds besides its own records — collections, deployments, images —, by name."""
 
+    def read_locations(self, project: str) -> list[Location]:
+        """The locations of a research project as they are kept, the removed ones too; one kept before the ids existed gets the same id whenever it is
+        read. Empty when it has none — or there is no such research project."""
+
+    def write_locations(self, project: str, locations: list[Location]) -> None:
+        """Keeps these as all the locations of the research project."""
+
 
 class VisitHistory(Protocol):
     """What the visits say, as far as the catalog needs it."""
 
     def has_visits(self, acronym: str) -> bool:
         """Whether any visit was kept to the research project."""
+
+    def visits_at(self, project: str, location_id: str) -> int:
+        """How many visits were kept to a location."""
+
+    def site_status_refusal(self, project: str, locations: list[Location], location: Location, wanted: str) -> str | None:
+        """Why the status of a site cannot be set to `wanted` by hand — None when it can: a camera that is out there, a visit still to be made in a
+        revision that has begun… The visits' rules."""
+
+
+class StatusHistory(Protocol):
+    """Where each change of the status of a location, a camera or an SD card is written down."""
+
+    def record_location(self, project: str, before: Location | None, after: Location) -> None:
+        """A line when `after` has another status than `before` had — or when it is new, with the status it starts with."""
 
 
 class LegacyTrappers(Protocol):
@@ -103,3 +148,6 @@ class LegacyTrappers(Protocol):
 class Clock(Protocol):
     def now(self) -> str:
         """The instant, as the dates of a record are written: ISO 8601, UTC, with a Z."""
+
+    def today(self) -> str:
+        """The day, here, YYYY-MM-DD."""

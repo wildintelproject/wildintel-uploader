@@ -1,5 +1,6 @@
-"""The commands of the catalog (module `modules.catalog`): `catalog trappers …` and `catalog projects …` — the same people and research projects as
-the settings page, through the same contract (`domain.ports.CatalogService`). Only the asking and the showing are here."""
+"""The commands of the catalog (module `modules.catalog`): `catalog trappers …`, `catalog projects …` and `catalog locations …` — the same people,
+research projects and locations as the settings page, through the same contract (`domain.ports.CatalogService`). Only the asking and the showing are
+here."""
 from __future__ import annotations
 
 from typing import Annotated, Optional
@@ -10,7 +11,9 @@ from rich.table import Table
 
 from wildintel_uploader.cli.common import console, fail
 from wildintel_uploader.entrypoints.cli.injection import inject
-from wildintel_uploader.modules.catalog.domain.models import PROJECT_STATUSES, CatalogError, ResearchProject, Trapper, UnknownProject
+from wildintel_uploader.modules.catalog.domain.models import (
+    LOCATION_STATUSES, PROJECT_STATUSES, CatalogError, Location, ResearchProject, Trapper, UnknownLocation, UnknownProject,
+)
 from pathlib import Path
 
 from wildintel_uploader.entrypoints.catalog_storage import move_catalog
@@ -24,8 +27,10 @@ trappers_app = typer.Typer(help="The people who go to the field — whatever the
 catalog_app.add_typer(trappers_app, name="trappers")
 projects_app = typer.Typer(help="The research projects — each with its folder in the collections folder, named by its acronym.", no_args_is_help=True)
 catalog_app.add_typer(projects_app, name="projects")
+locations_app = typer.Typer(help="The locations of a research project, where the camera traps are put up.", no_args_is_help=True)
+catalog_app.add_typer(locations_app, name="locations")
 
-_STATUS = {"active": "green", "inactive": "yellow", "archived": "dim", "planned": "cyan", "finished": "blue"}
+_STATUS = {"active": "green", "inactive": "yellow", "archived": "dim", "planned": "cyan", "finished": "blue", "pending": "yellow", "ready": "cyan"}
 
 
 @trappers_app.command("list")
@@ -183,3 +188,81 @@ def migrate(
     except CatalogError as exc:
         raise fail(exc.message) from exc
     console.print(f"[green]✔[/green] {copied.trappers} people and {copied.projects} research projects moved to {to}: the catalog is kept there now.")
+
+
+# ── the locations ──
+
+def _refused(exc: Exception) -> typer.Exit:
+    message = getattr(exc, "message", None) or str(exc)
+    return fail(message if message.endswith(".") else f"Invalid {getattr(exc, 'field', 'value')}: {message}.")
+
+
+@locations_app.command("list")
+@inject
+def locations_list(catalog: FromDishka[CatalogService], project: Annotated[str, typer.Argument(help="The research project.")],
+                   all_: Annotated[bool, typer.Option("--all", help="The removed ones too.")] = False) -> None:
+    """The locations of a research project."""
+    locations = catalog.locations(project, include_deleted=all_)
+    table = Table(show_header=True, box=None, padding=(0, 2))
+    for column in ("Location", "Name", "Status", "Timezone", "Latitude", "Longitude"):
+        table.add_column(column)
+    for loc in sorted(locations, key=lambda loc: loc.location_id.lower()):
+        zone = (loc.timezone or "—") + (" (no summer time)" if loc.ignore_dst else "")
+        table.add_row(loc.location_id, loc.name or "—", _status(loc), zone, "—" if loc.latitude is None else f"{loc.latitude:.5f}",
+                      "—" if loc.longitude is None else f"{loc.longitude:.5f}")
+    console.print(table)
+    console.print(f"[dim]{len(locations)} location{'s' if len(locations) != 1 else ''} of {project}[/dim]")
+
+
+@locations_app.command("add")
+@inject
+def locations_add(
+    catalog: FromDishka[CatalogService],
+    project: Annotated[str, typer.Argument(help="The research project.")],
+    location_id: Annotated[str, typer.Argument(help="Its id, as the field files name it (DONA_01).")],
+    latitude: Annotated[float, typer.Option(help="WGS84 decimal degrees.")],
+    longitude: Annotated[float, typer.Option(help="WGS84 decimal degrees.")],
+    timezone: Annotated[str, typer.Option(help="The IANA timezone of its visits (Europe/Madrid). Fixed once it is made.")] = "UTC",
+    ignore_dst: Annotated[bool, typer.Option("--ignore-dst", help="Its cameras never change to summer time. Fixed once it is made.")] = False,
+    name: Annotated[Optional[str], typer.Option(help="Its name.")] = None,
+    planned: Annotated[bool, typer.Option("--planned", help="Planned, not pending: not offered for a visit yet.")] = False,
+) -> None:
+    """Add a location to a research project. It starts pending — its first visit starts it — or planned."""
+    try:
+        location = Location(location_id=location_id, timezone=timezone, ignore_dst=ignore_dst, latitude=latitude, longitude=longitude, name=name,
+                            status="planned" if planned else "pending")
+        catalog.add_location(project, location, by_hand=True)
+    except (CatalogError, UnknownProject) as exc:
+        raise _refused(exc) from exc
+    console.print(f"[green]✔[/green] {location_id} added to {project}.")
+
+
+@locations_app.command("set-status")
+@inject
+def locations_set_status(
+    catalog: FromDishka[CatalogService],
+    project: Annotated[str, typer.Argument(help="The research project.")],
+    location_id: Annotated[str, typer.Argument(help="The location.")],
+    status: Annotated[str, typer.Argument(help=f"One of {', '.join(LOCATION_STATUSES)} — as the visits allow.")],
+) -> None:
+    """Change the status of a location by hand — as far as its visits allow: a camera up there, a revision still to finish…"""
+    try:
+        catalog.update_location(project, location_id, {"status": status})
+    except (CatalogError, UnknownLocation) as exc:
+        raise _refused(exc) from exc
+    console.print(f"[green]✔[/green] {location_id} is {status}.")
+
+
+@locations_app.command("delete")
+@inject
+def locations_delete(catalog: FromDishka[CatalogService], project: Annotated[str, typer.Argument(help="The research project.")],
+                     location_id: Annotated[str, typer.Argument(help="The location.")],
+                     yes: Annotated[bool, typer.Option("--yes", "-y", help="Don't ask.")] = False) -> None:
+    """Remove a location — logically: it is kept, its visits still need its timezone. Not one with visits, nor one from TRAPPER."""
+    if not yes and not typer.confirm(f"Remove the location {location_id} of {project}?"):
+        raise typer.Exit()
+    try:
+        catalog.delete_location(project, location_id)
+    except (CatalogError, UnknownLocation) as exc:
+        raise _refused(exc) from exc
+    console.print(f"[green]✔[/green] {location_id} removed.")
