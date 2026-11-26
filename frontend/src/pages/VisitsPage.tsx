@@ -1952,6 +1952,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
             const added = csvResult.visits
             const sessions = [...new Set(added.map((v) => v.session))].sort()
             const sites = [...new Set(added.map((v) => v.location_id))]
+            // a camera is told by its label: its camera_id is its serial number, often none (#236)
             const made = csvResult.create
             const madeLine = (kind: 'locations' | 'cameras' | 'sd_cards' | 'trappers', key: string) => (made?.[kind] ?? []).map((e) => String(e[key])).join(', ')
             const lines: [string, ReactNode][] = [
@@ -1962,7 +1963,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
               ...((csvResult.closed?.length ?? 0) > 0 ? [['Marked as not visited — to close the revision before', csvResult.closed!.map((m) => `${m.location_id} (${m.session})`).join(', ')] as [string, ReactNode]] : []),
               ...(csvResult.problems.length > 0 ? [['Rows with a problem — not added', csvResult.problems.length] as [string, ReactNode]] : []),
               ...((made?.locations.length ?? 0) > 0 ? [[csvSaved === null ? 'Locations to create' : 'Locations created', madeLine('locations', 'location_id')] as [string, ReactNode]] : []),
-              ...((made?.cameras.length ?? 0) > 0 ? [[csvSaved === null ? 'Cameras to create' : 'Cameras created', madeLine('cameras', 'camera_id')] as [string, ReactNode]] : []),
+              ...((made?.cameras.length ?? 0) > 0 ? [[csvSaved === null ? 'Cameras to create' : 'Cameras created', (made?.cameras ?? []).map((c) => String(c.label ?? c.camera_id)).join(', ')] as [string, ReactNode]] : []),
               ...((made?.sd_cards.length ?? 0) > 0 ? [[csvSaved === null ? 'SD cards to create' : 'SD cards created', madeLine('sd_cards', 'label')] as [string, ReactNode]] : []),
               ...((made?.trappers?.length ?? 0) > 0 ? [[csvSaved === null ? 'Trappers to create' : 'Trappers created', madeLine('trappers', 'name')] as [string, ReactNode]] : []),
               ...(csvSaved !== null && justClosed.length > 0 ? [['Visits whose cards were collected — their deployment can be created', justClosed.length] as [string, ReactNode]] : []),
