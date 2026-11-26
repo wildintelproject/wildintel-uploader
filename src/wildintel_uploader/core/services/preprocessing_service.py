@@ -36,7 +36,7 @@ from PIL import Image, ImageOps, JpegImagePlugin
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import camera_info, deployment_import_service, file_memo, local_folder_service, report_service
+from wildintel_uploader.core.services import camera_info, deployment_import_service, disk_space, file_memo, local_folder_service, report_service
 from wildintel_uploader.core.services.deployment_import_service import DeploymentImportError
 
 logger = logging.getLogger(__name__)
@@ -369,7 +369,8 @@ def preprocess_stream(
 
     Raises:
         DeploymentImportError: bad source/destination paths, an unknown timezone,
-            metadata asked for without ExifTool, or the deployment's folder already there.
+            metadata asked for without ExifTool, the deployment's folder already there, or no room on the disk of the collection for the images
+            prepared in its .staging folder (checked before anything is written).
     """
     source = Path(source_dir).expanduser()
     collection = Path(collection_dir).expanduser()
@@ -385,6 +386,12 @@ def preprocess_stream(
     deployment_import_service.check_not_kept(dest)
     if work.exists():
         shutil.rmtree(work)  # prepared before and not saved, or interrupted: it is done again
+    # the images are prepared in .staging, on the disk of the collection, and moved to their place from there: room for all of them — as much as the folder
+    # takes, at most, as resizing only makes them smaller — before anything is written
+    needed = sum(p.stat().st_size for p in source.rglob("*") if p.is_file())
+    short = disk_space.shortfall(work.parent, needed, f"Preparing the images of {deployment.deployment_id}", "the folder they are prepared in")
+    if short:
+        raise DeploymentImportError(short)
 
     def events() -> Iterator[dict]:
         local_folder_service.write_collection_metadata(collection, collection_name)
