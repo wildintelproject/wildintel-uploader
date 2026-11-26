@@ -31,6 +31,35 @@ def test_export_is_read_back_as_the_same_visits():
             assert got.get(field) == value, field
 
 
+def test_a_camera_taken_from_a_site_and_put_up_at_another_at_the_same_minute_is_taken_away_first():
+    """As the field form often has it (DONA, R0013: camera 4 from DONA_0026 to DONA_0026_B at 16:15): whatever order the rows come in, at the same instant what
+    is taken away is taken away before what is put up, and the camera is not at two sites at once."""
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "A", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"},
+                 {"location_id": "A_B", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC", "status": "pending"}]   # a new site: it starts with its first visit
+    kept = [{"location_id": "A", "session": "R0001", "date": "2026-09-14", "time": "09:00:00", "when": "2026-09-14T09:00:00Z", "actions": ["Installation"], "camera_id": "CAM4", "sd": "1"}]
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "A_B,Installation,2026-10-10,16:15:00,R0002,CAM4,2,\n"                    # put up first in the file
+            "A,Revision + Desinstallation,2026-10-10,16:15:00,R0002,CAM4,,120\n")     # and taken away at the same minute
+    result = _parse(text, locations, kept, visits_csv.suggest_mapping(text)["mapping"])
+
+    assert result["problems"] == []
+    assert sorted((v["location_id"], v["actions"]) for v in result["visits"]) == [("A", ["Revision", "Desinstallation"]), ("A_B", ["SiteStart", "Installation"])]
+
+
+def test_a_camera_still_at_a_site_cannot_be_put_up_at_another_at_the_same_minute():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "A", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"},
+                 {"location_id": "A_B", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC", "status": "pending"}]   # a new site: it starts with its first visit
+    kept = [{"location_id": "A", "session": "R0001", "date": "2026-09-14", "time": "09:00:00", "when": "2026-09-14T09:00:00Z", "actions": ["Installation"], "camera_id": "CAM4", "sd": "1"}]
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "A_B,Installation,2026-10-10,16:15:00,R0002,CAM4,2,\n"
+            "A,Revision,2026-10-10,16:15:00,R0002,CAM4,3,120\n")                      # revised and kept there: it is not taken away
+    result = _parse(text, locations, kept, visits_csv.suggest_mapping(text)["mapping"])
+
+    assert [p["row"] for p in result["problems"]] == [2] and "installed at A" in result["problems"][0]["message"]
+
+
 def test_every_row_says_what_became_of_it():
     from wildintel_uploader.core.services import visits_csv
     locations = [{"location_id": "WICP_0001", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"}]
@@ -169,14 +198,16 @@ def test_locations_cameras_and_sd_cards_that_do_not_exist_are_created_when_asked
     assert not result["problems"] and len(result["visits"]) == 2 and result["new_sites"] == []
     made = result["create"]
     assert [(l["location_id"], l["timezone"], l["latitude"]) for l in made["locations"]] == [("WICP_0001", "Europe/Madrid", 40.0)]      # the location's, not the visit's (40.1)
-    assert [(c["camera_id"], c["camera_model"], c["label"]) for c in made["cameras"]] == [("CAM9", "Browning", "CAM9")]
+    assert [(c["camera_id"], c["camera_model"], c["label"]) for c in made["cameras"]] == [(None, "Browning", "CAM9")]   # #231: called by the row, no serial number given
     assert [(c["label"], c["brand"]) for c in made["sd_cards"]] == [("S9", "SanDisk"), ("S10", "SanDisk")]
     assert result["visits"][0]["time"] == "11:40:00" and "creates the location WICP_0001" in result["rows"][0]["message"]
 
     # what exists is not created again, and what is not asked for is not created
     again = _parse(text, [{"location_id": "WICP_0001", "timezone": "UTC"}], [], mapping,
                                     {"create": {"cameras": True, "sd_cards": True}, "cameras": [{"camera_id": "CAM9", "label": "A"}], "cards": [{"label": "S9"}, {"label": "S10"}]})
-    assert again["create"] == {"locations": [], "cameras": [], "sd_cards": [], "trappers": []}
+    # the camera found by its serial number (CAM9 is the serial of A): its record lacked the model, and the row completes it — never overwriting (#231)
+    assert again["create"] == {"locations": [], "cameras": [], "sd_cards": [], "trappers": [], "complete_cameras": [{"label": "A", "camera_model": "Browning"}]}
+    assert {v["camera_id"] for v in again["visits"]} == {"A"}   # told by its label
 
 
 def test_the_id_of_a_camera_and_of_an_sd_card_is_what_the_cell_says_stripped_and_what_exists_is_found_only_when_written_the_same():
@@ -190,12 +221,12 @@ def test_the_id_of_a_camera_and_of_an_sd_card_is_what_the_cell_says_stripped_and
     # nothing is taken out of a cell but its spaces: SD 7 is not 7, and 5.0 is not 5
     assert not result["problems"]
     assert [v["camera_id"] for v in result["visits"]] == ["5.0", "P800"] and [v["sd"] for v in result["visits"]] == ["SD 7", "7"]
-    assert [c["camera_id"] for c in result["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in result["create"]["sd_cards"]] == ["SD 7", "7"]
+    assert [c["label"] for c in result["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in result["create"]["sd_cards"]] == ["SD 7", "7"]
     # what exists is found when it is written the same — the case counts, in cameras and in cards alike: p800 is not P800, sd 7 is not SD 7
     again = _parse(text, locations, [], _MAP, {**options, "cameras": [{"camera_id": "P800", "label": "P800"}], "cards": [{"label": "SD 7"}]})
-    assert [c["camera_id"] for c in again["create"]["cameras"]] == ["5.0"] and [c["label"] for c in again["create"]["sd_cards"]] == ["7"]
+    assert [c["label"] for c in again["create"]["cameras"]] == ["5.0"] and [c["label"] for c in again["create"]["sd_cards"]] == ["7"]
     other = _parse(text, locations, [], _MAP, {**options, "cameras": [{"camera_id": "p800", "label": "p800"}], "cards": [{"label": "sd 7"}]})
-    assert [c["camera_id"] for c in other["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in other["create"]["sd_cards"]] == ["SD 7", "7"]
+    assert [c["label"] for c in other["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in other["create"]["sd_cards"]] == ["SD 7", "7"]
 
 
 def test_a_row_that_would_create_something_without_what_it_needs_is_a_problem_and_creates_nothing():
@@ -204,7 +235,7 @@ def test_a_row_that_would_create_something_without_what_it_needs_is_a_problem_an
     text = ("site,what,day,hour,lat,lon,cam,sd,model,brand,tz,llat,llon\n"
             "WICP_0003,Installation,2026-09-14,13:40,40.1,-3.2,CAM7,S7,Browning,SanDisk,,40.0,-3.0\n")  # no timezone
     result = _parse(text, [], [], mapping, {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"}})
-    assert result["visits"] == [] and result["create"] == {"locations": [], "cameras": [], "sd_cards": [], "trappers": []}
+    assert result["visits"] == [] and result["create"] == {"locations": [], "cameras": [], "sd_cards": [], "trappers": [], "complete_cameras": []}
     assert [(r["row"], r["label"]) for r in result["rows"]] == [(2, "Data to create it is missing")]
     assert "timezone" in result["rows"][0]["message"]
     # neither the model of a camera nor the brand of an SD card is needed: only their ids
@@ -388,13 +419,39 @@ def test_a_visit_is_not_checked_against_what_an_unknown_revision_between_it_and_
     result = _parse(text, locations, kept, mapping, {"unknown": unknown})
     assert not result["problems"] and len(result["visits"]) == 1
 
-    # with nothing unknown between them, R0002 would collect card 1 and leave it again: the visit is refused
+    # with nothing unknown between them, R0002 collects card 1 and leaves it again: that is asked, not refused (#207), so R0001 is kept too
     kept, unknown = _later_revision("R0002", 1)
     result = _parse(text, locations, kept, mapping, {"unknown": unknown})
-    assert result["visits"] == [] and "SD card 1 is the one this visit collects" in result["problems"][0]["message"]
+    assert not result["problems"] and len(result["visits"]) == 1
 
 
 # ── each rule a visit breaks has its own label ───────────────────────────────────────
+
+def test_the_card_collected_and_left_again_is_kept_and_asked():
+    """#207: the same SD card collected and left again in the same camera happens in the field — it was empty, or downloaded there and put back —, and it is
+    also how a card is written down by mistake: the visit is kept, and a warning says which row to look at."""
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": "WICP_0001", "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"}]
+    kept = [{"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "09:00:00", "when": "2026-09-14T09:00:00Z", "actions": ["Installation"], "camera_id": "C1", "sd": "58"}]
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "WICP_0001,Revision,2026-10-19,09:00:00,R0002,C1,58,120\n")
+    result = _parse(text, locations, kept, visits_csv.suggest_mapping(text)["mapping"])
+
+    assert not result["problems"] and [v["sd"] for v in result["visits"]] == ["58"]
+    assert any("the SD card 58 is collected and left again" in w for w in result["warnings"])
+
+
+def test_a_card_in_the_camera_of_another_site_is_still_refused():
+    from wildintel_uploader.core.services import visits_csv
+    locations = [{"location_id": s, "latitude": 40.0, "longitude": -3.0, "timezone": "UTC"} for s in ("WICP_0001", "WICP_0002")]
+    kept = [{"location_id": "WICP_0002", "session": "R0001", "date": "2026-09-14", "time": "08:00:00", "when": "2026-09-14T08:00:00Z", "actions": ["Installation"], "camera_id": "C2", "sd": "58"},
+            {"location_id": "WICP_0001", "session": "R0001", "date": "2026-09-14", "time": "09:00:00", "when": "2026-09-14T09:00:00Z", "actions": ["Installation"], "camera_id": "C1", "sd": "7"}]
+    text = ("location_id,actions,date,time,session,camera_id,sd,num_photos\n"
+            "WICP_0001,Revision,2026-10-19,09:00:00,R0002,C1,58,120\n")
+    result = _parse(text, locations, kept, visits_csv.suggest_mapping(text)["mapping"])
+
+    assert "SD card 58 is in the camera at WICP_0002" in result["problems"][0]["message"]
+
 
 def test_every_rule_of_a_visit_has_a_label_of_its_own():
     import re

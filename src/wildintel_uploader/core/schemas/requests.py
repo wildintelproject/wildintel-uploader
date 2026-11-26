@@ -233,6 +233,9 @@ class VisitCheckInfo(BaseModel):
     collected_session: Optional[str] = None  # the visit that collected the card
     counted_photos: Optional[int] = Field(default=None, ge=0)  # the photos it counted on the card
     sd_card: Optional[str] = None  # the card the images are said to come from
+    # how the visit that collected the card found it: a full card or flat batteries say why the camera stopped before it was collected
+    collected_card_status: Optional[str] = None  # OK or CardFull
+    collected_battery_status: Optional[str] = None  # OK or NoBatteries
 
 
 class ValidateDeploymentRequest(BaseModel):
@@ -403,8 +406,12 @@ class VisitRecord(BaseModel):
     updated_at: Optional[str] = None
 
     setup_by: Optional[str] = None
+    # The camera of the visit (#231): the id of its record in the research project (camera_ref) — what the visit points to — and its label (camera_id), to tell
+    # it. What the camera is — its model as Camtrap DP says it and its serial number — is told from the record, and not kept in the visit.
+    camera_ref: Optional[str] = None
     camera_id: Optional[str] = None
     camera_model: Optional[str] = None
+    camera_serial: Optional[str] = None
     camera_interval: Optional[int] = Field(default=None, ge=0)
     camera_height: Optional[float] = Field(default=None, ge=0)
     camera_depth: Optional[float] = Field(default=None, ge=0)

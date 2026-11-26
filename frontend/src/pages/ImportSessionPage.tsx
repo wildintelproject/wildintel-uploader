@@ -32,7 +32,7 @@ import type {
 import {
   ALL_DEPLOYMENT_CHECKS, DEFAULT_CHECK_SETTINGS, DEPLOYMENT_CHECK_DISPLAY, DEPLOYMENT_CHECK_OPTIONS, DeploymentCheckReport, Field,
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
-  DEFAULT_REQUIRED_DEPLOYMENT_CHECKS, DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
+  DEFAULT_REQUIRED_DEPLOYMENT_CHECKS, startingChecks, DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, hintClass, statParamsOf, statParamsValid, toggled, fillFromClosedVisit, visitKey, visitLabel,
   FieldLabel, DetailsFromContext, LockedDetailsContext, mergedDetails, visitApplies, detailsFound, fieldworkVisits, revisionOfVisit,
 } from './ImportDeploymentPage'
@@ -127,6 +127,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
 
   // ── Common to the whole session ──
   const [checkSettings, setCheckSettings] = useState<WizardSettings>(DEFAULT_CHECK_SETTINGS)
+  // Whether the checks have started as the settings say (see startingChecks): once, so what the user changes is kept.
+  const checksStarted = useRef(false)
   const [imageChecks, setImageChecks] = useState<Set<ImageCheck>>(new Set(['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates']))
   const [requiredImageChecks, setRequiredImageChecks] = useState<Set<ImageCheck>>(new Set())
   const [deploymentChecks, setDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set(ALL_DEPLOYMENT_CHECKS))
@@ -252,6 +254,11 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       .then((s) => {
         if (cancelled) return
         setCheckSettings({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+        if (!checksStarted.current) {
+          const start = startingChecks({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+          setImageChecks(start.image); setRequiredImageChecks(start.requiredImage); setDeploymentChecks(start.deployment); setRequiredDeploymentChecks(start.requiredDeployment)
+          checksStarted.current = true
+        }
         setSdCards(s.FIELDWORK?.sd_cards ?? [])
         if (!preprocessTouched.current) setPreprocessSteps(new Set((['rename', 'resize', 'metadata'] as const).filter((k) => s.PREPROCESSING[k])))
       })
@@ -835,6 +842,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           visit: visitOf(d.name) ? {
             left_session: visitOf(d.name)!.visit.session, left_sd: visitOf(d.name)!.visit.sd ?? null,
             collected_session: visitOf(d.name)!.end.session, counted_photos: visitOf(d.name)!.end.num_photos ?? null, sd_card: folderSd[d.name] || null,
+            collected_card_status: visitOf(d.name)!.end.card_status ?? null, collected_battery_status: visitOf(d.name)!.end.battery_status ?? null,
           } : null,
         })
         setChecks((c) => ({ ...c, [d.name]: { result } }))
@@ -1767,7 +1775,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
       {stepKey === 'prepare' && (() => {
         const rows: { key: string; label: string; always?: boolean; step?: PreprocessStep; text: ReactNode; disabledReason?: string }[] = [
           { key: 'copy', label: 'Copy into the collection', always: true, text: <>Copies the images of each deployment into its own folder in the revision&rsquo;s collection. Anything that isn&rsquo;t an image is copied as it is.</> },
-          { key: 'dates', label: 'Read the capture dates', always: true, text: <>From each image&rsquo;s EXIF, as the camera&rsquo;s local time in its location&rsquo;s timezone, ignoring summer time where the location says so{preSettings.convert_to_utc ? ', converted to UTC' : ''}.</> },
+          { key: 'dates', label: 'Read the capture dates', always: true, text: <>Read from each image as the clock of the camera in the timezone of its location, ignoring summer time where the location says so{preSettings.convert_to_utc ? ', converted to UTC' : ''}; in a location in UTC, as they are. They give the day in the name of each image and its date in the metadata. The dates in the images are never changed.</> },
           { key: 'rename', label: 'Rename the images', step: 'rename', text: <><span className="font-mono">{'<deployment>__<YYYYMMDD>_<n>.<EXT>'}</span> in upper case.</> },
           { key: 'resize', label: 'Resize the images', step: 'resize', text: <>Images wider than <strong>{preSettings.resize_width} px</strong> are resized to that width, keeping their proportions.</> },
           { key: 'metadata', label: 'Add metadata', step: 'metadata', text: <>Authorship, rights and license, written into each image as XMP — owner <span className="font-mono">{preSettings.owner || 'Unknown'}</span>, publisher <span className="font-mono">{preSettings.publisher || 'Unknown'}</span>.</>, disabledReason: exiftool === false ? 'ExifTool is not installed, and writing the metadata needs it.' : undefined },
@@ -1815,7 +1823,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Each optional step can be switched off for this run; its values come from Settings › Preprocessing.</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Each optional step can be switched off for this run; its values come from Settings › Processing.</p>
               <div className="flex justify-end mt-4">
                 <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={importing || pending.length === 0} onClick={handleImport}>
                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current"><path d="M6 4l14 8-14 8z" /></svg>

@@ -357,12 +357,22 @@ def _import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
         result = visits_csv.parse_visits(text, locations, kept, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "close_revisions": req.close_revisions, "close_after": req.close_after.model_dump() if req.close_after else None, "coordinates_from_location": req.coordinates_from_location, "photos_not_counted": req.photos_not_counted, "defaults": defaults, "new_site_makes_location": from_epicollect, "trappers": _trapper_names(), "trapper_usernames": [t.get("username", "") for t in local_folder_service.list_trappers(root)],
                                                                                                                                   "unknown": local_folder_service.list_unknown(root, req.research_project_id)})
         saved = field_logs = report = None
+        if req.save and result["problems"]:
+            # all or nothing (#206): a file with rows that cannot be added is not kept in part — the rows are corrected and the file read again
+            errors = len(result["blocking"]["errors"])
+            raise HTTPException(400, f"The file has {len(result['problems'])} row(s) that cannot be added ({errors} with an error of their own): nothing is kept. "
+                                     "Correct them and read the file again.")
         if req.save:
             # what the visits need is created first: the trappers who went, their locations, cameras and SD cards
             if result["create"]["trappers"]:
                 local_folder_service.write_trappers(root, [*local_folder_service.list_trappers(root), *result["create"]["trappers"]])
             for location in result["create"]["locations"]:
                 local_folder_service.write_location(root, req.research_project_id, location)
+            # what the rows say of cameras whose records lacked it — their serial number, make or model — completes them, never overwriting (#231)
+            if result["create"].get("complete_cameras"):
+                adds = {c["label"]: {k: v for k, v in c.items() if k != "label"} for c in result["create"]["complete_cameras"]}
+                cameras = [{**c, **{k: v for k, v in adds.get(str(c.get("label")), {}).items() if not c.get(k)}} for c in cameras]
+                local_folder_service.write_field_items(root, req.research_project_id, "cameras", cameras)
             for kind, kept_items in (("cameras", cameras), ("sd_cards", cards)):
                 if result["create"][kind]:
                     local_folder_service.write_field_items(root, req.research_project_id, kind, [*kept_items, *result["create"][kind]])

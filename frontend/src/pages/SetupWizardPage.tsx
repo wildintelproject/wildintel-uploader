@@ -11,6 +11,7 @@ import { validateResearchProject } from '../researchProjectValidation'
 import { btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
 import { PAGE_CLASS } from '../components/PageBar'
 import { Glyph } from '../components/ViewSwitch'
+import Notice from '../components/Notice'
 
 const ROLES: { value: TrapperRoleName; label: string }[] = [
   { value: 'principalInvestigator', label: 'Principal investigator' },
@@ -67,6 +68,23 @@ function AddList({ noun, fields, onAdd, added, onRemove, onContinue, continueLab
     }
   }
 
+  /** Going on with something typed and not added: it is added when it is complete, and said when it is not — what is typed is never lost without a word. */
+  function goOn() {
+    // only what is typed counts: a choice of a list or a box ticked is not something the user expects to be added on its own
+    const typed = fields.some((f) => f.type !== 'check' && f.type !== 'select' && values[f.name].trim() !== '' && values[f.name] !== (f.initial ?? ''))
+    if (!typed) { onContinue(); return }
+    if (!ready) { setError(`You typed a ${noun} but did not add it: complete it and add it, or clear it.`); return }
+    try {
+      onAdd(values)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `The ${noun} could not be entered.`)
+      return
+    }
+    setValues(empty())
+    setError(null)
+    onContinue()
+  }
+
   return (
     <div>
       <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label={`Add a ${noun}`}>
@@ -106,8 +124,9 @@ function AddList({ noun, fields, onAdd, added, onRemove, onContinue, continueLab
           {report.length > 1 && <ul className="mt-1 list-disc pl-5 text-amber-700 dark:text-amber-400">{report.slice(1).map((r) => <li key={r}>{r}</li>)}</ul>}
         </div>
       )}
+      {added.length > 0 && <p className="mt-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">The {noun}s added ({added.length}): the form is empty again to add the next one.</p>}
       {added.length > 0 && (
-        <ul aria-label={`The ${noun}s entered`} className="mt-4 flex flex-wrap gap-2">
+        <ul aria-label={`The ${noun}s entered`} className="mt-2 flex flex-wrap gap-2">
           {added.map((a) => (
             <li key={a.key} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/50 bg-emerald-100 dark:bg-emerald-950/60 px-3 py-1 text-sm text-zinc-800 dark:text-zinc-100">
               {a.label}
@@ -117,7 +136,7 @@ function AddList({ noun, fields, onAdd, added, onRemove, onContinue, continueLab
         </ul>
       )}
       <div className="mt-5 flex gap-2">
-        <button type="button" className={btnPrimary} onClick={onContinue}>{continueLabel}<span aria-hidden="true"> →</span></button>
+        <button type="button" className={btnPrimary} onClick={goOn}>{continueLabel}<span aria-hidden="true"> →</span></button>
         {added.length === 0 && <button type="button" className={btnOutline} onClick={onSkip}>Skip this step</button>}
       </div>
     </div>
@@ -195,7 +214,7 @@ export default function SetupWizardPage({ onBack, onMainMenu, onRegisterVisit }:
   /** What the review says is going to be done, line by line. */
   const plan: [string, ReactNode][] = [
     ['Research project', <><span className="font-mono">{code}</span> — {name.trim()}</>],
-    ['Data folder', <span className="font-mono">{chosenDir || '—'}</span>],
+    ['Data folder', <><span className="font-mono">{chosenDir || '—'}</span>{!folderStep && <span className="block font-sans text-xs text-zinc-500 dark:text-zinc-400">The same for every research project: it is changed in Settings › General.</span>}</>],
     ['Trappers', trappers.length ? trappers.map((t) => t.name).join(', ') : '—'],
     ['Roles', roles.length ? roles.map((r) => `${r.trapper} · ${roleName(r.role)}`).join(', ') : '—'],
     ['Locations', sites.length ? sites.map((x) => x.id).join(', ') : '—'],
@@ -272,7 +291,7 @@ export default function SetupWizardPage({ onBack, onMainMenu, onRegisterVisit }:
     <div className={PAGE_CLASS}>
       <datalist id="setup-zones">{ZONES.map((z) => <option key={z} value={z} />)}</datalist>
       <PageHeader icon={UTIL_ICONS.setup} title="Initial setup" parent="Utilities" onParent={onBack}
-        description="Create your first research project and choose where your data is kept. The rest is optional." />
+        description={folderStep ? 'Create your first research project and choose where your data is kept. The rest is optional.' : 'Create a research project. The rest is optional.'} />
 
       <WizardStep n={1} title="The research project" required status={status(1)} canEdit={canEdit} sealed={step === 9} onEdit={() => edit(1)}
                   summary={<><span className="font-mono">{code}</span> — {name.trim()}</>} description="A short acronym (it also names its folder, for example DONA_24) and its full name. Everything else can be filled in later in Settings › Entities.">
@@ -290,7 +309,7 @@ export default function SetupWizardPage({ onBack, onMainMenu, onRegisterVisit }:
             {folderStep
               ? <div className="sm:col-span-2"><button type="submit" className={btnPrimary} disabled={!projectOk || projectCount === null}>Continue<span aria-hidden="true"> →</span></button></div>
               : <div className="space-y-3 sm:col-span-2">
-                  <p className={hintClass}>The data folder is <span className="font-mono">{currentDir}</span>, the same for every research project: it is changed in Settings › General.</p>
+                  <Notice kind="info" role="status"><span>The data folder is <span className="font-mono">{currentDir}</span>, the same for every research project: it is changed in Settings › General.</span></Notice>
                   <div className="flex justify-end">{projectOk ? choices : <button type="button" className={btnPrimary} disabled>Continue<span aria-hidden="true"> →</span></button>}</div>
                   {optionalNote}
                 </div>}
@@ -349,7 +368,7 @@ export default function SetupWizardPage({ onBack, onMainMenu, onRegisterVisit }:
       <WizardStep n={num(5)} title="The locations" optional="Optional · From visits CSV or Settings" status={status(5)} skipped={sites.length === 0} canEdit={canEdit} sealed={step === 9} onEdit={() => edit(5)} summary={summary(sites.map((x) => x.id), 'sites')} description="The places where the cameras are put up, with the ids of the field files. Add them now, or skip: they come from TRAPPER or are created when you load the visits.">
         {step === 5 && (
           <AddList noun="location" added={chips(sites, (x) => x.id)} onRemove={(k) => setSites((l) => l.filter((x) => x.id !== k))} onContinue={next} onSkip={next}
-            fields={[{ name: 'id', label: 'Location id', required: true, hint: 'As the field files write it, for example DONA_0012: any other is taken as a new location.' }, { name: 'name', label: 'Name' }, { name: 'latitude', label: 'Latitude', required: true, type: 'number', hint: 'Decimal degrees, −90 to 90.' }, { name: 'longitude', label: 'Longitude', required: true, type: 'number', hint: 'Decimal degrees, −180 to 180.' }, { name: 'timezone', label: 'Timezone', type: 'zone', initial: 'UTC', required: true }, { name: 'ignore_dst', label: 'The cameras here ignore summer time', type: 'check', hint: 'On if the camera clocks are not changed in summer.', off: (v) => (isUtcZone(v.timezone) ? 'Summer time is not applied in UTC.' : null) }]}
+            fields={[{ name: 'id', label: 'Location id', required: true, hint: 'Exactly as the field files write it: DONA_0012 and DONA_12 are two different locations.' }, { name: 'name', label: 'Name' }, { name: 'latitude', label: 'Latitude', required: true, type: 'number', hint: 'Decimal degrees, −90 to 90.' }, { name: 'longitude', label: 'Longitude', required: true, type: 'number', hint: 'Decimal degrees, −180 to 180.' }, { name: 'timezone', label: 'Timezone', type: 'zone', initial: 'UTC', required: true }, { name: 'ignore_dst', label: 'The cameras here ignore summer time', type: 'check', hint: 'On if the camera clocks are not changed in summer.', off: (v) => (isUtcZone(v.timezone) ? 'Summer time is not applied in UTC.' : null) }]}
             onAdd={(v) => {
               const latitude = Number(v.latitude), longitude = Number(v.longitude)
               if (!(latitude >= -90 && latitude <= 90) || !(longitude >= -180 && longitude <= 180)) throw new Error('The coordinates must lie within −90 to 90 and −180 to 180.')
@@ -423,7 +442,7 @@ export default function SetupWizardPage({ onBack, onMainMenu, onRegisterVisit }:
       )}
 
       {step === 9 && result && (
-        <WizardStep n={num(9)} title="Review and continue" status="open" canEdit={false} onEdit={() => {}} description="What was saved, and what to do next.">
+        <WizardStep n={num(9)} title="Done" status="open" canEdit={false} onEdit={() => {}} description="What was saved, and what to do next.">
           <div className="space-y-4">
             {result.project.problems.length === 0 ? (
               <div role="status" className="rounded-xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-6 py-4 text-emerald-900 dark:text-emerald-100">
@@ -457,9 +476,12 @@ export default function SetupWizardPage({ onBack, onMainMenu, onRegisterVisit }:
             {result.project.problems.length === 0 && (
               <div role="group" aria-label="What next">
                 <section aria-label="Next" className={CARD}>
-                  <h6 className={HEAD}>Next</h6>
-                  <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">Do you want to register the first visit?</p>
-                  {onRegisterVisit && <button type="button" className={BIG} onClick={onRegisterVisit}>Register the first visit</button>}
+                  <h6 className={HEAD}>
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-sky-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                    Next
+                  </h6>
+                  <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">Register the visits: load them from a file (your field history, or a download of Epicollect) or one by hand.</p>
+                  {onRegisterVisit && <button type="button" className={BIG} onClick={onRegisterVisit}>Register the visits</button>}
                 </section>
                 <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
                   <span>Or go back to</span>

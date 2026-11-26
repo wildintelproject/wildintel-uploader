@@ -16,6 +16,8 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
+from wildintel_uploader.core.services import disk_space
+
 logger = logging.getLogger(__name__)
 
 # The folder the copies are made in: inside the temporary folder of the system, so that nothing else is ever removed.
@@ -58,7 +60,8 @@ def copy_card(source_dir: str) -> Iterator[dict]:
     {"type": "progress", "copied", "files", "bytes_copied", "bytes"} after each file and {"type": "done", "path", "files", "bytes"} — `path` is the copy.
 
     Raises:
-        CardCopyError: the card is not a folder that can be read, or has nothing on it, or a file could not be copied (what was copied is removed)."""
+        CardCopyError: the card is not a folder that can be read, or has nothing on it, or the temporary folder has no room for it (checked before anything
+            is copied), or a file could not be copied (what was copied is removed)."""
     source = Path(source_dir).expanduser()
     if not source.is_dir():
         raise CardCopyError(f"The SD card '{source_dir}' is not a folder that can be read.")
@@ -69,12 +72,16 @@ def copy_card(source_dir: str) -> Iterator[dict]:
     if not files:
         raise CardCopyError(f"There is nothing on the SD card '{source_dir}'.")
     clean_stale()
+    sizes = [f.stat().st_size for f in files]
+    total = sum(sizes)
+    # the copy goes to the temporary folder of the system: there has to be room for the whole card before it starts, not to fail half-way
+    short = disk_space.shortfall(base_dir(), total, "The SD card", "the temporary folder of the system")
+    if short:
+        raise CardCopyError(short)
     base_dir().mkdir(parents=True, exist_ok=True)
     holder = Path(tempfile.mkdtemp(prefix="card-", dir=base_dir()))
     # named like the card: its folder name, or its label
     destination = holder / (source.name or "card")
-    sizes = [f.stat().st_size for f in files]
-    total = sum(sizes)
     yield {"type": "start", "files": len(files), "bytes": total}
     copied_bytes = 0
     try:

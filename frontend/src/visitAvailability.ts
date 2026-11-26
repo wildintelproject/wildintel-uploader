@@ -72,7 +72,8 @@ export function cardAtSite(visits: StoredVisit[], site: string, when: string): {
 export interface CardOptions { cards?: SdCard[]; session?: string }
 
 /** Why a visit cannot leave a card in the camera — nothing when it can, or when it leaves none. A card cannot be left when it is archived (from the day it was),
- * when it is in the camera of another site, when it is the one the visit collects, or when it was collected by a visit of the same revision. */
+ * when it is in the camera of another site, or when it was collected by a visit of the same revision. The very card the visit collects can be left again: that is
+ * asked (see sameCardAgain), not refused. */
 export function cardBlock(kept: StoredVisit[], label: string, visit: Visit, options: CardOptions = {}): string | undefined {
   const card = label.trim()
   const installs = visit.actions.includes('Installation')
@@ -87,13 +88,26 @@ export function cardBlock(kept: StoredVisit[], label: string, visit: Visit, opti
     return `SD card ${card} is not available${settings.status_date ? ` since ${settings.status_date}` : ''}: it is archived${settings.archive_reason ? ` (${settings.archive_reason})` : ''}.`
   }
   const there = cardAt(kept, card, when)
-  if (there && collects && same(there.site, site)) return `SD card ${card} is the one this visit collects (left on ${there.date}): the card left in the camera has to be another.`
+  if (there && collects && same(there.site, site)) return undefined
   if (there) return `SD card ${card} is in the camera at ${there.site} (left on ${there.date}): it has to be collected before it is left here.`
   if (options.session) {
     const taken = kept.find((w) => w.session === options.session && collectsCard(w) && sameGear(cardAtSite(kept, w.location_id, stamp(w))?.label, card))
     if (taken) return `SD card ${card} was collected at ${taken.location_id} in this revision (${options.session}): it cannot be left again in the same revision.`
   }
   return undefined
+}
+
+/** What to ask of a visit that collects the card of its camera and leaves that same card in it: it happens in the field (the card was empty, or it was downloaded
+ * there and put back), and it is also how a card is written down by mistake. Nothing when it leaves another, or none. */
+export function sameCardAgain(kept: StoredVisit[], label: string, visit: Visit): string | undefined {
+  const card = label.trim()
+  const leaves = visit.actions.includes('Installation') || visit.actions.includes('Revision')
+  const collects = visit.actions.includes('Revision') || visit.actions.includes('Desinstallation')
+  if (!card || !leaves || !collects) return undefined
+  const there = cardAt(kept, card, visit.when || '9999-12-31T23:59:59')
+  return there && same(there.site, visit.site.trim())
+    ? `The SD card ${card} is the one this visit collects (left on ${there.date}), and it is left again. Was it empty, or downloaded in the field and put back? If not, choose the card that was left.`
+    : undefined
 }
 
 /** What stops a visit being kept for where its camera or its card is: the camera put up while it is somewhere else, a card left in a camera

@@ -1,5 +1,6 @@
 import { inTheApp, listWorking } from '../researchProjects'
 import { TABLE, TableCard } from '../components/DashboardParts'
+import TimeLeftBar, { type BatchTiming } from '../components/TimeLeftBar'
 import CheckResultsTable from '../components/CheckResultsTable'
 import ValidationDashboard, { formatRun } from '../components/ValidationDashboard'
 import WizardStep from '../components/WizardStep'
@@ -36,13 +37,14 @@ import Notice, { BadgeIcon, Mark, mark, StatusIcon } from '../components/Notice'
 import type { DateSource, Period } from '../components/DateSourcePicker'
 import type { EpicollectEntry } from '../epicollectImport'
 import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } from '../researchProjectValidation'
-import { shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
+import { isUtcZone, shownErrors, stampTimezone, validateDeployment } from '../deploymentValidation'
 import type {
-  Report, AppSettings, CameraGroup, CollectionPath, PreprocessingOptions, SimilarityMethod, StatisticCheck, StatisticsParams, ExifField, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
+  Report, AppSettings, CameraGroup, CollectionPath, CheckLevel, PreprocessingOptions, ResizeSummary, SimilarityMethod, StatisticCheck, StatisticsParams, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   FeatureType, GuessedDetails, ImageCheck, ImportEvent, LocalLocation, LocalResearchProject, PreviousDeployment, ResearchProject, ScanResult,
   SessionSummary, UploadTarget, ValidationResult,
 } from '../types'
 import { PAGE_CLASS } from '../components/PageBar'
+import { exifTagLabel } from '../exifTags'
 
 export const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
 export const labelClass = 'block text-sm font-semibold mb-1.5 text-zinc-700 dark:text-zinc-300'
@@ -615,7 +617,7 @@ export const DEPLOYMENT_CHECK_DISPLAY: Record<DeploymentCheck, { label: string; 
   collection_prefix: { label: 'Deployment id starts with its collection', description: () => 'The id begins with the collection you chose.' },
   collection_name: { label: 'Collection name', description: () => 'The collection name is written correctly.' },
   location: { label: "Deployment id's location is the one you chose", description: (id) => `The location in the id matches ${id}.` },
-  time_range: { label: 'Image dates fit the deployment', description: () => 'The first image is at the start and the last one at the end.' },
+  time_range: { label: 'Image dates fit the deployment', description: () => 'No image before the start or after the card was collected, and the first one at the start. A camera that stopped earlier is only said.' },
   camera: { label: 'Camera consistency', description: () => 'Every image comes from one camera, the one the deployment says.' },
   image_count: { label: 'Number of images is like the previous revisions', description: () => 'The number of images is close to that of the previous revisions.' },
   sequence_count: { label: 'Number of sequences is like the previous revisions', description: () => 'The number of sequences is close to that of the previous revisions.' },
@@ -636,10 +638,19 @@ export const SIMILARITY_METHODS: { value: SimilarityMethod; label: string }[] = 
 export const ALL_DEPLOYMENT_CHECKS: DeploymentCheck[] = DEPLOYMENT_CHECK_OPTIONS.map((o) => o.value)
 
 export const RANGE_RULE_LABELS = {
-  first: 'the first image should be at the start',
+  first: 'the first image should be at the start: a photo is taken right after the camera is set up',
+  before_start: 'it is before the start of the deployment',
+  after_end: 'it is after the card was collected',
   last: 'the last image should be at the end',
   between: 'it should be within the deployment',
 } as const
+
+/** What the note of a camera that stopped before its card was collected says: when, how long before, and why when the visit says it. */
+export function stoppedEarlyText(s: NonNullable<DeploymentCheckResult['stopped_early']>): string {
+  const why = s.reason === 'card_full' ? ': the visit says the card was full' : s.reason === 'no_batteries' ? ': the visit says the batteries were flat' : ''
+  const days = s.days >= 1 ? `${Math.round(s.days)} day${Math.round(s.days) === 1 ? '' : 's'}` : `${Math.round(s.days * 24)} hours`
+  return `The camera stopped on ${formatLocal(s.date)}, ${days} before the card was collected${why}. That is not a problem of the dates.`
+}
 
 /** The postvalidation's own leeway, in hours, around the deployment's start and end. */
 export const DEFAULT_TOLERANCE_HOURS = 1
@@ -647,9 +658,29 @@ export const DEFAULT_TOLERANCE_HOURS = 1
 /** Every check shown, as before anything is configured (or when the settings can't be read). */
 export type WizardSettings = Pick<AppSettings, 'VALIDATION' | 'POSTVALIDATION' | 'PREPROCESSING'>
 
+/** How each check starts in an import when the settings do not say it — as they started before it could be set: the dates of the images and the SD card have to
+ * pass, the rest warn. The settings (VALIDATION.defaults, POSTVALIDATION.defaults) say it, and each import can still change it. */
+export const IMAGE_CHECK_DEFAULTS: Record<ImageCheck, CheckLevel> = { corrupted: 'warn', sequence: 'warn', structure: 'warn', camera: 'warn', exif: 'warn', duplicates: 'warn' }
+export const DEPLOYMENT_CHECK_DEFAULTS: Record<DeploymentCheck, CheckLevel> = {
+  deployment_id: 'warn', collection_prefix: 'warn', collection_name: 'warn', location: 'warn', time_range: 'required', camera: 'warn',
+  image_count: 'warn', sequence_count: 'warn', sequence_length: 'warn', sd_card: 'required', photo_count: 'warn',
+}
+
+/** The checks an import starts with, ticked and required, as the settings say how each starts: required and warn are ticked, skip is not, and required has to pass. */
+export function startingChecks(settings: WizardSettings): { image: Set<ImageCheck>; requiredImage: Set<ImageCheck>; deployment: Set<DeploymentCheck>; requiredDeployment: Set<DeploymentCheck> } {
+  const image = { ...IMAGE_CHECK_DEFAULTS, ...(settings.VALIDATION.defaults ?? {}) }
+  const deployment = { ...DEPLOYMENT_CHECK_DEFAULTS, ...(settings.POSTVALIDATION.defaults ?? {}) }
+  const pick = <K extends string>(levels: Record<K, CheckLevel>, keep: (l: CheckLevel) => boolean) => new Set((Object.keys(levels) as K[]).filter((k) => keep(levels[k])))
+  return {
+    image: pick(image, (l) => l !== 'skip'), requiredImage: pick(image, (l) => l === 'required'),
+    deployment: pick(deployment, (l) => l !== 'skip'), requiredDeployment: pick(deployment, (l) => l === 'required'),
+  }
+}
+
 export const DEFAULT_CHECK_SETTINGS: WizardSettings = {
-  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true },
+  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true, defaults: IMAGE_CHECK_DEFAULTS, exif_fields: ['Model'], camera_levels: [['SerialNumber'], ['Make', 'Model'], ['Model']] },
   POSTVALIDATION: {
+    defaults: DEPLOYMENT_CHECK_DEFAULTS,
     deployment_id: true, collection_prefix: true, collection_name: true, location: true, time_range: true, camera: true,
     image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true, tolerance_hours: DEFAULT_TOLERANCE_HOURS,
     sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
@@ -662,6 +693,13 @@ export const DEFAULT_CHECK_SETTINGS: WizardSettings = {
 }
 
 export type PreprocessStep = 'rename' | 'resize' | 'metadata'
+
+const sizeText = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${(bytes / 1e6).toFixed(1)} MB`)
+/** What resizing did, in one line: "1,620 of 1,620 resized: 6000×4000 → 2400×1600, 14.1 GB → 2.3 GB". */
+export function resizeSummaryText(s: ResizeSummary): string {
+  const sizes = s.resized > 0 && s.before && s.after && s.before !== s.after ? `${s.before} → ${s.after}, ` : ''
+  return `${s.resized.toLocaleString('en-US')} of ${s.images.toLocaleString('en-US')} resized: ${sizes}${sizeText(s.before_bytes)} → ${sizeText(s.after_bytes)}`
+}
 
 /** The statistical parameters as typed (strings), from the settings. */
 export function statParamsOf(post: AppSettings['POSTVALIDATION']) {
@@ -732,10 +770,10 @@ export function buildDeploymentId(revision: string, locationId: string | null | 
   return `R${String(n).padStart(4, '0')}-${locationId.trim()}`
 }
 
-export const EXIF_FIELD_LABELS: Record<ExifField, string> = { date: 'a capture date', camera_model: 'a camera model', camera_id: 'a camera id' }
 
 /** "Reconyx HC600 · id P800HG08", whichever of the two is known. */
 export function describeCamera(camera: CameraGroup): string {
+  if (camera.values && Object.keys(camera.values).length > 0) return Object.entries(camera.values).map(([field, value]) => `${field} ${value}`).join(' · ')
   return [camera.model ?? 'unknown model', camera.camera_id ? `id ${camera.camera_id}` : 'no id'].join(' · ')
 }
 
@@ -1316,23 +1354,28 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
                   ))}
                 </ul>
               )}
-              {(validation.cameras_without_info ?? 0) > 0 && <p><Mark kind="warning" />{validation.cameras_without_info} image(s) have no camera information.</p>}
+              {(validation.cameras_without_info ?? 0) > 0 && <p><Mark kind="warning" />{validation.cameras_without_info} image(s) have no camera information{validation.camera_by?.length ? ` (no ${validation.camera_by.join(' + ')})` : ''}.</p>}
             </>
           )}
+          {validation.camera_by && validation.camera_by.length > 0 && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+              Compared by <span className="font-mono">{validation.camera_by.join(' + ')}</span>{!validation.camera_by.some((f) => /serial/i.test(f)) ? ': without a serial number, two cameras of the same model are not told apart' : ''}. The order is set in Settings › Validation.
+            </p>
+          )}
           {validation.exiftool === false && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">ExifTool isn't installed, so the camera id (serial number) may be missing — install it for a fuller reading.</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">ExifTool isn't installed, so the EXIF of the images is read with Pillow, which knows only the standard fields and names some of them otherwise: the serial number of the camera, the fields of the camera traps and some dates may be missing. Install ExifTool (it comes with the app) for the full reading.</p>
           )}
         </div>
       )}
       {validation.exif_missing !== undefined && (
         <div className={imageCheckPassed('exif', validation) ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
           {imageCheckPassed('exif', validation) ? (
-            <p><Mark kind="success" />Every image has its capture date, camera model and camera id.</p>
+            <p><Mark kind="success" />Every image has the EXIF fields expected: {Object.keys(validation.exif_missing).map((f) => exifTagLabel(f).toLowerCase()).join(', ')}.</p>
           ) : (
             <ul className="list-disc ml-6">
-              {(Object.keys(EXIF_FIELD_LABELS) as ExifField[]).filter((f) => validation.exif_missing![f].count > 0).map((f) => (
+              {Object.entries(validation.exif_missing).filter(([, m]) => m.count > 0).map(([f, m]) => (
                 <li key={f}>
-                  <Mark kind="warning" />{validation.exif_missing![f].count} image(s) without {EXIF_FIELD_LABELS[f]}, e.g. {validation.exif_missing![f].examples.join(', ')}
+                  <Mark kind="warning" />{m.count} image(s) without {exifTagLabel(f).toLowerCase()} (<span className="font-mono">{f}</span>), e.g. {m.examples.join(', ')}
                 </li>
               ))}
             </ul>
@@ -1382,7 +1425,48 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
 }
 
 /** What the postvalidation found — only the checks that were run have something to say. */
-export function DeploymentCheckReport({ result, toleranceHours }: { result: DeploymentCheckResult; toleranceHours: string }) {
+/** How the images were compared with the camera of the deployment — by which fields of its record, or with the model of the deployment when it has none —
+ * and, when the record has no make and model or other ones, the offer to keep the ones the images say in it. */
+export function CameraComparison({ result, onKeepCamera }: {
+  result: DeploymentCheckResult
+  /** Keeps in the record of the camera the make and the model the images say. */
+  onKeepCamera?: (label: string, make: string | null, model: string | null) => Promise<void>
+}) {
+  const [kept, setKept] = useState<'no' | 'keeping' | 'kept' | string>('no')
+  if (result.camera_mismatches === undefined) return null
+  const found = result.camera_found
+  const foundText = [found?.make, found?.model].filter(Boolean).join(' ')
+  const offer = Boolean(onKeepCamera && result.camera_label && found?.model && (result.camera_mismatches.length || !result.camera_by?.includes('Make')))
+  return (
+    <div className="space-y-1 text-sm">
+      <p className="text-xs text-zinc-500 dark:text-zinc-400" aria-label="How the camera was compared">
+        {result.camera_by?.length
+          ? <>Compared with the record of camera {result.camera_label} by <span className="font-mono">{result.camera_by.join(' + ')}</span>.</>
+          : result.camera_label
+            ? <>The record of camera {result.camera_label} says nothing to compare with: the images are compared with the model of the deployment.</>
+            : <>The camera of the deployment is not one of the cameras of the research project: the images are compared with the model of the deployment.</>}
+      </p>
+      {offer && kept !== 'kept' && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-blue-900 dark:text-blue-100">
+          <span>The images say <strong>{foundText}</strong>. Keep it as the make and model of camera <strong>{result.camera_label}</strong>?</span>
+          <button type="button" className={btnOutline} disabled={kept === 'keeping'}
+                  onClick={async () => { setKept('keeping'); try { await onKeepCamera!(result.camera_label!, found!.make, found!.model); setKept('kept') } catch (e) { setKept(e instanceof Error ? e.message : 'It could not be kept.') } }}>
+            {kept === 'keeping' ? 'Keeping…' : 'Keep it'}
+          </button>
+          {kept !== 'no' && kept !== 'keeping' && <span role="alert" className="text-red-600 dark:text-red-400">{kept}</span>}
+        </div>
+      )}
+      {kept === 'kept' && <p role="status" className="text-emerald-600 dark:text-emerald-400"><Mark kind="success" />Kept as the make and model of camera {result.camera_label}: run the checks again to compare with it.</p>}
+    </div>
+  )
+}
+
+export function DeploymentCheckReport({ result, toleranceHours, onKeepCamera }: {
+  result: DeploymentCheckResult; toleranceHours: string
+  /** Keeps in the record of the camera the make and the model the images say: offered when it has none, or another. */
+  onKeepCamera?: (label: string, make: string | null, model: string | null) => Promise<void>
+}) {
+  const expectedText = Object.values(result.camera_expected ?? {}).filter(Boolean).join(' ')
   return (
     <div className="mt-4 text-sm space-y-1 mb-2">
       {(['deployment_id', 'collection_name', 'collection_prefix', 'location', 'sd_card', 'photo_count'] as const).map((key) => {
@@ -1406,10 +1490,11 @@ export function DeploymentCheckReport({ result, toleranceHours }: { result: Depl
           </div>
         )
       })}
+      {result.stopped_early && <p className="text-sky-700 dark:text-sky-300" aria-label="The camera stopped"><Mark kind="info" />{stoppedEarlyText(result.stopped_early)}</p>}
       {result.out_of_range !== undefined && (
         result.out_of_range.length === 0 ? (
           <p className="text-emerald-600 dark:text-emerald-400">
-            <Mark kind="success" />The first image is at the start, the last at the end and the rest in between (± {result.tolerance_hours ?? toleranceHours} h).
+            <Mark kind="success" />No image before the start or after the card was collected, and the first at the start (± {result.tolerance_hours ?? toleranceHours} h).
           </p>
         ) : (
           <div className="text-amber-600 dark:text-amber-400">
@@ -1428,9 +1513,10 @@ export function DeploymentCheckReport({ result, toleranceHours }: { result: Depl
         <>
           <p className={result.camera_mismatches.length ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
             {result.camera_mismatches.length
-              ? mark('warning', `${result.camera_mismatches.length} image(s) with a different camera model than declared: ${result.camera_mismatches.map((m) => `${m.path} (${m.detected})`).join(', ')}`)
-              : mark('success', 'No camera-model mismatches with the declared camera.')}
+              ? mark('warning', `${result.camera_mismatches.length} image(s) of another camera than ${result.camera_label ? `camera ${result.camera_label}` : 'the one declared'} (${expectedText || '—'}): ${result.camera_mismatches.slice(0, 5).map((m) => `${m.path} (${m.detected})`).join(', ')}${result.camera_mismatches.length > 5 ? '…' : ''}`)
+              : mark('success', result.camera_by?.length ? `The images are of camera ${result.camera_label} (${expectedText}).` : 'No camera-model mismatches with the declared camera.')}
           </p>
+          <CameraComparison result={result} onKeepCamera={onKeepCamera} />
           <p className={(result.camera_models_found?.length ?? 0) > 1 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
             {(result.camera_models_found?.length ?? 0) > 1
               ? mark('warning', `${result.camera_models_found!.length} distinct camera models found across images: ${result.camera_models_found!.join(', ')}`)
@@ -1641,6 +1727,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   // Which checks the settings page turns on, and the tolerance and the statistical parameters the postvalidation uses — read again
   // when the validate and postvalidation steps are shown, since the settings can change meanwhile.
   const [checkSettings, setCheckSettings] = useState<WizardSettings>(DEFAULT_CHECK_SETTINGS)
+  // Whether the checks of this import have started as the settings say (see startingChecks): once, so what the user changes in it is kept.
+  const checksStarted = useRef(false)
   const [preprocessSteps, setPreprocessSteps] = useState<Set<PreprocessStep>>(new Set(['rename', 'resize', 'metadata']))
   // Set the moment a value is edited here (a ref, so a settings response arriving meanwhile never puts it back).
   const preprocessTouched = useRef(false)
@@ -1650,6 +1738,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   const [requiredDeploymentChecks, setRequiredDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set(DEFAULT_REQUIRED_DEPLOYMENT_CHECKS))
   const [checkingDeployment, setCheckingDeployment] = useState(false)
   const [deploymentCheck, setDeploymentCheck] = useState<DeploymentCheckResult | null>(null)
+  // Keeps in the record of the camera of the deployment the make and the model its images say (see CameraComparison).
+  const keepCamera = async (label: string, make: string | null, model: string | null) => { if (selectedProjectId) await api.cameraIdentity(selectedProjectId, label, make, model) }
   const [deploymentCheckError, setDeploymentCheckError] = useState<string | null>(null)
   // Which section of the checks is open: 1 to choose them, 2 for how they went.
   const [checksOpen, setChecksOpen] = useState(1)
@@ -1658,6 +1748,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   // The preprocessing runs in its own step and leaves the deployment pending; the import step then consolidates (seals) it.
   const [preprocessing, setPreprocessing] = useState(false)
   const [preprocessEvents, setPreprocessEvents] = useState<ImportEvent[]>([])
+  // how far Add metadata has gone, batch by batch, for its bar and its time left
+  const [metadataTiming, setMetadataTiming] = useState<BatchTiming | null>(null)
   // Whether the results of the preprocessing were gone over: step 2 shuts, and the saving opens.
   const [resultsDone, setResultsDone] = useState(false)
   const [preprocessError, setPreprocessError] = useState<string | null>(null)
@@ -1692,6 +1784,12 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         if (cancelled) return
         setSdCards(s.FIELDWORK?.sd_cards ?? [])
         setCheckSettings({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+        if (!checksStarted.current) {
+          // each check starts as the settings say: required, warn or skip (unticked)
+          const start = startingChecks({ VALIDATION: s.VALIDATION, POSTVALIDATION: s.POSTVALIDATION, PREPROCESSING: s.PREPROCESSING })
+          setImageChecks(start.image); setRequiredImageChecks(start.requiredImage); setDeploymentChecks(start.deployment); setRequiredDeploymentChecks(start.requiredDeployment)
+          checksStarted.current = true
+        }
         // What can be edited in the wizard starts from the settings, until it has been.
         if (!preprocessTouched.current) setPreprocessSteps(new Set((['rename', 'resize', 'metadata'] as const).filter((step) => s.PREPROCESSING[step])))
       })
@@ -1970,10 +2068,19 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
 
   // The cards of the project chosen — and those free for any.
   const projectSdCards = sdCards.filter((c) => (c.research_project ?? '').toLowerCase() === selectedProjectId.toLowerCase())
+  // the card the visit says was left in the camera, among the cards of the research project: it is chosen for the images when the visit is, and can be changed
+  const leftCard = linkedVisit?.visit.sd ? projectSdCards.find((c) => c.label.toLowerCase() === String(linkedVisit.visit.sd).toLowerCase()) : undefined
+  const cardChosenFor = useRef<string | null>(null)
+  useEffect(() => {
+    const key = linkedVisit ? `${linkedVisit.visit.session}|${linkedVisit.visit.location_id}` : null
+    if (key === cardChosenFor.current || (linkedVisit?.visit.sd && !leftCard)) return   // chosen once for each visit, when the cards of the settings are read
+    cardChosenFor.current = key
+    if (leftCard) setSdCard(leftCard.label)
+  }, [linkedVisit, leftCard])
 
   function selectProject(project: LocalResearchProject | undefined) {
     setSelectedProjectId(project?.acronym ?? '')
-    setSelectedLocationId(''); setOriginError(null); setLinkedVisit(null); setSdCard('')
+    setSelectedLocationId(''); setOriginError(null); setLinkedVisit(null); setSdCard(''); cardChosenFor.current = null
     setOrigin({ researchProject: project ? `${project.acronym} — ${project.name}` : '', locationId: '', locationName: '', timezone: '' })
     applyOriginLocation(undefined)
   }
@@ -2129,6 +2236,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         visit: linkedVisit ? {
           left_session: linkedVisit.visit.session, left_sd: linkedVisit.visit.sd ?? null,
           collected_session: linkedVisit.end.session, counted_photos: linkedVisit.end.num_photos ?? null, sd_card: sdCard || null,
+          collected_card_status: linkedVisit.end.card_status ?? null, collected_battery_status: linkedVisit.end.battery_status ?? null,
         } : null,
       }))
     } catch (e) {
@@ -2395,7 +2503,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   }
 
   async function handlePreprocess() {
-    setPreprocessing(true); setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
+    setPreprocessing(true); setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null); setMetadataTiming(null)
     try {
       // Into its collection in the collections folder (a new one is named like the deployment's R0003 prefix) — still pending: not sealed.
       await api.preprocess(
@@ -2403,6 +2511,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         (event) => {
           setPreprocessEvents((prev) => [...prev, event])
           if (event.type === 'done') setPreprocessed(event)
+          if (event.type === 'metadata') {
+            const now = Date.now(), done = event.index ?? 0
+            setMetadataTiming((t) => (t && done > 0 ? { ...t, at: now, done } : { start: now, at: now, done, total: event.total }))
+          }
         },
       )
     } catch (e) {
@@ -2442,7 +2554,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     setSavedOpen(false); setStep(0); setImagesOpen(1); setImagesReached(1); setOriginOpen(1); setOriginReached(1)
     setSourceDir(''); setScan(null); setScanError(null); setValidation(null); setValidationError(null)
     setGuess(null); guessedFor.current = null; sourcePicked.current = false; setDateSource(undefined)
-    setImageChecks(new Set(['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates'])); setRequiredImageChecks(new Set())
+    const start = startingChecks(checkSettings)   // as the settings say, again; read again when the images are reached
+    setImageChecks(start.image); setRequiredImageChecks(start.requiredImage); checksStarted.current = false
     resetOriginChoice()
     setConn({ status: 'idle', message: '' })
     setResearchProjects([])
@@ -2451,9 +2564,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     setDeploymentCheck(null); setDeploymentCheckError(null)
     preprocessTouched.current = false
     setRevision(''); revisionTouched.current = false; setRevisionHint(null)
-    setDeploymentChecks(new Set(ALL_DEPLOYMENT_CHECKS)); setRequiredDeploymentChecks(new Set(DEFAULT_REQUIRED_DEPLOYMENT_CHECKS))
+    setDeploymentChecks(start.deployment); setRequiredDeploymentChecks(start.requiredDeployment)
     setTimestampLogError(null)
-    setSdCard('')
+    setSdCard(''); cardChosenFor.current = null
     setEvents([]); setImportError(null); setDestDir(null); setCopied(false)
     setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
     setTaskId(null)
@@ -2494,15 +2607,23 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         parent="Menu" onParent={onBack} />
 
       {queue && (
-        <div role="status" aria-label="The deployment in the queue" className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/30 px-5 py-3 text-sm text-blue-900 dark:text-blue-100">
-          <span className="font-semibold">Deployment {queue.index + 1} of {queue.total}</span>
-          <span className="font-mono">{queue.current}</span>
-          {!destDir && (
-            <span className="ml-auto flex items-center gap-2">
-              <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={queue.onSkip}>Skip this one</button>
-              <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={queue.onStop}>Stop here</button>
-            </span>
-          )}
+        // which deployment of the queue is being imported: big, with how far the queue has gone, and kept at the top while the page scrolls
+        <div role="status" aria-label="The deployment in the queue" className="sticky top-0 z-20 mb-6 overflow-hidden rounded-xl border-2 border-blue-400 dark:border-blue-700 bg-blue-50 dark:bg-zinc-900 text-blue-900 dark:text-blue-100 shadow-md">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Deployment {queue.index + 1} of {queue.total}</p>
+              <p className="font-mono text-2xl font-bold text-zinc-900 dark:text-zinc-50 break-all">{queue.current}</p>
+            </div>
+            {!destDir && (
+              <span className="ml-auto flex items-center gap-2">
+                <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={queue.onSkip}>Skip this one</button>
+                <button type="button" className={btnOutline} disabled={importing || preprocessing} onClick={queue.onStop}>Stop here</button>
+              </span>
+            )}
+          </div>
+          <div role="progressbar" aria-label="Deployments of the queue" aria-valuemin={0} aria-valuemax={queue.total} aria-valuenow={queue.index} className="h-1.5 bg-blue-100 dark:bg-blue-950">
+            <div className="h-full bg-blue-500 transition-[width] duration-500" style={{ width: `${(queue.index / Math.max(queue.total, 1)) * 100}%` }} />
+          </div>
         </div>
       )}
 
@@ -2554,6 +2675,17 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
           <WizardStep n={1} title="Select the folder" status={imagesStatus(1)} canEdit={!validating} onEdit={() => setImagesOpen(1)}
                       description="Where the deployment's camera-trap images are, on this computer."
                       summary={scan && <>{folderName}<br />{imageCount}</>}>
+            {selectedProjectId && (
+              <div className="mb-4"><FormCard title="Which SD card is it?" description={`The label written on the card the images come from — one of ${selectedProjectId}'s, or one with no project.`}>
+                <Notice kind="info" className="mb-3">
+                  {leftCard
+                    ? <span>The visit <strong>{linkedVisit!.visit.session}</strong> to <strong>{linkedVisit!.visit.location_id}</strong> says the SD card <strong>{leftCard.label}</strong> was left in the camera: it is chosen. If the label on the card is another, choose that one.</span>
+                    : <span>It is checked against the card the visit says was left in the camera.</span>}
+                </Notice>
+                <SdCardsTable cards={projectSdCards} selected={sdCard} onSelect={setSdCard}
+                  empty={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet.` : 'No SD card matches.'} />
+              </FormCard></div>
+            )}
             <fieldset className="mb-4">
               <legend className={labelClass}>Are the images on an SD card?</legend>
               <ChoiceCards<'sd' | 'folder'> label="Are the images on an SD card?" value={imageSource} onChange={chooseImageSource}
@@ -2634,13 +2766,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
             ) : sourceDir ? (
               <button type="button" className={btnOutline} onClick={() => handleScan()}>Scan</button>
             ) : null}
-            {scan && selectedProjectId && (
-              <div className="mt-4"><FormCard title="SD card" description={`The card the images come from — one of ${selectedProjectId}'s, or one with no project.`}>
-                <Notice kind="info" className="mb-3">It is checked against the card the visit says was left in the camera.</Notice>
-                <SdCardsTable cards={projectSdCards} selected={sdCard} onSelect={setSdCard}
-                  empty={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet.` : 'No SD card matches.'} />
-              </FormCard></div>
-            )}
             <div className="flex justify-end items-center mt-4">
               <button type="button" aria-label="Continue to the checks" className={btnPrimary} disabled={!scan || scanning} onClick={() => openImagesStep(2)}>Continue<span aria-hidden="true"> →</span></button>
             </div>
@@ -3107,7 +3232,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
               </ValidationDashboard>
             )}
             {deploymentCheckError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{deploymentCheckError}</p>}
-            {deploymentCheck && !deploymentCheck.report_id && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} />}
+            {deploymentCheck && !deploymentCheck.report_id && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} onKeepCamera={keepCamera} />}
+            {deploymentCheck?.report_id && deploymentCheck.stopped_early && <Notice kind="info" className="mt-3" role="status">{stoppedEarlyText(deploymentCheck.stopped_early)}</Notice>}
+            {deploymentCheck?.report_id && <div className="mt-3"><CameraComparison result={deploymentCheck} onKeepCamera={keepCamera} /></div>}
           </WizardStep>
         </div>
         )
@@ -3117,7 +3244,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
       {stepKey === 'prepare' && (() => {
         const rows: { key: string; label: string; always?: boolean; step?: PreprocessStep; text: ReactNode; disabledReason?: string }[] = [
           { key: 'copy', label: 'Copy into the collection', always: true, text: <>Copies every image into the deployment&rsquo;s folder. Anything that isn&rsquo;t an image is copied as it is.</> },
-          { key: 'dates', label: 'Read the capture dates', always: true, text: <>From each image&rsquo;s EXIF, as the camera&rsquo;s local time in <span className="font-mono">{timezone || 'the timezone of the details'}</span>{ignoreDst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}. An image with no EXIF date uses its file&rsquo;s date.</> },
+          { key: 'dates', label: 'Read the capture dates', always: true, text: timezone && isUtcZone(timezone)
+            ? <>The cameras keep UTC: the dates are read as they are. They give the day in the name of each image and its date in the metadata. The dates in the images are never changed. An image with no date of its own uses its file&rsquo;s date.</>
+            : <>Read from each image as the clock of the camera in <span className="font-mono">{timezone || 'the timezone of the details'}</span>{ignoreDst ? ', ignoring summer time' : ''}{preSettings.convert_to_utc ? ', converted to UTC' : ''}. They give the day in the name of each image and its date in the metadata. The dates in the images are never changed. An image with no date of its own uses its file&rsquo;s date.</> },
           { key: 'rename', label: 'Rename the images', step: 'rename', text: <><span className="font-mono">{'<deployment>__<YYYYMMDD>_<n>.<EXT>'}</span> in upper case — for example <span className="font-mono">{exampleImageName}</span>.</> },
           { key: 'resize', label: 'Resize the images', step: 'resize', text: <>Images wider than <strong>{preSettings.resize_width} px</strong> are resized to that width, keeping their proportions, EXIF and colour profile.</> },
           { key: 'metadata', label: 'Add metadata', step: 'metadata', text: <>Authorship, rights and license, written into each image as XMP.</>, disabledReason: exiftool === false ? 'ExifTool is not installed, and writing the metadata needs it.' : undefined },
@@ -3239,7 +3368,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
               )}
               <ValidationDashboard
                 variant="steps" preprocessing lastRunLine
-                title="Preprocessing" subtitle={scan ? `${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'image' : 'images'}` : ''}
+                title="Processing" subtitle={scan ? `${scan.image_count.toLocaleString('en-US')} ${scan.image_count === 1 ? 'image' : 'images'}` : ''}
                 reportId={preprocessed?.type === 'done' ? preprocessed.report_id ?? null : null}
                 running={preprocessing} canRun={Boolean(plannedCollection) && !preprocessing} onRun={handlePreprocess} runLabel="Start preparing" runningLabel="Preparing…"
               >
@@ -3261,9 +3390,13 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                                 <span className="font-medium">{r.label}</span>
                                 <span className="block text-xs text-zinc-500 dark:text-zinc-400">{r.text}</span>
                                 {r.disabledReason && <span className="block text-xs text-red-600 dark:text-red-400">{r.disabledReason}</span>}
+                                {r.key === 'resize' && doneRun && preprocessed?.type === 'done' && preprocessed.resize && (
+                                  <span className="mt-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300" aria-label="What resizing did">{resizeSummaryText(preprocessed.resize)}</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-right">
                                 {active(r) && preprocessing && stepStatus(r) === 'running' && <span role="status" aria-label={`${r.label}: running`} className="inline-flex"><SmallSpinner /></span>}
+                                {r.key === 'metadata' && preprocessing && stepStatus(r) === 'running' && metadataTiming && <div className="ml-auto w-56 text-left"><TimeLeftBar timing={metadataTiming} noun="images" label="Images with their metadata written" /></div>}
                                 {active(r) && preprocessing && stepStatus(r) === 'done' && <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Done</span>}
                                 {doneRun && active(r) && (r.key === 'copy' && skipped > 0 ? (
                                   <button type="button" aria-label={`${openCheck === 'preprocessing' ? 'Close' : 'Open'} the skipped images`} aria-expanded={openCheck === 'preprocessing'}

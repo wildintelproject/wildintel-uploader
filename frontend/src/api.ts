@@ -3,7 +3,7 @@ import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
   AccessCheck, CardCopyEvent, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, StatusChange, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, ImportCsvOptions, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, RevisionCreated, StatisticsRow, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent } from './types'
+  ClosedVisit, StatusChange, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, ImportCsvOptions, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, RevisionCreated, StatisticsRow, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent, Camera } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
 async function errorMessage(r: Response): Promise<string> {
@@ -126,6 +126,9 @@ export const api = {
     post<{ results: Record<string, string | null> }>('/api/deployment-import/existing-deployments', { research_project_id: researchProjectId, deployment_ids: deploymentIds }),
 
   // For each deployment id, the details of the closest earlier revision of its location (null if there is none).
+  // Keeps in a camera's record the make and the model its images say: what Camera consistency compares them with from then on.
+  cameraIdentity: (researchProjectId: string, label: string, make: string | null, model: string | null) =>
+    post<Camera>('/api/deployment-import/camera-identity', { research_project_id: researchProjectId, label, make, model }),
   previousDeployments: (researchProjectId: string, deploymentIds: string[]) =>
     post<{ results: Record<string, PreviousDeployment | null> }>('/api/deployment-import/previous-deployments', { research_project_id: researchProjectId, deployment_ids: deploymentIds }),
 

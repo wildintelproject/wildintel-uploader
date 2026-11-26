@@ -41,7 +41,7 @@ def test_the_defaults_have_every_section_and_every_check_shown():
     body = _client().get("/api/settings").json()
 
     assert set(body) == {"GENERAL", "TRAPPER", "EPICOLLECT5", "AGOUTI", "EPICOLLECTCSV", "DATA", "VALIDATION", "POSTVALIDATION", "PREPROCESSING", "FIELDLOG", "FIELDWORK"}
-    assert all(body["VALIDATION"].values())
+    assert all(v for k, v in body["VALIDATION"].items() if k != "defaults")
     assert body["POSTVALIDATION"]["tolerance_hours"] == 1.0
     assert body["GENERAL"]["log_level"] == "INFO"
     assert body["GENERAL"]["log_file"].endswith("wildintel-uploader.log")
@@ -82,8 +82,8 @@ def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     # kept in the folder of the research project, and read back as it was
     assert _client().get("/api/settings").json()["FIELDWORK"]["sd_cards"][0]["in_service"] == "2026-03-01"
     assert _no_dates(saved["FIELDWORK"]["cameras"]) == [
-        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": "DONA", **ACTIVE, **NO_POWER},
-        {"label": "X1", "camera_id": "X1", "camera_model": None, "in_service": None, "research_project": "DONA", **ACTIVE, **NO_POWER},
+        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_make": None, "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": "DONA", **ACTIVE, **NO_POWER},
+        {"label": "X1", "camera_id": "X1", "camera_make": None, "camera_model": None, "in_service": None, "research_project": "DONA", **ACTIVE, **NO_POWER},
     ]  # one kept before it had a label is called by its id
 
 
@@ -317,6 +317,22 @@ def test_which_checks_are_shown_and_the_tolerance_are_saved():
     assert saved["VALIDATION"]["corrupted"] is True
     assert saved["POSTVALIDATION"]["location"] is False and saved["POSTVALIDATION"]["tolerance_hours"] == 2.5
     assert _client().get("/api/settings").json()["POSTVALIDATION"]["tolerance_hours"] == 2.5
+
+
+def test_how_each_check_starts_is_saved_and_read_back():
+    saved = _put(VALIDATION={"defaults": {"structure": "skip"}}, POSTVALIDATION={"defaults": {"time_range": "warn", "camera": "required"}})
+
+    assert saved["VALIDATION"]["defaults"]["structure"] == "skip" and saved["VALIDATION"]["defaults"]["corrupted"] == "warn"
+    assert saved["POSTVALIDATION"]["defaults"]["time_range"] == "warn" and saved["POSTVALIDATION"]["defaults"]["sd_card"] == "required"
+    read = _client().get("/api/settings").json()
+    assert read["POSTVALIDATION"]["defaults"]["camera"] == "required" and read["VALIDATION"]["defaults"]["structure"] == "skip"
+
+
+def test_how_two_images_are_told_of_the_same_camera_is_saved_in_its_order():
+    saved = _put(VALIDATION={"camera_levels": [["Model"], ["Make", "Model"], ["ImageDescription"]], "exif_fields": ["Model", "ISO"]})
+
+    assert saved["VALIDATION"]["camera_levels"] == [["Model"], ["Make", "Model"], ["ImageDescription"]]
+    assert _client().get("/api/settings").json()["VALIDATION"]["exif_fields"] == ["Model", "ISO"]
 
 
 @pytest.mark.parametrize("tolerance", [-1, 10_000])

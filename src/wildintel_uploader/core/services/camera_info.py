@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from PIL import ExifTags, Image
@@ -116,6 +117,99 @@ def _read(paths: list[Path], exiftool: str | None) -> tuple[dict[Path, CameraInf
         except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError) as exc:
             logger.warning("ExifTool failed (%s) — falling back to Pillow for the camera information.", exc)
     return {path: _read_with_pillow(path) for path in paths}, "pillow"
+
+
+_GPS_IFD = 0x8825
+# The names ExifTool gives some tags that Pillow knows by another name.
+_PILLOW_NAMES = {"iso": "ISOSpeedRatings", "createdate": "DateTimeDigitized", "modifydate": "DateTime", "exposurecompensation": "ExposureBiasValue"}
+
+
+def _tags_with_exiftool(exiftool: str, paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | None]]:
+    """The value of each tag in each file, in one ExifTool run (the file names on stdin): None where a file does not have it."""
+    args = [exiftool, "-json", "-charset", "filename=utf8", "-m", *(f"-{tag}" for tag in tags), "-@", "-"]
+    completed = subprocess.run(
+        args, input="\n".join(str(p) for p in paths), capture_output=True, text=True, encoding="utf-8", timeout=_EXIFTOOL_TIMEOUT_SECONDS, check=False,
+    )
+    rows = json.loads(completed.stdout) if completed.stdout.strip() else []
+    by_source = {str(Path(row.get("SourceFile", ""))): {k.lower(): v for k, v in row.items()} for row in rows}
+    return {path: {tag: _clean(by_source.get(str(path), {}).get(tag.lower())) for tag in tags} for path in paths}
+
+
+def _tags_with_pillow(path: Path, tags: list[str]) -> dict[str, str | None]:
+    """The value of each tag in a file, as Pillow reads it: the standard EXIF tags only, in the image, its Exif and its GPS sections."""
+    try:
+        with Image.open(path) as img:
+            exif = img.getexif()
+            sections = [exif, exif.get_ifd(_EXIF_IFD), exif.get_ifd(_GPS_IFD)]
+            gps_ids = {name.lower(): tag for tag, name in ExifTags.GPSTAGS.items()}
+            out: dict[str, str | None] = {}
+            for tag in tags:
+                name = _PILLOW_NAMES.get(tag.lower(), tag)
+                ids = [i for i in (_TAG_IDS.get(name), gps_ids.get(tag.lower()), gps_ids.get(tag.lower().removeprefix("gps"))) if i is not None]
+                out[tag] = next((v for v in (_clean(section.get(i)) for section in sections for i in ids) if v), None)
+            return out
+    except Exception as exc:  # an unreadable file has none of them
+        logger.debug("No EXIF in %s: %s", path, exc)
+        return dict.fromkeys(tags)
+
+
+def read_tags(paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | None]]:
+    """The value of each EXIF tag asked for (by its name, as ExifTool names it: Make, ISO, GPSLatitude…) in each file — None where it has not got it —, read
+    with ExifTool when there is one, and with Pillow (the standard tags only) when not, or when it fails."""
+    if not tags or not paths:
+        return {path: {} for path in paths}
+    exiftool = exiftool_path()
+    if exiftool:
+        try:
+            return _tags_with_exiftool(exiftool, paths, tags)
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError) as exc:
+            logger.warning("ExifTool failed (%s) — falling back to Pillow for the EXIF fields.", exc)
+    return {path: _tags_with_pillow(path, tags) for path in paths}
+
+
+# The capture date of an image, by the names ExifTool gives them, the first that has one: when it was taken, else when it was digitized, else when the file
+# was last changed by the camera (#227).
+DATE_TAGS = ("DateTimeOriginal", "CreateDate", "ModifyDate")
+_NO_DATE = {"", "0000:00:00 00:00:00", "    :  :     :  :  "}
+_PILLOW_DATE_TAGS = (("exif", 36867), ("exif", 36868), ("main", 306))   # DateTimeOriginal, DateTimeDigitized, DateTime
+
+
+def _parse_date(raw: object) -> datetime | None:
+    text = str(raw or "").strip()
+    if text in _NO_DATE:
+        return None
+    try:
+        return datetime.strptime(text[:19], "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
+def _date_with_pillow(path: Path) -> datetime | None:
+    try:
+        with Image.open(path) as img:
+            exif = img.getexif()
+            sub = exif.get_ifd(_EXIF_IFD)
+            for where, tag in _PILLOW_DATE_TAGS:
+                found = _parse_date((sub if where == "exif" else exif).get(tag))
+                if found is not None:
+                    return found
+    except Exception as exc:  # a corrupt or unreadable file has no date: it must not stop the rest
+        logger.debug("No EXIF date in %s: %s", path, exc)
+    return None
+
+
+def read_dates(paths: list[Path]) -> dict[Path, datetime | None]:
+    """The capture date of each image, as the camera's wall clock — None where it has none —, read with ExifTool in one run for all of them (#227):
+    DateTimeOriginal, else CreateDate, else ModifyDate. Only without ExifTool, or when it fails, with Pillow, image by image."""
+    if not paths:
+        return {}
+    if exiftool_path():
+        try:
+            tags = read_tags(paths, list(DATE_TAGS))
+            return {p: next((d for d in (_parse_date(tags.get(p, {}).get(t)) for t in DATE_TAGS) if d is not None), None) for p in paths}
+        except Exception as exc:  # noqa: BLE001 — what Pillow reads is better than nothing
+            logger.warning("ExifTool could not read the dates (%s) — falling back to Pillow.", exc)
+    return {p: _date_with_pillow(p) for p in paths}
 
 
 def read_cameras(paths: list[Path]) -> tuple[dict[Path, CameraInfo], str]:

@@ -518,7 +518,7 @@ def test_validate_images_accepts_the_camera_check_and_returns_its_groups(tmp_pat
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"checked_count", "cameras", "cameras_without_info", "exiftool", "report_id"}
+    assert set(body) == {"checked_count", "cameras", "camera_by", "cameras_without_info", "exiftool", "report_id"}
     assert body["cameras"] == [] and body["cameras_without_info"] == 2  # neither image says which camera took it
 
 
@@ -531,7 +531,7 @@ def test_validate_images_accepts_the_exif_and_duplicates_checks(tmp_path: Path):
     assert response.status_code == 200
     body = response.json()
     assert body["duplicates"] == [{"size": (tmp_path / "a.jpg").stat().st_size, "files": ["a.jpg", "copy.jpg"]}]
-    assert body["exif_missing"]["date"]["count"] == 0 and body["exif_missing"]["camera_model"]["count"] == 2
+    assert body["exif_missing"]["DateTimeOriginal"]["count"] == 0 and body["exif_missing"]["Model"]["count"] == 2
 
 
 def test_validate_images_looks_for_the_images_imported_before_into_the_research_project(tmp_path: Path):
@@ -1223,3 +1223,17 @@ def test_validate_images_progress_counts_every_image_once(tmp_path: Path):
     deployment_import_service.validate_images(tmp_path, frozenset({"corrupted"}), progress=lambda *args: told.append(args))
 
     assert told == [("corrupted", done, 7) for done in range(1, 8)]
+
+
+def test_the_make_and_the_model_the_images_say_are_kept_in_the_record_of_the_camera(tmp_path: Path):
+    from wildintel_uploader.core.services import local_folder_service as lfs
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json={"name": "Doñana", "acronym": "DONA"})
+        lfs.write_field_items(tmp_path, "DONA", "cameras", [{"label": "4", "camera_model": "Browning Strike Force HD PRO X"}])
+
+        kept = _client().post("/api/deployment-import/camera-identity", json={"research_project_id": "DONA", "label": "4", "make": "Browning", "model": "BTC-6DCL"})
+        missing = _client().post("/api/deployment-import/camera-identity", json={"research_project_id": "DONA", "label": "9", "make": "X", "model": "Y"})
+        record = lfs.camera_record(tmp_path, "DONA", "4")
+
+    assert kept.status_code == 200 and (record["camera_make"], record["camera_model"]) == ("Browning", "BTC-6DCL")
+    assert missing.status_code == 400 and "not one of the cameras" in missing.json()["detail"]

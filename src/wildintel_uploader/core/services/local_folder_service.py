@@ -466,6 +466,31 @@ def _kept_list(root: Path, research_project_id: str, kind: str, items: list[dict
         status_history.record_changes(root, research_project_id, kind, kept, out, lambda r: str(r.get("label") or r.get("camera_id") or ""), lambda item, old: next((r for r in old if r.get("id") and r.get("id") == item.get("id")), None))
 
 
+def camera_record(root: Path, research_project_id: str | None, key: str | None) -> dict | None:
+    """The camera of a research project a deployment or a visit names (`key`): the one with that label, else the one with that serial number — case aside.
+    None when it names none, or the research project has none."""
+    if not research_project_id or not str(key or "").strip():
+        return None
+    try:
+        cameras = list_field_items(root, research_project_id, "cameras")
+    except Exception:  # noqa: BLE001 — no research project, nothing kept: no record to compare with
+        return None
+    wanted = str(key).strip().casefold()
+    return (next((c for c in cameras if str(c.get("label") or "").strip().casefold() == wanted), None)
+            or next((c for c in cameras if str(c.get("camera_id") or "").strip().casefold() == wanted), None))
+
+
+def set_camera_identity(root: Path, research_project_id: str, label: str, make: str | None, model: str | None) -> dict:
+    """Keeps the make and the model a camera writes in its images in its record, as the images of one of its deployments say them. Returns the record."""
+    cameras = list_field_items(root, research_project_id, "cameras")
+    record = next((c for c in cameras if str(c.get("label") or "").strip() == label.strip()), None)
+    if record is None:
+        raise LocalFolderError(f"The camera {label} is not one of the cameras of {research_project_id}.")
+    record.update({"camera_make": (make or "").strip() or None, "camera_model": (model or "").strip() or None})
+    write_field_items(root, research_project_id, "cameras", cameras)
+    return record
+
+
 def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict], by_hand: bool = False) -> None:
     """Keeps these cameras or SD cards as the research project's — the whole list: what was kept and is not in it is deleted *logically* (see `_kept_list`).
 
@@ -640,8 +665,25 @@ class _Refs:
 # What a visit says of what it points to — (told as, kept as an id in, kind): told by what it is called, kept by the id. What cannot be found (a card nobody registered) is kept as it was said.
 _POINTS_TO = (("location_id", "location_ref", "location"), ("camera_id", "camera_ref", "camera"), ("sd", "sd_ref", "sd"), ("setup_by", "setup_by_ref", "trapper"))
 _CALLED = {
-    "location": lambda r: r.get("location_id"), "camera": lambda r: r.get("camera_id") or r.get("label"), "sd": lambda r: r.get("label"), "trapper": lambda r: r.get("name"),
+    "location": lambda r: r.get("location_id"), "camera": lambda r: r.get("label") or r.get("camera_id"), "sd": lambda r: r.get("label"), "trapper": lambda r: r.get("name"),
 }
+
+
+def camera_model_of(record: dict) -> str | None:
+    """The model of a camera as Camtrap DP's cameraModel says it — the make and the model, make-model — from its record: the model alone when it has no make."""
+    make, model = str(record.get("camera_make") or "").strip(), str(record.get("camera_model") or "").strip()
+    return f"{make}-{model}" if make and model and not model.lower().startswith(make.lower()) else (model or None)
+
+
+def _what_the_camera_is(record: dict) -> dict:
+    """What a visit tells of its camera from its record (#231): it only points to it (camera_ref), and what the camera is — its model as Camtrap DP says it and
+    its serial number — is the record's, copied for whoever needs it (the deployment), never kept in the visit."""
+    out: dict = {}
+    if (model := camera_model_of(record)) is not None:
+        out["camera_model"] = model
+    if str(record.get("camera_id") or "").strip():
+        out["camera_serial"] = str(record["camera_id"]).strip()
+    return out
 
 
 def _refs(root: Path, research_project_id: str, trappers=None) -> _Refs:
@@ -666,6 +708,9 @@ def _linked(visit: dict, refs: _Refs) -> dict:
     linked when it has it."""
     out = dict(visit)
     for told, kept, kind in _POINTS_TO:
+        if kind == "camera":
+            _link_camera(out, refs)
+            continue
         text = out.get(told)
         record = refs.by_label[kind].get(identity.key(kind, text)) if text not in (None, "") else None
         if record is not None and record.get("id"):
@@ -685,13 +730,36 @@ def _linked(visit: dict, refs: _Refs) -> dict:
     return out
 
 
+def _link_camera(out: dict, refs: _Refs) -> None:
+    """The camera of a visit kept by the id of its record (#231): the one it already points to (camera_ref), else the one it names — by its label, or by its
+    serial number when it says only that. Then what the camera is (its model, its serial number) is the record's, and is not kept in the visit — unless the
+    record says no model, when the one the visit wrote is kept. A camera with no record is kept as it was said, and is linked when it has one."""
+    record = refs.by_id["camera"].get(out.get("camera_ref"))
+    if record is None:
+        text = out.get("camera_id") or out.get("camera_serial")
+        record = refs.by_label["camera"].get(identity.key("camera", text)) if text not in (None, "") else None
+    if record is None or not record.get("id"):
+        out.pop("camera_ref", None)
+        return
+    out["camera_ref"] = record["id"]
+    out.pop("camera_id", None)
+    out.pop("camera_serial", None)
+    if str(record.get("camera_model") or "").strip():
+        out.pop("camera_model", None)
+
+
 def _unlinked(visit: dict, refs: _Refs) -> dict:
-    """A visit as it is told: what it points to said by what it is called now."""
+    """A visit as it is told: what it points to said by what it is called now — and its camera with the id of its record beside (camera_ref) and what the record
+    says it is (#231)."""
     out = dict(visit)
     for told, kept, kind in _POINTS_TO:
-        record = refs.by_id[kind].get(out.pop(kept, None))
+        record = refs.by_id[kind].get(out.get(kept) if kind == "camera" else out.pop(kept, None))
         if record is not None:
             out[told] = _CALLED[kind](record)
+            if kind == "camera":
+                out.update(_what_the_camera_is(record))
+        elif kind == "camera":
+            out.pop(kept, None)
     named = [str(refs.by_id["trapper"][t]["name"]) for t in out.pop("trapper_refs", None) or [] if t in refs.by_id["trapper"]]
     rest = [n.strip() for n in str(out.get("trappers") or "").split(",") if n.strip()]
     if named or "trappers" in out:

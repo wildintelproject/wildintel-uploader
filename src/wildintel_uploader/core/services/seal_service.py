@@ -72,7 +72,7 @@ def _per_image_validations(found: dict) -> dict[str, dict[str, str]]:
             add("duplicates", name, "same content as " + ", ".join(f for f in group["files"] if f != name))
     for field, info in found.get("exif_missing", {}).items():
         for name in info.get("files", []):
-            add("exif", name, f"no {field}")
+            add("exif", name, f"no {info.get('label') or field}")
     return {check: _problems(images) for check, images in problems.items()}
 
 
@@ -91,10 +91,11 @@ def run_checks(source: Path, dest: Path, deployment: DeploymentFields) -> dict:
     stat_checks = _checks(post, statistics_service.STATISTIC_CHECKS)
     collections_dir, research_project_id = dest.parent.parent.parent, dest.parent.parent.name
 
-    found = dis.validate_images(source, image_checks, detail=True)
+    found = dis.validate_images(source, image_checks, detail=True, exif_fields=settings.VALIDATION.exif_fields, camera_levels=settings.VALIDATION.camera_levels)
     consistency = dis.validate_deployment_consistency(
         source, deployment, deployment_checks, collection_name=dest.parent.name, expected_location_id=deployment.location_id,
-        tolerance_hours=post.tolerance_hours,
+        tolerance_hours=post.tolerance_hours, camera=local_folder_service.camera_record(collections_dir, research_project_id, deployment.camera_id),
+        camera_levels=settings.VALIDATION.camera_levels,
     )
     stats = statistics_service.statistical_checks(
         statistics_service.times_of_folder(source), collections_dir, research_project_id, deployment.deployment_id, stat_checks,

@@ -66,7 +66,7 @@ In the optional steps you can add entries one by one or use **Import from CSV** 
 
 New sites are **Pending**: their first visit starts them, and earlier revisions do not wait for them. The timezone is important for interpreting camera dates and cannot be changed after the location is created; see [Locations](user-manual.md#23-locations).
 
-After setup, choose **Register the first visit** or return to **Main menu**. To create another project later, use **Create a new research project** on the welcome screen or in the research project selector.
+After setup, choose **Register the visits** — from a file (your field history, or a download of Epicollect) or one by hand — or return to **Main menu**. To create another project later, use **Create a new research project** on the welcome screen or in the research project selector.
 
 ![Initial setup: the research project, the data folder and the way to finish or to configure the optional entities](img/screenshots/initial-setup.png)
 
@@ -154,7 +154,7 @@ Once the checks pass, WildINTEL Uploader prepares the images before they can be 
 **Add metadata.** This optional step writes information such as the creator, owner, publisher, rights, license and location into each image as XMP.
 
 !!! note "Add metadata"
-    The notice under **What gets written into each image** warns when **Owner** or **Publisher** has not been set in **Settings › Preprocessing**. If either is missing, its value will be written as **Unknown**; the notice does not prevent you from continuing. Set these values in Settings if you want the images to carry the correct attribution. This step also needs ExifTool; if it is unavailable, WildINTEL Uploader disables the step and explains why.
+    The notice under **What gets written into each image** warns when **Owner** or **Publisher** has not been set in **Settings › Processing**. If either is missing, its value will be written as **Unknown**; the notice does not prevent you from continuing. Set these values in Settings if you want the images to carry the correct attribution. This step also needs ExifTool; if it is unavailable, WildINTEL Uploader disables the step and explains why.
 
 When you start preprocessing, WildINTEL Uploader copies and processes the images. How long this takes depends on the number of images and the processing steps you selected. If everything completes successfully, WildINTEL Uploader shows a summary of what was done and asks you to confirm saving the deployment in your local collection. Saving seals it so WildINTEL Uploader can detect later changes.
 
@@ -234,7 +234,7 @@ The places the visits of a research project can be taken from, besides entering 
 The visits are read from the **CSV file downloaded from the new WildINTEL Epicollect project**, the form of the field flow (*Register the visits › WildINTEL Epicollect CSV*). The columns are found by the label of their question: there is nothing to say about them.
 
 - **The time of a visit** — the form has no date or time to read: a visit happened when its entry was created (`created_at`, UTC), and it is told in the timezone of its location.
-- **What is created** — the *Import & auto-creation rules* card summarizes the options and opens with **Customize**. It has switches to create locations, cameras, SD cards and trappers the file names that are not kept, and three more (*The photos were not counted*, *Use the coordinates of the location…* and *Close the revision before…*). **They are all marked at first** for the WildINTEL CSV; the expanded card has a switch to mark or clear them all. With **Create the locations** on, it asks the **timezone of the new locations** — the form does not say it — (**UTC** by default), and, only when it is not UTC, whether **their cameras follow summer time**. In a custom CSV the entity-creation switches start cleared, because creating asks for more columns.
+- **What is created** — the *Import & auto-creation rules* card summarizes the options and opens with **Customize**. It has switches to create locations, cameras, SD cards and trappers the file names that are not kept, and three more (*The photos were not counted*, *Use the coordinates of the location…* and *Mark the locations with no visit as not visited*). **They are all marked at first** for the WildINTEL CSV; the expanded card has a switch to mark or clear them all. With **Create the locations** on, it asks the **timezone of the new locations** — the form does not say it — (**UTC** by default), and, only when it is not UTC, whether **their cameras follow summer time**. In a custom CSV the entity-creation switches start cleared, because creating asks for more columns.
 
 #### Custom CSV
 
@@ -258,12 +258,34 @@ it has; a blank secret is the saved one. The **Import deployment information fro
 Which of the [folder checks](#stage-2-images) the wizard shows. Each is an entry with a switch;
 turn off the ones you never want to see. They are all on by default.
 
+The gear of each check says **how it starts in each import**: **Must pass** (it has to pass to go on),
+**Warn** (it only says what it found) or **Skip** (it is offered unticked). Each import can still
+change it. The folder checks start as *Warn*; in the postvalidation, *Image dates fit the deployment*
+and the SD card start as *Must pass* and the rest as *Warn*.
+
+The gear of **Required EXIF fields** also says which fields every image is expected to have. The
+**capture date** (`DateTimeOriginal`) is always one of them, with a lock: WildINTEL Uploader needs it
+for the dates, the names and the sequences. The rest are added by choosing them from a list — *Make*,
+*Model*, *SerialNumber*, *ISO*, *GPSLatitude*, *AmbientTemperature*… — or by typing any name ExifTool
+gives a field, and taken out with their cross. By default the model of the camera is expected; the
+serial number is not, as most camera traps do not write it. Without ExifTool only the standard EXIF
+fields can be read.
+
+The gear of **Same camera on every image** says how two images are told to be of the same camera:
+**levels** of fields, the most reliable first. The images are compared by the first level every one
+of them has; when no level is had by all of them, by the first that any has, and the rest are said
+to have no camera information. By default: `SerialNumber`, then `Make + Model`, then `Model`. A level
+is moved up or down with its arrows or taken out with its cross, and one is added by choosing a field
+from the list or typing it — several joined with **+**, as `Make + Model`; some cameras write their
+name in `ImageDescription` or in a field of their own. Without a serial number, two cameras of the
+same model are not told apart, and the result says so.
+
 ### Postvalidation
 
 ![Settings › Postvalidation](img/screenshots/settings-postvalidation.png)
 
-Which of the [postvalidation checks](#stage-4-check-details) the wizard shows, and what the ones
-that take a value mean:
+Which of the [postvalidation checks](#stage-4-check-details) the wizard shows, how each starts in an
+import — its gear, as in [Validation](#validation) — and what the ones that take a value mean:
 
 | Setting | Default | |
 |---|---|---|
@@ -274,9 +296,9 @@ that take a value mean:
 | Number of images / sequences / length of sequences | 50 % each | How different a value can be and still count as similar. |
 | SD card / Photo count | on | The two checks of a deployment [of a visit](#stage-4-check-details): that the card is the one the visit left and that the images are those it counted. |
 
-### Preprocessing
+### Processing
 
-![Settings › Preprocessing](img/screenshots/settings-preprocessing.png)
+![Settings › Processing](img/screenshots/settings-preprocessing.png)
 
 What a new import does to the images — the wizard lists it before preparing, and a run can still
 switch each step off.
@@ -289,7 +311,14 @@ switch each step off.
 - **License** — picked from a list: **CC0** (any use, no requirements), **CC BY** (any use with
   attribution) or **CC BY-NC** (with attribution, not for commercial purposes), the default. What is
   written into each image is the license's URL, shown beside each name.
-- **Dates** — **Ignore summer time**, and **Convert the dates to UTC**.
+- **Dates** — the capture dates give the day in the name of each image and its date in the metadata.
+  They are read from each image as the clock of the camera, in the timezone of its location; **the
+  dates in the images are never changed**. With a location in UTC, neither option changes anything.
+  - **Ignore summer time** — for cameras whose clock was set once and never changed: in summer,
+    08:00 on the camera is 09:00 on the clock of the location. Used when the location does not say it.
+  - **Convert the dates to UTC** — 08:30 in Madrid in July is written 06:30 UTC; off, the date keeps
+    the offset of the location (08:30+02:00). Only the name and the metadata change: near midnight, the
+    day in the name can be the day before.
 
 ### Entities
 
@@ -329,7 +358,7 @@ What each report holds:
 | **Validation** | each image and check — corrupted, shooting order, EXIF fields, duplicates —, and the folder for the structure and camera checks | The ones that passed too, so the report says what was checked, not only what failed. |
 | **Postvalidation** | the deployment for the naming and statistical checks, and each image for its date and camera | Why a check failed — *241 images — like the previous revisions (median 238, ±50 %)*. |
 | **Repair** | each image and check, and each metadata file | What the repair wrote and what the images passed, as the new seal says — and the preprocessing checks: names, size, metadata. |
-| **Preprocessing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized* — and the ones that were **skipped**, with the reason. |
+| **Processing** | each image | What was done — *IMG_0001.JPG → R0003-DONA_01__20240904_1.JPEG; date 2024-09-04T11:10:00+00:00 (exif); resized 6000×4000, 8.7 MB → 2400×1600, 1.4 MB*, or *not resized: 1920 px wide, no wider than 2400* — and the ones that were **skipped**, with the reason. |
 
 **Settings › Reports** lists all of them, newest first, with *View*, *CSV*, *JSON* and *Delete* (which
 asks again). They are kept in the `reports` folder of the data folder until you delete them. A check you run twice
@@ -358,9 +387,9 @@ Once it is configured, the menu is where you choose what you want to do. The thr
 ![The task menu](img/screenshots/menu.png)
 
 The **Quick guide** button, at the right of the title, opens a panel with the work from end to end: the research project and then the three steps, and where to follow the progress and to fix dates and files. The numbers of the cards are the **typical workflow**: **1 Register the visits**, then **2 Import the images** — which takes the location, the camera and the dates from the visits — and then **3 Upload the images**. *Sync* is for when
-
-The **Glossary** button, beside it, opens a panel with what each word of WildINTEL Uploader means, in alphabetical order: *camera*, *collection*, *deployment*, *location*, *research project*, *revision*, *SD card*, *trapper* and *visit*. A **revision** is one visit to every location of a research project; a **deployment** is the time a camera stays at a location with an SD card — from the visit that put the card in to the visit that collected it — with the conditions in which it was installed and the images it took; and the deployments of a revision are its **collection**.
 TRAPPER already holds deployments that this computer's collections folder doesn't know about (**Utils › Sync**).
+
+The **Glossary** button, beside it, opens a panel with what each word of WildINTEL Uploader means, from the whole to its parts: *research project*, *location*, *camera*, *SD card*, *trapper*, *visit*, *revision*, *deployment* and *collection*. A **revision** is one visit to every location of a research project; a **deployment** is the images of one camera at one location between two visits — from the visit that put an SD card in the camera to the visit that collected that card — and is what is uploaded to the remote repository; and the deployments whose SD cards were put in during the same revision are its **collection**, kept and uploaded together.
 
 The title in the top bar takes you back to the welcome screen at any time; **? Help** opens this
 documentation, and the sun/moon button switches between dark and light.
@@ -492,16 +521,18 @@ The camera and the SD card are picked from those of the research project, and wh
 
 Any spreadsheet with a row per visit. Press **Register the visits › From a file**; the research project is the default one. The steps:
 
-1. **Choose the spreadsheet file.** When Epicollect is turned on in the settings, first say **where the CSV is**: *A file on this computer* or *Epicollect5 project* — with the latter, **Download the entries** reads them from the project of the settings and goes on as a file does. Drop the CSV in the file area or browse for it. WildINTEL Uploader reads its columns and says what it detected — the download of the WildINTEL form or a custom CSV —; if it is wrong, say it is the other one, and the steps go on as that kind of file does. If you do not know what the file should look like, **Download a template** (at the top right of the file area): a CSV with the columns of a visit and twenty example visits of four locations in five revisions — the installation, revisions, a theft, a camera replaced, one taken away and a location given up — in which several actions are written in one visit, joined with `+` (`Stolen + Installation`, `Revision + Desinstallation + Installation`…). Its columns are matched by themselves; replace its rows with yours. Choosing the file does **not** move on: the step stays open with **Import & auto-creation rules**, where **Customize** opens the switches for entities the file names that are not in the project; each asks for more fields in the matching, where a default can also be given (a location is created with **its own coordinates**, `location_latitude` and `location_longitude`, which are not those of the visit). **Done** closes the options; **Continue** moves on.
+1. **Choose the spreadsheet file.** When Epicollect is turned on in the settings, first say **where the CSV is**: *A file on this computer* or *Epicollect5 project* — with the latter, **Download the entries** reads them from the project of the settings and goes on as a file does. Drop the CSV in the file area or browse for it. WildINTEL Uploader reads its columns and says what it detected — the download of the WildINTEL form or a custom CSV —; if it is wrong, say it is the other one, and the steps go on as that kind of file does. If you do not know what the file should look like, **supported formats**, in the subtitle of the step, opens a panel at the right with the two formats that are read — the *WildINTEL Epicollect CSV* and the *Custom CSV* —, each with **What goes in each column** (what goes in it, how it is written, an example, and which are required). The Custom CSV has **Download a template** too: a CSV with the columns of a visit and twenty example visits of four locations in five revisions — the installation, revisions, a theft, a camera replaced, one taken away and a location given up — in which several actions are written in one visit, joined with `+` (`Stolen + Installation`, `Revision + Desinstallation + Installation`…). Its columns are matched by themselves; replace its rows with yours. Choosing the file does **not** move on: the step stays open with **Import & auto-creation rules**, where **Customize** opens the switches for entities the file names that are not in the project; each asks for more fields in the matching, where a default can also be given (a location is created with **its own coordinates**, `location_latitude` and `location_longitude`, which are not those of the visit). **Done** closes the options; **Continue** moves on.
 2. **Match the columns.** For each field of a visit, the column of the file that gives it. The fields are in groups, as in the form of a visit by hand — *Who*, *Where*, *When*, *The visit*, *SD card*, *Camera*, *Site*, and *Grouping and notes* —, each with an example from the file. Each group is a card with a **chevron at the left** that folds it away, and says how many of its fields are matched (*3 of 5 matched*). What has the name of a field (`location_id`, `session`, `date`, `time`, `actions`, `trappers`, `camera_id`, `sd`, `num_photos`…) is matched by itself; pick the rest, or give a **default** for a field the file has no column for. The location and the actions are required — every row gives them, by a column or a default. The **coordinates of the visit** (`latitude` and `longitude`: where the trapper was when the visit was noted) are required of a visit, but the file need not have them: a row gives them by a column or a default and, when it gives none, takes those of its **location** (a note says how many rows did) — the switch *Use the coordinates of the location when a row has none*, on by default, in the options of the second step; with it off, a row with none is refused —; one of the two alone is refused; the time is a date and a time, or — when the file has it — the instant of an entry (`created_at`), as the *visit sources* setting says. Dates may be written day first. A visit with no revision gets the next one of its location. Press **Read the visits**.
 3. **Check the visits of the file.** The check starts when you press **Continue** in the step of the file, not before. While it runs nothing is shown but that the file is being checked (a long history can take some minutes): a bar that moves — it does not say how far the check is — and the number of the step turns like a clock. Then what the file says, before it is kept: *N visits to add · N already kept · N rows with a problem*, the new locations, what is worth knowing and what is odd. Then the **rows** of the file, laid out like a dashboard:
    - **Revision selection** — a card for *All revisions* and one for each revision the file has (the five most recent as cards, the older ones in the **Older revisions** list, for a file with many). Picking one narrows what is below to its rows.
    - **Status metrics & filters** — the **Progress** card and a card for *Rows read*, *Ready* (new visits), *Skipped / Existing* (already kept, or ignored) and *With problems*. Pressing one shows only those rows; pressing it again shows them all.
    - **The table** — the search (by row, location, visit, action…), **Group by** — *Row* or *Error* — and **Reset**, with a line of the **active filters**. Grouped **by row**, each row of the file has its **Row**, **Visit**, **Location ID**, **Actions**, **When** and **Status** (*Add*, *Add · to check*, *Skipped / Existing*, *Skipped / Ignored* or *Error*); the **chevron** at the left is only in the rows with something wrong, and opens the errors under the row — a row that is fine has none —, and the row is marked with a blue band while they are open; the **eye** button opens a **panel at the right** with what the row says, field by field, and what is wrong with it when something is (Escape or **Close** shuts it). Grouped **by error**, each kind of error is a row with how many rows have it, and its chevron opens those rows.
 
-   **A revision needs the one before it.** A revision is imported only when the one before it has at least one visit — kept already, or in the same file — and is closed: only R0001 has none before it. A file that starts in R0003 when there is nothing of R0002 is refused (*R0003 cannot start: R0002 has no visit*): import R0002 first. No visit is made *unknown*: what a revision lacks is a visit to be made, which *Close the revision before…* marks as **Not revised**. With it on, **When each revision is closed**, under the switch, says on which day: a number of days, weeks or months (with presets) counted **After its last visit** — the last visit kept of the revision — or **Before the next revision** — the first visit of the revision after it. At first it is **0 days after its last visit**: the day of that visit. It is the same for every revision the file closes. A day before the last visit of the revision is taken as that visit's day; and when the day reaches the next revision — on the day of its first visit or after —, **the day before the first visit of the next revision** is used. A note of the import says so. A revision that has every location visited is left as it is.
+   **A revision needs the one before it.** A revision is imported only when the one before it has at least one visit — kept already, or in the same file — and is closed: only R0001 has none before it. A file that starts in R0003 when there is nothing of R0002 is refused (*R0003 cannot start: R0002 has no visit*): import R0002 first. No visit is made *unknown*: what a revision lacks is a visit to be made, which *Mark the locations with no visit as not visited* marks as **Not revised**. With it on, **The day of the not visited mark**, under the switch, says on which day — it is only the date written in those marks, and it is folded, showing the day it is, until its **Customize** opens it: a number of days, weeks or months (with presets) counted **After its last visit** — the last visit kept of the revision — or **Before the next revision** — the first visit of the revision after it. At first it is **0 days after its last visit**: the day of that visit. It is the same for every revision the file closes. A day before the last visit of the revision is taken as that visit's day; and when the day reaches the next revision — on the day of its first visit or after —, **the day before the first visit of the next revision** is used. A note of the import says so. A revision that has every location visited is left as it is.
 
-   When the rows of a revision are refused because the revision before is not finished — *R0043 cannot start: R0042 is not finished, 3 location(s) still to be visited in it: …* —, a notice above the metrics says which revision and which locations, and has the button **Mark them as not visited and read again**: those locations get a visit *Not revised*, the revision before is closed — it cannot be changed afterwards —, and the file is read again. The other way out is to correct the file and read it again. The switch of the second step, *Close the revision before when it has locations still planned*, does the same beforehand.
+   When the rows of a revision are refused because the revision before is not finished — *R0043 cannot start: R0042 is not finished, 3 location(s) still to be visited in it: …* —, a notice above the metrics says which revision and which locations, and has the button **Mark them as not visited and read again**: those locations get a visit *Not revised*, the revision before is closed — it cannot be changed afterwards —, and the file is read again. The other way out is to correct the file and read it again. The switch of the second step, *Mark the locations with no visit as not visited*, does the same beforehand.
+
+   **All or nothing.** A file with rows that cannot be added keeps **nothing** — not even its good rows — until they are corrected and the file is read again: *Continue to the review* is off, and a box says, first, each row with an **error of its own** and why — *Row 460 (R0013, DONA_0026_B): Camera 4 is installed at DONA_0026…* —, and then how many rows only **wait** for them — *812 more rows of R0014 to R0043 only wait for them: a revision is added when the one before it is finished*. So the history is never kept in part, and what has to be corrected is said once, not in every row after it.
 
    An SD card whose id has spaces or signs (*84 (10)*, *38_B*) is told among what is odd — it is kept as written, not refused; the ids of the cards are never upper-cased. **The case counts** for an SD card, a camera and the full name of a trapper (not its username, which is read whatever its case): `7b` and `7B` are two SD cards (they were two locations), and a visit that says `7b` is of the card `7b`, not of `7B`. The locations and the research projects are still read whatever their case: they are names of folders, and TRAPPER keeps its ids in lower case.
 
@@ -614,7 +645,7 @@ The stage has three steps (the first one also asks the SD card):
 
 **1. Select the folder.** First say whether **the images are on an SD card**:
 
-- **Yes, they are on the SD card** — say where the card is (**Browse…**, or type it) and press **Copy the card**. The card is **only read**: its content is copied to a **temporary folder** of this computer, with the progress of the copy, and the card is ejected so that it can be taken out. The process goes on with the copy as with any folder, and the copy is removed when the import is over.
+- **Yes, they are on the SD card** — say where the card is (**Browse…**, or type it) and press **Copy the card**. The card is **only read**: its content is copied to a **temporary folder** of this computer, with the progress of the copy, and the card is ejected so that it can be taken out. The process goes on with the copy as with any folder, and the copy is removed when the import is over. Before copying, it is checked that the temporary folder of the system has room for the whole card; and before the images are prepared, that the disk of the collection has room for them (they are prepared in a hidden `.staging` folder of the collection and moved to their place when the deployment is saved). When there is not, it says how much is needed and how much is free, before anything is written.
 - **No, they are in a folder** — press **Browse…** and choose the folder with the deployment's images (or type its path), then **Scan**.
 
 The scan only **counts**: how many files there are and how many of them are images (by
@@ -634,8 +665,8 @@ of a visit, the card is checked against the one the visit left — see [Check de
 | Corrupted images | Files that aren't readable images. |
 | Shooting order vs. filename sequence | Images whose order by name differs from their order by time. |
 | Folder structure | Subfolders inside the deployment's folder. |
-| Same camera | More than one camera model or id among the images. |
-| Required photo data | Images missing the capture date, camera model or id. |
+| Same camera | More than one camera among the images, told by the first level of fields of Settings › Validation that every image has — by default the serial number, else the make and the model, else the model. The result says which fields it compared by. |
+| Required photo data | Images missing the capture date — always expected: WildINTEL Uploader needs it — or one of the EXIF fields expected in Settings › Validation (by default the model of the camera). |
 | Duplicate images | Files with the same content. |
 
 For each check you choose **how strict** it is: **Skip** doesn't run it, **Warn** shows the problems but lets you
@@ -658,9 +689,12 @@ Pressing a card filters the **table of results** below, and each block filters o
 
 ![The images that failed a check](img/screenshots/validation-failures.png)
 
-Reading the camera's model and id uses ExifTool, because the serial number of a camera trap lives
-in the manufacturer's own metadata. Without it WildINTEL Uploader falls back to the standard EXIF tags,
-which are less complete — it says which it used.
+The EXIF of the images — the capture dates, the camera, the fields expected — is read with **ExifTool**,
+in one run for all the images of the folder, so that a field is always the same field, by the names
+ExifTool gives them: the serial number of a camera trap, and much of what is its own, lives in the
+manufacturer's own metadata, which only ExifTool reads. It comes with the app. Without it (a development
+install) WildINTEL Uploader falls back to the standard EXIF tags, read with Pillow, which are less
+complete — and says so.
 
 ### Stage 3 — Dates and details
 
@@ -712,8 +746,8 @@ Now that you know when, how and where the images were taken, new checks are run:
 | Deployment id starts with its collection | `R0033-…` belongs to `R0033`. |
 | Collection name | `R0033`. |
 | The id's location is the one chosen | The location in the id is the one from stage 1. |
-| Image dates fit the deployment | The first image at the start, the last at the end, within the tolerance. |
-| Camera consistency | The camera in the images is the one in the details. |
+| Image dates fit the deployment | No image before the start or after the card was collected, and the first one at the start — the photo taken right after the camera is set up —, within the tolerance and by their dates. A last image long before the collection is only said: the camera stopped, as when the card was full or the batteries went flat (the visit that collected the card says which); it is not a problem of the dates, and **Fix the dates and times** is offered only for the others. |
+| Camera consistency | The images are of the camera of the deployment, as its record in Settings › Entities › Cameras says it — its serial number, make and model —, compared by the same levels as *Same camera*: the first level the record has. With no record, or one that says nothing, the images are compared with the model of the deployment. When the record has no make and model, or other ones, the result offers to **keep** the ones the images say in it, so the next cards of that camera are compared with them. |
 | Number of images | Like the previous revisions of the location. |
 | Number of sequences | Like the previous revisions of the location. |
 | Length of the sequences | Like the previous revisions of the location. |
@@ -746,21 +780,26 @@ failed it (*Out of range*, *Other camera*) as thumbnails. The [report](#reports)
 **1. Processing steps.** Choose what to do to the images; the table says what each step does. Press **Start preparing**.
 
 1. **Copy into the collection** — always. Anything that isn't an image is copied as it is.
-2. **Read the capture dates** — always. From each image's EXIF, as the camera's local time in the
-   location's timezone — ignoring summer time and converting to UTC, as the settings say. An image
-   with no EXIF date uses its file's date.
+2. **Read the capture dates** — always. From each image, as the clock of the camera in the
+   location's timezone — ignoring summer time and converting to UTC, as the settings say; when the
+   cameras keep UTC, as they are. They give the day in the name of each image and its date in the
+   metadata: the dates in the images are never changed. An image with no date of its own uses its
+   file's date.
 3. **Rename the images** — `<DEPLOYMENT>__<YYYYMMDD>_<n>.<EXT>` in upper case, `.jpg` becoming
    `.jpeg`, e.g. `R0003-DONA_01__20240904_1.JPEG`; *n* is the image's place in file-name order.
 4. **Resize the images** — to the width of the settings, keeping proportions, EXIF and colour
-   profile. Unlike wildintel-tools, the resized image is the one that is kept.
+   profile. Unlike wildintel-tools, the resized image is the one that is kept. Once prepared, the step
+   says how many were resized, their size before and after and what they weighed — *1,620 of 1,620
+   resized: 6000×4000 → 2400×1600, 14.1 GB → 2.3 GB* —, and the report says it of each image.
 5. **Add metadata** — authorship, rights and license, written into each image as XMP with
    ExifTool: *Creator*, *Owner*, *Publisher*, *Rights*, *License*, *Coverage* and the hash of the
-   original and of the image kept, so each can be traced back. It is switched off, with the reason
+   original and of the image kept, so each can be traced back. They are written in batches of 200:
+   while it runs, a bar says how many images are written and the time left. It is switched off, with the reason
    given, if ExifTool isn't available. Check the owner and publisher in the settings first: if
    they're blank, the step says so.
 
 Each optional step can be switched off for this run (its checkbox). Its values come from the
-[Preprocessing settings](#preprocessing). The images go into the deployment's folder in the collections folder; the
+[Processing settings](#processing). The images go into the deployment's folder in the collections folder; the
 originals are never touched. Nothing is final yet: you can go back, change something and **Prepare again** — the folder is
 simply redone.
 

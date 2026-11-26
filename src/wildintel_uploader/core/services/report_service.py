@@ -23,8 +23,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from wildintel_uploader.core import config, parallel
-from wildintel_uploader.core.services import deployment_import_service as dis
+from wildintel_uploader.core import config
+from wildintel_uploader.core.services import camera_info, deployment_import_service as dis
 
 KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload", "visits")
 DEPLOYMENT = "(deployment)"
@@ -39,10 +39,10 @@ LABELS = {
     "collection_name": "Collection name", "location": "The id's location is the one chosen", "time_range": "Image dates fit the deployment",
     "sd_card": "The SD card is the visit's", "photo_count": "Number of images is the visit's",
     "image_count": "Number of images", "sequence_count": "Number of sequences", "sequence_length": "Length of the sequences",
-    "preprocessing": "Preprocessing",
+    "preprocessing": "Processing",
     "metadata_files": "Metadata files", "camera_match": "The camera is the deployment's",
-    "preprocessing_names": "Names of the preprocessed images", "preprocessing_size": "Size of the preprocessed images",
-    "preprocessing_metadata": "XMP metadata of the images", "preprocessing_hash": "Images unchanged since they were preprocessed",
+    "preprocessing_names": "Names of the processed images", "preprocessing_size": "Size of the processed images",
+    "preprocessing_metadata": "XMP metadata of the images", "preprocessing_hash": "Images unchanged since they were processed",
 }
 
 
@@ -98,7 +98,8 @@ class _Builder:
             return
         root = Path(self.source_dir)
         names = sorted({e["identifier"] for e in self.entries if e["status"] == "failed" and e["identifier"] != DEPLOYMENT})
-        taken = dict(zip(names, parallel.pmap(lambda n: dis._image_datetime(root / n), names)))
+        read = camera_info.read_dates([root / n for n in names])
+        taken = {n: read[root / n] for n in names}
         for e in self.entries:
             when = taken.get(e["identifier"]) if e["status"] == "failed" else None
             if when is not None:
@@ -127,8 +128,8 @@ def validation_report(found: dict, source: Path, checks: Iterable[str] | None = 
         missing: dict[str, list[str]] = {}
         for field, info in found.get("exif_missing", {}).items():
             for name in info.get("files", []):
-                missing.setdefault(name, []).append(field.replace("_", " "))
-        b.per_image("exif", images, {name: "no " + ", no ".join(fields) for name, fields in missing.items()}, "has its capture date, camera model and camera id",
+                missing.setdefault(name, []).append(info.get("label") or field.replace("_", " "))
+        b.per_image("exif", images, {name: "no " + ", no ".join(fields) for name, fields in missing.items()}, "has the EXIF fields expected",
                     tags={name: ", ".join(f"No {field}" if i == 0 else f"no {field}" for i, field in enumerate(fields)) for name, fields in missing.items()})
     if "duplicates" in ran:
         problems = {name: "same content as " + ", ".join(f for f in g["files"] if f != name) for g in found.get("duplicates", []) for name in g["files"]}
@@ -141,9 +142,10 @@ def validation_report(found: dict, source: Path, checks: Iterable[str] | None = 
         b.deployment("structure", not folders, "all the images are in one folder" if not folders else f"images in subfolders: {', '.join(folders)}")
     if "camera" in ran:
         cameras = found.get("cameras", [])
-        names = "; ".join(f"{c['model'] or '?'} {c['camera_id'] or '?'} ({c['count']})" for c in cameras)
+        names = "; ".join((" ".join(c["values"].values()) if c.get("values") else f"{c['model'] or '?'} {c['camera_id'] or '?'}") + f" ({c['count']})" for c in cameras)
         without = found.get("cameras_without_info", 0)
-        b.deployment("camera", len(cameras) <= 1 and not without, f"{len(cameras)} camera(s): {names or 'none'}" + (f"; {without} image(s) without camera information" if without else ""))
+        by = f" (compared by {' + '.join(found['camera_by'])})" if found.get("camera_by") else ""
+        b.deployment("camera", len(cameras) <= 1 and not without, f"{len(cameras)} camera(s){by}: {names or 'none'}" + (f"; {without} image(s) without camera information" if without else ""))
     return b.build()
 
 
@@ -194,14 +196,25 @@ def repair_report(deployment_id: str, dest: Path, files: list[tuple[str, bool, s
     return b.build()
 
 
+def _megabytes(size: int | None) -> str:
+    return f"{(size or 0) / 1_000_000:.1f} MB"
+
+
+def _size(record: dict, prefix: str) -> str:
+    """An image's size, as the report says it: 6000×4000, 8.7 MB — `prefix` "original_" for the one it had before it was processed."""
+    return f"{record[prefix + 'width']}×{record[prefix + 'height']}, {_megabytes(record.get(prefix + 'bytes'))}"
+
+
 def preprocessing_report(records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> dict:
     """What preprocessing did to each image — and the ones it couldn't process."""
-    b = _Builder("preprocessing", f"Preprocessing of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters={**options, "destination": str(dest)})
+    b = _Builder("preprocessing", f"Processing of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters={**options, "destination": str(dest)})
     b.checked = len(records) + len(skipped)
     for r in records:
         steps = [f"{r['original']} → {r['name']}" if r["name"] != r["original"] else r["original"], f"date {r['date']} ({r['date_source']})"]
         if r.get("resized"):
-            steps.append("resized")
+            steps.append(f"resized {_size(r, 'original_')} → {_size(r, '')}" if r.get("width") and r.get("original_width") else "resized")
+        elif options.get("resize") and r.get("original_width"):
+            steps.append(f"not resized: {r['original_width']} px wide, no wider than {options.get('resize_width')}")
         b.add(r["original"], "preprocessing", True, "; ".join(steps))
     for item in skipped:
         b.add(item["name"], "preprocessing", False, item["detail"])

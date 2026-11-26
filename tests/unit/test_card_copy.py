@@ -37,6 +37,19 @@ def test_a_card_is_copied_to_a_temporary_folder_named_like_it_and_reports_its_pr
     assert (card / "DCIM" / "100" / "IMG_0001.JPG").exists()   # the card is only read
 
 
+def test_a_card_is_not_copied_when_the_temporary_folder_has_no_room_for_it(tmp_path: Path, monkeypatch):
+    """#212: the copy goes to the temporary folder of the system; with no room for the whole card, it is said before anything is copied."""
+    from wildintel_uploader.core.services import disk_space
+    card = _card(tmp_path)
+    monkeypatch.setattr(disk_space, "free_bytes", lambda path: 12)   # 30 bytes on the card
+
+    with pytest.raises(card_copy_service.CardCopyError) as refused:
+        list(card_copy_service.copy_card(str(card)))
+
+    assert "The SD card needs 30 bytes and the temporary folder of the system" in str(refused.value) and "has 12 bytes free" in str(refused.value)
+    assert not any((tmp_path / "temp").rglob("*.JPG"))   # nothing was copied
+
+
 def test_a_card_that_is_not_there_or_is_empty_is_refused(tmp_path: Path):
     (tmp_path / "EMPTY").mkdir()
     with pytest.raises(card_copy_service.CardCopyError, match="not a folder"):

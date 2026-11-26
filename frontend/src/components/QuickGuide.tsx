@@ -8,7 +8,7 @@ const DATABASE = <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7
 
 /** The steps of the work from the first: the research project, and then the three of the menu. */
 const STEPS: { badge: ReactNode; title: string; text: string }[] = [
-  { badge: 'project', title: 'Create a research project', text: 'Define trappers, locations, cameras and SD cards once, or switch anytime from the top bar.' },
+  { badge: 'project', title: 'Create a research project', text: 'Give its name, or link one that already exists in the remote repository. Its trappers, locations, cameras and SD cards can come later, with the field files. To work on another research project, choose it in the top bar.' },
   { badge: '1', title: 'Register the visits', text: 'Log field visits (who, when, location, actions) by hand or from your field CSV. Field visits are organized in revisions.' },
   { badge: '2', title: 'Import the images', text: 'Pair collected visits with SD card images to validate, rename and store them in a Camtrap DP-compatible deployment. Deployments are organized in collections.' },
   { badge: '3', title: 'Upload the images', text: 'Send to your remote repository (e.g., TRAPPER) either whole collections or any set of deployments.' },
@@ -23,7 +23,7 @@ function WithTerms({ text, onTerm }: { text: string; onTerm: (term: string) => v
   let last = 0
   for (const m of text.matchAll(TERM_FORMS)) {
     const term = TERMS.find((t) => t.term.toLowerCase() === m[1].toLowerCase())
-    if (!term) continue
+    if (!term || (m[0] === m[0].toUpperCase() && m[0] !== term.term)) continue   // TRAPPER, the platform, is not a trapper
     if (m.index > last) parts.push(text.slice(last, m.index))
     parts.push(
       <button key={m.index} type="button" title={`${term.term}: see it in the glossary`} onClick={() => onTerm(term.term)}

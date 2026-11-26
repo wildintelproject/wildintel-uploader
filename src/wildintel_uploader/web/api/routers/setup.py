@@ -40,6 +40,7 @@ class RolesRequest(BaseModel):
 class FieldItem(BaseModel):
     label: str = Field(min_length=1)
     camera_id: str | None = None
+    camera_make: str | None = None
     camera_model: str | None = None
     brand: str | None = None
     capacity: str | None = None
@@ -114,7 +115,7 @@ def add_field_items(req: FieldItemsRequest) -> dict:
             if req.kind == "cameras":
                 data.pop("brand", None); data.pop("capacity", None)
             else:
-                data.pop("camera_id", None); data.pop("camera_model", None)
+                data.pop("camera_id", None); data.pop("camera_make", None); data.pop("camera_model", None)
             key = data["label"]
             if key in have:
                 skipped.append(data["label"])

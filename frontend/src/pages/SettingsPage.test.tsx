@@ -456,7 +456,7 @@ describe('SettingsPage', () => {
   describe('Validation', () => {
     const IMAGE_CHECKS = [
       'Corrupted images', 'Shooting order vs. filename sequence', 'Folder structure (subdirectories)',
-      'Same camera (model and id) on every image', 'Required EXIF fields', 'Duplicate images',
+      'Same camera on every image', 'Required EXIF fields', 'Duplicate images',
     ]
 
     it('has one entry per check, each with a switch, all on by default', async () => {
@@ -466,20 +466,88 @@ describe('SettingsPage', () => {
 
       for (const label of IMAGE_CHECKS) expect(screen.getByRole('switch', { name: new RegExp(label.replace(/[()]/g, '\\$&')) })).toBeChecked()
       expect(screen.getAllByRole('switch')).toHaveLength(6)
-      expect(screen.queryAllByRole('button', { name: /^Configure/ })).toHaveLength(0) // none of them has anything to configure
+      expect(screen.queryAllByRole('button', { name: /^Configure/ })).toHaveLength(6) // every one has a gear: how it starts in each import
     })
 
-    it('turns checks off, and saves which are shown', async () => {
+    it('says which EXIF fields are expected: the capture date always, and the ones chosen from the list or typed', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await section('Validation')
+      await userEvent.click(screen.getByRole('button', { name: /Configure Required EXIF fields/ }))
+
+      const expected = () => within(screen.getByRole('list', { name: 'EXIF fields expected' }))
+      expect(expected().getByText('DateTimeOriginal')).toBeInTheDocument()
+      expect(expected().queryByRole('button', { name: /Do not expect DateTimeOriginal/ })).not.toBeInTheDocument()   // the app needs it: it cannot be taken out
+      expect(expected().getByText('Model')).toBeInTheDocument()
+
+      const field = screen.getByLabelText('EXIF field to expect')
+      await userEvent.type(field, 'iso')
+      await userEvent.click(screen.getByRole('button', { name: 'Add' }))   // completed as the list writes it
+      await userEvent.type(field, 'AmbientTemperature{Enter}')
+      await userEvent.type(field, 'model')
+      expect(screen.getByText('It is expected already.')).toBeInTheDocument()
+      await userEvent.clear(field)
+      await userEvent.type(field, 'not a field')
+      expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+      await userEvent.clear(field)
+      await userEvent.click(expected().getByRole('button', { name: 'Do not expect Model' }))
+      // Reset to default leaves only the model, and is off once it is so
+      const reset = within(screen.getByRole('group', { name: 'Required EXIF fields settings' })).getByRole('button', { name: 'Reset to default' })
+      await userEvent.click(reset)
+      expect(expected().queryByText('ISO')).not.toBeInTheDocument()
+      expect(reset).toBeDisabled()
+      await userEvent.type(field, 'ISO{Enter}')
+      await userEvent.type(field, 'AmbientTemperature{Enter}')
+      await userEvent.click(expected().getByRole('button', { name: 'Do not expect Model' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION.exif_fields).toEqual(['ISO', 'AmbientTemperature'])
+    })
+
+    it('says how two images are told to be of the same camera: levels of fields, in an order that can be changed', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await section('Validation')
+      await userEvent.click(screen.getByRole('button', { name: /Configure Same camera/ }))
+
+      const levels = () => within(screen.getByRole('list', { name: 'Levels to tell the camera' })).getAllByRole('listitem').map((li) => li.querySelector('.font-mono')?.textContent)
+      expect(levels()).toEqual(['SerialNumber', 'Make + Model', 'Model'])
+      expect(screen.getByRole('button', { name: 'Reset to default' })).toBeDisabled()   // as it is by default
+      await userEvent.click(screen.getByRole('button', { name: 'Take out Make + Model' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+      expect(levels()).toEqual(['SerialNumber', 'Make + Model', 'Model'])
+      await userEvent.click(screen.getByRole('button', { name: 'Move Model up' }))
+      expect(levels()).toEqual(['SerialNumber', 'Model', 'Make + Model'])
+      await userEvent.type(screen.getByLabelText('Level to add'), 'make + imagedescription{Enter}')   // fields joined with +, completed as the list writes them
+      await userEvent.type(screen.getByLabelText('Level to add'), 'Model')
+      expect(screen.getByText('It is one of the levels already.')).toBeInTheDocument()
+      await userEvent.clear(screen.getByLabelText('Level to add'))
+      await userEvent.click(screen.getByRole('button', { name: 'Take out SerialNumber' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION.camera_levels).toEqual([['Model'], ['Make', 'Model'], ['Make', 'ImageDescription']])
+    })
+
+    it('turns checks off, says how each starts in an import, and saves both', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
       await section('Validation')
 
       await userEvent.click(screen.getByRole('switch', { name: /Duplicate images/ }))
       await userEvent.click(screen.getByRole('switch', { name: /Required EXIF fields/ }))
+      // the gear of every check opens how it starts in each import
+      await userEvent.click(screen.getByRole('button', { name: /Configure Required EXIF fields/ }))
+      expect(within(screen.getByRole('radiogroup', { name: /How Required EXIF fields.* starts/ })).getByRole('radio', { name: 'Warn' })).toBeDisabled()   // a check turned off does not start at all
+      await userEvent.click(screen.getByRole('button', { name: /Configure Folder structure/ }))
+      await userEvent.click(within(screen.getByRole('radiogroup', { name: /How Folder structure.* starts/ })).getByRole('radio', { name: 'Skip' }))
+      await userEvent.click(screen.getByRole('button', { name: /Configure Corrupted images/ }))
+      await userEvent.click(within(screen.getByRole('radiogroup', { name: /How Corrupted images.* starts/ })).getByRole('radio', { name: 'Must pass' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION).toEqual({
         corrupted: true, sequence: true, structure: true, camera: true, exif: false, duplicates: false,
+        defaults: { corrupted: 'required', sequence: 'warn', structure: 'skip', camera: 'warn', exif: 'warn', duplicates: 'warn' },
+        exif_fields: ['Model'], camera_levels: [['SerialNumber'], ['Make', 'Model'], ['Model']],
       })
       await screen.findByText('Settings saved.')
       expect(screen.getByRole('switch', { name: /Duplicate images/ })).not.toBeChecked()
@@ -503,7 +571,7 @@ describe('SettingsPage', () => {
       await section('Validation')
 
       expect(screen.getByText('Files with exactly the same content.')).toBeInTheDocument()
-      expect(screen.getByText(/Capture date, camera model and camera id on every image/)).toBeInTheDocument()
+      expect(screen.getByText(/The capture date, and the fields the gear adds, on every image/)).toBeInTheDocument()
     })
   })
 
@@ -525,15 +593,15 @@ describe('SettingsPage', () => {
       for (const label of CHECKS) expect(screen.getByRole('switch', { name: label })).toBeChecked()
     })
 
-    it('puts a gear only on the checks that have something to configure', async () => {
+    it('puts a gear on every check: how it starts first, then what else it has to configure', async () => {
       await open()
 
-      const gears = screen.getAllByRole('button', { name: /^Configure/ }).map((b) => b.getAttribute('aria-label'))
-      expect(gears).toEqual([
-        'Configure Image dates fit the deployment', 'Configure Number of images is like the previous revisions',
-        'Configure Number of sequences is like the previous revisions', 'Configure Length of the sequences is like the previous revisions',
-      ])
+      expect(screen.getAllByRole('button', { name: /^Configure/ })).toHaveLength(11)
       expect(screen.queryByLabelText('Tolerance')).not.toBeInTheDocument() // closed until the gear is pressed
+      await userEvent.click(screen.getByRole('button', { name: 'Configure Image dates fit the deployment' }))
+      const panel = within(screen.getByRole('group', { name: 'Image dates fit the deployment settings' }))
+      expect(panel.getByRole('radio', { name: 'Must pass' })).toHaveAttribute('aria-checked', 'true')   // as before it could be set
+      expect(panel.getByLabelText('Tolerance')).toBeInTheDocument()
     })
 
     it('turns every check off, or on, at once', async () => {
@@ -569,6 +637,8 @@ describe('SettingsPage', () => {
         image_count: true, sequence_count: true, sequence_length: true, sd_card: true, photo_count: true, tolerance_hours: 2.5,
         sequence_gap_seconds: 60, min_revisions: 2, similarity_method: 'median',
         image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
+        defaults: { deployment_id: 'warn', collection_prefix: 'warn', collection_name: 'warn', location: 'warn', time_range: 'required', camera: 'warn',
+          image_count: 'warn', sequence_count: 'warn', sequence_length: 'warn', sd_card: 'required', photo_count: 'warn' },
       })
     })
 
@@ -684,13 +754,13 @@ describe('SettingsPage', () => {
     })
   })
 
-  describe('Preprocessing', () => {
+  describe('Processing', () => {
     it('is a section of its own, with the steps, the width, the authorship, the license and the dates', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Preprocessing')
+      await section('Processing')
 
-      expect(screen.getByRole('button', { name: 'Preprocessing' })).toHaveAttribute('aria-current', 'page')
+      expect(screen.getByRole('button', { name: 'Processing' })).toHaveAttribute('aria-current', 'page')
       for (const name of [/Rename the images/, /Resize the images/, /Add metadata/, /Ignore summer time/, /Convert the dates to UTC/]) {
         expect(screen.getByRole('checkbox', { name })).toBeChecked()
       }
@@ -706,7 +776,7 @@ describe('SettingsPage', () => {
     it('saves the steps, the width, the authorship, the license and the dates', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Preprocessing')
+      await section('Processing')
 
       await userEvent.click(screen.getByRole('checkbox', { name: /Rename the images/ }))
       await userEvent.click(screen.getByRole('checkbox', { name: /Ignore summer time/ }))
@@ -731,7 +801,7 @@ describe('SettingsPage', () => {
       async function open() {
         const view = render(<SettingsPage onClose={vi.fn()} />)
         await screen.findByLabelText('Level')
-        await section('Preprocessing')
+        await section('Processing')
         return view
       }
 
@@ -790,7 +860,7 @@ describe('SettingsPage', () => {
     it.each(['', '99', '20001', 'abc', '2400.5'])('marks the width "%s" as invalid, and its section, and cannot save', async (bad) => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Preprocessing')
+      await section('Processing')
       await userEvent.clear(screen.getByLabelText('Width'))
       if (bad) await userEvent.type(screen.getByLabelText('Width'), bad)
 
@@ -802,7 +872,7 @@ describe('SettingsPage', () => {
     it('says a blank owner or publisher is written as Unknown, and a blank coverage falls back to the location', async () => {
       render(<SettingsPage onClose={vi.fn()} />)
       await screen.findByLabelText('Level')
-      await section('Preprocessing')
+      await section('Processing')
 
       expect(screen.getByText(/blank owner or publisher is written as “Unknown”/)).toBeInTheDocument()
       expect(screen.getByText(/Left blank, the deployment.s location is used/)).toBeInTheDocument()
@@ -1203,7 +1273,7 @@ describe('SettingsPage', () => {
       await userEvent.click(dialog.getByRole('button', { name: 'Add' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_model: 'Reconyx-PC800', connectivity: '4g', power_source: 'battery', battery_removable: 'yes', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'ready', status_date: null, status_note: null }])
+      expect(mockedApi.saveSettings.mock.calls[0][0].FIELDWORK.cameras).toEqual([{ label: 'North gate', camera_id: 'P800HG08192031', camera_make: null, camera_model: 'Reconyx-PC800', connectivity: '4g', power_source: 'battery', battery_removable: 'yes', in_service: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), research_project: 'DONA', status: 'ready', status_date: null, status_note: null }])
     })
 
     it('gives a camera a status — and, once archived, the day, why and a comment — and says it on its card', async () => {

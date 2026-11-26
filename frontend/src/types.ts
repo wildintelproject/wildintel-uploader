@@ -95,12 +95,14 @@ export interface SequenceIssue {
 export type ImageCheck = 'corrupted' | 'sequence' | 'structure' | 'camera' | 'exif' | 'duplicates'
 
 /** The EXIF fields the wizard needs of every image. */
-export type ExifField = 'date' | 'camera_model' | 'camera_id'
+/** An EXIF field expected on every image, by the name ExifTool gives it: DateTimeOriginal (the capture date, always) and the ones of the settings. */
+export type ExifField = string
 
-/** How many images lack one of them, with a few examples. */
+/** How many images lack one of them, with a few examples, and what the field is. */
 export interface MissingExif {
   count: number
   examples: string[]
+  label?: string
 }
 
 /** Two or more files with exactly the same content. */
@@ -121,6 +123,8 @@ export interface ProjectDuplicate {
 export interface CameraGroup {
   model: string | null
   camera_id: string | null
+  /** The values of the fields the images were compared by (see camera_by): {SerialNumber: 'A1'}, {Make: 'Reconyx', Model: 'HC600'}… */
+  values?: Record<string, string>
   count: number
   /** A few of its files, relative to the scanned folder. */
   examples: string[]
@@ -136,6 +140,8 @@ export interface ValidationResult {
   cameras?: CameraGroup[]
   /** Images with no camera information at all. */
   cameras_without_info?: number
+  /** The EXIF fields the images were compared by to tell their camera — the first level of the settings every image has; none when no image has any. */
+  camera_by?: string[]
   /** Whether ExifTool (which reads the serial number of most camera traps) did the reading. */
   exiftool?: boolean
   /** Images lacking the capture date, the camera model or the camera id. */
@@ -151,8 +157,9 @@ export interface ValidationResult {
 export interface OutOfRangeImage {
   path: string
   date: string
-  /** Which rule it broke: the first image is at the start, the last at the end, the rest in between. */
-  rule?: 'first' | 'last' | 'between'
+  /** Which rule it broke: before the start, after the collection, or a first image long after the start (the photo taken when the camera is set up is not there).
+   * last and between are of older reports. */
+  rule?: 'first' | 'before_start' | 'after_end' | 'last' | 'between'
   /** The range it should have fallen in, e.g. "2024-09-04T10:00:00 ± 1h". */
   expected?: string
 }
@@ -236,6 +243,9 @@ export interface VisitCheckInfo {
   counted_photos: number | null
   /** The card the images are said to come from. */
   sd_card: string | null
+  /** How the visit that collected the card found it: a full card or flat batteries say why the camera stopped before it was collected. */
+  collected_card_status?: string | null
+  collected_battery_status?: string | null
 }
 
 /** What the visits a deployment is of say of it, for the collection's FieldworkLog: the one that left the camera and the one that collected its card. */
@@ -265,10 +275,20 @@ export interface DeploymentCheckResult {
   out_of_range?: OutOfRangeImage[]
   /** The hours of leeway the date range was checked with. */
   tolerance_hours?: number
+  /** The last image long before the collection: the camera stopped — the card was full or the batteries went flat. Said, not a problem. */
+  stopped_early?: { path: string; date: string; collected: string; days: number; reason: 'card_full' | 'no_batteries' | null }
   camera_mismatches?: CameraMismatch[]
   /** Every distinct EXIF camera model found — more than one usually means
    * images from different cameras got mixed into the folder. */
   camera_models_found?: string[]
+  /** The fields the images were compared by with the record of the camera (see VALIDATION.camera_levels): none when it has no record, or one that says nothing. */
+  camera_by?: string[]
+  /** What the record of the camera says of those fields — or the model of the deployment, when it has no record. */
+  camera_expected?: Record<string, string | null>
+  /** The make and the model most of the images say, for the record of the camera to take them. */
+  camera_found?: { make: string | null; model: string | null }
+  /** The label of the camera of the deployment, when it has a record. */
+  camera_label?: string | null
   /** The report this postvalidation was kept in. */
   report_id?: string | null
 }
@@ -339,12 +359,12 @@ export type ImportEvent =
   | { type: 'copy'; index: number; total: number; name: string }
   | { type: 'registering' }
   /** The images are done and their metadata is being written. */
-  | { type: 'metadata'; total: number }
+  | { type: 'metadata'; total: number; index?: number }   // index: the files written so far (0 when it starts)
   /** An image that couldn't be processed — the rest go on. */
   | { type: 'skipped'; name: string; detail: string }
   /** The images are being checked and the deployment sealed (see seal.json). */
   | { type: 'sealing' }
-  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean | null; report_id?: string | null }
+  | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean | null; report_id?: string | null; resize?: ResizeSummary }
 
 /** What is done to the images as they are imported, and the values it uses — see
  * core.services.preprocessing_service. */
@@ -390,6 +410,9 @@ export interface SyncCollection {
 }
 
 /** What the sync reports as it goes: a message per step, and at the end the result. */
+/** What resizing did to the images of a deployment: how many of how many, the most common size before and after, and how much they all weighed. */
+export interface ResizeSummary { resized: number; images: number; before: string | null; after: string | null; before_bytes: number; after_bytes: number }
+
 export type SyncEvent = { type: 'progress'; message: string } | ({ type: 'done' } & SyncResult)
 
 /** What the upload page starts from when it is reached from a finished import: the research project and collection just imported into. */
@@ -494,10 +517,21 @@ export interface SessionSummary {
 export type LogLevel = 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG'
 
 /** Which of the "Validate folder contents" checks the wizard shows — and so runs. */
-export type ValidationSettings = Record<ImageCheck, boolean>
+/** How a check starts in each import, when it is on: it has to pass (required), it only warns (warn), or it is offered unticked (skip). */
+export type CheckLevel = 'required' | 'warn' | 'skip'
+
+/** Which image checks the wizard shows, and how each starts. */
+export type ValidationSettings = Record<ImageCheck, boolean> & {
+  defaults: Record<ImageCheck, CheckLevel>
+  /** The EXIF fields expected on every image besides the capture date, by the names ExifTool gives them. */
+  exif_fields: string[]
+  /** How two images are told to be of the same camera: levels of EXIF fields, the most reliable first. */
+  camera_levels: string[][]
+}
 
 /** Which postvalidation checks the wizard shows, and the tolerance it starts from. */
 export interface PostvalidationSettings extends Record<DeploymentCheck, boolean> {
+  defaults: Record<DeploymentCheck, CheckLevel>
   tolerance_hours: number
   sequence_gap_seconds: number
   min_revisions: number
@@ -664,6 +698,9 @@ export interface Camera {
   label: string
   /** Its serial number, when it is known. */
   camera_id: string | null
+  /** The manufacturer, as the camera writes it in its images (EXIF Make): Browning, Reconyx… */
+  camera_make?: string | null
+  /** The model, as the camera writes it in its images (EXIF Model): BTC-6DCL, HC600… */
   camera_model: string | null
   /** The mobile network it sends its photos through: none when it does not. */
   connectivity?: CameraConnectivity | null
@@ -776,6 +813,9 @@ export interface LocalLocation {
 /** A visit to a camera trap kept in a research project's visits.json (see the backend's VisitRecord): the visit's own fields, and
  * what the visit says of the deployment — named as DeploymentFields names them. */
 export interface StoredVisit extends Omit<DeploymentFields, 'deployment_id' | 'location_id' | 'location_name' | 'coordinate_uncertainty' | 'start_date' | 'end_date' | 'latitude' | 'longitude'> {
+  /** The id of the record of its camera (#231): what the visit points to. camera_id is its label, to tell it; camera_model and camera_serial are the record's. */
+  camera_ref?: string | null
+  camera_serial?: string | null
   location_id: string
   session: string
   /** YYYY-MM-DD */
@@ -863,7 +903,10 @@ export interface ImportCsvOptions { create?: CsvCreate; defaults?: Record<string
  * those already kept, and how many were kept when asked to. */
 export interface VisitsCsvResult {
   visits: StoredVisit[]
-  problems: { row: number; message: string; }[]
+  /** The rows that cannot be added; `waits`: no error of its own, it only waits for the revision before (#206). */
+  problems: { row: number; message: string; waits?: boolean }[]
+  /** What stops the file from being added (#206): the rows with an error of their own, and how many rows only wait for them. */
+  blocking?: { errors: { row: number; site: string; session: string; message: string }[]; waiting: { rows: number; from: string | null; to: string | null } }
   skipped: number
   /** What the visits to add create: the locations, cameras and SD cards that do not exist and the file was asked to create. */
   create?: Record<CsvEntity, Record<string, unknown>[]>   // `trappers` is missing from an answer of an older server

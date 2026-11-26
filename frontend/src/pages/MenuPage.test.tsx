@@ -50,9 +50,9 @@ describe('MenuPage', () => {
     await userEvent.click(button)
     const panel = within(screen.getByRole('dialog', { name: 'Glossary' }))
     const words = within(panel.getByRole('region', { name: 'Words' })).getAllByRole('term').map((t) => t.textContent)
-    expect(words).toEqual([...words].sort())   // in alphabetical order
+    expect(words).toEqual(['Research project', 'Location', 'Camera', 'SD card', 'Trapper', 'Visit', 'Revision', 'Deployment', 'Collection'])   // from the whole to its parts
     expect(words).toEqual(expect.arrayContaining(['Collection', 'Deployment', 'Location', 'Revision', 'Visit']))
-    expect(panel.getByText(/from the visit that put the card in to the visit that collected it/)).toBeInTheDocument()
+    expect(panel.getByText(/from the visit that put an SD card in the camera to the visit that collected that card/)).toBeInTheDocument()
 
     await userEvent.click(panel.getByRole('button', { name: 'Close the glossary panel' }))
     expect(screen.queryByRole('dialog', { name: 'Glossary' })).not.toBeInTheDocument()
@@ -73,8 +73,9 @@ describe('MenuPage', () => {
     expect(panel.getByText('End-to-end workflow')).toBeInTheDocument()
     expect(panel.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Create a research project', 'Register the visits', 'Import the images', 'Upload the images'])
     const said = (text: string) => panel.getByText((_, el) => el?.tagName === 'P' && el.textContent === text)   // the words of the glossary are buttons inside the text
-    said('Define trappers, locations, cameras and SD cards once, or switch anytime from the top bar.')
+    said('Give its name, or link one that already exists in the remote repository. Its trappers, locations, cameras and SD cards can come later, with the field files. To work on another research project, choose it in the top bar.')
     said('Send to your remote repository (e.g., TRAPPER) either whole collections or any set of deployments.')
+    expect(panel.queryByRole('button', { name: 'TRAPPER' })).not.toBeInTheDocument()   // the platform, not a person who goes to the field
     expect(panel.getByText('Dashboards')).toBeInTheDocument()
     expect(panel.getByText('Utils')).toBeInTheDocument()
 

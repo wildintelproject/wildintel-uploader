@@ -183,6 +183,27 @@ class DataSettings(BaseModel):
         return value.strip()
 
 
+# How a check starts in each import, when it is on: it has to pass to go on (required), it only warns (warn), or it is offered unticked (skip). Each import can still change it.
+CheckLevel = Literal["required", "warn", "skip"]
+
+
+def _check_defaults(value: object, checks: tuple[str, ...], start: dict[str, str]) -> dict[str, str]:
+    """The level each check starts at: the ones given, and the default of the rest. A name that is not a check is refused."""
+    given = dict(value or {}) if isinstance(value, dict) else {}
+    unknown = sorted(set(given) - set(checks))
+    if unknown:
+        raise ValueError(f"not checks: {', '.join(unknown)}")
+    return {**start, **given}
+
+
+_IMAGE_CHECKS = ("corrupted", "sequence", "structure", "camera", "exif", "duplicates")
+_DEPLOYMENT_CHECKS = ("deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera", "image_count", "sequence_count",
+                      "sequence_length", "sd_card", "photo_count")
+# As they started before they could be set: the dates of the images and the SD card have to pass, the rest warn.
+IMAGE_CHECK_DEFAULTS: dict[str, str] = {c: "warn" for c in _IMAGE_CHECKS}
+DEPLOYMENT_CHECK_DEFAULTS: dict[str, str] = {c: ("required" if c in ("time_range", "sd_card") else "warn") for c in _DEPLOYMENT_CHECKS}
+
+
 class ValidationSettings(BaseModel):
     """Which of the "Validate folder contents" checks the wizard shows — and
     so runs. Each looks at the folder alone, without knowing the deployment."""
@@ -190,9 +211,58 @@ class ValidationSettings(BaseModel):
     corrupted: bool = Field(default=True, description="Corrupted images. (VALIDATION.corrupted)")
     sequence: bool = Field(default=True, description="Shooting order vs. filename sequence. (VALIDATION.sequence)")
     structure: bool = Field(default=True, description="Folder structure (subdirectories). (VALIDATION.structure)")
-    camera: bool = Field(default=True, description="Same camera (model and id) on every image. (VALIDATION.camera)")
-    exif: bool = Field(default=True, description="Required EXIF fields (capture date, camera model and id). (VALIDATION.exif)")
+    camera: bool = Field(default=True, description="Same camera on every image, as camera_levels tells it. (VALIDATION.camera)")
+    camera_levels: list[list[str]] = Field(
+        default_factory=lambda: [["SerialNumber"], ["Make", "Model"], ["Model"]],
+        description="How two images are told to be of the same camera: levels of EXIF fields, by the names ExifTool gives them, the most reliable first — "
+                    "the first level every image has is the one the images are compared by. (VALIDATION.camera_levels)",
+    )
+
+    @field_validator("camera_levels", mode="before")
+    @classmethod
+    def _camera_levels(cls, value):
+        """Each level its fields once, as written, and each level once; a level with no field is left out, and a name that cannot be a field is refused."""
+        out: list[list[str]] = []
+        for level in value or []:
+            fields: list[str] = []
+            for name in ([level] if isinstance(level, str) else level or []):
+                name = str(name).strip()
+                if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)?", name):
+                    raise ValueError(f"'{name}' is not the name of an EXIF field")
+                if name.lower() not in (f.lower() for f in fields):
+                    fields.append(name)
+            if fields and [f.lower() for f in fields] not in ([f.lower() for f in o] for o in out):
+                out.append(fields)
+        return out
+    exif: bool = Field(default=True, description="Required EXIF fields: the capture date and the ones of exif_fields. (VALIDATION.exif)")
+    exif_fields: list[str] = Field(
+        default_factory=lambda: ["Model"],
+        description="The EXIF fields expected on every image, by the names ExifTool gives them (Make, Model, SerialNumber, ISO…), besides the capture date "
+                    "(DateTimeOriginal), which is always expected: WildINTEL Uploader needs it. (VALIDATION.exif_fields)",
+    )
+
+    @field_validator("exif_fields", mode="before")
+    @classmethod
+    def _exif_fields(cls, value):
+        """Each field once, as written; the capture date is always expected, so it is not one of them. A name ExifTool could not have is refused."""
+        out: list[str] = []
+        for name in value or []:
+            name = str(name).strip()
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)?", name):
+                raise ValueError(f"'{name}' is not the name of an EXIF field")
+            if name.lower() != "datetimeoriginal" and name.lower() not in (n.lower() for n in out):
+                out.append(name)
+        return out
     duplicates: bool = Field(default=True, description="Duplicate images (same content). (VALIDATION.duplicates)")
+    defaults: dict[str, CheckLevel] = Field(
+        default_factory=lambda: dict(IMAGE_CHECK_DEFAULTS),
+        description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (VALIDATION.defaults)",
+    )
+
+    @field_validator("defaults", mode="before")
+    @classmethod
+    def _defaults(cls, value):
+        return _check_defaults(value, _IMAGE_CHECKS, IMAGE_CHECK_DEFAULTS)
 
 
 class PostvalidationSettings(BaseModel):
@@ -211,6 +281,15 @@ class PostvalidationSettings(BaseModel):
     sequence_length: bool = Field(default=True, description="The length of the sequences is like the previous revisions'. (POSTVALIDATION.sequence_length)")
     sd_card: bool = Field(default=True, description="The SD card is the one the visit left in the camera. (POSTVALIDATION.sd_card)")
     photo_count: bool = Field(default=True, description="The folder has the number of images the visit counted on the card. (POSTVALIDATION.photo_count)")
+    defaults: dict[str, CheckLevel] = Field(
+        default_factory=lambda: dict(DEPLOYMENT_CHECK_DEFAULTS),
+        description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (POSTVALIDATION.defaults)",
+    )
+
+    @field_validator("defaults", mode="before")
+    @classmethod
+    def _defaults(cls, value):
+        return _check_defaults(value, _DEPLOYMENT_CHECKS, DEPLOYMENT_CHECK_DEFAULTS)
     sequence_gap_seconds: float = Field(
         default=60.0, gt=0, le=86400,
         description="What a sequence is: a new one starts when the gap to the previous image is at least this many seconds. (POSTVALIDATION.sequence_gap_seconds)",
@@ -406,7 +485,8 @@ class Camera(BaseModel):
     them, and the day it was put into production."""
     label: str = Field(min_length=1, description="What the camera is called — the name it goes by in the field.")
     camera_id: Optional[str] = Field(default=None, description="The camera's id — its serial number. (cameraID)")
-    camera_model: Optional[str] = Field(default=None, description="Manufacturer and model, written as manufacturer-model. (cameraModel)")
+    camera_make: Optional[str] = Field(default=None, description="The manufacturer, as the camera writes it in its images (EXIF Make): Browning, Reconyx…")
+    camera_model: Optional[str] = Field(default=None, description="The model, as the camera writes it in its images (EXIF Model): 6DCL, HC600… Camtrap DP's cameraModel is the make and the model, make-model.")
     connectivity: Optional[Literal["none", "4g", "5g"]] = Field(default=None, description="The mobile network the camera sends its images through: none when it does not.")
     power_source: Optional[Literal["cells", "battery"]] = Field(default=None, description="What it runs on: cells (AA, AAA… the ones that are changed) or a battery.")
     battery_removable: Optional[Literal["yes", "no"]] = Field(default=None, description="Whether the battery can be taken out of the camera: only said of a battery, as cells are always taken out to be changed.")
@@ -455,7 +535,7 @@ class Camera(BaseModel):
     def _camera_id(cls, value: Optional[str]) -> Optional[str]:
         return _tidy(value)
 
-    @field_validator("camera_model")
+    @field_validator("camera_model", "camera_make")
     @classmethod
     def _camera_model(cls, value: Optional[str]) -> Optional[str]:
         return _tidy(value)

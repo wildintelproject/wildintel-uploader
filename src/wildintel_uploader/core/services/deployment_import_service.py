@@ -14,13 +14,13 @@ import logging
 import re
 import shutil
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 
-from PIL import ExifTags, Image
+from PIL import Image
 
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.core.schemas.requests import DeploymentFields
@@ -29,8 +29,6 @@ from wildintel_uploader.core.services import camera_info, file_memo, local_folde
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff"}
-_EXIF_IFD = 0x8769  # the "Exif" sub-IFD, where DateTimeOriginal lives
-_TAG_IDS = {name: tag for tag, name in ExifTags.TAGS.items()}
 
 
 class DeploymentImportError(ValueError):
@@ -217,33 +215,8 @@ def check_paths(source_dir: Path, dest_dir: Path) -> None:
 
 
 def _image_datetime(path: Path) -> datetime | None:
-    try:
-        with Image.open(path) as img:
-            exif = img.getexif()
-            raw = exif.get(_TAG_IDS.get("DateTimeOriginal", 36867))
-            if raw is None:
-                sub = exif.get_ifd(_EXIF_IFD)
-                raw = sub.get(_TAG_IDS.get("DateTimeOriginal", 36867))
-            if raw is None:
-                raw = exif.get(_TAG_IDS.get("DateTime", 306))
-            if not raw:
-                return None
-            return datetime.strptime(str(raw).strip(), "%Y:%m:%d %H:%M:%S")
-    except Exception as exc:  # a corrupt/unreadable file mustn't stop the scan
-        logger.debug("No EXIF date in %s: %s", path, exc)
-        return None
-
-
-def _image_camera_model(path: Path) -> str | None:
-    try:
-        with Image.open(path) as img:
-            exif = img.getexif()
-            make = exif.get(_TAG_IDS.get("Make", 271))
-            model = exif.get(_TAG_IDS.get("Model", 272))
-            parts = [str(p).strip() for p in (make, model) if p]
-            return " ".join(parts) or None
-    except Exception:
-        return None
+    """The capture date of one image (see camera_info.read_dates). For many, read them all at once with read_dates: one run of ExifTool for all."""
+    return camera_info.read_dates([path]).get(path)
 
 
 def _files_and_images(source_dir: Path) -> tuple[list[Path], list[Path]]:
@@ -284,7 +257,7 @@ def guess_details(source_dir: Path) -> dict:
 
     dates: list[datetime] = []
     dated_images = 0
-    for dt in parallel.pmap(_image_datetime, images):
+    for dt in camera_info.read_dates(images).values():
         if dt is not None:
             dates.append(dt)
             dated_images += 1
@@ -437,6 +410,119 @@ def _corruption_error(path: Path) -> str | None:
 
 # The image checks validate_images can run — see its own docstring. A
 # caller may ask for any subset; None (the default) means all of them.
+# How two images are told to be of the same camera when the settings do not say it (VALIDATION.camera_levels): by the serial number, else by the make and
+# the model, else by the model alone.
+DEFAULT_CAMERA_LEVELS = [["SerialNumber"], ["Make", "Model"], ["Model"]]
+
+
+def _camera_groups(images: list[Path], cameras: dict, levels: list[list[str]]) -> tuple[list[str], dict[tuple[str, ...], list[Path]], int]:
+    """The images grouped by the camera they were taken by, as `levels` tell it — the fields of each level, the most reliable first: the images are compared by
+    the first level every image has; when none, by the first that any has, and the ones that have not got it are without camera information. Returns the
+    fields compared by (none when no image has any level), the groups by their values, and how many images are without camera information."""
+    serials = {f for f in _CAMERA_FIELDS if f != "model"}
+    asked = list(dict.fromkeys(f for level in levels for f in level if f.lower() not in serials))
+    tags = camera_info.read_tags(images, asked) if asked else {}
+
+    def value(path: Path, field: str) -> str | None:
+        return cameras[path].camera_id if field.lower() in serials else tags.get(path, {}).get(field)
+
+    values = {tuple(level): {p: tuple(value(p, f) for f in level) for p in images} for level in levels}
+    complete = lambda level: [p for p in images if all(values[tuple(level)][p])]
+    chosen = next((level for level in levels if len(complete(level)) == len(images)), None) or next((level for level in levels if complete(level)), None)
+    if chosen is None:
+        return [], {}, len(images)
+    groups: dict[tuple[str, ...], list[Path]] = defaultdict(list)
+    for path in complete(chosen):
+        groups[values[tuple(chosen)][path]].append(path)   # type: ignore[index]
+    return list(chosen), dict(groups), len(images) - len(complete(chosen))
+
+
+def _dates_of_the_deployment(images: list[Path], source_dir: Path, deployment: DeploymentFields, tolerance_hours: float, visit: dict | None) -> dict:
+    """Whether the dates of the images fit the deployment, by their dates — not their names —, with `tolerance_hours` of leeway (#208):
+
+    - wrong, as only a camera clock that went wrong or images of another deployment explain it: an image **before the start** or **after the collection**,
+      and a **first image long after the start** — a photo is always taken right after the camera is set up (rule "before_start", "after_end", "first");
+    - normal, and only said (`stopped_early`): the **last image long before the collection** — the card was full or the batteries went flat, and the camera
+      stopped —, with why when the visit that collected the card says it (`reason`: "card_full", "no_batteries")."""
+    start, end = _parse_iso(deployment.start_date), _parse_iso(deployment.end_date)
+    tolerance, label = timedelta(hours=tolerance_hours), f"{tolerance_hours:g}h"
+    if start is None or end is None:
+        return {"out_of_range": []}
+    read = camera_info.read_dates(images)
+    dated = sorted(((dt, p) for p in images if (dt := read[p]) is not None), key=lambda item: (item[0], _natural_key(item[1].relative_to(source_dir))))
+    out: list[dict] = []
+    window = f"{start.isoformat()} – {end.isoformat()} ± {label}"
+    for dt, path in dated:
+        if dt < start - tolerance:
+            out.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": "before_start", "expected": window})
+        elif dt > end + tolerance:
+            out.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": "after_end", "expected": window})
+    result: dict = {"out_of_range": out}
+    if dated and start - tolerance <= dated[0][0] and dated[0][0] > start + tolerance:
+        first_dt, first = dated[0]
+        out.insert(0, {"path": str(first.relative_to(source_dir)), "date": first_dt.isoformat(), "rule": "first", "expected": f"{start.isoformat()} ± {label}"})
+    if dated and end - tolerance > dated[-1][0] >= start - tolerance:
+        last_dt, last = dated[-1]
+        visit = visit or {}
+        reason = ("card_full" if str(visit.get("collected_card_status") or "").lower() in ("cardfull", "carfull")
+                  else "no_batteries" if str(visit.get("collected_battery_status") or "").lower() == "nobatteries" else None)
+        result["stopped_early"] = {"path": str(last.relative_to(source_dir)), "date": last_dt.isoformat(), "collected": end.isoformat(),
+                                   "days": round((end - last_dt).total_seconds() / 86400, 1), "reason": reason}
+    return result
+
+
+def _same_text(a: str | None, b: str | None) -> bool:
+    """Two values of a camera are the same one whatever their case and their spaces: "Browning  BTC-8A" is "browning btc-8a"."""
+    norm = lambda v: " ".join(str(v or "").split()).casefold()
+    return norm(a) == norm(b)
+
+
+def _camera_consistency(images: list[Path], source_dir: Path, deployment: DeploymentFields, camera: dict | None, levels: list[list[str]]) -> dict:
+    """Whether the images are of the camera of the deployment, as its record in the settings says it is (`camera`: its serial number, make and model), by the
+    levels that tell a camera (VALIDATION.camera_levels): the first level the record has every field of — a level with a field a record cannot have is passed
+    over —, the images compared by it whatever their case and spaces. With no record, or one that says nothing of a level, the images are compared with the
+    model of the deployment, as it was. It says what the images say, for the record to take it: {"camera_mismatches", "camera_models_found", "camera_by",
+    "camera_expected", "camera_found", "camera_label"}."""
+    read = camera_info.read_tags(images, ["Make", "Model"])
+    serials = {f for f in _CAMERA_FIELDS if f != "model"}
+    record = {"make": (camera or {}).get("camera_make"), "model": (camera or {}).get("camera_model"), "serial": (camera or {}).get("camera_id")}
+
+    def of_record(field: str) -> str | None:
+        key = field.lower()
+        return record["serial"] if key in serials else record["make"] if key == "make" else record["model"] if key == "model" else None
+
+    chosen = next((level for level in levels if all(f.lower() in serials | {"make", "model"} for f in level) and all(of_record(f) for f in level)), None) if camera else None
+    serial_of = camera_info.read_cameras(images)[0] if chosen and any(f.lower() in serials for f in chosen) else {}
+
+    def of_image(path: Path, field: str) -> str | None:
+        return serial_of[path].camera_id if field.lower() in serials else read[path].get("Make" if field.lower() == "make" else "Model")
+
+    mismatches: list[dict] = []
+    for path in images:
+        if chosen:
+            found = [of_image(path, f) for f in chosen]
+            if not all(found):
+                continue   # it does not say: nothing to compare
+            if not all(_same_text(v, of_record(f)) for v, f in zip(found, chosen)):
+                mismatches.append({"path": str(path.relative_to(source_dir)), "detected": " ".join(str(v) for v in found)})
+        else:
+            model = camera_info._model(read[path].get("Make"), read[path].get("Model"))
+            if model and deployment.camera_model and not _same_text(model, deployment.camera_model):
+                mismatches.append({"path": str(path.relative_to(source_dir)), "detected": model})
+    pairs = Counter((read[p].get("Make"), read[p].get("Model")) for p in images if read[p].get("Model"))
+    make, model = pairs.most_common(1)[0][0] if pairs else (None, None)
+    return {
+        "camera_mismatches": mismatches,
+        "camera_models_found": sorted({m for m in (camera_info._model(read[p].get("Make"), read[p].get("Model")) for p in images) if m}),
+        "camera_by": list(chosen) if chosen else [],
+        "camera_expected": {f: of_record(f) for f in chosen} if chosen else ({"Model": deployment.camera_model} if deployment.camera_model else {}),
+        "camera_found": {"make": make, "model": model},
+        "camera_label": (camera or {}).get("label"),
+    }
+
+
+# The EXIF fields the camera information already reads (camera_info): the model — the make with it — and the serial number, under any of its names.
+_CAMERA_FIELDS = {"model", "serialnumber", "internalserialnumber", "bodyserialnumber", "cameraserialnumber"}
 IMAGE_CHECKS = frozenset({"corrupted", "sequence", "structure", "camera", "exif", "duplicates"})
 
 
@@ -505,7 +591,7 @@ def _reporting(progress: Callable[[str, int, int], None] | None, step: str, tota
 
 def validate_images(
     source_dir: Path, checks: frozenset[str] | None = None, *, detail: bool = False, imported: dict[str, list[dict]] | None = None,
-    progress: Callable[[str, int, int], None] | None = None,
+    progress: Callable[[str, int, int], None] | None = None, exif_fields: list[str] | None = None, camera_levels: list[list[str]] | None = None,
 ) -> dict:
     """Independent, opt-in checks over a scanned folder's images — only
     "checked_count" plus whichever of these were asked for are present in
@@ -569,19 +655,27 @@ def validate_images(
     # Reading each image is what takes the time, so it is done for several at once (GENERAL.workers).
     taken: dict[Path, datetime | None] = {}
     if "exif" in checks or "sequence" in checks:
-        taken = dict(zip(images, parallel.pmap(_image_datetime, images, progress=_reporting(progress, "dates", len(images)))))
+        taken = camera_info.read_dates(images)   # one run of ExifTool for all of them (#227)
+        if progress:
+            progress("dates", len(images), len(images))
 
     if "exif" in checks:
-        missing: dict[str, list[Path]] = {"date": [], "camera_model": [], "camera_id": []}
+        # the capture date, always (the app needs it), and the fields the settings expect (VALIDATION.exif_fields): the model and the serial number as the
+        # camera information has them, any other as it is read
+        fields = ["DateTimeOriginal", *(f for f in (exif_fields if exif_fields is not None else ["Model"]) if f.lower() != "datetimeoriginal")]
+        others = [f for f in fields[1:] if f.lower() not in _CAMERA_FIELDS]
+        tags = camera_info.read_tags(sorted(images), others) if others else {}
+        missing: dict[str, list[Path]] = {f: [] for f in fields}
         for path in sorted(images):
-            if taken[path] is None:
-                missing["date"].append(path)
-            if cameras[path].model is None:
-                missing["camera_model"].append(path)
-            if cameras[path].camera_id is None:
-                missing["camera_id"].append(path)
+            for field in fields:
+                key = field.lower()
+                found = (taken[path] if key == "datetimeoriginal" else cameras[path].model if key == "model"
+                         else cameras[path].camera_id if key in _CAMERA_FIELDS else tags.get(path, {}).get(field))
+                if found is None:
+                    missing[field].append(path)
         result["exif_missing"] = {
             field: {
+                "label": "capture date" if field == "DateTimeOriginal" else field,
                 "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]],
                 **({"files": [str(p.relative_to(source_dir)) for p in paths]} if detail else {}),
             }
@@ -594,19 +688,14 @@ def validate_images(
             result["duplicates_in_project"] = _imported_before(images, source_dir, imported)
 
     if "camera" in checks:
-        groups: dict[tuple[str | None, str | None], list[Path]] = defaultdict(list)
-        without_info = 0
-        for path in sorted(images):  # a stable order, whatever the file system lists first
-            info = cameras[path]
-            if info.known:
-                groups[(info.model, info.camera_id)].append(path)
-            else:
-                without_info += 1
+        by, groups, without = _camera_groups(sorted(images), cameras, camera_levels if camera_levels is not None else DEFAULT_CAMERA_LEVELS)
         result["cameras"] = [
-            {"model": model, "camera_id": camera_id, "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]]}
-            for (model, camera_id), paths in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0][0] or "", item[0][1] or ""))
+            {"model": cameras[paths[0]].model, "camera_id": cameras[paths[0]].camera_id, "values": dict(zip(by, key)),
+             "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]]}
+            for key, paths in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0]))
         ]
-        result["cameras_without_info"] = without_info
+        result["camera_by"] = by
+        result["cameras_without_info"] = without
 
     if "structure" in checks:
         result["subdirectories"] = sorted({str(p.parent.relative_to(source_dir)) for p in files if p.parent != source_dir})
@@ -740,7 +829,7 @@ def _photo_count_check(visit: dict | None, found: int) -> dict:
 def validate_deployment_consistency(
     source_dir: Path, deployment: DeploymentFields, checks: frozenset[str] | None = None, *,
     collection_name: str | None = None, expected_location_id: str | None = None,
-    tolerance_hours: float = DEFAULT_TOLERANCE_HOURS, visit: dict | None = None,
+    tolerance_hours: float = DEFAULT_TOLERANCE_HOURS, visit: dict | None = None, camera: dict | None = None, camera_levels: list[list[str]] | None = None,
 ) -> dict:
     """The postvalidation: checks a deployment — what the wizard now knows of
     it — and its scanned images against wildintel-tools' own rules. Only
@@ -830,41 +919,10 @@ def validate_deployment_consistency(
 
     if "time_range" in checks:
         result["tolerance_hours"] = tolerance_hours
-        start = _parse_iso(deployment.start_date)
-        end = _parse_iso(deployment.end_date)
-        tolerance = timedelta(hours=tolerance_hours)
-        label = f"{tolerance_hours:g}h"
-        out_of_range: list[dict] = []
-        ordered = sorted(images, key=lambda p: _natural_key(p.relative_to(source_dir)))
-        for position, path in enumerate(ordered):
-            dt = _image_datetime(path)
-            if dt is None or start is None or end is None:
-                continue
-            if position == 0:
-                rule, low, high = "first", start - tolerance, start + tolerance
-                expected = f"{start.isoformat()} ± {label}"
-            elif position == len(ordered) - 1:
-                rule, low, high = "last", end - tolerance, end + tolerance
-                expected = f"{end.isoformat()} ± {label}"
-            else:
-                rule, low, high = "between", start - tolerance, end + tolerance
-                expected = f"{start.isoformat()} – {end.isoformat()} ± {label}"
-            if not low <= dt <= high:
-                out_of_range.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": rule, "expected": expected})
-        result["out_of_range"] = out_of_range
+        result.update(_dates_of_the_deployment(images, source_dir, deployment, tolerance_hours, visit))
 
     if "camera" in checks:
-        camera_mismatches: list[dict] = []
-        models_found: set[str] = set()
-        for path in images:
-            model = _image_camera_model(path)
-            if model is None:
-                continue
-            models_found.add(model)
-            if deployment.camera_model and model != deployment.camera_model:
-                camera_mismatches.append({"path": str(path.relative_to(source_dir)), "detected": model})
-        result["camera_mismatches"] = camera_mismatches
-        result["camera_models_found"] = sorted(models_found)
+        result.update(_camera_consistency(images, source_dir, deployment, camera, camera_levels if camera_levels is not None else DEFAULT_CAMERA_LEVELS))
 
     return result
 
@@ -937,8 +995,10 @@ def copied_images_info(dest: Path) -> list[dict]:
     """The images of a copied deployment folder, in natural order, as images.json keeps them: the name, the camera's
     wall-clock time from the EXIF (None when it has none) and, as extras, the file's size and its pixels."""
     entries = []
-    for path in sorted((p for p in dest.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: _natural_key(p.relative_to(dest))):
-        taken = _image_datetime(path)
+    ordered = sorted((p for p in dest.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: _natural_key(p.relative_to(dest)))
+    dates = camera_info.read_dates(ordered)
+    for path in ordered:
+        taken = dates[path]
         try:
             with Image.open(path) as img:
                 width, height = img.width, img.height

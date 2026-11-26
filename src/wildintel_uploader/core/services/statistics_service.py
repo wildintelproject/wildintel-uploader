@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-from wildintel_uploader.core.services import deployment_import_service as dis, local_folder_service
+from wildintel_uploader.core.services import camera_info, deployment_import_service as dis, local_folder_service
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +87,7 @@ def times_of_folder(source_dir: Path) -> DeploymentTimes:
     """The images of a folder and when each was taken, from their EXIF."""
     images = [p for p in source_dir.rglob("*") if p.is_file() and p.suffix.lower() in dis.IMAGE_EXTENSIONS]
     stamps = []
-    for path in images:
-        taken = dis._image_datetime(path)
+    for taken in camera_info.read_dates(images).values():
         if taken is not None:
             stamps.append(taken.replace(tzinfo=timezone.utc).timestamp())
     return DeploymentTimes(len(images), sorted(stamps))

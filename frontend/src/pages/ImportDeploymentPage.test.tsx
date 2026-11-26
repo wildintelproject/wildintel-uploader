@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
-import ImportDeploymentPage from './ImportDeploymentPage'
+import ImportDeploymentPage, { CameraComparison, stoppedEarlyText, DEFAULT_CHECK_SETTINGS, resizeSummaryText, startingChecks } from './ImportDeploymentPage'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { DeploymentCheckResult, LocalLocation, LocalResearchProject, Report } from '../types'
 import { APP_SETTINGS, DETAILED_SESSION, SESSION } from '../test/fixtures'
@@ -692,11 +692,17 @@ describe('ImportDeploymentPage', () => {
           await userEvent.click(await screen.findByRole('option', { name: 'DONA — Doñana' }))
           await userEvent.click(within(await screen.findByRole('table', { name: 'Collected visits' })).getByRole('row', { name: /R0001/ }))
           await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
-          await scanTheFolder()
           if (card) {
-            // asked once the folder is chosen
-            await userEvent.click(within(await screen.findByRole('table', { name: 'SD cards' })).getByRole('row', { name: new RegExp(`\\b${card}\\b`) }))
+            // asked first, with the card the visit left already chosen: another one is picked
+            const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
+            if (!cards.queryByRole('button', { name: new RegExp(`\\b${card}\\b`), pressed: true })) await userEvent.click(cards.getByRole('row', { name: new RegExp(`\\b${card}\\b`) }))
+          } else {
+            // no card said: the one the visit left, chosen for it, is let go
+            const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
+            const chosen = cards.queryByRole('button', { name: /A13/, pressed: true })
+            if (chosen) await userEvent.click(cards.getByRole('row', { name: /A13/ }))
           }
+          await scanTheFolder()
           await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
           await screen.findByText('Choose the checks')
           await runTheImageChecks()
@@ -708,7 +714,7 @@ describe('ImportDeploymentPage', () => {
           await screen.findByText('Check the details', { selector: 'h4' })
         }
 
-        it('offers, with the research project, the cards of that project', async () => {
+        it('asks first which SD card it is, with the cards of the research project and the one the visit left already chosen', async () => {
           SD_SETTINGS()
           storedProjects = [DONA_PROJECT]
           storedLocations = { DONA: [DONA_01] }
@@ -718,17 +724,18 @@ describe('ImportDeploymentPage', () => {
           expect(screen.queryByRole('table', { name: 'SD cards' })).not.toBeInTheDocument() // not in the origin: it is asked after the folder
           await pickTheVisit()
           await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
-          expect(screen.queryByRole('table', { name: 'SD cards' })).not.toBeInTheDocument() // nor before the folder is chosen
-          await scanTheFolder()
 
-          expect(screen.getByText(/It is checked against the card the visit says was left in the camera/)).toBeInTheDocument()           // what it is for is in a box above the table
+          // before the folder: the card is what says which deployment the images are of
+          expect(screen.queryByLabelText('Folder')).not.toBeInTheDocument()
+          expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && /says the SD card A13 was left in the camera: it is chosen/.test(el.textContent ?? ''))).toBeInTheDocument()
           const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
           expect(cards.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').slice(1).map((c) => c.textContent))).toEqual([['A13', 'SanDisk', '64 GB', 'Active'], ['B2', '—', '—', 'Active']])
+          expect(cards.getByRole('button', { name: /A13/, pressed: true })).toBeInTheDocument()   // the one the visit left
           // a row picks its card, and a second press lets it go
-          await userEvent.click(cards.getByRole('row', { name: /A13/ }))
-          expect(cards.getByRole('button', { name: /A13/, pressed: true })).toBeInTheDocument()
-          await userEvent.click(cards.getByRole('row', { name: /A13/ }))
-          expect(cards.getByRole('button', { name: /A13/, pressed: false })).toBeInTheDocument()
+          await userEvent.click(cards.getByRole('row', { name: /B2/ }))
+          expect(cards.getByRole('button', { name: /B2/, pressed: true })).toBeInTheDocument()
+          await userEvent.click(cards.getByRole('row', { name: /B2/ }))
+          expect(cards.getByRole('button', { name: /B2/, pressed: false })).toBeInTheDocument()
           // and the labels view offers the same cards
           await userEvent.click(screen.getByRole('button', { name: 'Show the SD cards as labels' }))
           expect(within(screen.getByRole('group', { name: 'SD cards' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Pick the SD card A13', 'Pick the SD card B2'])
@@ -758,7 +765,7 @@ describe('ImportDeploymentPage', () => {
 
           await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
             expect.anything(), expect.anything(), expect.arrayContaining(['sd_card', 'photo_count']),
-            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 300, sd_card: 'B2' } }),
+            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 300, sd_card: 'B2', collected_card_status: null, collected_battery_status: null } }),
           ))
         })
 
@@ -770,7 +777,7 @@ describe('ImportDeploymentPage', () => {
 
           await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
             expect.anything(), expect.anything(), expect.anything(),
-            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: null, sd_card: null } }),
+            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: null, sd_card: null, collected_card_status: null, collected_battery_status: null } }),
           ))
         })
       })
@@ -1262,7 +1269,7 @@ describe('ImportDeploymentPage', () => {
     })
 
     describe('the EXIF fields the wizard needs', () => {
-      const COMPLETE = { date: { count: 0, examples: [] }, camera_model: { count: 0, examples: [] }, camera_id: { count: 0, examples: [] } }
+      const COMPLETE = { DateTimeOriginal: { count: 0, examples: [] }, Model: { count: 0, examples: [] }, SerialNumber: { count: 0, examples: [] } }
 
       it('is one of the checks, on by default (it warns)', async () => {
         await goToValidateStep()
@@ -1275,37 +1282,38 @@ describe('ImportDeploymentPage', () => {
         await goToValidateStep()
         await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-        expect(await screen.findByText('Every image has its capture date, camera model and camera id.')).toBeInTheDocument()
+        expect(await screen.findByText(/Every image has the EXIF fields expected: capture date, model of the camera \(with its make\), serial number of the camera\./)).toBeInTheDocument()
       })
 
       it('says how many images lack each field, with examples, and leaves out the fields nobody lacks', async () => {
         mockedApi.validateImages.mockResolvedValue({
           checked_count: 10,
           exif_missing: {
-            date: { count: 0, examples: [] },
-            camera_model: { count: 2, examples: ['a.jpg', 'b.jpg'] },
-            camera_id: { count: 10, examples: ['a.jpg', 'b.jpg', 'c.jpg'] },
+            DateTimeOriginal: { count: 0, examples: [] },
+            Model: { count: 2, examples: ['a.jpg', 'b.jpg'] },
+            AmbientTemperature: { count: 10, examples: ['a.jpg', 'b.jpg', 'c.jpg'] },
           },
         })
         await goToValidateStep()
         await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-        expect(await screen.findByText(/2 image\(s\) without a camera model, e\.g\. a\.jpg, b\.jpg/)).toBeInTheDocument()
-        expect(screen.getByText(/10 image\(s\) without a camera id, e\.g\. a\.jpg, b\.jpg, c\.jpg/)).toBeInTheDocument()
-        expect(screen.queryByText(/without a capture date/)).not.toBeInTheDocument()
+        const item = (re: RegExp) => (_: string, el: Element | null) => el?.tagName === 'LI' && re.test(el.textContent ?? '')
+        expect(await screen.findByText(item(/2 image\(s\) without model of the camera \(with its make\) \(Model\), e\.g\. a\.jpg, b\.jpg/))).toBeInTheDocument()
+        expect(screen.getByText(item(/10 image\(s\) without ambient temperature \(some camera traps\) \(AmbientTemperature\), e\.g\. a\.jpg, b\.jpg, c\.jpg/))).toBeInTheDocument()
+        expect(screen.queryByText(/without capture date/)).not.toBeInTheDocument()
       })
 
       it('blocks continuing when it is required and a field is missing, and lets go once it is not', async () => {
-        mockedApi.validateImages.mockResolvedValue({ checked_count: 2, exif_missing: { ...COMPLETE, date: { count: 1, examples: ['a.jpg'] } } })
+        mockedApi.validateImages.mockResolvedValue({ checked_count: 2, exif_missing: { ...COMPLETE, DateTimeOriginal: { count: 1, examples: ['a.jpg'] } } })
         await goToValidateStep()
         await chooseStrictness(4, 'Must pass') // the fifth check
         await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
-        await screen.findByText(/1 image\(s\) without a capture date/)
+        await screen.findByText(/1 image\(s\) without capture date/)
         expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
 
         mockedApi.validateImages.mockResolvedValue({ checked_count: 2, exif_missing: COMPLETE })
         await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
-        await screen.findByText(/Every image has its capture date/)
+        await screen.findByText(/Every image has the EXIF fields expected/)
         expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
       })
     })
@@ -1384,6 +1392,18 @@ describe('ImportDeploymentPage', () => {
 
         expect(strictness('Same camera on every image', 'Warn')).toBeChecked()
         expect(screen.getAllByRole('radiogroup')).toHaveLength(7) // and the question of where the images are
+      })
+
+      it('says which fields the images were compared by, and that without a serial number two cameras of a model are one', async () => {
+        mockedApi.validateImages.mockResolvedValue({
+          checked_count: 3, exiftool: true, cameras_without_info: 0, camera_by: ['Make', 'Model'],
+          cameras: [{ model: 'Reconyx HC600', camera_id: null, values: { Make: 'Reconyx', Model: 'HC600' }, count: 3, examples: ['a.jpg', 'b.jpg', 'c.jpg'] }],
+        })
+        await goToValidateStep()
+        await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
+
+        expect(await screen.findByText('Make Reconyx · Model HC600')).toBeInTheDocument()
+        expect(screen.getByText((_, el) => el?.tagName === 'P' && /^Compared by Make \+ Model: without a serial number, two cameras of the same model are not told apart/.test(el.textContent ?? ''))).toBeInTheDocument()
       })
 
       it('passes when every image was taken by one camera, and says which', async () => {
@@ -1611,7 +1631,7 @@ describe('ImportDeploymentPage', () => {
         {
           collectionName: null, expectedLocationId: 'DONA_01', toleranceHours: 1, // the collection is the one the id names
           researchProjectId: 'DONA', // whose collections hold the previous revisions
-          visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 12, sd_card: null }, // the visit it is of
+          visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 12, sd_card: null, collected_card_status: null, collected_battery_status: null }, // the visit it is of
           statistics: {
             sequence_gap_seconds: 60, min_revisions: 2, method: 'median',
             image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
@@ -1652,18 +1672,18 @@ describe('ImportDeploymentPage', () => {
         checked_count: 20, tolerance_hours: 1,
         out_of_range: [
           { path: 'IMG_0001.jpg', date: '2024-09-04T12:00:00', rule: 'first', expected: '2024-09-04T10:00:00 ± 1h' },
-          { path: 'IMG_0020.jpg', date: '2024-09-09T10:00:00', rule: 'last', expected: '2024-09-10T10:00:00 ± 1h' },
-          { path: 'IMG_0007.jpg', date: '2024-08-01T10:00:00', rule: 'between', expected: '2024-09-04T10:00:00 – 2024-09-10T10:00:00 ± 1h' },
+          { path: 'IMG_0020.jpg', date: '2024-09-12T10:00:00', rule: 'after_end', expected: '2024-09-04T10:00:00 – 2024-09-10T10:00:00 ± 1h' },
+          { path: 'IMG_0007.jpg', date: '2024-08-01T10:00:00', rule: 'before_start', expected: '2024-09-04T10:00:00 – 2024-09-10T10:00:00 ± 1h' },
         ],
       })
       await goToPostvalidation()
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
       expect(await screen.findByText(/3 image\(s\) outside the deployment's dates \(± 1 h\)/)).toBeInTheDocument()
-      expect(screen.getByText(/the first image should be at the start/)).toBeInTheDocument()
-      expect(screen.getByText(/the last image should be at the end/)).toBeInTheDocument()
-      expect(screen.getByText(/it should be within the deployment/)).toBeInTheDocument()
-      expect(screen.getByText(/4 Sep 2024, 12:00, the first image should be at the start \(4 Sep 2024, 10:00 ± 1h\)/)).toBeInTheDocument()
+      expect(screen.getByText(/the first image should be at the start: a photo is taken right after the camera is set up/)).toBeInTheDocument()
+      expect(screen.getByText(/it is after the card was collected/)).toBeInTheDocument()
+      expect(screen.getByText(/it is before the start of the deployment/)).toBeInTheDocument()
+      expect(screen.getByText(/4 Sep 2024, 12:00, the first image should be at the start: a photo is taken right after the camera is set up \(4 Sep 2024, 10:00 ± 1h\)/)).toBeInTheDocument()
     })
 
     it('offers to fix the dates and times when images fell outside them, and comes back to the checks', async () => {
@@ -1686,7 +1706,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(await screen.findByText(/The first image is at the start, the last at the end and the rest in between \(± 2 h\)/)).toBeInTheDocument()
+      expect(await screen.findByText(/No image before the start or after the card was collected, and the first at the start \(± 2 h\)/)).toBeInTheDocument()
     })
 
     it('still reports the camera checks', async () => {
@@ -1697,7 +1717,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(await screen.findByText(/1 image\(s\) with a different camera model than declared: b\.jpg/)).toBeInTheDocument()
+      expect(await screen.findByText(/1 image\(s\) of another camera than the one declared .*: b\.jpg/)).toBeInTheDocument()
       expect(screen.getByText(/2 distinct camera models found/)).toBeInTheDocument()
     })
 
@@ -1999,10 +2019,26 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
 
-      expect(screen.getByText(/as the camera.s local time in/)).toHaveTextContent('Europe/Madrid, converted to UTC') // a new location follows summer time
+      expect(screen.getByText(/as the clock of the camera in/)).toHaveTextContent('Europe/Madrid, converted to UTC') // a new location follows summer time
 
     })
 
+
+    it('says the dates are read as they are when the cameras keep UTC, and that the dates in the images are never changed', async () => {
+      await goToOriginStep()
+      await addProjectByHand('Doñana', 'DONA', { timezone: 'UTC' })
+      await addLocationByHand()
+      await continueToDates()
+      await screen.findByText('Dates of the deployment')
+      await waitFor(() => expect(screen.queryByText(/Reading the dates and the camera/)).not.toBeInTheDocument())
+      await toMoreDetails()
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await screen.findByText('Check the details', { selector: 'h4' })
+      await advanceToPreprocessing()
+
+      expect(screen.getByText(/The cameras keep UTC: the dates are read as they are/)).toHaveTextContent('The dates in the images are never changed.')
+      expect(screen.queryByText(/converted to UTC/)).not.toBeInTheDocument()
+    })
 
     /** Locations kept before the summer-time setting was asked: they do not say it, so the setting's default stands. */
     const locationsWithoutSummerTime = () => mockedApi.saveLocalLocation.mockImplementation(async (id, location) => {
@@ -2017,8 +2053,8 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
 
-      await waitFor(() => expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('ignoring summer time'))
-      expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('converted to UTC')
+      await waitFor(() => expect(screen.getByText(/as the clock of the camera in/)).not.toHaveTextContent('ignoring summer time'))
+      expect(screen.getByText(/as the clock of the camera in/)).not.toHaveTextContent('converted to UTC')
     })
 
     it('reads the summer-time setting from the location rather than from the settings', async () => {
@@ -2031,7 +2067,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await advanceToPreprocessing()
 
-      await waitFor(() => expect(screen.getByText(/as the camera.s local time in/)).not.toHaveTextContent('ignoring summer time'))
+      await waitFor(() => expect(screen.getByText(/as the clock of the camera in/)).not.toHaveTextContent('ignoring summer time'))
     })
 
     it('shows the name an image will get, built from the deployment id and the first date', async () => {
@@ -2504,6 +2540,7 @@ describe('ImportDeploymentPage', () => {
       await goToOriginStep()
 
       expect(screen.getByRole('status', { name: 'The deployment in the queue' })).toHaveTextContent('Deployment 2 of 3R0001-DONA_01')
+      expect(screen.getByRole('progressbar', { name: 'Deployments of the queue' })).toHaveAttribute('aria-valuenow', '1')   // one of the three done
       await userEvent.click(screen.getByRole('button', { name: 'Skip this one' }))
       expect(queue.onSkip).toHaveBeenCalledTimes(1)
       await userEvent.click(screen.getByRole('button', { name: 'Stop here' }))
@@ -2747,5 +2784,67 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getByText(/which follows daylight saving time/)).toBeInTheDocument()
       for (const bold of ['DONA_01', 'Europe/Madrid']) expect(screen.getAllByText(bold).some((el) => el.tagName === 'STRONG')).toBe(true)
     })
+  })
+})
+
+describe('resizeSummaryText', () => {
+  it('says how many images were resized, their size before and after, and how much they all weighed', () => {
+    expect(resizeSummaryText({ resized: 1620, images: 1620, before: '6000×4000', after: '2400×1600', before_bytes: 14_100_000_000, after_bytes: 2_300_000_000 }))
+      .toBe('1,620 of 1,620 resized: 6000×4000 → 2400×1600, 14.1 GB → 2.3 GB')
+    // none wider than the width: no size before and after, only what they weigh
+    expect(resizeSummaryText({ resized: 0, images: 30, before: '1920×1080', after: '1920×1080', before_bytes: 27_000_000, after_bytes: 27_000_000 }))
+      .toBe('0 of 30 resized: 27.0 MB → 27.0 MB')
+  })
+})
+
+describe('startingChecks', () => {
+  it('starts each check as the settings say: required and warn ticked, skip unticked, required having to pass', () => {
+    // by default, as before it could be set: every check ticked, the dates of the images and the SD card required
+    const start = startingChecks(DEFAULT_CHECK_SETTINGS)
+    expect([start.image.size, start.requiredImage.size]).toEqual([6, 0])
+    expect([...start.requiredDeployment].sort()).toEqual(['sd_card', 'time_range'])
+
+    const set = startingChecks({ ...DEFAULT_CHECK_SETTINGS,
+      VALIDATION: { ...DEFAULT_CHECK_SETTINGS.VALIDATION, defaults: { ...DEFAULT_CHECK_SETTINGS.VALIDATION.defaults, structure: 'skip', corrupted: 'required' } },
+      POSTVALIDATION: { ...DEFAULT_CHECK_SETTINGS.POSTVALIDATION, defaults: { ...DEFAULT_CHECK_SETTINGS.POSTVALIDATION.defaults, time_range: 'warn' } } })
+    expect(set.image.has('structure')).toBe(false)
+    expect([...set.requiredImage]).toEqual(['corrupted'])
+    expect(set.deployment.has('time_range') && !set.requiredDeployment.has('time_range')).toBe(true)   // ticked, only warning
+  })
+})
+
+describe('CameraComparison', () => {
+  const base = { checked_count: 2, camera_mismatches: [], camera_models_found: ['Browning BTC-6DCL'], camera_found: { make: 'Browning', model: 'BTC-6DCL' }, camera_label: '4' }
+
+  it('says by which fields of the record of the camera the images were compared, and offers nothing when they are its', () => {
+    render(<CameraComparison result={{ ...base, camera_by: ['Make', 'Model'], camera_expected: { Make: 'Browning', Model: 'BTC-6DCL' } }} onKeepCamera={vi.fn()} />)
+    expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('Compared with the record of camera 4 by Make + Model.')
+    expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument()
+  })
+
+  it('offers to keep what the images say in a record that has no make, and keeps it', async () => {
+    const keep = vi.fn().mockResolvedValue(undefined)
+    render(<CameraComparison result={{ ...base, camera_by: [], camera_expected: { Model: 'Browning Strike Force HD PRO X' } }} onKeepCamera={keep} />)
+    expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('The record of camera 4 says nothing to compare with')
+    expect(screen.getByText(/The images say/)).toHaveTextContent('The images say Browning BTC-6DCL. Keep it as the make and model of camera 4?')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Keep it' }))
+    expect(keep).toHaveBeenCalledWith('4', 'Browning', 'BTC-6DCL')
+    expect(await screen.findByRole('status')).toHaveTextContent('Kept as the make and model of camera 4: run the checks again to compare with it.')
+  })
+
+  it('says when the camera of the deployment is not one of the research project, with nothing to keep', () => {
+    render(<CameraComparison result={{ ...base, camera_label: null, camera_by: [] }} onKeepCamera={vi.fn()} />)
+    expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('is not one of the cameras of the research project')
+    expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument()
+  })
+})
+
+describe('stoppedEarlyText', () => {
+  it('says when the camera stopped, how long before the card was collected, and why when the visit says it', () => {
+    expect(stoppedEarlyText({ path: 'a.jpg', date: '2026-10-12T08:00:00', collected: '2026-10-21T09:00:00', days: 9, reason: 'card_full' }))
+      .toBe('The camera stopped on 12 Oct 2026, 08:00, 9 days before the card was collected: the visit says the card was full. That is not a problem of the dates.')
+    expect(stoppedEarlyText({ path: 'a.jpg', date: '2026-10-21T03:00:00', collected: '2026-10-21T09:00:00', days: 0.25, reason: null }))
+      .toMatch(/, 6 hours before the card was collected\. That is not a problem/)
   })
 })

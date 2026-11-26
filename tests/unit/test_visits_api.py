@@ -492,11 +492,28 @@ def test_a_csv_refuses_the_visits_that_break_the_rules_of_a_visit_as_the_form_do
         "DONA_02,2026-10-03,08:00,Installation,,B2,P800\n"      # the camera is at DONA_01
         "DONA_01,2026-10-04,08:00,Revision,,,P800\n"            # no photos counted
     )
-    body = _import(tmp_path, text, save=True).json()
+    body = _import(tmp_path, text).json()
 
-    assert body["saved"] == 1 and [p["row"] for p in body["problems"]] == [3, 4]          # what the form refuses, the file refuses
+    assert [p["row"] for p in body["problems"]] == [3, 4]          # what the form refuses, the file refuses
     assert "Camera P800 is installed at DONA_01" in body["problems"][0]["message"]
     assert "images on the card collected is required" in body["problems"][1]["message"]
+    # each with an error of its own, said in what blocks the file
+    assert [(e["row"], e["site"]) for e in body["blocking"]["errors"]] == [(3, "DONA_02"), (4, "DONA_01")] and body["blocking"]["waiting"]["rows"] == 0
+
+
+def test_a_file_with_rows_that_cannot_be_added_is_not_kept_in_part(tmp_path: Path):
+    """#206: all or nothing — a file with a row that cannot be added keeps nothing, not even its good rows: the rows are corrected and the file read again."""
+    from wildintel_uploader.core.services import local_folder_service
+    text = (
+        "location_id,date,time,actions,num_photos,sd,camera_id\n"
+        "DONA_01,2026-10-02,08:00,Installation,,A13,P800\n"
+        "DONA_02,2026-10-03,08:00,Installation,,B2,P800\n"      # the camera is at DONA_01
+    )
+    refused = _import(tmp_path, text, save=True)
+
+    assert refused.status_code == 400 and "nothing is kept" in refused.json()["detail"]
+    with _in(tmp_path):
+        assert local_folder_service.list_visits(tmp_path, "DONA") == []
 
 
 def test_a_site_that_is_not_a_location_comes_back_as_new_or_misnamed(tmp_path: Path):
@@ -1122,11 +1139,14 @@ def test_a_file_that_starts_after_the_first_revision_is_not_imported_when_the_re
                 "DONA_01,Installation,2026-10-19,11:40:00,R0003,C1,S1\n"
                 "DONA_02,Installation,2026-10-19,12:40:00,R0003,C2,S2\n")
         mapping = {"location_id": "location_id", "actions": "actions", "date": "date", "time": "time", "session": "session", "camera_id": "camera_id", "sd": "sd"}
-        shown = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "save": True}).json()
+        shown = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping}).json()
+        saving = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "save": True})
         kept = local_folder_service.list_visits(tmp_path, "DONA")
 
-    assert shown["unknown"] == [] and kept == []
+    assert shown["unknown"] == [] and kept == [] and saving.status_code == 400
     assert [p["row"] for p in shown["problems"]] == [2, 3] and "R0003 cannot start: R0002 has no visit" in shown["problems"][0]["message"]
+    # they only wait for a revision before them: no error of their own
+    assert shown["blocking"] == {"errors": [], "waiting": {"rows": 2, "from": "R0003", "to": "R0003"}}
 
 
 def _edit(visit: dict, location_id: str = "DONA_01", session: str | None = None):
@@ -1256,7 +1276,7 @@ def _read(text: str, save: bool = False) -> dict:
 def test_a_revision_cannot_be_given_before_the_one_before_it(tmp_path: Path):
     with _in(tmp_path):
         _project()
-        early = _read("DONA_01,Revision,2026-03-01,10:00:00,R0002,C1,S2,100\n", save=True)
+        early = _read("DONA_01,Revision,2026-03-01,10:00:00,R0002,C1,S2,100\n")
 
     assert early["visits"] == [] and "R0002 cannot start: R0001 has no visit" in early["problems"][0]["message"]
 
@@ -1306,7 +1326,8 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
     assert (rows[0]["num_photos"], rows[0]["card_status"], rows[2]["card_status"], rows[3]["battery_status"]) == ("1420", "OK", "Full Card", "No batteries")
 
     _, rows = read("revision_1_installation.csv")
-    assert rows[0]["sd"] == "1" and rows[0]["camera_id"] == "BR5071050724" and rows[0]["trappers"] == "Ana Pérez"
+    assert rows[0]["sd"] == "1" and rows[0]["trappers"] == "Ana Pérez"
+    assert (rows[0]["camera_id"], rows[0]["camera_serial"]) == ("1", "BR5071050724")   # #231: the camera by its name; its serial number apart, to find or complete it
 
 
 def test_a_file_can_close_the_revision_before_its_own_marking_the_locations_still_planned_as_not_visited(tmp_path: Path):
@@ -1987,7 +2008,7 @@ def test_a_visit_with_a_camera_an_sd_card_or_a_trapper_that_does_not_exist_is_re
     for said in ("camera NOCAM", "SD card NOSD", "Nobody is not one of the trappers"):
         assert said in by_hand.text
     assert [p["row"] for p in refused["problems"]] == [2] and "NOCAM" in refused["problems"][0]["message"] and "Nobody" in refused["problems"][0]["message"]
-    assert created["problems"] == [] and len(created["visits"]) == 1 and [c["camera_id"] for c in created["create"]["cameras"]] == ["NOCAM"]
+    assert created["problems"] == [] and len(created["visits"]) == 1 and [c["label"] for c in created["create"]["cameras"]] == ["NOCAM"]
 
 
 def test_a_visit_that_left_no_camera_whether_it_took_it_away_found_it_stolen_or_gave_the_site_up_is_in_the_state_no_camera(tmp_path: Path):

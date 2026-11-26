@@ -281,7 +281,8 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
 
         # ── when it was: the timestamp log prevails over the images ──
         yield step("dates", "running", "Reading the capture dates and the timestamp log…")
-        times = dict(zip(images, parallel.pmap(lambda p: pre._camera_time(p, options), images)))
+        dates = camera_info.read_dates(images)   # one run of ExifTool for all of them (#227)
+        times = {p: pre._camera_time(p, options, dates) for p in images}
         exif_times = [t[0] for t in times.values() if t[2] == "exif"] or [t[0] for t in times.values()]
         computed = (min(exif_times), max(exif_times)) if exif_times else None
         row, log_problem = _log_row(collection_dir, deployment_id)

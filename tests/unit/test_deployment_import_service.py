@@ -396,13 +396,26 @@ def test_time_range_the_first_image_must_be_within_the_tolerance_of_the_start(tm
     assert issue["expected"] == "2024-09-04T10:00:00 ± 1h"
 
 
-def test_time_range_the_last_image_must_be_within_the_tolerance_of_the_end(tmp_path: Path):
+def test_time_range_a_last_image_long_before_the_collection_is_only_said(tmp_path: Path):
+    """#208: the card was full or the batteries went flat, and the camera stopped before the card was collected: normal, so it is said, not a problem — with
+    why, when the visit that collected the card says it — and nothing is offered to fix the clock."""
     folder = _shots(tmp_path, "2024:09:04 10:00:00", "2024:09:07 12:00:00", "2024:09:09 10:00:00")  # a day before the end
+
+    result = svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}), visit={"collected_card_status": "CardFull"})
+
+    assert result["out_of_range"] == []
+    assert result["stopped_early"] == {"path": "IMG_0003.jpg", "date": "2024-09-09T10:00:00", "collected": "2024-09-10T10:00:00", "days": 1.0, "reason": "card_full"}
+    flat = svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}), visit={"collected_battery_status": "NoBatteries"})
+    assert flat["stopped_early"]["reason"] == "no_batteries"
+    assert svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))["stopped_early"]["reason"] is None
+
+
+def test_time_range_an_image_after_the_collection_is_wrong(tmp_path: Path):
+    folder = _shots(tmp_path, "2024:09:04 10:00:00", "2024:09:12 10:00:00")  # two days after the card was collected: the clock
 
     [issue] = _out_of_range(folder)
 
-    assert (issue["path"], issue["rule"]) == ("IMG_0003.jpg", "last")
-    assert issue["expected"] == "2024-09-10T10:00:00 ± 1h"
+    assert (issue["path"], issue["rule"]) == ("IMG_0002.jpg", "after_end") and "stopped_early" not in svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))
 
 
 def test_time_range_the_images_in_between_only_have_to_be_inside_the_range_widened_by_the_tolerance(tmp_path: Path):
@@ -416,7 +429,7 @@ def test_time_range_the_images_in_between_only_have_to_be_inside_the_range_widen
 
     issues = _out_of_range(folder)
 
-    assert [(i["path"], i["rule"]) for i in issues] == [("IMG_0003.jpg", "between"), ("IMG_0005.jpg", "between")]
+    assert [(i["path"], i["rule"]) for i in issues] == [("IMG_0003.jpg", "before_start"), ("IMG_0005.jpg", "after_end")]   # by their dates
     assert issues[0]["expected"] == "2024-09-04T10:00:00 – 2024-09-10T10:00:00 ± 1h"
 
 
@@ -449,12 +462,16 @@ def test_time_range_walks_the_images_in_natural_file_name_order_across_subfolder
     assert _out_of_range(tmp_path) == []
 
 
-def test_time_range_skips_an_image_with_no_date_but_it_still_takes_its_place_in_the_order(tmp_path: Path):
-    _make_jpeg(tmp_path / "IMG_0001.jpg")  # the first image: no date, so nothing to check
-    _make_jpeg(tmp_path / "IMG_0002.jpg", taken="2024:09:05 10:00:00")
+def test_time_range_skips_an_image_with_no_date_and_the_first_dated_one_is_the_first(tmp_path: Path):
+    _make_jpeg(tmp_path / "IMG_0001.jpg")  # no date: nothing to check
+    _make_jpeg(tmp_path / "IMG_0002.jpg", taken="2024:09:04 10:30:00")
     _make_jpeg(tmp_path / "IMG_0003.jpg", taken="2024:09:10 10:00:00")
-
     assert _out_of_range(tmp_path) == []
+
+    # the first dated one a day after the start: the photo taken when the camera was set up is not there — the clock
+    (tmp_path / "IMG_0002.jpg").unlink()
+    _make_jpeg(tmp_path / "IMG_0002.jpg", taken="2024:09:05 10:00:00")
+    assert [(i["path"], i["rule"]) for i in _out_of_range(tmp_path)] == [("IMG_0002.jpg", "first")]
 
 
 def test_time_range_a_single_image_is_the_first_one(tmp_path: Path):
@@ -490,6 +507,30 @@ def test_validate_deployment_consistency_flags_camera_mismatches_and_lists_model
 
     assert [m["path"] for m in result["camera_mismatches"]] == ["b.jpg"]
     assert result["camera_models_found"] == ["Bushnell Trophy Cam", "Reconyx HC600"]
+
+
+def test_camera_consistency_compares_the_images_with_the_record_of_the_camera_by_the_levels(tmp_path: Path, no_exiftool):
+    """#208: the camera of the deployment is its record in the settings — not the text the field form wrote —, compared by the first level the record has:
+    the serial number, else the make and the model, else the model; case and spaces aside. It says what the images say, for the record to take it."""
+    _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 10:00:00", make="Browning", model="BTC-6DCL")
+    _make_jpeg(tmp_path / "b.jpg", taken="2024:09:04 10:00:05", make="Browning", model="BTC-6DCL")
+    deployment = _deployment(camera_model="Browning Strike Force HD PRO X")   # as the field form wrote it: it is not compared
+
+    by_make = svc.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_make": "browning", "camera_model": "btc-6dcl "})
+    assert by_make["camera_mismatches"] == [] and by_make["camera_by"] == ["Make", "Model"]
+
+    # a record kept before it had a make: by the model alone
+    by_model = svc.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_model": "BTC-6DCL"})
+    assert by_model["camera_by"] == ["Model"] and by_model["camera_mismatches"] == []
+
+    # another camera: each image is said, and what the images say is offered for the record
+    other = svc.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_make": "Reconyx", "camera_model": "HC600"})
+    assert [m["detected"] for m in other["camera_mismatches"]] == ["Browning BTC-6DCL", "Browning BTC-6DCL"]
+    assert other["camera_found"] == {"make": "Browning", "model": "BTC-6DCL"} and other["camera_label"] == "4"
+
+    # with no record, the model of the deployment, as before — case and spaces aside
+    legacy = svc.validate_deployment_consistency(tmp_path, _deployment(camera_model="browning  btc-6dcl"), frozenset({"camera"}))
+    assert legacy["camera_mismatches"] == [] and legacy["camera_by"] == []
 
 
 def test_validate_deployment_consistency_skips_camera_mismatch_when_undeclared(tmp_path: Path):
@@ -742,23 +783,51 @@ def test_validate_images_camera_check_passes_with_one_camera(tmp_path: Path, no_
 
     result = svc.validate_images(folder, frozenset({"camera"}))
 
-    assert result["cameras"] == [{"model": "Reconyx HC600", "camera_id": "P800HG08", "count": 2, "examples": ["IMG_0000.jpg", "IMG_0001.jpg"]}]
-    assert result["cameras_without_info"] == 0
+    assert result["cameras"] == [{"model": "Reconyx HC600", "camera_id": "P800HG08", "values": {"SerialNumber": "P800HG08"}, "count": 2,
+                                  "examples": ["IMG_0000.jpg", "IMG_0001.jpg"]}]
+    assert result["camera_by"] == ["SerialNumber"] and result["cameras_without_info"] == 0
     assert result["exiftool"] is False
-    assert set(result) == {"checked_count", "cameras", "cameras_without_info", "exiftool"}  # only what was asked
+    assert set(result) == {"checked_count", "cameras", "camera_by", "cameras_without_info", "exiftool"}  # only what was asked
 
 
-def test_validate_images_camera_check_lists_each_distinct_model_and_id_with_how_many_each_took(tmp_path: Path, no_exiftool):
+def test_validate_images_camera_check_lists_each_camera_with_how_many_each_took(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(
-        tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"),
-        ("Reconyx", "HC600", "B2"), ("Browning", "Recon Force", "A1"),
+        tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "B2"), ("Browning", "Recon Force", "C3"),
     )
 
     result = svc.validate_images(folder, frozenset({"camera"}))
 
-    assert [(c["model"], c["camera_id"], c["count"]) for c in result["cameras"]] == [
-        ("Reconyx HC600", "A1", 3), ("Browning Recon Force", "A1", 1), ("Reconyx HC600", "B2", 1),  # the most common first, then by name
+    assert [(c["values"], c["count"]) for c in result["cameras"]] == [
+        ({"SerialNumber": "A1"}, 2), ({"SerialNumber": "B2"}, 1), ({"SerialNumber": "C3"}, 1),  # the most common first, then by value
     ]
+
+
+def test_the_camera_is_told_by_the_first_level_every_image_has(tmp_path: Path, no_exiftool):
+    """#208: by the serial number when every image has one; else by the make and the model; else by the model; and the order is the settings'."""
+    serial = _cameras_folder(tmp_path / "s", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"))
+    assert svc.validate_images(serial, frozenset({"camera"}))["camera_by"] == ["SerialNumber"]
+
+    # one image without a serial number: the two are not two cameras, they are compared by the make and the model
+    mixed = _cameras_folder(tmp_path / "m", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", None))
+    result = svc.validate_images(mixed, frozenset({"camera"}))
+    assert result["camera_by"] == ["Make", "Model"] and [(c["values"], c["count"]) for c in result["cameras"]] == [({"Make": "Reconyx", "Model": "HC600"}, 2)]
+
+    # without the make, by the model alone
+    _make_jpeg(tmp_path / "o" / "a.jpg", model="BTC-8A")
+    _make_jpeg(tmp_path / "o" / "b.jpg", model="BTC-8A")
+    assert svc.validate_images(tmp_path / "o", frozenset({"camera"}))["camera_by"] == ["Model"]
+
+    # the order of the settings: by the model first, two serial numbers are one camera
+    two = _cameras_folder(tmp_path / "t", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "B2"))
+    assert len(svc.validate_images(two, frozenset({"camera"}))["cameras"]) == 2
+    by_model = svc.validate_images(two, frozenset({"camera"}), camera_levels=[["Model"], ["SerialNumber"]])
+    assert by_model["camera_by"] == ["Model"] and len(by_model["cameras"]) == 1
+
+    # no level every image has: the first any has, and the rest are without camera information
+    _cameras_folder(tmp_path / "n", ("Reconyx", "HC600", "A1"))
+    _make_jpeg(tmp_path / "n" / "bare.jpg")
+    some = svc.validate_images(tmp_path / "n", frozenset({"camera"}))
+    assert some["camera_by"] == ["SerialNumber"] and some["cameras_without_info"] == 1
 
 
 def test_validate_images_camera_check_counts_the_images_with_no_camera_information(tmp_path: Path, no_exiftool):
@@ -796,21 +865,39 @@ def test_validate_images_exif_check_counts_the_images_missing_each_field(tmp_pat
     _make_jpeg(tmp_path / "no_serial.jpg", taken="2024:09:01 11:00:00", make="Reconyx", model="HC600")
     _make_jpeg(tmp_path / "bare.jpg")
 
-    result = svc.validate_images(tmp_path, frozenset({"exif"}))
+    result = svc.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["Model", "SerialNumber"])
 
     missing = result["exif_missing"]
-    assert missing["date"] == {"count": 2, "examples": ["bare.jpg", "no_date.jpg"]}
-    assert missing["camera_model"] == {"count": 1, "examples": ["bare.jpg"]}
-    assert missing["camera_id"] == {"count": 2, "examples": ["bare.jpg", "no_serial.jpg"]}
+    assert missing["DateTimeOriginal"] == {"label": "capture date", "count": 2, "examples": ["bare.jpg", "no_date.jpg"]}
+    assert missing["Model"] == {"label": "Model", "count": 1, "examples": ["bare.jpg"]}
+    assert missing["SerialNumber"] == {"label": "SerialNumber", "count": 2, "examples": ["bare.jpg", "no_serial.jpg"]}
     assert set(result) == {"checked_count", "exif_missing", "exiftool"}  # only what was asked
+
+
+def test_validate_images_exif_check_expects_the_capture_date_and_only_the_fields_asked(tmp_path: Path, no_exiftool):
+    """#208: the capture date is always expected — the app needs it —; the rest are the ones the settings ask for (by default the model): most camera traps do
+    not write their serial number, so it is not expected unless asked. Any other field is read as it is (Pillow here: the standard EXIF tags)."""
+    _make_jpeg(tmp_path / "a.jpg", taken="2024:09:01 10:00:00", make="Reconyx", model="HC600")
+
+    by_default = svc.validate_images(tmp_path, frozenset({"exif"}))["exif_missing"]
+    assert {f: i["count"] for f, i in by_default.items()} == {"DateTimeOriginal": 0, "Model": 0}
+    asked = svc.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["Make", "ISO"])["exif_missing"]
+    assert {f: i["count"] for f, i in asked.items()} == {"DateTimeOriginal": 0, "Make": 0, "ISO": 1}
+
+    # a field Pillow knows by another name than ExifTool (ISO, ISOSpeedRatings) is found too
+    img = Image.open(tmp_path / "a.jpg")
+    exif = img.getexif()
+    exif.get_ifd(0x8769)[34855] = 400
+    img.save(tmp_path / "a.jpg", exif=exif)
+    assert svc.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["ISO"])["exif_missing"]["ISO"]["count"] == 0
 
 
 def test_validate_images_exif_check_finds_nothing_missing_when_every_image_has_everything(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"))
 
-    result = svc.validate_images(folder, frozenset({"exif"}))
+    result = svc.validate_images(folder, frozenset({"exif"}), exif_fields=["Model", "SerialNumber"])
 
-    assert {field: info["count"] for field, info in result["exif_missing"].items()} == {"date": 0, "camera_model": 0, "camera_id": 0}
+    assert {field: info["count"] for field, info in result["exif_missing"].items()} == {"DateTimeOriginal": 0, "Model": 0, "SerialNumber": 0}
 
 
 def test_validate_images_exif_and_camera_checks_read_the_camera_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_exiftool):

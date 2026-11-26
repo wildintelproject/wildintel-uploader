@@ -51,7 +51,8 @@ def test_a_visit_is_kept_pointing_to_its_location_its_camera_its_card_and_its_tr
     assert raw["trappers"] == "Luis"                                                              # a trapper nobody registered is kept as it was said
     assert not {"location_id", "camera_id", "sd", "setup_by"} & set(raw)                           # what is pointed to is not said again by name
     assert all(len(i) == 36 for i in (place["id"], camera["id"], card["id"], raw["id"]))           # the ids the app generates
-    assert (told["location_id"], told["camera_id"], told["sd"], told["trappers"], told["setup_by"]) == ("DONA_01", "BR1", "A13", "Pedro Pérez, Luis", "Pedro Pérez")
+    assert (told["location_id"], told["camera_id"], told["sd"], told["trappers"], told["setup_by"]) == ("DONA_01", "CAM-1", "A13", "Pedro Pérez, Luis", "Pedro Pérez")
+    assert told["camera_serial"] == "BR1" and told["camera_ref"]   # #231: told by its label, with the id of its record and what the record says it is
     assert "location_ref" not in told and "trapper_refs" not in told                               # the ids are the app's: the page does not see them as references
 
 
@@ -69,7 +70,8 @@ def test_correcting_what_something_is_called_changes_nothing_else_the_visits_sti
     told = svc.list_visits(tmp_path, "DONA")[0]
 
     assert _on_disk(tmp_path) == before                                                           # the file of the visits was not touched
-    assert (told["sd"], told["camera_id"], told["trappers"], told["setup_by"]) == ("A-13", "BR1-X", "Pedro Pérez López, Luis", "Pedro Pérez López")
+    assert (told["sd"], told["camera_id"], told["trappers"], told["setup_by"]) == ("A-13", "CAM-ONE", "Pedro Pérez López, Luis", "Pedro Pérez López")
+    assert told["camera_serial"] == "BR1-X"
     assert [c["label"] for c in svc.list_field_items(tmp_path, "DONA", "sd_cards")] == ["A-13"]   # a rename is not a card that was deleted and another one added
     assert svc.list_field_items(tmp_path, "DONA", "sd_cards")[0]["id"] == card["id"]
 
@@ -107,7 +109,7 @@ def test_what_was_kept_before_the_ids_existed_gets_them_when_it_is_read_and_its_
 
     told = svc.list_visits(tmp_path, "DONA")[0]
 
-    assert (told["location_id"], told["camera_id"], told["sd"], told["trappers"]) == ("DONA_01", "BR1", "A13", "Pedro Pérez")
+    assert (told["location_id"], told["camera_id"], told["sd"], told["trappers"]) == ("DONA_01", "CAM-1", "A13", "Pedro Pérez")
     assert svc.list_field_items(tmp_path, "DONA", "sd_cards")[0]["id"] == ids.legacy_id("sd_cards", "A13", "DONA")   # the same one wherever it is read
     assert "id" not in _on_disk(tmp_path, "sd_cards.json")[0]                                                  # reading the cards wrote nothing: it is kept with the next write
     svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "A13", "brand": "SanDisk"}])
@@ -220,3 +222,34 @@ def test_the_batteries_and_the_card_are_two_fields_and_a_visit_kept_with_one_is_
     told = svc.list_visits(tmp_path, "DONA")[0]
     assert (told["battery_status"], told["card_status"]) == ("NoBatteries", "CardFull") and "card_batteries_ok" not in told
     assert "card_batteries_ok" not in _on_disk(tmp_path)[0] and _on_disk(tmp_path)[0]["card_status"] == "CardFull"
+
+
+def test_a_visit_points_to_its_camera_by_id_and_what_the_camera_is_is_the_records(tmp_path: Path, people):
+    """#231: the visit says only which camera it was — kept as the id of its record, told by its label —; its make, model and serial number are the record's,
+    not kept in the visit, and the deployment gets them copied: the serial number as cameraID, make-model as cameraModel."""
+    from wildintel_uploader.core.services import visit_deployments
+    _project(tmp_path)
+    svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM-1", "camera_id": "BR1", "camera_make": "Browning", "camera_model": "BTC-6DCL"}])
+    # named by its serial number, with the model the field wrote: the record is found, and neither is kept
+    svc.write_visits(tmp_path, "DONA", [{**VISIT, "camera_id": "BR1", "camera_model": "Browning Strike Force HD PRO X"}])
+
+    [kept] = _on_disk(tmp_path)
+    assert kept["camera_ref"] and "camera_id" not in kept and "camera_model" not in kept and "camera_serial" not in kept
+    [told] = svc.list_visits(tmp_path, "DONA")
+    assert (told["camera_id"], told["camera_serial"], told["camera_model"]) == ("CAM-1", "BR1", "Browning-BTC-6DCL")
+    details = visit_deployments.merged_details(told, None)
+    assert (details["camera_id"], details["camera_model"]) == ("BR1", "Browning-BTC-6DCL")
+
+    # renamed in the settings: the visit still points to it, and is told by its new label
+    camera = svc.list_field_items(tmp_path, "DONA", "cameras")[0]
+    svc.write_field_items(tmp_path, "DONA", "cameras", [{**camera, "label": "CAM-ONE"}])
+    assert svc.list_visits(tmp_path, "DONA")[0]["camera_id"] == "CAM-ONE"
+
+
+def test_a_camera_with_no_model_in_its_record_keeps_the_one_the_visit_wrote(tmp_path: Path, people):
+    _project(tmp_path)   # CAM-1 has no model
+    svc.write_visits(tmp_path, "DONA", [{**VISIT, "camera_id": "CAM-1", "camera_model": "Reconyx-PC800"}])
+
+    [kept] = _on_disk(tmp_path)
+    assert kept["camera_ref"] and kept["camera_model"] == "Reconyx-PC800"
+    assert svc.list_visits(tmp_path, "DONA")[0]["camera_model"] == "Reconyx-PC800"

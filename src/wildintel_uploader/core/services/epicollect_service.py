@@ -342,7 +342,7 @@ def find_entries_of(location_ids: list[str], revision: int | None, settings: con
 VISIT_QUESTIONS: dict[str, str] = {
     "setupby": "trappers", "collection": "session", "revision": "session", "date": "date", "locationid": "location_id", "statusofthecamera": "camera_status",
     "cardandbatteries": "card_batteries_ok", "batterystatus": "battery_status", "batteriesstatus": "battery_status", "cardstatus": "card_status", "nºpicturescollected": "num_photos", "dateandtimeok": "date_time_ok", "action": "action",
-    "actionaftertheft": "action_after_theft", "cameraname": "camera_label", "cameramodel": "camera_model", "serialnumber": "camera_id",
+    "actionaftertheft": "action_after_theft", "cameraname": "camera_label", "cameramodel": "camera_model", "serialnumber": "camera_serial",
     "cameraheight": "camera_height", "cameradelay": "camera_interval", "cameratilt": "camera_tilt", "cameraheading": "camera_heading",
     "detectiondistance": "detection_distance", "baituse": "bait_use", "featuretype": "feature_type", "habitat": "habitat", "sdtoinsert": "sd",
     "actionafterthereview": "action", "actionafterinspection": "action", "calibration": "calibration", "observations": "comments", "coordinates": "coordinates", "time": "time",
@@ -350,7 +350,7 @@ VISIT_QUESTIONS: dict[str, str] = {
 # what the form answers of the card and the batteries — one question — and what each of them is
 _CARD_CODES = {"ok": ("OK", "OK"), "card full": ("OK", "CardFull"), "no batteries": ("NoBatteries", "OK"), "card full and no batteries": ("NoBatteries", "CardFull")}
 VISIT_COLUMNS = (
-    "location_id", "session", "date", "time", "created_at", "actions", "trappers", "setup_by", "camera_status", "battery_status", "card_status", "num_photos", "date_time_ok", "camera_id", "camera_model",
+    "location_id", "session", "date", "time", "created_at", "actions", "trappers", "setup_by", "camera_status", "battery_status", "card_status", "num_photos", "date_time_ok", "camera_id", "camera_serial", "camera_model",
     "camera_height", "camera_interval", "camera_tilt", "camera_heading", "detection_distance", "bait_use", "feature_type", "habitat", "sd", "calibration", "comments", "latitude", "longitude",
 )
 
@@ -413,9 +413,10 @@ def visit_row(entry: dict, refs: dict[str, str]) -> dict[str, str]:
         row["num_photos"] = str(int(number))
     if (text := _text(raw.get("date_time_ok"))) is not None:
         row["date_time_ok"] = "Yes" if text.lower().startswith("ok") else "No"
-    if (text := _text(raw.get("camera_id")) or _text(raw.get("camera_label"))) is not None:
+    # the camera is what it is called in the field — its name (#231); its serial number only finds it, or creates or completes its record
+    if (text := _text(raw.get("camera_label")) or _text(raw.get("camera_id"))) is not None:
         row["camera_id"] = text
-    for field in ("camera_model", "feature_type", "habitat", "comments"):
+    for field in ("camera_serial", "camera_model", "feature_type", "habitat", "comments"):
         if (text := _text(raw.get(field))) is not None:
             row[field] = text
     # the card is what the SD cards of the project are called — its number: the form is a free text, where it is written "SD 7", "sd-7" or "7"

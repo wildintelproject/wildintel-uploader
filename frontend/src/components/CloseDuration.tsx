@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { CloseAfter } from '../types'
+import { btnOutline } from '../pages/ImportDeploymentPage'
 
 const UNITS: { value: CloseAfter['unit']; label: string; short: string }[] = [{ value: 'days', label: 'Days', short: 'd' }, { value: 'weeks', label: 'Weeks', short: 'w' }, { value: 'months', label: 'Months', short: 'm' }]
 const PRESETS: Record<CloseAfter['unit'], number[]> = { days: [0, 7, 14, 30], weeks: [1, 2, 3, 4], months: [1, 2, 3, 6] }
@@ -7,17 +9,29 @@ const ANCHORS: { value: CloseAfter['anchor']; label: string }[] = [{ value: 'aft
 const pill = (on: boolean) => `px-3 h-8 rounded-md text-sm font-semibold transition-colors ${on ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
 
 /** The day each revision that is closed is closed on: so long after its last visit, or before the first visit of the revision that closes it. Its locations still to be visited are
- * marked as not visited on that day. */
+ * marked as not visited on that day. It is only that date, and the day of the last visit is right for almost everyone: it is folded, with the day it is, and opened with Customize. */
 export default function CloseDuration({ value, onChange }: { value: CloseAfter; onChange: (v: CloseAfter) => void }) {
   const unitLabel = UNITS.find((u) => u.value === value.unit)!
   const set = (changes: Partial<CloseAfter>) => onChange({ ...value, ...changes })
+  const [open, setOpen] = useState(false)
+  const day = value.anchor === 'after_last'
+    ? (value.amount === 0 ? 'On the day of the last visit of the revision.' : `${value.amount} ${unitLabel.label.toLowerCase()} after the last visit of the revision.`)
+    : `${value.amount} ${unitLabel.label.toLowerCase()} before the first visit of the next revision.`
   return (
-    <section aria-label="When each revision is closed" className="border-t border-zinc-200 dark:border-zinc-700 border-l-4 border-l-blue-500 px-5 py-4">
+    <section aria-label="The day of the not visited mark" className="border-t border-zinc-200 dark:border-zinc-700 border-l-4 border-l-blue-500 px-5 py-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 max-w-prose">
-          <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">When each revision is closed</p>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Unvisited locations are marked as not visited on that day: so long after the last visit of the revision, or before the first visit of the next one. Never before its last visit; if it reaches the next revision, the day before its first visit.</p>
+          <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">The day of the not visited mark</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Only the date written for the locations with no visit. The day of the last visit of the revision is right for almost everyone: change it only if you need to.</p>
+          {!open && <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300" aria-label="The day">{day}</p>}
         </div>
+        <button type="button" className={`${btnOutline} inline-flex items-center gap-2`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 text-sky-500 dark:text-sky-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h7M15 6h5M4 12h3M11 12h9M4 18h9M17 18h3M11 4v4M7 10v4M13 16v4" /></svg>
+          {open ? 'Done' : 'Customize'}
+        </button>
+      </div>
+      {open && <>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <div role="radiogroup" aria-label="Counted from" className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 p-1">
           {ANCHORS.map((a) => (
             <button key={a.value} type="button" role="radio" aria-checked={value.anchor === a.value} onClick={() => set({ anchor: a.value })}
@@ -44,11 +58,8 @@ export default function CloseDuration({ value, onChange }: { value: CloseAfter; 
                   className={`px-3 h-8 rounded-md border text-sm font-semibold ${value.amount === n ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>{n}{unitLabel.short}</button>
         ))}
       </div>
-      <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400" aria-label="The day">
-        {value.anchor === 'after_last'
-          ? (value.amount === 0 ? 'On the day of the last visit of the revision.' : `${value.amount} ${unitLabel.label.toLowerCase()} after the last visit of the revision.`)
-          : `${value.amount} ${unitLabel.label.toLowerCase()} before the first visit of the next revision.`}
-      </p>
+      <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400" aria-label="The day">{day}</p>
+      </>}
     </section>
   )
 }

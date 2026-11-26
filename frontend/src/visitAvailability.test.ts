@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { availabilityErrors, cameraAt, cameraAtSite, cardAt, cardBlock, unfinishedRevision } from './visitAvailability'
+import { availabilityErrors, cameraAt, cameraAtSite, cardAt, cardBlock, unfinishedRevision, sameCardAgain } from './visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from './types'
 import type { StoredVisit } from './types'
 import type { Visit } from './pages/VisitsPage'
@@ -62,10 +62,12 @@ describe('availabilityErrors', () => {
     expect(availabilityErrors(KEPT, visit({ camera: 'C1', actions: ['Desinstallation'] })).camera).toBeUndefined()
   })
 
-  it('refuses to leave a card that is in another camera or the one this visit collects, but not one that was collected', () => {
+  it('refuses to leave a card that is in another camera, but not one that was collected, nor the one this visit collects (#207: that is asked)', () => {
     expect(availabilityErrors(KEPT, visit({ sd: 'A2' })).sd).toBe('SD card A2 is in the camera at DONA_01 (left on 2026-08-01): it has to be collected before it is left here.')
     expect(availabilityErrors(KEPT, visit({ sd: 'A1' }))).toEqual({})
-    expect(availabilityErrors(KEPT, visit({ sd: 'A2', site: 'DONA_01', actions: ['Revision'] })).sd).toBe('SD card A2 is the one this visit collects (left on 2026-08-01): the card left in the camera has to be another.')
+    expect(availabilityErrors(KEPT, visit({ sd: 'A2', site: 'DONA_01', actions: ['Revision'] }))).toEqual({})
+    expect(sameCardAgain(KEPT, 'A2', visit({ sd: 'A2', site: 'DONA_01', actions: ['Revision'] }))).toMatch(/^The SD card A2 is the one this visit collects \(left on 2026-08-01\), and it is left again/)
+    expect(sameCardAgain(KEPT, 'A9', visit({ sd: 'A9', site: 'DONA_01', actions: ['Revision'] }))).toBeUndefined()
     expect(availabilityErrors(KEPT, visit({ sd: 'A9', site: 'DONA_01', actions: ['Revision'] }))).toEqual({})
     expect(availabilityErrors(KEPT, visit({ sd: 'A2', site: 'DONA_01', actions: ['Installation'] })).sd).toMatch(/is in the camera at DONA_01/)
   })

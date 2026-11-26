@@ -7,8 +7,6 @@ import { actionLabel, actionsLabel, revisionNumber } from '../visitActions'
 import { useEffect, useRef, useState } from 'react'
 import TimezoneCombobox from '../components/TimezoneCombobox'
 import { api } from '../api'
-import { download } from '../csvFile'
-import visitsTemplate from '../visitsTemplate.csv?raw'
 import BackButton from '../components/BackButton'
 import PickTable, { LabelFrame, PickedTick } from '../components/PickTable'
 import Combobox from '../components/Combobox'
@@ -25,10 +23,11 @@ import IconButton from '../components/IconButton'
 import VisitSummary, { type SummaryRow, type SummaryTone, type VisitSummaryData } from '../components/VisitSummary'
 import { CamtrapDpContext, CamtrapDpTag, DateTimeField, FormCard, MoreDetailsForm, SectionCard, DETAILS_SECTIONS, FEATURE_TYPE_OPTIONS, SwitchRow, roundPill, btnOutline, btnPrimary, hintClass, inputClass, labelClass } from './ImportDeploymentPage'
 import { shownErrors, validateDeployment } from '../deploymentValidation'
-import { availabilityErrors, cameraAtSite, cardBlock, nextRevision, unfinishedRevision } from '../visitAvailability'
+import { availabilityErrors, cameraAtSite, cardAtSite, cardBlock, nextRevision, sameCardAgain, unfinishedRevision } from '../visitAvailability'
 import { EMPTY_DEPLOYMENT_FIELDS } from '../types'
 import type { Camera, DeploymentFields, LocalLocation, LocalResearchProject, SdCard, StoredVisit, Trapper, ClosedVisit, ClosedVisitTarget, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, CsvCreate, ImportCsvOptions, CloseAfter } from '../types'
 import { PAGE_CLASS } from '../components/PageBar'
+import VisitFormatsPanel from '../components/VisitFormatsPanel'
 
 export type VisitSource = 'manual' | 'wildintel-new' | 'csv'
 
@@ -534,7 +533,8 @@ interface Props {
 
 /** Register the visits to the camera traps, in steps — the first asks where they come from. */
 /** What a visit keeps of its camera: its serial number, or its label when it has none. */
-const cameraKey = (c: Camera) => c.camera_id || c.label
+// a visit tells its camera by its label (#231): the record is found by it, and the visit is kept pointing to the record's id
+const cameraKey = (c: Camera) => c.label
 
 export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, settingsOpen = false, onImportImages, onImportImagesOf, start }: Props) {
   const [source, setSource] = useState<VisitSource | null>(null)
@@ -612,6 +612,8 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   const [csvOrigin, setCsvOrigin] = useState<'file' | 'epicollect'>('file')
   const [importRulesOpen, setImportRulesOpen] = useState(false)
   const [draggingCsv, setDraggingCsv] = useState(false)
+  // the panel at the right with the formats of the files of visits that are read
+  const [formatsOpen, setFormatsOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [csvText, setCsvText] = useState('')
   // Whether the file is being checked again — with the visits kept now, the locations now, the settings now.
@@ -650,7 +652,10 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   const cardOptions = { cards: allSdCards, session: visit.session || nextSession }
   const conflicts = allVisits ? availabilityErrors(allVisits, visit, cardOptions) : {}
   // Only the cards that are ready — the settings say so: not planned (they are only there), not archived, not active (in a camera) —, and that no visit puts in another camera, not collected by this revision. The one already chosen stays, to show why it cannot be.
-  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (c.label === visit.sd || ((!c.status || c.status === 'ready') && !cardBlock(allVisits ?? [], c.label, visit, cardOptions))))
+  // The card this visit collects can be left again too (#207): it is in the camera, so the settings say it is active, but it is offered.
+  const collectedHere = allVisits && visit.site.trim() && visit.actions.some((x) => ['Revision', 'Desinstallation'].includes(x)) ? cardAtSite(allVisits, visit.site.trim(), visit.when || '9999-12-31T23:59:59')?.label : undefined
+  const sdCards = allSdCards.filter((c) => ofProject(c.research_project) && (c.label === visit.sd || c.label === collectedHere || ((!c.status || c.status === 'ready') && !cardBlock(allVisits ?? [], c.label, visit, cardOptions))))
+  const cardAgain = allVisits && visit.sd ? sameCardAgain(allVisits, visit.sd, visit) : undefined
   // A Revision, a Desinstallation or a stolen camera is of the camera that is at the site: which one is not asked nor kept — the visit before says it —, unless the visit also installs another.
   const siteCamera = allVisits && visit.site.trim() ? cameraAtSite(allVisits, visit.site.trim(), visit.when || '9999-12-31T23:59:59') : null
   const ofTheSiteCamera = Boolean(siteCamera) && !visit.actions.includes('Installation') && visit.actions.some((x) => ['Revision', 'Desinstallation', 'Stolen'].includes(x))
@@ -971,7 +976,10 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
   const given = (field: string) => !!csvMapping[field] || !!csvDefaults[field]?.trim()
   // What creating asks for: the fields each entity that is created needs.
   // The fields that are asked: those of an entity only when it is created.
-  const fieldsShown = (csvColumns?.fields ?? []).filter((f) => f.field !== 'setup_by' && (!f.entity || csvCreate[f.entity])) // who set up is who went: one field
+  // who set up is who went: one field. When the entry was created (created_at) is the time of the entries of Epicollect5, which have none of their own: it is offered for
+  // them, and for a file that has that column, not for a file of one's own
+  const fieldsShown = (csvColumns?.fields ?? []).filter((f) => f.field !== 'setup_by' && (!f.entity || csvCreate[f.entity])
+    && (f.field !== 'created_at' || csvOrigin === 'epicollect' || !!csvMapping.created_at))
   const createdNeeds = (csvColumns?.fields ?? []).filter((f) => (f.required_with ?? []).some((e) => csvCreate[e]))
   // every option of the box, marked or cleared together
   const optionsOn = [...Object.values(csvCreate), csvPhotosNotCounted, csvLocationCoordinates, csvClose].filter(Boolean).length
@@ -1019,7 +1027,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
       <SwitchRow label="The images were not counted" hint="For old datasheets: a visit that collected a card but has no image count is accepted, and the count is left empty." checked={csvPhotosNotCounted} onChange={setCsvPhotosNotCounted} />
       <SwitchRow label="Use the coordinates of the location when a row has none" hint="A row with no coordinates takes those of its location. Off, a row with no coordinates is refused." checked={csvLocationCoordinates} onChange={setCsvLocationCoordinates} />
       <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40">
-        <div className="px-5"><SwitchRow plain label="Close the revision before when it has locations still planned" hint="A revision can only be added when the one before it is complete. On, the locations with no visit in the revision before are marked as not visited." checked={csvClose} onChange={setCsvClose} /></div>
+        <div className="px-5"><SwitchRow plain label="Mark the locations with no visit as not visited" hint="A revision can only be added when the one before it is finished. On, the locations that have no visit in the revision before are marked as not visited, so that it is finished. Below, the day that is written for them." checked={csvClose} onChange={setCsvClose} /></div>
         {csvClose && <CloseDuration value={csvCloseOn} onChange={setCsvCloseOn} />}
       </div>
     </div>
@@ -1070,7 +1078,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
     setVisit((v) => ({ ...v, [field]: value }))
   }
 
-  /** The camera of the visit is one of the settings: its id and its model go with the visit. */
+  /** The camera of the visit is one of the settings: the visit says which — its label, kept as the id of its record —, and its model is the record's, shown. */
   function pickCamera(label: string) {
     const camera = cameras.find((c) => c.label === label)
     setVisit((v) => ({ ...v, details: { ...v.details, camera_id: camera ? cameraKey(camera) : null, camera_model: camera?.camera_model ?? null } }))
@@ -1488,6 +1496,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     />
                     </ControlRow>
                     {conflicts.sd ? <Notice kind="error" role="alert" className="mt-2">{conflicts.sd}</Notice> : shown('sd') && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{shown('sd')}</p>}
+                    {!conflicts.sd && cardAgain && <Notice kind="warning" role="status" className="mt-2">{cardAgain}</Notice>}
                     {allSdCards.every((c) => !ofProject(c.research_project)) && <p className={hintClass}>The settings have no SD cards yet.</p>}
                     {sdCards.length === 0 && allSdCards.some((c) => ofProject(c.research_project)) && <p className={hintClass}>No SD card is ready: they are planned, archived, in a camera or were collected in this revision.</p>}
                     {onOpenSettings && (
@@ -1682,9 +1691,10 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
 
           <WizardStep
             n={defaultProject ? 2 : 3} title={'Choose the spreadsheet file'} status={!project ? 'locked' : (csvResult || csvColumns || checking) && fileConfirmed ? 'done' : 'open'} sealed={csvSaved !== null} canEdit={csvSaved === null} onEdit={() => { forgetCsv(); setCsvName(null) }}
-            description="The CSV downloaded from the WildINTEL form in Epicollect5, or any other with one row per visit. WildINTEL Uploader detects which one it is."
+            description={<>Choose a file in one of the <button type="button" className="underline decoration-dotted underline-offset-4 hover:text-blue-600 dark:hover:text-blue-400" aria-haspopup="dialog" aria-expanded={formatsOpen} onClick={() => setFormatsOpen(true)}>supported formats</button>: WildINTEL Uploader detects which one it is.</>}
             summary={csvName}
           >
+            {formatsOpen && <VisitFormatsPanel onClose={() => setFormatsOpen(false)} />}
             {!(fileReady && csvColumns) && sourcesUsed.epicollect && (
               <div role="radiogroup" aria-label="Where the CSV is" className="flex gap-2 mb-4">
                 {([['file', 'A file on this computer'], ['epicollect', 'Epicollect5 project']] as const).map(([v, label]) => (
@@ -1708,9 +1718,6 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-6 py-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h5 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Spreadsheet file</h5>
-                <button type="button" className={`${btnOutline} inline-flex items-center gap-2`} onClick={() => download('visits_template.csv', visitsTemplate)}>
-                  <Glyph className="h-4 w-4"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></Glyph>Download a template
-                </button>
               </div>
               <label htmlFor="visits-csv" aria-label="Drop CSV file" onDragOver={(e) => { e.preventDefault(); setDraggingCsv(true) }}
                      onDragLeave={() => setDraggingCsv(false)}
@@ -1868,6 +1875,28 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     {' '}Marking {unfinishedBefore.sites.length === 1 ? 'it' : 'them'} as not visited closes {unfinishedBefore.revisions.length === 1 ? 'that revision' : 'those revisions'}, which cannot be changed afterwards. Or correct the file and read it again.
                   </Notice>
                 )}
+                {csvResult.problems.length > 0 && (csvResult.blocking?.errors.length ?? 0) > 0 && (
+                  <Notice kind="error" role="alert" className="mt-4 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed">
+                    <div aria-label="What stops the file">
+                      <strong className="font-semibold">
+                        Nothing is added until {csvResult.blocking!.errors.length === 1 ? 'this row is' : `these ${csvResult.blocking!.errors.length} rows are`} corrected in the file, and it is read again:
+                      </strong>
+                      <ul aria-label="Rows with an error" className="mt-2 list-disc pl-6 space-y-1">
+                        {csvResult.blocking!.errors.slice(0, 20).map((e) => (
+                          <li key={e.row}><strong>Row {e.row}</strong>{e.session || e.site ? ` (${[e.session, e.site].filter(Boolean).join(', ')})` : ''}: {e.message}</li>
+                        ))}
+                        {csvResult.blocking!.errors.length > 20 && <li>…and {csvResult.blocking!.errors.length - 20} more, in the table of the rows.</li>}
+                      </ul>
+                      {csvResult.blocking!.waiting.rows > 0 && (
+                        <p className="mt-2">
+                          {csvResult.blocking!.waiting.rows} more {csvResult.blocking!.waiting.rows === 1 ? 'row' : 'rows'}
+                          {csvResult.blocking!.waiting.from ? ` of ${csvResult.blocking!.waiting.from}${csvResult.blocking!.waiting.to !== csvResult.blocking!.waiting.from ? ` to ${csvResult.blocking!.waiting.to}` : ''}` : ''} only
+                          {csvResult.blocking!.waiting.rows === 1 ? ' waits' : ' wait'} for them: a revision is added when the one before it is finished.
+                        </p>
+                      )}
+                    </div>
+                  </Notice>
+                )}
                 {listedProblems.length > 0 && (
                   <ul className="mt-4 mb-5 space-y-2 text-base text-red-600 dark:text-red-400 list-disc pl-6" aria-label="Rows with a problem">
                     {listedProblems.map((p) => <li key={p.row}>Row {p.row}: {p.message}</li>)}
@@ -1912,8 +1941,9 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     )}
                   </Notice>
                 )}
-                <div className="mt-4 flex justify-end">
-                  <button type="button" className={btnPrimary} disabled={csvResult.visits.length === 0} onClick={() => setCsvConfirming(true)}>Continue to the review<span aria-hidden="true"> →</span></button>
+                <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+                  {csvResult.problems.length > 0 && <span className="text-sm text-red-600 dark:text-red-400">The file has rows that cannot be added: correct them and read it again.</span>}
+                  <button type="button" className={btnPrimary} disabled={csvResult.visits.length === 0 || csvResult.problems.length > 0} onClick={() => setCsvConfirming(true)}>Continue to the review<span aria-hidden="true"> →</span></button>
                 </div>
               </>
             )}

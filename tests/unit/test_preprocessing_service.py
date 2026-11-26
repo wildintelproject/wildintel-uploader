@@ -198,7 +198,11 @@ def test_the_images_are_renamed_resized_and_kept_flat_in_the_deployments_folder(
         with Image.open(image) as img:
             assert img.width == 2400
     assert [e["type"] for e in events] == ["copy", "copy", "copy", "sealing", "done"]
-    assert {k: v for k, v in events[-1].items() if k != "report_id"} == {"type": "done", "dest_dir": str(dest), "processed": 3, "skipped": 0, "sealed": True}
+    assert {k: v for k, v in events[-1].items() if k not in ("report_id", "resize")} == {"type": "done", "dest_dir": str(dest), "processed": 3, "skipped": 0, "sealed": True}
+    # what resizing did, at a glance: the three 3000×2000 are 2400×1600 now
+    summary = events[-1]["resize"]
+    assert (summary["resized"], summary["images"], summary["before"], summary["after"]) == (3, 3, "3000×2000", "2400×1600")
+    assert 0 < summary["after_bytes"] and 0 < summary["before_bytes"]
     assert events[-1]["report_id"].endswith("_preprocessing_R0003-DONA_01")
     assert events[0]["name"] == "R0003-DONA_01__20240701_1.JPEG"
     assert json.loads((dest / "deployment.json").read_text())["deployment_id"] == "R0003-DONA_01"
@@ -373,12 +377,44 @@ def test_the_import_leaves_a_report_of_what_was_done_to_each_image(tmp_path: Pat
     assert report["totals"] == {"entries": 4, "ok": 3, "failed": 1, "images_with_issues": 1}
 
 
+def test_the_images_are_not_prepared_when_the_disk_of_the_collection_has_no_room_for_them(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """#212: the images are prepared in .staging, on the disk of the collection; with no room for them — as much as the folder takes —, it is said before
+    anything is written."""
+    from wildintel_uploader.core.services import disk_space
+    source = _source(tmp_path, 2)
+    monkeypatch.setattr(disk_space, "free_bytes", lambda path: 100)
+
+    with pytest.raises(pre.DeploymentImportError) as refused:
+        _run(source, tmp_path / "out")
+
+    assert "Preparing the images of R0003-DONA_01 needs" in str(refused.value) and "has 100 bytes free" in str(refused.value)
+    assert not (tmp_path / "out" / ".staging").exists()
+
+
+def test_disk_space_says_sizes_as_they_are_read_and_finds_the_disk_of_a_folder_not_made_yet(tmp_path: Path):
+    from wildintel_uploader.core.services import disk_space
+    assert [disk_space.size_text(n) for n in (31_200_000_000, 640_000_000, 12_000, 500)] == ["31.2 GB", "640.0 MB", "12 KB", "500 bytes"]
+    assert disk_space.free_bytes(tmp_path / "not" / "made" / "yet") is not None   # the nearest folder that exists
+    assert disk_space.shortfall(tmp_path, 1, "This", "there") is None
+
+
 def test_without_metadata_exiftool_is_not_needed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
 
     events = _run(_source(tmp_path, 1), tmp_path / "out")
 
     assert events[-1]["type"] == "done"
+
+
+def test_the_xmp_is_written_in_batches_saying_how_many_files_are_written_after_each(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """For the progress of Add metadata and its time left: one ExifTool run per batch, and the files written so far after each one."""
+    runs: list[int] = []
+    monkeypatch.setattr(pre, "_XMP_BATCH", 2)
+    monkeypatch.setattr(pre.subprocess, "run", lambda *a, **k: (runs.append(k["input"].count("-execute")), subprocess.CompletedProcess(a, 0, "", ""))[1])
+    items = [(tmp_path / f"IMG_{n}.JPG", {"XMP-dc:Creator": "x"}) for n in range(5)]
+
+    assert list(pre.write_xmp_batches("exiftool", items)) == [2, 4, 5]
+    assert runs == [2, 2, 1]
 
 
 @needs_exiftool
@@ -390,7 +426,7 @@ def test_the_xmp_metadata_is_written_into_each_image(tmp_path: Path):
 
     events = _run(source, tmp_path / "out", options)
 
-    assert "metadata" in [e["type"] for e in events]
+    assert [(e["index"], e["total"]) for e in events if e["type"] == "metadata"] == [(0, 2), (2, 2)]   # when it starts, and after the one batch
     dest = tmp_path / "out" / "R0003-DONA_01"
     log = json.loads((dest / "preprocessing.json").read_text())
     first = log["images"][0]

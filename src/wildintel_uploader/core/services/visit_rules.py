@@ -277,6 +277,17 @@ def _last_touch(group: list[dict], when: str, touches) -> dict | None:
     return None
 
 
+def _taken_away_at(group: list[dict], when: str, camera: str) -> bool:
+    """Whether a visit to a site at the very instant `when` takes `camera` away from it: at the same instant, what is taken away is taken away before what is
+    put up — a camera taken from one site and put up at another at the same minute, as the field form often has them."""
+    return any(_stamp(v) == when and _takes_away(v) and not (_leaves_camera(v) and _same_gear(v.get("camera_id") or "", camera)) for v in group)
+
+
+def by_time_takings_first(v: dict) -> tuple[str, int]:
+    """The order visits are taken in: by their instants and, at the same instant, the ones that take a camera away first."""
+    return _stamp(v), 0 if _takes_away(v) else 1
+
+
 def _touches_camera(v: dict) -> bool:
     return _takes_away(v) or bool(_leaves_camera(v) and v.get("camera_id"))
 
@@ -332,7 +343,7 @@ def camera_at(visits: list[dict], camera: str, when: str, unknown: list[dict] | 
         best = None
         for group in visits.sites_by_time():
             last = _last_touch(group, when, _touches_camera)
-            if last is None or not (_leaves_camera(last) and last.get("camera_id") and _same_gear(last["camera_id"], camera)):
+            if last is None or not (_leaves_camera(last) and last.get("camera_id") and _same_gear(last["camera_id"], camera)) or _taken_away_at(group, when, camera):
                 continue
             first = next(v for v in group if _touches_camera(v))
             key = (_stamp(first), visits._pos[id(first)])
@@ -347,6 +358,9 @@ def camera_at(visits: list[dict], camera: str, when: str, unknown: list[dict] | 
             here[site] = None
         if _leaves_camera(v) and v.get("camera_id"):
             here[site] = {"camera": v["camera_id"], "site": v["location_id"], "date": v["date"], "session": v.get("session")}
+    for site, h in here.items():   # at the same instant, what is taken away is taken away first
+        if h and _taken_away_at([v for v in visits if str(v["location_id"]).lower() == site], when, camera):
+            here[site] = None
     at = next(({"site": h["site"], "date": h["date"], "session": h["session"]} for h in here.values() if h and _same_gear(h["camera"], camera)), None)
     return None if at is None or _stale(at, at["site"], unknown, number) else at
 
@@ -431,10 +445,26 @@ def card_at_site(visits: list[dict], site: str, when: str, unknown: list[dict] |
     return None if _stale(at, site, unknown, number) else at
 
 
+def same_card_again(kept: list[dict], visit: dict, unknown: list[dict] | None = None) -> str | None:
+    """What to ask of a visit that collects the card of its camera and leaves that same card in it — None when it leaves another, or none. It happens in the field
+    (the card was empty, or it was downloaded there and put back), and it is also how a card is written down by mistake: it is asked, not refused."""
+    card = str(visit.get("sd") or "").strip()
+    actions = visit.get("actions") or []
+    leaves, collects = {"Installation", "Revision"} & set(actions), {"Revision", "Desinstallation"} & set(actions)
+    if not card or not leaves or not collects:
+        return None
+    site = str(visit["location_id"]).strip()
+    there = card_at(kept, card, _stamp(visit), unknown, _session_number(visit.get("session")))
+    if there and _same(there["site"], site):
+        return (f"{visit.get('session')} {site}: the SD card {card} is collected and left again (it was left on {there['date']}). Was it empty, or downloaded "
+                f"in the field and put back? If not, correct the file.")
+    return None
+
+
 def card_block(kept: list[dict], visit: dict, cards: list[dict] | None = None, unknown: list[dict] | None = None) -> str | None:
     """Why a visit cannot leave the card it says in the camera — None when it can, or when it leaves none. A card cannot be left when it is archived (from the
-    day it was; with no day, for good), when it is in the camera of another site, when it is the one the visit collects, or when a visit of the same revision
-    collected it."""
+    day it was; with no day, for good), when it is in the camera of another site, or when a visit of the same revision collected it. The very card the visit
+    collects can be left again — it was empty, or downloaded in the field and put back —: that is a warning (see same_card_again), not a refusal."""
     card = str(visit.get("sd") or "").strip()
     actions = visit.get("actions") or []
     installs, revises = "Installation" in actions, "Revision" in actions
@@ -451,7 +481,7 @@ def card_block(kept: list[dict], visit: dict, cards: list[dict] | None = None, u
     number = _session_number(visit.get("session"))
     there = card_at(kept, card, when, unknown, number)
     if there and collects and _same(there["site"], site):
-        return _reason("card_is_the_one_collected", f"SD card {card} is the one this visit collects (left on {there['date']}): the card left in the camera has to be another.")
+        return None
     if there:
         return _reason("card_in_another_camera", f"SD card {card} is in the camera at {there['site']} (left on {there['date']}): it has to be collected before it is left here.")
     session = visit.get("session")
@@ -567,6 +597,12 @@ def history_warning_items(new: list[dict], kept: list[dict], cards: list[dict] |
         if len(of) > 1:
             hint = " (typo in the location number?)" if action == "Installation" else ""
             say(f"{session}: {site} has {len(of)} \"{action}\" entries in the same revision{hint}.", *of)
+
+    # The card collected left again: asked, as it may be true or a slip.
+    for v in new:
+        again = same_card_again(everything, v, unknown)
+        if again:
+            say(again, v)
 
     for v in new:
         here = [e for e in _site_visits(everything, v["location_id"]) if e is not v]

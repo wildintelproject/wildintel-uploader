@@ -15,7 +15,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
@@ -275,7 +276,8 @@ def validate_images(req: ValidateImagesRequest) -> dict:
         imported = None
         if req.research_project_id and (checks is None or "duplicates" in checks):
             imported = local_folder_service.imported_source_hashes(config.collections_dir(), req.research_project_id, req.deployment_id)
-        result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported)
+        result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported, exif_fields=config.load_settings().VALIDATION.exif_fields,
+                                                                camera_levels=config.load_settings().VALIDATION.camera_levels)
     except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
         raise HTTPException(400, str(exc)) from exc
     return {**result, "report_id": _keep(lambda: report_service.validation_report(result, source, checks))}
@@ -303,7 +305,9 @@ def validate_images_stream(req: ValidateImagesRequest) -> StreamingResponse:
             imported = None
             if req.research_project_id and (checks is None or "duplicates" in checks):
                 imported = local_folder_service.imported_source_hashes(config.collections_dir(), req.research_project_id, req.deployment_id)
-            result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported, progress=progress)
+            result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported, progress=progress,
+                                                                exif_fields=config.load_settings().VALIDATION.exif_fields,
+                                                                camera_levels=config.load_settings().VALIDATION.camera_levels)
             events.put({"type": "done", "result": {**result, "report_id": _keep(lambda: report_service.validation_report(result, source, checks))}})
         except Exception as exc:
             logger.warning("Validating the images failed: %s", exc, exc_info=debugging())
@@ -338,6 +342,22 @@ def next_revision(req: NextRevisionRequest) -> dict:
     return statistics_service.next_revision(config.collections_dir(), req.research_project_id, req.location_id)
 
 
+class CameraIdentityRequest(BaseModel):
+    research_project_id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    make: Optional[str] = None
+    model: Optional[str] = None
+
+
+@router.post("/camera-identity")
+def camera_identity(req: CameraIdentityRequest) -> dict:
+    """Keeps in a camera's record the make and the model its images say — what Camera consistency compares them with from then on."""
+    try:
+        return local_folder_service.set_camera_identity(config.collections_dir(), req.research_project_id, req.label, req.make, req.model)
+    except local_folder_service.LocalFolderError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.post("/validate-deployment")
 def validate_deployment(req: ValidateDeploymentRequest) -> dict:
     """Opt-in checks of the scanned images against the deployment's own
@@ -350,6 +370,8 @@ def validate_deployment(req: ValidateDeploymentRequest) -> dict:
             source, req.deployment, checks, collection_name=req.collection_name,
             expected_location_id=req.expected_location_id, tolerance_hours=req.tolerance_hours,
             visit=req.visit.model_dump() if req.visit else None,
+            camera=local_folder_service.camera_record(config.collections_dir(), req.research_project_id, req.deployment.camera_id),
+            camera_levels=config.load_settings().VALIDATION.camera_levels,
         )
         # The statistical checks compare this revision with the location's previous ones.
         wanted = frozenset(statistics_service.STATISTIC_CHECKS) if checks is None else checks & frozenset(statistics_service.STATISTIC_CHECKS)
