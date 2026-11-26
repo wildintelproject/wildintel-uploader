@@ -42,9 +42,6 @@ from wildintel_uploader.core.services.deployment_import_service import Deploymen
 logger = logging.getLogger(__name__)
 
 PREPROCESSING_LOG_FILE = "preprocessing.json"
-_EXIF_IFD = 0x8769
-_DATE_TAGS = (("exif", 36867), ("exif", 36868), ("main", 306))  # DateTimeOriginal, DateTimeDigitized, DateTime
-_NO_DATA = {"0000:00:00 00:00:00"}
 _XMP_BATCH = 200  # files per ExifTool run
 EXIFTOOL_TMP_SUFFIX = "_exiftool_tmp"  # what ExifTool adds to a file's name while it rewrites it
 _JPEG_QUALITY = 90  # only when the original's own JPEG settings can't be read
@@ -87,24 +84,11 @@ def localize(naive: datetime, zone: ZoneInfo, *, ignore_dst: bool) -> datetime:
     return naive.replace(tzinfo=zone)
 
 
-def _exif_date(path: Path) -> datetime | None:
-    try:
-        with Image.open(path) as img:
-            exif = img.getexif()
-            sub = exif.get_ifd(_EXIF_IFD)
-            for where, tag in _DATE_TAGS:
-                raw = (sub if where == "exif" else exif).get(tag)
-                if raw and str(raw).strip() not in _NO_DATA:
-                    return datetime.strptime(str(raw).strip()[:19], "%Y:%m:%d %H:%M:%S")
-    except Exception as exc:  # unreadable metadata: fall back to the file's date
-        logger.debug("No EXIF date in %s: %s", path, exc)
-    return None
-
-
-def _camera_time(path: Path, options: PreprocessOptions) -> tuple[datetime, datetime, str]:
+def _camera_time(path: Path, options: PreprocessOptions, dates: dict[Path, datetime | None] | None = None) -> tuple[datetime, datetime, str]:
     """The image's capture time as the camera's wall clock, the same in its timezone, and where it came from:
-    "exif", or "file" when the image has no date and its modification time stands in."""
-    naive, source = _exif_date(path), "exif"
+    "exif", or "file" when the image has no date and its modification time stands in. `dates` are the dates of the images read at once
+    (camera_info.read_dates, one run of ExifTool for all of them); without them, this one's is read (#227)."""
+    naive, source = (dates[path] if dates is not None and path in dates else camera_info.read_dates([path]).get(path)), "exif"
     if naive is None:
         naive, source = datetime.fromtimestamp(path.stat().st_mtime).replace(microsecond=0), "file"
     return naive, localize(naive, zone_of(options.timezone), ignore_dst=options.ignore_dst), source
@@ -260,9 +244,9 @@ def _dimensions(path: Path) -> tuple[int | None, int | None]:
 
 
 def _process(index: int, path: Path, source_dir: Path, dest: Path, deployment: DeploymentFields, options: PreprocessOptions,
-             cameras: dict[Path, camera_info.CameraInfo]) -> dict:
+             cameras: dict[Path, camera_info.CameraInfo], dates: dict[Path, datetime | None] | None = None) -> dict:
     """One image: date, name, resize (or copy) and hashes."""
-    naive, aware, date_source = _camera_time(path, options)
+    naive, aware, date_source = _camera_time(path, options, dates)
     date = aware.astimezone(datetime_timezone.utc) if options.convert_to_utc else aware
     relative = path.relative_to(source_dir)
     name = new_name(deployment.deployment_id, date, index, path.suffix) if options.rename else str(relative)
@@ -401,6 +385,7 @@ def preprocess_stream(
         others = [p for p in files if p not in image_set]
         total = len(files)
         cameras, _ = camera_info.read_cameras(images)
+        dates = camera_info.read_dates(images)   # one run of ExifTool for all of them (#227)
         index_of = {path: i for i, path in enumerate(images, start=1)}
 
         records: list[dict] = []
@@ -410,7 +395,7 @@ def preprocess_stream(
         work.mkdir(parents=True, exist_ok=True)
         _hide(work.parent)
         with ThreadPoolExecutor(max_workers=config.workers()) as pool:
-            futures = [(path, pool.submit(_process, index_of[path], path, source, work, deployment, options, cameras)) for path in images]
+            futures = [(path, pool.submit(_process, index_of[path], path, source, work, deployment, options, cameras, dates)) for path in images]
             for path, future in futures:  # in order, so the events are too
                 done += 1
                 try:

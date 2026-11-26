@@ -30,7 +30,7 @@ import logging
 import subprocess
 from pathlib import Path
 
-from wildintel_uploader.core import config, parallel
+from wildintel_uploader.core import config
 from wildintel_uploader.core.services import camera_info, local_folder_service
 from wildintel_uploader.core.services import deployment_import_service as dis
 
@@ -110,7 +110,8 @@ def timeline(folder: str, period: tuple[dt.datetime, dt.datetime] | None = None,
     settings = settings or config.load_settings()
     folder = _dir(folder)
     images = _images(folder)
-    times = parallel.pmap(dis._image_datetime, images, settings.GENERAL.workers)
+    read = camera_info.read_dates(images)   # one run of ExifTool for all of them (#227)
+    times = [read[p] for p in images]
     tolerance = dt.timedelta(hours=settings.POSTVALIDATION.tolerance_hours)
     lo, hi = (period[0] - tolerance, period[1] + tolerance) if period else (None, None)
 
