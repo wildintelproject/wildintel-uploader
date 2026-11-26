@@ -275,7 +275,8 @@ def validate_images(req: ValidateImagesRequest) -> dict:
         imported = None
         if req.research_project_id and (checks is None or "duplicates" in checks):
             imported = local_folder_service.imported_source_hashes(config.collections_dir(), req.research_project_id, req.deployment_id)
-        result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported, exif_fields=config.load_settings().VALIDATION.exif_fields)
+        result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported, exif_fields=config.load_settings().VALIDATION.exif_fields,
+                                                                camera_levels=config.load_settings().VALIDATION.camera_levels)
     except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
         raise HTTPException(400, str(exc)) from exc
     return {**result, "report_id": _keep(lambda: report_service.validation_report(result, source, checks))}
@@ -304,7 +305,8 @@ def validate_images_stream(req: ValidateImagesRequest) -> StreamingResponse:
             if req.research_project_id and (checks is None or "duplicates" in checks):
                 imported = local_folder_service.imported_source_hashes(config.collections_dir(), req.research_project_id, req.deployment_id)
             result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported, progress=progress,
-                                                                exif_fields=config.load_settings().VALIDATION.exif_fields)
+                                                                exif_fields=config.load_settings().VALIDATION.exif_fields,
+                                                                camera_levels=config.load_settings().VALIDATION.camera_levels)
             events.put({"type": "done", "result": {**result, "report_id": _keep(lambda: report_service.validation_report(result, source, checks))}})
         except Exception as exc:
             logger.warning("Validating the images failed: %s", exc, exc_info=debugging())

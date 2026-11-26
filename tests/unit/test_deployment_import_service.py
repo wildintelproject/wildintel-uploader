@@ -742,23 +742,51 @@ def test_validate_images_camera_check_passes_with_one_camera(tmp_path: Path, no_
 
     result = svc.validate_images(folder, frozenset({"camera"}))
 
-    assert result["cameras"] == [{"model": "Reconyx HC600", "camera_id": "P800HG08", "count": 2, "examples": ["IMG_0000.jpg", "IMG_0001.jpg"]}]
-    assert result["cameras_without_info"] == 0
+    assert result["cameras"] == [{"model": "Reconyx HC600", "camera_id": "P800HG08", "values": {"SerialNumber": "P800HG08"}, "count": 2,
+                                  "examples": ["IMG_0000.jpg", "IMG_0001.jpg"]}]
+    assert result["camera_by"] == ["SerialNumber"] and result["cameras_without_info"] == 0
     assert result["exiftool"] is False
-    assert set(result) == {"checked_count", "cameras", "cameras_without_info", "exiftool"}  # only what was asked
+    assert set(result) == {"checked_count", "cameras", "camera_by", "cameras_without_info", "exiftool"}  # only what was asked
 
 
-def test_validate_images_camera_check_lists_each_distinct_model_and_id_with_how_many_each_took(tmp_path: Path, no_exiftool):
+def test_validate_images_camera_check_lists_each_camera_with_how_many_each_took(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(
-        tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"),
-        ("Reconyx", "HC600", "B2"), ("Browning", "Recon Force", "A1"),
+        tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "B2"), ("Browning", "Recon Force", "C3"),
     )
 
     result = svc.validate_images(folder, frozenset({"camera"}))
 
-    assert [(c["model"], c["camera_id"], c["count"]) for c in result["cameras"]] == [
-        ("Reconyx HC600", "A1", 3), ("Browning Recon Force", "A1", 1), ("Reconyx HC600", "B2", 1),  # the most common first, then by name
+    assert [(c["values"], c["count"]) for c in result["cameras"]] == [
+        ({"SerialNumber": "A1"}, 2), ({"SerialNumber": "B2"}, 1), ({"SerialNumber": "C3"}, 1),  # the most common first, then by value
     ]
+
+
+def test_the_camera_is_told_by_the_first_level_every_image_has(tmp_path: Path, no_exiftool):
+    """#208: by the serial number when every image has one; else by the make and the model; else by the model; and the order is the settings'."""
+    serial = _cameras_folder(tmp_path / "s", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"))
+    assert svc.validate_images(serial, frozenset({"camera"}))["camera_by"] == ["SerialNumber"]
+
+    # one image without a serial number: the two are not two cameras, they are compared by the make and the model
+    mixed = _cameras_folder(tmp_path / "m", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", None))
+    result = svc.validate_images(mixed, frozenset({"camera"}))
+    assert result["camera_by"] == ["Make", "Model"] and [(c["values"], c["count"]) for c in result["cameras"]] == [({"Make": "Reconyx", "Model": "HC600"}, 2)]
+
+    # without the make, by the model alone
+    _make_jpeg(tmp_path / "o" / "a.jpg", model="BTC-8A")
+    _make_jpeg(tmp_path / "o" / "b.jpg", model="BTC-8A")
+    assert svc.validate_images(tmp_path / "o", frozenset({"camera"}))["camera_by"] == ["Model"]
+
+    # the order of the settings: by the model first, two serial numbers are one camera
+    two = _cameras_folder(tmp_path / "t", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "B2"))
+    assert len(svc.validate_images(two, frozenset({"camera"}))["cameras"]) == 2
+    by_model = svc.validate_images(two, frozenset({"camera"}), camera_levels=[["Model"], ["SerialNumber"]])
+    assert by_model["camera_by"] == ["Model"] and len(by_model["cameras"]) == 1
+
+    # no level every image has: the first any has, and the rest are without camera information
+    _cameras_folder(tmp_path / "n", ("Reconyx", "HC600", "A1"))
+    _make_jpeg(tmp_path / "n" / "bare.jpg")
+    some = svc.validate_images(tmp_path / "n", frozenset({"camera"}))
+    assert some["camera_by"] == ["SerialNumber"] and some["cameras_without_info"] == 1
 
 
 def test_validate_images_camera_check_counts_the_images_with_no_camera_information(tmp_path: Path, no_exiftool):

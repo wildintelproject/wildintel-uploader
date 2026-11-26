@@ -518,7 +518,7 @@ def test_validate_images_accepts_the_camera_check_and_returns_its_groups(tmp_pat
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"checked_count", "cameras", "cameras_without_info", "exiftool", "report_id"}
+    assert set(body) == {"checked_count", "cameras", "camera_by", "cameras_without_info", "exiftool", "report_id"}
     assert body["cameras"] == [] and body["cameras_without_info"] == 2  # neither image says which camera took it
 
 

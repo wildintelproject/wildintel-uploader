@@ -437,6 +437,33 @@ def _corruption_error(path: Path) -> str | None:
 
 # The image checks validate_images can run — see its own docstring. A
 # caller may ask for any subset; None (the default) means all of them.
+# How two images are told to be of the same camera when the settings do not say it (VALIDATION.camera_levels): by the serial number, else by the make and
+# the model, else by the model alone.
+DEFAULT_CAMERA_LEVELS = [["SerialNumber"], ["Make", "Model"], ["Model"]]
+
+
+def _camera_groups(images: list[Path], cameras: dict, levels: list[list[str]]) -> tuple[list[str], dict[tuple[str, ...], list[Path]], int]:
+    """The images grouped by the camera they were taken by, as `levels` tell it — the fields of each level, the most reliable first: the images are compared by
+    the first level every image has; when none, by the first that any has, and the ones that have not got it are without camera information. Returns the
+    fields compared by (none when no image has any level), the groups by their values, and how many images are without camera information."""
+    serials = {f for f in _CAMERA_FIELDS if f != "model"}
+    asked = list(dict.fromkeys(f for level in levels for f in level if f.lower() not in serials))
+    tags = camera_info.read_tags(images, asked) if asked else {}
+
+    def value(path: Path, field: str) -> str | None:
+        return cameras[path].camera_id if field.lower() in serials else tags.get(path, {}).get(field)
+
+    values = {tuple(level): {p: tuple(value(p, f) for f in level) for p in images} for level in levels}
+    complete = lambda level: [p for p in images if all(values[tuple(level)][p])]
+    chosen = next((level for level in levels if len(complete(level)) == len(images)), None) or next((level for level in levels if complete(level)), None)
+    if chosen is None:
+        return [], {}, len(images)
+    groups: dict[tuple[str, ...], list[Path]] = defaultdict(list)
+    for path in complete(chosen):
+        groups[values[tuple(chosen)][path]].append(path)   # type: ignore[index]
+    return list(chosen), dict(groups), len(images) - len(complete(chosen))
+
+
 # The EXIF fields the camera information already reads (camera_info): the model — the make with it — and the serial number, under any of its names.
 _CAMERA_FIELDS = {"model", "serialnumber", "internalserialnumber", "bodyserialnumber", "cameraserialnumber"}
 IMAGE_CHECKS = frozenset({"corrupted", "sequence", "structure", "camera", "exif", "duplicates"})
@@ -507,7 +534,7 @@ def _reporting(progress: Callable[[str, int, int], None] | None, step: str, tota
 
 def validate_images(
     source_dir: Path, checks: frozenset[str] | None = None, *, detail: bool = False, imported: dict[str, list[dict]] | None = None,
-    progress: Callable[[str, int, int], None] | None = None, exif_fields: list[str] | None = None,
+    progress: Callable[[str, int, int], None] | None = None, exif_fields: list[str] | None = None, camera_levels: list[list[str]] | None = None,
 ) -> dict:
     """Independent, opt-in checks over a scanned folder's images — only
     "checked_count" plus whichever of these were asked for are present in
@@ -602,19 +629,14 @@ def validate_images(
             result["duplicates_in_project"] = _imported_before(images, source_dir, imported)
 
     if "camera" in checks:
-        groups: dict[tuple[str | None, str | None], list[Path]] = defaultdict(list)
-        without_info = 0
-        for path in sorted(images):  # a stable order, whatever the file system lists first
-            info = cameras[path]
-            if info.known:
-                groups[(info.model, info.camera_id)].append(path)
-            else:
-                without_info += 1
+        by, groups, without = _camera_groups(sorted(images), cameras, camera_levels if camera_levels is not None else DEFAULT_CAMERA_LEVELS)
         result["cameras"] = [
-            {"model": model, "camera_id": camera_id, "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]]}
-            for (model, camera_id), paths in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0][0] or "", item[0][1] or ""))
+            {"model": cameras[paths[0]].model, "camera_id": cameras[paths[0]].camera_id, "values": dict(zip(by, key)),
+             "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]]}
+            for key, paths in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0]))
         ]
-        result["cameras_without_info"] = without_info
+        result["camera_by"] = by
+        result["cameras_without_info"] = without
 
     if "structure" in checks:
         result["subdirectories"] = sorted({str(p.parent.relative_to(source_dir)) for p in files if p.parent != source_dir})

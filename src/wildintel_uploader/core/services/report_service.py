@@ -141,9 +141,10 @@ def validation_report(found: dict, source: Path, checks: Iterable[str] | None = 
         b.deployment("structure", not folders, "all the images are in one folder" if not folders else f"images in subfolders: {', '.join(folders)}")
     if "camera" in ran:
         cameras = found.get("cameras", [])
-        names = "; ".join(f"{c['model'] or '?'} {c['camera_id'] or '?'} ({c['count']})" for c in cameras)
+        names = "; ".join((" ".join(c["values"].values()) if c.get("values") else f"{c['model'] or '?'} {c['camera_id'] or '?'}") + f" ({c['count']})" for c in cameras)
         without = found.get("cameras_without_info", 0)
-        b.deployment("camera", len(cameras) <= 1 and not without, f"{len(cameras)} camera(s): {names or 'none'}" + (f"; {without} image(s) without camera information" if without else ""))
+        by = f" (compared by {' + '.join(found['camera_by'])})" if found.get("camera_by") else ""
+        b.deployment("camera", len(cameras) <= 1 and not without, f"{len(cameras)} camera(s){by}: {names or 'none'}" + (f"; {without} image(s) without camera information" if without else ""))
     return b.build()
 
 

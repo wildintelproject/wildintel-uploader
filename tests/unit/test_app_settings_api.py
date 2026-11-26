@@ -328,6 +328,13 @@ def test_how_each_check_starts_is_saved_and_read_back():
     assert read["POSTVALIDATION"]["defaults"]["camera"] == "required" and read["VALIDATION"]["defaults"]["structure"] == "skip"
 
 
+def test_how_two_images_are_told_of_the_same_camera_is_saved_in_its_order():
+    saved = _put(VALIDATION={"camera_levels": [["Model"], ["Make", "Model"], ["ImageDescription"]], "exif_fields": ["Model", "ISO"]})
+
+    assert saved["VALIDATION"]["camera_levels"] == [["Model"], ["Make", "Model"], ["ImageDescription"]]
+    assert _client().get("/api/settings").json()["VALIDATION"]["exif_fields"] == ["Model", "ISO"]
+
+
 @pytest.mark.parametrize("tolerance", [-1, 10_000])
 def test_the_tolerance_must_be_within_its_limits(tolerance):
     body = config.Settings().model_dump(mode="json")
