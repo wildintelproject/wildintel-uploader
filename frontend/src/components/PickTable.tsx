@@ -23,7 +23,17 @@ export function LabelFrame({ picked, name, onPress, children }: { picked: boolea
   )
 }
 
-export interface PickColumn<T> { label: string; cell: (item: T) => ReactNode; className?: string }
+export interface PickColumn<T> {
+  label: string; cell: (item: T) => ReactNode; className?: string
+  /** What the column is sorted by: its header is then a button that sorts by it, and it is among the choices of Sort by. */
+  sort?: (item: T) => string | number
+}
+
+/** A filter of the toolbar: a select of the values of the items — their status, say —, told in the line of the active filters. */
+export interface PickFilter<T> { label: string; valueOf: (item: T) => string; options: { value: string; label: string }[] }
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+const compare = (x: string | number, y: string | number) => (typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y)))
 
 /** What a list needs to let many be picked, not one: the keys picked and how they change, which can be picked at all, what the ones picked come to, and the choices of the chevron of the bar. */
 export interface PickMany<T> {
@@ -42,7 +52,7 @@ export interface PickMany<T> {
 
 /** The things to pick from — visits, SD cards — in the table of a dashboard: search, rows, pages, and a button to see them as labels. Pressing a row or a label picks its
  * item, the one picked marked, and pressing it again lets it go. */
-export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect, many, columns, searchText, renderLabel, names, searchPlaceholder, empty = 'Nothing matches.', perPage, optionLabel, filters, total, defaultView = 'table' }: {
+export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect, many, columns, searchText, renderLabel, names, searchPlaceholder, empty = 'Nothing matches.', perPage, optionLabel, filters, total, defaultView = 'table', filter, defaultSort }: {
   items: T[]; keyOf: (item: T) => string; selectedKey?: string; onSelect?: (item: T | undefined) => void
   /** Many can be picked, not one: the table has a box in each row, and the bar of the selection is over the rows. */
   many?: PickMany<T>
@@ -64,15 +74,25 @@ export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect,
   total?: number
   /** The view it opens on: the table when it is not said; the search field alone is the collapsed one. */
   defaultView?: View
+  /** A filter of the items, chosen in the toolbar. */
+  filter?: PickFilter<T>
+  /** The label of the column the items are sorted by at first: as they come when it is not said. */
+  defaultSort?: string
 }) {
   const [text, setText] = useState('')
   const [page, setPage] = useState(1)
   const [view, setView] = useState<View>(defaultView)
+  const [only, setOnly] = useState('')
+  const [sort, setSort] = useState<{ by: string; descending: boolean }>({ by: defaultSort ?? '', descending: false })
+  const sortable = columns.filter((col) => col.sort)
+  const sortColumn = sortable.find((col) => col.label === sort.by)
+  const sortBy = (by: string) => { setSort((now) => ({ by, descending: now.by === by && !now.descending })); setPage(1) }
   // In the view of only the search field: whether its list is open, and the option the keys are on.
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
   const words = text.toLowerCase().split(/\s+/).filter(Boolean)
-  const shown = items.filter((c) => { const line = searchText(c).toLowerCase(); return words.every((w) => line.includes(w)) })
+  const found = items.filter((c) => { const line = searchText(c).toLowerCase(); return words.every((w) => line.includes(w)) && (!filter || !only || filter.valueOf(c) === only) })
+  const shown = sortColumn ? [...found].sort((a, b) => (sort.descending ? -1 : 1) * compare(sortColumn.sort!(a), sortColumn.sort!(b))) : found
   const size = perPage ?? (view === 'labels' ? CARDS : PER_PAGE)
   const pages = Math.max(1, Math.ceil(shown.length / size)), current = Math.min(page, pages)
   const onPage = shown.slice((current - 1) * size, current * size)
@@ -102,8 +122,12 @@ export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect,
   }
   return (
     <TableCard label={`${names.table} table`}>
-      <TableToolbar searchLabel={names.search} placeholder={searching ? names.pickPlaceholder : searchPlaceholder} onReset={() => { setText(''); setPage(1); setOpen(false) }}
+      <TableToolbar searchLabel={names.search} placeholder={searching ? names.pickPlaceholder : searchPlaceholder} onReset={() => { setText(''); setPage(1); setOpen(false); setOnly(''); setSort({ by: defaultSort ?? '', descending: false }) }}
         text={searching && !open && picked && text === '' ? optionLabel(picked) : text} onText={(t) => { setText(t); setPage(1); if (searching) { setOpen(true); setActive(0) } }}
+        choice={searching ? undefined : [
+          ...(filter ? [{ label: filter.label, value: only, onChange: (v: string) => { setOnly(v); setPage(1) }, options: filter.options }] : []),
+          ...(view === 'labels' && sortable.length > 0 ? [{ label: 'Sort by', value: sort.by, onChange: (v: string) => { setSort({ by: v, descending: false }); setPage(1) }, options: sortable.map((col) => ({ value: col.label, label: col.label })), all: 'As listed' }] : []),
+        ]}
         trailing={<ViewSwitch view={view} items={names.items} onChange={(v) => { setView(v); setPage(1); setOpen(false) }} />}
         onSearchBlur={() => setOpen(false)} onSearchKeyDown={onKey} />
       {searching && open && text.trim() !== '' && (
@@ -121,7 +145,7 @@ export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect,
           choices={choices.map((c) => ({ label: c.label, count: c.showCount === false ? undefined : c.pick(matching).length, disabled: c.showCount === false ? false : c.pick(matching).length === 0, onPick: () => setPicked(c.pick(matching)) }))} />
       )}
       {!searching && (
-        <ActiveFilters filters={[...(filters ?? []), { label: `Search: ${text.trim() ? `“${text.trim()}”` : 'None'}`, tone: 'green' }]} summary={`${shown.length} of ${total ?? items.length} ${names.items} match`} />
+        <ActiveFilters filters={[...(filters ?? []), ...(filter ? [{ label: `${filter.label}: ${filter.options.find((o) => o.value === only)?.label ?? 'All'}`, tone: 'blue' as const }] : []), { label: `Search: ${text.trim() ? `“${text.trim()}”` : 'None'}`, tone: 'green' }]} summary={`${shown.length} of ${total ?? items.length} ${names.items} match`} />
       )}
       {searching ? null : view === 'table' ? (
         <div className="overflow-x-auto">
@@ -129,7 +153,16 @@ export default function PickTable<T>({ items, keyOf, selectedKey = '', onSelect,
             <thead className={TABLE.head}>
               <tr>
                 <th scope="col" className="w-10 px-2 py-3"><span className="sr-only">{many ? 'Selected' : 'Pick'}</span></th>
-                {columns.map((col) => <th key={col.label} scope="col" className={TABLE.th}>{col.label}</th>)}
+                {columns.map((col) => col.sort ? (
+                  <th key={col.label} scope="col" aria-sort={sort.by === col.label ? (sort.descending ? 'descending' : 'ascending') : 'none'} className={TABLE.th}>
+                    <button type="button" aria-label={`Sort by ${col.label}`} className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => sortBy(col.label)}>
+                      {col.label}
+                      <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-3.5 w-3.5 fill-none stroke-current ${sort.by === col.label ? 'text-blue-500' : 'text-zinc-400 dark:text-zinc-600'}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        {sort.by === col.label ? (sort.descending ? <path d="M12 5v14M6 13l6 6 6-6" /> : <path d="M12 19V5M6 11l6-6 6 6" />) : <path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" />}
+                      </svg>
+                    </button>
+                  </th>
+                ) : <th key={col.label} scope="col" className={TABLE.th}>{col.label}</th>)}
               </tr>
             </thead>
             <tbody className={TABLE.body}>

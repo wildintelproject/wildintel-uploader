@@ -691,14 +691,11 @@ describe('ImportDeploymentPage', () => {
           await userEvent.click(within(await screen.findByRole('table', { name: 'Collected visits' })).getByRole('row', { name: /R0001/ }))
           await userEvent.click(screen.getByRole('button', { name: /Continue to the images/ }))
           if (card) {
-            // asked first, with the card the visit left already chosen: another one is picked
-            const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
-            if (!cards.queryByRole('button', { name: new RegExp(`\\b${card}\\b`), pressed: true })) await userEvent.click(cards.getByRole('row', { name: new RegExp(`\\b${card}\\b`) }))
+            // asked first, with none chosen: the user picks the one of the label
+            await userEvent.click(within(await screen.findByRole('group', { name: 'SD cards' })).getByRole('button', { name: `Pick the SD card ${card}` }))
           } else {
-            // no card said: the one the visit left, chosen for it, is let go
-            const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
-            const chosen = cards.queryByRole('button', { name: /A13/, pressed: true })
-            if (chosen) await userEvent.click(cards.getByRole('row', { name: /A13/ }))
+            // no card said: none is chosen
+            expect(within(await screen.findByRole('group', { name: 'SD cards' })).queryByRole('button', { pressed: true })).not.toBeInTheDocument()
           }
           await scanTheFolder()
           await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
@@ -712,7 +709,7 @@ describe('ImportDeploymentPage', () => {
           await screen.findByText('Check the details', { selector: 'h4' })
         }
 
-        it('asks first which SD card it is, with the cards of the research project and the one the visit left already chosen', async () => {
+        it('asks first which SD card it is, with the cards of the research project and none chosen: the user reads it on the card', async () => {
           SD_SETTINGS()
           storedProjects = [DONA_PROJECT]
           storedLocations = { DONA: [DONA_01] }
@@ -725,18 +722,21 @@ describe('ImportDeploymentPage', () => {
 
           // before the folder: the card is what says which deployment the images are of
           expect(screen.queryByLabelText('Folder')).not.toBeInTheDocument()
-          expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && /says the SD card A13 was left in the camera: it is chosen/.test(el.textContent ?? ''))).toBeInTheDocument()
-          const cards = within(await screen.findByRole('table', { name: 'SD cards' }))
+          // the card the visit left is not said nor chosen: what the user picks is checked against it
+          expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && /Choose the one whose label you read on the card\. It is checked against the card the visit R0001 to DONA_01 says was left in the camera/.test(el.textContent ?? ''))).toBeInTheDocument()
+          expect(screen.queryByText(/A13 was left in the camera/)).not.toBeInTheDocument()
+          // as labels at first, none chosen — not even the one the visit left
+          const labels = within(await screen.findByRole('group', { name: 'SD cards' }))
+          expect(labels.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Pick the SD card A13', 'Pick the SD card B2'])
+          // a label picks its card, and a second press lets it go
+          await userEvent.click(labels.getByRole('button', { name: 'Pick the SD card B2' }))
+          expect(labels.getByRole('button', { name: 'Let go of the SD card B2', pressed: true })).toBeInTheDocument()
+          await userEvent.click(labels.getByRole('button', { name: 'Let go of the SD card B2' }))
+          expect(labels.queryByRole('button', { pressed: true })).not.toBeInTheDocument()
+          // and the table offers the same cards
+          await userEvent.click(screen.getByRole('button', { name: 'Show the SD cards as a table' }))
+          const cards = within(screen.getByRole('table', { name: 'SD cards' }))
           expect(cards.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').slice(1).map((c) => c.textContent))).toEqual([['A13', 'SanDisk', '64 GB', 'Active'], ['B2', '—', '—', 'Active']])
-          expect(cards.getByRole('button', { name: /A13/, pressed: true })).toBeInTheDocument()   // the one the visit left
-          // a row picks its card, and a second press lets it go
-          await userEvent.click(cards.getByRole('row', { name: /B2/ }))
-          expect(cards.getByRole('button', { name: /B2/, pressed: true })).toBeInTheDocument()
-          await userEvent.click(cards.getByRole('row', { name: /B2/ }))
-          expect(cards.getByRole('button', { name: /B2/, pressed: false })).toBeInTheDocument()
-          // and the labels view offers the same cards
-          await userEvent.click(screen.getByRole('button', { name: 'Show the SD cards as labels' }))
-          expect(within(screen.getByRole('group', { name: 'SD cards' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Pick the SD card A13', 'Pick the SD card B2'])
         })
 
         const STRICT_CARD = 'How strict: The SD card is the one the visit left'
