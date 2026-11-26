@@ -16,7 +16,6 @@ const KINDS: { key: keyof SyncResult['created']; label: string }[] = [
   { key: 'locations', label: 'Locations' },
   { key: 'collections', label: 'Collections' },
   { key: 'deployments', label: 'Deployments' },
-  { key: 'timestamp_log', label: 'Timestamp log rows' },
   { key: 'images', label: 'Images files (images.json)' },
 ]
 
@@ -114,7 +113,7 @@ export default function SyncCollectionsPage({ onBack }: { onBack?: () => void; o
     <div className={PAGE_CLASS}>
       <PageHeader icon={UTIL_ICONS.sync} title="Sync local collections" parent="Utilities" onParent={onBack}
         description={<>The local folders are checked against what TRAPPER has for a classification project, and what is missing is created: the research project and its locations, the collection
-        (with its timestamp log) and the chosen deployments. What is already there is left as it is. The images are only downloaded if you ask for it.</>} />
+        and the chosen deployments. What is already there is left as it is. The images are only downloaded if you ask for it.</>} />
 
       <WizardStep n={1} title="Choose what to sync" status={started ? 'done' : 'open'} canEdit={!syncing} onEdit={startOver}
                   summary={collection && <>{projects.find((p) => String(p.pk) === projectPk)?.acronym ?? projectPk} › {classifications.find((c) => String(c.pk) === classificationPk)?.name} › {collection.name} · {chosenDeployments.size} {chosenDeployments.size === 1 ? 'deployment' : 'deployments'}</>}

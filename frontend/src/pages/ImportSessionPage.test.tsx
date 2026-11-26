@@ -12,7 +12,7 @@ vi.mock('../api', () => ({
   api: {
     getSettings: vi.fn(), exiftoolStatus: vi.fn(), browseFolder: vi.fn(), scanSession: vi.fn(), scanFolder: vi.fn(), guessDetails: vi.fn(), validateImages: vi.fn(),
     listResearchProjects: vi.fn(), saveResearchProject: vi.fn(), listLocalLocations: vi.fn(), saveLocalLocation: vi.fn(),
-    writeTimestampLog: vi.fn(), validateDeployment: vi.fn(), previousDeployments: vi.fn(), existingDeployments: vi.fn(), collectionPath: vi.fn(), importLocal: vi.fn(), openFolder: vi.fn(),
+    validateDeployment: vi.fn(), previousDeployments: vi.fn(), existingDeployments: vi.fn(), collectionPath: vi.fn(), importLocal: vi.fn(), openFolder: vi.fn(),
     trapperGetConfig: vi.fn(), trapperTestConnection: vi.fn(), trapperResearchProjects: vi.fn(), nextRevision: vi.fn(), epicollectEntriesBatch: vi.fn(),
     closedVisits: vi.fn(), linkVisit: vi.fn(),
   },
@@ -76,7 +76,6 @@ beforeEach(() => {
   mockedApi.validateImages.mockResolvedValue({ checked_count: 10, corrupted: [] })
   mockedApi.listResearchProjects.mockResolvedValue({ results: [DONA] })
   mockedApi.listLocalLocations.mockResolvedValue({ results: [loc('DONA_01'), loc('DONA_02')] })
-  mockedApi.writeTimestampLog.mockResolvedValue({ path: '/c/R0003_FileTimestampLog.csv', action: 'added', rows: 1, collection: 'R0003' })
   mockedApi.validateDeployment.mockResolvedValue({ checked_count: 10, out_of_range: [], deployment_id: { ok: true, message: 'fine' }, sd_card: { ok: true, message: 'fine' } })
   mockedApi.collectionPath.mockResolvedValue({ path: COLLECTION, collection: 'R0003', exists: false, name: null })
   mockedApi.importLocal.mockImplementation(async (_s, _d, _n, deployment, _p, onEvent) => {
@@ -524,13 +523,12 @@ describe('ImportSessionPage', () => {
     expect(screen.getByText('1. Choose the checks', { selector: 'h4' })).toBeInTheDocument() // done, shut, with its pencil
   })
 
-  it('writes each deployment’s timestamp log and checks each one after the details', async () => {
+  it('checks each deployment after the details', async () => {
     await toDetails()
     await next()
     await userEvent.click(await screen.findByRole('button', { name: 'Run checks' }))
 
     await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledTimes(2))
-    expect(mockedApi.writeTimestampLog.mock.calls.map((c) => c[1].deployment_id)).toEqual(['R0003-DONA_01', 'R0003-DONA_02'])
     expect(mockedApi.validateDeployment.mock.calls.map((c) => c[1].deployment_id)).toEqual(['R0003-DONA_01', 'R0003-DONA_02'])
     expect(mockedApi.validateDeployment.mock.calls[0][1].start_date).toBe('2026-10-02T08:00:00+02:00')   // the visit's, in the timezone of the location
   })
@@ -917,20 +915,6 @@ describe('an import session of visits', () => {
     await waitFor(() => expect(mockedApi.linkVisit).toHaveBeenCalledTimes(2))
     expect(mockedApi.linkVisit).toHaveBeenCalledWith('DONA', CLOSED[0].visit, 'R0002-DONA_01')
     expect(mockedApi.linkVisit).toHaveBeenCalledWith('DONA', CLOSED[1].visit, 'R0002-DONA_02')
-  })
-
-  it('writes each deployment of the session into the collection\'s logs with what its visit says of it', async () => {
-    await toTheFolders()
-    await userEvent.selectOptions(screen.getByLabelText('SD card of DONA_01'), 'B2')
-    await next()
-    await screen.findByText(/The revision is the one of the visits you chose/)
-    await toMoreDetailsSubstep()
-    await next() // dates → checks
-
-    await waitFor(() => expect(mockedApi.writeTimestampLog).toHaveBeenCalledTimes(2))
-    expect(mockedApi.writeTimestampLog.mock.calls[0][2]).toEqual({
-      left_session: 'R0002', left_action: 'Revision', left_sd: 'A13', collected_session: 'R0003', collected_action: 'Revision', counted_photos: 10, sd_card: 'B2',
-    })
   })
 
 })

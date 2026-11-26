@@ -2,8 +2,8 @@ import type { EpicollectEntry } from './epicollectImport'
 import type {
   AppSettings, AppSettingsUpdate, ConfigInfo, UpdateCheck, PreviousDeployment, ClassificationProject, PreprocessingOptions, CollectionCheck, CollectionPath, LocalLocation, LocalResearchProject, StoredVisit, DeploymentCheck, DeploymentCheckResult, DeploymentFields,
   DeploymentSelection, ExistingDeployment, ImageCheck, ImportEvent, Location, LocalDeployment, ResearchProject,
-  AccessCheck, CardCopyEvent, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, TimestampLogResult, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
-  ClosedVisit, StatusChange, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, ImportCsvOptions, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, RevisionCreated, StatisticsRow, EpicollectForm, FieldworkVisits, FieldLogsResult, FieldDeployment, BookVisit, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent, Camera } from './types'
+  AccessCheck, CardCopyEvent, GuessedDetails, ScanResult, SessionSummary, StatisticsParams, SyncCollection, SyncEvent, LogEntry, SessionScan, UploadCollection, UploadEvent, UploadMode, ValidationResult,
+  ClosedVisit, StatusChange, VisitCheckInfo, VisitsCsvColumns, VisitsCsvFormat, VisitsCsvResult, ImportCsvOptions, Report, ReportSummary, RepairCollection, RepairEvent, Timeline, TimeFixTarget, RepairState, RevisionCreated, StatisticsRow, EpicollectForm, CollectionFoldersResult, FieldDeployment, BookVisit, BackupProjectInfo, BackupRead, BackupCreateRequest, BackupRestoreRequest, BackupEvent, RestoreEvent, Camera } from './types'
 
 /** A failed response's message — FastAPI's `detail` when there is one. */
 async function errorMessage(r: Response): Promise<string> {
@@ -173,11 +173,11 @@ export const api = {
     post<{ csv: string; filename: string; count: number }>('/api/visits/export-csv', { research_project_id: researchProjectId }),
 
   saveVisit: (researchProjectId: string, visit: StoredVisit) =>
-    post<StoredVisit & { field_logs?: FieldLogsResult }>('/api/visits/save', { research_project_id: researchProjectId, visit }),
+    post<StoredVisit & { collection_folders?: CollectionFoldersResult }>('/api/visits/save', { research_project_id: researchProjectId, visit }),
 
   // Edits a visit kept — its site and revision are its key. Refused when it starts or closes an imported deployment, or when the change makes it or a later visit impossible.
   updateVisit: (researchProjectId: string, visit: StoredVisit) =>
-    post<StoredVisit & { field_logs?: FieldLogsResult }>('/api/visits/update', { research_project_id: researchProjectId, location_id: visit.location_id, session: visit.session, visit }),
+    post<StoredVisit & { collection_folders?: CollectionFoldersResult }>('/api/visits/update', { research_project_id: researchProjectId, location_id: visit.location_id, session: visit.session, visit }),
 
   // The visits of a research project that closed a deployment — they collected the card — and have none linked yet.
   closedVisits: (researchProjectId: string) => post<{ results: ClosedVisit[] }>('/api/visits/closed', { research_project_id: researchProjectId }),
@@ -286,10 +286,6 @@ export const api = {
       visit: options.visit ?? null,
     }),
 
-  // Puts the deployment's start and end in its collection's <collection>_FileTimestampLog.csv — before the postvalidation — and its
-  // row in the <collection>_FieldworkLog.csv, with what the visits it is of say of it.
-  writeTimestampLog: (researchProjectId: string, deployment: DeploymentFields, visits?: FieldworkVisits) =>
-    post<TimestampLogResult>('/api/deployment-import/timestamp-log', { research_project_id: researchProjectId, deployment, visits: visits ?? null }),
 
   // What the collection's two logs say of a deployment, if they have its row.
   logEntry: (researchProjectId: string, deploymentId: string) =>

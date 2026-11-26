@@ -34,7 +34,7 @@ import {
   FormCard, IMAGE_CHECK_DESCRIPTIONS, IMAGE_CHECK_OPTIONS, SmallSpinner, StepHeading, StrictnessTable,
   DEFAULT_REQUIRED_DEPLOYMENT_CHECKS, startingChecks, DeploymentFormBody, LocationTimeNote, MoreDetailsForm, ValidationReport, buildDeploymentId, fillFromPreviousRevision, btnOutline, btnPrimary, deploymentCheckPassed, describePreprocessing, imageCheckPassed,
   inputClass, labelClass, hintClass, statParamsOf, statParamsValid, toggled, fillFromClosedVisit, visitKey, visitLabel,
-  FieldLabel, DetailsFromContext, LockedDetailsContext, mergedDetails, visitApplies, detailsFound, fieldworkVisits, revisionOfVisit,
+  FieldLabel, DetailsFromContext, LockedDetailsContext, mergedDetails, visitApplies, detailsFound, revisionOfVisit,
 } from './ImportDeploymentPage'
 import type { PreprocessStep, Strictness, WizardSettings } from './ImportDeploymentPage'
 import { PAGE_CLASS } from '../components/PageBar'
@@ -212,8 +212,6 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   const [addingLocation, setAddingLocation] = useState(false)
   const [locationDraft, setLocationDraft] = useState(EMPTY_LOCATION_DRAFT)
   const [locationError, setLocationError] = useState<string | null>(null)
-  const [savingDetails, setSavingDetails] = useState(false)
-  const [detailsError, setDetailsError] = useState<string | null>(null)
   const [validations, setValidations] = useState<Record<string, Outcome<ValidationResult>>>({})
   const [validating, setValidating] = useState(false)
   const [checkProgress, setCheckProgress] = useState<ImageCheckProgress | null>(null)
@@ -805,20 +803,8 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
     }
   }
 
-  /** Each deployment's row goes into its collection's FileTimestampLog and FieldworkLog before the postvalidation. */
-  async function handleContinueFromDetails() {
-    setSavingDetails(true); setDetailsError(null)
-    try {
-      for (const d of chosen) {
-        const linked = visitOf(d.name)
-        await (linked ? api.writeTimestampLog(projectId, fieldsOf(d.name), fieldworkVisits(linked, folderSd[d.name] ?? '')) : api.writeTimestampLog(projectId, fieldsOf(d.name)))
-      }
-    } catch (e) {
-      setDetailsError(e instanceof Error ? e.message : "Could not write the collection's timestamp log.")
-      setSavingDetails(false)
-      return
-    }
-    setSavingDetails(false)
+  /** On to the postvalidation: no log of the collection is written any more (#213). */
+  function handleContinueFromDetails() {
     setChecks({})
     setStep((s) => s + 1)
   }
@@ -918,7 +904,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
   const canContinue: Record<StepKey, boolean> = {
     origin: Boolean(projectId) && closedVisits !== null && visitsMode,
     images: chosen.length > 0 && !validating && (!visitsMode || chosen.every((d) => folderVisit[d.name])),
-    dates: detailsActive && detailsReady && !savingDetails,
+    dates: detailsActive && detailsReady,
     checks: requiredDeploymentChecksOk && !checking,
     prepare: false,
   }
@@ -1589,7 +1575,6 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
               {visible.length === 0 && <li className="px-5 py-3 text-sm text-zinc-500 dark:text-zinc-400">No deployment matches.</li>}
             </ul>
           </FormCard>
-          {detailsError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{detailsError}</p>}
           <div className="flex justify-between items-center mt-4">
             <button type="button" className={btnOutline} onClick={() => (visitsMode ? setStep((s) => s - 1) : setOriginOpen(1))}><span aria-hidden="true">← </span>Back</button>
             <button type="button" aria-label="Continue to more details" className={btnPrimary} disabled={!detailsReady}
@@ -1914,14 +1899,13 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
         )}
         {stepKey === 'dates' && (
           <div className="flex flex-col items-end gap-1 max-w-md">
-            {detailsError && <p className="text-xs text-red-600 dark:text-red-400 text-right">{detailsError}</p>}
             {detailsActive && originOpen >= 2 && !detailsReady && (() => {
               const incomplete = chosen.filter((d) => problemsOf(d.name) > 0)
               const onlyDates = incomplete.length > 0 && incomplete.every((d) => Object.keys(errorsOf(d.name)).every((k) => k === 'start_date' || k === 'end_date') && !duplicated(d.name))
               return <p className="text-xs text-amber-600 dark:text-amber-400">{!revisionValid ? 'Enter the revision number.' : `${plural(incomplete.length, 'deployment needs', 'deployments need')} ${onlyDates ? 'dates' : 'details'}.`}</p>
             })()}
-            <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!canContinue.dates} onClick={handleContinueFromDetails}>
-              {savingDetails && <SmallSpinner />}{savingDetails ? 'Saving…' : <>Continue<span aria-hidden="true"> →</span></>}
+            <button type="button" className={btnPrimary} disabled={!canContinue.dates} onClick={handleContinueFromDetails}>
+              Continue<span aria-hidden="true"> →</span>
             </button>
           </div>
         )}

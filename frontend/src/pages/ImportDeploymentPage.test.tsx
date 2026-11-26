@@ -15,7 +15,6 @@ vi.mock('../api', () => ({
     trapperGetConfig: vi.fn(),
     getSettings: vi.fn(),
     exiftoolStatus: vi.fn(),
-    writeTimestampLog: vi.fn(),
     logEntry: vi.fn(),
     trapperTestConnection: vi.fn(),
     trapperResearchProjects: vi.fn(),
@@ -116,7 +115,6 @@ beforeEach(() => {
   mockedApi.previousDeployments.mockResolvedValue({ results: {} })
   mockedApi.exiftoolStatus.mockResolvedValue({ available: true, path: '/usr/bin/exiftool' })
   mockedApi.logEntry.mockResolvedValue({ collection: 'R0001', timestamps: null, fieldwork: null })
-  mockedApi.writeTimestampLog.mockResolvedValue({ path: `${COLLECTIONS_DIR}/R0001_FileTimestampLog.csv`, action: 'added', rows: 1, collection: 'R0001' })
   mockedApi.trapperGetConfig.mockResolvedValue({ base_url: 'https://trapper.example.org', user_name: 'alice', has_password: true })
   mockedApi.trapperTestConnection.mockResolvedValue({ ok: true, research_projects_count: 1 })
   mockedApi.trapperResearchProjects.mockResolvedValue({ results: RESEARCH_PROJECTS })
@@ -747,10 +745,6 @@ describe('ImportDeploymentPage', () => {
         it('adds two checks to the details of a deployment of a visit: the card and the number of photos, as strict as the others', async () => {
           await toTheChecks('A13', 12)
 
-          // the collection's FieldworkLog gets what the visits say of the deployment
-          expect(mockedApi.writeTimestampLog).toHaveBeenCalledWith('DONA', expect.anything(), expect.objectContaining({
-            left_session: 'R0001', left_action: 'Installation', left_sd: 'A13', collected_session: 'R0002', collected_action: 'Revision', counted_photos: 12, sd_card: 'A13',
-          }))
           expect(screen.getByRole('radiogroup', { name: STRICT_CARD })).toBeInTheDocument()
           expect(screen.getByRole('radiogroup', { name: STRICT_PHOTOS })).toBeInTheDocument()
           await chooseStrictness('The SD card is the one the visit left', 'Must pass')
@@ -1843,44 +1837,6 @@ describe('ImportDeploymentPage', () => {
       await waitFor(() => expect(screen.queryByText('Previous revisions', { selector: 'h5' })).not.toBeInTheDocument())
       expect(screen.queryByLabelText('Sequence gap (seconds)')).not.toBeInTheDocument()
       expect(screen.getByRole('radiogroup', { name: 'How strict: Camera consistency' })).toBeInTheDocument()
-    })
-  })
-
-  describe('the collection\'s timestamp log', () => {
-    it('is written for the deployment when leaving the details, before the postvalidation', async () => {
-      await goToPostvalidation('1')
-
-      expect(mockedApi.writeTimestampLog).toHaveBeenCalledWith('DONA', expect.objectContaining({
-        deployment_id: 'R0001-DONA_01', start_date: '2024-09-04T13:10:00+02:00', end_date: '2024-11-04T14:28:00+01:00',
-      }), expect.objectContaining({ left_session: 'R0001', collected_session: 'R0002' }))   // and what the visits say of it
-    })
-
-    it('cannot go on when the log cannot be written, and says why', async () => {
-      mockedApi.writeTimestampLog.mockRejectedValue(new Error('R0001_FileTimestampLog.csv is missing the columns: EndDate, EndTime.'))
-      await goToNewDetailsStep()
-      await fillRequiredDetails()
-      await toMoreDetails()
-      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-
-      expect(await screen.findByText('R0001_FileTimestampLog.csv is missing the columns: EndDate, EndTime.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument() // still on the details
-      expect(screen.queryByText('Postvalidation', { selector: 'h4' })).not.toBeInTheDocument()
-
-      mockedApi.writeTimestampLog.mockResolvedValue({ path: 'x/R0001_FileTimestampLog.csv', action: 'added', rows: 1, collection: 'R0001' })
-      await userEvent.click(screen.getByRole('button', { name: 'Continue' })) // tried again once it is fixed
-      expect(await screen.findByText('Check the details', { selector: 'h4' })).toBeInTheDocument()
-    })
-
-    it('is written again, with the new dates, when the details are changed and left again', async () => {
-      await goToPostvalidation()
-      await userEvent.click(screen.getByRole('button', { name: 'Back' }))
-      await manualEntry()
-      fireEvent.change(screen.getByLabelText('End'), { target: { value: '2024-12-01T08:00' } })
-      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-      await screen.findByText('Check the details', { selector: 'h4' })
-
-      expect(mockedApi.writeTimestampLog).toHaveBeenCalledTimes(2)
-      expect(mockedApi.writeTimestampLog.mock.calls[1][1].end_date).toBe('2024-12-01T08:00:00+01:00')
     })
   })
 

@@ -2626,8 +2626,8 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
               {clearLog.kind === 'error' && <p className="text-xs text-red-600 dark:text-red-400 px-1">{clearLog.message}</p>}
               </div>
             </GroupCard>
-            <ToggleCard title="Keep the seconds in the logs" checked={draft.fieldlogKeepSeconds} onChange={(v) => set('fieldlogKeepSeconds', v)}
-                        description="The start and the end of the deployments written in the FileTimestampLog and the FieldworkLog. Turned off, they are cut to the minute." />
+            <ToggleCard title="Keep the seconds of the deployments" checked={draft.fieldlogKeepSeconds} onChange={(v) => set('fieldlogKeepSeconds', v)}
+                        description="The start and the end of the deployments the visits give. Turned off, they are cut to the minute." />
           </div>
         )}
 
