@@ -484,7 +484,7 @@ def test_a_config_can_be_downloaded_and_its_folder_opened(config_dir):
     assert "b.toml" in response.headers["content-disposition"]
     assert response.text == (config_dir / "configs" / "b.toml").read_text(encoding="utf-8")
 
-    with patch("wildintel_uploader.web.api.routers.app_settings.file_manager.open_folder") as opener:
+    with patch("wildintel_uploader.entrypoints.api.settings.file_manager.open_folder") as opener:
         assert client.post("/api/settings/configs/b/open-folder").status_code == 200
     opener.assert_called_once_with(config_dir / "configs")
 

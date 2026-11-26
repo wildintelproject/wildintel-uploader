@@ -1,4 +1,5 @@
 """config.py — settings.toml roundtrip and the derived data directory."""
+import os
 from pathlib import Path
 
 import pytest
@@ -211,11 +212,11 @@ def test_the_resize_width_has_limits(bad):
 # ── how many images are worked on at once ────────────────────────────────────
 
 def test_the_workers_default_to_the_cpus_up_to_four(monkeypatch):
-    monkeypatch.setattr(config.os, "cpu_count", lambda: 22)
+    monkeypatch.setattr(os, "cpu_count", lambda: 22)
     assert config.default_workers() == 4
-    monkeypatch.setattr(config.os, "cpu_count", lambda: 2)
+    monkeypatch.setattr(os, "cpu_count", lambda: 2)
     assert config.default_workers() == 2
-    monkeypatch.setattr(config.os, "cpu_count", lambda: None)
+    monkeypatch.setattr(os, "cpu_count", lambda: None)
     assert config.default_workers() == 1
 
 

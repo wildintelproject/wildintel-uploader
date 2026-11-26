@@ -1,10 +1,12 @@
-"""FastAPI router — the app's own settings.toml (see config.py), edited on
-the settings page. The password never goes back to the frontend: TRAPPER
+"""FastAPI router — what the settings page reads and saves all at once, and what it does with the research projects: their cameras, SD cards,
+trappers and roles, the research project that comes filled in, the log, the history of the states. The settings themselves (the configs, the
+welcome page, the data folder) are the module `modules.settings`, driven by `entrypoints/api/settings.py`.
+
+Edited on the settings page. The password never goes back to the frontend: TRAPPER
 says whether one is saved instead, and saving a blank one keeps it."""
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -12,8 +14,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from wildintel_uploader.core import config
+from wildintel_uploader.modules.settings.domain import folders
+from wildintel_uploader.modules.settings.domain import models as domain
 from wildintel_uploader.core import logging_setup, storage
-from wildintel_uploader.core.services import audit, file_manager, local_folder_service, status_history
+from wildintel_uploader.core.services import audit, local_folder_service, status_history
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -97,20 +101,11 @@ def _move_to_the_projects(settings: config.Settings) -> config.Settings:
 
 
 def _follow_data_dir(old: config.Settings, new: config.Settings) -> None:
-    """When the data folder changes, the collections, reports and packages folders that were inside the old one go inside the new one: a folder kept elsewhere stays where it is, and one that was
-    just <old data folder>/<its name> goes back to being the default one."""
-    old_dir, new_dir = config.data_dir(old), config.data_dir(new)
-    if old_dir == new_dir:
-        return
-    for key in ("collections", "reports", "packages"):
-        value = getattr(new.DATA, f"{key}_dir")
-        if not value:
-            continue
-        try:
-            inside = Path(value).expanduser().relative_to(old_dir)
-        except ValueError:
-            continue
-        setattr(new.DATA, f"{key}_dir", None if str(inside) == key else str(new_dir / inside))
+    """When the data folder changes, the collections, reports and packages folders that were inside the old one go inside the new one — the rule of
+    the domain of the settings (modules.settings.domain.folders.follow_data_dir), on the file's settings this router still works with."""
+    followed = folders.follow_data_dir(domain.DataSettings(**old.DATA.model_dump()), domain.DataSettings(**new.DATA.model_dump()), config.default_data_dir())
+    for key in ("collections_dir", "reports_dir", "packages_dir"):
+        setattr(new.DATA, key, getattr(followed, key))
 
 
 @router.get("")
@@ -198,37 +193,6 @@ def set_default_research_project(req: DefaultResearchProjectRequest) -> dict:
     return {"default_research_project": found}
 
 
-class ShowWelcomeRequest(BaseModel):
-    show: bool
-
-
-@router.put("/show-welcome")
-def set_show_welcome(req: ShowWelcomeRequest) -> dict:
-    """Changes only whether the welcome page is shown when the app opens — what its tick does."""
-    settings = config.load_settings()
-    settings.GENERAL.show_welcome = req.show
-    config.save_settings(settings)
-    return {"show_welcome": req.show}
-
-
-class DataDirRequest(BaseModel):
-    dir: str | None = None
-
-
-@router.put("/data-dir")
-def set_data_dir(req: DataDirRequest) -> dict:
-    """Changes only the data folder — what the initial setup asks for. Blank is the default one. What is kept in the old one is not moved, and the folders that were inside it go inside the new one."""
-    settings = config.load_settings()
-    before = settings.model_copy(deep=True)
-    wanted = (req.dir or "").strip()
-    if wanted and not (Path(wanted).expanduser().is_absolute()):
-        raise HTTPException(422, "The data folder must be an absolute path (or one starting with ~).")
-    settings.DATA.dir = wanted or None
-    _follow_data_dir(before, settings)
-    config.save_settings(settings)
-    return {"dir": str(config.data_dir(settings))}
-
-
 @router.get("/log")
 def download_log() -> FileResponse:
     """The current log file — to attach to a bug report."""
@@ -312,61 +276,3 @@ def rebuild_status_history(req: RebuildStatusHistoryRequest) -> dict:
     return {"added": status_history.rebuild(root, req.research_project_id)}
 
 
-class NewConfigRequest(BaseModel):
-    name: str
-
-
-@router.get("/configs")
-def get_configs() -> list[dict]:
-    """Every settings file the user can switch to, the one in use flagged."""
-    return [c.model_dump() for c in config.list_configs()]
-
-
-@router.post("/configs")
-def add_config(req: NewConfigRequest) -> list[dict]:
-    """Writes a new settings file with the default values (it doesn't become
-    the active one) and returns the updated list."""
-    try:
-        config.create_config(req.name)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    return get_configs()
-
-
-@router.post("/configs/{config_id}/activate")
-def activate_config(config_id: str) -> list[dict]:
-    """Makes `config_id` the settings file the whole app reads and saves."""
-    try:
-        config.set_active_config(config_id)
-    except KeyError:
-        raise HTTPException(404, f"There's no config {config_id!r}.") from None
-    return get_configs()
-
-
-def _existing_config_file(config_id: str) -> Path:
-    try:
-        path = config.config_file_for(config_id)
-    except KeyError:
-        raise HTTPException(404, f"There's no config {config_id!r}.") from None
-    if not path.is_file():
-        raise HTTPException(404, "There's no settings file yet.")
-    return path
-
-
-@router.get("/configs/{config_id}/download")
-def download_config(config_id: str) -> FileResponse:
-    """The settings file itself, as saved — passwords included, since it's a
-    backup of the file; it's the user's own file, on their own machine."""
-    path = _existing_config_file(config_id)
-    return FileResponse(path, media_type="application/toml", filename=path.name)
-
-
-@router.post("/configs/{config_id}/open-folder")
-def open_config_folder(config_id: str) -> dict:
-    """Opens the directory holding that settings file in the OS's file manager."""
-    path = _existing_config_file(config_id)
-    try:
-        file_manager.open_folder(path.parent)
-    except OSError as exc:
-        raise HTTPException(500, f"Could not open the folder: {exc}") from exc
-    return {"ok": True}

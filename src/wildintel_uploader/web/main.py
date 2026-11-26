@@ -6,16 +6,21 @@ Creates the app, registers middleware and routers, mounts the built frontend.
 import sys
 from pathlib import Path
 
+from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from wildintel_uploader.entrypoints import wiring
+from wildintel_uploader.entrypoints.api import settings as settings_entrypoint
 from wildintel_uploader.web.api.routers import app_settings, backup, deployment_import, epicollect, health, repair, reports, sessions, setup, statistics, sync, timefix, trapper, upload, visits
 from wildintel_uploader.web.settings import configure_logging, settings
 
 configure_logging()
 
 app = FastAPI(title="WildINTEL Uploader API")
+# The modules, given to the routers that ask for them as FromDishka[...] (see entrypoints/wiring.py).
+setup_dishka(wiring.make_app_container(), app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for _router in [health.router, trapper.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, setup.router, statistics.router, epicollect.router, visits.router, timefix.router, backup.router]:
+for _router in [health.router, settings_entrypoint.router, trapper.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, setup.router, statistics.router, epicollect.router, visits.router, timefix.router, backup.router]:
     app.include_router(_router)
 
 

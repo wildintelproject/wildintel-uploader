@@ -15,6 +15,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, FloatPrompt, IntPrompt, Prompt
 from rich.table import Table
 
+from wildintel_uploader.entrypoints.cli.settings import settings_app
 from wildintel_uploader.cli.common import call, console, err_console, fail, trapper_credentials
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import DeploymentFields
@@ -58,59 +59,9 @@ def test_connection() -> None:
 app.command("tc", hidden=True, help="Alias for test-connection.")(test_connection)
 
 
-# ── config ────────────────────────────────────────────────────────────────────
+# ── config: the module of the settings (see entrypoints/cli/settings.py) ──
 
-config_app = typer.Typer(help="Show or change the settings — the same settings.toml as the web app's ⚙️ page.", no_args_is_help=True)
-app.add_typer(config_app, name="config")
-
-# every setting marked secret in the schema of the settings: never shown, and hidden while it is typed
-_SECRET = frozenset(config.secret_fields())
-
-
-@config_app.command("show")
-def config_show() -> None:
-    """Show every setting (the passwords and the secrets never shown)."""
-    settings = config.load_settings()
-    for section, values in settings.model_dump().items():
-        table = Table(title=section, title_justify="left", show_header=False, box=None, padding=(0, 2))
-        for key, value in values.items():
-            shown = ("(saved)" if value else "(not set)") if (section, key) in _SECRET else ("—" if value is None else str(value))
-            table.add_row(f"{section}.{key}", shown)
-        console.print(table)
-    console.print(f"[dim]{config.active_config_file()}[/dim]")
-
-
-@config_app.command("path")
-def config_path() -> None:
-    """Where settings.toml, the log and the app's documents are."""
-    from wildintel_uploader.core import logging_setup
-
-    console.print(f"Settings:  {config.active_config_file()}")
-    console.print(f"Log:       {logging_setup.log_file()}")
-    console.print(f"Data:      {config.data_dir()}")
-    console.print(f"Collections: {config.collections_dir()}")
-
-
-@config_app.command("set")
-def config_set(
-    key: Annotated[str, typer.Argument(help="SECTION.field — e.g. TRAPPER.base_url, TRAPPER.user_password, DATA.dir.")],
-    value: Annotated[Optional[str], typer.Argument(help="The new value — asked for (hidden for a password or a secret) if left out.")] = None,
-) -> None:
-    """Change one setting."""
-    section, _, field = key.partition(".")
-    settings = config.load_settings()
-    data = settings.model_dump()
-    if section not in data or field not in data[section]:
-        raise fail(f"No setting {key}. See: wildintel-uploader config show")
-    if value is None:
-        value = typer.prompt(key, hide_input=(section, field) in _SECRET)
-    data[section][field] = value if value != "" else None
-    try:
-        new = config.Settings.model_validate(data)
-    except ValidationError as exc:
-        raise fail(f"Invalid {key}: {exc.errors()[0]['msg']}.") from exc
-    config.save_settings(new)
-    console.print(f"[green]✔[/green] {key} saved.")
+app.add_typer(settings_app, name="config")
 
 
 # ── Trapper lookups ───────────────────────────────────────────────────────────
