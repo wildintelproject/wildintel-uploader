@@ -1,6 +1,6 @@
-"""FastAPI routers — the catalog (module `modules.catalog`): the people who go to the field (trappers), adding them in the initial setup, the research
-projects and their locations — at /api/catalog, and at the addresses the pages have always used (/api/deployment-import/research-projects/…,
-/api/deployment-import/locations/…).
+"""FastAPI routers — the catalog (module `modules.catalog`): the people who go to the field (trappers), the research projects and their locations,
+cameras, SD cards, roles and the history of their states — at /api/catalog, and at the addresses the pages have always used
+(/api/deployment-import/…, /api/setup/…, /api/settings/field-item-status, /api/settings/status-history…, /api/settings/default-research-project).
 
 They only translate: a request into a call to the contract of the module (`domain.ports.CatalogService`), given by Dishka, and its answer or its
 error into HTTP. The people are given as the files keep them: their fields, their id and their dates."""
@@ -24,8 +24,8 @@ from wildintel_uploader.entrypoints.catalog_storage import move_catalog
 from wildintel_uploader.modules.catalog.application.migration import TargetNotEmpty
 from wildintel_uploader.modules.settings.domain.ports import SettingsService
 from wildintel_uploader.modules.catalog.domain.models import (
-    Audit, CatalogError, Location, LocationExists, LocationFromTrapper, LocationHasVisits, LocationTimeFixed, ProjectExists, ProjectNotEmpty,
-    ResearchProject, Trapper, UnknownLocation, UnknownProject,
+    Audit, Camera, CatalogError, Location, LocationExists, LocationFromTrapper, LocationHasVisits, LocationTimeFixed, ProjectExists, ProjectNotEmpty,
+    ResearchProject, Role, SdCard, Trapper, UnknownCamera, UnknownLocation, UnknownProject, UnknownTrapper,
 )
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
@@ -35,6 +35,8 @@ router = APIRouter(prefix="/api/catalog", tags=["catalog"], route_class=DishkaSy
 setup_router = APIRouter(prefix="/api/setup", tags=["setup"], route_class=DishkaSyncRoute)
 # the research projects, at the addresses the pages have always used
 import_router = APIRouter(prefix="/api/deployment-import", tags=["catalog"], route_class=DishkaSyncRoute)
+# what the settings page does with the catalog, at the addresses it has always used
+settings_router = APIRouter(prefix="/api/settings", tags=["catalog"], route_class=DishkaSyncRoute)
 
 Catalog = FromDishka[CatalogService]
 
@@ -344,3 +346,231 @@ def delete_location_before(req: DeleteLocationRequest, catalog: Catalog) -> dict
     except CatalogError as exc:
         raise HTTPException(400, exc.message) from exc
     return {"deleted": found.location_id}
+
+
+# ── the cameras, the SD cards and the roles ──
+
+_EQUIPMENT = {"cameras": ("cameras", Camera), "sd-cards": ("sd_cards", SdCard)}
+
+
+def _item_json(item: Any, project: str | None) -> dict:
+    return {**_record(item), "research_project": project}
+
+
+def _role_json(role: Role, project: str | None) -> dict:
+    out = {k: v for k, v in _record(role).items() if k != "trapper_ref"}
+    return {**out, "trapper": role.trapper, "research_project": project}
+
+
+def _get_equipment(project: str, kind: str, catalog: CatalogService, include_deleted: bool) -> list[dict]:
+    return [_item_json(i, project) for i in catalog.equipment(project, _EQUIPMENT[kind][0], include_deleted)]
+
+
+def _save_equipment(project: str, kind: str, items: list[dict[str, Any]], catalog: CatalogService) -> list[dict]:
+    """Keeps these as all the cameras or SD cards of a research project — by hand: their status changes only as the visits allow. One is the one
+    kept when it says its id, or its label. 404: no such research project; 422: what can't be."""
+    domain_kind, model = _EQUIPMENT[kind]
+    try:
+        wanted = [model(**{k: v for k, v in i.items() if k not in ("id", "created_at", "updated_at", "deleted_at", "research_project")},
+                        audit=Audit(id=i.get("id"))) for i in items]
+        return [_item_json(i, project) for i in catalog.save_equipment(project, domain_kind, wanted, by_hand=True)]
+    except UnknownProject as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except CatalogError as exc:
+        raise _refused(exc) from exc
+    except TypeError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/projects/{project}/cameras")
+def get_cameras(project: str, catalog: Catalog, include_deleted: bool = False) -> list[dict]:
+    """The cameras of a research project — the removed ones only with include_deleted."""
+    return _get_equipment(project, "cameras", catalog, include_deleted)
+
+
+@router.put("/projects/{project}/cameras")
+def save_cameras(project: str, items: list[dict[str, Any]], catalog: Catalog) -> list[dict]:
+    """Keeps these as all the cameras of a research project — see _save_equipment."""
+    return _save_equipment(project, "cameras", items, catalog)
+
+
+@router.get("/projects/{project}/sd-cards")
+def get_sd_cards(project: str, catalog: Catalog, include_deleted: bool = False) -> list[dict]:
+    """The SD cards of a research project — the removed ones only with include_deleted."""
+    return _get_equipment(project, "sd-cards", catalog, include_deleted)
+
+
+@router.put("/projects/{project}/sd-cards")
+def save_sd_cards(project: str, items: list[dict[str, Any]], catalog: Catalog) -> list[dict]:
+    """Keeps these as all the SD cards of a research project — see _save_equipment."""
+    return _save_equipment(project, "sd-cards", items, catalog)
+
+
+@router.get("/projects/{project}/roles")
+def get_roles(project: str, catalog: Catalog, include_deleted: bool = False) -> list[dict]:
+    """The roles of the people in a research project, each told with the name its trapper has now."""
+    return [_role_json(r, project) for r in catalog.roles(project, include_deleted)]
+
+
+class RoleBody(BaseModel):
+    trapper: str = Field(min_length=1)
+    role: Literal["contact", "principalInvestigator", "rightsHolder", "publisher", "contributor"] = "contributor"
+    id: str | None = None
+
+
+@router.put("/projects/{project}/roles")
+def save_roles(project: str, roles: list[RoleBody], catalog: Catalog) -> list[dict]:
+    """Keeps these as all the roles of a research project, each by the id of its trapper."""
+    try:
+        return [_role_json(r, project) for r in catalog.save_roles(project, [Role(trapper=r.trapper, role=r.role, audit=Audit(id=r.id)) for r in roles])]
+    except UnknownProject as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except CatalogError as exc:
+        raise _refused(exc) from exc
+
+
+@router.get("/projects/{project}/history")
+def get_history(project: str, catalog: Catalog, kind: str | None = None, name: str | None = None) -> list[dict]:
+    """The history of the states of the locations, cameras and SD cards of a research project, the oldest first."""
+    try:
+        return catalog.status_history(project, kind, name)
+    except UnknownProject as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/projects/{project}/history/rebuild")
+def rebuild_history(project: str, catalog: Catalog) -> dict:
+    """Adds to the history what the visits say and it lacks: {"added"}."""
+    try:
+        return {"added": catalog.rebuild_status_history(project)}
+    except UnknownProject as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+# ── at the addresses of before ──
+
+class CameraIdentityRequest(BaseModel):
+    research_project_id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    make: str | None = None
+    model: str | None = None
+
+
+@import_router.post("/camera-identity")
+def camera_identity(req: CameraIdentityRequest, catalog: Catalog) -> dict:
+    """Keeps in a camera's record the make and the model its images say — what Camera consistency compares them with from then on."""
+    try:
+        return _item_json(catalog.set_camera_identity(req.research_project_id, req.label, req.make, req.model), req.research_project_id)
+    except (UnknownCamera, CatalogError, StorageError) as exc:
+        raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
+
+
+class RolesRequest(BaseModel):
+    research_project_id: str
+    roles: list[RoleBody]
+
+
+@setup_router.post("/roles")
+def add_roles(req: RolesRequest, catalog: Catalog) -> dict:
+    """Gives trappers a role in a research project: the ones it has already are left as they are, and a trapper that is not kept is refused.
+    {"added": [[trapper, role]]}."""
+    try:
+        added = catalog.add_roles(req.research_project_id, [(r.trapper, r.role) for r in req.roles])
+    except UnknownTrapper as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except (UnknownProject, CatalogError, StorageError) as exc:
+        raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
+    return {"added": [list(a) for a in added]}
+
+
+class FieldItem(BaseModel):
+    label: str = Field(min_length=1)
+    camera_id: str | None = None
+    camera_make: str | None = None
+    camera_model: str | None = None
+    brand: str | None = None
+    capacity: str | None = None
+
+
+class FieldItemsRequest(BaseModel):
+    research_project_id: str
+    kind: Literal["cameras", "sd_cards"]
+    items: list[FieldItem]
+
+
+@setup_router.post("/field-items")
+def add_field_items(req: FieldItemsRequest, catalog: Catalog) -> dict:
+    """Adds cameras or SD cards to a research project, active: one with the label of another is left out. {"added": [labels], "skipped": [labels]}."""
+    own = ("camera_id", "camera_make", "camera_model") if req.kind == "cameras" else ("brand", "capacity")
+    model = Camera if req.kind == "cameras" else SdCard
+    try:
+        items = [model(label=i.label, **{k: getattr(i, k) for k in own}) for i in req.items]
+        added = catalog.add_equipment(req.research_project_id, req.kind, items)
+    except (UnknownProject, CatalogError, StorageError) as exc:
+        raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
+    return {"added": added.added, "skipped": added.skipped}
+
+
+class FieldItemStatusRequest(BaseModel):
+    research_project_id: str
+    kind: Literal["cameras", "sd_cards"]
+    key: str                  # what the visits call it: a camera's serial number, or its label; an SD card's label
+    status: Literal["archived", "stolen", "lost", "broken"]   # stolen, lost or broken are the reason it is archived
+    status_date: str | None = None
+    status_note: str | None = None
+
+
+@settings_router.post("/field-item-status")
+def set_field_item_status(req: FieldItemStatusRequest, catalog: Catalog) -> dict:
+    """Marks a camera or an SD card of a research project as no longer available (stolen, lost…) — what a visit that finds a camera stolen says of
+    it and of its card. Nothing happens, and `updated` is false, when the research project does not keep one called that — or when it is archived,
+    which is for good and is never changed."""
+    try:
+        return {"updated": catalog.retire_equipment(req.research_project_id, req.kind, req.key, req.status, req.status_date, req.status_note)}
+    except (UnknownProject, CatalogError, StorageError) as exc:
+        raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
+
+
+class StatusHistoryRequest(BaseModel):
+    research_project_id: str
+    kind: Literal["locations", "cameras", "sd_cards"] | None = None
+    name: str | None = None
+
+
+@settings_router.post("/status-history")
+def status_history_of(req: StatusHistoryRequest, catalog: Catalog) -> dict:
+    """The history of the status of the locations, the cameras and the SD cards of a research project — of one kind, and of one of them, when they
+    are given — the oldest first."""
+    try:
+        return {"results": catalog.status_history(req.research_project_id, req.kind, req.name)}
+    except (UnknownProject, StorageError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class RebuildStatusHistoryRequest(BaseModel):
+    research_project_id: str
+
+
+@settings_router.post("/status-history/rebuild")
+def rebuild_status_history(req: RebuildStatusHistoryRequest, catalog: Catalog) -> dict:
+    """Rebuilds the history of the status of a research project from its visits, adding the lines it lacks — nothing of it is overwritten nor
+    deleted. Says how many it added."""
+    try:
+        return {"added": catalog.rebuild_status_history(req.research_project_id)}
+    except (UnknownProject, StorageError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class DefaultResearchProjectRequest(BaseModel):
+    acronym: str
+
+
+@settings_router.put("/default-research-project")
+def set_default_research_project(req: DefaultResearchProjectRequest, catalog: Catalog, settings: FromDishka[SettingsService]) -> dict:
+    """Changes only the research project that comes filled in everywhere — what the selector of the header does. It must be one of the catalog: the
+    catalog says it is, and the settings keep it."""
+    found = next((p.acronym for p in catalog.projects() if p.acronym.lower() == req.acronym.strip().lower()), None)
+    if found is None:
+        raise HTTPException(404, f"There is no research project called {req.acronym!r} in the collections folder.")
+    settings.save_section("GENERAL", {"default_research_project": found})
+    return {"default_research_project": found}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from wildintel_uploader.modules.catalog.domain.models import Audit, Location, ResearchProject, Trapper
+from wildintel_uploader.modules.catalog.domain.models import Audit, Camera, Location, ResearchProject, Role, SdCard, Trapper
 from wildintel_uploader.shared import ids
 
 def _extra(record: dict[str, Any], known: tuple[str, ...]) -> dict[str, Any]:
@@ -67,4 +67,52 @@ def location_to_record(location: Location) -> dict[str, Any]:
     """As it is written: every field — the empty ones too —, and the dates it has."""
     record: dict[str, Any] = {**location.extra, **{k: getattr(location, k) for k in _LOCATION}}
     record.update({k: getattr(location.audit, k) for k in _AUDIT if getattr(location.audit, k) is not None})
+    return record
+
+
+_CAMERA = ("label", "camera_id", "camera_make", "camera_model", "connectivity", "power_source", "battery_removable", "in_service", "status",
+           "archive_reason", "status_date", "status_note")
+_SD_CARD = ("label", "brand", "capacity", "in_service", "status", "archive_reason", "status_date", "status_note")
+_ROLE = ("trapper", "role", "trapper_ref")
+EQUIPMENT_FIELDS = {"cameras": _CAMERA, "sd_cards": _SD_CARD}
+_EQUIPMENT_CLASS = {"cameras": Camera, "sd_cards": SdCard}
+# not kept: the research project of an item is the folder it is kept in
+_NOT_KEPT = ("research_project",)
+
+
+def _with_id(record: dict[str, Any], kind: str, key: str, project: str) -> Audit:
+    audit = Audit(**{k: record.get(k) for k in _AUDIT})
+    if audit.id:
+        return audit
+    return Audit(id=ids.legacy_id(kind, key, project), created_at=audit.created_at, updated_at=audit.updated_at, deleted_at=audit.deleted_at)
+
+
+def equipment_from_record(record: dict[str, Any], kind: str, project: str):
+    """A camera or an SD card as it is kept — one kept before the ids existed gets the same id whenever it is read; an old status is migrated."""
+    fields = EQUIPMENT_FIELDS[kind]
+    audit = _with_id(record, kind, str(record.get("label") or record.get("camera_id") or ""), project)
+    values = {k: record[k] for k in fields if k in record and record[k] is not None}
+    return _EQUIPMENT_CLASS[kind](**{"label": "", **values}, audit=audit, extra=_extra(record, fields + _NOT_KEPT))
+
+
+def equipment_to_record(item, kind: str) -> dict[str, Any]:
+    record: dict[str, Any] = {**item.extra, **{k: getattr(item, k) for k in EQUIPMENT_FIELDS[kind]}}
+    record.update({k: getattr(item.audit, k) for k in _AUDIT if getattr(item.audit, k) is not None})
+    return record
+
+
+def role_from_record(record: dict[str, Any], project: str) -> Role:
+    key = f"{record.get('trapper_ref') or record.get('trapper')}:{record.get('role')}"
+    values = {k: record[k] for k in _ROLE if k in record and record[k] is not None}
+    return Role(**values, audit=_with_id(record, "roles", key, project), extra=_extra(record, _ROLE + _NOT_KEPT))
+
+
+def role_to_record(role: Role) -> dict[str, Any]:
+    """As it is kept: by the id of its trapper when it has one — its name then is not kept, it is told —, else by the name it was given."""
+    record: dict[str, Any] = {**role.extra, "role": role.role}
+    if role.trapper_ref:
+        record["trapper_ref"] = role.trapper_ref
+    else:
+        record["trapper"] = role.trapper
+    record.update({k: getattr(role.audit, k) for k in _AUDIT if getattr(role.audit, k) is not None})
     return record

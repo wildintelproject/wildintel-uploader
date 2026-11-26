@@ -12,12 +12,24 @@ from dataclasses import dataclass
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject, Trapper
+from wildintel_uploader.modules.catalog.domain.models import Camera, Location, ResearchProject, Role, SdCard, Trapper
+
+Equipment = Camera | SdCard
+
+
+@dataclass(frozen=True)
+class Fieldwork:
+    """The field work as the settings page shows it: the people, and the cameras, SD cards and roles of every research project — each with its
+    research project, None for one versions before left in the settings with none yet."""
+    trappers: list[Trapper]
+    cameras: list[tuple[str | None, Camera]]
+    sd_cards: list[tuple[str | None, SdCard]]
+    roles: list[tuple[str | None, Role]]
 
 
 @dataclass(frozen=True)
 class AddedTrappers:
-    """What adding people did: the usernames added, and those left out because they were taken."""
+    """What adding people — or cameras, or SD cards — did: those added, and those left out because they were taken (by username, or by label)."""
     added: list[str]
     skipped: list[str]
 
@@ -78,6 +90,66 @@ class CatalogService(Protocol):
         """The timezone and the summer-time setting kept for a location — only the ones it has; empty when it is not kept: what every deployment
         there is read in."""
 
+    # the equipment of a research project: its cameras and its SD cards
+    def equipment(self, project: str, kind: str, include_deleted: bool = False) -> list[Equipment]:
+        """Its cameras (`kind` "cameras") or its SD cards ("sd_cards") — a removed one only when asked for."""
+
+    def all_equipment(self, kind: str) -> list[tuple[str, Equipment]]:
+        """The cameras or the SD cards of every research project, project after project, each with its research project."""
+
+    def save_equipment(self, project: str, kind: str, items: list[Equipment], *, by_hand: bool = False) -> list[Equipment]:
+        """Keeps these as all its cameras or SD cards (see domain.rules.saved_records), each change of status written down. By hand — a person, not a
+        visit — the status changes only as the visits allow (EquipmentStatusRefused). UnknownProject, ProjectArchived."""
+
+    def camera(self, project: str | None, key: str | None) -> Camera | None:
+        """The camera a deployment or a visit names: the one with that label, else the one with that serial number — case aside. None when it names
+        none, or the research project has none."""
+
+    def set_camera_identity(self, project: str, label: str, make: str | None, model: str | None) -> Camera:
+        """Keeps in the record of a camera the make and the model its images say. UnknownCamera."""
+
+    def add_equipment(self, project: str, kind: str, items: list[Equipment]) -> AddedTrappers:
+        """Adds the cameras or SD cards that are not kept yet — active —; one with the label of another (as written) is left out: {added, skipped}
+        by label."""
+
+    def retire_equipment(self, project: str, kind: str, key: str, reason: str, day: str | None, note: str | None) -> bool:
+        """Archives the camera or SD card a visit names — its label, or a camera's serial number, as written — because it was found stolen, lost or
+        broken ("archived": for another reason). False when the research project keeps none called that, or it is archived already: that is for
+        good."""
+
+    # the roles of the people in a research project
+    def roles(self, project: str, include_deleted: bool = False) -> list[Role]:
+        """Its roles, each told with the name its trapper has now."""
+
+    def all_roles(self) -> list[tuple[str, Role]]:
+        """The roles of every research project, project after project."""
+
+    def add_roles(self, project: str, roles: list[tuple[str, str]]) -> list[tuple[str, str]]:
+        """Gives trappers — by name, whatever its case — a role in a research project; the ones it has already are left as they are. Gives the
+        (trapper, role) added. UnknownTrapper: one is not among the people."""
+
+    def save_roles(self, project: str, roles: list[Role]) -> list[Role]:
+        """Keeps these as all its roles — each by the id of its trapper, found by name; one whose trapper is not among the people keeps the name it was
+        given. UnknownProject, ProjectArchived."""
+
+    # the history of the states of the locations, the cameras and the SD cards
+    def status_history(self, project: str, kind: str | None = None, name: str | None = None) -> list[dict[str, Any]]:
+        """The lines of the history of a research project — of one kind and of one of them, when they are said —, the oldest first. UnknownProject."""
+
+    def rebuild_status_history(self, project: str) -> int:
+        """Adds the lines the visits say and the history lacks — nothing of it is changed nor removed —, and says how many. UnknownProject."""
+
+    # the field work of the settings page
+    def fieldwork(self) -> Fieldwork:
+        """The people, and the cameras, SD cards and roles of every research project — and those versions before left in the settings, which are
+        taken to their research project first when it is kept."""
+
+    def save_fieldwork(self, trappers: list[Trapper], cameras: list[tuple[str | None, Camera]], sd_cards: list[tuple[str | None, SdCard]],
+                       roles: list[tuple[str | None, Role]]) -> Fieldwork:
+        """Saves the field work as the settings page has it: the people; and the cameras, SD cards and roles of each research project, which replace
+        its own — an archived camera or card can't be changed (EquipmentArchived), each belongs to a research project (EquipmentWithoutProject), and
+        their status changes only as the visits allow. Gives what is of a research project that is not kept — to stay in the settings."""
+
     def require_project(self, acronym: str, *, active: bool = False, modifiable: bool = False) -> ResearchProject:
         """The research project, if it is kept — and, asked for, being worked on (ProjectNotActive: what new visits need) or one that can be modified
         (ProjectArchived). UnknownProject."""
@@ -116,6 +188,19 @@ class CatalogRepository(Protocol):
     def write_locations(self, project: str, locations: list[Location]) -> None:
         """Keeps these as all the locations of the research project."""
 
+    def read_equipment(self, project: str, kind: str) -> list[Equipment]:
+        """The cameras or the SD cards of a research project as they are kept, the removed ones too (one kept before the ids existed gets the same id
+        whenever it is read). Empty when it has none."""
+
+    def write_equipment(self, project: str, kind: str, items: list[Equipment]) -> None:
+        """Keeps these as all its cameras or SD cards."""
+
+    def read_roles(self, project: str) -> list[Role]:
+        """The roles of a research project as they are kept, the removed ones too."""
+
+    def write_roles(self, project: str, roles: list[Role]) -> None:
+        """Keeps these as all its roles."""
+
 
 class VisitHistory(Protocol):
     """What the visits say, as far as the catalog needs it."""
@@ -130,12 +215,35 @@ class VisitHistory(Protocol):
         """Why the status of a site cannot be set to `wanted` by hand — None when it can: a camera that is out there, a visit still to be made in a
         revision that has begun… The visits' rules."""
 
+    def equipment_status_refusal(self, project: str, kind: str, item: Equipment, wanted: str) -> str | None:
+        """Why the status of a camera or an SD card cannot be set to `wanted` by hand — None when it can: it is put up, or in a camera. The visits'
+        rules."""
+
 
 class StatusHistory(Protocol):
     """Where each change of the status of a location, a camera or an SD card is written down."""
 
     def record_location(self, project: str, before: Location | None, after: Location) -> None:
         """A line when `after` has another status than `before` had — or when it is new, with the status it starts with."""
+
+    def record_equipment(self, project: str, kind: str, before: list[Equipment], after: list[Equipment]) -> None:
+        """A line for each of `after` whose status is not the one it had in `before` — found there by its id —, or that is new."""
+
+    def lines(self, project: str, kind: str | None, name: str | None) -> list[dict[str, Any]]:
+        """The lines kept — of one kind and of one of them, when they are said —, the oldest first."""
+
+    def rebuild(self, project: str) -> int:
+        """Adds the lines the visits say and the history lacks, and says how many."""
+
+
+class LegacyFieldwork(Protocol):
+    """The cameras, the SD cards and the roles versions before kept in the settings, each with the research project it says (or none)."""
+
+    def items(self, kind: str) -> list[tuple[str | None, Any]]:
+        """What is left of one kind — "cameras", "sd_cards", "roles" —, each with its research project."""
+
+    def keep(self, kind: str, items: list[tuple[str | None, Any]]) -> None:
+        """What is left of one kind once the catalog took what it could: kept in the settings, the rest no longer there."""
 
 
 class LegacyTrappers(Protocol):

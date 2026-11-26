@@ -292,3 +292,173 @@ class LocationFromTrapper(CatalogError):
 class LocationHasVisits(CatalogError):
     def __init__(self, location_id: str, visits: int) -> None:
         super().__init__("location_id", f"The location '{location_id}' still has {visits} visit{'s' if visits != 1 else ''}: it can't be deleted — mark it as archived instead.")
+
+
+# ── the equipment: cameras and SD cards ──
+
+EQUIPMENT_KINDS = ("cameras", "sd_cards")
+EQUIPMENT_STATUSES = ("planned", "ready", "active", "archived")   # planned: only in the settings; ready: not in the field yet; active: in use
+ARCHIVE_REASONS = ("lost", "stolen", "broken", "other")
+CONNECTIVITIES = ("none", "4g", "5g")
+POWER_SOURCES = ("cells", "battery")
+
+
+def migrated_status(status: str | None, reason: str | None) -> tuple[str, str | None]:
+    """A status as versions before kept it: "retired" is archived, and "stolen", "lost", "broken" are archived with that reason; an archived one has
+    a reason — "other" when none was said."""
+    if status in ("stolen", "lost", "broken"):
+        status, reason = "archived", reason or status
+    elif status == "retired":
+        status = "archived"
+    if status == "archived" and not reason:
+        reason = "other"
+    return status or "ready", reason
+
+
+def _equipment_checks(record) -> None:
+    status, reason = migrated_status(record.status, record.archive_reason)
+    _set(record, "status", status)
+    _set(record, "archive_reason", reason)
+    if record.status not in EQUIPMENT_STATUSES:
+        raise CatalogError("status", f"must be one of {', '.join(EQUIPMENT_STATUSES)}")
+    if record.archive_reason is not None and record.archive_reason not in ARCHIVE_REASONS:
+        raise CatalogError("archive_reason", f"must be one of {', '.join(ARCHIVE_REASONS)}")
+    for name in ("in_service", "status_date"):
+        value = (getattr(record, name) or "").strip() or None   # a day left blank is no day
+        if value is not None and not _DAY.match(value):
+            raise CatalogError(name, "must be a day: YYYY-MM-DD")
+        _set(record, name, value)
+    _set(record, "status_note", _tidy(record.status_note))
+
+
+@dataclass(frozen=True)
+class SdCard:
+    """One of the SD cards of the field work of a research project — its label, as it is written on it."""
+    label: str
+    brand: str | None = None
+    capacity: str | None = None            # free text: 64 GB
+    in_service: str | None = None          # the day it was put into production, YYYY-MM-DD
+    status: str = "ready"
+    archive_reason: str | None = None      # why it was archived: lost, stolen, broken, other (the status note says which)
+    status_date: str | None = None         # the day it stopped being active
+    status_note: str | None = None
+    audit: Audit = field(default_factory=Audit)
+    extra: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        label = " ".join((self.label or "").split())
+        if not label:
+            raise CatalogError("label", "can't be blank")
+        _set(self, "label", label)
+        _set(self, "brand", _tidy(self.brand))
+        _set(self, "capacity", _tidy(self.capacity))
+        _equipment_checks(self)
+
+    @property
+    def deleted(self) -> bool:
+        return self.audit.deleted
+
+    @property
+    def names(self) -> set[str]:
+        """What the visits call it."""
+        return {self.label}
+
+
+@dataclass(frozen=True)
+class Camera:
+    """One of the camera traps of a research project — its label (what it is called in the field), and, as Camtrap DP names them, its id (the
+    serial number), make and model, as the camera writes them in its images."""
+    label: str
+    camera_id: str | None = None           # the serial number (cameraID)
+    camera_make: str | None = None         # as the camera writes it in its images (EXIF Make)
+    camera_model: str | None = None        # (EXIF Model)
+    connectivity: str | None = None        # the mobile network it sends its images through: none, 4g, 5g
+    power_source: str | None = None        # cells (the ones that are changed) or a battery
+    battery_removable: str | None = None   # yes or no — only said of a battery: cells are always taken out
+    in_service: str | None = None
+    status: str = "ready"
+    archive_reason: str | None = None
+    status_date: str | None = None
+    status_note: str | None = None
+    audit: Audit = field(default_factory=Audit)
+    extra: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        camera_id = _tidy(self.camera_id)
+        label = " ".join((self.label or "").split()) or (camera_id or "")   # a camera kept before it had a label is called by its id
+        if not label:
+            raise CatalogError("label", "A camera needs a label.")
+        _set(self, "label", label)
+        _set(self, "camera_id", camera_id)
+        _set(self, "camera_make", _tidy(self.camera_make))
+        _set(self, "camera_model", _tidy(self.camera_model))
+        for name, choices in (("connectivity", CONNECTIVITIES), ("power_source", POWER_SOURCES), ("battery_removable", ("yes", "no"))):
+            if getattr(self, name) is not None and getattr(self, name) not in choices:
+                raise CatalogError(name, f"must be one of {', '.join(choices)}")
+        if self.power_source != "battery":
+            _set(self, "battery_removable", None)
+        _equipment_checks(self)
+
+    @property
+    def deleted(self) -> bool:
+        return self.audit.deleted
+
+    @property
+    def names(self) -> set[str]:
+        """What the visits call it: its label, and its serial number."""
+        return {self.label} | ({self.camera_id} if self.camera_id else set())
+
+
+# ── the roles ──
+
+ROLES = ("contact", "principalInvestigator", "rightsHolder", "publisher", "contributor")
+
+
+@dataclass(frozen=True)
+class Role:
+    """What a trapper is in a research project — one of the roles of a contributor in Camtrap DP. It is kept by the id of the trapper
+    (`trapper_ref`), so a trapper that is renamed still has it; `trapper` is the name it is told with — or the one it was given, when the trapper is
+    not among the people."""
+    trapper: str | None = None
+    role: str = "contributor"
+    trapper_ref: str | None = None
+    audit: Audit = field(default_factory=Audit)
+    extra: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _set(self, "trapper", " ".join(self.trapper.split()) if self.trapper else self.trapper)
+        if not self.trapper and not self.trapper_ref:
+            raise CatalogError("trapper", "can't be blank")
+        if self.role not in ROLES:
+            raise CatalogError("role", f"must be one of {', '.join(ROLES)}")
+
+    @property
+    def deleted(self) -> bool:
+        return self.audit.deleted
+
+
+class UnknownCamera(LookupError):
+    def __init__(self, project: str, label: str) -> None:
+        super().__init__(f"The camera {label} is not one of the cameras of {project}.")
+
+
+class EquipmentStatusRefused(CatalogError):
+    """What the visits say against the status of a camera or an SD card asked for by hand — the reason is theirs."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__("status", reason)
+
+
+class EquipmentArchived(CatalogError):
+    def __init__(self, kind: str, label: str) -> None:
+        super().__init__("status", f"{'The camera' if kind == 'cameras' else 'The SD card'} {label} is archived for good: it can no longer be changed.")
+
+
+class EquipmentWithoutProject(CatalogError):
+    def __init__(self, kind: str, label: str) -> None:
+        super().__init__("research_project", f"{'A camera' if kind == 'cameras' else 'An SD card'} belongs to a research project: choose one for {label}.")
+
+
+class UnknownTrapper(LookupError):
+    def __init__(self, name: str) -> None:
+        super().__init__(f"There is no trapper called {name!r}: add it before giving it a role.")

@@ -1,24 +1,30 @@
-"""FastAPI router — what the settings page reads and saves all at once (GET and PUT /api/settings), and what it does with the research projects: their
-cameras, SD cards, trappers and roles, the research project that comes filled in, the history of the states.
+"""FastAPI router — what the settings page reads and saves all at once (GET and PUT /api/settings).
 
 What is a setting, it leaves to the module `modules.settings` (its contract, SettingsService, given by Dishka): which secrets are saved, the folders by
 default, the log and the CPUs to show; and saving them — a secret left blank keeps the saved one, a blank address or user is none, the folders follow
-the data folder, the storage has to exist, the level of the log applies at once. What is left here is the field work, which is not a setting and goes
-to the research projects. The rest of the settings is `entrypoints/api/settings.py`."""
+the data folder, the storage has to exist, the level of the log applies at once. The field work of the page — the people, and the cameras, SD cards
+and roles of the research projects — it leaves to the module `modules.catalog` (CatalogService). What is left here is putting the two together as the
+page has them. The rest of the settings is `entrypoints/api/settings.py`, and the rest of the catalog `entrypoints/api/catalog.py`."""
 from __future__ import annotations
 
-from typing import Literal
+from dataclasses import replace
 
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.services import audit, local_folder_service, status_history
+from wildintel_uploader.core.services import audit
 from wildintel_uploader.modules.settings.domain import folders
 from wildintel_uploader.modules.settings.domain import models as domain
 from wildintel_uploader.modules.settings.domain.ports import SettingsService
+from wildintel_uploader.entrypoints import wiring
+from wildintel_uploader.modules.catalog.domain.models import Audit, CatalogError, Role
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService, Fieldwork
+from wildintel_uploader.modules.catalog.infrastructure.mapping import (
+    equipment_from_record, equipment_to_record, role_to_record, trapper_from_record, trapper_to_record,
+)
 from wildintel_uploader.modules.settings.infrastructure.mapping import to_domain
+from wildintel_uploader.shared.storage import StorageError
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], route_class=DishkaSyncRoute)
 
@@ -48,56 +54,23 @@ def _root(settings: config.Settings):
     return config.collections_dir(settings)
 
 
-def _shown(settings: config.Settings, service: SettingsService) -> dict:
-    """The settings as the page has them: the cameras and the SD cards are those of the research projects, in their folders of the collections folder."""
-    root = _root(settings)
+def _shown(settings: config.Settings, service: SettingsService, fieldwork: Fieldwork) -> dict:
+    """The settings as the page has them, and the field work of the catalog: the people, and the cameras, SD cards and roles of the research projects
+    — with those versions before left in the settings, which wait there for their research project."""
     data = _public(settings, service)
+    data["FIELDWORK"]["trappers"] = [trapper_to_record(t) for t in fieldwork.trappers]
     for kind in ("cameras", "sd_cards"):
-        # what is still in the settings file belongs to a research project that is not in the collections folder (yet)
-        data["FIELDWORK"][kind] = [i.model_dump(mode="json") if hasattr(i, "model_dump") else i for i in local_folder_service.list_all_field_items(root, kind)] + data["FIELDWORK"][kind]
-    # the trappers are the people, whatever the project: kept beside the projects, not in the settings (an earlier version kept them here: they are moved when they are asked for)
-    data["FIELDWORK"]["trappers"] = local_folder_service.list_trappers(root)
-    # the roles belong to the research projects too: what is still in the settings file is of a project that is not here (yet)
-    data["FIELDWORK"]["roles"] = local_folder_service.list_all_roles(root) + data["FIELDWORK"]["roles"]
+        data["FIELDWORK"][kind] = [{**equipment_to_record(i, kind), "research_project": p} for p, i in getattr(fieldwork, kind)]
+    data["FIELDWORK"]["roles"] = [{**{k: v for k, v in role_to_record(r).items() if k != "trapper_ref"}, "trapper": r.trapper, "research_project": p}
+                                  for p, r in fieldwork.roles if not r.deleted]
     return data
 
 
-def _move_to_the_projects(settings: config.Settings) -> config.Settings:
-    """Cameras and SD cards kept in settings.toml (as they were before) go to the folder of their research project, as a file of its own: the ones that are a
-    research project's, to it. What can't be moved stays: the ones whose project isn't in the collections folder yet, and the ones that belong to none — a camera
-    or an SD card belongs to one research project, so those wait to be assigned to one in the settings. Does nothing once there is nothing left to move."""
-    fieldwork = settings.FIELDWORK
-    if not fieldwork.cameras and not fieldwork.sd_cards and not fieldwork.roles:
-        return settings
-    root = _root(settings)
-    projects = [p["acronym"] for p in local_folder_service.list_research_projects(root)]
-    leftovers: dict[str, list] = {"cameras": [], "sd_cards": []}
-    for kind in ("cameras", "sd_cards"):
-        label = {"cameras": "label", "sd_cards": "label"}[kind]
-        for project in projects:
-            mine = [i for i in getattr(fieldwork, kind) if (i.research_project or "").lower() == project.lower()]
-            if not mine:
-                continue
-            kept = local_folder_service.list_field_items(root, project, kind)
-            have = {str(i.get(label, "")) for i in kept}   # as written: 7b and 7B are two
-            added = [i.model_dump(mode="json") for i in mine if i.label not in have]
-            local_folder_service.write_field_items(root, project, kind, [*kept, *added])
-        leftovers[kind] = [i for i in getattr(fieldwork, kind) if (i.research_project or "").lower() not in {p.lower() for p in projects}]
-    # the roles too: a role of a project that is kept here goes to it
-    roles_left = []
-    for project in projects:
-        mine = [r for r in fieldwork.roles if r.research_project.lower() == project.lower()]
-        if not mine:
-            continue
-        kept = local_folder_service.list_roles(root, project, include_deleted=True)
-        have = {(str(r.get("trapper") or "").lower(), r.get("role") or "contributor") for r in kept}
-        added = [r.model_dump(mode="json") for r in mine if (r.trapper.lower(), r.role) not in have]
-        local_folder_service.write_roles(root, project, [*audit.alive(kept), *added])
-    roles_left = [r for r in fieldwork.roles if r.research_project.lower() not in {p.lower() for p in projects}]
-    if (leftovers["cameras"], leftovers["sd_cards"], roles_left) != (fieldwork.cameras, fieldwork.sd_cards, fieldwork.roles):
-        fieldwork.cameras, fieldwork.sd_cards, fieldwork.roles = leftovers["cameras"], leftovers["sd_cards"], roles_left
-        config.save_settings(settings)
-    return settings
+def _page_equipment(item, kind: str):
+    """A camera or an SD card as the page sends it: with the id it says — none for a new one, which the catalog gives."""
+    record = item.model_dump(mode="json")
+    found = equipment_from_record(record, kind, item.research_project or "")
+    return found if record.get("id") else replace(found, audit=Audit())
 
 
 def _follow_data_dir(old: config.Settings, new: config.Settings) -> None:
@@ -109,14 +82,15 @@ def _follow_data_dir(old: config.Settings, new: config.Settings) -> None:
 
 
 @router.get("")
-def get_settings(service: FromDishka[SettingsService]) -> dict:
-    return _shown(_move_to_the_projects(config.load_settings()), service)
+def get_settings(service: FromDishka[SettingsService], catalog: FromDishka[CatalogService]) -> dict:
+    fieldwork = catalog.fieldwork()   # what versions before left in the settings goes to its research project first
+    return _shown(config.load_settings(), service, fieldwork)
 
 
 @router.put("")
 def save_settings(new: config.Settings, service: FromDishka[SettingsService]) -> dict:
-    """Replaces every setting by the rules of the module of the settings (see SettingsService.save_settings), and the field work of the page goes to
-    the research projects."""
+    """Replaces every setting by the rules of the module of the settings (SettingsService.save_settings), and the field work of the page goes to the
+    research projects by the rules of the catalog (CatalogService.save_fieldwork) — in the collections folder the settings are saved with."""
     current = config.load_settings()
     # the page does not show where the records and the catalog are kept: they are not its to change
     for name in ("storage", "catalog_storage", "catalog_database"):
@@ -127,133 +101,27 @@ def save_settings(new: config.Settings, service: FromDishka[SettingsService]) ->
     except domain.SettingsError as exc:
         raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
     _follow_data_dir(current, new)   # where the research projects are, for their field work
-    root = _root(new)
-    local_folder_service.write_trappers(root, [t.model_dump(mode="json") for t in new.FIELDWORK.trappers])   # the people are kept beside the projects, not in the settings
-    new.FIELDWORK.trappers = []
-    model = {"cameras": config.Camera, "sd_cards": config.SdCard}
-    for kind in ("cameras", "sd_cards"):
-        items = getattr(new.FIELDWORK, kind)
-        # An archived camera or SD card is archived for good: what is kept of it is not changed.
-        for project in {i.research_project for i in items if i.research_project}:
-            try:
-                kept = local_folder_service.list_field_items(root, project, kind)
-            except local_folder_service.LocalFolderError:
-                continue
-            archived = {str(k.get("label") or "").strip(): model[kind].model_validate(k).model_dump(mode="json") for k in kept if k.get("status") == "archived"}
-            for item in items:
-                before = archived.get(item.label.strip()) if item.research_project == project else None
-                if before is not None and item.model_dump(mode="json") != before:
-                    raise HTTPException(422, f"{'The camera' if kind == 'cameras' else 'The SD card'} {item.label} is archived for good: it can no longer be changed.")
-        free = [i for i in items if not i.research_project]
-        if free:
-            raise HTTPException(422, f"{'A camera' if kind == 'cameras' else 'An SD card'} belongs to a research project: choose one for {free[0].label}.")
-        by_project: dict[str, list] = {}
-        for item in items:
-            by_project.setdefault(item.research_project, []).append(item.model_dump(mode="json"))
-        known = {p["acronym"] for p in local_folder_service.list_research_projects(root)}
-        # the list of each research project is replaced by what the page has — the ones it no longer lists are gone; a project that is not kept here keeps them in the settings
-        for project in known:
-            try:
-                local_folder_service.write_field_items(root, project, kind, by_project.get(project, []), by_hand=True)
-            except local_folder_service.LocalFolderError as exc:
-                raise HTTPException(422, str(exc)) from exc
-        setattr(new.FIELDWORK, kind, [i for i in items if i.research_project not in known])
-    # the roles belong to the research projects: each project's are replaced by what the page has — the ones it no longer lists are deleted, logically
-    known = {p["acronym"] for p in local_folder_service.list_research_projects(root)}
-    by_project: dict[str, list] = {}
-    for role in new.FIELDWORK.roles:
-        by_project.setdefault(role.research_project, []).append(role.model_dump(mode="json"))
-    for project in known:
-        local_folder_service.write_roles(root, project, by_project.get(project, []))
-    new.FIELDWORK.roles = [r for r in new.FIELDWORK.roles if r.research_project not in known]
+    catalog = wiring.build_catalog(_root(new), service)
+    fieldwork = new.FIELDWORK
+    try:
+        catalog.save_fieldwork(
+            [trapper_from_record({**t.model_dump(mode="json"), "id": t.id or None}) for t in fieldwork.trappers],
+            [(i.research_project, _page_equipment(i, "cameras")) for i in fieldwork.cameras],
+            [(i.research_project, _page_equipment(i, "sd_cards")) for i in fieldwork.sd_cards],
+            [(r.research_project, Role(trapper=r.trapper, role=r.role, audit=Audit(id=r.id))) for r in fieldwork.roles],
+        )
+    except (CatalogError, StorageError) as exc:
+        raise HTTPException(422, getattr(exc, "message", str(exc))) from exc
+    # what is of a research project that is not kept stays in the settings, to wait for it
+    known = {p.acronym for p in catalog.projects()}
+    fieldwork.trappers = []
+    fieldwork.cameras = [i for i in fieldwork.cameras if i.research_project not in known]
+    fieldwork.sd_cards = [i for i in fieldwork.sd_cards if i.research_project not in known]
+    fieldwork.roles = [r for r in fieldwork.roles if r.research_project not in known]
     try:
         service.save_settings(to_domain(new))
     except domain.SettingsError as exc:
         raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
-    return _shown(config.load_settings(), service)
-
-
-class DefaultResearchProjectRequest(BaseModel):
-    acronym: str
-
-
-@router.put("/default-research-project")
-def set_default_research_project(req: DefaultResearchProjectRequest) -> dict:
-    """Changes only the research project that comes filled in everywhere — what the selector of the header does. It must be one of the collections folder."""
-    settings = config.load_settings()
-    wanted = req.acronym.strip().lower()
-    found = next((p["acronym"] for p in local_folder_service.list_research_projects(_root(settings)) if p["acronym"].lower() == wanted), None)
-    if found is None:
-        raise HTTPException(404, f"There is no research project called {req.acronym!r} in the collections folder.")
-    settings.GENERAL.default_research_project = found
-    config.save_settings(settings)
-    return {"default_research_project": found}
-
-
-class FieldItemStatusRequest(BaseModel):
-    research_project_id: str
-    kind: Literal["cameras", "sd_cards"]
-    # What the visits call it: a camera's serial number, or its label when it has none; an SD card's label.
-    key: str
-    # what a visit says of it: stolen, lost or broken are the reason it is archived
-    status: Literal["archived", "stolen", "lost", "broken"]
-    status_date: str | None = None
-    status_note: str | None = None
-
-
-@router.post("/field-item-status")
-def set_field_item_status(req: FieldItemStatusRequest) -> dict:
-    """Marks a camera or an SD card of a research project as no longer available (stolen, lost…) — what a visit that finds a camera stolen says of it and of its card.
-    Nothing happens, and `updated` is false, when the research project does not keep one called that — or when it is archived, which is for good and is never changed."""
-    root = _root(config.load_settings())
-    try:
-        items = local_folder_service.list_field_items(root, req.research_project_id, req.kind)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    wanted = req.key.strip()   # as written: 7b and 7B are two
-    updated = False
-    for item in items:
-        names = {str(item.get("label") or "").strip()} | ({str(item.get("camera_id") or "").strip()} if req.kind == "cameras" else set())
-        if wanted and wanted in names and item.get("status") != "archived":
-            item["status"], item["status_date"], item["status_note"] = "archived", req.status_date, req.status_note
-            item["archive_reason"] = req.status if req.status != "archived" else "other"
-            updated = True
-    if updated:
-        try:
-            local_folder_service.write_field_items(root, req.research_project_id, req.kind, items)
-        except local_folder_service.LocalFolderError as exc:
-            raise HTTPException(400, str(exc)) from exc
-    return {"updated": updated}
-
-
-class StatusHistoryRequest(BaseModel):
-    research_project_id: str
-    kind: Literal["locations", "cameras", "sd_cards"] | None = None
-    name: str | None = None
-
-
-@router.post("/status-history")
-def status_history_of(req: StatusHistoryRequest) -> dict:
-    """The history of the status of the locations, the cameras and the SD cards of a research project — of one kind, and of one of them, when they are given — the oldest first."""
-    try:
-        local_folder_service.require_research_project(_root(config.load_settings()), req.research_project_id)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    return {"results": status_history.list_history(_root(config.load_settings()), req.research_project_id, req.kind, req.name)}
-
-
-class RebuildStatusHistoryRequest(BaseModel):
-    research_project_id: str
-
-
-@router.post("/status-history/rebuild")
-def rebuild_status_history(req: RebuildStatusHistoryRequest) -> dict:
-    """Rebuilds the history of the status of a research project from its visits, adding the lines it lacks — nothing of it is overwritten nor deleted. Says how many it added."""
-    root = _root(config.load_settings())
-    try:
-        local_folder_service.require_research_project(root, req.research_project_id)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    return {"added": status_history.rebuild(root, req.research_project_id)}
+    return _shown(config.load_settings(), service, catalog.fieldwork())
 
 

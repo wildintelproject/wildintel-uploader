@@ -15,14 +15,12 @@ from contextlib import contextmanager
 from dataclasses import replace
 import json
 import logging
-import re
 from datetime import datetime
 from pathlib import Path
 
 from wildintel_uploader.core import identity, storage
 from wildintel_uploader.core.storage import valid_project_id
-from wildintel_uploader.core.config import migrate_gear
-from wildintel_uploader.core.services import audit, ids, status_history, visit_rules, visit_time
+from wildintel_uploader.core.services import audit, ids, visit_rules, visit_time
 
 logger = logging.getLogger(__name__)
 
@@ -254,22 +252,6 @@ def list_locations(root: Path, research_project_id: str, include_deleted: bool =
     return [location_to_record(loc) for loc in _catalog(root).locations(research_project_id, include_deleted)]
 
 
-def _read_with_ids(root: Path, research_project_id: str, kind: str, key_of) -> list[dict]:
-    """The records of a kind as they are kept, each with its `id`: what was kept before the ids existed gets its own — the same one whenever it is read (see ids.legacy_id) —
-    and is kept with it the next time the records are written. Reading writes nothing."""
-    store = _store(root)
-    records = store.read_records(research_project_id, kind)
-    # A record kept before the ids existed gets the one `legacy_id` gives it — always the same — and it is kept the next time the records are written: reading never writes, so that
-    # two requests that read the same file cannot fight over writing it (on Windows one of them fails with a PermissionError).
-    return [r if r.get("id") else {**r, "id": ids.legacy_id(kind, key_of(r), research_project_id)} for r in records]
-
-
-_LOCATION_KEY = lambda r: r.get("location_id", "")   # noqa: E731
-_GEAR_KEY = lambda r: r.get("label") or r.get("camera_id") or ""   # noqa: E731
-
-
-def _index_of(locations: list[dict], location_id: str, deleted: bool = False) -> int | None:
-    return next((i for i, l in enumerate(locations) if str(l.get("location_id", "")).lower() == location_id.lower() and audit.is_deleted(l) == deleted), None)
 
 
 def write_location(root: Path, research_project_id: str, location: dict, by_hand: bool = False) -> dict:
@@ -336,10 +318,12 @@ def delete_location(root: Path, research_project_id: str, location_id: str) -> d
 # with its collections. (The trappers are people, not things of a project: they stay in the settings.)
 
 def list_field_items(root: Path, research_project_id: str, kind: str, include_deleted: bool = False) -> list[dict]:
-    """The cameras (`kind` "cameras") or the SD cards ("sd_cards") kept for a research project — each with its `research_project` set to it. Empty until one is kept. One that
-    was deleted is kept, but is not listed (`include_deleted` lists it too)."""
-    items = [{**migrate_gear(i), "research_project": research_project_id} for i in _read_with_ids(root, research_project_id, kind, _GEAR_KEY)]
-    return items if include_deleted else audit.alive(items)
+    """The cameras (`kind` "cameras") or the SD cards ("sd_cards") of a research project — each with its `research_project` set to it. A removed one
+    is kept, but is not listed (`include_deleted` lists it too). The catalog's: CatalogService.equipment."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record
+    valid_project_id(research_project_id)
+    with _as_local_folder_error():
+        return [{**equipment_to_record(i, kind), "research_project": research_project_id} for i in _catalog(root).equipment(research_project_id, kind, include_deleted)]
 
 
 def _camera_status_refusal(camera: dict, wanted: str, visits: list[dict]) -> str | None:
@@ -369,76 +353,39 @@ def _card_status_refusal(card: dict, wanted: str, visits: list[dict]) -> str | N
     return None
 
 
-def _kept_list(root: Path, research_project_id: str, kind: str, items: list[dict], key) -> None:
-    """Keeps `items` as all the `kind` of the research project that are listed: the ones that were kept and are not among them are **deleted logically** — they get `deleted_at` and stay,
-    with all they said — and one that was deleted and is among them comes back. Each keeps its `id`, its `created_at` and gets a new `updated_at` when it changed (see audit).
-
-    An item is the one that was kept when it says its `id` — so one that is renamed is the same one, and what points to it still does — or, if it says none, when it has the same `key`."""
-    store = _store(root)
-    kept = _read_with_ids(root, research_project_id, kind, (lambda r: f"{r.get('trapper_ref') or r.get('trapper')}:{r.get('role')}") if kind == "roles" else _GEAR_KEY)
-    by_id = {r["id"]: r for r in kept if r.get("id")}
-    by_key = {key(r): r for r in kept}
-    at = audit.now()
-    out, listed = [], set()
-    for item in items:
-        before = by_id.get(item.get("id")) or by_key.get(key(item))
-        if before is not None:
-            listed.add(before["id"])
-        out.append(audit.stamped({n: v for n, v in item.items() if n != "research_project"}, before, at))
-    out += [audit.deleted(r, at) for r in kept if r["id"] not in listed]   # what is no longer listed is not forgotten
-    store.write_records(research_project_id, kind, out)
-    if kind in status_history.KINDS:
-        status_history.record_changes(root, research_project_id, kind, kept, out, lambda r: str(r.get("label") or r.get("camera_id") or ""), lambda item, old: next((r for r in old if r.get("id") and r.get("id") == item.get("id")), None))
-
-
 def camera_record(root: Path, research_project_id: str | None, key: str | None) -> dict | None:
-    """The camera of a research project a deployment or a visit names (`key`): the one with that label, else the one with that serial number — case aside.
-    None when it names none, or the research project has none."""
-    if not research_project_id or not str(key or "").strip():
-        return None
-    try:
-        cameras = list_field_items(root, research_project_id, "cameras")
-    except Exception:  # noqa: BLE001 — no research project, nothing kept: no record to compare with
-        return None
-    wanted = str(key).strip().casefold()
-    return (next((c for c in cameras if str(c.get("label") or "").strip().casefold() == wanted), None)
-            or next((c for c in cameras if str(c.get("camera_id") or "").strip().casefold() == wanted), None))
+    """The camera of a research project a deployment or a visit names (`key`): the one with that label, else the one with that serial number — case
+    aside. None when it names none, or the research project has none. CatalogService.camera."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record
+    camera = _catalog(root).camera(research_project_id, key) if research_project_id and str(key or "").strip() else None
+    return {**equipment_to_record(camera, "cameras"), "research_project": research_project_id} if camera is not None else None
 
 
 def set_camera_identity(root: Path, research_project_id: str, label: str, make: str | None, model: str | None) -> dict:
-    """Keeps the make and the model a camera writes in its images in its record, as the images of one of its deployments say them. Returns the record."""
-    cameras = list_field_items(root, research_project_id, "cameras")
-    record = next((c for c in cameras if str(c.get("label") or "").strip() == label.strip()), None)
-    if record is None:
-        raise LocalFolderError(f"The camera {label} is not one of the cameras of {research_project_id}.")
-    record.update({"camera_make": (make or "").strip() or None, "camera_model": (model or "").strip() or None})
-    write_field_items(root, research_project_id, "cameras", cameras)
-    return record
+    """Keeps the make and the model a camera writes in its images in its record. Returns the record. CatalogService.set_camera_identity."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record
+    with _as_local_folder_error():
+        camera = _catalog(root).set_camera_identity(research_project_id, label, make, model)
+    return {**equipment_to_record(camera, "cameras"), "research_project": research_project_id}
 
 
 def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict], by_hand: bool = False) -> None:
-    """Keeps these cameras or SD cards as the research project's — the whole list: what was kept and is not in it is deleted *logically* (see `_kept_list`).
-
-    `by_hand` is a person changing them in the settings: the status of a camera is then changed only where the visits allow (see `_camera_status_refusal`) — what a visit does to a
-    camera, it does through the app and not by hand.
+    """Keeps these cameras or SD cards as the research project's — the whole list: what was kept and is not in it is removed logically. By hand, the
+    status changes only where the visits allow. CatalogService.save_equipment.
 
     Raises:
-        LocalFolderError: the research project isn't in the collections folder, or the status of a camera is changed where the visits do not allow it.
+        LocalFolderError: the research project isn't in the collections folder or is archived, or the status is changed where the visits do not allow it.
     """
-    _require_modifiable(root, research_project_id)
-    require_research_project(root, research_project_id)
-    if by_hand and kind in ("cameras", "sd_cards"):
-        before = {str(i.get("label") or "").strip(): i for i in list_field_items(root, research_project_id, kind)}   # as written: 7b and 7B are two
-        before_id = {i["id"]: i for i in before.values() if i.get("id")}
-        visits = None
-        for item in items:
-            old = before_id.get(item.get("id")) or before.get(str(item.get("label") or "").strip())
-            if old is not None and item.get("status") and item["status"] != old.get("status"):
-                visits = list_visits(root, research_project_id) if visits is None else visits
-                why = (_camera_status_refusal if kind == "cameras" else _card_status_refusal)(old, item["status"], visits)
-                if why:
-                    raise LocalFolderError(why)
-    _kept_list(root, research_project_id, kind, items, lambda i: str(i.get("label") or "").strip())
+    with _as_local_folder_error():
+        _catalog(root).save_equipment(research_project_id, kind, [_equipment(i, kind, research_project_id) for i in items], by_hand=by_hand)
+
+
+def _equipment(record: dict, kind: str, research_project_id: str):
+    """A camera or an SD card as a caller of before gives it: with the id it says — none for a new one, which the catalog gives."""
+    from wildintel_uploader.modules.catalog.domain.models import Audit
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_from_record
+    item = equipment_from_record(record, kind, research_project_id)
+    return item if record.get("id") else replace(item, audit=Audit())
 
 
 # ── The roles of a research project ─────────────────────────────────────────────────────────────────────────────
@@ -454,10 +401,10 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
 @contextmanager
 def _as_local_folder_error():
     """The errors of the catalog as the callers of before catch them: a LocalFolderError, with the same words — some still read them."""
-    from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownLocation, UnknownProject
+    from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownCamera, UnknownLocation, UnknownProject
     try:
         yield
-    except (UnknownProject, UnknownLocation) as exc:
+    except (UnknownProject, UnknownLocation, UnknownCamera) as exc:
         raise LocalFolderError(str(exc)) from exc
     except CatalogError as exc:
         raise LocalFolderError(exc.message) from exc
@@ -494,6 +441,18 @@ def put_project_record(root: Path, record: dict) -> None:
         repository.add_project(project)
 
 
+def equipment_records(root: Path, research_project_id: str, kind: str) -> list[dict]:
+    """The cameras or the SD cards of a research project as they are kept — the removed ones too —: wherever the catalog is kept."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record
+    return [equipment_to_record(i, kind) for i in _catalog_repository(root).read_equipment(research_project_id, kind)]
+
+
+def put_equipment_records(root: Path, research_project_id: str, kind: str, records: list[dict]) -> None:
+    """Keeps these as all the cameras or SD cards of a research project, as they are given — their ids and dates too, as a backup has them."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_from_record
+    _catalog_repository(root).write_equipment(research_project_id, kind, [equipment_from_record(r, kind, research_project_id) for r in records])
+
+
 def location_records(root: Path, research_project_id: str) -> list[dict]:
     """The locations of a research project as they are kept — the removed ones too —: wherever the catalog is kept."""
     from wildintel_uploader.modules.catalog.infrastructure.mapping import location_to_record
@@ -528,53 +487,38 @@ def _trapper_records(root: Path, trappers=None) -> list[dict]:
     return [t if isinstance(t, dict) else t.model_dump(mode="json") for t in trappers]
 
 
-def _role_key(r: dict):
-    return (r.get("trapper_ref") or str(r.get("trapper") or "").strip().lower(), r.get("role") or "contributor")
-
-
 def list_roles(root: Path, research_project_id: str, include_deleted: bool = False, trappers=None) -> list[dict]:
-    """The roles kept for a research project — each with its `research_project` set to it and the name of its trapper (it is kept by the trapper's id, so a trapper that is renamed
-    is still the one that has the role). One that was deleted is kept, but is not listed."""
-    people = {t["id"]: t for t in _trapper_records(root, trappers) if t.get("id")}
-    roles = []
-    for r in _read_with_ids(root, research_project_id, "roles", lambda r: f"{r.get('trapper_ref') or r.get('trapper')}:{r.get('role')}"):
-        told = {k: v for k, v in r.items() if k != "trapper_ref"}
-        if r.get("trapper_ref") in people:
-            told["trapper"] = people[r["trapper_ref"]]["name"]
-        roles.append({**told, "research_project": research_project_id})
-    return roles if include_deleted else audit.alive(roles)
+    """The roles of a research project — each with its `research_project` and the name its trapper has now. A removed one is kept, but is not listed.
+    CatalogService.roles."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import role_to_record
+    out = []
+    for role in _catalog(root).roles(research_project_id, include_deleted):
+        record = {k: v for k, v in role_to_record(role).items() if k != "trapper_ref"}
+        out.append({**record, "trapper": role.trapper, "research_project": research_project_id})
+    return out
 
 
 def write_roles(root: Path, research_project_id: str, roles: list[dict], trappers=None) -> None:
-    """Keeps these roles — each with the name of its trapper — as all of the research project's: the ones that were kept and are not in it are deleted *logically*, as the cameras
-    are. A role is kept by the id of its trapper; one whose trapper is not among the trappers keeps the name it was given.
+    """Keeps these roles — each with the name of its trapper — as all of the research project's, each by the id of its trapper. CatalogService.save_roles.
 
     Raises:
         LocalFolderError: the research project isn't in the collections folder.
     """
-    _require_modifiable(root, research_project_id)
-    require_research_project(root, research_project_id)
-    by_name = {str(t.get("name", "")).strip().lower(): t for t in _trapper_records(root, trappers)}
-    stored = []
-    for r in roles:
-        item = {k: v for k, v in r.items() if k not in ("trapper", "research_project", "trapper_ref")}
-        person = by_name.get(str(r.get("trapper") or "").strip().lower())
-        if person and person.get("id"):
-            item["trapper_ref"] = person["id"]
-        else:
-            item["trapper"] = r.get("trapper")
-        stored.append(item)
-    _kept_list(root, research_project_id, "roles", stored, _role_key)
+    from wildintel_uploader.modules.catalog.domain.models import Audit, Role
+    with _as_local_folder_error():
+        _catalog(root).save_roles(research_project_id, [Role(trapper=r.get("trapper"), role=r.get("role") or "contributor",
+                                                             audit=Audit(id=r.get("id"))) for r in roles])
 
 
 def list_all_field_items(root: Path, kind: str) -> list[dict]:
     """The cameras or the SD cards of every research project kept in the collections folder, project after project."""
-    return [item for project in list_research_projects(root) for item in list_field_items(root, project["acronym"], kind)]
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record
+    return [{**equipment_to_record(i, kind), "research_project": p} for p, i in _catalog(root).all_equipment(kind)]
 
 
 def list_all_roles(root: Path, trappers=None) -> list[dict]:
     """The roles of every research project kept in the collections folder, project after project."""
-    return [role for project in list_research_projects(root) for role in list_roles(root, project["acronym"], trappers=trappers)]
+    return [role for project in list_research_projects(root) for role in list_roles(root, project["acronym"])]
 
 
 def _raw_visits(root: Path, research_project_id: str) -> list[dict]:

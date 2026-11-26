@@ -14,8 +14,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
@@ -244,22 +243,6 @@ def next_revision(req: NextRevisionRequest) -> dict:
     """The revision a new deployment at this location is expected to have — one after the highest kept for it in the
     research project, or 1 — as {"last", "next"}."""
     return statistics_service.next_revision(config.collections_dir(), req.research_project_id, req.location_id)
-
-
-class CameraIdentityRequest(BaseModel):
-    research_project_id: str = Field(min_length=1)
-    label: str = Field(min_length=1)
-    make: Optional[str] = None
-    model: Optional[str] = None
-
-
-@router.post("/camera-identity")
-def camera_identity(req: CameraIdentityRequest) -> dict:
-    """Keeps in a camera's record the make and the model its images say — what Camera consistency compares them with from then on."""
-    try:
-        return local_folder_service.set_camera_identity(config.collections_dir(), req.research_project_id, req.label, req.make, req.model)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(400, str(exc)) from exc
 
 
 def _validate_deployment(req: ValidateDeploymentRequest, on_check=None) -> dict:

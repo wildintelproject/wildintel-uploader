@@ -169,6 +169,9 @@ class SettingsService(Protocol):
     def forget_legacy_fieldwork(self, kind: str) -> None:
         """Takes one kind of them out of the settings — "trappers", "cameras", "sd_cards", "roles" — once the catalog keeps them."""
 
+    def keep_legacy_fieldwork(self, kind: str, items: list[dict[str, Any]]) -> None:
+        """What is left of one kind once the catalog took what it could — the rest is no longer in the settings."""
+
     # the General section
     def general(self) -> GeneralView:
         """The General section: its settings, the folders and what the system says."""

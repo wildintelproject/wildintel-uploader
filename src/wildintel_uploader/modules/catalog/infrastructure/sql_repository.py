@@ -15,7 +15,7 @@ from typing import Any, Optional
 from sqlalchemy import JSON, Engine, delete, func
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-from wildintel_uploader.modules.catalog.domain.models import Audit, Location, ResearchProject, Trapper
+from wildintel_uploader.modules.catalog.domain.models import Audit, Camera, Location, ResearchProject, Role, SdCard, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
 from wildintel_uploader.shared.storage import StorageError
 from wildintel_uploader.shared.storage.json_files import PROJECT_FILE, RECORD_FILES
@@ -81,7 +81,46 @@ class LocationRow(_Audited, table=True):
     status_note: Optional[str] = None
 
 
-_TABLES = [TrapperRow.__table__, ProjectRow.__table__, LocationRow.__table__]  # type: ignore[attr-defined]
+class _Equipment(_Audited):
+    row: Optional[int] = Field(default=None, primary_key=True)
+    project: str = Field(index=True)
+    label: str
+    in_service: Optional[str] = None
+    status: str = "ready"
+    archive_reason: Optional[str] = None
+    status_date: Optional[str] = None
+    status_note: Optional[str] = None
+
+
+class CameraRow(_Equipment, table=True):
+    __tablename__ = "cameras"
+    camera_id: Optional[str] = None
+    camera_make: Optional[str] = None
+    camera_model: Optional[str] = None
+    connectivity: Optional[str] = None
+    power_source: Optional[str] = None
+    battery_removable: Optional[str] = None
+
+
+class SdCardRow(_Equipment, table=True):
+    __tablename__ = "sd_cards"
+    brand: Optional[str] = None
+    capacity: Optional[str] = None
+
+
+class RoleRow(_Audited, table=True):
+    __tablename__ = "roles"
+    row: Optional[int] = Field(default=None, primary_key=True)
+    project: str = Field(index=True)
+    trapper: Optional[str] = None
+    trapper_ref: Optional[str] = None
+    role: str = "contributor"
+
+
+_TABLES = [t.__table__ for t in (TrapperRow, ProjectRow, LocationRow, CameraRow, SdCardRow, RoleRow)]  # type: ignore[attr-defined]
+_EQUIPMENT = {"cameras": (CameraRow, Camera, ("label", "camera_id", "camera_make", "camera_model", "connectivity", "power_source", "battery_removable",
+                                               "in_service", "status", "archive_reason", "status_date", "status_note")),
+              "sd_cards": (SdCardRow, SdCard, ("label", "brand", "capacity", "in_service", "status", "archive_reason", "status_date", "status_note"))}
 _AUDIT = ("id", "created_at", "updated_at", "deleted_at")
 _TRAPPER = ("username", "name", "affiliation", "email", "status", "trapper_pk")
 _LOCATION = ("location_id", "name", "timezone", "ignore_dst", "latitude", "longitude", "coordinate_uncertainty", "in_service", "trapper_pk", "status",
@@ -203,4 +242,32 @@ class SqlCatalogRepository(CatalogRepository):
         with Session(self.engine) as session:
             session.exec(delete(LocationRow).where(LocationRow.project == project))  # type: ignore[call-overload]
             session.add_all([_location_row(project, loc) for loc in locations])
+            session.commit()
+
+    # the equipment and the roles
+
+    def read_equipment(self, project: str, kind: str) -> list:
+        row_class, domain_class, fields = _EQUIPMENT[kind]
+        with Session(self.engine) as session:
+            rows = session.exec(select(row_class).where(row_class.project == project).order_by(row_class.row))
+            return [domain_class(**{k: getattr(r, k) for k in fields}, audit=_audit(r), extra=dict(r.extra or {})) for r in rows]
+
+    def write_equipment(self, project: str, kind: str, items: list) -> None:
+        row_class, _, fields = _EQUIPMENT[kind]
+        with Session(self.engine) as session:
+            session.exec(delete(row_class).where(row_class.project == project))  # type: ignore[call-overload]
+            session.add_all([row_class(project=project, **{k: getattr(i, k) for k in fields}, **{k: getattr(i.audit, k) for k in _AUDIT},
+                                       extra=dict(i.extra)) for i in items])
+            session.commit()
+
+    def read_roles(self, project: str) -> list[Role]:
+        with Session(self.engine) as session:
+            rows = session.exec(select(RoleRow).where(RoleRow.project == project).order_by(RoleRow.row))
+            return [Role(trapper=r.trapper, role=r.role, trapper_ref=r.trapper_ref, audit=_audit(r), extra=dict(r.extra or {})) for r in rows]
+
+    def write_roles(self, project: str, roles: list[Role]) -> None:
+        with Session(self.engine) as session:
+            session.exec(delete(RoleRow).where(RoleRow.project == project))  # type: ignore[call-overload]
+            session.add_all([RoleRow(project=project, trapper=None if r.trapper_ref else r.trapper, trapper_ref=r.trapper_ref, role=r.role,
+                                     **{k: getattr(r.audit, k) for k in _AUDIT}, extra=dict(r.extra)) for r in roles])
             session.commit()

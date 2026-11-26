@@ -62,7 +62,8 @@ def test_the_history_is_read_with_an_endpoint_by_kind_and_by_name(tmp_path: Path
     svc.write_location(tmp_path, "DONA", LOCATION)
     svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM1", "status": "ready"}])
     client = TestClient(app)
-    with patch("wildintel_uploader.web.api.routers.app_settings._root", return_value=tmp_path):
+    with patch("wildintel_uploader.web.api.routers.app_settings._root", return_value=tmp_path), \
+            patch("wildintel_uploader.entrypoints.wiring.catalog_collections_dir", return_value=tmp_path):
         everything = client.post("/api/settings/status-history", json={"research_project_id": "DONA"}).json()["results"]
         cameras = client.post("/api/settings/status-history", json={"research_project_id": "DONA", "kind": "cameras"}).json()["results"]
         one = client.post("/api/settings/status-history", json={"research_project_id": "DONA", "kind": "locations", "name": "dona_01"}).json()["results"]
@@ -161,7 +162,8 @@ def test_the_history_is_rebuilt_with_an_endpoint(tmp_path: Path):
     from wildintel_uploader.web.main import app
     _kept_before_the_history(tmp_path, "ready")
     client = TestClient(app)
-    with patch("wildintel_uploader.web.api.routers.app_settings._root", return_value=tmp_path):
+    with patch("wildintel_uploader.web.api.routers.app_settings._root", return_value=tmp_path), \
+            patch("wildintel_uploader.entrypoints.wiring.catalog_collections_dir", return_value=tmp_path):
         done = client.post("/api/settings/status-history/rebuild", json={"research_project_id": "DONA"})
         again = client.post("/api/settings/status-history/rebuild", json={"research_project_id": "DONA"})
         missing = client.post("/api/settings/status-history/rebuild", json={"research_project_id": "NOPE"})

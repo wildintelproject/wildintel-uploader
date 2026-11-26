@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from wildintel_uploader.entrypoints import wiring
 from wildintel_uploader.entrypoints.api import catalog as catalog_entrypoint
 from wildintel_uploader.entrypoints.api import settings as settings_entrypoint
-from wildintel_uploader.web.api.routers import app_settings, backup, deployment_import, epicollect, health, repair, reports, sessions, setup, statistics, sync, timefix, trapper, upload, visits
+from wildintel_uploader.web.api.routers import app_settings, backup, deployment_import, epicollect, health, repair, reports, sessions, statistics, sync, timefix, trapper, upload, visits
 from wildintel_uploader.web.settings import configure_logging, settings
 
 configure_logging()
@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, trapper.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, setup.router, statistics.router, epicollect.router, visits.router, timefix.router, backup.router]:
+for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, catalog_entrypoint.settings_router, trapper.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, statistics.router, epicollect.router, visits.router, timefix.router, backup.router]:
     app.include_router(_router)
 
 

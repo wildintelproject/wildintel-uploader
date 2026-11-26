@@ -136,7 +136,7 @@ def create_backup(
                 # what is kept points to other things by their ids, which are the app's own: the backup says them by what they are called, so that it can be restored anywhere
                 records = (local_folder_service.list_roles(root, research_project_id, include_deleted=True) if kind == "roles"
                            else local_folder_service.location_records(root, research_project_id) if kind == "locations"   # wherever the catalog is kept
-                           else store.read_records(research_project_id, kind))  # type: ignore[arg-type]
+                           else local_folder_service.equipment_records(root, research_project_id, kind))  # type: ignore[arg-type]
                 if records:
                     entries.append((f"project/{name}", None, records))
             if history := store.read_records(research_project_id, "status_history"):  # type: ignore[arg-type]
@@ -355,10 +355,10 @@ def restore_backup(
                     current = local_folder_service.location_records(root, project)  # type: ignore[arg-type]
                     merged, added, replaced, skipped = _merge(current, backed, key, replace=replace)
                     local_folder_service.put_location_records(root, project, merged)  # type: ignore[arg-type]
-                else:
-                    current = store.read_records(project, kind)  # type: ignore[arg-type]
+                else:   # the cameras and the SD cards, wherever the catalog is kept
+                    current = local_folder_service.equipment_records(root, project, kind)  # type: ignore[arg-type]
                     merged, added, replaced, skipped = _merge(current, backed, key, replace=replace)
-                    store.write_records(project, kind, merged)  # type: ignore[arg-type]
+                    local_folder_service.put_equipment_records(root, project, kind, merged)  # type: ignore[arg-type]
                 summary["project_files"][label] = {"added": added, "replaced": replaced, "kept": skipped}
             if f"project/{HISTORY}" in names:   # a line of the history is never changed: the ones the backup has that are not here are added
                 backed = [i for i in json.loads(zf.read(f"project/{HISTORY}")) if isinstance(i, dict)]

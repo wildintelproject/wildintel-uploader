@@ -5,8 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from wildintel_uploader.modules.catalog.domain.models import Trapper
-from wildintel_uploader.modules.catalog.domain.ports import Clock, LegacyTrappers
-from wildintel_uploader.modules.catalog.infrastructure.mapping import trapper_from_record
+from typing import Any
+
+from wildintel_uploader.modules.catalog.domain.ports import Clock, LegacyFieldwork, LegacyTrappers
+from wildintel_uploader.modules.catalog.infrastructure.mapping import (
+    equipment_from_record, equipment_to_record, role_from_record, role_to_record, trapper_from_record,
+)
 from wildintel_uploader.modules.settings.domain.ports import SettingsService
 from wildintel_uploader.shared import audit
 
@@ -31,3 +35,22 @@ class SystemClock(Clock):
     def today(self) -> str:
         """The day here — as the day a location is put into production always was."""
         return datetime.now().date().isoformat()
+
+
+class FieldworkFromTheSettings(LegacyFieldwork):
+    """The cameras, the SD cards and the roles versions before left in the settings, through the contract of their module."""
+
+    def __init__(self, settings: SettingsService) -> None:
+        self.settings = settings
+
+    def items(self, kind: str) -> list[tuple[str | None, Any]]:
+        out = []
+        for record in getattr(self.settings.legacy_fieldwork(), kind):
+            project = record.get("research_project") or None
+            item = role_from_record(dict(record), project or "") if kind == "roles" else equipment_from_record(dict(record), kind, project or "")
+            out.append((project, item))
+        return out
+
+    def keep(self, kind: str, items: list[tuple[str | None, Any]]) -> None:
+        records = [{**(role_to_record(i) if kind == "roles" else equipment_to_record(i, kind)), "research_project": p} for p, i in items]
+        self.settings.keep_legacy_fieldwork(kind, records)

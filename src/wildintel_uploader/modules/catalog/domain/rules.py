@@ -76,3 +76,22 @@ def saved_trappers(kept: list[Trapper], wanted: list[Trapper], at: str, new_id: 
         out.append(stamped(trapper, before, at, new_id))
     out += [removed(t, at) for t in kept if t.audit.id not in listed]
     return out
+
+
+# ── any list of records of a research project: its cameras, its SD cards, its roles ──
+
+def saved_records(kept: list[R], wanted: list[R], key: Callable[[R], object], at: str, new_id: Callable[[], str]) -> list[R]:
+    """The records as they are kept once `wanted` is saved as all of them. A record is the one kept when it says its id — so one renamed is the same
+    one, and what points to it still does — or, saying none, when it has the same `key`. One the list no longer has is removed — kept, with when —,
+    and one listed again comes back."""
+    by_id = {r.audit.id: r for r in kept if r.audit.id}
+    by_key = {key(r): r for r in kept}
+    out: list[R] = []
+    listed: set[str | None] = set()
+    for record in wanted:
+        before = (by_id.get(record.audit.id) if record.audit.id else None) or by_key.get(key(record))
+        if before is not None:
+            listed.add(before.audit.id)
+        out.append(stamped(record, before, at, new_id))
+    out += [removed(r, at) for r in kept if r.audit.id not in listed]
+    return out

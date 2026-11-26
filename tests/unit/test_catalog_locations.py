@@ -86,7 +86,7 @@ def test_each_change_of_status_is_written_down(world):
     catalog.add_location("DONA", _madrid())
     catalog.update_location("DONA", "DONA_01", {"name": "Same status"})
     catalog.update_location("DONA", "DONA_01", {"status": "ready"}, by_visit=True)
-    assert catalog.status_history.lines == [("DONA", "DONA_01", None, "pending"), ("DONA", "DONA_01", "pending", "ready")]
+    assert catalog._history.lines == [("DONA", "DONA_01", None, "pending"), ("DONA", "DONA_01", "pending", "ready")]
 
 
 def test_a_location_with_visits_or_from_trapper_is_not_removed_and_an_archived_project_changes_nothing(world):

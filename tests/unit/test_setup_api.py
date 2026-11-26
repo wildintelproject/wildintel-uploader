@@ -12,7 +12,7 @@ from wildintel_uploader.web.main import app
 @pytest.fixture(autouse=True)
 def collections(tmp_path: Path):
     local_folder_service.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
-    with patch("wildintel_uploader.web.api.routers.setup.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
         yield tmp_path
 
 

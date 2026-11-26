@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject, Trapper
+from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject, Role, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
 from wildintel_uploader.modules.catalog.infrastructure.mapping import (
-    location_from_record, location_to_record, project_from_record, project_to_record, trapper_from_record, trapper_to_record,
+    equipment_from_record, equipment_to_record, location_from_record, location_to_record, project_from_record, project_to_record, role_from_record,
+    role_to_record, trapper_from_record, trapper_to_record,
 )
 from wildintel_uploader.shared.storage import ProjectStore, StorageError
 
@@ -49,3 +50,21 @@ class StoreCatalogRepository(CatalogRepository):
 
     def write_locations(self, project: str, locations: list[Location]) -> None:
         self.store.write_records(project, "locations", [location_to_record(loc) for loc in locations])
+
+    def read_equipment(self, project: str, kind: str) -> list:
+        try:
+            return [equipment_from_record(r, kind, project) for r in self.store.read_records(project, kind)]
+        except StorageError:
+            return []
+
+    def write_equipment(self, project: str, kind: str, items: list) -> None:
+        self.store.write_records(project, kind, [equipment_to_record(i, kind) for i in items])
+
+    def read_roles(self, project: str) -> list[Role]:
+        try:
+            return [role_from_record(r, project) for r in self.store.read_records(project, "roles")]
+        except StorageError:
+            return []
+
+    def write_roles(self, project: str, roles: list[Role]) -> None:
+        self.store.write_records(project, "roles", [role_to_record(r) for r in roles])

@@ -236,11 +236,15 @@ class SettingsUseCases(SettingsService):
         return self.store.load().legacy_fieldwork
 
     def forget_legacy_fieldwork(self, kind: str) -> None:
+        self.keep_legacy_fieldwork(kind, [])
+
+    def keep_legacy_fieldwork(self, kind: str, items: list[dict[str, Any]]) -> None:
         if kind not in {f.name for f in fields(LegacyFieldwork)}:
             raise UnknownSetting(f"FIELDWORK.{kind}")
         settings = self.store.load()
-        if getattr(settings.legacy_fieldwork, kind):
-            self.store.save(replace(settings, legacy_fieldwork=replace(settings.legacy_fieldwork, **{kind: ()})))
+        left = tuple(dict(i) for i in items)
+        if tuple(dict(i) for i in getattr(settings.legacy_fieldwork, kind)) != left:
+            self.store.save(replace(settings, legacy_fieldwork=replace(settings.legacy_fieldwork, **{kind: left})))
 
     # ── the General section ──
 

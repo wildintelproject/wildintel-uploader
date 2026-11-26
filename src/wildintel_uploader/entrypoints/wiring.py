@@ -20,7 +20,7 @@ from wildintel_uploader.core import config
 from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseCases
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
-from wildintel_uploader.modules.catalog.infrastructure.legacy import SystemClock, TrappersFromTheSettings
+from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, SystemClock, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredStatusHistory, StoredVisits
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
@@ -44,7 +44,8 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
     settings through their module. Its records are kept in `repository`, or — none given — where the settings say (see catalog_repository)."""
     store = storage.open_store(collections_dir)
     return CatalogUseCases(repository or catalog_repository(collections_dir, settings), legacy_trappers=TrappersFromTheSettings(settings),
-                           visits=StoredVisits(store, collections_dir), status_history=StoredStatusHistory(collections_dir), clock=clock or SystemClock())
+                           visits=StoredVisits(store, collections_dir), status_history=StoredStatusHistory(collections_dir), clock=clock or SystemClock(),
+                           legacy_fieldwork=FieldworkFromTheSettings(settings))
 
 
 def catalog_repository(collections_dir: Path, settings: SettingsService, kind: str | None = None, database: Path | None = None) -> CatalogRepository:
@@ -83,6 +84,11 @@ class SettingsProvider(Provider):
         return build_settings(store, activity_log=activity_log, machine=machine, record_storage=record_storage)
 
 
+def catalog_collections_dir() -> Path:
+    """The collections folder the catalog of a request or a command is kept in: the one the settings say."""
+    return config.collections_dir()
+
+
 class CatalogProvider(Provider):
     """The module of the catalog, kept in the collections folder the settings say."""
 
@@ -92,7 +98,7 @@ class CatalogProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     def service(self, settings: SettingsService, clock: Clock) -> CatalogService:
-        return build_catalog(config.collections_dir(), settings, clock)
+        return build_catalog(catalog_collections_dir(), settings, clock)
 
 
 def make_app_container() -> Container:

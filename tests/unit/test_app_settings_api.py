@@ -19,7 +19,8 @@ def fresh_settings_file(tmp_path: Path):
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
     for acronym in ("DONA", "TATR"):
         local_folder_service.write_research_project(tmp_path, {"name": acronym, "acronym": acronym})
-    with patch("wildintel_uploader.web.api.routers.app_settings._root", return_value=tmp_path):
+    with patch("wildintel_uploader.web.api.routers.app_settings._root", return_value=tmp_path), \
+            patch("wildintel_uploader.entrypoints.wiring.catalog_collections_dir", return_value=tmp_path):
         yield
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
 
