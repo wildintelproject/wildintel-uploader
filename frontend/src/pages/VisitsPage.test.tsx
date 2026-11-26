@@ -1398,7 +1398,7 @@ describe('VisitsPage from a CSV file', () => {
   })
 
   it('shows nothing of the file while it is checked, and the visits are added from a step that says what is going to be done', async () => {
-    const answer = { visits: [visit()], problems: [], skipped: 0, saved: null, new_sites: [], warnings: [], create: { locations: [], cameras: [{ camera_id: 'C9' }], sd_cards: [], trappers: [] } }
+    const answer = { visits: [visit()], problems: [], skipped: 0, saved: null, new_sites: [], warnings: [], create: { locations: [], cameras: [{ label: 'C9', camera_id: null }, { label: '22', camera_id: 'TEST0122' }], sd_cards: [], trappers: [] } }
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ ...answer, visits: [], problems: [{ row: 2, message: 'Simone is not one of the trappers.' }] })
     let finish: (value: unknown) => void = () => {}
     mockedApi.importVisitsCsv.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }) as never)
@@ -1423,7 +1423,7 @@ describe('VisitsPage from a CSV file', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Continue to the review/ }))
     const plan = await screen.findByRole('region', { name: 'What is going to be saved' })
     expect(plan).toHaveTextContent('Visits to add1')
-    expect(plan).toHaveTextContent('Cameras to createC9')
+    expect(plan).toHaveTextContent('Cameras to createC9, 22')   // by their label, not their serial number (#236)
     expect(mockedApi.importVisitsCsv).toHaveBeenCalledTimes(2) // nothing is saved until the button is pressed
   })
 
