@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Icon } from './Dashboard'
+import Glossary from './Glossary'
 import LanguageButton from './LanguageButton'
 import ResearchProjectSelect from './ResearchProjectSelect'
 import { useCurrentTrail } from './Trail'
@@ -27,6 +28,8 @@ export default function Navbar({ version, onHome, onOpenSettings, settingsOpen, 
   const { t } = useTranslation()
   const trail = useCurrentTrail()
   const [dark, setDark] = useState(true)
+  // the glossary, at hand from any page
+  const [glossaryOpen, setGlossaryOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -80,6 +83,9 @@ export default function Navbar({ version, onHome, onOpenSettings, settingsOpen, 
           >
             ? {t('navbar.help')}
           </a>
+          <button type="button" className={btnOutline} title={t('navbar.glossaryTitle')} aria-haspopup="dialog" aria-expanded={glossaryOpen} onClick={() => setGlossaryOpen(true)}>
+            📖 {t('navbar.glossary')}
+          </button>
           <LanguageButton />
           <button
             className={`${btnOutline} ${settingsOpen ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
@@ -97,6 +103,7 @@ export default function Navbar({ version, onHome, onOpenSettings, settingsOpen, 
           </button>
         </div>
       </div>
+      {glossaryOpen && <Glossary onClose={() => setGlossaryOpen(false)} />}
     </nav>
   )
 }

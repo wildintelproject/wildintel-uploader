@@ -39,6 +39,22 @@ vi.mock('../api', async (original) => ({ ...(await original<typeof import('../ap
 
 function SomePage() { usePageTrail({ title: 'Visit dashboard', parent: 'Manage visits' }); return null }
 
+describe('Navbar glossary', () => {
+  it('has, beside Help, a button that opens the glossary on any page, and its cross closes it', async () => {
+    render(<Navbar version={null} onHome={() => {}} onOpenSettings={() => {}} settingsOpen={false} />)
+
+    const help = screen.getByText(/Help/)
+    const button = screen.getByRole('button', { name: /Glossary/ })
+    expect(help.nextElementSibling).toBe(button)
+    await userEvent.click(button)
+    expect(screen.getByRole('dialog', { name: 'Glossary' })).toBeInTheDocument()
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close the glossary panel' }))
+    expect(screen.queryByRole('dialog', { name: 'Glossary' })).not.toBeInTheDocument()
+  })
+})
+
 describe('Navbar research project', () => {
   it('has, in the list of the research projects, the option that creates a new one — it calls what it is given', async () => {
     vi.mocked(api.getSettings).mockResolvedValue({ GENERAL: { default_research_project: 'DONA' } } as never)
