@@ -466,6 +466,31 @@ def _kept_list(root: Path, research_project_id: str, kind: str, items: list[dict
         status_history.record_changes(root, research_project_id, kind, kept, out, lambda r: str(r.get("label") or r.get("camera_id") or ""), lambda item, old: next((r for r in old if r.get("id") and r.get("id") == item.get("id")), None))
 
 
+def camera_record(root: Path, research_project_id: str | None, key: str | None) -> dict | None:
+    """The camera of a research project a deployment or a visit names (`key`): the one with that label, else the one with that serial number — case aside.
+    None when it names none, or the research project has none."""
+    if not research_project_id or not str(key or "").strip():
+        return None
+    try:
+        cameras = list_field_items(root, research_project_id, "cameras")
+    except Exception:  # noqa: BLE001 — no research project, nothing kept: no record to compare with
+        return None
+    wanted = str(key).strip().casefold()
+    return (next((c for c in cameras if str(c.get("label") or "").strip().casefold() == wanted), None)
+            or next((c for c in cameras if str(c.get("camera_id") or "").strip().casefold() == wanted), None))
+
+
+def set_camera_identity(root: Path, research_project_id: str, label: str, make: str | None, model: str | None) -> dict:
+    """Keeps the make and the model a camera writes in its images in its record, as the images of one of its deployments say them. Returns the record."""
+    cameras = list_field_items(root, research_project_id, "cameras")
+    record = next((c for c in cameras if str(c.get("label") or "").strip() == label.strip()), None)
+    if record is None:
+        raise LocalFolderError(f"The camera {label} is not one of the cameras of {research_project_id}.")
+    record.update({"camera_make": (make or "").strip() or None, "camera_model": (model or "").strip() or None})
+    write_field_items(root, research_project_id, "cameras", cameras)
+    return record
+
+
 def write_field_items(root: Path, research_project_id: str, kind: str, items: list[dict], by_hand: bool = False) -> None:
     """Keeps these cameras or SD cards as the research project's — the whole list: what was kept and is not in it is deleted *logically* (see `_kept_list`).
 

@@ -742,7 +742,7 @@ Now that you know when, how and where the images were taken, new checks are run:
 | Collection name | `R0033`. |
 | The id's location is the one chosen | The location in the id is the one from stage 1. |
 | Image dates fit the deployment | The first image at the start, the last at the end, within the tolerance. |
-| Camera consistency | The camera in the images is the one in the details. |
+| Camera consistency | The images are of the camera of the deployment, as its record in Settings › Entities › Cameras says it — its serial number, make and model —, compared by the same levels as *Same camera*: the first level the record has. With no record, or one that says nothing, the images are compared with the model of the deployment. When the record has no make and model, or other ones, the result offers to **keep** the ones the images say in it, so the next cards of that camera are compared with them. |
 | Number of images | Like the previous revisions of the location. |
 | Number of sequences | Like the previous revisions of the location. |
 | Length of the sequences | Like the previous revisions of the location. |

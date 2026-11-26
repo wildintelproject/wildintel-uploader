@@ -94,7 +94,8 @@ def run_checks(source: Path, dest: Path, deployment: DeploymentFields) -> dict:
     found = dis.validate_images(source, image_checks, detail=True, exif_fields=settings.VALIDATION.exif_fields, camera_levels=settings.VALIDATION.camera_levels)
     consistency = dis.validate_deployment_consistency(
         source, deployment, deployment_checks, collection_name=dest.parent.name, expected_location_id=deployment.location_id,
-        tolerance_hours=post.tolerance_hours,
+        tolerance_hours=post.tolerance_hours, camera=local_folder_service.camera_record(collections_dir, research_project_id, deployment.camera_id),
+        camera_levels=settings.VALIDATION.camera_levels,
     )
     stats = statistics_service.statistical_checks(
         statistics_service.times_of_folder(source), collections_dir, research_project_id, deployment.deployment_id, stat_checks,

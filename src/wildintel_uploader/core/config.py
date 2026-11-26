@@ -485,7 +485,8 @@ class Camera(BaseModel):
     them, and the day it was put into production."""
     label: str = Field(min_length=1, description="What the camera is called — the name it goes by in the field.")
     camera_id: Optional[str] = Field(default=None, description="The camera's id — its serial number. (cameraID)")
-    camera_model: Optional[str] = Field(default=None, description="Manufacturer and model, written as manufacturer-model. (cameraModel)")
+    camera_make: Optional[str] = Field(default=None, description="The manufacturer, as the camera writes it in its images (EXIF Make): Browning, Reconyx…")
+    camera_model: Optional[str] = Field(default=None, description="The model, as the camera writes it in its images (EXIF Model): 6DCL, HC600… Camtrap DP's cameraModel is the make and the model, make-model.")
     connectivity: Optional[Literal["none", "4g", "5g"]] = Field(default=None, description="The mobile network the camera sends its images through: none when it does not.")
     power_source: Optional[Literal["cells", "battery"]] = Field(default=None, description="What it runs on: cells (AA, AAA… the ones that are changed) or a battery.")
     battery_removable: Optional[Literal["yes", "no"]] = Field(default=None, description="Whether the battery can be taken out of the camera: only said of a battery, as cells are always taken out to be changed.")
@@ -534,7 +535,7 @@ class Camera(BaseModel):
     def _camera_id(cls, value: Optional[str]) -> Optional[str]:
         return _tidy(value)
 
-    @field_validator("camera_model")
+    @field_validator("camera_model", "camera_make")
     @classmethod
     def _camera_model(cls, value: Optional[str]) -> Optional[str]:
         return _tidy(value)
