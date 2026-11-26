@@ -1033,6 +1033,10 @@ describe('VisitsPage from a CSV file', () => {
 
     const header = await screen.findByRole('list', { name: 'Header of the file' })
     expect(within(header).getAllByRole('listitem').map((l) => l.textContent)).toEqual(['Lugar', 'Dia', 'Hora', 'Tarea', 'Fotos'])
+    // what its colours mean: a column read for the visits, and one that is not
+    expect(screen.getByLabelText('What the colours of the columns mean')).toHaveTextContent('Read for the visitsNot read')
+    expect(within(header).getAllByRole('listitem').map((l) => l.getAttribute('title'))).toEqual(
+      ['Lugar', 'Dia', 'Hora', 'Tarea', 'Fotos'].map((c) => (Object.values(COLUMNS.mapping) as string[]).includes(c) ? 'Read for the visits' : 'Not read'))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /^Change type/ }))
     await userEvent.click(screen.getByRole('menuitemradio', { name: /WildINTEL Epicollect CSV/ }))
