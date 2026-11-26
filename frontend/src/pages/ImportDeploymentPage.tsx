@@ -2060,19 +2060,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
 
   // The cards of the project chosen — and those free for any.
   const projectSdCards = sdCards.filter((c) => (c.research_project ?? '').toLowerCase() === selectedProjectId.toLowerCase())
-  // the card the visit says was left in the camera, among the cards of the research project: it is chosen for the images when the visit is, and can be changed
-  const leftCard = linkedVisit?.visit.sd ? projectSdCards.find((c) => c.label.toLowerCase() === String(linkedVisit.visit.sd).toLowerCase()) : undefined
-  const cardChosenFor = useRef<string | null>(null)
-  useEffect(() => {
-    const key = linkedVisit ? `${linkedVisit.visit.session}|${linkedVisit.visit.location_id}` : null
-    if (key === cardChosenFor.current || (linkedVisit?.visit.sd && !leftCard)) return   // chosen once for each visit, when the cards of the settings are read
-    cardChosenFor.current = key
-    if (leftCard) setSdCard(leftCard.label)
-  }, [linkedVisit, leftCard])
 
   function selectProject(project: LocalResearchProject | undefined) {
     setSelectedProjectId(project?.acronym ?? '')
-    setSelectedLocationId(''); setOriginError(null); setLinkedVisit(null); setSdCard(''); cardChosenFor.current = null
+    setSelectedLocationId(''); setOriginError(null); setLinkedVisit(null); setSdCard('')
     setOrigin({ researchProject: project ? `${project.acronym} — ${project.name}` : '', locationId: '', locationName: '', timezone: '' })
     applyOriginLocation(undefined)
   }
@@ -2549,7 +2540,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     preprocessTouched.current = false
     setRevision(''); revisionTouched.current = false; setRevisionHint(null)
     setDeploymentChecks(start.deployment); setRequiredDeploymentChecks(start.requiredDeployment)
-    setSdCard(''); cardChosenFor.current = null
+    setSdCard('')
     setEvents([]); setImportError(null); setDestDir(null); setCopied(false)
     setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
     setTaskId(null)
@@ -2661,9 +2652,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
             {selectedProjectId && (
               <div className="mb-4"><FormCard title="Which SD card is it?" description={`The label written on the card the images come from — one of ${selectedProjectId}'s, or one with no project.`}>
                 <Notice kind="info" className="mb-3">
-                  {leftCard
-                    ? <span>The visit <strong>{linkedVisit!.visit.session}</strong> to <strong>{linkedVisit!.visit.location_id}</strong> says the SD card <strong>{leftCard.label}</strong> was left in the camera: it is chosen. If the label on the card is another, choose that one.</span>
-                    : <span>It is checked against the card the visit says was left in the camera.</span>}
+                  {linkedVisit?.visit.sd
+                    ? <span>Choose the one whose label you read on the card. It is checked against the card the visit <strong>{linkedVisit.visit.session}</strong> to <strong>{linkedVisit.visit.location_id}</strong> says was left in the camera, so that the card and the field notes are seen to agree.</span>
+                    : <span>Choose the one whose label you read on the card. It is checked against the card the visit says was left in the camera.</span>}
                 </Notice>
                 <SdCardsTable cards={projectSdCards} selected={sdCard} onSelect={setSdCard}
                   empty={projectSdCards.length === 0 ? `No SD cards for ${selectedProjectId} in the settings yet.` : 'No SD card matches.'} />
