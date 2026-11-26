@@ -392,7 +392,7 @@ TRAPPER already holds deployments that this computer's collections folder doesn'
 The **Glossary** button, beside it, opens a panel with what each word of WildINTEL Uploader means, from the whole to its parts: *research project*, *location*, *camera*, *SD card*, *trapper*, *visit*, *revision*, *deployment* and *collection*. A **revision** is one visit to every location of a research project; a **deployment** is the images of one camera at one location between two visits — from the visit that put an SD card in the camera to the visit that collected that card — and is what is uploaded to the remote repository; and the deployments whose SD cards were put in during the same revision are its **collection**, kept and uploaded together. In the Quick guide, these words are underlined with dots: each one opens the glossary at its entry.
 
 The title in the top bar takes you back to the welcome screen at any time; **? Help** opens this
-documentation, and the sun/moon button switches between dark and light.
+documentation, **📖 Glossary**, beside it, opens the glossary on any page, and the sun/moon button switches between dark and light.
 
 If WildINTEL Uploader was closed in the middle of an import, the first thing you see is the list of
 **unfinished runs** — see [Unfinished runs](#4-unfinished-runs).
