@@ -1,11 +1,13 @@
-"""services.file_memo — what the steps of an import remember of a file while it is the same one: the camera of an image, and that it decoded in full (#140)."""
+"""services.file_memo — what the steps of an import remember of a file while it is the same one: what ExifTool read of an image (kept on disk too), its camera, and that it decoded in full (#140)."""
 import os
+import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
-from wildintel_uploader.core.services import camera_info, file_memo
+from wildintel_uploader.core.services import camera_info, exif_store, file_memo
 from wildintel_uploader.core.services import deployment_import_service as svc
 from wildintel_uploader.core.services import preprocessing_service as pre
 
@@ -93,28 +95,118 @@ def test_only_the_images_that_changed_are_read_again(tmp_path: Path, monkeypatch
     assert cameras[images[1]].model == "Reconyx Another" and cameras[images[0]].model == "Reconyx HC600"
 
 
+def _fake_exiftool(monkeypatch: pytest.MonkeyPatch, tags_of: dict[Path, dict[str, str]] | None = None) -> list[tuple[list[Path], list[str]]]:
+    """ExifTool, as far as camera_info is concerned: each run is recorded (the images and the tags asked for), and gives what tags_of says of each image (a
+    camera "Reconyx HC600", serial "S1", taken 2024-09-04 10:00 when it is not said); an image not in tags_of, when it is given, cannot be read."""
+    runs: list[tuple[list[Path], list[str]]] = []
+    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "exiftool")
+
+    def read(tool, paths, tags):
+        runs.append((list(paths), list(tags)))
+        base = {"Make": "Reconyx", "Model": "HC600", "SerialNumber": "S1", "DateTimeOriginal": "2024:09:04 10:00:00"}
+        return {p: {t: {**base, **(tags_of or {}).get(p, {})}.get(t) for t in tags} for p in paths if tags_of is None or p in tags_of}
+    monkeypatch.setattr(camera_info, "_tags_with_exiftool", read)
+    return runs
+
+
+def test_one_exiftool_run_gives_the_camera_the_dates_and_the_fields_of_every_step(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    images = [_jpeg(tmp_path / f"IMG_{n}.jpg") for n in range(3)]
+    runs = _fake_exiftool(monkeypatch)
+
+    cameras, reader = camera_info.read_cameras(images)
+    dates = camera_info.read_dates(images)
+    models = camera_info.read_tags(images, ["Model", "SerialNumber"])
+
+    assert len(runs) == 1 and {"Make", "Model", "SerialNumber", "DateTimeOriginal", "CreateDate", "ModifyDate"} <= set(runs[0][1])
+    assert reader == "exiftool" and cameras[images[0]] == camera_info.CameraInfo(model="Reconyx HC600", camera_id="S1")
+    assert set(dates.values()) == {datetime(2024, 9, 4, 10)} and models[images[2]] == {"Model": "HC600", "SerialNumber": "S1"}
+
+
+def test_a_field_not_read_before_is_read_with_the_rest_and_then_remembered(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    images = [_jpeg(tmp_path / "a.jpg")]
+    runs = _fake_exiftool(monkeypatch, {images[0]: {"ISO": "400"}})
+    camera_info.read_dates(images)
+
+    assert camera_info.read_tags(images, ["ISO"]) == {images[0]: {"ISO": "400"}}
+    camera_info.read_tags(images, ["ISO"])
+    camera_info.read_cameras(images)
+
+    assert [r[1][-1] for r in runs] == ["ModifyDate", "ISO"]   # the second run asked for ISO, besides the camera and the dates; nothing after it
+
+
+def test_only_the_images_that_changed_are_read_again_by_exiftool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    images = [_jpeg(tmp_path / f"IMG_{n}.jpg") for n in range(3)]
+    runs = _fake_exiftool(monkeypatch)
+    camera_info.read_dates(images)
+
+    _jpeg(images[1], size=(8, 8))   # replaced by another image
+    camera_info.read_dates(images)
+
+    assert [r[0] for r in runs] == [images, [images[1]]]
+
+
+def test_what_exiftool_read_is_kept_on_disk_for_after_a_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    images = [_jpeg(tmp_path / f"IMG_{n}.jpg") for n in range(2)]
+    runs = _fake_exiftool(monkeypatch)
+    first = camera_info.read_cameras(images)
+
+    file_memo.forget_all()   # the app restarted: its memory is empty
+    assert camera_info.read_cameras(images) == first and camera_info.read_dates(images)[images[0]] == datetime(2024, 9, 4, 10)
+    assert len(runs) == 1 and exif_store.path().is_file()
+
+    _jpeg(images[0], size=(8, 8))   # but not what an earlier file said
+    file_memo.forget_all()
+    camera_info.read_cameras(images)
+    assert runs[1][0] == [images[0]]
+
+
+def test_an_image_exiftool_could_not_read_is_looked_at_again(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    good, bad = _jpeg(tmp_path / "good.jpg"), _jpeg(tmp_path / "bad.jpg")
+    runs = _fake_exiftool(monkeypatch, {good: {}})
+
+    assert camera_info.read_dates([good, bad]) == {good: datetime(2024, 9, 4, 10), bad: None}
+    camera_info.read_dates([good, bad])
+
+    assert [r[0] for r in runs] == [[good, bad], [bad]]
+
+
+def test_a_store_on_disk_that_cannot_be_read_is_as_if_it_were_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    images = [_jpeg(tmp_path / "a.jpg")]
+    runs = _fake_exiftool(monkeypatch)
+    camera_info.read_dates(images)
+    monkeypatch.setattr(exif_store, "_open", lambda: (_ for _ in ()).throw(sqlite3.OperationalError("disk I/O error")))
+    file_memo.forget_all()
+
+    assert camera_info.read_dates(images)[images[0]] == datetime(2024, 9, 4, 10)
+    assert len(runs) == 2
+
+
+def test_the_store_on_disk_keeps_at_most_its_limit_the_oldest_forgotten_first(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(exif_store, "LIMIT", 2)
+    for n in range(3):
+        exif_store.put_many({(f"/img/{n}.jpg", 1, 1): {"model": str(n)}})
+
+    assert exif_store.get_many([(f"/img/{n}.jpg", 1, 1) for n in range(3)]) == {("/img/1.jpg", 1, 1): {"model": "1"}, ("/img/2.jpg", 1, 1): {"model": "2"}}
+
+
 def test_a_reading_by_pillow_is_made_again_when_exiftool_is_there_now(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     images = [_jpeg(tmp_path / "a.jpg")]
     monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
     camera_info.read_cameras(images)
 
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "exiftool")
-    seen = []
-    monkeypatch.setattr(camera_info, "_read_with_exiftool", lambda tool, paths: seen.append(list(paths)) or {p: camera_info.CameraInfo(model="From ExifTool", camera_id="S1") for p in paths})
+    runs = _fake_exiftool(monkeypatch)
     cameras, reader = camera_info.read_cameras(images)
 
-    assert seen == [images] and reader == "exiftool" and cameras[images[0]].camera_id == "S1"
-    seen.clear()
+    assert len(runs) == 1 and reader == "exiftool" and cameras[images[0]].camera_id == "S1"
     camera_info.read_cameras(images)
-    assert seen == []   # and now it is remembered
+    assert len(runs) == 1   # and now it is remembered
 
 
-def test_the_reader_is_pillow_when_any_image_was_read_by_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_the_reader_is_pillow_when_exiftool_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     a, b = _jpeg(tmp_path / "a.jpg"), _jpeg(tmp_path / "b.jpg")
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "exiftool")
-    monkeypatch.setattr(camera_info, "_read_with_exiftool", lambda tool, paths: {p: camera_info.CameraInfo(model="X") for p in paths})
+    _fake_exiftool(monkeypatch)
     assert camera_info.read_cameras([a])[1] == "exiftool"
-    monkeypatch.setattr(camera_info, "_read_with_exiftool", lambda tool, paths: (_ for _ in ()).throw(OSError("gone")))
+    monkeypatch.setattr(camera_info, "_tags_with_exiftool", lambda tool, paths, tags: (_ for _ in ()).throw(OSError("gone")))
     assert camera_info.read_cameras([a, b])[1] == "pillow"
 
 

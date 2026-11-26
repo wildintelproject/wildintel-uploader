@@ -362,7 +362,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
                 records.append({
                     "original": before.get("original", name), "name": name, "date": date.isoformat(), "date_source": source, "resized": before.get("resized"),
                     "source_hash": before.get("source_hash") or xmp.get(path, {}).get("source_hash"), "hash": before.get("hash") or hashes[path],
-                    "final_hash": hashes[path], "camera": cameras[path].model if path in cameras else None, "width": width, "height": height,
+                    "final_hash": hashes[path], "camera": cameras[path].model if path in cameras else None, "camera_id": cameras[path].camera_id if path in cameras else None, "width": width, "height": height,
                     "_local": naive, "_date": date, "_size": path.stat().st_size,
                 })
             public = [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
@@ -377,7 +377,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
 
             yield step("images", "running", "Rebuilding images.json…")
             entries = [local_folder_service.image_entry(r["name"], r["_local"].isoformat(), "local", {
-                "original": r["original"], "taken_at": r["date"], "timestamp": r["_date"].timestamp(), "date_source": r["date_source"], "camera": r["camera"],
+                "original": r["original"], "taken_at": r["date"], "timestamp": r["_date"].timestamp(), "date_source": r["date_source"], "camera": r["camera"], "camera_id": r.get("camera_id"),
                 "width": r["width"], "height": r["height"], "size_bytes": r["_size"], "resized": r["resized"], "sha1": r["final_hash"], "source_sha1": r["source_hash"],
             }) for r in records]
             local_folder_service.write_images_file(dest, deployment_id, entries)

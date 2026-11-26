@@ -21,7 +21,7 @@ from pathlib import Path
 
 from PIL import ExifTags, Image
 
-from wildintel_uploader.core.services import file_memo
+from wildintel_uploader.core.services import exif_store, file_memo
 
 logger = logging.getLogger(__name__)
 
@@ -78,25 +78,6 @@ def _clean(value: object) -> str | None:
     return text or None
 
 
-def _read_with_exiftool(exiftool: str, paths: list[Path]) -> dict[Path, CameraInfo]:
-    """One ExifTool run over every file — the file names go in on stdin, so a
-    folder of thousands of images doesn't overflow the command line."""
-    args = [exiftool, "-json", "-charset", "filename=utf8", "-m", "-Make", "-Model", *(f"-{tag}" for tag in _SERIAL_TAGS), "-@", "-"]
-    completed = subprocess.run(
-        args, input="\n".join(str(p) for p in paths), capture_output=True, text=True, encoding="utf-8",
-        timeout=_EXIFTOOL_TIMEOUT_SECONDS, check=False,
-    )
-    # ExifTool exits non-zero when some file can't be read, but still reports the others.
-    rows = json.loads(completed.stdout) if completed.stdout.strip() else []
-    by_source = {str(Path(row.get("SourceFile", ""))): row for row in rows}
-    cameras: dict[Path, CameraInfo] = {}
-    for path in paths:
-        row = by_source.get(str(path), {})
-        serial = next((s for s in (_clean(row.get(tag)) for tag in _SERIAL_TAGS) if s), None)
-        cameras[path] = CameraInfo(model=_model(row.get("Make"), row.get("Model")), camera_id=serial)
-    return cameras
-
-
 def _read_with_pillow(path: Path) -> CameraInfo:
     try:
         with Image.open(path) as img:
@@ -110,29 +91,21 @@ def _read_with_pillow(path: Path) -> CameraInfo:
         return CameraInfo()
 
 
-def _read(paths: list[Path], exiftool: str | None) -> tuple[dict[Path, CameraInfo], str]:
-    if exiftool:
-        try:
-            return _read_with_exiftool(exiftool, paths), "exiftool"
-        except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError) as exc:
-            logger.warning("ExifTool failed (%s) — falling back to Pillow for the camera information.", exc)
-    return {path: _read_with_pillow(path) for path in paths}, "pillow"
-
-
 _GPS_IFD = 0x8825
 # The names ExifTool gives some tags that Pillow knows by another name.
 _PILLOW_NAMES = {"iso": "ISOSpeedRatings", "createdate": "DateTimeDigitized", "modifydate": "DateTime", "exposurecompensation": "ExposureBiasValue"}
 
 
 def _tags_with_exiftool(exiftool: str, paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | None]]:
-    """The value of each tag in each file, in one ExifTool run (the file names on stdin): None where a file does not have it."""
+    """The value of each tag in each file, in one ExifTool run (the file names on stdin): None where a file does not have it. A file ExifTool says nothing
+    of — one it could not read — is not in what is returned."""
     args = [exiftool, "-json", "-charset", "filename=utf8", "-m", *(f"-{tag}" for tag in tags), "-@", "-"]
     completed = subprocess.run(
         args, input="\n".join(str(p) for p in paths), capture_output=True, text=True, encoding="utf-8", timeout=_EXIFTOOL_TIMEOUT_SECONDS, check=False,
     )
     rows = json.loads(completed.stdout) if completed.stdout.strip() else []
     by_source = {str(Path(row.get("SourceFile", ""))): {k.lower(): v for k, v in row.items()} for row in rows}
-    return {path: {tag: _clean(by_source.get(str(path), {}).get(tag.lower())) for tag in tags} for path in paths}
+    return {path: {tag: _clean(by_source[str(path)].get(tag.lower())) for tag in tags} for path in paths if str(path) in by_source}
 
 
 def _tags_with_pillow(path: Path, tags: list[str]) -> dict[str, str | None]:
@@ -158,12 +131,9 @@ def read_tags(paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | 
     with ExifTool when there is one, and with Pillow (the standard tags only) when not, or when it fails."""
     if not tags or not paths:
         return {path: {} for path in paths}
-    exiftool = exiftool_path()
-    if exiftool:
-        try:
-            return _tags_with_exiftool(exiftool, paths, tags)
-        except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError) as exc:
-            logger.warning("ExifTool failed (%s) — falling back to Pillow for the EXIF fields.", exc)
+    read = _metadata(paths, tags)
+    if read is not None:
+        return {path: {tag: read[path].get(tag.lower()) for tag in tags} for path in paths}
     return {path: _tags_with_pillow(path, tags) for path in paths}
 
 
@@ -203,42 +173,87 @@ def read_dates(paths: list[Path]) -> dict[Path, datetime | None]:
     DateTimeOriginal, else CreateDate, else ModifyDate. Only without ExifTool, or when it fails, with Pillow, image by image."""
     if not paths:
         return {}
-    if exiftool_path():
-        try:
-            tags = read_tags(paths, list(DATE_TAGS))
-            return {p: next((d for d in (_parse_date(tags.get(p, {}).get(t)) for t in DATE_TAGS) if d is not None), None) for p in paths}
-        except Exception as exc:  # noqa: BLE001 — what Pillow reads is better than nothing
-            logger.warning("ExifTool could not read the dates (%s) — falling back to Pillow.", exc)
+    read = _metadata(paths, list(DATE_TAGS))
+    if read is not None:
+        return {p: next((d for d in (_parse_date(read[p].get(t.lower())) for t in DATE_TAGS) if d is not None), None) for p in paths}
     return {p: _date_with_pillow(p) for p in paths}
 
 
 def read_cameras(paths: list[Path]) -> tuple[dict[Path, CameraInfo], str]:
-    """The camera model and id of each image, and which reader was used
-    ("exiftool" or "pillow"). ExifTool failing for any reason falls back to Pillow.
-
-    What is read is remembered while the image is the same one (see file_memo): the validation of the images, the preprocessing and the seal read the same images, and ExifTool
-    takes seconds for a card. A reading by Pillow is made again when ExifTool is there, as it says less."""
+    """The camera model and id of each image, and which reader was used ("exiftool" or "pillow"). With ExifTool it is what _metadata read — once for every
+    step that asks —; without it, or when it fails, Pillow reads it, and that too is remembered while the image is the same (see file_memo), but only as long as
+    there is no ExifTool: it says less."""
     if not paths:
         return {}, "pillow"
-    exiftool = exiftool_path()
-    stamps = {path: file_memo.stamp(path) for path in paths}
+    read = _metadata(paths, [])
+    if read is not None:
+        return {p: _camera_of(read[p]) for p in paths}, "exiftool"
     found: dict[Path, CameraInfo] = {}
-    readers: set[str] = set()
-    missing: list[Path] = []
     for path in paths:
-        remembered = file_memo.CAMERAS.get(stamps[path])
-        if remembered is not None and not (exiftool and remembered[1] != "exiftool"):
-            found[path] = remembered[0]  # type: ignore[assignment]
-            readers.add(remembered[1])
-        else:
-            missing.append(path)
-    if missing:
-        read, reader = _read(missing, exiftool)
-        for path in missing:
-            found[path] = read[path]
-            file_memo.CAMERAS.put(stamps[path], (read[path], reader))
-        readers.add(reader)
-    return {path: found[path] for path in paths}, "exiftool" if readers == {"exiftool"} else "pillow"
+        key = file_memo.stamp(path)
+        remembered = file_memo.CAMERAS.get(key)
+        if remembered is None:
+            remembered = (_read_with_pillow(path), "pillow")
+            file_memo.CAMERAS.put(key, remembered)
+        found[path] = remembered[0]  # type: ignore[assignment]
+    return found, "pillow"
+
+
+def _camera_of(tags: dict[str, str | None]) -> CameraInfo:
+    """The camera, from the tags ExifTool read of an image: the model with its make, and the first serial number there is, in the order of _SERIAL_TAGS."""
+    serial = next((s for s in (_clean(tags.get(t.lower())) for t in _SERIAL_TAGS) if s), None)
+    return CameraInfo(model=_model(tags.get("make"), tags.get("model")), camera_id=serial)
+
+
+# What every reading of an image with ExifTool asks for, whatever step it is for: the camera and the capture date, which every step of an import needs — so that
+# one run reads what the next ones will ask for (#140).
+_BASE_TAGS = ("Make", "Model", *_SERIAL_TAGS, *DATE_TAGS)
+
+
+def _metadata(paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | None]] | None:
+    """The tags of each image (by their names in lowercase, None where it has not got one) as ExifTool reads them — None when there is no ExifTool, or it
+    failed: the caller reads with Pillow then.
+
+    Each image is read once while it is the same file (its path, size and modification time, see file_memo): what was read is remembered in memory and kept on
+    disk (exif_store), so that neither the next step nor a restart of the app reads it again. Only the images not remembered, or remembered without one of the
+    tags asked for, are read — all of them in one run, asking for _BASE_TAGS besides the tags asked for, so that the next steps find them."""
+    exiftool = exiftool_path()
+    if not exiftool:
+        return None
+    wanted = {t.lower() for t in tags}
+    stamps = {path: file_memo.stamp(path) for path in paths}
+    found: dict[Path, dict[str, str | None]] = {}
+    for path in paths:
+        known = file_memo.EXIF.get(stamps[path])
+        if known is not None and wanted <= known.keys():
+            found[path] = known
+    kept = exif_store.get_many([stamps[p] for p in paths if p not in found and stamps[p] is not None])
+    for path in paths:
+        known = kept.get(stamps[path]) if path not in found and stamps[path] is not None else None
+        if known is not None and wanted <= known.keys():
+            file_memo.EXIF.put(stamps[path], known)
+            found[path] = known
+    missing = [p for p in paths if p not in found]
+    if not missing:
+        return found
+    ask = list({t.lower(): t for t in (*_BASE_TAGS, *tags)}.values())
+    try:
+        read = _tags_with_exiftool(exiftool, missing, ask)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError) as exc:
+        logger.warning("ExifTool failed (%s) — falling back to Pillow.", exc)
+        return None
+    fresh: dict[file_memo.Stamp, dict[str, str | None]] = {}
+    for path in missing:
+        if path not in read:   # ExifTool could not read it: it has none of them, and it is looked at again next time
+            found[path] = dict.fromkeys((t.lower() for t in ask), None)
+            continue
+        values = {**(file_memo.EXIF.get(stamps[path]) or {}), **{t.lower(): v for t, v in read[path].items()}}
+        found[path] = values
+        if stamps[path] is not None:
+            file_memo.EXIF.put(stamps[path], values)
+            fresh[stamps[path]] = values  # type: ignore[index]
+    exif_store.put_many(fresh)
+    return found
 
 
 def common_value(values: list[str | None]) -> str | None:

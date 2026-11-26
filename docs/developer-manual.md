@@ -263,6 +263,19 @@ decodes across brands. `camera_info.exiftool_path()` finds the copy bundled with
 result says which reader was used so the UI can say "may be incomplete". ExifTool also writes the
 XMP metadata of the preprocessing, which is why that step is disabled without it.
 
+**Each image is read once** (#140). `read_cameras`, `read_dates` and `read_tags` all go through
+`camera_info._metadata`: one ExifTool run asks for the camera (make, model, serial-number tags) and
+the capture dates (`DateTimeOriginal`, `CreateDate`, `ModifyDate`) besides whatever tags the caller
+wants, so the steps after it (the checks of the deployment, the statistics, the preprocessing, the
+seal) find what they need already read. What was read is kept by the stamp of the file — its path,
+size and modification time, see `file_memo` — in memory (`file_memo.EXIF`) and on disk
+(`exif_store`: a SQLite database `exif.sqlite3` in the cache folder of the system, e.g.
+`~/.cache/wildintel-uploader`, at most `exif_store.LIMIT` images, the oldest written forgotten
+first), so a restart in the middle of an import does not read the images again. A changed file has
+another stamp and is read again; a file ExifTool could not read is not kept. The store is only a
+cache: it can be deleted at any time, and when it cannot be opened it is as if it were empty. The
+tests point the cache folder to their throwaway home and clear it before each test (`conftest.py`).
+
 ### Scan and guess
 
 `scan_folder` only counts — files, and images by extension — and never opens an image, so it is instant. What the

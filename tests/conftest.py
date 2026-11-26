@@ -13,6 +13,8 @@ _FAKE_HOME = Path(tempfile.mkdtemp(prefix="wildintel-uploader-test-home-"))
 os.environ["HOME"] = str(_FAKE_HOME)
 os.environ["XDG_CONFIG_HOME"] = str(_FAKE_HOME / ".config")
 os.environ["XDG_STATE_HOME"] = str(_FAKE_HOME / ".local" / "state")
+os.environ["XDG_CACHE_HOME"] = str(_FAKE_HOME / ".cache")
+os.environ["LOCALAPPDATA"] = str(_FAKE_HOME / "AppData" / "Local")
 os.environ["XDG_DOCUMENTS_DIR"] = str(_FAKE_HOME / "Documents")
 os.environ["APPDATA"] = str(_FAKE_HOME / "AppData" / "Roaming")
 atexit.register(shutil.rmtree, _FAKE_HOME, True)
@@ -23,8 +25,11 @@ import pytest  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _forget_what_was_found_of_files():
-    """What the steps of an import remember of a file (see services.file_memo) is not carried from one test to the next."""
-    from wildintel_uploader.core.services import file_memo
+    """What the steps of an import remember of a file (see services.file_memo), and what ExifTool read kept on disk (services.exif_store), is not carried from
+    one test to the next."""
+    from wildintel_uploader.core.services import exif_store, file_memo
     file_memo.forget_all()
+    exif_store.clear()
     yield
     file_memo.forget_all()
+    exif_store.clear()

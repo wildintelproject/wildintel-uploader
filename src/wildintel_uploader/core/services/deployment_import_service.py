@@ -610,10 +610,10 @@ def validate_images(
             progress("cameras", len(images), len(images))
         result["exiftool"] = reader == "exiftool"
 
-    # Reading each image is what takes the time, so it is done for several at once (GENERAL.workers).
+    # The dates come from the same ExifTool run as the camera: each image is read once, for every step that asks (#140).
     taken: dict[Path, datetime | None] = {}
     if "exif" in checks or "sequence" in checks:
-        taken = camera_info.read_dates(images)   # one run of ExifTool for all of them (#227)
+        taken = camera_info.read_dates(images)
         if progress:
             progress("dates", len(images), len(images))
 
@@ -951,10 +951,12 @@ def import_stream(
 
 def copied_images_info(dest: Path) -> list[dict]:
     """The images of a copied deployment folder, in natural order, as images.json keeps them: the name, the camera's
-    wall-clock time from the EXIF (None when it has none) and, as extras, the file's size and its pixels."""
+    wall-clock time from the EXIF (None when it has none) and, as extras, the camera and its serial number, the file's size and its pixels — what
+    the EXIF says, so that what comes after does not read the images again (#140); the dates and the camera in one ExifTool run."""
     entries = []
     ordered = sorted((p for p in dest.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: _natural_key(p.relative_to(dest)))
     dates = camera_info.read_dates(ordered)
+    cameras, _ = camera_info.read_cameras(ordered)   # read with the dates: no other run
     for path in ordered:
         taken = dates[path]
         try:
@@ -964,7 +966,7 @@ def copied_images_info(dest: Path) -> list[dict]:
             width = height = None
         entries.append(local_folder_service.image_entry(
             str(path.relative_to(dest)), taken.isoformat() if taken else None, "local",
-            {"width": width, "height": height, "size_bytes": path.stat().st_size},
+            {"camera": cameras[path].model, "camera_id": cameras[path].camera_id, "width": width, "height": height, "size_bytes": path.stat().st_size},
         ))
     return entries
 

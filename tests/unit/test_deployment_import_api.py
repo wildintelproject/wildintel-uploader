@@ -874,6 +874,7 @@ def test_import_local_without_preprocessing_writes_images_json(tmp_path: Path):
     assert (info["deployment_id"], info["image_count"], info["first"], info["last"]) == ("R0003-DONA_01", 1, "2024-07-01T10:00:00", "2024-07-01T10:00:00")
     image = info["images"][0]
     assert image["name"] == "IMG_0001.jpg" and image["source"] == "local" and (image["extra"]["width"], image["extra"]["height"]) == (4, 4)
+    assert {"camera", "camera_id"} <= image["extra"].keys()   # what the EXIF says of the camera, so that it is not read again (#140)
 
 
 def test_import_local_with_preprocessing_writes_images_json_with_the_dates_and_hashes(tmp_path: Path):
@@ -887,6 +888,7 @@ def test_import_local_with_preprocessing_writes_images_json_with_the_dates_and_h
     assert image["local_time"] == "2024-07-01T10:00:00" and extra["taken_at"].startswith("2024-07-01T09:00:00")  # Madrid, ignoring summer time (UTC+1) → UTC
     assert extra["timestamp"] == 1719824400.0
     assert extra["size_bytes"] == (folder / image["name"]).stat().st_size and len(extra["sha1"]) == 40
+    assert {"camera", "camera_id"} <= extra.keys()
 
 
 def test_import_local_refuses_a_deployment_synced_from_trapper(tmp_path: Path):

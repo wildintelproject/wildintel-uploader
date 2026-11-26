@@ -225,12 +225,12 @@ def write_xmp_batches(exiftool: str, items: list[tuple[Path, dict[str, str]]]) -
 
 def _image_entry(record: dict) -> dict:
     """What images.json keeps of a preprocessed image: its name and when it was taken (the camera's wall clock) and, as
-    extras, its original name, the instant and its epoch seconds, the camera, the file's size and pixels and its hashes."""
+    extras, its original name, the instant and its epoch seconds, the camera and its serial number, the file's size and pixels and its hashes."""
     target: Path = record["_target"]
     width, height = _dimensions(target)
     return local_folder_service.image_entry(record["name"], record["_local"].isoformat(), "local", {
         "original": record["original"], "taken_at": record["date"], "timestamp": record["_date"].timestamp(), "date_source": record["date_source"],
-        "camera": record["camera"], "width": width, "height": height, "size_bytes": target.stat().st_size,
+        "camera": record["camera"], "camera_id": record.get("camera_id"), "width": width, "height": height, "size_bytes": target.stat().st_size,
         "resized": record["resized"], "sha1": record["final_hash"], "source_sha1": record["source_hash"],
     })
 
@@ -265,7 +265,7 @@ def _process(index: int, path: Path, source_dir: Path, dest: Path, deployment: D
         # how big the image was and is — before the metadata, which adds a few kilobytes — to see that it was resized as asked
         "original_width": original_width, "original_height": original_height, "original_bytes": path.stat().st_size,
         "width": width, "height": height, "bytes": target.stat().st_size,
-        "source_hash": source_hash, "hash": _sha1(target), "camera": cameras[path].model, "_target": target, "_date": date, "_local": naive,
+        "source_hash": source_hash, "hash": _sha1(target), "camera": cameras[path].model, "camera_id": cameras[path].camera_id, "_target": target, "_date": date, "_local": naive,
     }
 
 

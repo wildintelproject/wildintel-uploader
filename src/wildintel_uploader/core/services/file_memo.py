@@ -4,7 +4,8 @@ The steps of an import — the validation of the images, the preprocessing, the 
 camera, and a full decoding to see that they are not corrupted. The result of each is remembered here under the file's path, its size and its modification time: a file
 that has been changed — or replaced by another — has other ones and is read again, so what is remembered is never what an earlier file said.
 
-It lives in the process, is bounded (the oldest is forgotten first) and is not written anywhere: a restart starts empty."""
+It lives in the process, is bounded (the oldest is forgotten first) and is not written anywhere: a restart starts empty — except what ExifTool read, which
+exif_store also keeps on disk."""
 from __future__ import annotations
 
 import os
@@ -62,12 +63,15 @@ class FileMemo(Generic[V]):
         return len(self._items)
 
 
-# The camera of an image — what camera_info.read_cameras found — and with which reader ("exiftool" or "pillow").
+# What ExifTool read of an image — its tags by their names in lowercase (see camera_info._metadata) —, also kept on disk (see exif_store).
+EXIF: FileMemo[dict[str, str | None]] = FileMemo()
+# The camera of an image as Pillow read it, when there is no ExifTool, and with which reader ("pillow").
 CAMERAS: FileMemo[tuple[object, str]] = FileMemo()
 # The images that were decoded in full without an error: not corrupted. An image that failed is not kept: it is looked at again.
 DECODED: FileMemo[bool] = FileMemo()
 
 
 def forget_all() -> None:
+    EXIF.clear()
     CAMERAS.clear()
     DECODED.clear()
