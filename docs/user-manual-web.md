@@ -643,7 +643,7 @@ The stage has three steps (the first one also asks the SD card):
 
 **1. Select the folder.** First say whether **the images are on an SD card**:
 
-- **Yes, they are on the SD card** — say where the card is (**Browse…**, or type it) and press **Copy the card**. The card is **only read**: its content is copied to a **temporary folder** of this computer, with the progress of the copy, and the card is ejected so that it can be taken out. The process goes on with the copy as with any folder, and the copy is removed when the import is over.
+- **Yes, they are on the SD card** — say where the card is (**Browse…**, or type it) and press **Copy the card**. The card is **only read**: its content is copied to a **temporary folder** of this computer, with the progress of the copy, and the card is ejected so that it can be taken out. The process goes on with the copy as with any folder, and the copy is removed when the import is over. Before copying, it is checked that the temporary folder of the system has room for the whole card; and before the images are prepared, that the disk of the collection has room for them (they are prepared in a hidden `.staging` folder of the collection and moved to their place when the deployment is saved). When there is not, it says how much is needed and how much is free, before anything is written.
 - **No, they are in a folder** — press **Browse…** and choose the folder with the deployment's images (or type its path), then **Scan**.
 
 The scan only **counts**: how many files there are and how many of them are images (by
