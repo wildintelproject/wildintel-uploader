@@ -72,8 +72,10 @@ describe('MenuPage', () => {
     const panel = within(screen.getByRole('dialog', { name: 'Quick guide' }))
     expect(panel.getByText('End-to-end workflow')).toBeInTheDocument()
     expect(panel.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Create a research project', 'Register the visits', 'Import the images', 'Upload the images'])
-    expect(panel.getByText('Give its name, or link one that already exists in the remote repository. Its trappers, locations, cameras and SD cards can come later, with the field files. To work on another research project, choose it in the top bar.')).toBeInTheDocument()
-    expect(panel.getByText('Send curated local deployments to your remote repository (e.g., TRAPPER).')).toBeInTheDocument()
+    const said = (text: string) => panel.getByText((_, el) => el?.tagName === 'P' && el.textContent === text)   // the words of the glossary are buttons inside the text
+    said('Give its name, or link one that already exists in the remote repository. Its trappers, locations, cameras and SD cards can come later, with the field files. To work on another research project, choose it in the top bar.')
+    said('Send to your remote repository (e.g., TRAPPER) either whole collections or any set of deployments.')
+    expect(panel.queryByRole('button', { name: 'TRAPPER' })).not.toBeInTheDocument()   // the platform, not a person who goes to the field
     expect(panel.getByText('Dashboards')).toBeInTheDocument()
     expect(panel.getByText('Utils')).toBeInTheDocument()
 
@@ -82,6 +84,18 @@ describe('MenuPage', () => {
     await userEvent.click(button)
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('dialog', { name: 'Quick guide' })).not.toBeInTheDocument()
+  })
+
+  it('underlines with dots the words of the glossary in the Quick guide and each opens the glossary at its entry', async () => {
+    renderMenu()
+    await userEvent.click(screen.getByRole('button', { name: 'Quick guide' }))
+    const guide = within(screen.getByRole('dialog', { name: 'Quick guide' }))
+    const word = guide.getAllByRole('button', { name: 'collections' })[0]
+    expect(word).toHaveClass('underline', 'decoration-dotted')
+    await userEvent.click(word)
+    expect(screen.queryByRole('dialog', { name: 'Quick guide' })).not.toBeInTheDocument()
+    const glossary = within(screen.getByRole('dialog', { name: 'Glossary' }))
+    expect(glossary.getByText('Collection').closest('div')).toHaveClass('bg-blue-50')
   })
 
   it('has its title at 22 px, semibold, with what it says under it and a subtle line after', () => {

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { LineIcon } from './TaskCard'
+import { TERMS } from '../glossary'
 
 const COMPASS = <><circle cx="12" cy="12" r="9" /><path d="m15.500 8.500-2 5-5 2 2-5z" /></>
 const DATABASE = <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.700 3.600 3 8 3s8-1.300 8-3V5" /><path d="M4 11v6c0 1.700 3.600 3 8 3s8-1.300 8-3v-6" /></>
@@ -8,10 +9,33 @@ const DATABASE = <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7
 /** The steps of the work from the first: the research project, and then the three of the menu. */
 const STEPS: { badge: ReactNode; title: string; text: string }[] = [
   { badge: 'project', title: 'Create a research project', text: 'Give its name, or link one that already exists in the remote repository. Its trappers, locations, cameras and SD cards can come later, with the field files. To work on another research project, choose it in the top bar.' },
-  { badge: '1', title: 'Register the visits', text: 'Log field visits (who, when, location, actions) by hand or from your field CSV.' },
-  { badge: '2', title: 'Import the images', text: 'Pair collected visits with SD card images to validate, rename and structure them in Camtrap DP.' },
-  { badge: '3', title: 'Upload the images', text: 'Send curated local deployments to your remote repository (e.g., TRAPPER).' },
+  { badge: '1', title: 'Register the visits', text: 'Log field visits (who, when, location, actions) by hand or from your field CSV. Field visits are organized in revisions.' },
+  { badge: '2', title: 'Import the images', text: 'Pair collected visits with SD card images to validate, rename and store them in a Camtrap DP-compatible deployment. Deployments are organized in collections.' },
+  { badge: '3', title: 'Upload the images', text: 'Send to your remote repository (e.g., TRAPPER) either whole collections or any set of deployments.' },
 ]
+
+/** The ways the words of the glossary are written in the text, singular or plural, and the term each one is. */
+const TERM_FORMS = new RegExp(`\\b(${TERMS.map((t) => t.term.replace(/\s+/g, '\\s')).join('|')})(?:s)?\\b`, 'gi')
+
+/** The text with the words of the glossary underlined with dots; each one opens the glossary at its entry. */
+function WithTerms({ text, onTerm }: { text: string; onTerm: (term: string) => void }) {
+  const parts: ReactNode[] = []
+  let last = 0
+  for (const m of text.matchAll(TERM_FORMS)) {
+    const term = TERMS.find((t) => t.term.toLowerCase() === m[1].toLowerCase())
+    if (!term || (m[0] === m[0].toUpperCase() && m[0] !== term.term)) continue   // TRAPPER, the platform, is not a trapper
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    parts.push(
+      <button key={m.index} type="button" title={`${term.term}: see it in the glossary`} onClick={() => onTerm(term.term)}
+              className="underline decoration-dotted decoration-zinc-400 underline-offset-4 hover:text-blue-600 hover:decoration-blue-600 dark:hover:text-blue-400">
+        {m[0]}
+      </button>,
+    )
+    last = m.index + m[0].length
+  }
+  parts.push(text.slice(last))
+  return <>{parts}</>
+}
 
 /** The button of the title of the menu that opens the quick guide. */
 export function QuickGuideButton({ onClick, expanded }: { onClick: () => void; expanded: boolean }) {
@@ -24,7 +48,7 @@ export function QuickGuideButton({ onClick, expanded }: { onClick: () => void; e
 }
 
 /** The panel at the right with the work from end to end: the research project and the three steps, on a line. It closes with its cross, the background or Escape. */
-export default function QuickGuide({ onClose }: { onClose: () => void }) {
+export default function QuickGuide({ onClose, onTerm }: { onClose: () => void; onTerm: (term: string) => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -55,7 +79,7 @@ export default function QuickGuide({ onClose }: { onClose: () => void }) {
                 : <span aria-hidden="true" className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300">{s.badge}</span></span>}
               <div>
                 <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{s.title}</h3>
-                <p className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{s.text}</p>
+                <p className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400"><WithTerms text={s.text} onTerm={onTerm} /></p>
               </div>
             </li>
           ))}

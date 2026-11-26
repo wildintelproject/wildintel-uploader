@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { LineIcon } from './TaskCard'
 import { TERMS, type GlossaryEntry } from '../glossary'
 
@@ -14,12 +14,15 @@ export function GlossaryButton({ onClick, expanded }: { onClick: () => void; exp
   )
 }
 
-function Entries({ entries }: { entries: GlossaryEntry[] }) {
+function Entries({ entries, focus }: { entries: GlossaryEntry[]; focus?: string }) {
+  const focused = useRef<HTMLDivElement>(null)
+  useEffect(() => { focused.current?.scrollIntoView?.({ block: 'start' }) }, [focus])
   return (
     <section aria-label="Words">
       <dl className="space-y-4">
         {entries.map((e) => (
-          <div key={e.term}>
+          <div key={e.term} ref={e.term === focus ? focused : undefined} id={`glossary-${e.term.toLowerCase().replace(/\s+/g, '-')}`}
+               className={e.term === focus ? '-mx-3 rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-950/40' : undefined}>
             <dt className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{e.term}</dt>
             <dd className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{e.meaning}</dd>
           </div>
@@ -30,7 +33,7 @@ function Entries({ entries }: { entries: GlossaryEntry[] }) {
 }
 
 /** The panel at the right with what each word of the app means. It closes with its cross, the background or Escape. */
-export default function Glossary({ onClose }: { onClose: () => void }) {
+export default function Glossary({ onClose, focus }: { onClose: () => void; focus?: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -52,7 +55,7 @@ export default function Glossary({ onClose }: { onClose: () => void }) {
             <LineIcon size={20}><path d="M6 6l12 12M18 6L6 18" /></LineIcon>
           </button>
         </div>
-        <Entries entries={TERMS} />
+        <Entries entries={TERMS} focus={focus} />
       </aside>
     </div>
   )
