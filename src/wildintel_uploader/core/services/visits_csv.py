@@ -457,6 +457,10 @@ def _minute_before(time: str) -> str:
     return f"{total // 60:02d}:{total % 60:02d}:00"
 
 
+# The reasons a row is not added that are not errors of its own: it waits for the revision before it, which is not finished or has no visit (#206).
+_WAITING = {"revision_not_finished", "revision_without_previous"}
+
+
 def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: dict[str, str] | None = None, options: dict | None = None) -> dict:
     """The visits in the CSV `text` that can be kept, and what is wrong with the rest.
 
@@ -508,8 +512,10 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
     # What became of each row of the file: {row: {"row", "site", "result", "message"}} — result is ok, problem, already_kept, new_site or ignored.
     report: dict[int, dict] = {}
 
-    def problem(n: int, message: str, code: str = "other") -> None:
-        problems.append({"row": n, "message": message})
+    def problem(n: int, message: str, code: str = "other", waits: bool = False) -> None:
+        """A row that cannot be added, and why. `waits`: it has no error of its own — it only waits for the revision before, which a row with an error
+        left unfinished (#206)."""
+        problems.append({"row": n, "message": message, **({"waits": True} if waits else {})})
         report[n] = {**report.get(n, {"row": n, "site": ""}), "result": "problem", "label": error_label(code), "message": message}
 
     by_new_site: list[dict] = []   # the locations that a visit that says New site made
@@ -725,7 +731,8 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
             reasons += [visit_rules._reason("trapper_unknown", f"{t} is not one of the trappers.") for t in (x.strip() for x in str(visit.get("trappers") or "").split(",")) if t and t not in known_trappers]
         if reasons:
             # the kind of error is that of the first rule it breaks; every reason is told
-            problem(n, " ".join(dict.fromkeys(reasons)), getattr(reasons[0], "code", "visit_refused"))
+            own = [r for r in reasons if getattr(r, "code", None) not in _WAITING]
+            problem(n, " ".join(dict.fromkeys(reasons)), getattr((own or reasons)[0], "code", "visit_refused"), waits=not own)
         else:
             accepted.append(visit)
     refused_ids = {id(v) for v in visits} - {id(v) for v in accepted}
@@ -816,8 +823,16 @@ def parse_visits(text: str, locations: list[dict], kept: list[dict], mapping: di
         names += [f"the trapper {w}" for w in dict.fromkeys(trapper_rows.get(n, []))]
         if names and n in report and report[n]["result"] == "ok":
             report[n]["message"] = f"The visit is added, and creates {', '.join(names)}."
+    # what stops the file from being added, said once (#206): the rows with an error of their own, and how many rows only wait for them — the revisions
+    # after one a refused row left unfinished
+    waiting = [p for p in problems if p.get("waits")]
+    sessions = sorted({report[p["row"]].get("session") for p in waiting if report.get(p["row"], {}).get("session")})
+    blocking = {"errors": [{"row": p["row"], "site": report.get(p["row"], {}).get("site", ""), "session": report.get(p["row"], {}).get("session", ""), "message": p["message"]}
+                           for p in problems if not p.get("waits")],
+                "waiting": {"rows": len(waiting), "from": sessions[0] if sessions else None, "to": sessions[-1] if sessions else None}}
     return {"visits": visits, "problems": problems, "rows": [report[n] for n in sorted(report)], "skipped": skipped, "new_sites": new_sites,
-            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes, "unknown": unknown, "closed": closed}
+            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes, "unknown": unknown, "closed": closed,
+            "blocking": blocking}
 
 
 # The columns of an export: the fields of a visit a CSV can give, by their names — which the import finds by themselves — less the two that are worked out
