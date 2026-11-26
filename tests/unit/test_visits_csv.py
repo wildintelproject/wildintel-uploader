@@ -198,14 +198,16 @@ def test_locations_cameras_and_sd_cards_that_do_not_exist_are_created_when_asked
     assert not result["problems"] and len(result["visits"]) == 2 and result["new_sites"] == []
     made = result["create"]
     assert [(l["location_id"], l["timezone"], l["latitude"]) for l in made["locations"]] == [("WICP_0001", "Europe/Madrid", 40.0)]      # the location's, not the visit's (40.1)
-    assert [(c["camera_id"], c["camera_model"], c["label"]) for c in made["cameras"]] == [("CAM9", "Browning", "CAM9")]
+    assert [(c["camera_id"], c["camera_model"], c["label"]) for c in made["cameras"]] == [(None, "Browning", "CAM9")]   # #231: called by the row, no serial number given
     assert [(c["label"], c["brand"]) for c in made["sd_cards"]] == [("S9", "SanDisk"), ("S10", "SanDisk")]
     assert result["visits"][0]["time"] == "11:40:00" and "creates the location WICP_0001" in result["rows"][0]["message"]
 
     # what exists is not created again, and what is not asked for is not created
     again = _parse(text, [{"location_id": "WICP_0001", "timezone": "UTC"}], [], mapping,
                                     {"create": {"cameras": True, "sd_cards": True}, "cameras": [{"camera_id": "CAM9", "label": "A"}], "cards": [{"label": "S9"}, {"label": "S10"}]})
-    assert again["create"] == {"locations": [], "cameras": [], "sd_cards": [], "trappers": []}
+    # the camera found by its serial number (CAM9 is the serial of A): its record lacked the model, and the row completes it — never overwriting (#231)
+    assert again["create"] == {"locations": [], "cameras": [], "sd_cards": [], "trappers": [], "complete_cameras": [{"label": "A", "camera_model": "Browning"}]}
+    assert {v["camera_id"] for v in again["visits"]} == {"A"}   # told by its label
 
 
 def test_the_id_of_a_camera_and_of_an_sd_card_is_what_the_cell_says_stripped_and_what_exists_is_found_only_when_written_the_same():
@@ -219,12 +221,12 @@ def test_the_id_of_a_camera_and_of_an_sd_card_is_what_the_cell_says_stripped_and
     # nothing is taken out of a cell but its spaces: SD 7 is not 7, and 5.0 is not 5
     assert not result["problems"]
     assert [v["camera_id"] for v in result["visits"]] == ["5.0", "P800"] and [v["sd"] for v in result["visits"]] == ["SD 7", "7"]
-    assert [c["camera_id"] for c in result["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in result["create"]["sd_cards"]] == ["SD 7", "7"]
+    assert [c["label"] for c in result["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in result["create"]["sd_cards"]] == ["SD 7", "7"]
     # what exists is found when it is written the same — the case counts, in cameras and in cards alike: p800 is not P800, sd 7 is not SD 7
     again = _parse(text, locations, [], _MAP, {**options, "cameras": [{"camera_id": "P800", "label": "P800"}], "cards": [{"label": "SD 7"}]})
-    assert [c["camera_id"] for c in again["create"]["cameras"]] == ["5.0"] and [c["label"] for c in again["create"]["sd_cards"]] == ["7"]
+    assert [c["label"] for c in again["create"]["cameras"]] == ["5.0"] and [c["label"] for c in again["create"]["sd_cards"]] == ["7"]
     other = _parse(text, locations, [], _MAP, {**options, "cameras": [{"camera_id": "p800", "label": "p800"}], "cards": [{"label": "sd 7"}]})
-    assert [c["camera_id"] for c in other["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in other["create"]["sd_cards"]] == ["SD 7", "7"]
+    assert [c["label"] for c in other["create"]["cameras"]] == ["5.0", "P800"] and [c["label"] for c in other["create"]["sd_cards"]] == ["SD 7", "7"]
 
 
 def test_a_row_that_would_create_something_without_what_it_needs_is_a_problem_and_creates_nothing():
@@ -233,7 +235,7 @@ def test_a_row_that_would_create_something_without_what_it_needs_is_a_problem_an
     text = ("site,what,day,hour,lat,lon,cam,sd,model,brand,tz,llat,llon\n"
             "WICP_0003,Installation,2026-09-14,13:40,40.1,-3.2,CAM7,S7,Browning,SanDisk,,40.0,-3.0\n")  # no timezone
     result = _parse(text, [], [], mapping, {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"daylight_saving": "yes"}})
-    assert result["visits"] == [] and result["create"] == {"locations": [], "cameras": [], "sd_cards": [], "trappers": []}
+    assert result["visits"] == [] and result["create"] == {"locations": [], "cameras": [], "sd_cards": [], "trappers": [], "complete_cameras": []}
     assert [(r["row"], r["label"]) for r in result["rows"]] == [(2, "Data to create it is missing")]
     assert "timezone" in result["rows"][0]["message"]
     # neither the model of a camera nor the brand of an SD card is needed: only their ids

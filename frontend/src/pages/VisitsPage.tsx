@@ -533,7 +533,8 @@ interface Props {
 
 /** Register the visits to the camera traps, in steps — the first asks where they come from. */
 /** What a visit keeps of its camera: its serial number, or its label when it has none. */
-const cameraKey = (c: Camera) => c.camera_id || c.label
+// a visit tells its camera by its label (#231): the record is found by it, and the visit is kept pointing to the record's id
+const cameraKey = (c: Camera) => c.label
 
 export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, settingsOpen = false, onImportImages, onImportImagesOf, start }: Props) {
   const [source, setSource] = useState<VisitSource | null>(null)
@@ -1077,7 +1078,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
     setVisit((v) => ({ ...v, [field]: value }))
   }
 
-  /** The camera of the visit is one of the settings: its id and its model go with the visit. */
+  /** The camera of the visit is one of the settings: the visit says which — its label, kept as the id of its record —, and its model is the record's, shown. */
   function pickCamera(label: string) {
     const camera = cameras.find((c) => c.label === label)
     setVisit((v) => ({ ...v, details: { ...v.details, camera_id: camera ? cameraKey(camera) : null, camera_model: camera?.camera_model ?? null } }))

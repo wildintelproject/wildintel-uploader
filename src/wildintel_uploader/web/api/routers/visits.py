@@ -368,6 +368,11 @@ def _import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
                 local_folder_service.write_trappers(root, [*local_folder_service.list_trappers(root), *result["create"]["trappers"]])
             for location in result["create"]["locations"]:
                 local_folder_service.write_location(root, req.research_project_id, location)
+            # what the rows say of cameras whose records lacked it — their serial number, make or model — completes them, never overwriting (#231)
+            if result["create"].get("complete_cameras"):
+                adds = {c["label"]: {k: v for k, v in c.items() if k != "label"} for c in result["create"]["complete_cameras"]}
+                cameras = [{**c, **{k: v for k, v in adds.get(str(c.get("label")), {}).items() if not c.get(k)}} for c in cameras]
+                local_folder_service.write_field_items(root, req.research_project_id, "cameras", cameras)
             for kind, kept_items in (("cameras", cameras), ("sd_cards", cards)):
                 if result["create"][kind]:
                     local_folder_service.write_field_items(root, req.research_project_id, kind, [*kept_items, *result["create"][kind]])

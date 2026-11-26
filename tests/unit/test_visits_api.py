@@ -1326,7 +1326,8 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
     assert (rows[0]["num_photos"], rows[0]["card_status"], rows[2]["card_status"], rows[3]["battery_status"]) == ("1420", "OK", "Full Card", "No batteries")
 
     _, rows = read("revision_1_installation.csv")
-    assert rows[0]["sd"] == "1" and rows[0]["camera_id"] == "BR5071050724" and rows[0]["trappers"] == "Ana Pérez"
+    assert rows[0]["sd"] == "1" and rows[0]["trappers"] == "Ana Pérez"
+    assert (rows[0]["camera_id"], rows[0]["camera_serial"]) == ("1", "BR5071050724")   # #231: the camera by its name; its serial number apart, to find or complete it
 
 
 def test_a_file_can_close_the_revision_before_its_own_marking_the_locations_still_planned_as_not_visited(tmp_path: Path):
@@ -2007,7 +2008,7 @@ def test_a_visit_with_a_camera_an_sd_card_or_a_trapper_that_does_not_exist_is_re
     for said in ("camera NOCAM", "SD card NOSD", "Nobody is not one of the trappers"):
         assert said in by_hand.text
     assert [p["row"] for p in refused["problems"]] == [2] and "NOCAM" in refused["problems"][0]["message"] and "Nobody" in refused["problems"][0]["message"]
-    assert created["problems"] == [] and len(created["visits"]) == 1 and [c["camera_id"] for c in created["create"]["cameras"]] == ["NOCAM"]
+    assert created["problems"] == [] and len(created["visits"]) == 1 and [c["label"] for c in created["create"]["cameras"]] == ["NOCAM"]
 
 
 def test_a_visit_that_left_no_camera_whether_it_took_it_away_found_it_stolen_or_gave_the_site_up_is_in_the_state_no_camera(tmp_path: Path):
