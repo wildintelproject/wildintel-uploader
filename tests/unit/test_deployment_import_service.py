@@ -410,6 +410,15 @@ def test_time_range_a_last_image_long_before_the_collection_is_only_said(tmp_pat
     assert svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))["stopped_early"]["reason"] is None
 
 
+def test_time_range_says_the_first_and_the_last_date_of_the_images(tmp_path: Path):
+    """What the dates of the deployment are compared with at a glance, in the fix of the dates: the span of all the images, and how many have a date."""
+    folder = _shots(tmp_path, "2024:09:07 12:00:00", "2024:09:04 10:00:00", "2024:09:09 10:00:00")
+
+    result = svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))
+
+    assert result["images_span"] == {"first": "2024-09-04T10:00:00", "last": "2024-09-09T10:00:00", "dated": 3}
+
+
 def test_time_range_an_image_after_the_collection_is_wrong(tmp_path: Path):
     folder = _shots(tmp_path, "2024:09:04 10:00:00", "2024:09:12 10:00:00")  # two days after the card was collected: the clock
 

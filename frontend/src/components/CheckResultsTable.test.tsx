@@ -37,6 +37,19 @@ describe('CheckResultsTable', () => {
     expect(within(panel).getAllByText('No camera id').length).toBeGreaterThan(0)
   })
 
+  it('filters the failed tests by what they do: only warn, or set to Must pass', async () => {
+    const { rerender } = mount()
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Results' }), 'warn')
+    const table = screen.getByRole('table', { name: 'Tests' })
+    expect(within(table).getByText('Required EXIF fields')).toBeInTheDocument()           // failed, and only warns
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Results' }), 'must')
+    expect(within(table).queryByText('Required EXIF fields')).not.toBeInTheDocument()
+    rerender(<CheckResultsTable report={report} options={options} enabled={new Set(['corrupted', 'exif'])} required={new Set(['exif'])} />)
+    expect(within(table).getByText('Required EXIF fields')).toBeInTheDocument()           // set to Must pass: it stops the import
+    expect(within(table).queryByText('Corrupted images')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Active filters')).toHaveTextContent('Results: Only failed · Must pass')
+  })
+
   it('filters the tests by what they found and by what is typed', async () => {
     mount()
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Results' }), 'issues')

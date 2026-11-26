@@ -253,6 +253,8 @@ export interface DeploymentCheckResult {
   sequence_count?: StatisticResult
   sequence_length?: StatisticResult
   out_of_range?: OutOfRangeImage[]
+  /** The first and the last date the images say, and how many say one: what the dates of the deployment are compared with. */
+  images_span?: { first: string; last: string; dated: number }
   /** The hours of leeway the date range was checked with. */
   tolerance_hours?: number
   /** The last image long before the collection: the camera stopped — the card was full or the batteries went flat. Said, not a problem. */

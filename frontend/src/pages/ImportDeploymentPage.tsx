@@ -34,6 +34,7 @@ import RecordingPeriod from '../components/RecordingPeriod'
 import PrefilledDetails from '../components/PrefilledDetails'
 import TimeFixPage from './TimeFixPage'
 import Notice, { BadgeIcon, Mark, mark, StatusIcon } from '../components/Notice'
+import AvailableFixes, { FixesBadge, type Fix } from '../components/AvailableFixes'
 import type { DateSource, Period } from '../components/DateSourcePicker'
 import type { EpicollectEntry } from '../epicollectImport'
 import { RESEARCH_PROJECT_LIMITS, shownProjectErrors, validateResearchProject } from '../researchProjectValidation'
@@ -1421,35 +1422,106 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
 /** What the postvalidation found — only the checks that were run have something to say. */
 /** How the images were compared with the camera of the deployment — by which fields of its record, or with the model of the deployment when it has none —
  * and, when the record has no make and model or other ones, the offer to keep the ones the images say in it. */
-export function CameraComparison({ result, onKeepCamera }: {
+/** Whether the record of the camera of the deployment can take the make and the model the images say: when it lacks them (`lacking`: "make", "model"), or
+ * has other ones. Null when there is nothing to offer — no record, nothing said by the images, or the record already has them: a record compared by its
+ * serial number may have the very make and model the images say. */
+export function cameraOffer(result: DeploymentCheckResult) {
+  if (result.camera_mismatches === undefined) return null
+  const found = result.camera_found
+  const record = result.camera_record
+  const lacking = (record === undefined ? (result.camera_by?.includes('Make') ? [] : ['make', 'model']) : [!record?.make && 'make', !record?.model && 'model'].filter(Boolean)) as string[]
+  const same = (a?: string | null, b?: string | null) => (a ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === (b ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const differs = record === undefined ? result.camera_mismatches.length > 0 : !same(record?.make, found?.make) || !same(record?.model, found?.model)
+  if (!result.camera_label || !found?.model || !(lacking.length || differs)) return null
+  return { camera: result.camera_label, found, record: record ?? null, lacking, foundText: [found.make, found.model].filter(Boolean).join(' '), recordText: [record?.make, record?.model].filter(Boolean).join(' ') }
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** The day of a timestamp, as it is written in it — "12 Oct 2026" —, with no time zone moving it. */
+const dayOf = (iso: string) => { const [y, m, d] = iso.slice(0, 10).split('-').map(Number); return `${d} ${MONTHS[m - 1]} ${y}` }
+/** How far apart two timestamps are, signed and roughly: "−6 years", "+3 days", "−2 hours". */
+function roughly(from: string, to: string) {
+  const ms = new Date(to.slice(0, 19)).getTime() - new Date(from.slice(0, 19)).getTime()
+  const sign = ms < 0 ? '−' : '+', abs = Math.abs(ms), day = 86_400_000
+  const [n, unit] = abs >= 330 * day ? [Math.round(abs / (365.25 * day)), 'year'] : abs >= day ? [Math.round(abs / day), 'day'] : [Math.round(abs / 3_600_000), 'hour']
+  return `${sign}${n} ${unit}${n === 1 ? '' : 's'}`
+}
+
+/** The repairs the checks of a deployment lead to, as cards: updating the camera with the make and the model the images say, and fixing the dates of the
+ * images when some fall outside the deployment's. */
+export function deploymentFixes(result: DeploymentCheckResult, deployment: { start_date?: string | null; end_date?: string | null }, how: {
+  keepCamera: (label: string, make: string | null, model: string | null) => Promise<void>
+  /** How updating the camera went: 'no', 'keeping', 'kept', or why it could not be. */
+  cameraState: string
+  fixDates: () => void
+}): Fix[] {
+  const fixes: Fix[] = []
+  const offer = cameraOffer(result)
+  if (offer) {
+    const { camera, found, record, lacking } = offer
+    const images = result.checked_count, single = (result.camera_models_found?.length ?? 0) === 1
+    const kept = how.cameraState === 'kept', keeping = how.cameraState === 'keeping', failed = !['no', 'keeping', 'kept'].includes(how.cameraState)
+    fixes.push({
+      key: 'camera', tone: 'blue', subject: `Camera ${camera} · Metadata`, kind: '1-click fix',
+      title: lacking.length ? `Complete the missing camera ${lacking.join(' & ')} from the EXIF` : 'Replace the camera make & model with the EXIF’s',
+      description: <>{lacking.length
+        ? <>The record of camera {camera} has no {lacking.join(' or ')} to compare the images with; </>
+        : <>The record of camera {camera} says {offer.recordText}; </>}
+        {single ? <>the EXIF of all {images.toLocaleString('en-US')} images says one make and model.</> : <>the EXIF of most of the images says another.</>}</>,
+      changes: [{ label: 'Make', before: record?.make ?? null, after: found.make ?? '—' }, { label: 'Model', before: record?.model ?? null, after: found.model ?? '—' }],
+      action: (
+        <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={keeping || kept} onClick={() => void how.keepCamera(camera, found.make, found.model)}>
+          {keeping ? <SmallSpinner /> : <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
+          {kept ? `Applied to camera ${camera}` : keeping ? 'Updating…' : `Apply to camera ${camera}`}
+        </button>
+      ),
+      outcome: kept ? <p role="status" className="text-sm text-emerald-600 dark:text-emerald-400"><Mark kind="success" />Camera {camera} was updated with the make and model of the images: run the checks again to compare with them.</p>
+        : failed ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{how.cameraState}</p> : undefined,
+    })
+  }
+  const outside = [...new Set((result.out_of_range ?? []).map((o) => o.path))].length
+  if (outside > 0) {
+    const span = result.images_span
+    const allOutside = span !== undefined && outside >= span.dated
+    const start = deployment.start_date, end = deployment.end_date
+    fixes.push({
+      key: 'dates', tone: 'amber', subject: `${outside.toLocaleString('en-US')} ${outside === 1 ? 'image' : 'images'} · Timestamps`, kind: 'Needs review',
+      title: 'Image dates fall outside the deployment’s dates',
+      description: allOutside
+        ? <>All {outside.toLocaleString('en-US')} image dates are outside the deployment’s — a camera clock that went wrong?</>
+        : <>{outside.toLocaleString('en-US')} of the images were taken outside the deployment’s dates — a camera clock that went wrong, or images of another deployment?</>,
+      changes: [
+        ...(start && end ? [{ label: 'Deployment', after: `${dayOf(start)} – ${dayOf(end)}` }] : []),
+        ...(span ? [{ label: 'Detected EXIF', after: `${dayOf(span.first)} – ${dayOf(span.last)}${allOutside && start ? ` (${roughly(start, span.first)})` : ''}` }] : []),
+      ],
+      action: (
+        <button type="button" className="flex items-center gap-2 rounded-lg border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/40" onClick={how.fixDates}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+          Fix the dates and times…
+        </button>
+      ),
+    })
+  }
+  return fixes
+}
+
+export function CameraComparison({ result, onKeepCamera, withOffer = true }: {
   result: DeploymentCheckResult
   /** Keeps in the record of the camera the make and the model the images say. */
   onKeepCamera?: (label: string, make: string | null, model: string | null) => Promise<void>
+  /** Whether the offer to update the camera is made here: not where it is one of the available fixes. */
+  withOffer?: boolean
 }) {
   const [kept, setKept] = useState<'no' | 'keeping' | 'kept' | string>('no')
   if (result.camera_mismatches === undefined) return null
-  const found = result.camera_found
-  const foundText = [found?.make, found?.model].filter(Boolean).join(' ')
-  // what the record lacks — the make, the model or both —: what the images say fills it in; when it lacks nothing and has other ones, it would change them.
-  // Only then is it offered: a record compared by its serial number may have the very make and model the images say.
-  const record = result.camera_record
-  const lacking = record === undefined ? (result.camera_by?.includes('Make') ? [] : ['make', 'model']) : [!record?.make && 'make', !record?.model && 'model'].filter(Boolean)
-  const same = (a?: string | null, b?: string | null) => (a ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === (b ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
-  const differs = record === undefined ? result.camera_mismatches.length > 0 : !same(record?.make, found?.make) || !same(record?.model, found?.model)
-  const offer = Boolean(onKeepCamera && result.camera_label && found?.model && (lacking.length || differs))
-  const recordText = [record?.make, record?.model].filter(Boolean).join(' ')
+  const made = cameraOffer(result)
+  const offer = Boolean(withOffer && onKeepCamera && made)
+  const { found, lacking = [], foundText = '', recordText = '' } = made ?? {}
   const camera = result.camera_label
   return (
     <div className="space-y-1 text-sm">
-      <p className="text-xs text-zinc-500 dark:text-zinc-400" aria-label="How the camera was compared">
-        {result.camera_by?.length
-          ? <>Compared with the record of camera {result.camera_label} by <span className="font-mono">{result.camera_by.join(' + ')}</span>.</>
-          : result.camera_label
-            ? <>The record of camera {result.camera_label} says nothing to compare with: the images are compared with the model of the deployment.</>
-            : <>The camera of the deployment is not one of the cameras of the research project: the images are compared with the model of the deployment.</>}
-      </p>
       {offer && kept !== 'kept' && (
-        <Notice kind="info" action={
+        <Notice kind="warning" action={
           <button type="button" className={`${btnOutline} shrink-0`} disabled={kept === 'keeping'}
                   onClick={async () => { setKept('keeping'); try { await onKeepCamera!(camera!, found!.make, found!.model); setKept('kept') } catch (e) { setKept(e instanceof Error ? e.message : 'The camera could not be updated.') } }}>
             {kept === 'keeping' ? 'Updating…' : `Update camera ${camera}`}
@@ -1462,6 +1534,13 @@ export function CameraComparison({ result, onKeepCamera }: {
         </Notice>
       )}
       {kept === 'kept' && <p role="status" className="text-emerald-600 dark:text-emerald-400"><Mark kind="success" />Camera {camera} was updated with the make and model of the images: run the checks again to compare with them.</p>}
+      <p className="text-xs text-zinc-500 dark:text-zinc-400" aria-label="How the camera was compared">
+        {result.camera_by?.length
+          ? <>Compared with the record of camera {result.camera_label} by <span className="font-mono">{result.camera_by.join(' + ')}</span>.</>
+          : result.camera_label
+            ? <>The record of camera {result.camera_label} says nothing to compare with: the images are compared with the model of the deployment.</>
+            : <>The camera of the deployment is not one of the cameras of the research project: the images are compared with the model of the deployment.</>}
+      </p>
     </div>
   )
 }
@@ -1743,6 +1822,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   const [deploymentCheck, setDeploymentCheck] = useState<DeploymentCheckResult | null>(null)
   // Keeps in the record of the camera of the deployment the make and the model its images say (see CameraComparison).
   const keepCamera = async (label: string, make: string | null, model: string | null) => { if (selectedProjectId) await api.cameraIdentity(selectedProjectId, label, make, model) }
+  // The repairs offered beside the checks of the deployment: whether they are shown, and how updating the camera went.
+  const [fixesOpen, setFixesOpen] = useState(false)
+  const [cameraFix, setCameraFix] = useState<'no' | 'keeping' | 'kept' | string>('no')
+  useEffect(() => setCameraFix('no'), [deploymentCheck])
   const [deploymentCheckError, setDeploymentCheckError] = useState<string | null>(null)
   // Which section of the checks is open: 1 to choose them, 2 for how they went.
   const [checksOpen, setChecksOpen] = useState(1)
@@ -2659,7 +2742,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
           <div className="border-t border-zinc-200 dark:border-zinc-700" />
           <WizardStep n={1} title="Select the folder" status={imagesStatus(1)} canEdit={!validating} onEdit={() => setImagesOpen(1)}
                       description="Where the deployment's camera-trap images are, on this computer."
-                      summary={scan && <>{folderName}<br />{imageCount}</>}>
+                      summary={scan && <>{folderName}<br />{imageCount}{sdCard && <> · SD card <span className="font-mono">{sdCard}</span></>}</>}>
             {selectedProjectId && (
               <div className="mb-4"><FormCard title="Which SD card is it?" description={`The label written on the card the images come from — one of ${selectedProjectId}'s, or one with no project.`}>
                 <Notice kind="info" className="mb-3">
@@ -2792,7 +2875,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                         </button>
                       ) : undefined}>
             <ValidationDashboard
-              variant="steps" rows onReport={setImagesReport} runLabel="Run again" runningLabel="Checking…" title={folderName} subtitle={imageCount}
+              variant="steps" rows required={new Set([...requiredImageChecks].filter((c) => imageChecks.has(c)))} onReport={setImagesReport} runLabel="Run again" runningLabel="Checking…" title={folderName} subtitle={imageCount}
               reportId={validation?.report_id ?? null} running={validating} canRun={runnableImageChecks.length > 0} onRun={handleValidate}
             >
               {({ report, openCheck, open, filters, onFilters }) => {
@@ -2802,15 +2885,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
                 return (
                   <>
-                    {report && (
-                      <Notice role="status" className="mb-4" kind={problems.length === 0 ? 'success' : blocking.length > 0 ? 'error' : 'warning'}>
-                        {problems.length === 0
-                          ? 'Every check passed.'
-                          : <>{plural(problems.length, 'check found', 'checks found')} problems in {plural(issueImages, 'image', 'images')}. {
-                              blocking.length > 0
-                                ? `${plural(blocking.length, 'is', 'are')} set to Must pass — resolve ${blocking.length === 1 ? 'it' : 'them'} to continue.`
-                                : requiredImageChecks.size === 0 ? 'None is set to Must pass, so you can continue.' : 'The ones set to Must pass passed, so you can continue.'
-                            }</>}
+                    {/* how many passed and failed is in the figures above: only what stops the import is said */}
+                    {report && blocking.length > 0 && (
+                      <Notice role="status" className="mb-4" kind="error">
+                        {plural(blocking.length, 'check', 'checks')} set to Must pass found problems in {plural(issueImages, 'image', 'images')} — {blocking.map((o) => o.label).join(', ')}: resolve {blocking.length === 1 ? 'it' : 'them'} to continue.
                       </Notice>
                     )}
                     {report ? (
@@ -3171,34 +3249,31 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                       ) : undefined}>
             {shownDeploymentChecks.length > 0 && (
               <ValidationDashboard
-                variant="steps" rows onReport={setDeploymentCheckReport} title={deployment.deployment_id} subtitle={imageCount}
+                variant="steps" rows required={new Set([...requiredDeploymentChecks].filter((c) => deploymentChecks.has(c)))} onReport={setDeploymentCheckReport} title={deployment.deployment_id} subtitle={imageCount}
                 reportId={deploymentCheck?.report_id ?? null} running={checkingDeployment} canRun={runnableDeploymentChecks.length > 0}
                 onRun={handleCheckDeployment} runLabel="Run again" runningLabel="Checking…"
               >
                 {({ report, openCheck, open, filters, onFilters }) => {
                   const problems = report ? shownDeploymentChecks.filter((o) => (report.checks[o.value]?.failed ?? 0) > 0) : []
-                  const passed = report ? shownDeploymentChecks.filter((o) => deploymentChecks.has(o.value) && report.checks[o.value] && report.checks[o.value].failed === 0).length : 0
                   const blocking = problems.filter((o) => requiredDeploymentChecks.has(o.value) && deploymentChecks.has(o.value))
                   const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+                  const fixes = deploymentCheck ? deploymentFixes(deploymentCheck, deployment, {
+                    cameraState: cameraFix, fixDates: () => setFixingDates(true),
+                    keepCamera: async (label, make, model) => { setCameraFix('keeping'); try { await keepCamera(label, make, model); setCameraFix('kept') } catch (e) { setCameraFix(e instanceof Error ? e.message : 'The camera could not be updated.') } },
+                  }) : []
                   return (
                     <>
-                      {report && (
-                        <Notice role="status" className="mb-4" kind={problems.length === 0 ? 'success' : blocking.length > 0 ? 'error' : 'warning'}>
-                          {problems.length === 0
-                            ? 'Every check passed.'
-                            : <>{plural(passed, 'check', 'checks')} passed, {plural(problems.length, 'check found', 'checks found')} problems — see below. {
-                                blocking.length > 0
-                                  ? `${plural(blocking.length, 'is', 'are')} set to Must pass — resolve ${blocking.length === 1 ? 'it' : 'them'} to continue.`
-                                  : requiredDeploymentChecks.size === 0 ? 'None is set to Must pass, so you can continue.' : 'The ones set to Must pass passed, so you can continue.'
-                              }</>}
+                      {/* how many passed and failed is in the figures above: what is said is what stops the import, and what can be put right here */}
+                      {((report && blocking.length > 0) || fixes.length > 0) && (
+                        <Notice role="status" className="mb-4" kind={blocking.length > 0 ? 'error' : 'warning'}
+                          action={fixes.length > 0 ? <FixesBadge count={fixes.length} open={fixesOpen} onToggle={() => setFixesOpen(!fixesOpen)} /> : undefined}>
+                          {blocking.length > 0
+                            ? <>{plural(blocking.length, 'check', 'checks')} set to Must pass found problems — {blocking.map((o) => DEPLOYMENT_CHECK_DISPLAY[o.value].label).join(', ')}: resolve {blocking.length === 1 ? 'it' : 'them'} to continue.</>
+                            : <>Some of the problems the checks found can be put right here. None is set to Must pass, so you can continue.</>}
                         </Notice>
                       )}
-                      {((report?.checks.time_range?.failed ?? 0) > 0 || (deploymentCheck?.out_of_range?.length ?? 0) > 0) && (
-                        <Notice kind="warning" className="mb-4">
-                          Some images were taken outside the deployment&rsquo;s dates — a camera clock that went wrong?{' '}
-                          <button type="button" className="font-medium underline" onClick={() => setFixingDates(true)}>Fix the dates and times</button>, then run the checks again.
-                        </Notice>
-                      )}
+                      <AvailableFixes fixes={fixes} open={fixesOpen} />
+                      {deploymentCheck?.report_id && <div className="mb-4"><CameraComparison result={deploymentCheck} withOffer={false} /></div>}
                       {report ? (
                         <CheckResultsTable report={report} options={shownDeploymentChecks.map((o) => ({ value: o.value, label: DEPLOYMENT_CHECK_DISPLAY[o.value].label }))}
                           enabled={deploymentChecks} required={requiredDeploymentChecks}
@@ -3219,7 +3294,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
             {deploymentCheckError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{deploymentCheckError}</p>}
             {deploymentCheck && !deploymentCheck.report_id && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} onKeepCamera={keepCamera} />}
             {deploymentCheck?.report_id && deploymentCheck.stopped_early && <Notice kind="info" className="mt-3" role="status">{stoppedEarlyText(deploymentCheck.stopped_early)}</Notice>}
-            {deploymentCheck?.report_id && <div className="mt-3"><CameraComparison result={deploymentCheck} onKeepCamera={keepCamera} /></div>}
           </WizardStep>
         </div>
         )

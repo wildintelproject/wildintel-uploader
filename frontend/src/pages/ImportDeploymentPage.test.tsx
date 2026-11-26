@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
-import ImportDeploymentPage, { CameraComparison, stoppedEarlyText, DEFAULT_CHECK_SETTINGS, resizeSummaryText, startingChecks } from './ImportDeploymentPage'
+import AvailableFixes from '../components/AvailableFixes'
+import ImportDeploymentPage, { CameraComparison, deploymentFixes, stoppedEarlyText, DEFAULT_CHECK_SETTINGS, resizeSummaryText, startingChecks } from './ImportDeploymentPage'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { DeploymentCheckResult, LocalLocation, LocalResearchProject, Report } from '../types'
 import { APP_SETTINGS, DETAILED_SESSION, SESSION } from '../test/fixtures'
@@ -700,6 +701,8 @@ describe('ImportDeploymentPage', () => {
           await scanTheFolder()
           await userEvent.click(screen.getByRole('button', { name: /Continue to the checks/ }))
           await screen.findByText('Choose the checks')
+          // the summary of Select the folder says the card picked, besides the images
+          if (card) expect(screen.getByText((_, el) => el?.tagName === 'DIV' && new RegExp(` images · SD card ${card}$`).test(el.textContent ?? '') && el.querySelector('div') === null)).toBeInTheDocument()
           await runTheImageChecks()
           await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
           await screen.findByText('Dates of the deployment')
@@ -1536,9 +1539,12 @@ describe('ImportDeploymentPage', () => {
       await goToValidateStep()
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(await screen.findByText(/None is set to Must pass, so you can continue/)).toBeInTheDocument()
+      // what passed and failed is in the figures of the panel: nothing more is said while nothing stops the import
+      await screen.findByRole('button', { name: 'Run again' })
+      expect(screen.queryByText(/set to Must pass found problems/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/so you can continue/)).not.toBeInTheDocument()
       await chooseStrictness(0, 'Must pass')
-      expect(await screen.findByText(/set to Must pass — resolve it to continue/)).toBeInTheDocument()
+      expect(await screen.findByText(/1 check set to Must pass found problems in .* — .*: resolve it to continue\./)).toBeInTheDocument()
     })
   })
 
@@ -1686,7 +1692,12 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      await userEvent.click(await screen.findByRole('button', { name: 'Fix the dates and times' }))
+      // the fixes are folded under the summary: its badge opens them
+      expect(screen.queryByRole('region', { name: 'Available fixes' })).not.toBeInTheDocument()
+      await userEvent.click(await screen.findByRole('button', { name: '1 fix available' }))
+      const fix = within(screen.getByRole('region', { name: 'Available fixes' })).getByRole('article', { name: 'Image dates fall outside the deployment’s dates' })
+      expect(fix).toHaveTextContent('1 image · Timestamps')
+      await userEvent.click(within(fix).getByRole('button', { name: 'Fix the dates and times…' }))
       expect(await screen.findByRole('heading', { name: 'Check and fix dates and times' })).toBeInTheDocument()
       await waitFor(() => expect(mockedApi.timefixTimeline).toHaveBeenCalledWith(expect.objectContaining({ folder: expect.any(String) })))
 
@@ -2766,6 +2777,41 @@ describe('startingChecks', () => {
     expect(set.image.has('structure')).toBe(false)
     expect([...set.requiredImage]).toEqual(['corrupted'])
     expect(set.deployment.has('time_range') && !set.requiredDeployment.has('time_range')).toBe(true)   // ticked, only warning
+  })
+})
+
+describe('deploymentFixes', () => {
+  const how = { keepCamera: vi.fn().mockResolvedValue(undefined), cameraState: 'no', fixDates: vi.fn() }
+  const period = { start_date: '2026-10-12T10:00:00+02:00', end_date: '2026-11-25T10:00:00+01:00' }
+  const camera = { checked_count: 3000, camera_mismatches: [], camera_models_found: ['RECONYX HyperFire 2 HF2X'], camera_by: [], camera_label: '43',
+    camera_found: { make: 'RECONYX', model: 'HyperFire 2 HF2X' }, camera_record: { make: null, model: null } }
+
+  it('offers to complete the camera with what the EXIF says, saying what changes, and does it with its button', async () => {
+    const [fix] = deploymentFixes(camera, period, how)
+    render(<AvailableFixes fixes={[fix]} open />)
+    const card = screen.getByRole('article', { name: 'Complete the missing camera make & model from the EXIF' })
+    expect(card).toHaveTextContent('Camera 43 · Metadata')
+    expect(card).toHaveTextContent('1-click fix')
+    expect(card).toHaveTextContent('the EXIF of all 3,000 images says one make and model')
+    expect(card).toHaveTextContent('Make: empty → RECONYX')
+    expect(card).toHaveTextContent('Model: empty → HyperFire 2 HF2X')
+    await userEvent.click(within(card).getByRole('button', { name: 'Apply to camera 43' }))
+    expect(how.keepCamera).toHaveBeenCalledWith('43', 'RECONYX', 'HyperFire 2 HF2X')
+  })
+
+  it('offers to fix the dates when the images fall outside the deployment, with both periods and how far apart when all of them are out', () => {
+    const fixes = deploymentFixes({ checked_count: 3, out_of_range: ['a', 'b', 'c'].map((p) => ({ path: `${p}.jpg`, date: '2020-10-12T10:00:00', rule: 'before_start', expected: 'x' })),
+      images_span: { first: '2020-10-12T10:00:00', last: '2020-11-25T09:00:00', dated: 3 } }, period, how)
+    render(<AvailableFixes fixes={fixes} open />)
+    const card = screen.getByRole('article', { name: 'Image dates fall outside the deployment’s dates' })
+    expect(card).toHaveTextContent('3 images · Timestamps')
+    expect(card).toHaveTextContent('All 3 image dates are outside the deployment’s')
+    expect(card).toHaveTextContent('Deployment: 12 Oct 2026 – 25 Nov 2026')
+    expect(card).toHaveTextContent('Detected EXIF: 12 Oct 2020 – 25 Nov 2020 (−6 years)')
+  })
+
+  it('offers nothing when the camera already says what the images say and every image is in its dates', () => {
+    expect(deploymentFixes({ ...camera, camera_record: { make: 'reconyx', model: 'HyperFire 2  HF2X' }, out_of_range: [] }, period, how)).toEqual([])
   })
 })
 

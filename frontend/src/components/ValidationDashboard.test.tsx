@@ -84,12 +84,27 @@ describe('ValidationDashboard', () => {
     expect(screen.getByRole('button', { name: 'Without errors' })).toHaveTextContent('238')
     expect(screen.getByRole('button', { name: 'With errors' })).toHaveTextContent('3')
     expect(screen.getByRole('button', { name: 'Checks passed' })).toHaveTextContent('1')
-    expect(screen.getByRole('button', { name: 'Checks failed' })).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: 'Failed · Warn' })).toHaveTextContent('1')        // nothing is set to Must pass: it only warns
+    expect(screen.getByRole('button', { name: 'Failed · Must pass' })).toHaveTextContent('0')
     await userEvent.click(screen.getByRole('button', { name: 'With errors' }))
     expect(seen[seen.length - 1]).toEqual({ group: 'image', tests: 'all', images: 'issues' })
     await userEvent.click(screen.getByRole('button', { name: 'Checks passed' }))   // the other section keeps its own
     expect(seen[seen.length - 1]).toEqual({ group: 'test', tests: 'passed', images: 'issues' })
     await userEvent.click(screen.getByRole('button', { name: 'Checks passed' }))   // pressed again: all of them
     expect(seen[seen.length - 1]).toEqual({ group: 'test', tests: 'all', images: 'issues' })
+  })
+
+  it('tells apart the checks that failed set to Must pass, which stop the import, from the ones that only warn, and filters by them', async () => {
+    const seen: unknown[] = []
+    render(
+      <ValidationDashboard variant="steps" rows required={new Set(['corrupted'])} title="Validation" subtitle="" reportId="r1" running={false} canRun onRun={vi.fn()}>
+        {({ filters }) => { seen.push(filters); return null }}
+      </ValidationDashboard>,
+    )
+    expect(await screen.findByRole('button', { name: 'Failed · Must pass' })).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: 'Failed · Warn' })).toHaveTextContent('0')
+    expect(screen.getByText(/1 check with problems · 1 must pass/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Failed · Must pass' }))
+    expect(seen[seen.length - 1]).toEqual({ group: 'test', tests: 'must', images: 'all' })
   })
 })

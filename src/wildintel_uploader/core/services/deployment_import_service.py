@@ -401,7 +401,8 @@ def _dates_of_the_deployment(images: list[Path], source_dir: Path, deployment: D
     - wrong, as only a camera clock that went wrong or images of another deployment explain it: an image **before the start** or **after the collection**,
       and a **first image long after the start** — a photo is always taken right after the camera is set up (rule "before_start", "after_end", "first");
     - normal, and only said (`stopped_early`): the **last image long before the collection** — the card was full or the batteries went flat, and the camera
-      stopped —, with why when the visit that collected the card says it (`reason`: "card_full", "no_batteries")."""
+      stopped —, with why when the visit that collected the card says it (`reason`: "card_full", "no_batteries").
+    And `images_span`: the first and the last date the images say, and how many say one."""
     start, end = _parse_iso(deployment.start_date), _parse_iso(deployment.end_date)
     tolerance, label = timedelta(hours=tolerance_hours), f"{tolerance_hours:g}h"
     if start is None or end is None:
@@ -416,6 +417,8 @@ def _dates_of_the_deployment(images: list[Path], source_dir: Path, deployment: D
         elif dt > end + tolerance:
             out.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": "after_end", "expected": window})
     result: dict = {"out_of_range": out}
+    if dated:   # when the images say they were taken, all of them: for the dates of the deployment to be compared with at a glance
+        result["images_span"] = {"first": dated[0][0].isoformat(), "last": dated[-1][0].isoformat(), "dated": len(dated)}
     if dated and start - tolerance <= dated[0][0] and dated[0][0] > start + tolerance:
         first_dt, first = dated[0]
         out.insert(0, {"path": str(first.relative_to(source_dir)), "date": first_dt.isoformat(), "rule": "first", "expected": f"{start.isoformat()} ± {label}"})

@@ -6,11 +6,14 @@ import IconButton, { ICON_PATHS } from './IconButton'
 import { CheckStatusIcon, STRICTNESS_CHOICES, STRICTNESS_SOFT, checkStatus, strictnessOf } from '../pages/ImportDeploymentPage'
 
 export type Group = 'test' | 'image'
-export type Show = 'all' | 'issues' | 'passed'
+/** What the results show: all, the ones with problems, the ones that passed — and, of the tests, the ones that failed only warning or set to Must pass. */
+export type Show = 'all' | 'issues' | 'passed' | 'warn' | 'must'
 /** What the table shows: by test or by image, and — for each, independently — all of them, only those with issues or only those that passed. The figures above the table press them. */
 export interface ResultFilters { group: Group; tests: Show; images: Show }
 export const NO_FILTERS: ResultFilters = { group: 'test', tests: 'all', images: 'all' }
 const SHOWS: { value: Show; label: string }[] = [{ value: 'all', label: 'All results' }, { value: 'issues', label: 'Only issues / failures' }, { value: 'passed', label: 'Only passed' }]
+// by test, the failures can also be told apart by what they do: only warn, or stop the import
+const TEST_SHOWS: { value: Show; label: string }[] = [...SHOWS, { value: 'warn', label: 'Only failed · Warn' }, { value: 'must', label: 'Only failed · Must pass' }]
 
 /** The cards of the images that failed a test are shown eight at a time; the images, ten. */
 const CARDS = 8
@@ -146,7 +149,7 @@ export default function CheckResultsTable<T extends string>({ report, options, e
     const runs = enabled.has(opt.value)
     const failed = runs && info ? info.failed : 0
     return { ...opt, runs, info, failed, passed: runs && Boolean(info) && failed === 0, strictness: strictnessOf(runs, required.has(opt.value)) }
-  }).filter((t) => (show === 'all' || (show === 'issues' ? t.failed > 0 : t.passed)) && all(`${t.label} ${describe?.(t.value) ?? ''}`))
+  }).filter((t) => (show === 'all' || (show === 'issues' ? t.failed > 0 : show === 'warn' ? t.failed > 0 && !required.has(t.value) : show === 'must' ? t.failed > 0 && required.has(t.value) : t.passed)) && all(`${t.label} ${describe?.(t.value) ?? ''}`))
 
   // by image: every image the report speaks of, with what each test found in it
   const images = useMemo(() => {
@@ -158,7 +161,7 @@ export default function CheckResultsTable<T extends string>({ report, options, e
     return [...by.entries()].map(([path, entries]) => ({ path, entries, failed: entries.filter((e) => e.status !== 'ok').length, taken: entries.find((e) => e.taken)?.taken }))
       .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }))
   }, [report])
-  const shownImages = images.filter((i) => (show === 'all' || (show === 'issues' ? i.failed > 0 : i.failed === 0)) && all(`${i.path} ${i.entries.filter((e) => e.status !== 'ok').map((e) => `${report.checks[e.check]?.label ?? e.check} ${e.message}`).join(' ')}`))
+  const shownImages = images.filter((i) => (show === 'all' || (show === 'passed' ? i.failed === 0 : i.failed > 0)) && all(`${i.path} ${i.entries.filter((e) => e.status !== 'ok').map((e) => `${report.checks[e.check]?.label ?? e.check} ${e.message}`).join(' ')}`))
   const perPage = layout === 'grid' ? 12 : PER_PAGE
   const pages = Math.max(1, Math.ceil(shownImages.length / perPage))
   const current = Math.min(page, pages)
@@ -174,10 +177,10 @@ export default function CheckResultsTable<T extends string>({ report, options, e
         <TableToolbar searchLabel="Search the results" placeholder={group === 'test' ? 'Search by test…' : `Search by ${unit.one} name or by what was found…`} text={query} onText={setQuery} onReset={reset} extra={group === 'image' ? <LayoutToggle value={layout} onChange={setLayout} /> : undefined}
           choice={[
             { label: 'Group by', value: group, onChange: (v) => { setGroup(v as Group); setOpenTest(null); setOpenImage(null) }, options: [{ value: 'test', label: 'Test' }, { value: 'image', label: unit.one === 'image' ? 'Image' : unit.one[0].toUpperCase() + unit.one.slice(1) }], all: null },
-            { label: 'Results', value: show, onChange: (v) => setShow(v as Show), options: SHOWS, all: null },
+            { label: 'Results', value: show, onChange: (v) => setShow(v as Show), options: group === 'test' ? TEST_SHOWS : SHOWS, all: null },
           ]} />
         <ActiveFilters
-          filters={[{ label: `Group by: ${group === 'test' ? 'Test' : unit.one[0].toUpperCase() + unit.one.slice(1)}`, tone: 'blue' }, { label: `Results: ${SHOWS.find((s) => s.value === show)!.label}`, tone: 'green' }, ...(query.trim() ? [{ label: `Search: ${query.trim()}`, tone: 'blue' as const }] : [])]}
+          filters={[{ label: `Group by: ${group === 'test' ? 'Test' : unit.one[0].toUpperCase() + unit.one.slice(1)}`, tone: 'blue' }, { label: `Results: ${TEST_SHOWS.find((s) => s.value === show)!.label}`, tone: 'green' }, ...(query.trim() ? [{ label: `Search: ${query.trim()}`, tone: 'blue' as const }] : [])]}
           summary={group === 'test' ? `${tests.length} of ${options.length} tests match` : `${shownImages.length} of ${images.length} ${images.length === 1 ? unit.one : unit.many} match`} />
 
         {group === 'test' ? (
