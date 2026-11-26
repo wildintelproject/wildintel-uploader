@@ -82,8 +82,8 @@ def test_the_sd_cards_and_the_cameras_are_saved_clean_and_listed_once():
     # kept in the folder of the research project, and read back as it was
     assert _client().get("/api/settings").json()["FIELDWORK"]["sd_cards"][0]["in_service"] == "2026-03-01"
     assert _no_dates(saved["FIELDWORK"]["cameras"]) == [
-        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": "DONA", **ACTIVE, **NO_POWER},
-        {"label": "X1", "camera_id": "X1", "camera_model": None, "in_service": None, "research_project": "DONA", **ACTIVE, **NO_POWER},
+        {"label": "P800HG0819", "camera_id": "P800HG0819", "camera_make": None, "camera_model": "Reconyx-PC800", "in_service": "2025-11-12", "research_project": "DONA", **ACTIVE, **NO_POWER},
+        {"label": "X1", "camera_id": "X1", "camera_make": None, "camera_model": None, "in_service": None, "research_project": "DONA", **ACTIVE, **NO_POWER},
     ]  # one kept before it had a label is called by its id
 
 

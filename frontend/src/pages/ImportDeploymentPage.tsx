@@ -1416,7 +1416,48 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
 }
 
 /** What the postvalidation found — only the checks that were run have something to say. */
-export function DeploymentCheckReport({ result, toleranceHours }: { result: DeploymentCheckResult; toleranceHours: string }) {
+/** How the images were compared with the camera of the deployment — by which fields of its record, or with the model of the deployment when it has none —
+ * and, when the record has no make and model or other ones, the offer to keep the ones the images say in it. */
+export function CameraComparison({ result, onKeepCamera }: {
+  result: DeploymentCheckResult
+  /** Keeps in the record of the camera the make and the model the images say. */
+  onKeepCamera?: (label: string, make: string | null, model: string | null) => Promise<void>
+}) {
+  const [kept, setKept] = useState<'no' | 'keeping' | 'kept' | string>('no')
+  if (result.camera_mismatches === undefined) return null
+  const found = result.camera_found
+  const foundText = [found?.make, found?.model].filter(Boolean).join(' ')
+  const offer = Boolean(onKeepCamera && result.camera_label && found?.model && (result.camera_mismatches.length || !result.camera_by?.includes('Make')))
+  return (
+    <div className="space-y-1 text-sm">
+      <p className="text-xs text-zinc-500 dark:text-zinc-400" aria-label="How the camera was compared">
+        {result.camera_by?.length
+          ? <>Compared with the record of camera {result.camera_label} by <span className="font-mono">{result.camera_by.join(' + ')}</span>.</>
+          : result.camera_label
+            ? <>The record of camera {result.camera_label} says nothing to compare with: the images are compared with the model of the deployment.</>
+            : <>The camera of the deployment is not one of the cameras of the research project: the images are compared with the model of the deployment.</>}
+      </p>
+      {offer && kept !== 'kept' && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-blue-900 dark:text-blue-100">
+          <span>The images say <strong>{foundText}</strong>. Keep it as the make and model of camera <strong>{result.camera_label}</strong>?</span>
+          <button type="button" className={btnOutline} disabled={kept === 'keeping'}
+                  onClick={async () => { setKept('keeping'); try { await onKeepCamera!(result.camera_label!, found!.make, found!.model); setKept('kept') } catch (e) { setKept(e instanceof Error ? e.message : 'It could not be kept.') } }}>
+            {kept === 'keeping' ? 'Keeping…' : 'Keep it'}
+          </button>
+          {kept !== 'no' && kept !== 'keeping' && <span role="alert" className="text-red-600 dark:text-red-400">{kept}</span>}
+        </div>
+      )}
+      {kept === 'kept' && <p role="status" className="text-emerald-600 dark:text-emerald-400"><Mark kind="success" />Kept as the make and model of camera {result.camera_label}: run the checks again to compare with it.</p>}
+    </div>
+  )
+}
+
+export function DeploymentCheckReport({ result, toleranceHours, onKeepCamera }: {
+  result: DeploymentCheckResult; toleranceHours: string
+  /** Keeps in the record of the camera the make and the model the images say: offered when it has none, or another. */
+  onKeepCamera?: (label: string, make: string | null, model: string | null) => Promise<void>
+}) {
+  const expectedText = Object.values(result.camera_expected ?? {}).filter(Boolean).join(' ')
   return (
     <div className="mt-4 text-sm space-y-1 mb-2">
       {(['deployment_id', 'collection_name', 'collection_prefix', 'location', 'sd_card', 'photo_count'] as const).map((key) => {
@@ -1462,9 +1503,10 @@ export function DeploymentCheckReport({ result, toleranceHours }: { result: Depl
         <>
           <p className={result.camera_mismatches.length ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
             {result.camera_mismatches.length
-              ? mark('warning', `${result.camera_mismatches.length} image(s) with a different camera model than declared: ${result.camera_mismatches.map((m) => `${m.path} (${m.detected})`).join(', ')}`)
-              : mark('success', 'No camera-model mismatches with the declared camera.')}
+              ? mark('warning', `${result.camera_mismatches.length} image(s) of another camera than ${result.camera_label ? `camera ${result.camera_label}` : 'the one declared'} (${expectedText || '—'}): ${result.camera_mismatches.slice(0, 5).map((m) => `${m.path} (${m.detected})`).join(', ')}${result.camera_mismatches.length > 5 ? '…' : ''}`)
+              : mark('success', result.camera_by?.length ? `The images are of camera ${result.camera_label} (${expectedText}).` : 'No camera-model mismatches with the declared camera.')}
           </p>
+          <CameraComparison result={result} onKeepCamera={onKeepCamera} />
           <p className={(result.camera_models_found?.length ?? 0) > 1 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
             {(result.camera_models_found?.length ?? 0) > 1
               ? mark('warning', `${result.camera_models_found!.length} distinct camera models found across images: ${result.camera_models_found!.join(', ')}`)
@@ -1686,6 +1728,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   const [requiredDeploymentChecks, setRequiredDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set(DEFAULT_REQUIRED_DEPLOYMENT_CHECKS))
   const [checkingDeployment, setCheckingDeployment] = useState(false)
   const [deploymentCheck, setDeploymentCheck] = useState<DeploymentCheckResult | null>(null)
+  // Keeps in the record of the camera of the deployment the make and the model its images say (see CameraComparison).
+  const keepCamera = async (label: string, make: string | null, model: string | null) => { if (selectedProjectId) await api.cameraIdentity(selectedProjectId, label, make, model) }
   const [deploymentCheckError, setDeploymentCheckError] = useState<string | null>(null)
   // Which section of the checks is open: 1 to choose them, 2 for how they went.
   const [checksOpen, setChecksOpen] = useState(1)
@@ -3177,7 +3221,8 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
               </ValidationDashboard>
             )}
             {deploymentCheckError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{deploymentCheckError}</p>}
-            {deploymentCheck && !deploymentCheck.report_id && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} />}
+            {deploymentCheck && !deploymentCheck.report_id && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} onKeepCamera={keepCamera} />}
+            {deploymentCheck?.report_id && <div className="mt-3"><CameraComparison result={deploymentCheck} onKeepCamera={keepCamera} /></div>}
           </WizardStep>
         </div>
         )

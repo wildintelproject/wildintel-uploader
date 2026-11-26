@@ -275,6 +275,14 @@ export interface DeploymentCheckResult {
   /** Every distinct EXIF camera model found — more than one usually means
    * images from different cameras got mixed into the folder. */
   camera_models_found?: string[]
+  /** The fields the images were compared by with the record of the camera (see VALIDATION.camera_levels): none when it has no record, or one that says nothing. */
+  camera_by?: string[]
+  /** What the record of the camera says of those fields — or the model of the deployment, when it has no record. */
+  camera_expected?: Record<string, string | null>
+  /** The make and the model most of the images say, for the record of the camera to take them. */
+  camera_found?: { make: string | null; model: string | null }
+  /** The label of the camera of the deployment, when it has a record. */
+  camera_label?: string | null
   /** The report this postvalidation was kept in. */
   report_id?: string | null
 }
@@ -684,6 +692,9 @@ export interface Camera {
   label: string
   /** Its serial number, when it is known. */
   camera_id: string | null
+  /** The manufacturer, as the camera writes it in its images (EXIF Make): Browning, Reconyx… */
+  camera_make?: string | null
+  /** The model, as the camera writes it in its images (EXIF Model): BTC-6DCL, HC600… */
   camera_model: string | null
   /** The mobile network it sends its photos through: none when it does not. */
   connectivity?: CameraConnectivity | null

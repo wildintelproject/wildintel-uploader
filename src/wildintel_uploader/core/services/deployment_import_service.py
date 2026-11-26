@@ -14,7 +14,7 @@ import logging
 import re
 import shutil
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -464,6 +464,56 @@ def _camera_groups(images: list[Path], cameras: dict, levels: list[list[str]]) -
     return list(chosen), dict(groups), len(images) - len(complete(chosen))
 
 
+def _same_text(a: str | None, b: str | None) -> bool:
+    """Two values of a camera are the same one whatever their case and their spaces: "Browning  BTC-8A" is "browning btc-8a"."""
+    norm = lambda v: " ".join(str(v or "").split()).casefold()
+    return norm(a) == norm(b)
+
+
+def _camera_consistency(images: list[Path], source_dir: Path, deployment: DeploymentFields, camera: dict | None, levels: list[list[str]]) -> dict:
+    """Whether the images are of the camera of the deployment, as its record in the settings says it is (`camera`: its serial number, make and model), by the
+    levels that tell a camera (VALIDATION.camera_levels): the first level the record has every field of — a level with a field a record cannot have is passed
+    over —, the images compared by it whatever their case and spaces. With no record, or one that says nothing of a level, the images are compared with the
+    model of the deployment, as it was. It says what the images say, for the record to take it: {"camera_mismatches", "camera_models_found", "camera_by",
+    "camera_expected", "camera_found", "camera_label"}."""
+    read = camera_info.read_tags(images, ["Make", "Model"])
+    serials = {f for f in _CAMERA_FIELDS if f != "model"}
+    record = {"make": (camera or {}).get("camera_make"), "model": (camera or {}).get("camera_model"), "serial": (camera or {}).get("camera_id")}
+
+    def of_record(field: str) -> str | None:
+        key = field.lower()
+        return record["serial"] if key in serials else record["make"] if key == "make" else record["model"] if key == "model" else None
+
+    chosen = next((level for level in levels if all(f.lower() in serials | {"make", "model"} for f in level) and all(of_record(f) for f in level)), None) if camera else None
+    serial_of = camera_info.read_cameras(images)[0] if chosen and any(f.lower() in serials for f in chosen) else {}
+
+    def of_image(path: Path, field: str) -> str | None:
+        return serial_of[path].camera_id if field.lower() in serials else read[path].get("Make" if field.lower() == "make" else "Model")
+
+    mismatches: list[dict] = []
+    for path in images:
+        if chosen:
+            found = [of_image(path, f) for f in chosen]
+            if not all(found):
+                continue   # it does not say: nothing to compare
+            if not all(_same_text(v, of_record(f)) for v, f in zip(found, chosen)):
+                mismatches.append({"path": str(path.relative_to(source_dir)), "detected": " ".join(str(v) for v in found)})
+        else:
+            model = camera_info._model(read[path].get("Make"), read[path].get("Model"))
+            if model and deployment.camera_model and not _same_text(model, deployment.camera_model):
+                mismatches.append({"path": str(path.relative_to(source_dir)), "detected": model})
+    pairs = Counter((read[p].get("Make"), read[p].get("Model")) for p in images if read[p].get("Model"))
+    make, model = pairs.most_common(1)[0][0] if pairs else (None, None)
+    return {
+        "camera_mismatches": mismatches,
+        "camera_models_found": sorted({m for m in (camera_info._model(read[p].get("Make"), read[p].get("Model")) for p in images) if m}),
+        "camera_by": list(chosen) if chosen else [],
+        "camera_expected": {f: of_record(f) for f in chosen} if chosen else ({"Model": deployment.camera_model} if deployment.camera_model else {}),
+        "camera_found": {"make": make, "model": model},
+        "camera_label": (camera or {}).get("label"),
+    }
+
+
 # The EXIF fields the camera information already reads (camera_info): the model — the make with it — and the serial number, under any of its names.
 _CAMERA_FIELDS = {"model", "serialnumber", "internalserialnumber", "bodyserialnumber", "cameraserialnumber"}
 IMAGE_CHECKS = frozenset({"corrupted", "sequence", "structure", "camera", "exif", "duplicates"})
@@ -770,7 +820,7 @@ def _photo_count_check(visit: dict | None, found: int) -> dict:
 def validate_deployment_consistency(
     source_dir: Path, deployment: DeploymentFields, checks: frozenset[str] | None = None, *,
     collection_name: str | None = None, expected_location_id: str | None = None,
-    tolerance_hours: float = DEFAULT_TOLERANCE_HOURS, visit: dict | None = None,
+    tolerance_hours: float = DEFAULT_TOLERANCE_HOURS, visit: dict | None = None, camera: dict | None = None, camera_levels: list[list[str]] | None = None,
 ) -> dict:
     """The postvalidation: checks a deployment — what the wizard now knows of
     it — and its scanned images against wildintel-tools' own rules. Only
@@ -884,17 +934,7 @@ def validate_deployment_consistency(
         result["out_of_range"] = out_of_range
 
     if "camera" in checks:
-        camera_mismatches: list[dict] = []
-        models_found: set[str] = set()
-        for path in images:
-            model = _image_camera_model(path)
-            if model is None:
-                continue
-            models_found.add(model)
-            if deployment.camera_model and model != deployment.camera_model:
-                camera_mismatches.append({"path": str(path.relative_to(source_dir)), "detected": model})
-        result["camera_mismatches"] = camera_mismatches
-        result["camera_models_found"] = sorted(models_found)
+        result.update(_camera_consistency(images, source_dir, deployment, camera, camera_levels if camera_levels is not None else DEFAULT_CAMERA_LEVELS))
 
     return result
 

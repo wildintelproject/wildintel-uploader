@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
-import ImportDeploymentPage, { DEFAULT_CHECK_SETTINGS, resizeSummaryText, startingChecks } from './ImportDeploymentPage'
+import ImportDeploymentPage, { CameraComparison, DEFAULT_CHECK_SETTINGS, resizeSummaryText, startingChecks } from './ImportDeploymentPage'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { DeploymentCheckResult, LocalLocation, LocalResearchProject, Report } from '../types'
 import { APP_SETTINGS, DETAILED_SESSION, SESSION } from '../test/fixtures'
@@ -1717,7 +1717,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(await screen.findByText(/1 image\(s\) with a different camera model than declared: b\.jpg/)).toBeInTheDocument()
+      expect(await screen.findByText(/1 image\(s\) of another camera than the one declared .*: b\.jpg/)).toBeInTheDocument()
       expect(screen.getByText(/2 distinct camera models found/)).toBeInTheDocument()
     })
 
@@ -2810,5 +2810,32 @@ describe('startingChecks', () => {
     expect(set.image.has('structure')).toBe(false)
     expect([...set.requiredImage]).toEqual(['corrupted'])
     expect(set.deployment.has('time_range') && !set.requiredDeployment.has('time_range')).toBe(true)   // ticked, only warning
+  })
+})
+
+describe('CameraComparison', () => {
+  const base = { checked_count: 2, camera_mismatches: [], camera_models_found: ['Browning BTC-6DCL'], camera_found: { make: 'Browning', model: 'BTC-6DCL' }, camera_label: '4' }
+
+  it('says by which fields of the record of the camera the images were compared, and offers nothing when they are its', () => {
+    render(<CameraComparison result={{ ...base, camera_by: ['Make', 'Model'], camera_expected: { Make: 'Browning', Model: 'BTC-6DCL' } }} onKeepCamera={vi.fn()} />)
+    expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('Compared with the record of camera 4 by Make + Model.')
+    expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument()
+  })
+
+  it('offers to keep what the images say in a record that has no make, and keeps it', async () => {
+    const keep = vi.fn().mockResolvedValue(undefined)
+    render(<CameraComparison result={{ ...base, camera_by: [], camera_expected: { Model: 'Browning Strike Force HD PRO X' } }} onKeepCamera={keep} />)
+    expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('The record of camera 4 says nothing to compare with')
+    expect(screen.getByText(/The images say/)).toHaveTextContent('The images say Browning BTC-6DCL. Keep it as the make and model of camera 4?')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Keep it' }))
+    expect(keep).toHaveBeenCalledWith('4', 'Browning', 'BTC-6DCL')
+    expect(await screen.findByRole('status')).toHaveTextContent('Kept as the make and model of camera 4: run the checks again to compare with it.')
+  })
+
+  it('says when the camera of the deployment is not one of the research project, with nothing to keep', () => {
+    render(<CameraComparison result={{ ...base, camera_label: null, camera_by: [] }} onKeepCamera={vi.fn()} />)
+    expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('is not one of the cameras of the research project')
+    expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument()
   })
 })

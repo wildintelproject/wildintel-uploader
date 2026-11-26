@@ -492,6 +492,30 @@ def test_validate_deployment_consistency_flags_camera_mismatches_and_lists_model
     assert result["camera_models_found"] == ["Bushnell Trophy Cam", "Reconyx HC600"]
 
 
+def test_camera_consistency_compares_the_images_with_the_record_of_the_camera_by_the_levels(tmp_path: Path, no_exiftool):
+    """#208: the camera of the deployment is its record in the settings — not the text the field form wrote —, compared by the first level the record has:
+    the serial number, else the make and the model, else the model; case and spaces aside. It says what the images say, for the record to take it."""
+    _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 10:00:00", make="Browning", model="BTC-6DCL")
+    _make_jpeg(tmp_path / "b.jpg", taken="2024:09:04 10:00:05", make="Browning", model="BTC-6DCL")
+    deployment = _deployment(camera_model="Browning Strike Force HD PRO X")   # as the field form wrote it: it is not compared
+
+    by_make = svc.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_make": "browning", "camera_model": "btc-6dcl "})
+    assert by_make["camera_mismatches"] == [] and by_make["camera_by"] == ["Make", "Model"]
+
+    # a record kept before it had a make: by the model alone
+    by_model = svc.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_model": "BTC-6DCL"})
+    assert by_model["camera_by"] == ["Model"] and by_model["camera_mismatches"] == []
+
+    # another camera: each image is said, and what the images say is offered for the record
+    other = svc.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_make": "Reconyx", "camera_model": "HC600"})
+    assert [m["detected"] for m in other["camera_mismatches"]] == ["Browning BTC-6DCL", "Browning BTC-6DCL"]
+    assert other["camera_found"] == {"make": "Browning", "model": "BTC-6DCL"} and other["camera_label"] == "4"
+
+    # with no record, the model of the deployment, as before — case and spaces aside
+    legacy = svc.validate_deployment_consistency(tmp_path, _deployment(camera_model="browning  btc-6dcl"), frozenset({"camera"}))
+    assert legacy["camera_mismatches"] == [] and legacy["camera_by"] == []
+
+
 def test_validate_deployment_consistency_skips_camera_mismatch_when_undeclared(tmp_path: Path):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 10:00:00", make="Reconyx", model="HC600")
 
