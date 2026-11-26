@@ -263,6 +263,14 @@ The gear of each check says **how it starts in each import**: **Must pass** (it 
 change it. The folder checks start as *Warn*; in the postvalidation, *Image dates fit the deployment*
 and the SD card start as *Must pass* and the rest as *Warn*.
 
+The gear of **Required EXIF fields** also says which fields every image is expected to have. The
+**capture date** (`DateTimeOriginal`) is always one of them, with a lock: WildINTEL Uploader needs it
+for the dates, the names and the sequences. The rest are added by choosing them from a list — *Make*,
+*Model*, *SerialNumber*, *ISO*, *GPSLatitude*, *AmbientTemperature*… — or by typing any name ExifTool
+gives a field, and taken out with their cross. By default the model of the camera is expected; the
+serial number is not, as most camera traps do not write it. Without ExifTool only the standard EXIF
+fields can be read.
+
 ### Postvalidation
 
 ![Settings › Postvalidation](img/screenshots/settings-postvalidation.png)
@@ -647,7 +655,7 @@ of a visit, the card is checked against the one the visit left — see [Check de
 | Shooting order vs. filename sequence | Images whose order by name differs from their order by time. |
 | Folder structure | Subfolders inside the deployment's folder. |
 | Same camera | More than one camera model or id among the images. |
-| Required photo data | Images missing the capture date, camera model or id. |
+| Required photo data | Images missing the capture date — always expected: WildINTEL Uploader needs it — or one of the EXIF fields expected in Settings › Validation (by default the model of the camera). |
 | Duplicate images | Files with the same content. |
 
 For each check you choose **how strict** it is: **Skip** doesn't run it, **Warn** shows the problems but lets you

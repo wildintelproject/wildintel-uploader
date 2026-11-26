@@ -52,7 +52,7 @@ def test_a_validation_report_says_which_image_failed_which_check(source: Path):
     assert _entry(report, "IMG_0004.JPG", "corrupted")["status"] == "failed"
     assert _entry(report, "IMG_0001.JPG", "corrupted")["status"] == "ok"  # what passed is written down too
     assert "dated before IMG_0001.JPG" in _entry(report, "IMG_0002.JPG", "sequence")["message"]
-    assert _entry(report, "IMG_0003.JPG", "exif")["message"] == "no date, no camera model, no camera id" or "no date" in _entry(report, "IMG_0003.JPG", "exif")["message"]
+    assert _entry(report, "IMG_0003.JPG", "exif")["message"].startswith("no capture date")
     assert report["checks"]["corrupted"] == {"label": "Corrupted images", "scope": "images", "ok": 3, "failed": 1}
     assert report["checks"]["structure"]["scope"] == "deployment"
     assert report["totals"]["failed"] == sum(c["failed"] for c in report["checks"].values())
@@ -197,7 +197,7 @@ def test_a_failed_image_has_a_short_tag_and_its_capture_date(source: Path):
 
     out_of_order = _entry(report, "IMG_0002.JPG", "sequence")
     assert out_of_order["tag"] == "Out of order" and out_of_order["taken"] == "2024-09-04T09:00:00"
-    assert _entry(report, "IMG_0003.JPG", "exif")["tag"].startswith("No date")
+    assert _entry(report, "IMG_0003.JPG", "exif")["tag"].startswith("No capture date")
     assert _entry(report, "IMG_0004.JPG", "corrupted")["tag"] == "Corrupted" and "taken" not in _entry(report, "IMG_0004.JPG", "corrupted")  # no date to read
     assert "tag" not in _entry(report, "IMG_0001.JPG", "corrupted") and "taken" not in _entry(report, "IMG_0001.JPG", "corrupted")  # what passed has neither
 

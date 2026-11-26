@@ -796,21 +796,39 @@ def test_validate_images_exif_check_counts_the_images_missing_each_field(tmp_pat
     _make_jpeg(tmp_path / "no_serial.jpg", taken="2024:09:01 11:00:00", make="Reconyx", model="HC600")
     _make_jpeg(tmp_path / "bare.jpg")
 
-    result = svc.validate_images(tmp_path, frozenset({"exif"}))
+    result = svc.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["Model", "SerialNumber"])
 
     missing = result["exif_missing"]
-    assert missing["date"] == {"count": 2, "examples": ["bare.jpg", "no_date.jpg"]}
-    assert missing["camera_model"] == {"count": 1, "examples": ["bare.jpg"]}
-    assert missing["camera_id"] == {"count": 2, "examples": ["bare.jpg", "no_serial.jpg"]}
+    assert missing["DateTimeOriginal"] == {"label": "capture date", "count": 2, "examples": ["bare.jpg", "no_date.jpg"]}
+    assert missing["Model"] == {"label": "Model", "count": 1, "examples": ["bare.jpg"]}
+    assert missing["SerialNumber"] == {"label": "SerialNumber", "count": 2, "examples": ["bare.jpg", "no_serial.jpg"]}
     assert set(result) == {"checked_count", "exif_missing", "exiftool"}  # only what was asked
+
+
+def test_validate_images_exif_check_expects_the_capture_date_and_only_the_fields_asked(tmp_path: Path, no_exiftool):
+    """#208: the capture date is always expected — the app needs it —; the rest are the ones the settings ask for (by default the model): most camera traps do
+    not write their serial number, so it is not expected unless asked. Any other field is read as it is (Pillow here: the standard EXIF tags)."""
+    _make_jpeg(tmp_path / "a.jpg", taken="2024:09:01 10:00:00", make="Reconyx", model="HC600")
+
+    by_default = svc.validate_images(tmp_path, frozenset({"exif"}))["exif_missing"]
+    assert {f: i["count"] for f, i in by_default.items()} == {"DateTimeOriginal": 0, "Model": 0}
+    asked = svc.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["Make", "ISO"])["exif_missing"]
+    assert {f: i["count"] for f, i in asked.items()} == {"DateTimeOriginal": 0, "Make": 0, "ISO": 1}
+
+    # a field Pillow knows by another name than ExifTool (ISO, ISOSpeedRatings) is found too
+    img = Image.open(tmp_path / "a.jpg")
+    exif = img.getexif()
+    exif.get_ifd(0x8769)[34855] = 400
+    img.save(tmp_path / "a.jpg", exif=exif)
+    assert svc.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["ISO"])["exif_missing"]["ISO"]["count"] == 0
 
 
 def test_validate_images_exif_check_finds_nothing_missing_when_every_image_has_everything(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"))
 
-    result = svc.validate_images(folder, frozenset({"exif"}))
+    result = svc.validate_images(folder, frozenset({"exif"}), exif_fields=["Model", "SerialNumber"])
 
-    assert {field: info["count"] for field, info in result["exif_missing"].items()} == {"date": 0, "camera_model": 0, "camera_id": 0}
+    assert {field: info["count"] for field, info in result["exif_missing"].items()} == {"DateTimeOriginal": 0, "Model": 0, "SerialNumber": 0}
 
 
 def test_validate_images_exif_and_camera_checks_read_the_camera_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_exiftool):

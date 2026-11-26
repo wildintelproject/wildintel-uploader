@@ -95,12 +95,14 @@ export interface SequenceIssue {
 export type ImageCheck = 'corrupted' | 'sequence' | 'structure' | 'camera' | 'exif' | 'duplicates'
 
 /** The EXIF fields the wizard needs of every image. */
-export type ExifField = 'date' | 'camera_model' | 'camera_id'
+/** An EXIF field expected on every image, by the name ExifTool gives it: DateTimeOriginal (the capture date, always) and the ones of the settings. */
+export type ExifField = string
 
-/** How many images lack one of them, with a few examples. */
+/** How many images lack one of them, with a few examples, and what the field is. */
 export interface MissingExif {
   count: number
   examples: string[]
+  label?: string
 }
 
 /** Two or more files with exactly the same content. */
@@ -501,7 +503,11 @@ export type LogLevel = 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG'
 export type CheckLevel = 'required' | 'warn' | 'skip'
 
 /** Which image checks the wizard shows, and how each starts. */
-export type ValidationSettings = Record<ImageCheck, boolean> & { defaults: Record<ImageCheck, CheckLevel> }
+export type ValidationSettings = Record<ImageCheck, boolean> & {
+  defaults: Record<ImageCheck, CheckLevel>
+  /** The EXIF fields expected on every image besides the capture date, by the names ExifTool gives them. */
+  exif_fields: string[]
+}
 
 /** Which postvalidation checks the wizard shows, and the tolerance it starts from. */
 export interface PostvalidationSettings extends Record<DeploymentCheck, boolean> {

@@ -531,7 +531,7 @@ def test_validate_images_accepts_the_exif_and_duplicates_checks(tmp_path: Path):
     assert response.status_code == 200
     body = response.json()
     assert body["duplicates"] == [{"size": (tmp_path / "a.jpg").stat().st_size, "files": ["a.jpg", "copy.jpg"]}]
-    assert body["exif_missing"]["date"]["count"] == 0 and body["exif_missing"]["camera_model"]["count"] == 2
+    assert body["exif_missing"]["DateTimeOriginal"]["count"] == 0 and body["exif_missing"]["Model"]["count"] == 2
 
 
 def test_validate_images_looks_for_the_images_imported_before_into_the_research_project(tmp_path: Path):

@@ -8,6 +8,7 @@ import CheckboxList from '../components/CheckboxList'
 import Combobox from '../components/Combobox'
 import { download, itemsToCsv, readItems } from '../csvFile'
 import { defaultResearchProject } from '../defaultResearchProject'
+import { CAPTURE_DATE_TAG, EXIF_TAGS, exifTagLabel, isExifTagName } from '../exifTags'
 import { ANIMAL_TYPES_OPTIONS, BAIT_USE_OPTIONS, DEPLOYMENT_CHECK_DEFAULTS, IMAGE_CHECK_DEFAULTS, NO_CREDENTIALS, SAMPLING_DESIGN_OPTIONS, SENSOR_METHOD_OPTIONS } from './ImportDeploymentPage'
 import { DOCS_URL, REPO_URL } from '../components/Navbar'
 import { COVERAGE_AREAS, ENTITIES, SD_CARD_BRANDS, SD_CARD_CAPACITIES } from '../entities'
@@ -185,6 +186,8 @@ interface Draft {
   postvalidation: Record<DeploymentCheck, boolean>
   // how each check starts in an import: required, warn or skip (#208)
   validationDefaults: Record<ImageCheck, CheckLevel>
+  // the EXIF fields expected on every image besides the capture date (VALIDATION.exif_fields)
+  exifFields: string[]
   postvalidationDefaults: Record<DeploymentCheck, CheckLevel>
   toleranceHours: string
   sequenceGap: string
@@ -262,6 +265,7 @@ function toDraft(s: AppSettings): Draft {
     validation: { corrupted: s.VALIDATION.corrupted, sequence: s.VALIDATION.sequence, structure: s.VALIDATION.structure, camera: s.VALIDATION.camera, exif: s.VALIDATION.exif, duplicates: s.VALIDATION.duplicates },
     postvalidation: checks,
     validationDefaults: { ...IMAGE_CHECK_DEFAULTS, ...(s.VALIDATION.defaults ?? {}) },
+    exifFields: [...(s.VALIDATION.exif_fields ?? ['Model'])],
     postvalidationDefaults: { ...DEPLOYMENT_CHECK_DEFAULTS, ...(s.POSTVALIDATION.defaults ?? {}) },
     toleranceHours: String(post.tolerance_hours),
     sequenceGap: String(post.sequence_gap_seconds),
@@ -318,7 +322,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
     AGOUTI: { enabled: d.agoutiEnabled, base_url: d.agoutiUrl.trim() || null, api_key: d.agoutiKey, project_id: d.agoutiProject.trim() || null },
     EPICOLLECTCSV: { enabled: d.wildintelNewEnabled },
     DATA: { dir: d.dataDir.trim() || null, collections_dir: d.collectionsDir.trim() || null, reports_dir: d.reportsDir.trim() || null, packages_dir: d.packagesDir.trim() || null },
-    VALIDATION: { ...d.validation, defaults: d.validationDefaults },
+    VALIDATION: { ...d.validation, defaults: d.validationDefaults, exif_fields: d.exifFields },
     POSTVALIDATION: {
       ...d.postvalidation, defaults: d.postvalidationDefaults, tolerance_hours: Number(d.toleranceHours), sequence_gap_seconds: Number(d.sequenceGap),
       min_revisions: Number(d.minRevisions), similarity_method: d.similarityMethod, image_count_tolerance: Number(d.imageTolerance),
@@ -516,6 +520,47 @@ const iconBtn = 'w-10 h-10 shrink-0 flex items-center justify-center rounded-xl 
 
 /** One check as an entry of its own: its name and what it looks at, a switch to turn it on or off at once, and — only when
  * it has something to configure — a gear that opens its settings. An entry whose settings are wrong opens them by itself. */
+/** The EXIF fields expected on every image: the capture date, always — WildINTEL Uploader needs it —, and the ones added, each with a cross to take it out.
+ * A field is chosen from the list, or typed (it is completed as it is typed), and added with Add or Enter. */
+function ExifFieldsEditor({ fields, onChange, disabled }: { fields: string[]; onChange: (fields: string[]) => void; disabled?: boolean }) {
+  const [typed, setTyped] = useState('')
+  const name = typed.trim()
+  const known = EXIF_TAGS.find((t) => t.name.toLowerCase() === name.toLowerCase())
+  const there = [CAPTURE_DATE_TAG.name, ...fields].some((f) => f.toLowerCase() === name.toLowerCase())
+  const error = !name ? null : there ? 'It is expected already.' : !isExifTagName(name) ? 'Not the name of an EXIF field: letters, digits, _ and - (and a group before a colon, as XMP:Rating).' : null
+  const add = () => { if (name && !error) { onChange([...fields, known?.name ?? name]); setTyped('') } }
+  const chip = 'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm'
+  return (
+    <div>
+      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fields expected on every image</p>
+      <ul aria-label="EXIF fields expected" className="mt-1.5 flex flex-wrap gap-2">
+        <li className={`${chip} border-zinc-300 dark:border-zinc-600 bg-zinc-200/70 dark:bg-zinc-700/60 text-zinc-700 dark:text-zinc-200`} title="WildINTEL Uploader needs it: it is always expected">
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+          {CAPTURE_DATE_TAG.label} <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{CAPTURE_DATE_TAG.name}</span>
+        </li>
+        {fields.map((f) => (
+          <li key={f} className={`${chip} border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-zinc-800 dark:text-zinc-100`}>
+            {exifTagLabel(f) !== f && <span>{exifTagLabel(f)}</span>}<span className="font-mono text-xs">{f}</span>
+            <button type="button" aria-label={`Do not expect ${f}`} disabled={disabled} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-50" onClick={() => onChange(fields.filter((x) => x !== f))}>×</button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex flex-wrap items-start gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <input aria-label="EXIF field to expect" list="exif-tags" className={`${fieldBox} !bg-white dark:!bg-zinc-900 !py-2`} placeholder="Choose or type a field: Make, ISO, GPSLatitude…" value={typed} disabled={disabled}
+                 onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }} />
+          <datalist id="exif-tags">
+            {EXIF_TAGS.filter((t) => !fields.some((f) => f.toLowerCase() === t.name.toLowerCase())).map((t) => <option key={t.name} value={t.name}>{t.label}</option>)}
+          </datalist>
+          {error ? <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
+            : <p className={`${hintClass} mt-1`}>{known ? known.label : name ? 'Not in the list: it is looked for as it is written, by the name ExifTool gives it.' : 'From the list, or any field ExifTool knows. Without ExifTool only the standard EXIF fields can be read.'}</p>}
+        </div>
+        <button type="button" className={btnOutline} disabled={disabled || !name || Boolean(error)} onClick={add}>Add</button>
+      </div>
+    </div>
+  )
+}
+
 const LEVELS: { value: CheckLevel; label: string }[] = [{ value: 'required', label: 'Must pass' }, { value: 'warn', label: 'Warn' }, { value: 'skip', label: 'Skip' }]
 
 function CheckEntry({ label, hint, enabled, onToggle, settings, invalid, level, onLevel }: {
@@ -581,7 +626,7 @@ const IMAGE_CHECKS: { key: ImageCheck; label: string; hint: string }[] = [
   { key: 'sequence', label: 'Shooting order vs. filename sequence', hint: 'A higher-numbered file dated earlier than a lower-numbered one — a clock reset, or cards mixed.' },
   { key: 'structure', label: 'Folder structure (subdirectories)', hint: 'Images spread over subfolders instead of one flat folder.' },
   { key: 'camera', label: 'Same camera (model and id) on every image', hint: 'More than one camera among the images. Reads the serial number with ExifTool when it is installed.' },
-  { key: 'exif', label: 'Required EXIF fields', hint: 'Capture date, camera model and camera id on every image.' },
+  { key: 'exif', label: 'Required EXIF fields', hint: 'The capture date, and the fields the gear adds, on every image.' },
   { key: 'duplicates', label: 'Duplicate images', hint: 'Files with exactly the same content.' },
 ]
 
@@ -2718,7 +2763,8 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
               {IMAGE_CHECKS.map(({ key, label, hint }) => (
                 <CheckEntry key={key} label={label} hint={hint} enabled={draft.validation[key]}
                             onToggle={(v) => set('validation', { ...draft.validation, [key]: v })}
-                            level={draft.validationDefaults[key]} onLevel={(l) => set('validationDefaults', { ...draft.validationDefaults, [key]: l })} />
+                            level={draft.validationDefaults[key]} onLevel={(l) => set('validationDefaults', { ...draft.validationDefaults, [key]: l })}
+                            settings={key === 'exif' ? <ExifFieldsEditor fields={draft.exifFields} disabled={!draft.validation.exif} onChange={(f) => set('exifFields', f)} /> : undefined} />
               ))}
             </div>
           </div>

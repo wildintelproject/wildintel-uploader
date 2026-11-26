@@ -212,7 +212,25 @@ class ValidationSettings(BaseModel):
     sequence: bool = Field(default=True, description="Shooting order vs. filename sequence. (VALIDATION.sequence)")
     structure: bool = Field(default=True, description="Folder structure (subdirectories). (VALIDATION.structure)")
     camera: bool = Field(default=True, description="Same camera (model and id) on every image. (VALIDATION.camera)")
-    exif: bool = Field(default=True, description="Required EXIF fields (capture date, camera model and id). (VALIDATION.exif)")
+    exif: bool = Field(default=True, description="Required EXIF fields: the capture date and the ones of exif_fields. (VALIDATION.exif)")
+    exif_fields: list[str] = Field(
+        default_factory=lambda: ["Model"],
+        description="The EXIF fields expected on every image, by the names ExifTool gives them (Make, Model, SerialNumber, ISO…), besides the capture date "
+                    "(DateTimeOriginal), which is always expected: WildINTEL Uploader needs it. (VALIDATION.exif_fields)",
+    )
+
+    @field_validator("exif_fields", mode="before")
+    @classmethod
+    def _exif_fields(cls, value):
+        """Each field once, as written; the capture date is always expected, so it is not one of them. A name ExifTool could not have is refused."""
+        out: list[str] = []
+        for name in value or []:
+            name = str(name).strip()
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)?", name):
+                raise ValueError(f"'{name}' is not the name of an EXIF field")
+            if name.lower() != "datetimeoriginal" and name.lower() not in (n.lower() for n in out):
+                out.append(name)
+        return out
     duplicates: bool = Field(default=True, description="Duplicate images (same content). (VALIDATION.duplicates)")
     defaults: dict[str, CheckLevel] = Field(
         default_factory=lambda: dict(IMAGE_CHECK_DEFAULTS),
