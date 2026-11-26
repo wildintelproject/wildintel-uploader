@@ -1363,7 +1363,7 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
             </p>
           )}
           {validation.exiftool === false && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">ExifTool isn't installed, so the camera id (serial number) may be missing — install it for a fuller reading.</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">ExifTool isn't installed, so the EXIF of the images is read with Pillow, which knows only the standard fields and names some of them otherwise: the serial number of the camera, the fields of the camera traps and some dates may be missing. Install ExifTool (it comes with the app) for the full reading.</p>
           )}
         </div>
       )}

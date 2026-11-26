@@ -23,8 +23,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from wildintel_uploader.core import config, parallel
-from wildintel_uploader.core.services import deployment_import_service as dis
+from wildintel_uploader.core import config
+from wildintel_uploader.core.services import camera_info, deployment_import_service as dis
 
 KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload", "visits")
 DEPLOYMENT = "(deployment)"
@@ -98,7 +98,8 @@ class _Builder:
             return
         root = Path(self.source_dir)
         names = sorted({e["identifier"] for e in self.entries if e["status"] == "failed" and e["identifier"] != DEPLOYMENT})
-        taken = dict(zip(names, parallel.pmap(lambda n: dis._image_datetime(root / n), names)))
+        read = camera_info.read_dates([root / n for n in names])
+        taken = {n: read[root / n] for n in names}
         for e in self.entries:
             when = taken.get(e["identifier"]) if e["status"] == "failed" else None
             if when is not None:

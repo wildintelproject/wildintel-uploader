@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 
-from PIL import ExifTags, Image
+from PIL import Image
 
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.core.schemas.requests import DeploymentFields
@@ -29,8 +29,6 @@ from wildintel_uploader.core.services import camera_info, file_memo, local_folde
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff"}
-_EXIF_IFD = 0x8769  # the "Exif" sub-IFD, where DateTimeOriginal lives
-_TAG_IDS = {name: tag for tag, name in ExifTags.TAGS.items()}
 
 
 class DeploymentImportError(ValueError):
@@ -217,33 +215,8 @@ def check_paths(source_dir: Path, dest_dir: Path) -> None:
 
 
 def _image_datetime(path: Path) -> datetime | None:
-    try:
-        with Image.open(path) as img:
-            exif = img.getexif()
-            raw = exif.get(_TAG_IDS.get("DateTimeOriginal", 36867))
-            if raw is None:
-                sub = exif.get_ifd(_EXIF_IFD)
-                raw = sub.get(_TAG_IDS.get("DateTimeOriginal", 36867))
-            if raw is None:
-                raw = exif.get(_TAG_IDS.get("DateTime", 306))
-            if not raw:
-                return None
-            return datetime.strptime(str(raw).strip(), "%Y:%m:%d %H:%M:%S")
-    except Exception as exc:  # a corrupt/unreadable file mustn't stop the scan
-        logger.debug("No EXIF date in %s: %s", path, exc)
-        return None
-
-
-def _image_camera_model(path: Path) -> str | None:
-    try:
-        with Image.open(path) as img:
-            exif = img.getexif()
-            make = exif.get(_TAG_IDS.get("Make", 271))
-            model = exif.get(_TAG_IDS.get("Model", 272))
-            parts = [str(p).strip() for p in (make, model) if p]
-            return " ".join(parts) or None
-    except Exception:
-        return None
+    """The capture date of one image (see camera_info.read_dates). For many, read them all at once with read_dates: one run of ExifTool for all."""
+    return camera_info.read_dates([path]).get(path)
 
 
 def _files_and_images(source_dir: Path) -> tuple[list[Path], list[Path]]:
@@ -284,7 +257,7 @@ def guess_details(source_dir: Path) -> dict:
 
     dates: list[datetime] = []
     dated_images = 0
-    for dt in parallel.pmap(_image_datetime, images):
+    for dt in camera_info.read_dates(images).values():
         if dt is not None:
             dates.append(dt)
             dated_images += 1
@@ -475,7 +448,8 @@ def _dates_of_the_deployment(images: list[Path], source_dir: Path, deployment: D
     tolerance, label = timedelta(hours=tolerance_hours), f"{tolerance_hours:g}h"
     if start is None or end is None:
         return {"out_of_range": []}
-    dated = sorted(((dt, p) for p in images if (dt := _image_datetime(p)) is not None), key=lambda item: (item[0], _natural_key(item[1].relative_to(source_dir))))
+    read = camera_info.read_dates(images)
+    dated = sorted(((dt, p) for p in images if (dt := read[p]) is not None), key=lambda item: (item[0], _natural_key(item[1].relative_to(source_dir))))
     out: list[dict] = []
     window = f"{start.isoformat()} – {end.isoformat()} ± {label}"
     for dt, path in dated:
@@ -681,7 +655,9 @@ def validate_images(
     # Reading each image is what takes the time, so it is done for several at once (GENERAL.workers).
     taken: dict[Path, datetime | None] = {}
     if "exif" in checks or "sequence" in checks:
-        taken = dict(zip(images, parallel.pmap(_image_datetime, images, progress=_reporting(progress, "dates", len(images)))))
+        taken = camera_info.read_dates(images)   # one run of ExifTool for all of them (#227)
+        if progress:
+            progress("dates", len(images), len(images))
 
     if "exif" in checks:
         # the capture date, always (the app needs it), and the fields the settings expect (VALIDATION.exif_fields): the model and the serial number as the
@@ -1019,8 +995,10 @@ def copied_images_info(dest: Path) -> list[dict]:
     """The images of a copied deployment folder, in natural order, as images.json keeps them: the name, the camera's
     wall-clock time from the EXIF (None when it has none) and, as extras, the file's size and its pixels."""
     entries = []
-    for path in sorted((p for p in dest.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: _natural_key(p.relative_to(dest))):
-        taken = _image_datetime(path)
+    ordered = sorted((p for p in dest.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: _natural_key(p.relative_to(dest)))
+    dates = camera_info.read_dates(ordered)
+    for path in ordered:
+        taken = dates[path]
         try:
             with Image.open(path) as img:
                 width, height = img.width, img.height

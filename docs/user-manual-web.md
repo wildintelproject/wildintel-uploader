@@ -689,9 +689,12 @@ Pressing a card filters the **table of results** below, and each block filters o
 
 ![The images that failed a check](img/screenshots/validation-failures.png)
 
-Reading the camera's model and id uses ExifTool, because the serial number of a camera trap lives
-in the manufacturer's own metadata. Without it WildINTEL Uploader falls back to the standard EXIF tags,
-which are less complete — it says which it used.
+The EXIF of the images — the capture dates, the camera, the fields expected — is read with **ExifTool**,
+in one run for all the images of the folder, so that a field is always the same field, by the names
+ExifTool gives them: the serial number of a camera trap, and much of what is its own, lives in the
+manufacturer's own metadata, which only ExifTool reads. It comes with the app. Without it (a development
+install) WildINTEL Uploader falls back to the standard EXIF tags, read with Pillow, which are less
+complete — and says so.
 
 ### Stage 3 — Dates and details
 
