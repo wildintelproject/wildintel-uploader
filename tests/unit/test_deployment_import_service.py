@@ -396,13 +396,26 @@ def test_time_range_the_first_image_must_be_within_the_tolerance_of_the_start(tm
     assert issue["expected"] == "2024-09-04T10:00:00 ± 1h"
 
 
-def test_time_range_the_last_image_must_be_within_the_tolerance_of_the_end(tmp_path: Path):
+def test_time_range_a_last_image_long_before_the_collection_is_only_said(tmp_path: Path):
+    """#208: the card was full or the batteries went flat, and the camera stopped before the card was collected: normal, so it is said, not a problem — with
+    why, when the visit that collected the card says it — and nothing is offered to fix the clock."""
     folder = _shots(tmp_path, "2024:09:04 10:00:00", "2024:09:07 12:00:00", "2024:09:09 10:00:00")  # a day before the end
+
+    result = svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}), visit={"collected_card_status": "CardFull"})
+
+    assert result["out_of_range"] == []
+    assert result["stopped_early"] == {"path": "IMG_0003.jpg", "date": "2024-09-09T10:00:00", "collected": "2024-09-10T10:00:00", "days": 1.0, "reason": "card_full"}
+    flat = svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}), visit={"collected_battery_status": "NoBatteries"})
+    assert flat["stopped_early"]["reason"] == "no_batteries"
+    assert svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))["stopped_early"]["reason"] is None
+
+
+def test_time_range_an_image_after_the_collection_is_wrong(tmp_path: Path):
+    folder = _shots(tmp_path, "2024:09:04 10:00:00", "2024:09:12 10:00:00")  # two days after the card was collected: the clock
 
     [issue] = _out_of_range(folder)
 
-    assert (issue["path"], issue["rule"]) == ("IMG_0003.jpg", "last")
-    assert issue["expected"] == "2024-09-10T10:00:00 ± 1h"
+    assert (issue["path"], issue["rule"]) == ("IMG_0002.jpg", "after_end") and "stopped_early" not in svc.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))
 
 
 def test_time_range_the_images_in_between_only_have_to_be_inside_the_range_widened_by_the_tolerance(tmp_path: Path):
@@ -416,7 +429,7 @@ def test_time_range_the_images_in_between_only_have_to_be_inside_the_range_widen
 
     issues = _out_of_range(folder)
 
-    assert [(i["path"], i["rule"]) for i in issues] == [("IMG_0003.jpg", "between"), ("IMG_0005.jpg", "between")]
+    assert [(i["path"], i["rule"]) for i in issues] == [("IMG_0003.jpg", "before_start"), ("IMG_0005.jpg", "after_end")]   # by their dates
     assert issues[0]["expected"] == "2024-09-04T10:00:00 – 2024-09-10T10:00:00 ± 1h"
 
 
@@ -449,12 +462,16 @@ def test_time_range_walks_the_images_in_natural_file_name_order_across_subfolder
     assert _out_of_range(tmp_path) == []
 
 
-def test_time_range_skips_an_image_with_no_date_but_it_still_takes_its_place_in_the_order(tmp_path: Path):
-    _make_jpeg(tmp_path / "IMG_0001.jpg")  # the first image: no date, so nothing to check
-    _make_jpeg(tmp_path / "IMG_0002.jpg", taken="2024:09:05 10:00:00")
+def test_time_range_skips_an_image_with_no_date_and_the_first_dated_one_is_the_first(tmp_path: Path):
+    _make_jpeg(tmp_path / "IMG_0001.jpg")  # no date: nothing to check
+    _make_jpeg(tmp_path / "IMG_0002.jpg", taken="2024:09:04 10:30:00")
     _make_jpeg(tmp_path / "IMG_0003.jpg", taken="2024:09:10 10:00:00")
-
     assert _out_of_range(tmp_path) == []
+
+    # the first dated one a day after the start: the photo taken when the camera was set up is not there — the clock
+    (tmp_path / "IMG_0002.jpg").unlink()
+    _make_jpeg(tmp_path / "IMG_0002.jpg", taken="2024:09:05 10:00:00")
+    assert [(i["path"], i["rule"]) for i in _out_of_range(tmp_path)] == [("IMG_0002.jpg", "first")]
 
 
 def test_time_range_a_single_image_is_the_first_one(tmp_path: Path):

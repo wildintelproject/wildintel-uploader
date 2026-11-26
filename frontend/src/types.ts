@@ -157,8 +157,9 @@ export interface ValidationResult {
 export interface OutOfRangeImage {
   path: string
   date: string
-  /** Which rule it broke: the first image is at the start, the last at the end, the rest in between. */
-  rule?: 'first' | 'last' | 'between'
+  /** Which rule it broke: before the start, after the collection, or a first image long after the start (the photo taken when the camera is set up is not there).
+   * last and between are of older reports. */
+  rule?: 'first' | 'before_start' | 'after_end' | 'last' | 'between'
   /** The range it should have fallen in, e.g. "2024-09-04T10:00:00 ± 1h". */
   expected?: string
 }
@@ -242,6 +243,9 @@ export interface VisitCheckInfo {
   counted_photos: number | null
   /** The card the images are said to come from. */
   sd_card: string | null
+  /** How the visit that collected the card found it: a full card or flat batteries say why the camera stopped before it was collected. */
+  collected_card_status?: string | null
+  collected_battery_status?: string | null
 }
 
 /** What the visits a deployment is of say of it, for the collection's FieldworkLog: the one that left the camera and the one that collected its card. */
@@ -271,6 +275,8 @@ export interface DeploymentCheckResult {
   out_of_range?: OutOfRangeImage[]
   /** The hours of leeway the date range was checked with. */
   tolerance_hours?: number
+  /** The last image long before the collection: the camera stopped — the card was full or the batteries went flat. Said, not a problem. */
+  stopped_early?: { path: string; date: string; collected: string; days: number; reason: 'card_full' | 'no_batteries' | null }
   camera_mismatches?: CameraMismatch[]
   /** Every distinct EXIF camera model found — more than one usually means
    * images from different cameras got mixed into the folder. */

@@ -909,8 +909,8 @@ describe('an import session of visits', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
     await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledTimes(2))
     const calls = mockedApi.validateDeployment.mock.calls
-    expect(calls[0][3]).toEqual(expect.objectContaining({ visit: { left_session: 'R0002', left_sd: 'A13', collected_session: 'R0003', counted_photos: 10, sd_card: 'B2' } }))
-    expect(calls[1][3]).toEqual(expect.objectContaining({ visit: { left_session: 'R0002', left_sd: 'B2', collected_session: 'R0003', counted_photos: 300, sd_card: null } }))
+    expect(calls[0][3]).toEqual(expect.objectContaining({ visit: { left_session: 'R0002', left_sd: 'A13', collected_session: 'R0003', counted_photos: 10, sd_card: 'B2', collected_card_status: null, collected_battery_status: null } }))
+    expect(calls[1][3]).toEqual(expect.objectContaining({ visit: { left_session: 'R0002', left_sd: 'B2', collected_session: 'R0003', counted_photos: 300, sd_card: null, collected_card_status: null, collected_battery_status: null } }))
 
     await nextFromChecks() // checks → prepare
     await userEvent.click(await screen.findByRole('button', { name: 'Import 2 deployments' }))

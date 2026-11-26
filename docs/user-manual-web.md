@@ -741,7 +741,7 @@ Now that you know when, how and where the images were taken, new checks are run:
 | Deployment id starts with its collection | `R0033-…` belongs to `R0033`. |
 | Collection name | `R0033`. |
 | The id's location is the one chosen | The location in the id is the one from stage 1. |
-| Image dates fit the deployment | The first image at the start, the last at the end, within the tolerance. |
+| Image dates fit the deployment | No image before the start or after the card was collected, and the first one at the start — the photo taken right after the camera is set up —, within the tolerance and by their dates. A last image long before the collection is only said: the camera stopped, as when the card was full or the batteries went flat (the visit that collected the card says which); it is not a problem of the dates, and **Fix the dates and times** is offered only for the others. |
 | Camera consistency | The images are of the camera of the deployment, as its record in Settings › Entities › Cameras says it — its serial number, make and model —, compared by the same levels as *Same camera*: the first level the record has. With no record, or one that says nothing, the images are compared with the model of the deployment. When the record has no make and model, or other ones, the result offers to **keep** the ones the images say in it, so the next cards of that camera are compared with them. |
 | Number of images | Like the previous revisions of the location. |
 | Number of sequences | Like the previous revisions of the location. |

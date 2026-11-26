@@ -842,6 +842,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           visit: visitOf(d.name) ? {
             left_session: visitOf(d.name)!.visit.session, left_sd: visitOf(d.name)!.visit.sd ?? null,
             collected_session: visitOf(d.name)!.end.session, counted_photos: visitOf(d.name)!.end.num_photos ?? null, sd_card: folderSd[d.name] || null,
+            collected_card_status: visitOf(d.name)!.end.card_status ?? null, collected_battery_status: visitOf(d.name)!.end.battery_status ?? null,
           } : null,
         })
         setChecks((c) => ({ ...c, [d.name]: { result } }))

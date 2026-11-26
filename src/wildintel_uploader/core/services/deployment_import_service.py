@@ -464,6 +464,39 @@ def _camera_groups(images: list[Path], cameras: dict, levels: list[list[str]]) -
     return list(chosen), dict(groups), len(images) - len(complete(chosen))
 
 
+def _dates_of_the_deployment(images: list[Path], source_dir: Path, deployment: DeploymentFields, tolerance_hours: float, visit: dict | None) -> dict:
+    """Whether the dates of the images fit the deployment, by their dates — not their names —, with `tolerance_hours` of leeway (#208):
+
+    - wrong, as only a camera clock that went wrong or images of another deployment explain it: an image **before the start** or **after the collection**,
+      and a **first image long after the start** — a photo is always taken right after the camera is set up (rule "before_start", "after_end", "first");
+    - normal, and only said (`stopped_early`): the **last image long before the collection** — the card was full or the batteries went flat, and the camera
+      stopped —, with why when the visit that collected the card says it (`reason`: "card_full", "no_batteries")."""
+    start, end = _parse_iso(deployment.start_date), _parse_iso(deployment.end_date)
+    tolerance, label = timedelta(hours=tolerance_hours), f"{tolerance_hours:g}h"
+    if start is None or end is None:
+        return {"out_of_range": []}
+    dated = sorted(((dt, p) for p in images if (dt := _image_datetime(p)) is not None), key=lambda item: (item[0], _natural_key(item[1].relative_to(source_dir))))
+    out: list[dict] = []
+    window = f"{start.isoformat()} – {end.isoformat()} ± {label}"
+    for dt, path in dated:
+        if dt < start - tolerance:
+            out.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": "before_start", "expected": window})
+        elif dt > end + tolerance:
+            out.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": "after_end", "expected": window})
+    result: dict = {"out_of_range": out}
+    if dated and start - tolerance <= dated[0][0] and dated[0][0] > start + tolerance:
+        first_dt, first = dated[0]
+        out.insert(0, {"path": str(first.relative_to(source_dir)), "date": first_dt.isoformat(), "rule": "first", "expected": f"{start.isoformat()} ± {label}"})
+    if dated and end - tolerance > dated[-1][0] >= start - tolerance:
+        last_dt, last = dated[-1]
+        visit = visit or {}
+        reason = ("card_full" if str(visit.get("collected_card_status") or "").lower() in ("cardfull", "carfull")
+                  else "no_batteries" if str(visit.get("collected_battery_status") or "").lower() == "nobatteries" else None)
+        result["stopped_early"] = {"path": str(last.relative_to(source_dir)), "date": last_dt.isoformat(), "collected": end.isoformat(),
+                                   "days": round((end - last_dt).total_seconds() / 86400, 1), "reason": reason}
+    return result
+
+
 def _same_text(a: str | None, b: str | None) -> bool:
     """Two values of a camera are the same one whatever their case and their spaces: "Browning  BTC-8A" is "browning btc-8a"."""
     norm = lambda v: " ".join(str(v or "").split()).casefold()
@@ -910,28 +943,7 @@ def validate_deployment_consistency(
 
     if "time_range" in checks:
         result["tolerance_hours"] = tolerance_hours
-        start = _parse_iso(deployment.start_date)
-        end = _parse_iso(deployment.end_date)
-        tolerance = timedelta(hours=tolerance_hours)
-        label = f"{tolerance_hours:g}h"
-        out_of_range: list[dict] = []
-        ordered = sorted(images, key=lambda p: _natural_key(p.relative_to(source_dir)))
-        for position, path in enumerate(ordered):
-            dt = _image_datetime(path)
-            if dt is None or start is None or end is None:
-                continue
-            if position == 0:
-                rule, low, high = "first", start - tolerance, start + tolerance
-                expected = f"{start.isoformat()} ± {label}"
-            elif position == len(ordered) - 1:
-                rule, low, high = "last", end - tolerance, end + tolerance
-                expected = f"{end.isoformat()} ± {label}"
-            else:
-                rule, low, high = "between", start - tolerance, end + tolerance
-                expected = f"{start.isoformat()} – {end.isoformat()} ± {label}"
-            if not low <= dt <= high:
-                out_of_range.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": rule, "expected": expected})
-        result["out_of_range"] = out_of_range
+        result.update(_dates_of_the_deployment(images, source_dir, deployment, tolerance_hours, visit))
 
     if "camera" in checks:
         result.update(_camera_consistency(images, source_dir, deployment, camera, camera_levels if camera_levels is not None else DEFAULT_CAMERA_LEVELS))
