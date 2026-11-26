@@ -1524,7 +1524,11 @@ describe('VisitsPage from a CSV file', () => {
   })
 
   it('reads the visits with the columns as they are mapped, says what it found, and keeps them with the same mapping', async () => {
-    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit(), visit({ session: 'R0002', date: '2026-11-05', actions: ['Revision', 'Installation'] })], problems: [{ row: 4, message: "'many' is not a whole number." }], skipped: 1, saved: null, new_sites: [{ site: 'X', session: null, actions: ['Revision'], date: '2026-10-02', time: '08:00:00', latitude: 37.1, longitude: -6.4, visits: 1, nearest: { location_id: 'DONA_01', distance_m: 40 }, similar: ['DONA_01'] }], warnings: [] })
+    const two = [visit(), visit({ session: 'R0002', date: '2026-11-05', actions: ['Revision', 'Installation'] })]
+    const newSite = { site: 'X', session: null, actions: ['Revision'], date: '2026-10-02', time: '08:00:00', latitude: 37.1, longitude: -6.4, visits: 1, nearest: { location_id: 'DONA_01', distance_m: 40 }, similar: ['DONA_01'] }
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: two, problems: [{ row: 4, message: "'many' is not a whole number." }], skipped: 1, saved: null, new_sites: [newSite], warnings: [],
+      blocking: { errors: [{ row: 4, site: 'TATR_0002', session: 'R0002', message: "'many' is not a whole number." }], waiting: { rows: 0, from: null, to: null } } })
+    mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: two, problems: [], skipped: 1, saved: null, new_sites: [newSite], warnings: [] })   // the file corrected
     mockedApi.importVisitsCsv.mockResolvedValueOnce({ visits: [visit()], problems: [], skipped: 0, saved: 2, new_sites: [], warnings: [] })
     await start()
     await userEvent.selectOptions(await screen.findByLabelText('Photos on the card collected'), 'Fotos')
@@ -1533,7 +1537,12 @@ describe('VisitsPage from a CSV file', () => {
     await waitFor(() => expect(mockedApi.importVisitsCsv).toHaveBeenCalledWith('TATR', expect.stringContaining('TATR_0001,02/10/2026'), false, 'mapped', MAPPING))
     expect(await screen.findByText(/to add/)).toHaveTextContent('2 visits to add · 1 already kept · 1 row with a problem')
     expect(screen.getByRole('list', { name: 'Rows with a problem' })).toHaveTextContent("Row 4: 'many' is not a whole number.")
+    // all or nothing (#206): nothing is added until the row is corrected, and it says which and why
+    expect(screen.getByLabelText('What stops the file')).toHaveTextContent("Nothing is added until this row is corrected in the file, and it is read again:Row 4 (R0002, TATR_0002): 'many' is not a whole number.")
+    expect(screen.getByRole('button', { name: /Continue to the review/ })).toBeDisabled()
 
+    await userEvent.click(screen.getByRole('button', { name: 'Read the visits' }))   // read again, corrected
+    expect(await screen.findByText(/to add/)).toHaveTextContent('2 visits to add · 1 already kept')
     await userEvent.click(await screen.findByRole('button', { name: /Continue to the review/ }))
 
     await userEvent.click(screen.getByRole('button', { name: 'Add 2 visits' }))

@@ -900,7 +900,10 @@ export interface ImportCsvOptions { create?: CsvCreate; defaults?: Record<string
  * those already kept, and how many were kept when asked to. */
 export interface VisitsCsvResult {
   visits: StoredVisit[]
-  problems: { row: number; message: string; }[]
+  /** The rows that cannot be added; `waits`: no error of its own, it only waits for the revision before (#206). */
+  problems: { row: number; message: string; waits?: boolean }[]
+  /** What stops the file from being added (#206): the rows with an error of their own, and how many rows only wait for them. */
+  blocking?: { errors: { row: number; site: string; session: string; message: string }[]; waiting: { rows: number; from: string | null; to: string | null } }
   skipped: number
   /** What the visits to add create: the locations, cameras and SD cards that do not exist and the file was asked to create. */
   create?: Record<CsvEntity, Record<string, unknown>[]>   // `trappers` is missing from an answer of an older server

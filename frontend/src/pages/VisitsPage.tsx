@@ -1874,6 +1874,28 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     {' '}Marking {unfinishedBefore.sites.length === 1 ? 'it' : 'them'} as not visited closes {unfinishedBefore.revisions.length === 1 ? 'that revision' : 'those revisions'}, which cannot be changed afterwards. Or correct the file and read it again.
                   </Notice>
                 )}
+                {csvResult.problems.length > 0 && (csvResult.blocking?.errors.length ?? 0) > 0 && (
+                  <Notice kind="error" role="alert" className="mt-4 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed">
+                    <div aria-label="What stops the file">
+                      <strong className="font-semibold">
+                        Nothing is added until {csvResult.blocking!.errors.length === 1 ? 'this row is' : `these ${csvResult.blocking!.errors.length} rows are`} corrected in the file, and it is read again:
+                      </strong>
+                      <ul aria-label="Rows with an error" className="mt-2 list-disc pl-6 space-y-1">
+                        {csvResult.blocking!.errors.slice(0, 20).map((e) => (
+                          <li key={e.row}><strong>Row {e.row}</strong>{e.session || e.site ? ` (${[e.session, e.site].filter(Boolean).join(', ')})` : ''}: {e.message}</li>
+                        ))}
+                        {csvResult.blocking!.errors.length > 20 && <li>…and {csvResult.blocking!.errors.length - 20} more, in the table of the rows.</li>}
+                      </ul>
+                      {csvResult.blocking!.waiting.rows > 0 && (
+                        <p className="mt-2">
+                          {csvResult.blocking!.waiting.rows} more {csvResult.blocking!.waiting.rows === 1 ? 'row' : 'rows'}
+                          {csvResult.blocking!.waiting.from ? ` of ${csvResult.blocking!.waiting.from}${csvResult.blocking!.waiting.to !== csvResult.blocking!.waiting.from ? ` to ${csvResult.blocking!.waiting.to}` : ''}` : ''} only
+                          {csvResult.blocking!.waiting.rows === 1 ? ' waits' : ' wait'} for them: a revision is added when the one before it is finished.
+                        </p>
+                      )}
+                    </div>
+                  </Notice>
+                )}
                 {listedProblems.length > 0 && (
                   <ul className="mt-4 mb-5 space-y-2 text-base text-red-600 dark:text-red-400 list-disc pl-6" aria-label="Rows with a problem">
                     {listedProblems.map((p) => <li key={p.row}>Row {p.row}: {p.message}</li>)}
@@ -1918,8 +1940,9 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     )}
                   </Notice>
                 )}
-                <div className="mt-4 flex justify-end">
-                  <button type="button" className={btnPrimary} disabled={csvResult.visits.length === 0} onClick={() => setCsvConfirming(true)}>Continue to the review<span aria-hidden="true"> →</span></button>
+                <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+                  {csvResult.problems.length > 0 && <span className="text-sm text-red-600 dark:text-red-400">The file has rows that cannot be added: correct them and read it again.</span>}
+                  <button type="button" className={btnPrimary} disabled={csvResult.visits.length === 0 || csvResult.problems.length > 0} onClick={() => setCsvConfirming(true)}>Continue to the review<span aria-hidden="true"> →</span></button>
                 </div>
               </>
             )}
