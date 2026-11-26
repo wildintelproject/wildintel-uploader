@@ -7,7 +7,7 @@ import threading
 from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.schemas.requests import CreateRevisionRequest, FieldLogsRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, MarkNotVisitedRequest, SaveVisitRequest, UpdateVisitRequest, VisitRecord, VisitsCsvColumnsRequest
+from wildintel_uploader.core.schemas.requests import CreateRevisionRequest, ImportVisitsCsvRequest, LinkVisitRequest, ListVisitsRequest, MarkNotVisitedRequest, SaveVisitRequest, UpdateVisitRequest, VisitRecord, VisitsCsvColumnsRequest
 from wildintel_uploader.core.services import epicollect_service, audit, local_folder_service, status_history, report_service, trapper_upload_service, visit_deployments, visit_rules, visit_time, visits_csv
 
 router = APIRouter(prefix="/api/visits", tags=["visits"])
@@ -62,14 +62,14 @@ def _upload_states(root, research_project_id: str, imported: str | None, deploym
     return out
 
 
-def _write_logs(root, research_project_id: str, new: list[dict]) -> dict:
-    """The folders of the collections the new visits change, and their FileTimestampLog and FieldworkLog — made when a visit is registered, not when its
-    deployment is imported. {"collections": [...], "warnings": [...]}; nothing is written when no deployment is said by the visits yet."""
+def _make_folders(root, research_project_id: str, new: list[dict]) -> dict:
+    """The folders of the collections the new visits change, with their collection.json — made when a visit is registered, not when its deployment is
+    imported. {"collections": [...]}; nothing is made when no deployment is said by the visits yet. No log is written (#213)."""
     if not new:
-        return {"collections": [], "warnings": []}
+        return {"collections": []}
     visits = local_folder_service.list_visits(root, research_project_id)
     keep = config.load_settings().FIELDLOG.keep_seconds
-    return visit_deployments.write_collection_logs(root, research_project_id, visit_deployments.collections_of(visits, new, keep), keep)
+    return visit_deployments.make_collection_folders(root, research_project_id, visit_deployments.collections_of(visits, new, keep), keep)
 
 
 def _refresh_states(root, research_project_id: str) -> None:
@@ -169,7 +169,7 @@ def save_visit(req: SaveVisitRequest) -> dict:
         _archive_locations(root, req.research_project_id, [kept])
         _apply_to_entities(root, req.research_project_id, [kept], kept_visits)
         _refresh_states(root, req.research_project_id)
-        return {**kept, "field_logs": _write_logs(root, req.research_project_id, [kept])}
+        return {**kept, "collection_folders": _make_folders(root, req.research_project_id, [kept])}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -224,7 +224,7 @@ def update_visit(req: UpdateVisitRequest) -> dict:
             raise HTTPException(422, " ".join(reasons))
         kept = local_folder_service.update_visit(root, req.research_project_id, req.location_id, req.session, visit)
         _refresh_states(root, req.research_project_id)
-        return {**kept, "field_logs": _write_logs(root, req.research_project_id, [kept])}
+        return {**kept, "collection_folders": _make_folders(root, req.research_project_id, [kept])}
     except local_folder_service.LocalFolderError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -321,7 +321,7 @@ def import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
 def _import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
     """Reads the visits of a CSV file for a research project: what can be kept and what is wrong with the rest — kept when `save` is set.
 
-    When the visits are kept, the folders of the collections they change get their FileTimestampLog and FieldworkLog."""
+    When the visits are kept, the folders of the collections they change are made."""
     root = config.collections_dir()
     try:
         if req.save:
@@ -356,7 +356,7 @@ def _import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
         defaults = {"timezone": "UTC", "daylight_saving": "no", **(req.defaults or {})} if from_epicollect else req.defaults
         result = visits_csv.parse_visits(text, locations, kept, mapping, {"time_source": time_source, "cards": cards, "cameras": cameras, "create": req.create, "close_revisions": req.close_revisions, "close_after": req.close_after.model_dump() if req.close_after else None, "coordinates_from_location": req.coordinates_from_location, "photos_not_counted": req.photos_not_counted, "defaults": defaults, "new_site_makes_location": from_epicollect, "trappers": _trapper_names(), "trapper_usernames": [t.get("username", "") for t in local_folder_service.list_trappers(root)],
                                                                                                                                   "unknown": local_folder_service.list_unknown(root, req.research_project_id)})
-        saved = field_logs = report = None
+        saved = collection_folders = report = None
         if req.save and result["problems"]:
             # all or nothing (#206): a file with rows that cannot be added is not kept in part — the rows are corrected and the file read again
             errors = len(result["blocking"]["errors"])
@@ -384,14 +384,14 @@ def _import_visits_csv(req: ImportVisitsCsvRequest) -> dict:
             _archive_locations(root, req.research_project_id, result["visits"])
             _apply_to_entities(root, req.research_project_id, result["visits"], kept)
             _refresh_states(root, req.research_project_id)
-            field_logs = _write_logs(root, req.research_project_id, result["visits"])
+            collection_folders = _make_folders(root, req.research_project_id, result["visits"])
             report = _save_report(req.research_project_id, result, saved)
     except (local_folder_service.LocalFolderError, visits_csv.VisitsCsvError) as exc:
         raise HTTPException(400, str(exc)) from exc
     # each visit is told on the wall clock of its location: the timezone of the location goes with it (the ones this file creates, too)
     zones = {str(l.get("location_id", "")).lower(): l.get("timezone") for l in [*locations, *result["create"]["locations"]]}
     visits = [{**v, "timezone": zones.get(str(v.get("location_id", "")).lower())} for v in result["visits"]]
-    return {**result, "visits": visits, "saved": saved, "field_logs": field_logs, "report": report}
+    return {**result, "visits": visits, "saved": saved, "collection_folders": collection_folders, "report": report}
 
 
 @router.post("/export-csv")
@@ -504,16 +504,6 @@ def deployments(req: ListVisitsRequest) -> dict:
             "upload_states": [] if d["no_images"] else _upload_states(root, req.research_project_id, imported, d["deployment_id"], failures),
         })
     return {"results": results}
-
-
-@router.post("/field-logs")
-def field_logs(req: FieldLogsRequest) -> dict:
-    """Writes, in the folder of each collection the visits give deployments to, its FileTimestampLog (the closed deployments' start and end) and its FieldworkLog
-    (every deployment, closed or open, with its fields as Camtrap DP names them)."""
-    try:
-        return visit_deployments.write_collection_logs(config.collections_dir(), req.research_project_id, req.collections, config.load_settings().FIELDLOG.keep_seconds)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/book")

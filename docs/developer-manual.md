@@ -192,12 +192,12 @@ something to say for each check.
 | `statistics_service` | The statistical postvalidation: sequences, and whether this revision is like the earlier ones of the location. Also the statistics of a whole revision (`collection_statistics`, `POST /api/statistics/revision`, the CLI's `statistics`), with each deployment's metrics kept in `statistics.json` beside its `images.json`. |
 | `report_service` | The reports: builds them from a validation's, a postvalidation's or a preprocessing's results, keeps them as JSON in `<data dir>/reports/`, lists, deletes and exports them to CSV. |
 | `seal_service` | Runs the checks over the source images and writes/verifies `seal.json`. |
-| `local_folder_service` | The collections folder: research projects, locations, visits, cameras and SD cards (the *rules* of the records, which are kept through `core/storage`), collections, deployments, `images.json`, the timestamp log. |
+| `local_folder_service` | The collections folder: research projects, locations, visits, cameras and SD cards (the *rules* of the records, which are kept through `core/storage`), collections, deployments, `images.json`, the timestamp log and the fieldwork log of older folders (only read, #213). |
 | `audit` | The two dates every visit, camera and SD card keeps — `created_at` and `updated_at` — written by the app when it is kept, as an ORM does. |
 | `camera_info` | The camera's model and id, through ExifTool when it's there (bundled or on the `PATH`), else Pillow. |
 | `trapper_service` | Thin wrapper over the SDK for lookups; registers a deployment through the classic import form. |
 | `trapper_upload_service` | Uploading a deployment: location, deployment, packing in zips + yaml, upload, wait. Also the access check. |
-| `repair_service` | Looks at a deployment folder (valid as its `seal.json` says) and rebuilds its metadata files from the folder's own contents; the timestamp log prevails over the images. |
+| `repair_service` | Looks at a deployment folder (valid as its `seal.json` says) and rebuilds its metadata files from the folder's own contents; an older timestamp log prevails over the images. |
 | `sync_service` | Fills the collections folder from a TRAPPER classification project. |
 | `session_store` | The wizard's resumable runs. |
 | `folder_picker`, `file_manager` | The OS's native folder dialog and file explorer — this is a local tool, so the backend can open them on the user's screen. |
@@ -368,7 +368,7 @@ are found ignoring case: TRAPPER keeps its ids in lower case, the collections fo
 `repair_service.inspect` is the state of a deployment: *valid* is `seal_service.verify` saying so, nothing else. `repair_stream`
 rebuilds, in this order: the dates (`pre._camera_time` of every image — the camera's wall clock — then the period: the
 deployment's row in `<collection>_FileTimestampLog.csv` if there is one, else the `deployment.json` that is left, else the
-images; the row is added when missing), `deployment.json` (what is left + the location's record + the camera +
+images; the log is only read, never written — #213), `deployment.json` (what is left + the location's record + the camera +
 the period, validated as `DeploymentFields`), `preprocessing.json` and `images.json` (one entry per image; the options are
 the old file's, else the settings' with the location's timezone), and `seal_service.seal(dest, dest, …, recovered=True)`,
 which runs the validation and postvalidation over the folder's own images. `report_service.repair_report` joins what it wrote,
@@ -475,7 +475,6 @@ bodies are JSON, and every `POST` that talks to TRAPPER takes optional `url`, `u
 | | `…/research-projects/list`, `/save`; `…/locations/list`, `/save`, `/update` | The collections folder's research projects and locations. |
 | | `…/check-collection`, `/collection-path`, `/existing-deployments`, `/list-local-deployments` | What is already kept. |
 | | `…/next-revision`, `/previous-deployments` | The revision to propose; the earlier deployment to fill the form from. |
-| | `…/timestamp-log` | Add a deployment to the collection's timestamp log. |
 | | `…/seal` | Whether a kept deployment still matches its seal. |
 | | `…/exiftool` | Whether ExifTool is available. |
 | | `…/preprocess` | **Streams** the preprocessing, leaving the deployment pending. |

@@ -584,51 +584,34 @@ def test_what_the_two_visits_of_a_deployment_say_of_it_is_kept_beside_each_other
     assert closed["comments"] == "Setup: new camera | Retrieval: pilas; cameraHeight 1.5 (setup 1.2)"
 
 
-def test_the_logs_of_the_collections_are_written_with_every_deployment_closed_or_open(tmp_path: Path):
-    import csv
-    with _in(tmp_path):
-        _field_visits()
-        done = _client().post("/api/visits/field-logs", json={"research_project_id": "DONA"})
+# ── the folders made when a visit is registered: no log is written any more (#213) ─────────────────────────────
 
-    assert done.status_code == 200
-    by_collection = {c["collection"]: c for c in done.json()["collections"]}
-    assert (by_collection["R0003"]["closed"], by_collection["R0003"]["open"]) == (1, 1)
-    stamp = (tmp_path / "DONA" / "R0003" / "R0003_FileTimestampLog.csv").read_text(encoding="utf-8-sig").splitlines()
-    assert stamp[1:] == ["r0003-dona_01,2024:09:04,09:00:00,2024:10:12,09:00:00"]            # only the closed one
-    with (tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv").open(encoding="utf-8-sig", newline="") as f:
-        rows = {r["deploymentID"]: r for r in csv.DictReader(f)}
-    assert set(rows) == {"R0003-DONA_01", "R0003-DONA_02"}                                    # the open one too
-    assert rows["R0003-DONA_01"]["status"] == "closed" and rows["R0003-DONA_01"]["cardSD"] == "A13" and rows["R0003-DONA_01"]["photosCounted"] == "241"
-    assert rows["R0003-DONA_02"]["status"] == "open" and rows["R0003-DONA_02"]["deploymentEnd"] == ""
-
-
-# ── the folders and the logs made when a visit is registered ────────────────────────────────────────────────────
-
-def test_the_folder_of_a_collection_and_its_logs_are_made_when_a_visit_closes_a_deployment(tmp_path: Path):
+def test_the_folder_of_a_collection_is_made_when_a_visit_leaves_a_camera_and_no_log_is_written(tmp_path: Path):
     install = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "session": "R0003", "date": "2024-09-04", "time": "09:00:00"}
     collect = {**VISIT, "actions": ["Revision"], "sd": "B2", "num_photos": 241, "session": "R0004", "date": "2024-10-12", "time": "09:00:00"}
     with _in(tmp_path):
         _project(archived=(2, 3))
         first = _save(install)
-        # a camera left and not collected yet is an open deployment of the collection being completed: its folder and its FieldworkLog are made at once
+        # a camera left and not collected yet is an open deployment of the collection being completed: its folder is made at once
         folder = tmp_path / "DONA" / "R0003"
-        assert first.status_code == 200 and (folder / "collection.json").is_file() and (folder / "R0003_FieldworkLog.csv").is_file()
-        assert not (folder / "R0003_FileTimestampLog.csv").exists()                  # nothing is closed yet
+        assert first.status_code == 200 and (folder / "collection.json").is_file()
         second = _save(collect)
+        gone = _client().post("/api/visits/field-logs", json={"research_project_id": "DONA"})
 
-    assert second.json()["field_logs"]["collections"][0]["collection"] == "R0003"
-    assert (folder / "R0003_FileTimestampLog.csv").read_text(encoding="utf-8-sig").splitlines()[1] == "r0003-dona_01,2024:09:04,09:00:00,2024:10:12,09:00:00"
-    assert "closed" in (folder / "R0003_FieldworkLog.csv").read_text(encoding="utf-8-sig")
+    assert second.json()["collection_folders"]["collections"][0] == {"collection": "R0003", "closed": 1, "open": 0}
+    assert not list(folder.glob("*Log.csv"))                                         # neither the FileTimestampLog nor the FieldworkLog
+    assert gone.status_code in (404, 405)                                            # nor can they be asked for
 
 
-def test_the_visits_of_a_csv_make_the_folders_and_the_logs_of_their_collections_when_they_are_kept(tmp_path: Path):
+def test_the_visits_of_a_csv_make_the_folders_of_their_collections_when_they_are_kept(tmp_path: Path):
     text = "location_id,date,time,actions,session,num_photos,sd,camera_id\nDONA_01,2024-09-04,09:00,Installation,R0001,,A13,P800\nDONA_01,2024-10-12,09:00,Revision,R0002,241,B2,P800\n"
     shown = _import(tmp_path, text, given_up="2000-01-01")
     assert not (tmp_path / "DONA" / "R0001").exists()                               # only reading: nothing is made
     kept = _import(tmp_path, text, save=True, given_up="2000-01-01").json()
 
-    assert kept["saved"] == 2 and [c["collection"] for c in kept["field_logs"]["collections"]] == ["R0001", "R0002"]
-    assert (tmp_path / "DONA" / "R0001" / "R0001_FileTimestampLog.csv").is_file() and (tmp_path / "DONA" / "R0002" / "R0002_FieldworkLog.csv").is_file()
+    assert kept["saved"] == 2 and [c["collection"] for c in kept["collection_folders"]["collections"]] == ["R0001", "R0002"]
+    assert (tmp_path / "DONA" / "R0001" / "collection.json").is_file() and (tmp_path / "DONA" / "R0002" / "collection.json").is_file()
+    assert not list((tmp_path / "DONA").glob("R000*/*Log.csv"))                      # no log (#213)
     assert shown.status_code == 200
 
 
@@ -687,20 +670,22 @@ def test_a_row_that_is_a_visit_kept_already_by_its_session_site_camera_and_actio
     assert result["visits"] == [] and result["skipped"] == 1
 
 
-def test_the_seconds_are_cut_from_the_logs_unless_they_are_kept_and_an_import_leaves_its_report(tmp_path: Path, reports: Path):
+def test_the_seconds_are_cut_from_the_deployments_unless_they_are_kept_and_an_import_leaves_its_report(tmp_path: Path, reports: Path):
     from unittest.mock import patch
 
     from wildintel_uploader.core import config
     text = ("location_id,date,time,actions,session,num_photos,sd,camera_id\nDONA_01,2024-09-04,09:00:41,Installation,R0001,,A13,P800\n"
             "DONA_01,2024-10-12,09:05:17,Revision,R0002,241,B2,P800\n")
-    for keep, expected in ((False, "09:00:00,2024:10:12,09:05:00"), (True, "09:00:41,2024:10:12,09:05:17")):
+    for keep, expected in ((False, ("2024-09-04T09:00:00Z", "2024-10-12T09:05:00Z")), (True, ("2024-09-04T09:00:41Z", "2024-10-12T09:05:17Z"))):
         root = tmp_path / str(keep)
         root.mkdir()
         settings = config.Settings.model_validate({"FIELDLOG": {"keep_seconds": keep}})
         with patch("wildintel_uploader.web.api.routers.visits.config.load_settings", return_value=settings):
             body = _import(root, text, save=True, given_up="2000-01-01").json()
-        stamp = (root / "DONA" / "R0001" / "R0001_FileTimestampLog.csv").read_text(encoding="utf-8-sig").splitlines()[1]
-        assert stamp.endswith(expected), (keep, stamp)
+            with _in(root):
+                found = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
+        d = next(d for d in found if d["deployment_id"] == "R0001-DONA_01")
+        assert (d["start"], d["end"]) == expected, (keep, d)
     # the report is kept with the other reports, with an entry for each row of the file
     from wildintel_uploader.core.services import report_service
     report = report_service.read(body["report"], reports)
@@ -1813,9 +1798,7 @@ def test_an_sd_card_id_with_spaces_or_signs_is_said_not_refused_and_one_that_is_
     assert all("kept as written" in w for w in said)
 
 
-def test_the_id_of_an_sd_card_is_kept_as_written_in_the_cards_the_visits_and_the_fieldwork_log(tmp_path: Path):
-    import glob
-
+def test_the_id_of_an_sd_card_is_kept_as_written_in_the_cards_and_the_visits(tmp_path: Path):
     from wildintel_uploader.core.services import local_folder_service as lfs
     text = "location_id,session,date,time,actions,num_photos,camera_id,sd,sd_brand\nDONA_01,R0001,2026-01-10,08:00,Installation,,P1,47b,SanDisk\nDONA_01,R0002,2026-02-10,08:00,Revision,10,P1,52c,SanDisk\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos", "camera_id", "sd", "sd_brand")}
@@ -1824,11 +1807,9 @@ def test_the_id_of_an_sd_card_is_kept_as_written_in_the_cards_the_visits_and_the
         saved = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "save": True, "create": {"sd_cards": True, "cameras": True}, "defaults": {"camera_model": "X"}}).json()
         cards = [c["label"] for c in lfs.list_field_items(tmp_path, "DONA", "sd_cards")]
         kept = [v["sd"] for v in _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"] if v["session"] in ("R0001", "R0002")]
-        logs = "".join(open(p, encoding="utf-8-sig").read() for p in glob.glob(str(tmp_path / "**" / "*FieldworkLog.csv"), recursive=True))
 
     assert saved["problems"] == [] and saved["saved"] == 2
     assert cards == ["47b", "52c"] and sorted(kept) == ["47b", "52c"]                      # never upper-cased
-    assert ",47b," in logs and ",52c," in logs and "47B" not in logs and "52C" not in logs
 
 @pytest.mark.no_default_coordinates
 def test_a_row_with_no_coordinates_takes_those_of_its_location_unless_the_import_says_not_to(tmp_path: Path):

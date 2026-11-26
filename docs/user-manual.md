@@ -467,7 +467,6 @@ collections/
     ├── unknown_visits.json                 ← the revisions of a site of which nothing is known
     └── R0003/                              ← collection (one revision)
         ├── collection.json
-        ├── R0003_FileTimestampLog.csv      ← the start and end of each deployment
         └── R0003-DONA_01/                  ← deployment
             ├── R0003-DONA_01__20240904_1.JPEG …    the images
             ├── deployment.json             ← its details

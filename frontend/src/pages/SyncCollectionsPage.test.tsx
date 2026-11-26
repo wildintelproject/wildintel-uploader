@@ -7,7 +7,7 @@ import { api } from '../api'
 vi.mock('../api', () => ({ api: { trapperResearchProjects: vi.fn(), trapperClassificationProjects: vi.fn(), syncCollectionNames: vi.fn(), syncCollections: vi.fn() } }))
 const mockedApi = vi.mocked(api, true)
 
-const none = { research_project: [], locations: [], collections: [], deployments: [], timestamp_log: [], images: [] }
+const none = { research_project: [], locations: [], collections: [], deployments: [], images: [] }
 
 beforeEach(() => {
   vi.clearAllMocks()

@@ -16,7 +16,7 @@ const labelClass = 'block text-sm font-semibold mb-1.5 text-zinc-700 dark:text-z
 
 const STEPS: { step: RepairStep; label: string }[] = [
   { step: 'inspect', label: 'Look at the folder' },
-  { step: 'dates', label: 'Dates and timestamp log' },
+  { step: 'dates', label: 'Dates' },
   { step: 'deployment', label: 'deployment.json' },
   { step: 'preprocessing', label: 'preprocessing.json' },
   { step: 'images', label: 'images.json' },
@@ -303,8 +303,8 @@ export default function RepairPage({ onBack }: { onBack?: () => void; onOpenSett
 
       <WizardStep n={3} title="Repairs" status={step3Status} canEdit={false} onEdit={() => {}} expanded
                   description={<>Only needed when some deployment is not valid. A deployment is <strong>valid</strong> when its <span className="font-mono">seal.json</span> still matches it. For the ones that are not, the metadata
-                  files are written again from what the folder holds — the dates of the images, their camera, the location&rsquo;s details — and the images are validated and postvalidated again. If the
-                  revision&rsquo;s <span className="font-mono">FileTimestampLog.csv</span> has the deployment, it says its period.</>}>
+                  files are written again from what the folder holds — the dates of the images, their camera, the location&rsquo;s details — and the images are validated and postvalidated again. If an
+                  older revision folder has a <span className="font-mono">FileTimestampLog.csv</span> with the deployment, it says its period.</>}>
         <div className="space-y-3" aria-live="polite">
           {order.map((id) => {
             const run = runs[id] ?? EMPTY_RUN

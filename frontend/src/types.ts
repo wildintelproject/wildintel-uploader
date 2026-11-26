@@ -218,15 +218,7 @@ export interface StatisticResult {
   history: { revision: number; deployment_id: string; value: number }[]
 }
 
-/** What writing a deployment into its collection's FileTimestampLog did. */
-export interface TimestampLogResult {
-  path: string
-  action: 'added' | 'updated' | 'unchanged'
-  rows: number
-  collection: string
-}
-
-/** What the collection's FileTimestampLog and FieldworkLog say of a deployment — each null where it has no row of it. */
+/** What the collection's FileTimestampLog and FieldworkLog say of a deployment, when an older folder has them (they are no longer written, #213) — each null where it has no row of it. */
 export interface LogEntry {
   collection: string
   /** The camera's wall-clock time, ISO, from the FileTimestampLog. */
@@ -246,18 +238,6 @@ export interface VisitCheckInfo {
   /** How the visit that collected the card found it: a full card or flat batteries say why the camera stopped before it was collected. */
   collected_card_status?: string | null
   collected_battery_status?: string | null
-}
-
-/** What the visits a deployment is of say of it, for the collection's FieldworkLog: the one that left the camera and the one that collected its card. */
-export interface FieldworkVisits {
-  left_session: string | null
-  left_action: string | null
-  left_sd: string | null
-  collected_session: string | null
-  collected_action: string | null
-  counted_photos: number | null
-  /** The card the images are said to come from. */
-  sd_card: string | null
 }
 
 export interface DeploymentCheckResult {
@@ -389,8 +369,8 @@ export interface SyncResult {
   research_project_id: string
   folder: string
   collections: string[]
-  created: Record<'research_project' | 'locations' | 'collections' | 'deployments' | 'timestamp_log' | 'images', string[]>
-  kept: Record<'research_project' | 'locations' | 'collections' | 'deployments' | 'timestamp_log' | 'images', string[]>
+  created: Record<'research_project' | 'locations' | 'collections' | 'deployments' | 'images', string[]>
+  kept: Record<'research_project' | 'locations' | 'collections' | 'deployments' | 'images', string[]>
   unassigned: string[]
   failed: { deployment_id: string; error: string }[]
   /** Only when the images were asked for: what came, by deployment; what failed; and the images Trapper lists that the classification project doesn't hold. */
@@ -916,8 +896,8 @@ export interface VisitsCsvResult {
   notes?: string[]
   /** The report of the import, a text file beside the visits of the research project — when they were kept. */
   report?: string | null
-  /** The folders and logs made of the collections the visits kept change — when they were kept. */
-  field_logs?: FieldLogsResult | null
+  /** The folders made of the collections the visits kept change — when they were kept. */
+  collection_folders?: CollectionFoldersResult | null
   saved: number | null
   /** The sites of the file that are not locations of the research project, with what tells a new site from a misnamed one; their visits are held. */
   new_sites: NewSite[]
@@ -1018,10 +998,9 @@ export interface UploadedDeployment {
   uploads: UploadEntry[]
 }
 
-/** What writing the logs of the collections did: for each, how many deployments are closed and how many open, and the files written. */
-export interface FieldLogsResult {
-  collections: { collection: string; closed: number; open: number; files: string[] }[]
-  warnings: string[]
+/** The folders made of the collections the visits change: for each, how many of its deployments are closed and how many open. */
+export interface CollectionFoldersResult {
+  collections: { collection: string; closed: number; open: number }[]
 }
 
 /** A site of a file that is not a location of the research project yet: new, or misnamed in the field. */

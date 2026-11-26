@@ -144,7 +144,7 @@ revisions. Deployments TRAPPER holds in an invalid way are reported, not fatal.
 A deployment kept locally is **valid** when its `seal.json` still matches it. For one that isn't — lost metadata files,
 images that changed — **Repair** writes `deployment.json`, `preprocessing.json`, `images.json` and `seal.json` again from
 what its folder holds: the capture dates and camera of the images, the location's details and the collection's
-`FileTimestampLog.csv`, which always prevails over what the images say (a deployment it doesn't have gets its row). The images
+`FileTimestampLog.csv`, when an older folder has one, which always prevails over what the images say. The images
 are validated, postvalidated and checked against what preprocessing leaves, and a report says what was found.
 
 ## Settings

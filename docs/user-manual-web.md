@@ -202,7 +202,7 @@ dot marks a section with an invalid value.
   bug report.
 - **About** — at the top: WildINTEL Uploader's name and version, **Check for updates** (it offers the download when there is a newer version), and links to **Report a problem** (a GitHub issue that already says the version and your browser), the **Documentation**, the **GitHub** project and **What's new** (the release notes).
 
-- **Keep the seconds in the logs** — the start and the end of the deployments written in the `FileTimestampLog` and the `FieldworkLog`, for the visits of any origin. Off by default: they are cut to the minute.
+- **Keep the seconds of the deployments** — the start and the end of the deployments the visits give, for the visits of any origin. Off by default: they are cut to the minute.
 
 ### Uploader
 
@@ -554,9 +554,8 @@ There are example files of every case — all correct, three revisions, a revisi
 **The deployments the visits say, and the logs of the collections.** Each location's visits, in order, give a deployment for every pair where the first **left a camera** (an Installation or a Revision)
 and the second **collected its card**: it goes from the one to the other and is *closed*. It belongs to the collection **the revision of the visit that collected it names, minus one** — R0013
 collects the deployments of R0012 — and that is the revision [Import deployment](#import-a-deployment) gives it. A camera that was left and has not been collected is *open*: it will belong to
-the collection that the visit that collects it names. When a visit is registered — by hand or from a file — the **folder of each collection it changes is made**, with its `collection.json`, and so are its logs — they are written automatically, with no button for it, in the folder of each collection, its `<R000N>_FileTimestampLog.csv` (the
-closed deployments' start and end, as the cameras' wall clock) and its `<R000N>_FieldworkLog.csv` (every deployment, closed or open, with its fields as Camtrap DP names them, in UTC, in the order of the
-[`FieldworkLog` columns](#import-a-deployment)). When the visit that left a camera and the one that collected it say different things of a field, both are kept: a text as `Setup: … | Retrieval: …`
+the collection that the visit that collects it names. When a visit is registered — by hand or from a file — the **folder of each collection it changes is made**, with its `collection.json`. No `<R000N>_FileTimestampLog.csv` nor `<R000N>_FieldworkLog.csv` is written any more: the visits keep what
+they say of each deployment. When the visit that left a camera and the one that collected it say different things of a field, both are kept: a text as `Setup: … | Retrieval: …`
 (who set it up, the habitat), the tags and groups of both together, and a number, a yes/no or a feature type as the setup says it with the retrieval's value noted in the comments.
 
 ## 6. Import the images
@@ -713,8 +712,7 @@ folder away.
 
 Then the **period**: when the camera started and stopped recording, as the clock of the location's timezone. **The dates always come from the visits**: from the visit where the card was left to the one where it was collected. The card **Recording period** shows them **locked** — *Locked · Field work (R0002 → R0003)* —, the start and the end each with its visit, the **duration** and the timezone. **Edit dates** unlocks them: the form to type the start and the end appears, marked *Unlocked · Custom override*, with **Cancel**, **Apply changes** and **Restore from Visits of the field work**, which gives the dates of the visits back. The visits are never changed.
 
-If the deployment's collection has a `<COLLECTION>_FileTimestampLog.csv` (the file wildintel-tools asks for), going on from *More details*
-**adds the deployment's row to that file**. A log that is already there is used for the dates in an [*Import deployments*](#7-import-deployments).
+No `<COLLECTION>_FileTimestampLog.csv` is written. One that an older folder already has — or one made with wildintel-tools — is still used for the dates in an [*Import deployments*](#7-import-deployments).
 
 **2. More details.**
 
@@ -985,7 +983,7 @@ holds.
 What is missing is created, one deployment at a time, and a live log says what is happening:
 
 - the research project (`research_project.json`) and its `locations.json`;
-- the collection (with its `collection.json` and `<collection>_FileTimestampLog.csv`);
+- the collection (with its `collection.json`);
 - each chosen deployment's `deployment.json`, in the collection its id starts with, and an
   `images.json` made from what TRAPPER holds for its images (names, when they were taken,
   observations).
@@ -1030,9 +1028,9 @@ its images were touched — so it no longer matches its seal — and you want it
 Each deployment is repaired in turn, with its steps shown:
 
 - **Dates.** The capture date of every image is read from its EXIF, as the camera's wall clock, and the deployment's period
-  is decided: if the collection's `<collection>_FileTimestampLog.csv` has a row for it, **the log says it**, whatever the
-  images say; otherwise the period is the one the `deployment.json` that is left has, or else the one of the images, and the
-  row is **added to the log**. The log itself is never rewritten but to add that row.
+  is decided: if an older `<collection>_FileTimestampLog.csv` of the collection has a row for it, **the log says it**, whatever the
+  images say; otherwise the period is the one the `deployment.json` that is left has, or else the one of the images. The log
+  is never written.
 - **`deployment.json`** — what is left of it, plus the location's details (name, coordinates), the camera of the images,
   and the period. If something required can't be known — the location has no coordinates, say — the repair stops and says so.
 - **`preprocessing.json`** and **`images.json`** — one entry for every image in the folder, with its date, hashes, camera and size.

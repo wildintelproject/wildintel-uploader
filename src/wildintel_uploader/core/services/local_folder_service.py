@@ -1117,7 +1117,8 @@ def location_time_in(project_folder: Path, location_id: str | None) -> dict:
 #   r0003-dona_0007_b,2024:09:04,13:10:00,2024:11:04,14:28:00
 #
 # One row per deployment, named in lower case as Trapper keeps its ids: when its images were taken, as the camera's local
-# wall-clock time. wildintel-tools' check-deployments reads it.
+# wall-clock time. wildintel-tools' check-deployments reads it. It is no longer written (#213): it is only read, when an older
+# folder or one made with wildintel-tools has it.
 
 TIMESTAMP_LOG_SUFFIX = "_FileTimestampLog.csv"
 TIMESTAMP_LOG_FIELDS = ["Deployment", "StartDate", "StartTime", "EndDate", "EndTime"]
@@ -1158,49 +1159,12 @@ def read_timestamp_log(path: Path) -> list[dict]:
         raise LocalFolderError(f"Could not read {path.name}: {exc}") from exc
 
 
-def upsert_timestamp_log(collection_dir: Path, deployment_id: str, start: datetime, end: datetime) -> dict:
-    """Puts a deployment's row — its start and end, as wall-clock times — in its collection's
-    timestamp log, creating the collection folder (named in its collection.json) and the log if
-    need be. The deployment is named in lower case, as Trapper keeps it. Its own row is replaced (compared ignoring case), the others stay.
-
-    Returns {"path", "action": "added" | "updated" | "unchanged", "rows"}.
-
-    Raises:
-        LocalFolderError: the log that's there can't be read — it is left as it is — or the
-            deployment ends before it starts.
-    """
-    if end <= start:
-        raise LocalFolderError(f"{deployment_id} must start before it ends ({start} → {end}).")
-    path = timestamp_log_path(collection_dir)
-    rows = read_timestamp_log(path)
-    new_row = {
-        "Deployment": deployment_id.lower(), "StartDate": start.strftime("%Y:%m:%d"), "StartTime": start.strftime("%H:%M:%S"),
-        "EndDate": end.strftime("%Y:%m:%d"), "EndTime": end.strftime("%H:%M:%S"),
-    }
-    index = next((i for i, row in enumerate(rows) if row["Deployment"].upper() == deployment_id.upper()), None)
-    if index is None:
-        rows.append(new_row)
-        action = "added"
-    elif rows[index] == new_row:
-        action = "unchanged"
-    else:
-        rows[index] = new_row
-        action = "updated"
-    if not collection_dir.is_dir():
-        write_collection_metadata(collection_dir, collection_dir.name)
-    if action != "unchanged" or not path.is_file():
-        with path.open("w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.DictWriter(f, fieldnames=TIMESTAMP_LOG_FIELDS)
-            writer.writeheader()
-            writer.writerows(rows)
-    return {"path": str(path), "action": action, "rows": len(rows)}
-
-
 # ── The collection's fieldwork log ──────────────────────────────────────────
 #
 # <collection>/<collection>_FieldworkLog.csv, beside the timestamp log: one row per deployment with its fields named as Camtrap DP
 # names them, what the visits say of it (the sessions and the actions of the visit that left the camera and of the one that
-# collected its card), the SD card and the photos counted on it. Times are UTC, with a Z.
+# collected its card), the SD card and the photos counted on it. Times are UTC, with a Z. It is no longer written (#213): it is
+# only read, when an older folder has it.
 
 FIELDWORK_LOG_SUFFIX = "_FieldworkLog.csv"
 FIELDWORK_LOG_FIELDS = [
@@ -1234,37 +1198,3 @@ def read_fieldwork_log(path: Path) -> list[dict]:
             return [{name: (row.get(name) or "").strip() for name in FIELDWORK_LOG_FIELDS} for row in reader if (row.get("deploymentID") or "").strip()]
     except (OSError, UnicodeDecodeError, csv.Error) as exc:
         raise LocalFolderError(f"Could not read {path.name}: {exc}") from exc
-
-
-def upsert_fieldwork_log(collection_dir: Path, row: dict) -> dict:
-    """Puts a deployment's row in its collection's fieldwork log, creating the collection folder and the log if need be. Its own row
-    (compared ignoring case) is replaced and the others stay; a field the row does not give is written empty.
-
-    Returns {"path", "action": "added" | "updated" | "unchanged", "rows"}.
-
-    Raises:
-        LocalFolderError: the log that's there can't be read — it is left as it is — or the row has no deploymentID.
-    """
-    deployment_id = str(row.get("deploymentID") or "").strip()
-    if not deployment_id:
-        raise LocalFolderError("A row of the fieldwork log needs its deploymentID.")
-    path = fieldwork_log_path(collection_dir)
-    rows = read_fieldwork_log(path)
-    new_row = {name: str(row.get(name) if row.get(name) is not None else "") for name in FIELDWORK_LOG_FIELDS}
-    index = next((i for i, r in enumerate(rows) if r["deploymentID"].upper() == deployment_id.upper()), None)
-    if index is None:
-        rows.append(new_row)
-        action = "added"
-    elif rows[index] == new_row:
-        action = "unchanged"
-    else:
-        rows[index] = new_row
-        action = "updated"
-    if not collection_dir.is_dir():
-        write_collection_metadata(collection_dir, collection_dir.name)
-    if action != "unchanged" or not path.is_file():
-        with path.open("w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.DictWriter(f, fieldnames=FIELDWORK_LOG_FIELDS)
-            writer.writeheader()
-            writer.writerows(rows)
-    return {"path": str(path), "action": action, "rows": len(rows)}

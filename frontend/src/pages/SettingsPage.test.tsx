@@ -1865,7 +1865,7 @@ describe('SettingsPage — WildINTEL Epicollect file', () => {
     expect(screen.queryByLabelText('The time of a visit is')).not.toBeInTheDocument()   // the form has no date or time to choose from
     expect(screen.queryByLabelText('Column for Who went')).not.toBeInTheDocument() // the columns are found by their names: nothing to say
     await userEvent.click(screen.getByRole('button', { name: 'General' }))
-    await userEvent.click(screen.getByRole('switch', { name: 'Keep the seconds in the logs' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Keep the seconds of the deployments' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(mockedApi.saveSettings).toHaveBeenCalled())

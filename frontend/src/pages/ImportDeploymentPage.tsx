@@ -28,7 +28,7 @@ import Combobox from '../components/Combobox'
 import OptionCards from '../components/OptionCards'
 import type { Option } from '../components/OptionCards'
 import { EMPTY_DEPLOYMENT_FIELDS, EMPTY_RESEARCH_PROJECT } from '../types'
-import type { ClosedVisit, ClosedVisitTarget, FieldworkVisits, LogEntry, SdCard, StoredVisit } from '../types'
+import type { ClosedVisit, ClosedVisitTarget, LogEntry, SdCard, StoredVisit } from '../types'
 import { applyEntry, entryLabel, entryPeriod } from '../epicollectImport'
 import RecordingPeriod from '../components/RecordingPeriod'
 import PrefilledDetails from '../components/PrefilledDetails'
@@ -545,12 +545,6 @@ export function revisionOfVisit(c: ClosedVisit): number | null {
   const revision = collected >= 2 ? collected - 1 : left
   return revision >= 1 ? revision : null
 }
-
-/** What a closed visit says of the deployment it gave, for the collection's FieldworkLog. */
-export const fieldworkVisits = (c: ClosedVisit, sdCard: string): FieldworkVisits => ({
-  left_session: c.visit.session, left_action: c.visit.actions.join(' + '), left_sd: c.visit.sd ?? null,
-  collected_session: c.end.session, collected_action: c.end.actions.join(' + '), counted_photos: c.end.num_photos ?? null, sd_card: sdCard || null,
-})
 
 /** The details of the deployment a closed visit gave, as what both its visits say mixes — the same mix the FieldworkLog gets, worked out by the server (`details`);
  * the visit that left the camera alone when there is none. What the visits do not say stays as it was. */
@@ -1733,8 +1727,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   // Set the moment a value is edited here (a ref, so a settings response arriving meanwhile never puts it back).
   const preprocessTouched = useRef(false)
   const [exiftool, setExiftool] = useState<boolean | null>(null) // whether ExifTool is installed; null until known
-  // The deployment's row in its collection's FileTimestampLog, written on leaving the details.
-  const [timestampLogError, setTimestampLogError] = useState<string | null>(null)
   const [requiredDeploymentChecks, setRequiredDeploymentChecks] = useState<Set<DeploymentCheck>>(new Set(DEFAULT_REQUIRED_DEPLOYMENT_CHECKS))
   const [checkingDeployment, setCheckingDeployment] = useState(false)
   const [deploymentCheck, setDeploymentCheck] = useState<DeploymentCheckResult | null>(null)
@@ -2459,17 +2451,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   /** Saves the deployment's own fields (best-effort) before moving on to
    * the postvalidation. */
   async function handleContinueFromDeployment() {
-    setSavingDetails(true); setTimestampLogError(null)
+    setSavingDetails(true)
     if (taskId) {
       try { await api.saveDetails(taskId, deployment) } catch { /* best-effort */ }
-    }
-    try {
-      // The collection's FileTimestampLog — wildintel-tools' file, one row per deployment — and its FieldworkLog, before the postvalidation.
-      await (linkedVisit ? api.writeTimestampLog(researchProjectId, deployment, fieldworkVisits(linkedVisit, sdCard)) : api.writeTimestampLog(researchProjectId, deployment))
-    } catch (e) {
-      setTimestampLogError(e instanceof Error ? e.message : 'Could not write the collection\'s timestamp log.')
-      setSavingDetails(false)
-      return
     }
     setSavingDetails(false)
     setStep((s) => s + 1)
@@ -2565,7 +2549,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
     preprocessTouched.current = false
     setRevision(''); revisionTouched.current = false; setRevisionHint(null)
     setDeploymentChecks(start.deployment); setRequiredDeploymentChecks(start.requiredDeployment)
-    setTimestampLogError(null)
     setSdCard(''); cardChosenFor.current = null
     setEvents([]); setImportError(null); setDestDir(null); setCopied(false)
     setPreprocessEvents([]); setPreprocessError(null); setPreprocessed(null)
@@ -3622,7 +3605,6 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         )}
         {!destDir && stepKey === 'dates' && originOpen === 3 && (      // only when step 3, More details, is the one open: before it, the step open has its own Continue
           <div className="flex flex-col items-end gap-1 max-w-md">
-            {timestampLogError && <p className="text-xs text-red-600 dark:text-red-400 text-right">{timestampLogError}</p>}
             <button type="button" className={`${btnPrimary} flex items-center gap-2`} disabled={!originReady || !newDetailsReady || savingDetails} onClick={handleContinueFromDeployment}>
               {savingDetails && <SmallSpinner />}
               {savingDetails ? 'Saving…' : <>Continue<span aria-hidden="true"> →</span></>}
