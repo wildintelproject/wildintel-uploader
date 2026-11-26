@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import fields, replace
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from wildintel_uploader.modules.catalog.domain.models import Audit, CatalogError, Trapper
 
-R = TypeVar("R", bound=Trapper)
+R = TypeVar("R", bound=Any)  # a record of the catalog: a dataclass with an `audit`
 
 
 def _content(record) -> dict:
@@ -18,7 +18,7 @@ def _content(record) -> dict:
 
 
 def stamped(record: R, before: R | None, at: str, new_id: Callable[[], str]) -> R:
-    """`record` with its audit, given what was kept of it (`before`, None when it is new): a new one gets an id and is created and updated now; one
+    """`record` — any record of the catalog — with its audit, given what was kept of it (`before`, None when it is new): a new one gets an id and is created and updated now; one
     kept before keeps its id and its creation, and is updated now if it says something else — or if it was removed and is here again."""
     if before is None:
         return replace(record, audit=Audit(id=new_id(), created_at=at, updated_at=at))

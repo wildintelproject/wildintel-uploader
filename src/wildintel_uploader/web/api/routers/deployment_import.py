@@ -21,8 +21,8 @@ from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
 from wildintel_uploader.core.schemas.requests import (
     BrowseFolderRequest, CardRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
-    DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest,
-    NextRevisionRequest, UpdateLocationRequest, UpdateResearchProjectRequest, ValidateDeploymentRequest, ValidateImagesRequest,
+    DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, SaveLocationRequest, ScanFolderRequest,
+    NextRevisionRequest, UpdateLocationRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
 from wildintel_uploader.core.services import camera_info, card_copy_service, deployment_import_service, deployment_photos, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service, visit_deployments
 from wildintel_uploader.web.api.routers.trapper import http_exc, resolve
@@ -68,45 +68,6 @@ def check_collection(req: CheckCollectionRequest) -> dict:
     name if it does (see services.local_folder_service.check_collection) —
     the "Local folder" destination's own first step."""
     return local_folder_service.check_collection(Path(req.path).expanduser())
-
-
-@router.post("/research-projects/list")
-def list_research_projects() -> dict:
-    """The research projects already kept in the collections folder — the
-    wizard's first question, "where was it taken?", is answered from them.
-    Empty until one is added."""
-    return {"results": local_folder_service.list_research_projects(config.collections_dir())}
-
-
-@router.post("/research-projects/save")
-def save_research_project(req: ResearchProjectRecord) -> dict:
-    """Adds a research project to the collections folder (by hand, or as
-    filled in from Trapper) — 409 if its acronym is already there."""
-    try:
-        return local_folder_service.write_research_project(config.collections_dir(), req.model_dump())
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(409 if "already exists" in str(exc) else 400, str(exc)) from exc
-
-
-@router.post("/research-projects/update")
-def update_research_project(req: UpdateResearchProjectRequest) -> dict:
-    """Changes a kept research project — its name, description, keywords and status…; the fields left out stay as they are (its acronym names
-    its folder and can't change). 404 if it isn't there."""
-    changes = req.model_dump(exclude={"acronym", "trapper_pk"}, exclude_none=True, exclude_unset=True)
-    try:
-        return local_folder_service.update_research_project(config.collections_dir(), req.acronym, changes)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(404 if "isn't in" in str(exc) else 400, str(exc)) from exc
-
-
-@router.post("/research-projects/delete")
-def delete_research_project(req: LocalLocationsRequest) -> dict:
-    """Deletes a research project with its locations and visits — 409 when it holds anything more (collections, deployments, images), 404 if
-    it isn't there."""
-    try:
-        return local_folder_service.delete_research_project(config.collections_dir(), req.research_project_id)
-    except local_folder_service.LocalFolderError as exc:
-        raise HTTPException(404 if "isn't in" in str(exc) else 409 if "still holds" in str(exc) else 400, str(exc)) from exc
 
 
 @router.post("/locations/list")

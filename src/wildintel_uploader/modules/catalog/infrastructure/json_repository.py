@@ -1,19 +1,40 @@
 """CatalogRepository over the records of the collections folder (shared.storage — JSON files today): the people are a global record, beside the
-research projects."""
+research projects; each research project has its folder, named by its acronym, which holds its record and, besides, its collections."""
 from __future__ import annotations
 
-from wildintel_uploader.modules.catalog.domain.models import Trapper
+from pathlib import Path
+
+from wildintel_uploader.modules.catalog.domain.models import ResearchProject, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
-from wildintel_uploader.modules.catalog.infrastructure.mapping import trapper_from_record, trapper_to_record
+from wildintel_uploader.modules.catalog.infrastructure.mapping import project_from_record, project_to_record, trapper_from_record, trapper_to_record
 from wildintel_uploader.shared.storage import ProjectStore
 
 
 class StoreCatalogRepository(CatalogRepository):
-    def __init__(self, store: ProjectStore) -> None:
-        self.store = store
+    def __init__(self, store: ProjectStore, collections_dir: Path) -> None:
+        self.store, self.collections_dir = store, collections_dir
 
     def read_trappers(self) -> list[Trapper]:
         return [trapper_from_record(r) for r in self.store.read_global("trappers")]
 
     def write_trappers(self, trappers: list[Trapper]) -> None:
         self.store.write_global("trappers", [trapper_to_record(t) for t in trappers])
+
+    def read_projects(self) -> list[ResearchProject]:
+        return [project_from_record(r) for r in self.store.list_projects()]
+
+    def read_project(self, acronym: str) -> ResearchProject | None:
+        record = self.store.get_project(acronym)
+        return project_from_record(record) if record is not None else None
+
+    def add_project(self, project: ResearchProject) -> None:
+        self.store.add_project(project_to_record(project))
+        (self.collections_dir / project.acronym).mkdir(parents=True, exist_ok=True)   # its folder, where its collections will go
+
+    def save_project(self, project: ResearchProject) -> None:
+        self.store.save_project(project.acronym, project_to_record(project))
+
+    def held_by_project(self, acronym: str) -> list[str]:
+        folder = self.collections_dir / acronym
+        own = self.store.owned_names(acronym)
+        return sorted(e.name for e in folder.iterdir() if e.name not in own) if folder.is_dir() else []

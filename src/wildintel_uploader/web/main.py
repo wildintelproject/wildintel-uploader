@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, trapper.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, setup.router, statistics.router, epicollect.router, visits.router, timefix.router, backup.router]:
+for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, trapper.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, setup.router, statistics.router, epicollect.router, visits.router, timefix.router, backup.router]:
     app.include_router(_router)
 
 

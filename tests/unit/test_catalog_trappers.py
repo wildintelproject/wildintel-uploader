@@ -84,6 +84,11 @@ class Legacy:
         return taken
 
 
+class NoVisits:
+    def has_visits(self, acronym: str) -> bool:
+        return False
+
+
 class Clock:
     def now(self) -> str:
         return "2026-11-27T10:00:00Z"
@@ -91,7 +96,7 @@ class Clock:
 
 def _catalog(repository=None, legacy=None) -> CatalogService:
     ids = iter(f"new-{n}" for n in range(100))
-    return CatalogUseCases(repository or MemoryRepository(), legacy_trappers=legacy or Legacy(), clock=Clock(), new_id=lambda: next(ids))
+    return CatalogUseCases(repository or MemoryRepository(), legacy_trappers=legacy or Legacy(), visits=NoVisits(), clock=Clock(), new_id=lambda: next(ids))
 
 
 def test_the_people_versions_before_left_in_the_settings_come_in_as_they_were_kept():

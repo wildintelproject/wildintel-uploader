@@ -21,6 +21,7 @@ from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseC
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService, Clock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
 from wildintel_uploader.modules.catalog.infrastructure.legacy import SystemClock, TrappersFromTheSettings
+from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
@@ -40,7 +41,8 @@ def build_settings(store: SettingsStore | None = None, *, activity_log: Activity
 def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock | None = None) -> CatalogService:
     """The catalog kept in a collections folder — the one of the settings, or one a caller of before names —, taking what versions before left in
     the settings through their module."""
-    return CatalogUseCases(StoreCatalogRepository(storage.open_store(collections_dir)), legacy_trappers=TrappersFromTheSettings(settings),
+    store = storage.open_store(collections_dir)
+    return CatalogUseCases(StoreCatalogRepository(store, collections_dir), legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store),
                            clock=clock or SystemClock())
 
 

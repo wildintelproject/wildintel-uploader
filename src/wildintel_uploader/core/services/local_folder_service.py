@@ -11,6 +11,7 @@ them in."""
 from __future__ import annotations
 
 import csv
+from contextlib import contextmanager
 import json
 import logging
 import re
@@ -175,40 +176,35 @@ def _read_json(path: Path):
 
 
 def list_research_projects(root: Path, include_deleted: bool = False) -> list[dict]:
-    """Every research project kept in the collections folder — empty if there is none yet (the first run). A project that was deleted is kept, but is not listed (`include_deleted`
-    lists it too): nothing is deleted for good (see audit)."""
-    projects = _store(root).list_projects()
-    return projects if include_deleted else audit.alive(projects)
+    """Every research project kept in the collections folder — empty if there is none yet. A removed one is kept, but is not listed (`include_deleted`
+    lists it too). The catalog's (modules.catalog): see CatalogService.projects."""
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import project_to_record
+    return [project_to_record(p) for p in _catalog(root).projects(include_deleted)]
 
 
 def has_research_project(root: Path, research_project_id: str) -> bool:
-    """Whether the research project is kept in the collections folder — and was not deleted.
+    """Whether the research project is kept in the collections folder — and was not removed.
 
     Raises:
         LocalFolderError: the research project id can't be a folder name.
     """
-    project = _store(root).get_project(research_project_id)
-    return project is not None and not audit.is_deleted(project)
+    from wildintel_uploader.modules.catalog.domain.models import UnknownProject
+    try:
+        _catalog(root).require_project(research_project_id)
+    except UnknownProject:
+        return False
+    return True
 
 
 def write_research_project(root: Path, project: dict) -> dict:
-    """Adds a research project: its folder (named by its acronym) and its record, with the day it was created. One that was deleted comes back, with its own
-    `created_at`: its collections and what it had are still there.
+    """Adds a research project and its folder, by the rules of the catalog (CatalogService.add_project): one removed comes back, with its own creation.
 
     Raises:
         LocalFolderError: the acronym can't be a folder name, or it's already there.
     """
-    store = _store(root)
-    before = store.get_project(project["acronym"])
-    if before is not None and not audit.is_deleted(before):
-        raise LocalFolderError(f"The research project '{project['acronym']}' already exists.")
-    kept = audit.stamped(project, before)
-    if before is None:
-        store.add_project(kept)
-    else:
-        store.save_project(project["acronym"], kept)
-    project_dir(root, project["acronym"]).mkdir(parents=True, exist_ok=True)   # its folder, where its collections will go
-    return kept
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import project_from_record, project_to_record
+    with _as_local_folder_error():
+        return project_to_record(_catalog(root).add_project(project_from_record({k: v for k, v in project.items() if k not in audit.AUDIT_FIELDS and k != "id"})))
 
 
 def _project_status(root: Path, research_project_id: str) -> str:
@@ -223,45 +219,24 @@ def _require_modifiable(root: Path, research_project_id: str) -> None:
 
 
 def update_research_project(root: Path, research_project_id: str, changes: dict) -> dict:
-    """Changes a kept research project's fields — only the keys in changes, the rest stay. The acronym names its folder, so it is not one of them.
+    """Changes a kept research project's fields — only the keys in changes, the rest stay; never its acronym. CatalogService.update_project.
 
     Raises:
-        LocalFolderError: the research project isn't there.
+        LocalFolderError: the research project isn't there, it is archived, or it has visits and would go back to planned.
     """
-    store = _store(root)
-    project = store.get_project(research_project_id)
-    if project is None or audit.is_deleted(project):
-        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
-    _require_modifiable(root, research_project_id)
-    wanted = changes.get("status")
-    if wanted == "planned" and _project_status(root, research_project_id) != "planned" and _raw_visits(root, research_project_id):
-        raise LocalFolderError(f"The research project '{research_project_id}' has visits: it can't go back to planned.")
-    project = audit.stamped({**project, **{k: v for k, v in changes.items() if k != "acronym" and k not in audit.AUDIT_FIELDS}}, project)
-    store.save_project(research_project_id, project)
-    return project
+    from wildintel_uploader.modules.catalog.infrastructure.mapping import project_to_record
+    with _as_local_folder_error():
+        return project_to_record(_catalog(root).update_project(research_project_id, {k: v for k, v in changes.items() if k not in audit.AUDIT_FIELDS}))
 
 
 def delete_research_project(root: Path, research_project_id: str) -> dict:
-    """Deletes a research project — *logically*: it gets `deleted_at` and is no longer listed, and everything it has is kept, with its locations, its visits and its
-    collections. A project that holds collections, deployments or images is not deleted, as they would be left with no project to be seen in.
+    """Removes a research project — logically —, unless it holds collections, deployments or images. CatalogService.delete_project.
 
     Raises:
-        LocalFolderError: the research project isn't there, or it holds more than its own records.
+        LocalFolderError: the research project isn't there, it is archived, or it holds more than its own records.
     """
-    store = _store(root)
-    folder = project_dir(root, research_project_id)
-    project = store.get_project(research_project_id)
-    if project is None or audit.is_deleted(project):
-        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
-    _require_modifiable(root, research_project_id)
-    own = store.owned_names(research_project_id)
-    others = sorted(e.name for e in folder.iterdir() if e.name not in own) if folder.is_dir() else []
-    if others:
-        raise LocalFolderError(
-            f"The research project '{research_project_id}' still holds {', '.join(others[:5])}{' and more' if len(others) > 5 else ''}: "
-            "it can't be deleted until those are removed (they hold collections, deployments or images)."
-        )
-    store.save_project(research_project_id, audit.deleted(project))
+    with _as_local_folder_error():
+        _catalog(root).delete_project(research_project_id)
     return {"deleted": research_project_id}
 
 
@@ -525,6 +500,18 @@ def write_field_items(root: Path, research_project_id: str, kind: str, items: li
 #
 # The people who go to the field are the same whatever the research project: they belong to none, and are kept beside them (the store's global records). What each is in a
 # project is its role, which is the project's.
+
+@contextmanager
+def _as_local_folder_error():
+    """The errors of the catalog as the callers of before catch them: a LocalFolderError, with the same words — some still read them."""
+    from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownProject
+    try:
+        yield
+    except UnknownProject as exc:
+        raise LocalFolderError(str(exc)) from exc
+    except CatalogError as exc:
+        raise LocalFolderError(exc.message) from exc
+
 
 def _catalog(root: Path):
     """The catalog kept in this collections folder (modules.catalog, #248), put together as the entry points put it (entrypoints.wiring)."""
@@ -831,18 +818,14 @@ def list_visits(root: Path, research_project_id: str, location_id: str | None = 
 
 def require_research_project(root: Path, research_project_id: str) -> None:
     """Raises LocalFolderError when the research project isn't kept in the collections folder."""
-    if not has_research_project(root, research_project_id):
-        raise LocalFolderError(f"The research project '{research_project_id}' isn't in the collections folder.")
+    with _as_local_folder_error():
+        _catalog(root).require_project(research_project_id)
 
 
 def require_active_research_project(root: Path, research_project_id: str) -> None:
-    """Raises LocalFolderError when the research project is not active: new visits are only kept to a project that is being worked on — a planned one is being prepared and a
-    finished one has no more fieldwork."""
-    require_research_project(root, research_project_id)
-    project = next((p for p in list_research_projects(root) if str(p.get("acronym", "")).lower() == research_project_id.lower()), None)
-    status = (project or {}).get("status") or "active"
-    if status != "active":
-        raise LocalFolderError(f"The research project '{research_project_id}' is {status}: new visits are only kept to an active one (change its status in Settings).")
+    """Raises LocalFolderError when the research project is not active: new visits are only kept to a project that is being worked on."""
+    with _as_local_folder_error():
+        _catalog(root).require_project(research_project_id, active=True)
 
 
 def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
