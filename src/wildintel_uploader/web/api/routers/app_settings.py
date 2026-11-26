@@ -1,46 +1,46 @@
-"""FastAPI router — what the settings page reads and saves all at once, and what it does with the research projects: their cameras, SD cards,
-trappers and roles, the research project that comes filled in, the log, the history of the states. The settings themselves (the configs, the
-welcome page, the data folder) are the module `modules.settings`, driven by `entrypoints/api/settings.py`.
+"""FastAPI router — what the settings page reads and saves all at once (GET and PUT /api/settings), and what it does with the research projects: their
+cameras, SD cards, trappers and roles, the research project that comes filled in, the history of the states.
 
-Edited on the settings page. The password never goes back to the frontend: TRAPPER
-says whether one is saved instead, and saving a blank one keeps it."""
+What is a setting, it leaves to the module `modules.settings` (its contract, SettingsService, given by Dishka): which secrets are saved, the folders by
+default, the log and the CPUs to show; and saving them — a secret left blank keeps the saved one, a blank address or user is none, the folders follow
+the data folder, the storage has to exist, the level of the log applies at once. What is left here is the field work, which is not a setting and goes
+to the research projects. The rest of the settings is `entrypoints/api/settings.py`."""
 from __future__ import annotations
 
-import os
 from typing import Literal
 
+from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from wildintel_uploader.core import config
+from wildintel_uploader.core.services import audit, local_folder_service, status_history
 from wildintel_uploader.modules.settings.domain import folders
 from wildintel_uploader.modules.settings.domain import models as domain
-from wildintel_uploader.core import logging_setup, storage
-from wildintel_uploader.core.services import audit, local_folder_service, status_history
+from wildintel_uploader.modules.settings.domain.ports import SettingsService
+from wildintel_uploader.modules.settings.infrastructure.mapping import to_domain
 
-router = APIRouter(prefix="/api/settings", tags=["settings"])
+router = APIRouter(prefix="/api/settings", tags=["settings"], route_class=DishkaSyncRoute)
 
 
 # what the settings page reads for each secret: whether it is saved
 _HAS = {"user_password": "has_password", "client_secret": "has_secret", "api_key": "has_api_key"}
 
 
-def _public(settings: config.Settings) -> dict:
+def _public(settings: config.Settings, service: SettingsService) -> dict:
     data = settings.model_dump(mode="json")
     # no secret goes to the frontend: only whether it is saved, with the name the page reads
-    for section, field in config.secret_fields():
+    for section, field in domain.secret_fields():
         data[section][_HAS.get(field, f"has_{field}")] = bool(data[section].pop(field))
     data["FIELDWORK"]["roles"] = audit.alive(data["FIELDWORK"]["roles"])
-    data["DATA"]["dir"] = data["DATA"]["dir"] or str(config.default_data_dir())
-    # What the collections folder is when no folder of its own is set — shown as the default.
+    # the folders by default, the log and the CPUs: what the General section of the module shows
+    general = service.general()
+    data["DATA"]["dir"] = data["DATA"]["dir"] or str(general.folders.default_dir)
     for key in ("collections", "reports", "packages"):
-        data["DATA"][f"default_{key}_dir"] = str(config.data_dir(settings) / key)
-    # Read-only: where the log goes, and whether the environment overrides
-    # the level set here.
-    data["GENERAL"]["log_file"] = str(logging_setup.log_file())
-    data["GENERAL"]["log_level_override"] = logging_setup.env_override()
-    data["GENERAL"]["cpu_count"] = os.cpu_count() or 1
+        data["DATA"][f"default_{key}_dir"] = str(getattr(general.folders, f"default_{key}_dir"))
+    data["GENERAL"]["log_file"] = str(general.system.log_file)
+    data["GENERAL"]["log_level_override"] = general.system.log_level_override
+    data["GENERAL"]["cpu_count"] = general.system.cpu_count
     return data
 
 
@@ -48,10 +48,10 @@ def _root(settings: config.Settings):
     return config.collections_dir(settings)
 
 
-def _shown(settings: config.Settings) -> dict:
+def _shown(settings: config.Settings, service: SettingsService) -> dict:
     """The settings as the page has them: the cameras and the SD cards are those of the research projects, in their folders of the collections folder."""
     root = _root(settings)
-    data = _public(settings)
+    data = _public(settings, service)
     for kind in ("cameras", "sd_cards"):
         # what is still in the settings file belongs to a research project that is not in the collections folder (yet)
         data["FIELDWORK"][kind] = [i.model_dump(mode="json") if hasattr(i, "model_dump") else i for i in local_folder_service.list_all_field_items(root, kind)] + data["FIELDWORK"][kind]
@@ -109,28 +109,22 @@ def _follow_data_dir(old: config.Settings, new: config.Settings) -> None:
 
 
 @router.get("")
-def get_settings() -> dict:
-    return _shown(_move_to_the_projects(config.load_settings()))
+def get_settings(service: FromDishka[SettingsService]) -> dict:
+    return _shown(_move_to_the_projects(config.load_settings()), service)
 
 
 @router.put("")
-def save_settings(new: config.Settings) -> dict:
-    """Replaces every setting — except a password left blank, which keeps
-    the saved one. Blank URL/username are cleared."""
+def save_settings(new: config.Settings, service: FromDishka[SettingsService]) -> dict:
+    """Replaces every setting by the rules of the module of the settings (see SettingsService.save_settings), and the field work of the page goes to
+    the research projects."""
     current = config.load_settings()
     if "storage" not in new.DATA.model_fields_set:   # the page does not show where the records are kept: it is not its to change
         new.DATA.storage = current.DATA.storage
-    if (new.DATA.storage or "json").strip().lower() not in storage.available():
-        raise HTTPException(422, f"There is no storage called '{new.DATA.storage}': {', '.join(storage.available())}.")
-    _follow_data_dir(current, new)
-    # a secret left blank keeps the saved one: the page never has it
-    for section, field in config.secret_fields():
-        if not getattr(getattr(new, section), field):
-            setattr(getattr(new, section), field, getattr(getattr(current, section), field))
-    for section, fields in ((new.TRAPPER, ("base_url", "user_name")), (new.EPICOLLECT5, ("project_slug", "client_id")), (new.AGOUTI, ("base_url", "project_id"))):
-        for field in fields:
-            if not getattr(section, field):
-                setattr(section, field, None)
+    try:
+        service.check_settings(to_domain(new))      # before anything is written to the research projects
+    except domain.SettingsError as exc:
+        raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
+    _follow_data_dir(current, new)   # where the research projects are, for their field work
     root = _root(new)
     local_folder_service.write_trappers(root, [t.model_dump(mode="json") for t in new.FIELDWORK.trappers])   # the people are kept beside the projects, not in the settings
     new.FIELDWORK.trappers = []
@@ -170,10 +164,11 @@ def save_settings(new: config.Settings) -> dict:
     for project in known:
         local_folder_service.write_roles(root, project, by_project.get(project, []))
     new.FIELDWORK.roles = [r for r in new.FIELDWORK.roles if r.research_project not in known]
-    config.save_settings(new)
-    storage.configure(new.DATA.storage)   # where the records are kept, from now on
-    logging_setup.apply_level(logging_setup.effective_level())
-    return _shown(new)
+    try:
+        service.save_settings(to_domain(new))
+    except domain.SettingsError as exc:
+        raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
+    return _shown(config.load_settings(), service)
 
 
 class DefaultResearchProjectRequest(BaseModel):
@@ -191,22 +186,6 @@ def set_default_research_project(req: DefaultResearchProjectRequest) -> dict:
     settings.GENERAL.default_research_project = found
     config.save_settings(settings)
     return {"default_research_project": found}
-
-
-@router.get("/log")
-def download_log() -> FileResponse:
-    """The current log file — to attach to a bug report."""
-    path = logging_setup.log_file()
-    if not path.is_file():
-        raise HTTPException(404, "There's no log file yet.")
-    return FileResponse(path, media_type="text/plain", filename=path.name)
-
-
-@router.delete("/log")
-def delete_log() -> dict:
-    """Deletes the log file and its rotated copies — logging goes on, into a
-    new one."""
-    return {"deleted": logging_setup.clear_log()}
 
 
 class FieldItemStatusRequest(BaseModel):

@@ -1,4 +1,6 @@
-"""FastAPI router — the settings themselves (module `modules.settings`): the configs the user can switch to, the welcome page and the data folder.
+"""FastAPI router — the settings themselves (module `modules.settings`): the configs the user can switch to (the Config section of the settings page),
+the General section — its settings, the folders, what the system says, the log —, each section of settings.toml on its own (TRAPPER, AGOUTI,
+EPICOLLECT5, VALIDATION…), the welcome page and the data folder.
 
 It only translates: a request into a call to the contract of the module (`domain.ports.SettingsService`), and its answer or its error into HTTP. What the settings
 page reads and saves all at once (GET and PUT /api/settings) is still `web/api/routers/app_settings.py`: it also moves the cameras, the SD cards and the
@@ -7,14 +9,15 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from wildintel_uploader.core.services import file_manager
-from wildintel_uploader.modules.settings.domain.models import SettingsError
-from wildintel_uploader.modules.settings.domain.ports import NoSettingsFile, SettingsService, UnknownConfig
+from wildintel_uploader.modules.settings.domain.models import DataSettings, GeneralSettings, SettingsError
+from wildintel_uploader.modules.settings.domain.ports import GeneralView, NoLogFile, NoSettingsFile, SettingsService, UnknownConfig, UnknownSetting
 
 # Each endpoint is given what it asks for as FromDishka[...] by the container of entrypoints.wiring, in a scope of its own for each request.
 router = APIRouter(prefix="/api/settings", tags=["settings"], route_class=DishkaSyncRoute)
@@ -103,3 +106,93 @@ def set_data_dir(req: DataDirRequest, service: Service) -> dict:
         return {"dir": str(service.set_data_dir(req.dir))}
     except SettingsError:
         raise HTTPException(422, "The data folder must be an absolute path (or one starting with ~).") from None
+
+
+# ── the General section ──
+
+def _json(value: Any) -> Any:
+    """A view of the contract as JSON: its dataclasses as objects, its paths as text."""
+    if isinstance(value, dict):
+        return {k: _json(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json(v) for v in value]
+    return str(value) if isinstance(value, Path) else value
+
+
+def _general(view: GeneralView) -> dict:
+    return _json(asdict(view))
+
+
+class FoldersRequest(BaseModel):
+    dir: str | None = None
+    collections_dir: str | None = None
+    reports_dir: str | None = None
+    packages_dir: str | None = None
+
+
+class GeneralRequest(BaseModel):
+    log_level: str
+    workers: int
+    default_research_project: str | None = None
+    show_welcome: bool = True
+    # left out, the folders stay as they are
+    folders: FoldersRequest | None = None
+
+
+@router.get("/general")
+def get_general(service: Service) -> dict:
+    """The General section: {"general": its settings, "folders": the folders and the default of each, "system": the CPUs, the log file and a level
+    the environment forces}."""
+    return _general(service.general())
+
+
+@router.put("/general")
+def save_general(req: GeneralRequest, service: Service) -> dict:
+    """Saves the General section, and the level of the log applies at once. A setting that cannot be is a 422 that names it."""
+    folders = req.folders.model_dump() if req.folders else {k: getattr(service.general().folders, k) for k in FoldersRequest.model_fields}
+    try:
+        general = GeneralSettings(log_level=req.log_level, workers=req.workers, default_research_project=req.default_research_project,
+                                  show_welcome=req.show_welcome)
+        return _general(service.save_general(general, DataSettings(**folders)))
+    except SettingsError as exc:
+        raise HTTPException(422, {"setting": exc.setting, "message": exc.message}) from exc
+
+
+@router.get("/log")
+def download_log(service: Service) -> FileResponse:
+    """The current log file — to attach to a bug report."""
+    try:
+        path = service.log_file()
+    except NoLogFile:
+        raise HTTPException(404, "There's no log file yet.") from None
+    return FileResponse(path, media_type="text/plain", filename=path.name)
+
+
+@router.delete("/log")
+def delete_log(service: Service) -> dict:
+    """Deletes the log file and its rotated copies — logging goes on, into a new one."""
+    return {"deleted": service.clear_log()}
+
+
+# ── each section ──
+
+@router.get("/sections/{section}")
+def get_section(section: str, service: Service) -> dict:
+    """One section of the settings — TRAPPER, AGOUTI, EPICOLLECT5, VALIDATION… —: {"section", "values" (the secrets left out), "secrets" (whether each
+    is saved)}."""
+    try:
+        return _json(asdict(service.section(section)))
+    except UnknownSetting:
+        raise HTTPException(404, f"There's no section {section!r}.") from None
+
+
+@router.put("/sections/{section}")
+def save_section(section: str, values: dict[str, Any], service: Service) -> dict:
+    """Changes the settings of one section that the body names — the rest stays. A secret left blank keeps the saved one. A setting that is not one
+    is a 404; a value it does not take, a 422 that names it."""
+    try:
+        return _json(asdict(service.save_section(section, values)))
+    except UnknownSetting as exc:
+        raise HTTPException(404, f"There's no setting {exc.args[0]!r}.") from None
+    except SettingsError as exc:
+        raise HTTPException(422, {"setting": exc.setting, "message": exc.message}) from exc

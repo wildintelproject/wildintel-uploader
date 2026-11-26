@@ -1,4 +1,5 @@
-"""The commands of the settings (module `modules.settings`): `config show`, `config set`, `config path` and `config configs …` — the same settings
+"""The commands of the settings (module `modules.settings`): `config show`, `config set`, `config path`, `config general`, `config log …` and
+`config configs …` — the same settings
 files as the web app's settings page, through the same contract (`domain.ports.SettingsService`). Only the asking and the showing are here: Rich
 tables, prompts, messages."""
 from __future__ import annotations
@@ -13,11 +14,13 @@ from dishka import FromDishka
 
 from wildintel_uploader.entrypoints.cli.injection import inject
 from wildintel_uploader.modules.settings.domain.models import SettingsError
-from wildintel_uploader.modules.settings.domain.ports import SettingsService, ShownSetting, UnknownConfig, UnknownSetting
+from wildintel_uploader.modules.settings.domain.ports import NoLogFile, SettingsService, ShownSetting, UnknownConfig, UnknownSetting
 
 settings_app = typer.Typer(help="Show or change the settings — the same settings.toml as the web app's ⚙️ page.", no_args_is_help=True)
 configs_app = typer.Typer(help="The configs — sets of settings — the app can switch between.", no_args_is_help=True)
 settings_app.add_typer(configs_app, name="configs")
+log_app = typer.Typer(help="The log of the app: where it is, and clearing it.", no_args_is_help=True)
+settings_app.add_typer(log_app, name="log")
 
 
 def _shown(setting: ShownSetting) -> str:
@@ -34,10 +37,17 @@ def _shown(setting: ShownSetting) -> str:
 
 @settings_app.command("show")
 @inject
-def show(service: FromDishka[SettingsService]) -> None:
-    """Show every setting (the passwords and the secrets never shown)."""
-    for section, settings in service.shown_settings().items():
-        table = Table(title=section, title_justify="left", show_header=False, box=None, padding=(0, 2))
+def show(service: FromDishka[SettingsService],
+         section: Annotated[Optional[str], typer.Argument(help="Only this section — GENERAL, TRAPPER, AGOUTI, EPICOLLECT5, VALIDATION…")] = None) -> None:
+    """Show the settings (the passwords and the secrets never shown)."""
+    shown = service.shown_settings()
+    if section is not None:
+        wanted = section.upper()
+        if wanted not in shown:
+            raise fail(f"No section {section}. The sections: {', '.join(shown)}.")
+        shown = {wanted: shown[wanted]}
+    for name, settings in shown.items():
+        table = Table(title=name, title_justify="left", show_header=False, box=None, padding=(0, 2))
         for setting in settings:
             table.add_row(setting.key, _shown(setting))
         console.print(table)
@@ -114,3 +124,45 @@ def configs_use(service: FromDishka[SettingsService], config_id: Annotated[str, 
         _configs_table(service.activate_config(config_id))
     except UnknownConfig:
         raise fail(f"There's no config {config_id!r}. See: wildintel-uploader config configs list") from None
+
+
+# ── the General section ──
+
+@settings_app.command("general")
+@inject
+def general(service: FromDishka[SettingsService]) -> None:
+    """The General section, as the settings page shows it — change one with `config set GENERAL.…` or `config set DATA.…`."""
+    view = service.general()
+    g, f, system = view.general, view.folders, view.system
+    table = Table(title="GENERAL", title_justify="left", show_header=False, box=None, padding=(0, 2))
+    table.add_row("Log level", g.log_level + (f"  [yellow](the environment forces {system.log_level_override})[/yellow]" if system.log_level_override else ""))
+    table.add_row("Images at once", f"{g.workers}  [dim](this computer has {system.cpu_count} CPU{'s' if system.cpu_count != 1 else ''}; at most {system.max_workers})[/dim]")
+    table.add_row("Default research project", g.default_research_project or "—")
+    table.add_row("Welcome page", "shown" if g.show_welcome else "not shown")
+    console.print(table)
+    folders = Table(title="Folders", title_justify="left", show_header=False, box=None, padding=(0, 2))
+    for label, own, default in (("Data", f.dir, f.default_dir), ("Collections", f.collections_dir, f.default_collections_dir),
+                                ("Reports", f.reports_dir, f.default_reports_dir), ("Packages", f.packages_dir, f.default_packages_dir)):
+        folders.add_row(label, own if own else f"{default}  [dim](default)[/dim]")
+    console.print(folders)
+    console.print(f"[dim]Log file: {system.log_file}[/dim]")
+
+
+@log_app.command("path")
+@inject
+def log_path(service: FromDishka[SettingsService]) -> None:
+    """Where the log file is — to attach it to a bug report."""
+    try:
+        console.print(str(service.log_file()))
+    except NoLogFile:
+        raise fail("There's no log file yet.") from None
+
+
+@log_app.command("clear")
+@inject
+def log_clear(service: FromDishka[SettingsService], yes: Annotated[bool, typer.Option("--yes", "-y", help="Don't ask.")] = False) -> None:
+    """Deletes the log file and its older copies. Logging goes on, into a new one."""
+    if not yes and not typer.confirm("Delete the log file and its older copies? This can't be undone"):
+        raise typer.Exit()
+    deleted = service.clear_log()
+    console.print(f"[green]✔[/green] {deleted} file{'s' if deleted != 1 else ''} deleted.")

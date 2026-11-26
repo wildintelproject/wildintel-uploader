@@ -13,19 +13,33 @@ from dishka import Container, Provider, Scope, make_container, provide
 
 from wildintel_uploader.core import config
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
-from wildintel_uploader.modules.settings.domain.ports import SettingsService, SettingsStore
+from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
+from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
 
 
 class SettingsProvider(Provider):
-    """The module of the settings: its use cases over the TOML files of the user's config folder."""
+    """The module of the settings: its use cases over the TOML files of the user's config folder, the log of the app, this computer and the backends of
+    the records — those three, with nothing to read anew, for as long as the app lives."""
 
     @provide(scope=Scope.REQUEST)
     def store(self) -> SettingsStore:
         return config.settings_store()
 
+    @provide(scope=Scope.APP)
+    def activity_log(self) -> ActivityLog:
+        return AppActivityLog()
+
+    @provide(scope=Scope.APP)
+    def machine(self) -> Machine:
+        return ThisMachine()
+
+    @provide(scope=Scope.APP)
+    def record_storage(self) -> RecordStorage:
+        return AppRecordStorage()
+
     @provide(scope=Scope.REQUEST)
-    def service(self, store: SettingsStore) -> SettingsService:
-        return SettingsUseCases(store, config.default_data_dir())
+    def service(self, store: SettingsStore, activity_log: ActivityLog, machine: Machine, record_storage: RecordStorage) -> SettingsService:
+        return SettingsUseCases(store, config.default_data_dir(), activity_log=activity_log, machine=machine, record_storage=record_storage)
 
 
 def make_app_container() -> Container:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any, ClassVar, Mapping
 
@@ -96,6 +96,9 @@ class TrapperSettings:
 
     def __post_init__(self) -> None:
         _in_range("TRAPPER.max_zip_mb", self.max_zip_mb, 1, 5000)
+        # where to connect and as whom: blank is none
+        _set(self, "base_url", _blank_is_none(self.base_url))
+        _set(self, "user_name", _blank_is_none(self.user_name))
 
 
 @dataclass(frozen=True)
@@ -124,6 +127,10 @@ class Epicollect5Settings:
     client_id: str | None = None                         # of its API client app, for private projects
     client_secret: str | None = secret(default=None)
     mapping: Mapping[str, str] = field(default_factory=dict)   # deployment field -> input ref of the form
+
+    def __post_init__(self) -> None:
+        _set(self, "project_slug", _blank_is_none(self.project_slug))
+        _set(self, "client_id", _blank_is_none(self.client_id))
 
 
 @dataclass(frozen=True)
@@ -312,3 +319,15 @@ def secret_fields() -> tuple[tuple[str, str], ...]:
             if f.metadata.get("secret"):
                 out.append((Settings.SECTIONS[section.name], f.name))
     return tuple(out)
+
+
+def keep_secrets(before: Settings, after: Settings) -> Settings:
+    """`after`, with each secret it leaves blank as `before` had it: a secret is never shown, so what comes back blank is one that was not changed —
+    it is cleared only by being given another."""
+    sections = {}
+    for section, name in secret_fields():
+        attribute = next(a for a, s in Settings.SECTIONS.items() if s == section)
+        values = sections.get(attribute, getattr(after, attribute))
+        if not getattr(values, name):
+            sections[attribute] = replace(values, **{name: getattr(getattr(before, attribute), name)})
+    return replace(after, **sections) if sections else after
