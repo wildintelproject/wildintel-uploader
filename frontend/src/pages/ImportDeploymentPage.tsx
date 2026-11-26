@@ -295,7 +295,8 @@ export function describePreprocessing(steps: Set<PreprocessStep>): string {
 /** The opt-in checks as a table: one row per check, with whether to run it
  * and whether it must pass to move past this step. "Required" is only
  * meaningful — and only enabled — alongside "run". */
-export type CheckStatus = 'running' | 'passed' | 'failed' | 'none'
+/** How a check is: while the checks run, waiting for its turn, running or done; once they ran, passed or failed; none when it is skipped. */
+export type CheckStatus = 'waiting' | 'running' | 'done' | 'passed' | 'failed' | 'none'
 
 export function CheckTable<T extends string>({ options, enabled, required, status, describe, outcome, opened, onOpen, onToggleEnabled, onToggleRequired, onSetEnabled, onSetRequired }: {
   options: { value: T; label: string }[]; enabled: Set<T>; required: Set<T>
@@ -413,10 +414,12 @@ export function strictnessOf(enabled: boolean, required: boolean): Strictness {
 
 /** The checks as a table of one row each, with how strict each is (skip, warn, must pass) and how it ended — the failed ones open
  * the images that failed them. */
-export function StrictnessTable<T extends string>({ options, enabled, required, running, results = false, unit, describe, outcome, opened, onOpen, note, onChoose }: {
+export function StrictnessTable<T extends string>({ options, enabled, required, running, states, results = false, unit, describe, outcome, opened, onOpen, note, onChoose }: {
   options: { value: T; label: string }[]; enabled: Set<T>; required: Set<T>
   /** Whether the checks are being run now. */
   running: boolean
+  /** While they run, how far each one is — the one running, the ones done —, when the server tells it: the others wait for their turn. */
+  states?: Partial<Record<T, 'running' | 'done'>>
   /** The table of results: how strict each check was is only told, not chosen, and the checks are not editable. */
   results?: boolean
   /** What a failure counts, when it is not images — "deployment" for a session, whose checks are counted by the deployments that failed them. */
@@ -448,7 +451,7 @@ export function StrictnessTable<T extends string>({ options, enabled, required, 
             const current = strictnessOf(runs, required.has(opt.value))
             const result = runs && !running ? outcome(opt.value) : undefined
             const failed = result !== undefined && result.failed > 0
-            const status = checkStatus(runs, running, result ? !failed : null)
+            const status = runs && running && states ? (states[opt.value] ?? 'waiting') : checkStatus(runs, running, result ? !failed : null)
             return (
               <Fragment key={opt.value}>
               <tr className={TABLE.row(false)}>
@@ -498,8 +501,30 @@ export function StrictnessTable<T extends string>({ options, enabled, required, 
 }
 
 /** Whether a check is running, or how it ended: passed, or failed — which stops you if it is required to continue. */
+/** How far the checks are while they run, as the preprocessing says it: "Check 2 of 6", how much of them is done, and what the one running is doing. */
+export function ChecksProgress({ checks, states, detail }: { checks: string[]; states: Partial<Record<string, 'running' | 'done'>>; detail?: string }) {
+  const total = checks.length
+  const done = checks.filter((c) => states[c] === 'done').length
+  const current = Math.max(1, Math.min(total, done + (checks.some((c) => states[c] === 'running') ? 1 : 0)))
+  const share = total ? (done / total) * 100 : 0
+  return (
+    <div className="mb-4" role="status" aria-label={`Check ${current} of ${total}`}>
+      <div className="flex items-baseline justify-between text-sm">
+        <span className="font-semibold text-zinc-900 dark:text-zinc-100">Check {current} of {total}</span>
+        <span className="text-zinc-500 dark:text-zinc-400">{Math.round(share)}%</span>
+      </div>
+      <div className="mt-2 h-2 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+        <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${share}%` }} />
+      </div>
+      {detail && <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">{detail}</p>}
+    </div>
+  )
+}
+
 export function CheckStatusIcon({ status, required, label }: { status: CheckStatus; required: boolean; label: string }) {
   if (status === 'running') return <span role="status" aria-label={`${label}: running`} title="Running…" className="inline-flex"><SmallSpinner /></span>
+  if (status === 'waiting') return <span role="img" aria-label={`${label}: waiting`} title="Waiting for its turn" className="inline-block h-4 w-4 rounded-full border-2 border-zinc-300 dark:border-zinc-600" />
+  if (status === 'done') return <span role="img" aria-label={`${label}: done`} title="Done — its result comes when every check has run" className="inline-flex text-zinc-400 dark:text-zinc-500"><StatusIcon kind="success" className="h-5 w-5" /></span>
   if (status === 'passed') return <span role="img" aria-label={`${label}: passed`} title="Passed" className="inline-flex text-emerald-500"><StatusIcon kind="success" className="h-5 w-5" /></span>
   if (status === 'failed') {
     return required
@@ -592,6 +617,7 @@ export const IMAGE_CHECK_DESCRIPTIONS: Record<ImageCheck, string> = {
   duplicates: 'Checks for images with exactly the same content',
 }
 
+// In the order they run in (see DEPLOYMENT_CHECK_ORDER of the server), as IMAGE_CHECK_OPTIONS: the table of the checks follows them while they run.
 export const DEPLOYMENT_CHECK_OPTIONS: { value: DeploymentCheck; label: string }[] = [
   { value: 'deployment_id', label: 'Deployment id format (R0033-DONA_01)' },
   { value: 'collection_prefix', label: 'Deployment id starts with its collection' },
@@ -599,11 +625,11 @@ export const DEPLOYMENT_CHECK_OPTIONS: { value: DeploymentCheck; label: string }
   { value: 'location', label: "Deployment id's location is the one chosen" },
   { value: 'time_range', label: 'Image dates fit the deployment (first at the start, last at the end)' },
   { value: 'camera', label: 'Camera consistency' },
+  { value: 'sd_card', label: 'The SD card is the one the visit left' },
+  { value: 'photo_count', label: 'The images are those the visit counted' },
   { value: 'image_count', label: 'Number of images is like the previous revisions' },
   { value: 'sequence_count', label: 'Number of sequences is like the previous revisions' },
   { value: 'sequence_length', label: 'Length of the sequences is like the previous revisions' },
-  { value: 'sd_card', label: 'The SD card is the one the visit left' },
-  { value: 'photo_count', label: 'The images are those the visit counted' },
 ]
 
 /** How the postvalidation names each check, and what it says it does. */
@@ -1735,6 +1761,9 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   const [requiredImageChecks, setRequiredImageChecks] = useState<Set<ImageCheck>>(new Set())
   const [validating, setValidating] = useState(false)
   const [checkProgress, setCheckProgress] = useState<ImageCheckProgress | null>(null)
+  // While the checks run, how far each one is, as the server tells it: of the images and of the deployment.
+  const [imageCheckStates, setImageCheckStates] = useState<Partial<Record<string, 'running' | 'done'>>>({})
+  const [deploymentCheckStates, setDeploymentCheckStates] = useState<Partial<Record<string, 'running' | 'done'>>>({})
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -2048,9 +2077,10 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   }
 
   async function handleValidate() {
-    setValidating(true); setValidationError(null); setValidation(null); setCheckProgress(null)
+    setValidating(true); setValidationError(null); setValidation(null); setCheckProgress(null); setImageCheckStates({})
     try {
-      setValidation(await api.validateImages(sourceDir, runnableImageChecks, researchProjectId, deployment.deployment_id || null, setCheckProgress))
+      setValidation(await api.validateImages(sourceDir, runnableImageChecks, researchProjectId, deployment.deployment_id || null, setCheckProgress,
+        (e) => setImageCheckStates((now) => ({ ...now, [e.check]: e.state }))))
     } catch (e) {
       setValidationError(e instanceof Error ? e.message : 'Could not validate the images.')
     } finally {
@@ -2301,7 +2331,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
   }, [deploymentCheck, checkingDeployment, deploymentCheckError])
 
   async function handleCheckDeployment() {
-    setCheckingDeployment(true); setDeploymentCheckError(null); setDeploymentCheck(null)
+    setCheckingDeployment(true); setDeploymentCheckError(null); setDeploymentCheck(null); setDeploymentCheckStates({})
     try {
       setDeploymentCheck(await api.validateDeployment(sourceDir, deployment, runnableDeploymentChecks, {
         // The collection is the one the deployment id names (its R0003 prefix).
@@ -2315,6 +2345,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
           collected_session: linkedVisit.end.session, counted_photos: linkedVisit.end.num_photos ?? null, sd_card: sdCard || null,
           collected_card_status: linkedVisit.end.card_status ?? null, collected_battery_status: linkedVisit.end.battery_status ?? null,
         } : null,
+        onCheck: (e) => setDeploymentCheckStates((now) => ({ ...now, [e.check]: e.state })),
       }))
     } catch (e) {
       setDeploymentCheckError(e instanceof Error ? e.message : 'Could not check the deployment.')
@@ -2894,10 +2925,14 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                     {report ? (
                       <CheckResultsTable report={report} options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks} describe={(c) => IMAGE_CHECK_DESCRIPTIONS[c]} filters={filters} onFilters={onFilters} />
                     ) : (
-                      <StrictnessTable options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks} running={validating} results
-                                       describe={(c) => IMAGE_CHECK_DESCRIPTIONS[c]}
-                                       outcome={() => undefined}
-                                       opened={openCheck as ImageCheck | null} onOpen={open} />
+                      <>
+                        {validating && <ChecksProgress checks={shownImageChecks.map((o) => o.value).filter((c) => runnableImageChecks.includes(c))} states={imageCheckStates}
+                                                       detail={checkProgress ? describeImageCheckProgress(checkProgress) : undefined} />}
+                        <StrictnessTable options={shownImageChecks} enabled={imageChecks} required={requiredImageChecks} running={validating} states={imageCheckStates} results
+                                         describe={(c) => IMAGE_CHECK_DESCRIPTIONS[c]}
+                                         outcome={() => undefined}
+                                         opened={openCheck as ImageCheck | null} onOpen={open} />
+                      </>
                     )}
                   </>
                 )
@@ -3279,12 +3314,19 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
                           enabled={deploymentChecks} required={requiredDeploymentChecks}
                           describe={(c) => DEPLOYMENT_CHECK_DISPLAY[c].description(deployment.location_id ?? '').replace(/\.$/, '')} filters={filters} onFilters={onFilters} />
                       ) : (
-                        <StrictnessTable
+                        <>
+                        {checkingDeployment && (() => {
+                          const order = shownDeploymentChecks.map((o) => o.value).filter((c) => runnableDeploymentChecks.includes(c))
+                          const now = order.find((c) => deploymentCheckStates[c] === 'running')
+                          return <ChecksProgress checks={order} states={deploymentCheckStates} detail={now ? `${DEPLOYMENT_CHECK_DISPLAY[now].label}…` : undefined} />
+                        })()}
+                        <StrictnessTable states={deploymentCheckStates}
                           options={shownDeploymentChecks.map((o) => ({ value: o.value, label: DEPLOYMENT_CHECK_DISPLAY[o.value].label }))}
                           enabled={deploymentChecks} required={requiredDeploymentChecks} running={checkingDeployment} results
                           describe={(c) => DEPLOYMENT_CHECK_DISPLAY[c].description(deployment.location_id ?? '').replace(/\.$/, '')}
                           outcome={() => undefined}
                           opened={openCheck as DeploymentCheck | null} onOpen={open} />
+                        </>
                       )}
                     </>
                   )

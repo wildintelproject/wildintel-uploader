@@ -1147,6 +1147,31 @@ def test_validate_images_stream_tells_the_progress_and_ends_with_the_same_result
         assert [e for e in progress if e["step"] == step][-1] == {"type": "progress", "step": step, "done": 5, "total": 5}
 
 
+def test_validate_images_stream_tells_each_check_when_it_starts_and_ends_in_the_order_they_run(tmp_path: Path):
+    for number in range(1, 4):
+        _make_jpeg(tmp_path / f"IMG_{number:04d}.jpg", f"2024:05:01 10:0{number}:00")
+
+    events = _stream_events(_client().post("/api/deployment-import/validate-images/stream", json={"path": str(tmp_path), "checks": ["structure", "corrupted", "sequence", "exif"]}))
+
+    told = [(e["check"], e["state"]) for e in events if e["type"] == "check"]
+    assert told == [(c, state) for c in ("corrupted", "sequence", "structure", "exif") for state in ("running", "done")]
+    assert events[-1]["type"] == "done"
+
+
+def test_validate_deployment_stream_tells_each_check_and_ends_with_what_the_plain_one_answers(tmp_path: Path):
+    _make_jpeg(tmp_path / "a.jpg", "2024:09:03 10:00:00")
+    body = {"path": str(tmp_path), "checks": ["deployment_id", "time_range", "camera"],
+            "deployment": {"deployment_id": "R0001-DONA_01", "location_id": "DONA_01", "start_date": "2024-09-04T00:00:00+02:00", "end_date": "2024-11-04T14:28:00+02:00", "latitude": 37.0, "longitude": -6.5}}
+
+    events = _stream_events(_client().post("/api/deployment-import/validate-deployment/stream", json=body))
+    plain = _client().post("/api/deployment-import/validate-deployment", json=body).json()
+
+    assert [(e["check"], e["state"]) for e in events if e["type"] == "check"] == [(c, s) for c in ("deployment_id", "time_range", "camera") for s in ("running", "done")]
+    assert events[-1]["type"] == "done"
+    assert {k: v for k, v in events[-1]["result"].items() if k != "report_id"} == {k: v for k, v in plain.items() if k != "report_id"}
+    assert _client().post("/api/deployment-import/validate-deployment/stream", json={**body, "path": "/no/such/folder"}).status_code == 400
+
+
 def test_validate_images_stream_of_a_missing_folder_is_a_400():
     assert _client().post("/api/deployment-import/validate-images/stream", json={"path": "/no/such/folder"}).status_code == 400
 

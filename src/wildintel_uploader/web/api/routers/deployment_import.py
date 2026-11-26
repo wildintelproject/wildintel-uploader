@@ -268,8 +268,8 @@ def validate_images(req: ValidateImagesRequest) -> dict:
 
 @router.post("/validate-images/stream")
 def validate_images_stream(req: ValidateImagesRequest) -> StreamingResponse:
-    """The same checks as /validate-images, told as NDJSON while they run: {"type": "progress", "step", "done", "total"} (at most a few
-    a second, and the last of each step) and, at the end, {"type": "done", "result": <what /validate-images answers>}. A failure is {"type": "error", "detail"}."""
+    """The same checks as /validate-images, told as NDJSON while they run: {"type": "check", "check", "state"} when each check starts ("running")
+    and ends ("done"), {"type": "progress", "step", "done", "total"} (at most a few a second, and the last of each step) and, at the end, {"type": "done", "result": <what /validate-images answers>}. A failure is {"type": "error", "detail"}."""
     checks = frozenset(req.checks) if req.checks is not None else None
     source = Path(req.path).expanduser()
     if not source.is_dir():
@@ -289,6 +289,7 @@ def validate_images_stream(req: ValidateImagesRequest) -> StreamingResponse:
             if req.research_project_id and (checks is None or "duplicates" in checks):
                 imported = local_folder_service.imported_source_hashes(config.collections_dir(), req.research_project_id, req.deployment_id)
             result = deployment_import_service.validate_images(source, checks, detail=True, imported=imported, progress=progress,
+                                                                on_check=lambda check, state: events.put({"type": "check", "check": check, "state": state}),
                                                                 exif_fields=config.load_settings().VALIDATION.exif_fields,
                                                                 camera_levels=config.load_settings().VALIDATION.camera_levels)
             events.put({"type": "done", "result": {**result, "report_id": _keep(lambda: report_service.validation_report(result, source, checks))}})
@@ -301,7 +302,7 @@ def validate_images_stream(req: ValidateImagesRequest) -> StreamingResponse:
         while True:
             event = events.get()
             yield json.dumps(event) + "\n"
-            if event["type"] != "progress":
+            if event["type"] not in ("progress", "check"):
                 return
 
     return StreamingResponse(lines(), media_type="application/x-ndjson")
@@ -341,38 +342,81 @@ def camera_identity(req: CameraIdentityRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
+def _validate_deployment(req: ValidateDeploymentRequest, on_check=None) -> dict:
+    """The checks of /validate-deployment, the statistical ones last, each told to `on_check(check, state)` when it starts and ends; the result with
+    the id of its report.
+
+    Raises:
+        deployment_import_service.DeploymentImportError: the folder is not one, or the tolerance is negative.
+    """
+    checks = frozenset(req.checks) if req.checks is not None else None
+    source = Path(req.path).expanduser()
+    result = deployment_import_service.validate_deployment_consistency(
+        source, req.deployment, checks, collection_name=req.collection_name,
+        expected_location_id=req.expected_location_id, tolerance_hours=req.tolerance_hours,
+        visit=req.visit.model_dump() if req.visit else None,
+        camera=local_folder_service.camera_record(config.collections_dir(), req.research_project_id, req.deployment.camera_id),
+        camera_levels=config.load_settings().VALIDATION.camera_levels, on_check=on_check,
+    )
+    # The statistical checks compare this revision with the location's previous ones: they are worked out together.
+    wanted = frozenset(statistics_service.STATISTIC_CHECKS) if checks is None else checks & frozenset(statistics_service.STATISTIC_CHECKS)
+    if wanted:
+        ordered = [c for c in statistics_service.STATISTIC_CHECKS if c in wanted]
+        for check in ordered:
+            if on_check:
+                on_check(check, "running")
+        stats = req.statistics
+        result.update(statistics_service.statistical_checks(
+            statistics_service.times_of_folder(source), config.collections_dir(), req.research_project_id,
+            req.deployment.deployment_id, wanted, sequence_gap_seconds=stats.sequence_gap_seconds,
+            min_revisions=stats.min_revisions, method=stats.method,
+            tolerances={
+                "image_count": stats.image_count_tolerance, "sequence_count": stats.sequence_count_tolerance,
+                "sequence_length": stats.sequence_length_tolerance,
+            },
+        ))
+        for check in ordered:
+            if on_check:
+                on_check(check, "done")
+    parameters = {"checks": sorted(checks) if checks is not None else None, "tolerance_hours": req.tolerance_hours, **req.statistics.model_dump()}
+    return {**result, "report_id": _keep(lambda: report_service.postvalidation_report(result, req.deployment.deployment_id, source, parameters))}
+
+
 @router.post("/validate-deployment")
 def validate_deployment(req: ValidateDeploymentRequest) -> dict:
     """Opt-in checks of the scanned images against the deployment's own
     fields — shooting times within its date range, camera consistency (see
     services.deployment_import_service.validate_deployment_consistency)."""
-    checks = frozenset(req.checks) if req.checks is not None else None
     try:
-        source = Path(req.path).expanduser()
-        result = deployment_import_service.validate_deployment_consistency(
-            source, req.deployment, checks, collection_name=req.collection_name,
-            expected_location_id=req.expected_location_id, tolerance_hours=req.tolerance_hours,
-            visit=req.visit.model_dump() if req.visit else None,
-            camera=local_folder_service.camera_record(config.collections_dir(), req.research_project_id, req.deployment.camera_id),
-            camera_levels=config.load_settings().VALIDATION.camera_levels,
-        )
-        # The statistical checks compare this revision with the location's previous ones.
-        wanted = frozenset(statistics_service.STATISTIC_CHECKS) if checks is None else checks & frozenset(statistics_service.STATISTIC_CHECKS)
-        if wanted:
-            stats = req.statistics
-            result.update(statistics_service.statistical_checks(
-                statistics_service.times_of_folder(source), config.collections_dir(), req.research_project_id,
-                req.deployment.deployment_id, wanted, sequence_gap_seconds=stats.sequence_gap_seconds,
-                min_revisions=stats.min_revisions, method=stats.method,
-                tolerances={
-                    "image_count": stats.image_count_tolerance, "sequence_count": stats.sequence_count_tolerance,
-                    "sequence_length": stats.sequence_length_tolerance,
-                },
-            ))
+        return _validate_deployment(req)
     except deployment_import_service.DeploymentImportError as exc:
         raise HTTPException(400, str(exc)) from exc
-    parameters = {"checks": sorted(checks) if checks is not None else None, "tolerance_hours": req.tolerance_hours, **req.statistics.model_dump()}
-    return {**result, "report_id": _keep(lambda: report_service.postvalidation_report(result, req.deployment.deployment_id, source, parameters))}
+
+
+@router.post("/validate-deployment/stream")
+def validate_deployment_stream(req: ValidateDeploymentRequest) -> StreamingResponse:
+    """The same checks as /validate-deployment, told as NDJSON while they run: {"type": "check", "check", "state"} when each starts ("running") and
+    ends ("done") and, at the end, {"type": "done", "result": <what /validate-deployment answers>}. A failure is {"type": "error", "detail"}."""
+    if not Path(req.path).expanduser().is_dir():
+        raise HTTPException(400, f"Not a folder: {Path(req.path).expanduser()}")
+    events: queue.Queue = queue.Queue()
+
+    def work() -> None:
+        try:
+            events.put({"type": "done", "result": _validate_deployment(req, lambda check, state: events.put({"type": "check", "check": check, "state": state}))})
+        except Exception as exc:
+            logger.warning("Checking the deployment failed: %s", exc, exc_info=debugging())
+            events.put({"type": "error", "detail": str(exc)})
+
+    def lines() -> Iterator[str]:
+        threading.Thread(target=work, daemon=True).start()
+        while True:
+            event = events.get()
+            yield json.dumps(event) + "\n"
+            if event["type"] not in ("progress", "check"):
+                return
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson")
 
 
 def _location_time(research_project_id: str | None, location_id: str | None) -> dict:

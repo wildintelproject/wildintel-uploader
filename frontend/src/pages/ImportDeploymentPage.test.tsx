@@ -1250,9 +1250,32 @@ describe('ImportDeploymentPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates'], 'DONA', 'R0001-DONA_01', expect.any(Function))
+      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'structure', 'camera', 'exif', 'duplicates'], 'DONA', 'R0001-DONA_01', expect.any(Function), expect.any(Function))
       expect(await screen.findByText(/1 corrupted image\(s\): IMG_0002\.jpg/)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
+    })
+
+    it('says, while the checks run, which one of how many is running, what it is doing, and which are done or wait for their turn', async () => {
+      let finish: (r: unknown) => void = () => {}
+      mockedApi.validateImages.mockImplementation((_path, _checks, _rp, _dep, onProgress, onCheck) => {
+        onCheck?.({ type: 'check', check: 'corrupted', state: 'running' })
+        onCheck?.({ type: 'check', check: 'corrupted', state: 'done' })
+        onCheck?.({ type: 'check', check: 'sequence', state: 'running' })
+        onProgress?.({ type: 'progress', step: 'dates', done: 1200, total: 3163 })
+        return new Promise((resolve) => { finish = resolve }) as never
+      })
+      await goToValidateStep()
+      await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
+
+      const progress = await screen.findByRole('status', { name: 'Check 2 of 6' })
+      expect(progress).toHaveTextContent('17%')                                     // one of six done
+      expect(progress).toHaveTextContent('Reading the dates… 1,200 of 3,163')
+      expect(screen.getByRole('img', { name: 'Corrupted images: done' })).toBeInTheDocument()
+      expect(screen.getByRole('status', { name: 'Shooting order vs. filename sequence: running' })).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: 'Folder structure (subfolders): waiting' })).toBeInTheDocument()
+
+      finish({ checked_count: 2, corrupted: [] })
+      await waitFor(() => expect(screen.queryByRole('status', { name: /^Check \d+ of/ })).not.toBeInTheDocument())
     })
 
     it('only runs the checks that are not skipped', async () => {
@@ -1262,7 +1285,7 @@ describe('ImportDeploymentPage', () => {
       for (const check of [0, 1, 3, 4, 5]) await chooseStrictness(check, 'Skip')
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['structure'], 'DONA', 'R0001-DONA_01', expect.any(Function))
+      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['structure'], 'DONA', 'R0001-DONA_01', expect.any(Function), expect.any(Function))
     })
 
     describe('the EXIF fields the wizard needs', () => {
@@ -1627,7 +1650,7 @@ describe('ImportDeploymentPage', () => {
       await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
         '/home/me/deployments/DONA_01',
         expect.objectContaining({ deployment_id: 'R0001-DONA_01', location_id: 'DONA_01' }),
-        ['deployment_id', 'collection_prefix', 'collection_name', 'location', 'time_range', 'camera', 'image_count', 'sequence_count', 'sequence_length', 'sd_card', 'photo_count'],
+        ['deployment_id', 'collection_prefix', 'collection_name', 'location', 'time_range', 'camera', 'sd_card', 'photo_count', 'image_count', 'sequence_count', 'sequence_length'],
         {
           collectionName: null, expectedLocationId: 'DONA_01', toleranceHours: 1, // the collection is the one the id names
           researchProjectId: 'DONA', // whose collections hold the previous revisions
@@ -1636,6 +1659,7 @@ describe('ImportDeploymentPage', () => {
             sequence_gap_seconds: 60, min_revisions: 2, method: 'median',
             image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
           },
+          onCheck: expect.any(Function), // told when each check starts and ends
         },
       ))
     })
@@ -1870,7 +1894,7 @@ describe('ImportDeploymentPage', () => {
       expect(screen.getAllByRole('radiogroup')).toHaveLength(4) // and the question of where the images are
 
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
-      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'camera'], 'DONA', 'R0001-DONA_01', expect.any(Function))
+      expect(mockedApi.validateImages).toHaveBeenCalledWith('/home/me/deployments/DONA_01', ['corrupted', 'sequence', 'camera'], 'DONA', 'R0001-DONA_01', expect.any(Function), expect.any(Function))
     })
 
     it('says there is nothing to run when every validation check is turned off, and lets the user go on', async () => {
@@ -1929,7 +1953,7 @@ describe('ImportDeploymentPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
       await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), ['deployment_id', 'collection_name', 'time_range', 'image_count', 'sequence_count', 'sequence_length', 'sd_card', 'photo_count'], expect.anything(),
+        expect.anything(), expect.anything(), ['deployment_id', 'collection_name', 'time_range', 'sd_card', 'photo_count', 'image_count', 'sequence_count', 'sequence_length'], expect.anything(),
       ))
     })
 

@@ -21,7 +21,10 @@ async function req<T>(url: string, options?: RequestInit): Promise<T> {
 
 /** How far a long step of the checks of the images is: the cameras (all at once), the dates and the corrupted images (image by image). */
 export interface ImageCheckProgress { type: 'progress'; step: 'cameras' | 'dates' | 'corrupted'; done: number; total: number }
-type ImageCheckEvent = ImageCheckProgress | { type: 'done'; result: ValidationResult }
+/** A check of the images or of the deployment that starts ('running') or ends ('done'), in the order they run. */
+export interface CheckEvent { type: 'check'; check: string; state: 'running' | 'done' }
+type ImageCheckEvent = ImageCheckProgress | CheckEvent | { type: 'done'; result: ValidationResult }
+type DeploymentCheckEvent = CheckEvent | { type: 'done'; result: DeploymentCheckResult }
 
 function post<T>(url: string, body: unknown): Promise<T> {
   return req<T>(url, {
@@ -256,12 +259,15 @@ export const api = {
   // checks omitted (or undefined) runs every check.
   // researchProjectId: the duplicates check also looks for images imported before into it; deploymentId: the one being imported again, left out of that.
   // onProgress: told how far each long step is while it runs (the answer is the same).
-  validateImages: async (path: string, checks?: ImageCheck[], researchProjectId?: string | null, deploymentId?: string | null, onProgress?: (progress: ImageCheckProgress) => void) => {
+  // onCheck: told when each check starts and ends.
+  validateImages: async (path: string, checks?: ImageCheck[], researchProjectId?: string | null, deploymentId?: string | null, onProgress?: (progress: ImageCheckProgress) => void,
+    onCheck?: (event: CheckEvent) => void) => {
     const body = { path, checks: checks ?? null, research_project_id: researchProjectId || null, deployment_id: deploymentId || null }
     if (!onProgress) return post<ValidationResult>('/api/deployment-import/validate-images', body)
     let result: ValidationResult | null = null
     await streamNdjson<ImageCheckEvent>('/api/deployment-import/validate-images/stream', body, (event) => {
       if (event.type === 'progress') onProgress(event)
+      else if (event.type === 'check') onCheck?.(event)
       else result = event.result
     }, 'The checks ended unexpectedly.')
     if (!result) throw new Error('The checks ended unexpectedly.')
@@ -277,14 +283,28 @@ export const api = {
       researchProjectId?: string | null; statistics?: StatisticsParams
       /** The visit the deployment is of, for the checks of the card and of the photos. */
       visit?: VisitCheckInfo | null
+      /** Told when each check starts and ends: the checks are then streamed (the answer is the same). */
+      onCheck?: (event: CheckEvent) => void
     } = {},
-  ) =>
-    post<DeploymentCheckResult>('/api/deployment-import/validate-deployment', {
+  ) => {
+    const body = {
       path, deployment, checks: checks ?? null, collection_name: options.collectionName ?? null,
       expected_location_id: options.expectedLocationId ?? null, tolerance_hours: options.toleranceHours ?? 1,
       research_project_id: options.researchProjectId ?? null, ...(options.statistics ? { statistics: options.statistics } : {}),
       visit: options.visit ?? null,
-    }),
+    }
+    if (!options.onCheck) return post<DeploymentCheckResult>('/api/deployment-import/validate-deployment', body)
+    const onCheck = options.onCheck
+    return (async () => {
+      let result: DeploymentCheckResult | null = null
+      await streamNdjson<DeploymentCheckEvent>('/api/deployment-import/validate-deployment/stream', body, (event) => {
+        if (event.type === 'check') onCheck(event)
+        else result = event.result
+      }, 'The checks ended unexpectedly.')
+      if (!result) throw new Error('The checks ended unexpectedly.')
+      return result as DeploymentCheckResult
+    })()
+  },
 
 
   // What the collection's two logs say of a deployment, if they have its row.
