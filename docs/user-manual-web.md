@@ -455,7 +455,7 @@ the visits come in:
 | Source | What it does |
 |---|---|
 | **By hand** | You fill in each visit yourself, following the field flow: the location, when, who went and what was done. |
-| **From a file** | A CSV with a row per visit, dropped in the page or, when Epicollect is turned on in the settings, **the entries of an Epicollect5 project** (*Epicollect5 project › Download the entries*). Once the file is read WildINTEL Uploader says what it detected — **WildINTEL Epicollect CSV**, whose columns are found by the label of their question, or **Custom CSV / Spreadsheet**, where you say which column gives each field — with the header of the file and the fields that matched. **Change type** reads the file as the other one and says why it cannot, if it cannot. |
+| **From a file** | A CSV with a row per visit, dropped in the page or, when Epicollect is turned on in the settings, **the entries of an Epicollect5 project** (*Epicollect5 project › Download the entries*). Once the file is read WildINTEL Uploader says what it detected — **WildINTEL Epicollect CSV**, whose columns are found by the label of their question, or **Custom CSV / Spreadsheet**, where you say which column gives each field — with the header of the file — its columns read for the visits in green, the others in grey, as its legend says; the coordinates of the form are read too — and the fields that matched. **Change type** reads the file as the other one and says why it cannot, if it cannot. |
 
 *By hand* and *From a file* are always offered.
 

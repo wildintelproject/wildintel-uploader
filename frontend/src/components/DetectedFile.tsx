@@ -12,7 +12,7 @@ export const FILE_KINDS: Record<FileKind, { title: string; summary: string }> = 
 /** The core fields shown for each kind, with the field of a visit each one is. */
 const CORE: Record<FileKind, [label: string, field: string][]> = {
   form: [['Location', 'location_id'], ['Status of the camera', 'camera_status'], ['Date and time', 'created_at']],
-  other: [['Site', 'location_id'], ['Actions', 'actions'], ['Date', 'date'], ['Time', 'time']],
+  other: [['Location', 'location_id'], ['Actions', 'actions'], ['Date', 'date'], ['Time', 'time']],
 }
 
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -103,8 +103,12 @@ export function DetectedFile({ name, text, found, kind, onKind, onReplace }: {
       <div className="px-6 py-5">
         <div className="mb-5">
           <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Header of the file</p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400" aria-label="What the colours of the columns mean">
+            <span className="flex items-center gap-1.5"><span aria-hidden="true" className="h-3 w-3 rounded-sm border border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40" />Read for the visits</span>
+            <span className="flex items-center gap-1.5"><span aria-hidden="true" className="h-3 w-3 rounded-sm border border-zinc-200 dark:border-zinc-700" />Not read</span>
+          </p>
           <ul className="mt-2 flex flex-wrap gap-2" aria-label="Header of the file">
-            {found.columns.map((c, i) => <li key={`${c}-${i}`} className={`rounded-md border px-2 py-1 font-mono text-xs ${Object.values(columns).includes(c) ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400'}`}>{c}</li>)}
+            {found.columns.map((c, i) => <li key={`${c}-${i}`} title={Object.values(columns).includes(c) ? 'Read for the visits' : 'Not read'} className={`rounded-md border px-2 py-1 font-mono text-xs ${Object.values(columns).includes(c) ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400'}`}>{c}</li>)}
           </ul>
         </div>
         <div className="flex flex-wrap items-start justify-between gap-3">

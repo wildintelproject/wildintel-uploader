@@ -1033,6 +1033,10 @@ describe('VisitsPage from a CSV file', () => {
 
     const header = await screen.findByRole('list', { name: 'Header of the file' })
     expect(within(header).getAllByRole('listitem').map((l) => l.textContent)).toEqual(['Lugar', 'Dia', 'Hora', 'Tarea', 'Fotos'])
+    // what its colours mean: a column read for the visits, and one that is not
+    expect(screen.getByLabelText('What the colours of the columns mean')).toHaveTextContent('Read for the visitsNot read')
+    expect(within(header).getAllByRole('listitem').map((l) => l.getAttribute('title'))).toEqual(
+      ['Lugar', 'Dia', 'Hora', 'Tarea', 'Fotos'].map((c) => (Object.values(COLUMNS.mapping) as string[]).includes(c) ? 'Read for the visits' : 'Not read'))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /^Change type/ }))
     await userEvent.click(screen.getByRole('menuitemradio', { name: /WildINTEL Epicollect CSV/ }))
@@ -1673,8 +1677,8 @@ describe('VisitsPage from a CSV file', () => {
     await continueFromTheFile()
 
     expect(await screen.findByRole('list', { name: 'What to check' })).toHaveTextContent('camera P800 is at 2 sites')
-    expect(screen.getByText(/2 sites are not a location of TATR/)).toBeInTheDocument()
-    expect(screen.getByLabelText('Sites that are not locations yet')).toHaveTextContent('TATR_0011, TATR_0099')
+    expect(screen.getByText(/2 locations of the file are not ones of TATR yet/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Locations of the file that are not of the research project yet')).toHaveTextContent('TATR_0011, TATR_0099')
     expect(screen.getByText(/Create the locations that do not exist/, { selector: 'em' })).toBeInTheDocument()
     // no site is added one by one from here: the option of the step creates them
     expect(screen.queryByRole('button', { name: /as a location/ })).not.toBeInTheDocument()

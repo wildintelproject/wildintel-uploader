@@ -515,14 +515,16 @@ def form_error(text: str) -> str | None:
 
 
 def form_columns(text: str) -> dict[str, str]:
-    """The columns of a CSV that are the answers of the WildINTEL form — the field of a visit and the header that gives it — with `created_at`, which says when. Empty if it is not the form."""
+    """The columns of a CSV that are the answers of the WildINTEL form — the field of a visit and the header that gives it — with `created_at`, which says when, and the
+    two columns of the coordinates, which are read too (#204). Empty if it is not the form."""
     import csv  # noqa: PLC0415
     import io  # noqa: PLC0415
     if not is_form_csv(text):
         return {}
     headers = csv.DictReader(io.StringIO(text.lstrip("\ufeff"))).fieldnames or []
-    refs, _ = _form_refs(list(headers))
-    return {**refs, "created_at": "created_at"}
+    refs, place = _form_refs(list(headers))
+    coordinates = {field: place[part] for field, part in (("latitude", "lat"), ("longitude", "long")) if part in place}
+    return {**refs, **coordinates, "created_at": "created_at"}
 
 
 def is_form_csv(text: str) -> bool:
