@@ -440,7 +440,8 @@ def _camera_consistency(images: list[Path], source_dir: Path, deployment: Deploy
     levels that tell a camera (VALIDATION.camera_levels): the first level the record has every field of — a level with a field a record cannot have is passed
     over —, the images compared by it whatever their case and spaces. With no record, or one that says nothing of a level, the images are compared with the
     model of the deployment, as it was. It says what the images say, for the record to take it: {"camera_mismatches", "camera_models_found", "camera_by",
-    "camera_expected", "camera_found", "camera_label"}."""
+    "camera_expected", "camera_found", "camera_label", "camera_record"} — the last the make and the model the record has (None with no record), to say whether
+    what the images say would fill it in or change it."""
     read = camera_info.read_tags(images, ["Make", "Model"])
     serials = {f for f in _CAMERA_FIELDS if f != "model"}
     record = {"make": (camera or {}).get("camera_make"), "model": (camera or {}).get("camera_model"), "serial": (camera or {}).get("camera_id")}
@@ -476,6 +477,7 @@ def _camera_consistency(images: list[Path], source_dir: Path, deployment: Deploy
         "camera_expected": {f: of_record(f) for f in chosen} if chosen else ({"Model": deployment.camera_model} if deployment.camera_model else {}),
         "camera_found": {"make": make, "model": model},
         "camera_label": (camera or {}).get("label"),
+        "camera_record": {"make": record["make"], "model": record["model"]} if camera else None,
     }
 
 

@@ -2773,26 +2773,48 @@ describe('CameraComparison', () => {
   const base = { checked_count: 2, camera_mismatches: [], camera_models_found: ['Browning BTC-6DCL'], camera_found: { make: 'Browning', model: 'BTC-6DCL' }, camera_label: '4' }
 
   it('says by which fields of the record of the camera the images were compared, and offers nothing when they are its', () => {
-    render(<CameraComparison result={{ ...base, camera_by: ['Make', 'Model'], camera_expected: { Make: 'Browning', Model: 'BTC-6DCL' } }} onKeepCamera={vi.fn()} />)
+    render(<CameraComparison result={{ ...base, camera_by: ['Make', 'Model'], camera_expected: { Make: 'Browning', Model: 'BTC-6DCL' }, camera_record: { make: 'Browning', model: 'BTC-6DCL' } }} onKeepCamera={vi.fn()} />)
     expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('Compared with the record of camera 4 by Make + Model.')
-    expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Update camera 4' })).not.toBeInTheDocument()
   })
 
-  it('offers to keep what the images say in a record that has no make, and keeps it', async () => {
+  it('says that the record of the camera is incomplete, offers to fill it in with what the images say, and does it', async () => {
     const keep = vi.fn().mockResolvedValue(undefined)
-    render(<CameraComparison result={{ ...base, camera_by: [], camera_expected: { Model: 'Browning Strike Force HD PRO X' } }} onKeepCamera={keep} />)
+    render(<CameraComparison result={{ ...base, camera_by: [], camera_expected: { Model: 'Browning Strike Force HD PRO X' }, camera_record: { make: null, model: null } }} onKeepCamera={keep} />)
     expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('The record of camera 4 says nothing to compare with')
-    expect(screen.getByText(/The images say/)).toHaveTextContent('The images say Browning BTC-6DCL. Keep it as the make and model of camera 4?')
+    expect(screen.getByText(/is incomplete/)).toHaveTextContent('The information of camera 4 is incomplete: its make and model are missing. According to the images, the make and model are Browning BTC-6DCL. Would you like to update camera 4 with them?')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Keep it' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Update camera 4' }))
     expect(keep).toHaveBeenCalledWith('4', 'Browning', 'BTC-6DCL')
-    expect(await screen.findByRole('status')).toHaveTextContent('Kept as the make and model of camera 4: run the checks again to compare with it.')
+    expect(await screen.findByRole('status')).toHaveTextContent('Camera 4 was updated with the make and model of the images: run the checks again to compare with them.')
+  })
+
+  it('says only what the record lacks: the make, when it has the model', () => {
+    render(<CameraComparison result={{ ...base, camera_by: ['Model'], camera_expected: { Model: 'BTC-6DCL' }, camera_record: { make: null, model: 'BTC-6DCL' } }} onKeepCamera={vi.fn()} />)
+    expect(screen.getByText(/is incomplete/)).toHaveTextContent('The information of camera 4 is incomplete: its make is missing.')
+  })
+
+  it('says that the record has another make and model, and offers to change them for what the images say', () => {
+    render(<CameraComparison result={{ ...base, camera_mismatches: [{ path: 'a.jpg', detected: 'Browning BTC-6DCL' }], camera_by: ['Make', 'Model'],
+      camera_expected: { Make: 'Reconyx', Model: 'HC600' }, camera_record: { make: 'Reconyx', model: 'HC600' } }} onKeepCamera={vi.fn()} />)
+    expect(screen.getByText(/according to the images/)).toHaveTextContent('Camera 4 is a Reconyx HC600, but according to the images the make and model are Browning BTC-6DCL. Would you like to update camera 4 with them?')
+    expect(screen.queryByText(/is incomplete/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update camera 4' })).toBeInTheDocument()
+  })
+
+  it('offers nothing when the record, compared by its serial number, has the make and model the images say — whatever the case and spaces', () => {
+    for (const mismatches of [[], [{ path: 'a.jpg', detected: 'S2' }]]) {
+      const { unmount } = render(<CameraComparison result={{ ...base, camera_mismatches: mismatches, camera_by: ['SerialNumber'], camera_expected: { SerialNumber: 'S1' },
+        camera_record: { make: 'BROWNING', model: 'btc-6dcl ' } }} onKeepCamera={vi.fn()} />)
+      expect(screen.queryByRole('button', { name: 'Update camera 4' })).not.toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('says when the camera of the deployment is not one of the research project, with nothing to keep', () => {
-    render(<CameraComparison result={{ ...base, camera_label: null, camera_by: [] }} onKeepCamera={vi.fn()} />)
+    render(<CameraComparison result={{ ...base, camera_label: null, camera_by: [], camera_record: null }} onKeepCamera={vi.fn()} />)
     expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('is not one of the cameras of the research project')
-    expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Update camera/ })).not.toBeInTheDocument()
   })
 })
 

@@ -1430,7 +1430,15 @@ export function CameraComparison({ result, onKeepCamera }: {
   if (result.camera_mismatches === undefined) return null
   const found = result.camera_found
   const foundText = [found?.make, found?.model].filter(Boolean).join(' ')
-  const offer = Boolean(onKeepCamera && result.camera_label && found?.model && (result.camera_mismatches.length || !result.camera_by?.includes('Make')))
+  // what the record lacks — the make, the model or both —: what the images say fills it in; when it lacks nothing and has other ones, it would change them.
+  // Only then is it offered: a record compared by its serial number may have the very make and model the images say.
+  const record = result.camera_record
+  const lacking = record === undefined ? (result.camera_by?.includes('Make') ? [] : ['make', 'model']) : [!record?.make && 'make', !record?.model && 'model'].filter(Boolean)
+  const same = (a?: string | null, b?: string | null) => (a ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === (b ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const differs = record === undefined ? result.camera_mismatches.length > 0 : !same(record?.make, found?.make) || !same(record?.model, found?.model)
+  const offer = Boolean(onKeepCamera && result.camera_label && found?.model && (lacking.length || differs))
+  const recordText = [record?.make, record?.model].filter(Boolean).join(' ')
+  const camera = result.camera_label
   return (
     <div className="space-y-1 text-sm">
       <p className="text-xs text-zinc-500 dark:text-zinc-400" aria-label="How the camera was compared">
@@ -1441,16 +1449,19 @@ export function CameraComparison({ result, onKeepCamera }: {
             : <>The camera of the deployment is not one of the cameras of the research project: the images are compared with the model of the deployment.</>}
       </p>
       {offer && kept !== 'kept' && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-blue-900 dark:text-blue-100">
-          <span>The images say <strong>{foundText}</strong>. Keep it as the make and model of camera <strong>{result.camera_label}</strong>?</span>
-          <button type="button" className={btnOutline} disabled={kept === 'keeping'}
-                  onClick={async () => { setKept('keeping'); try { await onKeepCamera!(result.camera_label!, found!.make, found!.model); setKept('kept') } catch (e) { setKept(e instanceof Error ? e.message : 'It could not be kept.') } }}>
-            {kept === 'keeping' ? 'Keeping…' : 'Keep it'}
+        <Notice kind="info" action={
+          <button type="button" className={`${btnOutline} shrink-0`} disabled={kept === 'keeping'}
+                  onClick={async () => { setKept('keeping'); try { await onKeepCamera!(camera!, found!.make, found!.model); setKept('kept') } catch (e) { setKept(e instanceof Error ? e.message : 'The camera could not be updated.') } }}>
+            {kept === 'keeping' ? 'Updating…' : `Update camera ${camera}`}
           </button>
-          {kept !== 'no' && kept !== 'keeping' && <span role="alert" className="text-red-600 dark:text-red-400">{kept}</span>}
-        </div>
+        }>
+          {lacking.length
+            ? <span>The information of camera <strong>{camera}</strong> is incomplete: its {lacking.join(' and ')} {lacking.length > 1 ? 'are' : 'is'} missing. According to the images, the make and model are <strong>{foundText}</strong>. Would you like to update camera <strong>{camera}</strong> with them?</span>
+            : <span>Camera <strong>{camera}</strong> is a <strong>{recordText}</strong>, but according to the images the make and model are <strong>{foundText}</strong>. Would you like to update camera <strong>{camera}</strong> with them?</span>}
+          {kept !== 'no' && kept !== 'keeping' && <span role="alert" className="mt-1 block text-red-600 dark:text-red-400">{kept}</span>}
+        </Notice>
       )}
-      {kept === 'kept' && <p role="status" className="text-emerald-600 dark:text-emerald-400"><Mark kind="success" />Kept as the make and model of camera {result.camera_label}: run the checks again to compare with it.</p>}
+      {kept === 'kept' && <p role="status" className="text-emerald-600 dark:text-emerald-400"><Mark kind="success" />Camera {camera} was updated with the make and model of the images: run the checks again to compare with them.</p>}
     </div>
   )
 }

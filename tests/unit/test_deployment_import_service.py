@@ -527,10 +527,12 @@ def test_camera_consistency_compares_the_images_with_the_record_of_the_camera_by
     other = svc.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_make": "Reconyx", "camera_model": "HC600"})
     assert [m["detected"] for m in other["camera_mismatches"]] == ["Browning BTC-6DCL", "Browning BTC-6DCL"]
     assert other["camera_found"] == {"make": "Browning", "model": "BTC-6DCL"} and other["camera_label"] == "4"
+    assert other["camera_record"] == {"make": "Reconyx", "model": "HC600"}   # what the record has: the images would change it
+    assert by_model["camera_record"] == {"make": None, "model": "BTC-6DCL"}  # or fill it in
 
     # with no record, the model of the deployment, as before — case and spaces aside
     legacy = svc.validate_deployment_consistency(tmp_path, _deployment(camera_model="browning  btc-6dcl"), frozenset({"camera"}))
-    assert legacy["camera_mismatches"] == [] and legacy["camera_by"] == []
+    assert legacy["camera_mismatches"] == [] and legacy["camera_by"] == [] and legacy["camera_record"] is None
 
 
 def test_validate_deployment_consistency_skips_camera_mismatch_when_undeclared(tmp_path: Path):

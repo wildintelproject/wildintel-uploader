@@ -269,6 +269,8 @@ export interface DeploymentCheckResult {
   camera_found?: { make: string | null; model: string | null }
   /** The label of the camera of the deployment, when it has a record. */
   camera_label?: string | null
+  /** The make and the model its record has — null with no record: what the images say fills them in, or changes them. */
+  camera_record?: { make: string | null; model: string | null } | null
   /** The report this postvalidation was kept in. */
   report_id?: string | null
 }
