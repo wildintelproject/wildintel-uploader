@@ -42,7 +42,7 @@ export default function StatusHistoryPage({ onBack }: { onBack?: () => void; onO
       <PageHeader icon={UTIL_ICONS.history} title="Rebuild the history of the states" parent="Utilities" onParent={onBack}
         description="Works out the changes of status of the locations, the cameras and the SD cards from the visits kept." />
       <div className="max-w-prose space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
-        <p>What was kept before the history was has none. Each visit says what it did — a camera put up, a card taken, a site started — and a line is written for each change, marked as rebuilt from the visits.</p>
+        <p>What was kept before the history was has none. Each visit says what it did — a camera put up, a card taken, a location started — and a line is written for each change, marked as rebuilt from the visits.</p>
         <p>The lines the history already has are kept: nothing is overwritten nor deleted, and a line that is there is not written again. What was changed by hand before cannot be known; when the visits do not end in the status of today, a last line says so.</p>
       </div>
       <div className="mt-6">

@@ -1446,7 +1446,7 @@ const requiredNumberRange = (min: number, max: number) => (v: string) => (v === 
 /** The fields of a location of the settings, the first naming it. */
 const LOCATION_FIELDS: ItemField<LocationDraft>[] = [
   { key: 'location_id', label: 'Location id', placeholder: 'e.g. DONA_0001', hint: 'Unique within this research project. It is how visits refer to this place.', section: 'Which place is it?', sectionIcon: <MapPinIcon />, sectionHint: 'The name the location is known by. Visits and deployments refer to it by its id.' },
-  { key: 'name', label: 'Name', placeholder: 'e.g. Doñana site 1' },
+  { key: 'name', label: 'Name', placeholder: 'e.g. Doñana location 1' },
   { key: 'latitude', label: 'Latitude', required: true, placeholder: 'e.g. 37.0123', section: 'Where is it?', sectionIcon: <CompassIcon />, sectionAside: (l, change) => <LocationMap latitude={l.latitude} longitude={l.longitude} onChange={(latitude, longitude) => change({ latitude, longitude })} />, sectionHint: 'Decimal degrees (WGS84), like 37.0123 and -6.4412. Both are required.', validate: requiredNumberRange(-90, 90) },
   { key: 'longitude', label: 'Longitude', required: true, placeholder: 'e.g. -6.4412', validate: requiredNumberRange(-180, 180) },
   { key: 'coordinate_uncertainty', label: 'Coordinate uncertainty', placeholder: 'e.g. 100', unit: 'metres', hint: 'How far off the position could be.', validate: (v) => (v === '' || (/^\d+$/.test(v) && Number(v) >= 1) ? null : 'A whole number, 1 or more.') },

@@ -103,7 +103,7 @@ export default function StatisticsComparator({ rows, id, field, onNavigate, onCl
                 </span>
               </div>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                Site <span className="font-mono text-blue-600 dark:text-blue-400">{row.location}</span>{field?.card ? ` · SD ${field.card}` : ''}
+                Location <span className="font-mono text-blue-600 dark:text-blue-400">{row.location}</span>{field?.card ? ` · SD ${field.card}` : ''}
                 {m.first_image !== null && m.last_image !== null ? ` · ${formatPeriod(wallIso(m.first_image), wallIso(m.last_image))}` : ''}
               </p>
             </div>

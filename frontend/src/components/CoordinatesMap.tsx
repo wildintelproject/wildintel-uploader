@@ -265,7 +265,7 @@ export default function CoordinatesMap({ name, points, legend, missing = 0, noun
           <div className="absolute z-20 flex flex-col gap-1" style={{ left: `calc(${(VIEW.left / VIEW.width) * 100}% + 10px)`, top: `calc(${(VIEW.top / plot.viewHeight) * 100}% + 10px)` }} role="group" aria-label="Zoom">
             <button type="button" className={control} aria-label="Zoom in" title="Zoom in" disabled={!canZoomIn} onClick={() => zoomBy(1)}>+</button>
             <button type="button" className={control} aria-label="Zoom out" title="Zoom out" disabled={!canZoomOut} onClick={() => zoomBy(-1)}>−</button>
-            <button type="button" className={control} aria-label="Show all the locations" title="Show all the sites" disabled={camera.zoom === 0 && camera.center === null} onClick={() => setCamera({ zoom: 0, center: null })}>
+            <button type="button" className={control} aria-label="Show all the locations" title="Show all the locations" disabled={camera.zoom === 0 && camera.center === null} onClick={() => setCamera({ zoom: 0, center: null })}>
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
             </button>
           </div>

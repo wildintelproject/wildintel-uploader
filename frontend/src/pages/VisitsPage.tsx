@@ -1444,7 +1444,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                   <label className="mt-3 flex items-start gap-3 text-sm text-zinc-700 dark:text-zinc-300">
                     <input type="checkbox" className="mt-1" checked={siteStarts} onChange={(e) => setSiteStarts(e.target.checked)} />
                     <span>
-                      <strong className="font-semibold">This is where {visit.site || 'the site'} starts</strong>
+                      <strong className="font-semibold">This is where {visit.site || 'the location'} starts</strong>
                       <span className="block text-xs text-zinc-500 dark:text-zinc-400">The location did not exist before this revision, so the revisions before it do not wait for a visit to it. Leave it off if the location was there before and its earlier visits are not here.</span>
                     </span>
                   </label>
@@ -1835,7 +1835,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                     })}
                   </div>
                   <p className={hintClass}>A default value is what the field is when the file has no column for it, and in the rows where its cell is empty.</p>
-                  <p className={hintClass}>A visit needs the site, the actions and when: a date and a time, the two in one column, or the time the entry was created.</p>
+                  <p className={hintClass}>A visit needs the location, the actions and when: a date and a time, the two in one column, or the time the entry was created.</p>
                   {stillToMap.length > 0 && <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-400">To read the visits, match also {stillToMap.join(', ')}.</p>}
                   <div className="mt-4 flex justify-end">
                     <button type="button" className={btnPrimary} disabled={!mappedEnough} onClick={() => void readMapped()}>Read the visits</button>
@@ -1925,9 +1925,9 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                 {csvResult.new_sites.length > 0 && (
                   <Notice kind="warning" className="mt-3 !items-start !rounded-2xl !px-6 !py-5 !text-base leading-relaxed" role="status">
                     <div>
-                      <strong className="font-semibold">{csvResult.new_sites.length === 1 ? 'A site is' : `${csvResult.new_sites.length} sites are`} not a location of {project?.acronym}.</strong> Their visits are held.
-                      {' '}To make them locations turn on <em>Create the locations that do not exist</em> and read the file again; if one is a site misnamed in the field, correct its id in the file.
-                      <p className="mt-2 font-mono text-sm break-words" aria-label="Sites that are not locations yet">{csvResult.new_sites.map((x) => x.site).join(', ')}</p>
+                      <strong className="font-semibold">{csvResult.new_sites.length === 1 ? 'A location of the file is' : `${csvResult.new_sites.length} locations of the file are`} not {csvResult.new_sites.length === 1 ? 'one' : 'ones'} of {project?.acronym} yet.</strong> Their visits are held.
+                      {' '}To make them locations turn on <em>Create the locations that do not exist</em> and read the file again; if one is a location misnamed in the field, correct its id in the file.
+                      <p className="mt-2 font-mono text-sm break-words" aria-label="Locations of the file that are not of the research project yet">{csvResult.new_sites.map((x) => x.site).join(', ')}</p>
                     </div>
                   </Notice>
                 )}
@@ -1957,7 +1957,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
             const lines: [string, ReactNode][] = [
               [csvSaved === null ? 'Visits to add' : 'Visits added', csvSaved ?? added.length],
               ['Revisions', sessions.join(', ') || '—'],
-              ['Sites', `${sites.length}${sites.length > 0 && sites.length <= 6 ? ` · ${sites.join(', ')}` : ''}`],
+              ['Locations', `${sites.length}${sites.length > 0 && sites.length <= 6 ? ` · ${sites.join(', ')}` : ''}`],
               ...(csvResult.skipped > 0 ? [['Already kept — left as they are', csvResult.skipped] as [string, ReactNode]] : []),
               ...((csvResult.closed?.length ?? 0) > 0 ? [['Marked as not visited — to close the revision before', csvResult.closed!.map((m) => `${m.location_id} (${m.session})`).join(', ')] as [string, ReactNode]] : []),
               ...(csvResult.problems.length > 0 ? [['Rows with a problem — not added', csvResult.problems.length] as [string, ReactNode]] : []),
@@ -2030,7 +2030,7 @@ export default function VisitsPage({ onBack, onMainMenu, onOpenSettings, setting
                         <table aria-label="Visits added" className="w-full text-sm">
                           <thead>
                             <tr className="text-left text-zinc-500 dark:text-zinc-400">
-                              <th className="pr-3 py-1 font-medium">Revision</th><th className="pr-3 font-medium">When</th><th className="pr-3 font-medium">Site</th><th className="font-medium">Actions</th>
+                              <th className="pr-3 py-1 font-medium">Revision</th><th className="pr-3 font-medium">When</th><th className="pr-3 font-medium">Location</th><th className="font-medium">Actions</th>
                             </tr>
                           </thead>
                           <tbody>

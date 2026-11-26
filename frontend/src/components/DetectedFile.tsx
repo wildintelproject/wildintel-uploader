@@ -12,7 +12,7 @@ export const FILE_KINDS: Record<FileKind, { title: string; summary: string }> = 
 /** The core fields shown for each kind, with the field of a visit each one is. */
 const CORE: Record<FileKind, [label: string, field: string][]> = {
   form: [['Location', 'location_id'], ['Status of the camera', 'camera_status'], ['Date and time', 'created_at']],
-  other: [['Site', 'location_id'], ['Actions', 'actions'], ['Date', 'date'], ['Time', 'time']],
+  other: [['Location', 'location_id'], ['Actions', 'actions'], ['Date', 'date'], ['Time', 'time']],
 }
 
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
