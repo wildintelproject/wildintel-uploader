@@ -18,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from wildintel_uploader.core.storage.base import GLOBAL_KINDS, RECORD_KINDS, ProjectStore, StorageError, valid_project_id
+from wildintel_uploader.shared.storage.base import GLOBAL_KINDS, RECORD_KINDS, ProjectStore, StorageError, valid_project_id
 
 logger = logging.getLogger(__name__)
 

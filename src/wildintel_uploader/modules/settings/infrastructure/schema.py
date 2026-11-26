@@ -15,7 +15,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
-from wildintel_uploader.core.services import ids
+from wildintel_uploader.shared import ids
 
 LogLevel = Literal["ERROR", "WARNING", "INFO", "DEBUG"]
 

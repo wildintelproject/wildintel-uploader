@@ -1,12 +1,13 @@
 """The ports out of the module that are the system's: the log of the app (`ActivityLog`, over core.logging_setup — its rotating file and the level the
 environment may force with WILDINTEL_UPLOADER_WEB_LOG_LEVEL), what the computer has (`Machine`), and the backends the records of the research
-projects can be kept in (`RecordStorage`, over core.storage)."""
+projects can be kept in (`RecordStorage`, over shared.storage)."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from wildintel_uploader.core import logging_setup, storage
+from wildintel_uploader.core import logging_setup
+from wildintel_uploader.shared import storage
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage
 
 
