@@ -276,6 +276,13 @@ another stamp and is read again; a file ExifTool could not read is not kept. The
 cache: it can be deleted at any time, and when it cannot be opened it is as if it were empty. The
 tests point the cache folder to their throwaway home and clear it before each test (`conftest.py`).
 
+**Read ahead.** Scanning a folder (`POST /scan-folder`) also starts reading its images' EXIF in a background thread
+(`deployment_import_service.prefetch_metadata` → `camera_info.prefetch`), with the extra fields of
+`VALIDATION.exif_fields`: while the user chooses the checks, ExifTool is already reading. Only one ExifTool reading runs
+at a time (`camera_info._reading`): a step that asks while the reading ahead is under way waits for it and then finds
+its result, rather than reading the same images again. Nothing is read ahead without ExifTool. The tests turn it off
+(`camera_info.PREFETCH = False` in `conftest.py`), so that no reading started by one test is still running in the next.
+
 ### Scan and guess
 
 `scan_folder` only counts — files, and images by extension — and never opens an image, so it is instant. What the

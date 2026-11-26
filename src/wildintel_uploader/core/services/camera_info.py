@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -205,6 +206,29 @@ def _camera_of(tags: dict[str, str | None]) -> CameraInfo:
     return CameraInfo(model=_model(tags.get("make"), tags.get("model")), camera_id=serial)
 
 
+# Only one ExifTool reading runs at a time (see _metadata).
+_reading = threading.Lock()
+# Whether prefetch reads ahead at all: the tests turn it off (conftest), so that no reading started by one test is still running in the next.
+PREFETCH = True
+
+
+def prefetch(paths: list[Path], tags: list[str] | None = None) -> threading.Thread | None:
+    """Starts reading, in the background, what the steps of an import will ask of these images — the camera, the dates, and `tags` (the EXIF fields the
+    settings ask for) —, so that it is remembered by the time they ask (#140): a step that asks meanwhile waits for it rather than reading them again.
+    Nothing is started without ExifTool — Pillow reads each image as it is asked for — or with no images. Returns the thread, for the tests to wait on."""
+    if not PREFETCH or not paths or not exiftool_path():
+        return None
+
+    def run() -> None:
+        try:
+            _metadata(paths, list(tags or []))
+        except Exception as exc:  # noqa: BLE001 — a reading ahead that fails only means the steps read the images themselves
+            logger.debug("Reading the EXIF ahead failed: %s", exc)
+    thread = threading.Thread(target=run, name="exif-prefetch", daemon=True)
+    thread.start()
+    return thread
+
+
 # What every reading of an image with ExifTool asks for, whatever step it is for: the camera and the capture date, which every step of an import needs — so that
 # one run reads what the next ones will ask for (#140).
 _BASE_TAGS = ("Make", "Model", *_SERIAL_TAGS, *DATE_TAGS)
@@ -234,6 +258,25 @@ def _metadata(paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | 
             file_memo.EXIF.put(stamps[path], known)
             found[path] = known
     missing = [p for p in paths if p not in found]
+    if not missing:
+        return found
+    # One reading at a time: a step that asks while another reading is under way — the one started when the folder was scanned — waits for it, and
+    # then finds what it read instead of reading the same images again.
+    with _reading:
+        return _read_missing(exiftool, paths, missing, tags, wanted, stamps, found)
+
+
+def _read_missing(exiftool: str, paths: list[Path], missing: list[Path], tags: list[str], wanted: set[str],
+                  stamps: dict[Path, file_memo.Stamp | None], found: dict[Path, dict[str, str | None]]) -> dict[Path, dict[str, str | None]] | None:
+    """The part of _metadata that runs ExifTool, under its lock: what another reading left in memory meanwhile is taken first."""
+    still = []
+    for path in missing:
+        known = file_memo.EXIF.get(stamps[path])
+        if known is not None and wanted <= known.keys():
+            found[path] = known
+        else:
+            still.append(path)
+    missing = still
     if not missing:
         return found
     ask = list({t.lower(): t for t in (*_BASE_TAGS, *tags)}.values())

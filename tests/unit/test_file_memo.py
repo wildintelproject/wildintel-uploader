@@ -1,6 +1,7 @@
 """services.file_memo — what the steps of an import remember of a file while it is the same one: what ExifTool read of an image (kept on disk too), its camera, and that it decoded in full (#140)."""
 import os
 import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -187,6 +188,34 @@ def test_the_store_on_disk_keeps_at_most_its_limit_the_oldest_forgotten_first(mo
         exif_store.put_many({(f"/img/{n}.jpg", 1, 1): {"model": str(n)}})
 
     assert exif_store.get_many([(f"/img/{n}.jpg", 1, 1) for n in range(3)]) == {("/img/1.jpg", 1, 1): {"model": "1"}, ("/img/2.jpg", 1, 1): {"model": "2"}}
+
+
+def test_the_exif_read_ahead_is_what_the_steps_find_even_when_they_ask_while_it_is_being_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    images = [_jpeg(tmp_path / f"IMG_{n}.jpg") for n in range(3)]
+    runs = _fake_exiftool(monkeypatch, {p: {"ISO": "100"} for p in images})
+    reading, slow, real = threading.Event(), threading.Event(), camera_info._tags_with_exiftool
+    monkeypatch.setattr(camera_info, "_tags_with_exiftool", lambda *a: (reading.set(), slow.wait(5), real(*a))[2])
+    monkeypatch.setattr(camera_info, "PREFETCH", True)
+
+    ahead = camera_info.prefetch(images, ["ISO"])
+    assert reading.wait(5)   # ExifTool is reading them
+    asked: dict = {}
+    step = threading.Thread(target=lambda: asked.update(camera_info.read_dates(images)))
+    step.start()          # the checks are run while it is still reading
+    slow.set()
+    ahead.join(5); step.join(5)
+
+    assert len(runs) == 1 and "ISO" in runs[0][1]            # one reading, with the fields of the settings
+    assert asked == dict.fromkeys(images, datetime(2024, 9, 4, 10))
+    assert camera_info.read_tags(images, ["ISO"])[images[0]] == {"ISO": "100"} and len(runs) == 1
+
+
+def test_nothing_is_read_ahead_without_exiftool_or_without_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(camera_info, "PREFETCH", True)
+    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    assert camera_info.prefetch([_jpeg(tmp_path / "a.jpg")]) is None
+    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "exiftool")
+    assert camera_info.prefetch([]) is None
 
 
 def test_a_reading_by_pillow_is_made_again_when_exiftool_is_there_now(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -201,6 +201,16 @@ def scan_folder(source_dir: Path) -> dict:
     return {"file_count": len(files), "image_count": len(images), "warnings": warnings}
 
 
+def prefetch_metadata(source_dir: Path, exif_fields: list[str] | None = None) -> None:
+    """Starts reading the EXIF of a folder's images in the background (see camera_info.prefetch) — what the checks, the details and the preprocessing
+    will ask —, right after it is scanned: while the user chooses the checks, ExifTool is already reading. Nothing happens if it is not a folder."""
+    if not source_dir.is_dir():
+        return
+    _, images = _files_and_images(source_dir)
+    extra = [f for f in (exif_fields or []) if f.lower() not in _CAMERA_FIELDS and f.lower() != "datetimeoriginal"]
+    camera_info.prefetch(images, extra)
+
+
 def guess_details(source_dir: Path) -> dict:
     """The deployment form's starting point, read from the images' metadata: the date range (the earliest and
     latest capture date) and the camera model and id — the last two only when every image agrees on them (a

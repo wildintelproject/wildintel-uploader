@@ -210,10 +210,15 @@ def list_local_deployments(req: CheckCollectionRequest) -> dict:
 
 @router.post("/scan-folder")
 def scan_folder(req: ScanFolderRequest) -> dict:
+    """What a folder holds — and, behind the answer, its images' EXIF starts being read (see deployment_import_service.prefetch_metadata)."""
+    folder = Path(req.path).expanduser()
     try:
-        return deployment_import_service.scan_folder(Path(req.path).expanduser())
+        result = deployment_import_service.scan_folder(folder)
     except deployment_import_service.DeploymentImportError as exc:
         raise HTTPException(400, str(exc)) from exc
+    if result["image_count"]:
+        deployment_import_service.prefetch_metadata(folder, config.load_settings().VALIDATION.exif_fields)
+    return result
 
 
 @router.post("/guess-details")
