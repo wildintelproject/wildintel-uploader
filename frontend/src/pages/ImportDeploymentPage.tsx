@@ -669,7 +669,7 @@ export function startingChecks(settings: WizardSettings): { image: Set<ImageChec
 }
 
 export const DEFAULT_CHECK_SETTINGS: WizardSettings = {
-  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true, defaults: IMAGE_CHECK_DEFAULTS, exif_fields: ['Model'] },
+  VALIDATION: { corrupted: true, sequence: true, structure: true, camera: true, exif: true, duplicates: true, defaults: IMAGE_CHECK_DEFAULTS, exif_fields: ['Model'], camera_levels: [['SerialNumber'], ['Make', 'Model'], ['Model']] },
   POSTVALIDATION: {
     defaults: DEPLOYMENT_CHECK_DEFAULTS,
     deployment_id: true, collection_prefix: true, collection_name: true, location: true, time_range: true, camera: true,
@@ -764,6 +764,7 @@ export function buildDeploymentId(revision: string, locationId: string | null | 
 
 /** "Reconyx HC600 · id P800HG08", whichever of the two is known. */
 export function describeCamera(camera: CameraGroup): string {
+  if (camera.values && Object.keys(camera.values).length > 0) return Object.entries(camera.values).map(([field, value]) => `${field} ${value}`).join(' · ')
   return [camera.model ?? 'unknown model', camera.camera_id ? `id ${camera.camera_id}` : 'no id'].join(' · ')
 }
 
@@ -1344,8 +1345,13 @@ export function ValidationReport({ validation }: { validation: ValidationResult 
                   ))}
                 </ul>
               )}
-              {(validation.cameras_without_info ?? 0) > 0 && <p><Mark kind="warning" />{validation.cameras_without_info} image(s) have no camera information.</p>}
+              {(validation.cameras_without_info ?? 0) > 0 && <p><Mark kind="warning" />{validation.cameras_without_info} image(s) have no camera information{validation.camera_by?.length ? ` (no ${validation.camera_by.join(' + ')})` : ''}.</p>}
             </>
+          )}
+          {validation.camera_by && validation.camera_by.length > 0 && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+              Compared by <span className="font-mono">{validation.camera_by.join(' + ')}</span>{!validation.camera_by.some((f) => /serial/i.test(f)) ? ': without a serial number, two cameras of the same model are not told apart' : ''}. The order is set in Settings › Validation.
+            </p>
           )}
           {validation.exiftool === false && (
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">ExifTool isn't installed, so the camera id (serial number) may be missing — install it for a fuller reading.</p>

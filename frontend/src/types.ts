@@ -123,6 +123,8 @@ export interface ProjectDuplicate {
 export interface CameraGroup {
   model: string | null
   camera_id: string | null
+  /** The values of the fields the images were compared by (see camera_by): {SerialNumber: 'A1'}, {Make: 'Reconyx', Model: 'HC600'}… */
+  values?: Record<string, string>
   count: number
   /** A few of its files, relative to the scanned folder. */
   examples: string[]
@@ -138,6 +140,8 @@ export interface ValidationResult {
   cameras?: CameraGroup[]
   /** Images with no camera information at all. */
   cameras_without_info?: number
+  /** The EXIF fields the images were compared by to tell their camera — the first level of the settings every image has; none when no image has any. */
+  camera_by?: string[]
   /** Whether ExifTool (which reads the serial number of most camera traps) did the reading. */
   exiftool?: boolean
   /** Images lacking the capture date, the camera model or the camera id. */
@@ -507,6 +511,8 @@ export type ValidationSettings = Record<ImageCheck, boolean> & {
   defaults: Record<ImageCheck, CheckLevel>
   /** The EXIF fields expected on every image besides the capture date, by the names ExifTool gives them. */
   exif_fields: string[]
+  /** How two images are told to be of the same camera: levels of EXIF fields, the most reliable first. */
+  camera_levels: string[][]
 }
 
 /** Which postvalidation checks the wizard shows, and the tolerance it starts from. */

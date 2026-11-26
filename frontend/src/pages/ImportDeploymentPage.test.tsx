@@ -1394,6 +1394,18 @@ describe('ImportDeploymentPage', () => {
         expect(screen.getAllByRole('radiogroup')).toHaveLength(7) // and the question of where the images are
       })
 
+      it('says which fields the images were compared by, and that without a serial number two cameras of a model are one', async () => {
+        mockedApi.validateImages.mockResolvedValue({
+          checked_count: 3, exiftool: true, cameras_without_info: 0, camera_by: ['Make', 'Model'],
+          cameras: [{ model: 'Reconyx HC600', camera_id: null, values: { Make: 'Reconyx', Model: 'HC600' }, count: 3, examples: ['a.jpg', 'b.jpg', 'c.jpg'] }],
+        })
+        await goToValidateStep()
+        await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
+
+        expect(await screen.findByText('Make Reconyx · Model HC600')).toBeInTheDocument()
+        expect(screen.getByText((_, el) => el?.tagName === 'P' && /^Compared by Make \+ Model: without a serial number, two cameras of the same model are not told apart/.test(el.textContent ?? ''))).toBeInTheDocument()
+      })
+
       it('passes when every image was taken by one camera, and says which', async () => {
         mockedApi.validateImages.mockResolvedValue({
           checked_count: 3, exiftool: true, cameras_without_info: 0,

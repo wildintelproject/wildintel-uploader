@@ -456,7 +456,7 @@ describe('SettingsPage', () => {
   describe('Validation', () => {
     const IMAGE_CHECKS = [
       'Corrupted images', 'Shooting order vs. filename sequence', 'Folder structure (subdirectories)',
-      'Same camera (model and id) on every image', 'Required EXIF fields', 'Duplicate images',
+      'Same camera on every image', 'Required EXIF fields', 'Duplicate images',
     ]
 
     it('has one entry per check, each with a switch, all on by default', async () => {
@@ -491,9 +491,41 @@ describe('SettingsPage', () => {
       expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
       await userEvent.clear(field)
       await userEvent.click(expected().getByRole('button', { name: 'Do not expect Model' }))
+      // Reset to default leaves only the model, and is off once it is so
+      const reset = within(screen.getByRole('group', { name: 'Required EXIF fields settings' })).getByRole('button', { name: 'Reset to default' })
+      await userEvent.click(reset)
+      expect(expected().queryByText('ISO')).not.toBeInTheDocument()
+      expect(reset).toBeDisabled()
+      await userEvent.type(field, 'ISO{Enter}')
+      await userEvent.type(field, 'AmbientTemperature{Enter}')
+      await userEvent.click(expected().getByRole('button', { name: 'Do not expect Model' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION.exif_fields).toEqual(['ISO', 'AmbientTemperature'])
+    })
+
+    it('says how two images are told to be of the same camera: levels of fields, in an order that can be changed', async () => {
+      render(<SettingsPage onClose={vi.fn()} />)
+      await screen.findByLabelText('Level')
+      await section('Validation')
+      await userEvent.click(screen.getByRole('button', { name: /Configure Same camera/ }))
+
+      const levels = () => within(screen.getByRole('list', { name: 'Levels to tell the camera' })).getAllByRole('listitem').map((li) => li.querySelector('.font-mono')?.textContent)
+      expect(levels()).toEqual(['SerialNumber', 'Make + Model', 'Model'])
+      expect(screen.getByRole('button', { name: 'Reset to default' })).toBeDisabled()   // as it is by default
+      await userEvent.click(screen.getByRole('button', { name: 'Take out Make + Model' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+      expect(levels()).toEqual(['SerialNumber', 'Make + Model', 'Model'])
+      await userEvent.click(screen.getByRole('button', { name: 'Move Model up' }))
+      expect(levels()).toEqual(['SerialNumber', 'Model', 'Make + Model'])
+      await userEvent.type(screen.getByLabelText('Level to add'), 'make + imagedescription{Enter}')   // fields joined with +, completed as the list writes them
+      await userEvent.type(screen.getByLabelText('Level to add'), 'Model')
+      expect(screen.getByText('It is one of the levels already.')).toBeInTheDocument()
+      await userEvent.clear(screen.getByLabelText('Level to add'))
+      await userEvent.click(screen.getByRole('button', { name: 'Take out SerialNumber' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION.camera_levels).toEqual([['Model'], ['Make', 'Model'], ['Make', 'ImageDescription']])
     })
 
     it('turns checks off, says how each starts in an import, and saves both', async () => {
@@ -515,7 +547,7 @@ describe('SettingsPage', () => {
       expect(mockedApi.saveSettings.mock.calls[0][0].VALIDATION).toEqual({
         corrupted: true, sequence: true, structure: true, camera: true, exif: false, duplicates: false,
         defaults: { corrupted: 'required', sequence: 'warn', structure: 'skip', camera: 'warn', exif: 'warn', duplicates: 'warn' },
-        exif_fields: ['Model'],
+        exif_fields: ['Model'], camera_levels: [['SerialNumber'], ['Make', 'Model'], ['Model']],
       })
       await screen.findByText('Settings saved.')
       expect(screen.getByRole('switch', { name: /Duplicate images/ })).not.toBeChecked()

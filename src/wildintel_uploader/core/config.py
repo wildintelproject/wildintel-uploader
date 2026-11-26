@@ -211,7 +211,29 @@ class ValidationSettings(BaseModel):
     corrupted: bool = Field(default=True, description="Corrupted images. (VALIDATION.corrupted)")
     sequence: bool = Field(default=True, description="Shooting order vs. filename sequence. (VALIDATION.sequence)")
     structure: bool = Field(default=True, description="Folder structure (subdirectories). (VALIDATION.structure)")
-    camera: bool = Field(default=True, description="Same camera (model and id) on every image. (VALIDATION.camera)")
+    camera: bool = Field(default=True, description="Same camera on every image, as camera_levels tells it. (VALIDATION.camera)")
+    camera_levels: list[list[str]] = Field(
+        default_factory=lambda: [["SerialNumber"], ["Make", "Model"], ["Model"]],
+        description="How two images are told to be of the same camera: levels of EXIF fields, by the names ExifTool gives them, the most reliable first — "
+                    "the first level every image has is the one the images are compared by. (VALIDATION.camera_levels)",
+    )
+
+    @field_validator("camera_levels", mode="before")
+    @classmethod
+    def _camera_levels(cls, value):
+        """Each level its fields once, as written, and each level once; a level with no field is left out, and a name that cannot be a field is refused."""
+        out: list[list[str]] = []
+        for level in value or []:
+            fields: list[str] = []
+            for name in ([level] if isinstance(level, str) else level or []):
+                name = str(name).strip()
+                if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)?", name):
+                    raise ValueError(f"'{name}' is not the name of an EXIF field")
+                if name.lower() not in (f.lower() for f in fields):
+                    fields.append(name)
+            if fields and [f.lower() for f in fields] not in ([f.lower() for f in o] for o in out):
+                out.append(fields)
+        return out
     exif: bool = Field(default=True, description="Required EXIF fields: the capture date and the ones of exif_fields. (VALIDATION.exif)")
     exif_fields: list[str] = Field(
         default_factory=lambda: ["Model"],

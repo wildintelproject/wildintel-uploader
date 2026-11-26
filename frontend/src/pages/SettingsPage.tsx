@@ -188,6 +188,8 @@ interface Draft {
   validationDefaults: Record<ImageCheck, CheckLevel>
   // the EXIF fields expected on every image besides the capture date (VALIDATION.exif_fields)
   exifFields: string[]
+  // how two images are told to be of the same camera: levels of EXIF fields, the most reliable first (VALIDATION.camera_levels)
+  cameraLevels: string[][]
   postvalidationDefaults: Record<DeploymentCheck, CheckLevel>
   toleranceHours: string
   sequenceGap: string
@@ -265,7 +267,8 @@ function toDraft(s: AppSettings): Draft {
     validation: { corrupted: s.VALIDATION.corrupted, sequence: s.VALIDATION.sequence, structure: s.VALIDATION.structure, camera: s.VALIDATION.camera, exif: s.VALIDATION.exif, duplicates: s.VALIDATION.duplicates },
     postvalidation: checks,
     validationDefaults: { ...IMAGE_CHECK_DEFAULTS, ...(s.VALIDATION.defaults ?? {}) },
-    exifFields: [...(s.VALIDATION.exif_fields ?? ['Model'])],
+    exifFields: [...(s.VALIDATION.exif_fields ?? DEFAULT_EXIF_FIELDS)],
+    cameraLevels: (s.VALIDATION.camera_levels ?? DEFAULT_CAMERA_LEVELS).map((l) => [...l]),
     postvalidationDefaults: { ...DEPLOYMENT_CHECK_DEFAULTS, ...(s.POSTVALIDATION.defaults ?? {}) },
     toleranceHours: String(post.tolerance_hours),
     sequenceGap: String(post.sequence_gap_seconds),
@@ -322,7 +325,7 @@ function toUpdate(d: Draft): AppSettingsUpdate | null {
     AGOUTI: { enabled: d.agoutiEnabled, base_url: d.agoutiUrl.trim() || null, api_key: d.agoutiKey, project_id: d.agoutiProject.trim() || null },
     EPICOLLECTCSV: { enabled: d.wildintelNewEnabled },
     DATA: { dir: d.dataDir.trim() || null, collections_dir: d.collectionsDir.trim() || null, reports_dir: d.reportsDir.trim() || null, packages_dir: d.packagesDir.trim() || null },
-    VALIDATION: { ...d.validation, defaults: d.validationDefaults, exif_fields: d.exifFields },
+    VALIDATION: { ...d.validation, defaults: d.validationDefaults, exif_fields: d.exifFields, camera_levels: d.cameraLevels },
     POSTVALIDATION: {
       ...d.postvalidation, defaults: d.postvalidationDefaults, tolerance_hours: Number(d.toleranceHours), sequence_gap_seconds: Number(d.sequenceGap),
       min_revisions: Number(d.minRevisions), similarity_method: d.similarityMethod, image_count_tolerance: Number(d.imageTolerance),
@@ -522,6 +525,8 @@ const iconBtn = 'w-10 h-10 shrink-0 flex items-center justify-center rounded-xl 
  * it has something to configure — a gear that opens its settings. An entry whose settings are wrong opens them by itself. */
 /** The EXIF fields expected on every image: the capture date, always — WildINTEL Uploader needs it —, and the ones added, each with a cross to take it out.
  * A field is chosen from the list, or typed (it is completed as it is typed), and added with Add or Enter. */
+const DEFAULT_EXIF_FIELDS = ['Model']
+
 function ExifFieldsEditor({ fields, onChange, disabled }: { fields: string[]; onChange: (fields: string[]) => void; disabled?: boolean }) {
   const [typed, setTyped] = useState('')
   const name = typed.trim()
@@ -532,7 +537,11 @@ function ExifFieldsEditor({ fields, onChange, disabled }: { fields: string[]; on
   const chip = 'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm'
   return (
     <div>
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fields expected on every image</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fields expected on every image</p>
+        <button type="button" className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40 disabled:no-underline"
+                disabled={disabled || JSON.stringify(fields) === JSON.stringify(DEFAULT_EXIF_FIELDS)} onClick={() => onChange([...DEFAULT_EXIF_FIELDS])}>Reset to default</button>
+      </div>
       <ul aria-label="EXIF fields expected" className="mt-1.5 flex flex-wrap gap-2">
         <li className={`${chip} border-zinc-300 dark:border-zinc-600 bg-zinc-200/70 dark:bg-zinc-700/60 text-zinc-700 dark:text-zinc-200`} title="WildINTEL Uploader needs it: it is always expected">
           <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
@@ -556,6 +565,54 @@ function ExifFieldsEditor({ fields, onChange, disabled }: { fields: string[]; on
             : <p className={`${hintClass} mt-1`}>{known ? known.label : name ? 'Not in the list: it is looked for as it is written, by the name ExifTool gives it.' : 'From the list, or any field ExifTool knows. Without ExifTool only the standard EXIF fields can be read.'}</p>}
         </div>
         <button type="button" className={btnOutline} disabled={disabled || !name || Boolean(error)} onClick={add}>Add</button>
+      </div>
+    </div>
+  )
+}
+
+/** How two images are told to be of the same camera: levels of EXIF fields, the most reliable first — the images are compared by the first level every one of
+ * them has. A level is moved up or down or taken out, and one is added by choosing a field from the list or typing it; fields are joined with + (Make + Model). */
+const DEFAULT_CAMERA_LEVELS = [['SerialNumber'], ['Make', 'Model'], ['Model']]
+
+function CameraLevelsEditor({ levels, onChange, disabled }: { levels: string[][]; onChange: (levels: string[][]) => void; disabled?: boolean }) {
+  const [typed, setTyped] = useState('')
+  const parts = typed.split('+').map((p) => p.trim()).filter(Boolean)
+  const level = parts.map((p) => EXIF_TAGS.find((t) => t.name.toLowerCase() === p.toLowerCase())?.name ?? p)
+  const key = (l: string[]) => l.map((f) => f.toLowerCase()).join('+')
+  const error = !typed.trim() ? null : parts.some((p) => !isExifTagName(p)) ? 'Fields by the names ExifTool gives them, joined with + (Make + Model).'
+    : levels.some((l) => key(l) === key(level)) ? 'It is one of the levels already.' : null
+  const add = () => { if (level.length && !error) { onChange([...levels, level]); setTyped('') } }
+  const move = (i: number, by: number) => { const next = [...levels]; [next[i], next[i + by]] = [next[i + by], next[i]]; onChange(next) }
+  const small = 'rounded-md p-1 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-30'
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">How two images are told to be of the same camera</p>
+        <button type="button" className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40 disabled:no-underline"
+                disabled={disabled || JSON.stringify(levels) === JSON.stringify(DEFAULT_CAMERA_LEVELS)}
+                onClick={() => onChange(DEFAULT_CAMERA_LEVELS.map((l) => [...l]))}>Reset to default</button>
+      </div>
+      <p className={`${hintClass} mt-0.5`}>The images are compared by the first level every one of them has, the most reliable first; with none, by the first that any has.</p>
+      <ol aria-label="Levels to tell the camera" className="mt-2 space-y-1.5">
+        {levels.map((l, i) => (
+          <li key={key(l)} className="flex items-center gap-2 rounded-lg bg-white dark:bg-zinc-900 px-3 py-1.5">
+            <span className="w-5 text-sm font-semibold text-zinc-400">{i + 1}.</span>
+            <span className="flex-1 font-mono text-sm text-zinc-800 dark:text-zinc-100">{l.join(' + ')}</span>
+            <button type="button" aria-label={`Move ${l.join(' + ')} up`} className={small} disabled={disabled || i === 0} onClick={() => move(i, -1)}>↑</button>
+            <button type="button" aria-label={`Move ${l.join(' + ')} down`} className={small} disabled={disabled || i === levels.length - 1} onClick={() => move(i, 1)}>↓</button>
+            <button type="button" aria-label={`Take out ${l.join(' + ')}`} className={small} disabled={disabled || levels.length === 1} onClick={() => onChange(levels.filter((_, j) => j !== i))}>×</button>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-3 flex flex-wrap items-start gap-2">
+        <div className="min-w-0 flex-1 basis-64">
+          <input aria-label="Level to add" list="camera-tags" className={`${fieldBox} !bg-white dark:!bg-zinc-900 !py-2`} placeholder="Choose or type a field, or several joined with +" value={typed} disabled={disabled}
+                 onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }} />
+          <datalist id="camera-tags">{EXIF_TAGS.map((t) => <option key={t.name} value={t.name}>{t.label}</option>)}</datalist>
+          {error ? <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
+            : <p className={`${hintClass} mt-1`}>Some cameras write their name in ImageDescription or in a field of their own: it can be a level too.</p>}
+        </div>
+        <button type="button" className={btnOutline} disabled={disabled || level.length === 0 || Boolean(error)} onClick={add}>Add</button>
       </div>
     </div>
   )
@@ -625,7 +682,7 @@ const IMAGE_CHECKS: { key: ImageCheck; label: string; hint: string }[] = [
   { key: 'corrupted', label: 'Corrupted images', hint: 'Files that fail to open and decode.' },
   { key: 'sequence', label: 'Shooting order vs. filename sequence', hint: 'A higher-numbered file dated earlier than a lower-numbered one — a clock reset, or cards mixed.' },
   { key: 'structure', label: 'Folder structure (subdirectories)', hint: 'Images spread over subfolders instead of one flat folder.' },
-  { key: 'camera', label: 'Same camera (model and id) on every image', hint: 'More than one camera among the images. Reads the serial number with ExifTool when it is installed.' },
+  { key: 'camera', label: 'Same camera on every image', hint: 'More than one camera among the images, told by the levels of fields of the gear: the serial number, else the make and the model, else the model.' },
   { key: 'exif', label: 'Required EXIF fields', hint: 'The capture date, and the fields the gear adds, on every image.' },
   { key: 'duplicates', label: 'Duplicate images', hint: 'Files with exactly the same content.' },
 ]
@@ -2764,7 +2821,8 @@ export default function SettingsPage({ onClose, initialSection, initialProject, 
                 <CheckEntry key={key} label={label} hint={hint} enabled={draft.validation[key]}
                             onToggle={(v) => set('validation', { ...draft.validation, [key]: v })}
                             level={draft.validationDefaults[key]} onLevel={(l) => set('validationDefaults', { ...draft.validationDefaults, [key]: l })}
-                            settings={key === 'exif' ? <ExifFieldsEditor fields={draft.exifFields} disabled={!draft.validation.exif} onChange={(f) => set('exifFields', f)} /> : undefined} />
+                            settings={key === 'exif' ? <ExifFieldsEditor fields={draft.exifFields} disabled={!draft.validation.exif} onChange={(f) => set('exifFields', f)} />
+                              : key === 'camera' ? <CameraLevelsEditor levels={draft.cameraLevels} disabled={!draft.validation.camera} onChange={(l) => set('cameraLevels', l)} /> : undefined} />
               ))}
             </div>
           </div>

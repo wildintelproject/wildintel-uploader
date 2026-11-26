@@ -271,6 +271,15 @@ gives a field, and taken out with their cross. By default the model of the camer
 serial number is not, as most camera traps do not write it. Without ExifTool only the standard EXIF
 fields can be read.
 
+The gear of **Same camera on every image** says how two images are told to be of the same camera:
+**levels** of fields, the most reliable first. The images are compared by the first level every one
+of them has; when no level is had by all of them, by the first that any has, and the rest are said
+to have no camera information. By default: `SerialNumber`, then `Make + Model`, then `Model`. A level
+is moved up or down with its arrows or taken out with its cross, and one is added by choosing a field
+from the list or typing it — several joined with **+**, as `Make + Model`; some cameras write their
+name in `ImageDescription` or in a field of their own. Without a serial number, two cameras of the
+same model are not told apart, and the result says so.
+
 ### Postvalidation
 
 ![Settings › Postvalidation](img/screenshots/settings-postvalidation.png)
@@ -654,7 +663,7 @@ of a visit, the card is checked against the one the visit left — see [Check de
 | Corrupted images | Files that aren't readable images. |
 | Shooting order vs. filename sequence | Images whose order by name differs from their order by time. |
 | Folder structure | Subfolders inside the deployment's folder. |
-| Same camera | More than one camera model or id among the images. |
+| Same camera | More than one camera among the images, told by the first level of fields of Settings › Validation that every image has — by default the serial number, else the make and the model, else the model. The result says which fields it compared by. |
 | Required photo data | Images missing the capture date — always expected: WildINTEL Uploader needs it — or one of the EXIF fields expected in Settings › Validation (by default the model of the camera). |
 | Duplicate images | Files with the same content. |
 
