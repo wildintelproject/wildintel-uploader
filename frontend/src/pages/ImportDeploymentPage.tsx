@@ -617,7 +617,7 @@ export const DEPLOYMENT_CHECK_DISPLAY: Record<DeploymentCheck, { label: string; 
   collection_prefix: { label: 'Deployment id starts with its collection', description: () => 'The id begins with the collection you chose.' },
   collection_name: { label: 'Collection name', description: () => 'The collection name is written correctly.' },
   location: { label: "Deployment id's location is the one you chose", description: (id) => `The location in the id matches ${id}.` },
-  time_range: { label: 'Image dates fit the deployment', description: () => 'The first image is at the start and the last one at the end.' },
+  time_range: { label: 'Image dates fit the deployment', description: () => 'No image before the start or after the card was collected, and the first one at the start. A camera that stopped earlier is only said.' },
   camera: { label: 'Camera consistency', description: () => 'Every image comes from one camera, the one the deployment says.' },
   image_count: { label: 'Number of images is like the previous revisions', description: () => 'The number of images is close to that of the previous revisions.' },
   sequence_count: { label: 'Number of sequences is like the previous revisions', description: () => 'The number of sequences is close to that of the previous revisions.' },
@@ -638,10 +638,19 @@ export const SIMILARITY_METHODS: { value: SimilarityMethod; label: string }[] = 
 export const ALL_DEPLOYMENT_CHECKS: DeploymentCheck[] = DEPLOYMENT_CHECK_OPTIONS.map((o) => o.value)
 
 export const RANGE_RULE_LABELS = {
-  first: 'the first image should be at the start',
+  first: 'the first image should be at the start: a photo is taken right after the camera is set up',
+  before_start: 'it is before the start of the deployment',
+  after_end: 'it is after the card was collected',
   last: 'the last image should be at the end',
   between: 'it should be within the deployment',
 } as const
+
+/** What the note of a camera that stopped before its card was collected says: when, how long before, and why when the visit says it. */
+export function stoppedEarlyText(s: NonNullable<DeploymentCheckResult['stopped_early']>): string {
+  const why = s.reason === 'card_full' ? ': the visit says the card was full' : s.reason === 'no_batteries' ? ': the visit says the batteries were flat' : ''
+  const days = s.days >= 1 ? `${Math.round(s.days)} day${Math.round(s.days) === 1 ? '' : 's'}` : `${Math.round(s.days * 24)} hours`
+  return `The camera stopped on ${formatLocal(s.date)}, ${days} before the card was collected${why}. That is not a problem of the dates.`
+}
 
 /** The postvalidation's own leeway, in hours, around the deployment's start and end. */
 export const DEFAULT_TOLERANCE_HOURS = 1
@@ -1481,10 +1490,11 @@ export function DeploymentCheckReport({ result, toleranceHours, onKeepCamera }: 
           </div>
         )
       })}
+      {result.stopped_early && <p className="text-sky-700 dark:text-sky-300" aria-label="The camera stopped"><Mark kind="info" />{stoppedEarlyText(result.stopped_early)}</p>}
       {result.out_of_range !== undefined && (
         result.out_of_range.length === 0 ? (
           <p className="text-emerald-600 dark:text-emerald-400">
-            <Mark kind="success" />The first image is at the start, the last at the end and the rest in between (± {result.tolerance_hours ?? toleranceHours} h).
+            <Mark kind="success" />No image before the start or after the card was collected, and the first at the start (± {result.tolerance_hours ?? toleranceHours} h).
           </p>
         ) : (
           <div className="text-amber-600 dark:text-amber-400">
@@ -2226,6 +2236,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
         visit: linkedVisit ? {
           left_session: linkedVisit.visit.session, left_sd: linkedVisit.visit.sd ?? null,
           collected_session: linkedVisit.end.session, counted_photos: linkedVisit.end.num_photos ?? null, sd_card: sdCard || null,
+          collected_card_status: linkedVisit.end.card_status ?? null, collected_battery_status: linkedVisit.end.battery_status ?? null,
         } : null,
       }))
     } catch (e) {
@@ -3222,6 +3233,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
             )}
             {deploymentCheckError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{deploymentCheckError}</p>}
             {deploymentCheck && !deploymentCheck.report_id && <DeploymentCheckReport result={deploymentCheck} toleranceHours={toleranceHours} onKeepCamera={keepCamera} />}
+            {deploymentCheck?.report_id && deploymentCheck.stopped_early && <Notice kind="info" className="mt-3" role="status">{stoppedEarlyText(deploymentCheck.stopped_early)}</Notice>}
             {deploymentCheck?.report_id && <div className="mt-3"><CameraComparison result={deploymentCheck} onKeepCamera={keepCamera} /></div>}
           </WizardStep>
         </div>

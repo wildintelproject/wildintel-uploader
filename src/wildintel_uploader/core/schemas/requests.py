@@ -233,6 +233,9 @@ class VisitCheckInfo(BaseModel):
     collected_session: Optional[str] = None  # the visit that collected the card
     counted_photos: Optional[int] = Field(default=None, ge=0)  # the photos it counted on the card
     sd_card: Optional[str] = None  # the card the images are said to come from
+    # how the visit that collected the card found it: a full card or flat batteries say why the camera stopped before it was collected
+    collected_card_status: Optional[str] = None  # OK or CardFull
+    collected_battery_status: Optional[str] = None  # OK or NoBatteries
 
 
 class ValidateDeploymentRequest(BaseModel):

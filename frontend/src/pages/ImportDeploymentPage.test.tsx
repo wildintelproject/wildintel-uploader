@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { api } from '../api'
-import ImportDeploymentPage, { CameraComparison, DEFAULT_CHECK_SETTINGS, resizeSummaryText, startingChecks } from './ImportDeploymentPage'
+import ImportDeploymentPage, { CameraComparison, stoppedEarlyText, DEFAULT_CHECK_SETTINGS, resizeSummaryText, startingChecks } from './ImportDeploymentPage'
 import { EMPTY_RESEARCH_PROJECT } from '../types'
 import type { DeploymentCheckResult, LocalLocation, LocalResearchProject, Report } from '../types'
 import { APP_SETTINGS, DETAILED_SESSION, SESSION } from '../test/fixtures'
@@ -765,7 +765,7 @@ describe('ImportDeploymentPage', () => {
 
           await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
             expect.anything(), expect.anything(), expect.arrayContaining(['sd_card', 'photo_count']),
-            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 300, sd_card: 'B2' } }),
+            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 300, sd_card: 'B2', collected_card_status: null, collected_battery_status: null } }),
           ))
         })
 
@@ -777,7 +777,7 @@ describe('ImportDeploymentPage', () => {
 
           await waitFor(() => expect(mockedApi.validateDeployment).toHaveBeenCalledWith(
             expect.anything(), expect.anything(), expect.anything(),
-            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: null, sd_card: null } }),
+            expect.objectContaining({ visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: null, sd_card: null, collected_card_status: null, collected_battery_status: null } }),
           ))
         })
       })
@@ -1631,7 +1631,7 @@ describe('ImportDeploymentPage', () => {
         {
           collectionName: null, expectedLocationId: 'DONA_01', toleranceHours: 1, // the collection is the one the id names
           researchProjectId: 'DONA', // whose collections hold the previous revisions
-          visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 12, sd_card: null }, // the visit it is of
+          visit: { left_session: 'R0001', left_sd: 'A13', collected_session: 'R0002', counted_photos: 12, sd_card: null, collected_card_status: null, collected_battery_status: null }, // the visit it is of
           statistics: {
             sequence_gap_seconds: 60, min_revisions: 2, method: 'median',
             image_count_tolerance: 50, sequence_count_tolerance: 50, sequence_length_tolerance: 50,
@@ -1672,18 +1672,18 @@ describe('ImportDeploymentPage', () => {
         checked_count: 20, tolerance_hours: 1,
         out_of_range: [
           { path: 'IMG_0001.jpg', date: '2024-09-04T12:00:00', rule: 'first', expected: '2024-09-04T10:00:00 ± 1h' },
-          { path: 'IMG_0020.jpg', date: '2024-09-09T10:00:00', rule: 'last', expected: '2024-09-10T10:00:00 ± 1h' },
-          { path: 'IMG_0007.jpg', date: '2024-08-01T10:00:00', rule: 'between', expected: '2024-09-04T10:00:00 – 2024-09-10T10:00:00 ± 1h' },
+          { path: 'IMG_0020.jpg', date: '2024-09-12T10:00:00', rule: 'after_end', expected: '2024-09-04T10:00:00 – 2024-09-10T10:00:00 ± 1h' },
+          { path: 'IMG_0007.jpg', date: '2024-08-01T10:00:00', rule: 'before_start', expected: '2024-09-04T10:00:00 – 2024-09-10T10:00:00 ± 1h' },
         ],
       })
       await goToPostvalidation()
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
       expect(await screen.findByText(/3 image\(s\) outside the deployment's dates \(± 1 h\)/)).toBeInTheDocument()
-      expect(screen.getByText(/the first image should be at the start/)).toBeInTheDocument()
-      expect(screen.getByText(/the last image should be at the end/)).toBeInTheDocument()
-      expect(screen.getByText(/it should be within the deployment/)).toBeInTheDocument()
-      expect(screen.getByText(/4 Sep 2024, 12:00, the first image should be at the start \(4 Sep 2024, 10:00 ± 1h\)/)).toBeInTheDocument()
+      expect(screen.getByText(/the first image should be at the start: a photo is taken right after the camera is set up/)).toBeInTheDocument()
+      expect(screen.getByText(/it is after the card was collected/)).toBeInTheDocument()
+      expect(screen.getByText(/it is before the start of the deployment/)).toBeInTheDocument()
+      expect(screen.getByText(/4 Sep 2024, 12:00, the first image should be at the start: a photo is taken right after the camera is set up \(4 Sep 2024, 10:00 ± 1h\)/)).toBeInTheDocument()
     })
 
     it('offers to fix the dates and times when images fell outside them, and comes back to the checks', async () => {
@@ -1706,7 +1706,7 @@ describe('ImportDeploymentPage', () => {
       await goToPostvalidation()
       await userEvent.click(screen.getByRole('button', { name: 'Run checks' }))
 
-      expect(await screen.findByText(/The first image is at the start, the last at the end and the rest in between \(± 2 h\)/)).toBeInTheDocument()
+      expect(await screen.findByText(/No image before the start or after the card was collected, and the first at the start \(± 2 h\)/)).toBeInTheDocument()
     })
 
     it('still reports the camera checks', async () => {
@@ -2837,5 +2837,14 @@ describe('CameraComparison', () => {
     render(<CameraComparison result={{ ...base, camera_label: null, camera_by: [] }} onKeepCamera={vi.fn()} />)
     expect(screen.getByLabelText('How the camera was compared')).toHaveTextContent('is not one of the cameras of the research project')
     expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument()
+  })
+})
+
+describe('stoppedEarlyText', () => {
+  it('says when the camera stopped, how long before the card was collected, and why when the visit says it', () => {
+    expect(stoppedEarlyText({ path: 'a.jpg', date: '2026-10-12T08:00:00', collected: '2026-10-21T09:00:00', days: 9, reason: 'card_full' }))
+      .toBe('The camera stopped on 12 Oct 2026, 08:00, 9 days before the card was collected: the visit says the card was full. That is not a problem of the dates.')
+    expect(stoppedEarlyText({ path: 'a.jpg', date: '2026-10-21T03:00:00', collected: '2026-10-21T09:00:00', days: 0.25, reason: null }))
+      .toMatch(/, 6 hours before the card was collected\. That is not a problem/)
   })
 })
