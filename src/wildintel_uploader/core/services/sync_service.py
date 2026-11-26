@@ -6,7 +6,6 @@ there is left as it is, whatever Trapper says:
   <collections folder>/<research project id>/research_project.json
                                             /locations.json
                                             /<R0003>/collection.json
-                                                    /<R0003>_FileTimestampLog.csv
                                                     /<deployment id>/deployment.json
 
 The collections are those of the classification project whose name starts with R; a deployment of the
@@ -199,7 +198,7 @@ def sync_stream(
 
     project_id = research_project.get("acronym") or str(research_project["pk"])
     folder = local_folder_service.project_dir(root, project_id)
-    created: dict[str, list[str]] = {"research_project": [], "locations": [], "collections": [], "deployments": [], "timestamp_log": [], "images": []}
+    created: dict[str, list[str]] = {"research_project": [], "locations": [], "collections": [], "deployments": [], "images": []}
     kept: dict[str, list[str]] = {key: [] for key in created}
 
     if local_folder_service.has_research_project(root, project_id):
@@ -248,7 +247,6 @@ def sync_stream(
             wanted_ids = {d.upper() for d in only_deployments}
             mine = [(deployment_id, d) for deployment_id, d in mine if deployment_id in wanted_ids]
         yield say(f"Collection {name} ({number}/{len(names)}): {len(mine)} deployment(s).")
-        log_rows = {row["Deployment"].upper() for row in local_folder_service.read_timestamp_log(local_folder_service.timestamp_log_path(collection_dir))}
         for position, (deployment_id, deployment) in enumerate(mine, 1):
             prefix = f"{deployment_id} ({position}/{len(mine)})"
             target = collection_dir / deployment_id
@@ -282,17 +280,6 @@ def sync_stream(
                 downloaded["failed"] += [{"deployment_id": deployment_id, **f} for f in got["failed"]]
                 if got["not_held"]:
                     downloaded["not_held"][deployment_id] = got["not_held"]
-            if deployment_id.upper() in log_rows:
-                kept["timestamp_log"].append(deployment_id)
-            elif deployment.get("start_date") and deployment.get("end_date"):
-                location = by_id.get((deployment.get("location_id") or "").lower(), {})
-                tz, dst = location.get("timezone"), bool(location.get("ignore_dst"))
-                start, end = wall_clock(deployment["start_date"], tz, dst), wall_clock(deployment["end_date"], tz, dst)
-                try:
-                    local_folder_service.upsert_timestamp_log(collection_dir, deployment_id, start, end)
-                    created["timestamp_log"].append(deployment_id)
-                except local_folder_service.LocalFolderError as exc:
-                    logger.warning("%s: no timestamp log row: %s", deployment_id, exc)
             yield say(f"{prefix}: done.")
 
     unassigned = sorted(d["deployment_id"].upper() for d in deployments if d["deployment_id"] and d["deployment_id"].upper() not in claimed)

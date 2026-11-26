@@ -31,7 +31,7 @@ def collection_names(req: SyncCollectionNamesRequest) -> dict:
 @router.post("/collections")
 def sync_collections(req: SyncCollectionsRequest) -> StreamingResponse:
     """Creates in the collections folder what Trapper has for the classification project and it lacks — the research
-    project, its locations, the collections starting with R and, in each, its timestamp log and its deployments, one
+    project, its locations, the collections starting with R and, in each, its deployments, one
     deployment at a time. What is already there is kept as it is.
 
     Answers NDJSON: a {"type": "progress", "message"} per step and, last, {"type": "done", ...} with what was created

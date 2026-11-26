@@ -43,8 +43,15 @@ def kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         _jpeg(source / f"IMG_{n:04d}.jpg", taken, color)
     collection = project / "R0003"
     list(pre.preprocess_stream(str(source), str(collection), "R0003", DEPLOYMENT, OPTIONS))
-    lfs.upsert_timestamp_log(collection, DEPLOYMENT_ID, *(datetime(2024, 7, 1, h, m) for h, m in ((9, 0), (12, 0))))
+    _old_log(collection, DEPLOYMENT_ID, datetime(2024, 7, 1, 9, 0), datetime(2024, 7, 1, 12, 0))   # as an older folder has it: it is no longer written (#213)
     return root, collection / DEPLOYMENT_ID
+
+
+def _old_log(collection: Path, deployment_id: str, start: datetime, end: datetime) -> None:
+    """The FileTimestampLog of the collection with the row of a deployment, as wildintel-tools — and this app before #213 — wrote it."""
+    lfs.timestamp_log_path(collection).write_text(
+        f"Deployment,StartDate,StartTime,EndDate,EndTime\n{deployment_id.lower()},{start:%Y:%m:%d},{start:%H:%M:%S},{end:%Y:%m:%d},{end:%H:%M:%S}\n",
+        encoding="utf-8-sig")
 
 
 def _repair(root: Path, deployment_id=DEPLOYMENT_ID) -> list[dict]:
@@ -96,7 +103,7 @@ def test_every_metadata_file_is_rebuilt_from_the_images_and_the_deployment_is_va
 def test_the_timestamp_log_prevails_over_what_the_images_say(kept):
     root, dest = kept
     collection = dest.parent
-    lfs.upsert_timestamp_log(collection, DEPLOYMENT_ID, *(datetime(2024, 6, 30, 8, 0), datetime(2024, 7, 2, 18, 0)))
+    _old_log(collection, DEPLOYMENT_ID, datetime(2024, 6, 30, 8, 0), datetime(2024, 7, 2, 18, 0))
     (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
 
     events = _repair(root)
@@ -107,17 +114,18 @@ def test_the_timestamp_log_prevails_over_what_the_images_say(kept):
     assert lfs.TIMESTAMP_LOG_SUFFIX not in "".join(events[-1]["written"])  # the log was not touched
 
 
-def test_without_a_row_in_the_log_the_period_is_the_one_left_in_deployment_json_or_the_images_and_the_row_is_added(kept):
+def test_without_a_log_the_period_is_the_one_left_in_deployment_json_or_the_images_and_no_log_is_written(kept):
     root, dest = kept
     collection = dest.parent
     lfs.timestamp_log_path(collection).unlink()
+    assert rep.inspect(root, "DONA", "R0003", DEPLOYMENT_ID)["problems"] == []   # having no log is not a problem (#213)
     (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
 
     events = _repair(root)
 
-    rows = lfs.read_timestamp_log(lfs.timestamp_log_path(collection))
-    assert [(r["Deployment"], r["StartDate"], r["StartTime"], r["EndTime"]) for r in rows] == [(DEPLOYMENT_ID.lower(), "2024:07:01", "10:00:00", "11:30:00")]  # from the images
-    assert lfs.timestamp_log_path(collection).name in events[-1]["written"]
+    deployment = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
+    assert deployment["start_date"].startswith("2024-07-01T10:00:00") and deployment["end_date"].startswith("2024-07-01T11:30:00")   # from the images
+    assert not lfs.timestamp_log_path(collection).exists() and lfs.timestamp_log_path(collection).name not in events[-1]["written"]
 
 
 def test_what_is_left_of_deployment_json_is_kept(kept):

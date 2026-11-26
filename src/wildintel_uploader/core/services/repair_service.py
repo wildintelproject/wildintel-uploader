@@ -8,9 +8,9 @@ they are written again from what the folder itself holds.
 A deployment is **valid** when its seal.json still matches it (seal_service.verify); anything else is not. Repairing it:
 
   - reads the capture date of every image (the camera's wall clock, from its EXIF) and its camera;
-  - takes the deployment's period from the collection's FileTimestampLog.csv if the deployment has a row there — the log
+  - takes the deployment's period from the collection's FileTimestampLog.csv if an old one has a row of it — the log
     always prevails over what the images say — and, if it has none, from the deployment.json that is left or else from the
-    images, and adds the row;
+    images; no row is added, the log is no longer written (#213);
   - writes deployment.json (what is left of it, the location's details and the camera, plus that period), preprocessing.json
     and images.json, as the images are;
   - validates and postvalidates the images (and checks the preprocessing: their names, sizes and metadata) and writes a new
@@ -151,10 +151,8 @@ def inspect(collections_dir: Path, research_project_id: str, collection: str, de
             problems.append("deployment.json is not what was sealed")
         if seal["seal_changed"]:
             problems.append("seal.json itself was changed")
-    if log in ("no row", "no log"):
-        problems.append("The collection's timestamp log has no row for it." if log == "no row" else "The collection has no timestamp log.")
-    elif log not in ("row",):
-        problems.append(log)
+    if log not in ("row", "no row", "no log"):
+        problems.append(log)   # a log that is there and can't be read; having none is not a problem (#213)
     if not images:
         problems.append("There are no images in the folder.")
     return {"deployment_id": deployment_id, "status": status, "seal": seal, "files": files, "images": len(images), "log": log, "problems": problems}
@@ -307,16 +305,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
             (start, end), note = computed, "read from its images"
         if end <= start:
             raise RepairError(f"The period of {deployment_id} is not valid: it ends ({end}) before it starts ({start}).")
-        if row is None:
-            try:
-                result = local_folder_service.upsert_timestamp_log(collection_dir, deployment_id, start, end)
-            except local_folder_service.LocalFolderError as exc:
-                raise RepairError(str(exc)) from exc
-            written.append(Path(result["path"]).name)
-            file_results.append((Path(result["path"]).name, True, f"a row for {deployment_id} was added"))
-            yield step("dates", "done", f"{start:%Y-%m-%d %H:%M:%S} → {end:%Y-%m-%d %H:%M:%S} ({note}); added to the timestamp log.")
-        else:
-            yield step("dates", "done", f"{start:%Y-%m-%d %H:%M:%S} → {end:%Y-%m-%d %H:%M:%S} ({note}).")
+        yield step("dates", "done", f"{start:%Y-%m-%d %H:%M:%S} → {end:%Y-%m-%d %H:%M:%S} ({note}).")
 
         # ── deployment.json ──
         yield step("deployment", "running", "Writing deployment.json…")

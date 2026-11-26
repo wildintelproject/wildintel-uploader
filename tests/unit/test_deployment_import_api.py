@@ -679,101 +679,27 @@ def test_the_exiftool_endpoint_says_whether_it_is_installed(installed: bool):
     assert body == {"available": installed, "path": path}
 
 
-# ── the collection's FileTimestampLog ───────────────────────────────────────
-
-def _log_payload(**deployment) -> dict:
-    return {
-        "research_project_id": "DONA",
-        "deployment": {
-            "deployment_id": "R0003-DONA_0007_B", "latitude": 37.0, "longitude": -6.5,
-            "start_date": "2024-09-04T13:10:00+02:00", "end_date": "2024-11-04T14:28:00+01:00", **deployment,
-        },
-    }
+# ── the collection's logs: no longer written (#213), only read when an older folder has them ─────
 
 
-def test_timestamp_log_writes_the_deployments_row_in_its_collection(tmp_path: Path):
+def _old_logs(collection: Path) -> None:
+    """The FileTimestampLog and the FieldworkLog of R0003 with the row of R0003-DONA_0007_B, as this app wrote them before #213."""
+    collection.mkdir(parents=True, exist_ok=True)
+    (collection / "R0003_FileTimestampLog.csv").write_text(
+        "Deployment,StartDate,StartTime,EndDate,EndTime\nr0003-dona_0007_b,2024:09:04,13:10:00,2024:11:04,14:28:00\n", encoding="utf-8-sig")
+    (collection / "R0003_FieldworkLog.csv").write_text(
+        "deploymentID,locationID,setupBy,cameraID,cameraHeight,baitUse,deploymentTags\nR0003-DONA_0007_B,DONA_0007,Ana,P800,1.2,true,forest | pine\n",
+        encoding="utf-8-sig")
+
+
+def test_the_logs_of_a_collection_can_no_longer_be_written(tmp_path: Path):
+    payload = {"research_project_id": "DONA", "deployment": {"deployment_id": "R0003-DONA_0007_B", "latitude": 37.0, "longitude": -6.5,
+                                                             "start_date": "2024-09-04T13:10:00+02:00", "end_date": "2024-11-04T14:28:00+01:00"}}
     with _in(tmp_path):
-        response = _client().post("/api/deployment-import/timestamp-log", json=_log_payload())
+        response = _client().post("/api/deployment-import/timestamp-log", json=payload)
 
-    log = tmp_path / "DONA" / "R0003" / "R0003_FileTimestampLog.csv"
-    assert response.status_code == 200
-    fieldwork = tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv"
-    assert response.json() == {"path": str(log), "action": "added", "rows": 1, "collection": "R0003",
-                               "fieldwork_log": {"path": str(fieldwork), "action": "added", "rows": 1}}
-    # The camera's wall-clock time: the designators (+02:00, +01:00) are dropped, not converted.
-    assert log.read_text(encoding="utf-8-sig").splitlines()[1] == "r0003-dona_0007_b,2024:09:04,13:10:00,2024:11:04,14:28:00"
-
-
-def test_timestamp_log_writes_the_deployments_row_in_the_fieldwork_log_too_in_utc(tmp_path: Path):
-    payload = _log_payload(setup_by="Ana", camera_id="P800", camera_height=1.2, bait_use=True, tags=["forest", "pine"], comments="Near the pond")
-    payload["visits"] = {"left_session": "R0003", "left_action": "Revision", "collected_session": "R0004", "collected_action": "Revision",
-                         "counted_photos": 241, "sd_card": "A13", "left_sd": "B2"}
-    with _in(tmp_path):
-        _client().post("/api/deployment-import/timestamp-log", json=payload)
-
-    lines = (tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv").read_text(encoding="utf-8-sig").splitlines()
-    header, row = lines[0].split(","), dict(zip(lines[0].split(","), next(__import__("csv").reader([lines[1]]))))
-    assert header[:6] == ["deploymentID", "locationID", "deploymentStart", "deploymentEnd", "setupBy", "cameraID"]
-    assert row["deploymentID"] == "R0003-DONA_0007_B"
-    assert (row["deploymentStart"], row["deploymentEnd"]) == ("2024-09-04T11:10:00Z", "2024-11-04T13:28:00Z")  # the designators, converted to UTC
-    assert (row["setupBy"], row["cameraID"], row["cameraHeight"], row["baitUse"]) == ("Ana", "P800", "1.2", "true")
-    assert (row["deploymentTags"], row["deploymentComments"], row["status"], row["collection"]) == ("forest | pine", "Near the pond", "closed", "R0003")
-    assert (row["cardSD"], row["photosCounted"]) == ("A13", "241")
-    assert (row["startSession"], row["startAction"], row["endSession"], row["endAction"]) == ("R0003", "Revision", "R0004", "Revision")
-
-
-def test_the_fieldwork_log_keeps_the_other_deployments_rows_and_replaces_its_own(tmp_path: Path):
-    with _in(tmp_path):
-        _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_01"))
-        _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_02"))
-        again = _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_01", habitat="Pine forest"))
-
-    log = tmp_path / "DONA" / "R0003" / "R0003_FieldworkLog.csv"
-    assert again.json()["fieldwork_log"]["action"] == "updated" and again.json()["fieldwork_log"]["rows"] == 2
-    assert "Pine forest" in log.read_text(encoding="utf-8-sig") and log.read_text(encoding="utf-8-sig").count("R0003-DONA_0") == 2
-
-
-def test_timestamp_log_says_updated_then_unchanged(tmp_path: Path):
-    with _in(tmp_path):
-        _client().post("/api/deployment-import/timestamp-log", json=_log_payload())
-        updated = _client().post("/api/deployment-import/timestamp-log", json=_log_payload(end_date="2024-12-01T08:00:00+01:00"))
-        unchanged = _client().post("/api/deployment-import/timestamp-log", json=_log_payload(end_date="2024-12-01T08:00:00+01:00"))
-
-    assert updated.json()["action"] == "updated" and unchanged.json()["action"] == "unchanged"
-    assert unchanged.json()["rows"] == 1
-
-
-def test_timestamp_log_refuses_an_id_without_a_collection_and_a_research_project_that_is_not_a_folder_name(tmp_path: Path):
-    with _in(tmp_path):
-        no_collection = _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="DONA-DONA_01"))
-        bad_project = _client().post("/api/deployment-import/timestamp-log", json={**_log_payload(), "research_project_id": "../x"})
-
-    assert no_collection.status_code == 400 and "R + four digits" in no_collection.json()["detail"]
-    assert bad_project.status_code == 400
+    assert response.status_code in (404, 405)
     assert not any(tmp_path.iterdir())
-
-
-def test_timestamp_log_refuses_a_log_it_cannot_read_and_leaves_it_alone(tmp_path: Path):
-    log = tmp_path / "DONA" / "R0003" / "R0003_FileTimestampLog.csv"
-    log.parent.mkdir(parents=True)
-    log.write_text("Deployment,StartDate\nR0003-X,2024:09:04\n", encoding="utf-8")
-
-    with _in(tmp_path):
-        response = _client().post("/api/deployment-import/timestamp-log", json=_log_payload())
-
-    assert response.status_code == 400 and "missing the columns" in response.json()["detail"]
-    assert log.read_text(encoding="utf-8") == "Deployment,StartDate\nR0003-X,2024:09:04\n"
-
-
-def test_the_collection_made_for_the_log_is_the_one_the_import_then_uses(tmp_path: Path):
-    source = tmp_path / "source"
-    source.mkdir()
-    _make_jpeg(source / "IMG_0001.jpg", "2024:09:04 13:10:00")
-    with _in(tmp_path / "collections"):
-        _client().post("/api/deployment-import/timestamp-log", json=_log_payload(deployment_id="R0003-DONA_01"))
-        collection = _client().post("/api/deployment-import/collection-path", json={"research_project_id": "DONA", "deployment_id": "R0003-DONA_01"}).json()
-
-    assert collection["exists"] is True and collection["name"] == "R0003"  # so the import keeps that name
 
 
 # ── statistical postvalidation ──────────────────────────────────────────────
@@ -1111,9 +1037,8 @@ def test_validate_deployment_takes_the_visit_for_the_card_and_the_photos(tmp_pat
 
 
 def test_log_entry_gives_what_the_collections_logs_say_of_a_deployment(tmp_path: Path):
-    payload = _log_payload(setup_by="Ana", camera_id="P800", camera_height=1.2, bait_use=True, tags=["forest", "pine"])
+    _old_logs(tmp_path / "DONA" / "R0003")
     with _in(tmp_path):
-        _client().post("/api/deployment-import/timestamp-log", json=payload)
         found = _client().get("/api/deployment-import/log-entry", params={"research_project_id": "DONA", "deployment_id": "R0003-DONA_0007_B"})
         other = _client().get("/api/deployment-import/log-entry", params={"research_project_id": "DONA", "deployment_id": "R0003-DONA_0008_B"})
 

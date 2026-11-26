@@ -10,7 +10,6 @@ import queue
 import threading
 import time
 from collections.abc import Iterator
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response
@@ -22,7 +21,7 @@ from wildintel_uploader.core import config
 from wildintel_uploader.core.logging_setup import debugging
 from wildintel_uploader.core.schemas.requests import (
     BrowseFolderRequest, CardRequest, CheckCollectionRequest, CollectionPathRequest, ImportDeploymentRequest, ImportLocalRequest,
-    DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest, TimestampLogRequest,
+    DeleteLocationRequest, ExistingDeploymentsRequest, LocalLocationsRequest, PreviousDeploymentsRequest, ResearchProjectRecord, SaveLocationRequest, ScanFolderRequest,
     NextRevisionRequest, UpdateLocationRequest, UpdateResearchProjectRequest, ValidateDeploymentRequest, ValidateImagesRequest,
 )
 from wildintel_uploader.core.services import camera_info, card_copy_service, deployment_import_service, deployment_photos, file_manager, folder_picker, local_folder_service, preprocessing_service, report_service, seal_service, statistics_service, visit_deployments
@@ -164,27 +163,6 @@ def log_entry(research_project_id: str, deployment_id: str) -> dict:
     deployment can be filled in from."""
     try:
         return deployment_import_service.log_entry(research_project_id, deployment_id)
-    except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-
-@router.post("/timestamp-log")
-def timestamp_log(req: TimestampLogRequest) -> dict:
-    """Puts the deployment's start and end in its collection's <collection>_FileTimestampLog.csv —
-    wildintel-tools' file, one row per deployment — before the postvalidation, and its row in the
-    <collection>_FieldworkLog.csv beside it: its fields as Camtrap DP names them, in UTC, and what the
-    visits it is of say of it. The collection is the one the deployment id names, in the research project's folder."""
-    try:
-        collection = deployment_import_service.default_collection_dir(req.research_project_id, req.deployment.deployment_id)
-        if local_folder_service.is_synced(collection / req.deployment.deployment_id):
-            raise deployment_import_service.DeploymentImportError(f"{req.deployment.deployment_id} was synced from TRAPPER, so it can't be modified here.")
-        # The camera's wall-clock time: what the images' EXIF holds, whatever the designator says.
-        start = datetime.fromisoformat(req.deployment.start_date).replace(tzinfo=None)
-        end = datetime.fromisoformat(req.deployment.end_date).replace(tzinfo=None)
-        result = local_folder_service.upsert_timestamp_log(collection, req.deployment.deployment_id, start, end)
-        fieldwork = local_folder_service.upsert_fieldwork_log(
-            collection, deployment_import_service.fieldwork_log_row(req.deployment, req.visits.model_dump() if req.visits else None))
-        return {**result, "collection": collection.name, "fieldwork_log": fieldwork}
     except (deployment_import_service.DeploymentImportError, local_folder_service.LocalFolderError) as exc:
         raise HTTPException(400, str(exc)) from exc
 

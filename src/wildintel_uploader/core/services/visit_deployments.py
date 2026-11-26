@@ -11,17 +11,16 @@ when it was collected, and the details of the camera and the site. When the visi
 a field, both are kept: a text as "Setup: … | Retrieval: …", the tags and groups of both together, and a number, a yes/no or a feature type as the setup says
 it with the retrieval's value noted in the comments.
 
-write_collection_logs() writes, in each collection's folder, the FileTimestampLog (the closed deployments' start and end) and the FieldworkLog (every
-deployment of the collection, closed or open).
+make_collection_folders() makes the folder of each collection the visits give deployments to, with its collection.json. No FileTimestampLog nor FieldworkLog
+is written any more (#213): the visits keep what they said.
 """
 from __future__ import annotations
 
-import datetime as dt
 import logging
 import re
 from pathlib import Path
 
-from wildintel_uploader.core.services import local_folder_service, visit_rules, visit_time
+from wildintel_uploader.core.services import local_folder_service, visit_rules
 
 logger = logging.getLogger(__name__)
 
@@ -270,11 +269,6 @@ def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[di
     return out
 
 
-def _wall(when: str, location: dict | None) -> dt.datetime:
-    date, time = visit_time.to_wall(when, location)
-    return dt.datetime.fromisoformat(f"{date}T{time}")
-
-
 def collections_of(visits: list[dict], new: list[dict], keep_seconds: bool = True) -> list[str]:
     """The collections whose deployments have one of the visits `new` (found by their instant and site) among their two — the ones a new visit changes."""
     keys = {(str(v.get("location_id", "")).lower(), v.get("when")) for v in new if v.get("when")}
@@ -286,53 +280,25 @@ def collections_of(visits: list[dict], new: list[dict], keep_seconds: bool = Tru
     return sorted(found)
 
 
-def write_collection_logs(root: Path, research_project_id: str, collections: list[str] | None = None, keep_seconds: bool = True) -> dict:
-    """Writes the FileTimestampLog and the FieldworkLog of each collection the visits give deployments to (only the ones named, when `collections` is
-    given). The FileTimestampLog is the camera's wall clock — the location's — and the FieldworkLog UTC; the row of a deployment already in them is replaced.
+def make_collection_folders(root: Path, research_project_id: str, collections: list[str] | None = None, keep_seconds: bool = True) -> dict:
+    """Makes the folder of each collection the visits give deployments to (only the ones named, when `collections` is given), with its collection.json.
 
-    Returns {"collections": [{"collection", "closed", "open", "files": [...]}], "warnings": [...]}.
+    Returns {"collections": [{"collection", "closed", "open"}]}.
 
     Raises:
         LocalFolderError: the research project isn't kept in the collections folder.
     """
     local_folder_service.require_research_project(root, research_project_id)
     visits = local_folder_service.list_visits(root, research_project_id)
-    locations = local_folder_service.list_locations(root, research_project_id)
-    where = {str(l["location_id"]).lower(): l for l in locations}
     project = root / research_project_id
     wanted = {c.upper() for c in collections} if collections is not None else None
     by_collection: dict[str, list[dict]] = {}
     for d in deployments(visits, keep_seconds):
         if wanted is None or d["collection"] in wanted:
             by_collection.setdefault(d["collection"], []).append(d)
-    result, warnings = [], []
+    result = []
     for collection, items in sorted(by_collection.items()):
-        folder = project / collection
-        local_folder_service.write_collection_metadata(folder, collection)   # the collection's folder, with its collection.json
-        files = []
-        for d in items:
-            location = where.get(d["site"].lower())
-            if d["status"] == "closed" and not d["no_images"]:
-                try:
-                    local_folder_service.upsert_timestamp_log(folder, d["deployment_id"], _wall(d["start"], location), _wall(d["end"], location))
-                except local_folder_service.LocalFolderError as exc:
-                    warnings.append(f"{d['deployment_id']}: not put in the FileTimestampLog: {exc}")
-            local_folder_service.upsert_fieldwork_log(folder, _row(d))
-        for path in (local_folder_service.timestamp_log_path(folder), local_folder_service.fieldwork_log_path(folder)):
-            if path.is_file():
-                files.append(str(path))
-        result.append({"collection": collection, "closed": sum(d["status"] == "closed" for d in items), "open": sum(d["status"] == "open" for d in items), "files": files})
-    return {"collections": result, "warnings": warnings}
+        local_folder_service.write_collection_metadata(project / collection, collection)   # the collection's folder, with its collection.json
+        result.append({"collection": collection, "closed": sum(d["status"] == "closed" for d in items), "open": sum(d["status"] == "open" for d in items)})
+    return {"collections": result}
 
-
-def _row(d: dict) -> dict:
-    """A deployment's row of the FieldworkLog."""
-    start, end = d["start_visit"], d["end_visit"]
-    cell = lambda v: "" if v is None else ("true" if v is True else "false" if v is False else str(v))  # noqa: E731
-    return {
-        "deploymentID": d["deployment_id"], "locationID": d["site"], "deploymentStart": d["start"], "deploymentEnd": d["end"] or "",
-        "setupBy": d["setup_by"] or "", "cameraID": d["camera_id"] or "", **{name: cell(d["fields"].get(name)) for _, name, _ in _EXTRAS},
-        "deploymentComments": d["comments"], "status": d["status"], "collection": d["collection"], "cardSD": d["card"] or "",
-        "photosCounted": cell(d["photos_counted"]), "startSession": start.get("session") or "", "startAction": " + ".join(start.get("actions") or []),
-        "endSession": (end or {}).get("session") or "", "endAction": " + ".join((end or {}).get("actions") or []),
-    }
