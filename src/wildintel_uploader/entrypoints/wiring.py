@@ -18,7 +18,7 @@ from dishka import Container, Provider, Scope, make_container, provide
 
 from wildintel_uploader.core import config
 from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseCases
-from wildintel_uploader.modules.catalog.domain.ports import CatalogService, Clock
+from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
 from wildintel_uploader.modules.catalog.infrastructure.legacy import SystemClock, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
@@ -38,12 +38,13 @@ def build_settings(store: SettingsStore | None = None, *, activity_log: Activity
                             machine=machine or ThisMachine(), record_storage=record_storage or AppRecordStorage())
 
 
-def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock | None = None) -> CatalogService:
-    """The catalog kept in a collections folder — the one of the settings, or one a caller of before names —, taking what versions before left in
-    the settings through their module."""
+def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock | None = None, repository: CatalogRepository | None = None) -> CatalogService:
+    """The catalog of a collections folder — the one of the settings, or one a caller of before names —, taking what versions before left in the
+    settings through their module. Its records are kept in `repository`: by default the JSON files of the collections folder
+    (StoreCatalogRepository); a SqlCatalogRepository keeps them in a database instead."""
     store = storage.open_store(collections_dir)
-    return CatalogUseCases(StoreCatalogRepository(store, collections_dir), legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store),
-                           clock=clock or SystemClock())
+    return CatalogUseCases(repository or StoreCatalogRepository(store, collections_dir), legacy_trappers=TrappersFromTheSettings(settings),
+                           visits=StoredVisits(store), clock=clock or SystemClock())
 
 
 # ── the providers of the container ──

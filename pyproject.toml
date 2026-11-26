@@ -30,6 +30,7 @@ dependencies = [
     "tzdata>=2024.1",
     "pyepicollect>=5.1.1",
     "dishka>=1.10",
+    "sqlmodel>=0.0.22",
 ]
 
 [dependency-groups]
