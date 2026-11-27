@@ -101,7 +101,7 @@ def test_the_endpoint_syncs_the_collections_folder(tmp_path: Path):
     from wildintel_uploader.web.main import app
     payload = {**dict(zip(("url", "username", "password"), CREDS)), "research_project_pk": 2, "research_project_name": "Doñana", "research_project_acronym": "DONA", "classification_project_pk": 10}
 
-    with patch("wildintel_uploader.web.api.routers.sync.config.collections_dir", return_value=tmp_path), \
+    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path), \
          patch("wildintel_uploader.core.services.sync_service.trapper_service.list_deployment_resources", return_value=RESOURCES), \
          patch("wildintel_uploader.core.services.sync_service.trapper_service.list_locations", return_value=LOCATIONS), \
          patch("wildintel_uploader.core.services.sync_service.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
@@ -231,8 +231,8 @@ def test_the_download_is_asked_for_by_the_endpoint(tmp_path: Path):
         seen["download_images"] = args[6] if len(args) > 6 else kwargs.get("download_images")
         yield {"type": "done"}
 
-    with patch("wildintel_uploader.web.api.routers.sync.sync_service.sync_stream", side_effect=fake_stream), \
-         patch("wildintel_uploader.web.api.routers.sync.resolve", return_value=CREDS):
+    with patch("wildintel_uploader.core.services.sync_service.sync_stream", side_effect=fake_stream), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper.TrapperClient.credentials", return_value=CREDS):
         TestClient(app).post("/api/sync/collections", json={"research_project_pk": 2, "research_project_acronym": "DONA", "classification_project_pk": 10, "download_images": True})
 
     assert seen["download_images"] is True

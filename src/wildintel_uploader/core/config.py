@@ -24,10 +24,11 @@ from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECK
 from wildintel_uploader.modules.prevalidation.infrastructure.settings import ValidationSettings  # noqa: F401
 from wildintel_uploader.modules.sources.infrastructure.settings import Epicollect5Settings, EpicollectCsvSettings  # noqa: F401
 from wildintel_uploader.modules.visits.infrastructure.settings import FieldlogSettings  # noqa: F401
+from wildintel_uploader.modules.uploaders.infrastructure.settings import AgoutiSettings, TrapperSettings  # noqa: F401
 from wildintel_uploader.modules.settings.infrastructure.schema import (  # noqa: F401
-    MAX_WORKERS, TRAPPER_ROLES, AgoutiSettings, Camera, CheckLevel, DataSettings,
+    MAX_WORKERS, TRAPPER_ROLES, Camera, CheckLevel, DataSettings,
     FieldworkSettings, GeneralSettings, LogLevel, SdCard, Settings,
-    Trapper, TrapperRole, TrapperSettings, default_workers, migrate_gear, secret_fields, username_from,
+    Trapper, TrapperRole, default_workers, migrate_gear, secret_fields, username_from,
 )
 from wildintel_uploader.modules.settings.infrastructure.toml_files import DEFAULT_CONFIG_ID, TomlSettingsStore, read_settings_file, write_settings_file  # noqa: F401
 

@@ -62,7 +62,7 @@ def test_uploading_streams_the_steps_and_ends_with_done(tmp_path: Path, fake_upl
     _kept(tmp_path)
     fake = FakeTrapper()
 
-    with _in(tmp_path / "collections"), patch("wildintel_uploader.web.api.routers.upload.config.data_dir", return_value=tmp_path), \
+    with _in(tmp_path / "collections"), patch("wildintel_uploader.core.config.data_dir", return_value=tmp_path), \
          patch.object(trapper_service, "_client", return_value=fake), patch.object(trapper_upload_service, "WAIT_FOR_COLLECTION_SECONDS", 0.2):
         response = _client().post("/api/upload/deployment", json=PAYLOAD)
 
@@ -112,7 +112,7 @@ def test_a_failure_midway_is_an_error_line_not_a_crash(tmp_path: Path, fake_uplo
     _kept(tmp_path, trapper_pk=999)  # a pk Trapper doesn't have, and an acronym it does not either
     fake = FakeTrapper(projects=[])
 
-    with _in(tmp_path / "collections"), patch("wildintel_uploader.web.api.routers.upload.config.data_dir", return_value=tmp_path), \
+    with _in(tmp_path / "collections"), patch("wildintel_uploader.core.config.data_dir", return_value=tmp_path), \
          patch.object(trapper_service, "_client", return_value=fake):
         response = _client().post("/api/upload/deployment", json=PAYLOAD)
 
@@ -136,7 +136,7 @@ def test_an_error_from_trapper_itself_is_reported_in_plain_words(tmp_path: Path,
         def _boom(**kw):
             raise err.UnauthorizedError("401")
 
-    with _in(tmp_path / "collections"), patch("wildintel_uploader.web.api.routers.upload.config.data_dir", return_value=tmp_path), \
+    with _in(tmp_path / "collections"), patch("wildintel_uploader.core.config.data_dir", return_value=tmp_path), \
          patch.object(trapper_service, "_client", return_value=Broken()):
         events = _events(_client().post("/api/upload/deployment", json=PAYLOAD))
 
@@ -174,7 +174,7 @@ def test_the_zips_are_split_at_the_size_of_the_settings(tmp_path: Path, fake_upl
     _kept(tmp_path)
     fake = FakeTrapper()
 
-    with _in(tmp_path / "collections"), patch("wildintel_uploader.web.api.routers.upload.config.data_dir", return_value=tmp_path), \
+    with _in(tmp_path / "collections"), patch("wildintel_uploader.core.config.data_dir", return_value=tmp_path), \
          patch.object(trapper_service, "_client", return_value=fake), patch.object(config, "max_zip_mb", return_value=1) as size:
         events = _events(_client().post("/api/upload/deployment", json=PAYLOAD))
 
@@ -185,7 +185,7 @@ def test_the_zips_are_split_at_the_size_of_the_settings(tmp_path: Path, fake_upl
 def test_when_the_collection_does_not_appear_the_error_says_how_long_it_waited(tmp_path: Path, fake_uploader):
     _kept(tmp_path)
 
-    with _in(tmp_path / "collections"), patch("wildintel_uploader.web.api.routers.upload.config.data_dir", return_value=tmp_path), \
+    with _in(tmp_path / "collections"), patch("wildintel_uploader.core.config.data_dir", return_value=tmp_path), \
          patch.object(trapper_service, "_client", return_value=FakeTrapper(collections_appear=False)), \
          patch.object(trapper_upload_service, "WAIT_FOR_COLLECTION_SECONDS", 0.2), patch.object(trapper_upload_service, "POLL_SECONDS", 0.05):
         events = _events(_client().post("/api/upload/deployment", json=PAYLOAD))
@@ -196,7 +196,7 @@ def test_when_the_collection_does_not_appear_the_error_says_how_long_it_waited(t
 # ── the three modes ─────────────────────────────────────────────────────────
 
 def _post(tmp_path: Path, payload: dict, fake: FakeTrapper | None = None, settings=None):
-    stack = [_in(tmp_path / "collections"), patch("wildintel_uploader.web.api.routers.upload.config.data_dir", return_value=tmp_path),
+    stack = [_in(tmp_path / "collections"), patch("wildintel_uploader.core.config.data_dir", return_value=tmp_path),
              patch.object(trapper_service, "_client", return_value=fake or FakeTrapper())]
     if settings is not None:
         stack.append(patch.object(trapper_service.config, "load_settings", return_value=settings))
@@ -270,7 +270,7 @@ def test_an_unknown_mode_is_a_422(tmp_path: Path):
 def test_open_folder_opens_a_folder_inside_the_data_folder(tmp_path):
     inside = tmp_path / "collections" / "DONA"
     inside.mkdir(parents=True)
-    with patch("wildintel_uploader.web.api.routers.deployment_import.config.data_dir", return_value=tmp_path), \
+    with patch("wildintel_uploader.core.config.data_dir", return_value=tmp_path), \
             patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager") as opener:
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(inside)})
     assert response.status_code == 200
@@ -280,7 +280,7 @@ def test_open_folder_opens_a_folder_inside_the_data_folder(tmp_path):
 def test_open_folder_refuses_folders_outside_the_data_folder(tmp_path):
     data = tmp_path / "data"
     data.mkdir()
-    with patch("wildintel_uploader.web.api.routers.deployment_import.config.data_dir", return_value=data), \
+    with patch("wildintel_uploader.core.config.data_dir", return_value=data), \
             patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager") as opener:
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(tmp_path)})
     assert response.status_code == 400
@@ -288,7 +288,7 @@ def test_open_folder_refuses_folders_outside_the_data_folder(tmp_path):
 
 
 def test_open_folder_404_when_missing(tmp_path):
-    with patch("wildintel_uploader.web.api.routers.deployment_import.config.data_dir", return_value=tmp_path), \
+    with patch("wildintel_uploader.core.config.data_dir", return_value=tmp_path), \
             patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager"):
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(tmp_path / "nope")})
     assert response.status_code == 404

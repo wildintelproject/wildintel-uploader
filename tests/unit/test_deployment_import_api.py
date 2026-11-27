@@ -865,7 +865,7 @@ def test_import_registers_the_deployment_in_the_kept_locations_timezone(tmp_path
     }
 
     with patch("wildintel_uploader.core.config.collections_dir", return_value=root), \
-         patch("wildintel_uploader.web.api.routers.deployment_import.deployment_import_service.import_stream", return_value=iter([])) as stream:
+         patch("wildintel_uploader.core.services.deployment_import_service.import_stream", return_value=iter([])) as stream:
         response = _client().post("/api/deployment-import/import", json=payload)
 
     assert response.status_code == 200

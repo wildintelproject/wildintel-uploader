@@ -59,6 +59,9 @@ from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv im
 from wildintel_uploader.modules.timefix.application.use_cases import TimeFixUseCases
 from wildintel_uploader.modules.timefix.domain.ports import TimeFixService
 from wildintel_uploader.modules.timefix.infrastructure.legacy import ImagesWithExifTool, PeriodsOfTheVisits
+from wildintel_uploader.modules.uploaders.application.use_cases import UploadersUseCases
+from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
+from wildintel_uploader.modules.uploaders.infrastructure.trapper import CollectionsFolder, SavedUploadReports, TrapperClient
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
 from wildintel_uploader.modules.visits.infrastructure.legacy import (
@@ -151,6 +154,11 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
 def build_timefix() -> TimeFixService:
     """The fixes of the dates of the images, over the code of before."""
     return TimeFixUseCases(PeriodsOfTheVisits(), ImagesWithExifTool())
+
+
+def build_uploaders() -> UploadersService:
+    """The uploaders: TRAPPER through its client, the collections folder as the code of before keeps it."""
+    return UploadersUseCases(TrapperClient(), CollectionsFolder(), SavedUploadReports())
 
 
 # ── the providers of the container ──
@@ -255,6 +263,12 @@ class TimeFixProvider(Provider):
         return build_timefix()
 
 
+class UploadersProvider(Provider):
+    @provide(scope=Scope.APP)
+    def service(self) -> UploadersService:
+        return build_uploaders()
+
+
 def make_app_container() -> Container:
     """The container of the app: every module's provider."""
-    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider(), TimeFixProvider())
+    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider(), TimeFixProvider(), UploadersProvider())

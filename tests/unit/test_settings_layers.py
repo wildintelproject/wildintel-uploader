@@ -11,6 +11,7 @@ from wildintel_uploader.modules.postvalidation.domain import settings as postval
 from wildintel_uploader.modules.preprocessing.domain import settings as preprocessing_settings
 from wildintel_uploader.modules.prevalidation.domain import settings as prevalidation_settings
 from wildintel_uploader.modules.settings.domain import models as domain
+from wildintel_uploader.modules.uploaders.domain import settings as uploaders_settings
 from wildintel_uploader.modules.visits.domain import settings as visits_settings
 from wildintel_uploader.modules.settings.infrastructure import schema
 from wildintel_uploader.modules.settings.infrastructure.mapping import to_domain, to_schema
@@ -27,7 +28,7 @@ def test_the_defaults_of_the_domain_are_those_of_the_files():
     (lambda: domain.GeneralSettings(workers=0), "GENERAL.workers"),
     (lambda: domain.GeneralSettings(workers=65), "GENERAL.workers"),
     (lambda: domain.GeneralSettings(log_level="LOUD"), "GENERAL.log_level"),
-    (lambda: domain.TrapperSettings(max_zip_mb=5001), "TRAPPER.max_zip_mb"),
+    (lambda: uploaders_settings.TrapperSettings(max_zip_mb=5001), "TRAPPER.max_zip_mb"),
     (lambda: domain.DataSettings(dir="relative/folder"), "DATA.dir"),
     (lambda: prevalidation_settings.ValidationSettings(exif_fields=("Bad Name",)), "VALIDATION.exif_fields"),
     (lambda: prevalidation_settings.ValidationSettings(defaults={"nope": "warn"}), "VALIDATION.defaults"),
