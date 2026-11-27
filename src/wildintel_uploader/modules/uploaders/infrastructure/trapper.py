@@ -10,7 +10,10 @@ from typing import Any, TypeVar
 from wildintel_uploader.modules.uploaders.domain.models import (
     Account, Credentials, Forbidden, NotAuthorized, NotThere, TimedOut, Unreachable, UploaderError,
 )
+from wildintel_uploader.modules.deployments.domain.naming import DEPLOYMENT_METADATA_FILE
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
+from wildintel_uploader.modules.uploaders.infrastructure import failures
+from wildintel_uploader.shared.storage import StorageError, valid_project_id
 from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, UploadReports
 
 logger = logging.getLogger(__name__)
@@ -126,10 +129,10 @@ class TrapperClient(Trapper):
 
 
 class CollectionsFolder(KeptCollections):
-    @staticmethod
-    def _lfs():
-        from wildintel_uploader.core.services import local_folder_service
-        return local_folder_service
+    def _records(self):
+        """The catalog of the collections folder as records — through its contract —, from where the app is put together."""
+        from wildintel_uploader.entrypoints import wiring
+        return wiring.build_catalog(self._root(), wiring.build_settings()).records()
 
     @staticmethod
     def _root() -> Path:
@@ -139,32 +142,32 @@ class CollectionsFolder(KeptCollections):
     def _failed(self, call: Callable[[], T]) -> T:
         try:
             return call()
-        except self._lfs().LocalFolderError as exc:
+        except StorageError as exc:
             raise UploaderError(str(exc)) from exc
 
     def project(self, project: str) -> dict | None:
-        return self._failed(lambda: {p["acronym"]: p for p in self._lfs().list_research_projects(self._root())}.get(project))
+        return self._failed(lambda: {p["acronym"]: p for p in self._records().research_projects()}.get(project))
 
     def collection_dir(self, project: str, collection: str) -> Path:
-        return self._failed(lambda: self._lfs().project_dir(self._root(), project) / collection)
+        return self._failed(lambda: (self._root() / valid_project_id(project)) / collection)
 
     def collections(self, project: str) -> list[dict]:
         return self._failed(lambda: _services()[1].list_collections(self._root(), project))
 
     def location_of(self, collection_dir: Path, deployment_id: str) -> str | None:
-        metadata = _services()[1]._read_json(collection_dir / deployment_id / self._lfs().DEPLOYMENT_METADATA_FILE)
+        metadata = _services()[1]._read_json(collection_dir / deployment_id / DEPLOYMENT_METADATA_FILE)
         return metadata.get("location_id") if isinstance(metadata, dict) else None
 
     def location_time(self, project: str, location_id: str | None) -> dict:
-        return self._failed(lambda: self._lfs().location_time(self._root(), project, location_id))
+        return self._failed(lambda: self._records().location_time(project, location_id))
 
     def check_project_dir(self, project: str) -> None:
-        self._failed(lambda: self._lfs().project_dir(self._root(), project))
+        self._failed(lambda: (self._root() / valid_project_id(project)))
 
     def note_failure(self, project: str, deployment_id: str, destination: str, note: str | None) -> None:
         try:
-            self._lfs().set_upload_failure(self._root(), project, deployment_id, destination, note)
-        except self._lfs().LocalFolderError:
+            failures.set_upload_failure(self._root(), project, deployment_id, destination, note)
+        except StorageError:
             pass
 
 

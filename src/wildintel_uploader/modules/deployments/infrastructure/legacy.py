@@ -279,8 +279,8 @@ class LayoutOfTheCollections(CollectionLayout):
     def image_entry(self, name: str, local_time: str | None, source: str, extra: dict) -> dict:
         return layout.image_entry(name, local_time, source, extra)
 
-    def write_images_file(self, folder: Path, deployment_id: str, images: list[dict]) -> None:
-        layout.write_images_file(folder, deployment_id, images)
+    def write_images_file(self, folder: Path, deployment_id: str, images: list[dict], source: str = "local") -> None:
+        layout.write_images_file(folder, deployment_id, images, source=source)
 
     def write_deployment_metadata(self, dest: Path, deployment: dict) -> None:
         layout.write_deployment_metadata(dest, deployment)

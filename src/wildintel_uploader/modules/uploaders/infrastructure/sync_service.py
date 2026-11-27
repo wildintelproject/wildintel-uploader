@@ -32,7 +32,21 @@ from pydantic import ValidationError
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName
 from wildintel_uploader.modules.deployments.domain.naming import collection_code
-from wildintel_uploader.core.services import local_folder_service, trapper_service
+from wildintel_uploader.core.services import trapper_service
+from wildintel_uploader.modules.deployments.domain.naming import COLLECTION_METADATA_FILE, DEPLOYMENT_METADATA_FILE, IMAGES_FILE
+from wildintel_uploader.shared import storage
+
+
+def _records(root: Path):
+    """The catalog of this collections folder as records — through its contract —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_catalog(root, wiring.build_settings()).records()
+
+
+def _layout():
+    """How a collection holds its deployments — the contract of the deployments —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_deployments().layout()
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +134,7 @@ def image_entries(resources: list[dict], timezone_name: str | None, ignore_dst: 
                 stamp = moment.timestamp() if moment.tzinfo else None
             except ValueError:
                 pass
-        entries.append(local_folder_service.image_entry(r["name"], local, "trapper", {
+        entries.append(_layout().image_entry(r["name"], local, "trapper", {
             "trapper_pk": r["pk"], "taken_at": taken, "timestamp": stamp, "mime": r.get("mime"),
             "date_recorded_correct": r.get("date_recorded_correct"), "observation_type": r.get("observation_type", []),
             "species": r.get("species", []), "tags": r.get("tags", []),
@@ -130,7 +144,7 @@ def image_entries(resources: list[dict], timezone_name: str | None, ignore_dst: 
 
 def _names_in_images_file(deployment_dir: Path) -> list[str]:
     try:
-        info = json.loads((deployment_dir / local_folder_service.IMAGES_FILE).read_text(encoding="utf-8"))
+        info = json.loads((deployment_dir / IMAGES_FILE).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return []
     return [i["name"] for i in info.get("images", []) if isinstance(i, dict) and i.get("name")]
@@ -193,17 +207,17 @@ def sync_stream(
     ("failed": {"deployment_id", "error"}), which are left out.
 
     Raises:
-        local_folder_service.LocalFolderError: the research project can't be a folder name.
+        storage.StorageError: the research project can't be a folder name.
     """
     def say(message: str) -> dict:
         return {"type": "progress", "message": message}
 
     project_id = research_project.get("acronym") or str(research_project["pk"])
-    folder = local_folder_service.project_dir(root, project_id)
+    folder = root / storage.valid_project_id(project_id)
     created: dict[str, list[str]] = {"research_project": [], "locations": [], "collections": [], "deployments": [], "images": []}
     kept: dict[str, list[str]] = {key: [] for key in created}
 
-    if local_folder_service.has_research_project(root, project_id):
+    if _records(root).has_project(project_id):
         kept["research_project"].append(project_id)
         yield say(f"Research project {project_id}: already there.")
     else:
@@ -211,13 +225,13 @@ def sync_stream(
         record = {"name": research_project.get("name") or project_id, "acronym": project_id, "sampling_design": 1, "sensor_method": 1, "animal_types": 1,
                   "bait_use": 1, "event_interval": 0, "status": "active", "keywords": "", "abstract": "", "methods": "", "description": "",
                   "trapper_pk": research_project["pk"]}
-        local_folder_service.write_research_project(root, record)
+        _records(root).add_project(record)
         created["research_project"].append(project_id)
         yield say(f"Research project {project_id}: created.")
 
     yield say("Reading the locations from TRAPPER…")
     locations = trapper_service.list_locations(*credentials, research_project["pk"])
-    known = {l.get("location_id", "").lower() for l in local_folder_service.list_locations(root, project_id)}
+    known = {l.get("location_id", "").lower() for l in _records(root).locations(project_id)}
     by_id = {}
     for location in locations:
         by_id[location["location_id"].lower()] = location
@@ -226,7 +240,7 @@ def sync_stream(
             continue
         record = {k: location.get(k) for k in ("location_id", "name", "timezone", "ignore_dst", "latitude", "longitude")}
         # Trapper keeps the ids in lower case; here they are written as the wizard does, in upper case.
-        local_folder_service.write_location(root, project_id, {**record, "location_id": location["location_id"].upper(), "coordinate_uncertainty": None, "trapper_pk": location["pk"], "status": "pending"})
+        _records(root).add_location(project_id, {**record, "location_id": location["location_id"].upper(), "coordinate_uncertainty": None, "trapper_pk": location["pk"], "status": "pending"})
         created["locations"].append(location["location_id"].upper())
     yield say(f"Locations: {len(created['locations'])} created, {len(kept['locations'])} already there.")
 
@@ -241,10 +255,10 @@ def sync_stream(
     downloaded: dict = {"images": 0, "bytes": 0, "deployments": {}, "failed": [], "not_held": {}}
     for number, name in enumerate(names, 1):
         collection_dir = folder / name
-        if (collection_dir / local_folder_service.COLLECTION_METADATA_FILE).is_file():
+        if (collection_dir / COLLECTION_METADATA_FILE).is_file():
             kept["collections"].append(name)
         else:
-            local_folder_service.write_collection_metadata(collection_dir, name)
+            _layout().write_collection_metadata(collection_dir, name)
             created["collections"].append(name)
         mine = _deployments_of(deployments, name)
         claimed.update(deployment_id for deployment_id, _ in mine)  # not "unassigned" even if left out here
@@ -255,7 +269,7 @@ def sync_stream(
         for position, (deployment_id, deployment) in enumerate(mine, 1):
             prefix = f"{deployment_id} ({position}/{len(mine)})"
             target = collection_dir / deployment_id
-            if (target / local_folder_service.DEPLOYMENT_METADATA_FILE).is_file():
+            if (target / DEPLOYMENT_METADATA_FILE).is_file():
                 kept["deployments"].append(deployment_id)
             else:
                 try:
@@ -265,16 +279,16 @@ def sync_stream(
                     failed.append({"deployment_id": deployment_id, "error": error})
                     yield say(f"{prefix}: skipped, TRAPPER holds it with invalid values ({error}).")
                     continue
-                local_folder_service.write_deployment_metadata(target, fields.model_dump())
+                _layout().write_deployment_metadata(target, fields.model_dump())
                 created["deployments"].append(deployment_id)
-            if (target / local_folder_service.IMAGES_FILE).is_file():
+            if (target / IMAGES_FILE).is_file():
                 kept["images"].append(deployment_id)
             else:
                 yield say(f"{prefix}: reading its images from TRAPPER…")
                 location = by_id.get((deployment.get("location_id") or "").lower(), {})
                 resources = trapper_service.list_deployment_resources(*credentials, deployment["pk"])
                 entries = image_entries(resources, location.get("timezone"), bool(location.get("ignore_dst")))
-                local_folder_service.write_images_file(target, deployment_id, entries, source="trapper")
+                _layout().write_images_file(target, deployment_id, entries, source="trapper")
                 created["images"].append(deployment_id)
             if download_images:
                 got = yield from _download_images(credentials, classification_project_pk, deployment, deployment_id, target, prefix)

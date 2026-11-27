@@ -56,9 +56,6 @@ def test_a_module_uses_another_only_through_its_domain(path: Path):
 # Each line is a coupling to cut: a new one fails this test, and one that is cut has to leave this list — it only shrinks.
 STILL_COUPLED = {
     "backup/infrastructure/backup_service.py": {"local_folder_service"},
-    "uploaders/infrastructure/sync_service.py": {"local_folder_service"},
-    "uploaders/infrastructure/trapper.py": {"local_folder_service"},
-    "uploaders/infrastructure/uploads.py": {"local_folder_service"},
 }
 
 
