@@ -436,22 +436,22 @@ def test_collection_statistics_unknown_collection(tmp_path):
 
 def test_deployment_metrics_are_kept_and_read_back(tmp_path):
     folder = _revision(tmp_path, "RP", "R0001-A", _stamps(20, 5), collection="R0001")
-    first = _statistics(folder)._metrics(folder, 60)
+    first = _statistics(folder).metrics(folder, 60)
     assert (folder / STATS_FILE).is_file()
     # a doctored cache is what is read back while images.json is the same…
     kept = json.loads((folder / STATS_FILE).read_text())
     kept["metrics"]["image_count"] = 999
     (folder / STATS_FILE).write_text(json.dumps(kept))
-    assert _statistics(folder)._metrics(folder, 60)["image_count"] == 999
+    assert _statistics(folder).metrics(folder, 60)["image_count"] == 999
     # …and it is recomputed when the gap changes or images.json does
-    assert _statistics(folder)._metrics(folder, 5)["image_count"] == first["image_count"]
+    assert _statistics(folder).metrics(folder, 5)["image_count"] == first["image_count"]
     (folder / "images.json").write_text(json.dumps({"images": []}), encoding="utf-8")
-    assert _statistics(folder)._metrics(folder, 60)["image_count"] == 0
+    assert _statistics(folder).metrics(folder, 60)["image_count"] == 0
 
 
 def test_deployment_without_images_json_is_not_kept(tmp_path):
     folder = _revision(tmp_path, "RP", "R0001-A", _stamps(5, 5), collection="R0001", log=False)
-    assert _statistics(folder)._metrics(folder, 60)["image_count"] == 5
+    assert _statistics(folder).metrics(folder, 60)["image_count"] == 5
     assert not (folder / STATS_FILE).exists()
 
 
@@ -467,7 +467,7 @@ def test_compare_deployments_gives_the_change(tmp_path):
 def test_deployment_metrics_say_the_days_it_covers_and_the_images_of_each_calendar_day(tmp_path):
     stamps = [datetime(2024, 9, 1, 8), datetime(2024, 9, 1, 9), datetime(2024, 9, 3, 23, 30), datetime(2024, 9, 4, 0, 30)]
     folder = _revision(tmp_path, "RP", "R0001-A", stamps, collection="R0001")
-    metrics = _statistics(folder)._metrics(folder, 60)
+    metrics = _statistics(folder).metrics(folder, 60)
 
     assert metrics["daily"] == [{"date": "2024-09-01", "images": 2}, {"date": "2024-09-02", "images": 0},
                                 {"date": "2024-09-03", "images": 1}, {"date": "2024-09-04", "images": 1}]
@@ -477,7 +477,7 @@ def test_deployment_metrics_say_the_days_it_covers_and_the_images_of_each_calend
 
 def test_one_image_covers_no_days_and_has_no_daily_rate(tmp_path):
     folder = _revision(tmp_path, "RP", "R0001-A", [datetime(2024, 9, 1, 8)], collection="R0001")
-    metrics = _statistics(folder)._metrics(folder, 60)
+    metrics = _statistics(folder).metrics(folder, 60)
     assert metrics["days"] is None and metrics["images_per_day"] is None and metrics["daily"] == [{"date": "2024-09-01", "images": 1}]
 
 
@@ -492,7 +492,7 @@ def test_the_sequences_of_a_deployment_by_day_by_length_and_the_longest(tmp_path
     # 1 Sep: a sequence of 3 images and a single one; 3 Sep: a sequence of 12
     stamps = [datetime(2024, 9, 1, 8, 0, s) for s in (0, 10, 20)] + [datetime(2024, 9, 1, 12)] + [datetime(2024, 9, 3, 9, 0) + timedelta(seconds=s) for s in range(0, 120, 10)]
     folder = _revision(tmp_path, "RP", "R0001-A", stamps, collection="R0001")
-    metrics = _statistics(folder)._metrics(folder, 60)
+    metrics = _statistics(folder).metrics(folder, 60)
 
     assert metrics["sequences_daily"] == [{"date": "2024-09-01", "sequences": 2}, {"date": "2024-09-02", "sequences": 0}, {"date": "2024-09-03", "sequences": 1}]
     assert metrics["sequence_lengths"] == [[1, 1], [3, 1], [12, 1]]
@@ -501,5 +501,5 @@ def test_the_sequences_of_a_deployment_by_day_by_length_and_the_longest(tmp_path
 
 def test_no_images_no_histograms(tmp_path):
     folder = _revision(tmp_path, "RP", "R0001-A", [], collection="R0001")
-    metrics = _statistics(folder)._metrics(folder, 60)
+    metrics = _statistics(folder).metrics(folder, 60)
     assert metrics["sequences_daily"] == [] and metrics["sequence_lengths"] == [] and metrics["longest_sequence"] is None

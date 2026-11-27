@@ -41,7 +41,7 @@ class RevisionStatistics:
 
     # ── the metrics ──
 
-    def _metrics(self, where: object, gap_seconds: float) -> dict:
+    def metrics(self, where: object, gap_seconds: float) -> dict:
         """A deployment's metrics, kept beside it while its images.json and the gap are the same — so the history of a location is not read again
         for each collection."""
         cached = self._folders.cached_metrics(where, gap_seconds)
@@ -62,8 +62,8 @@ class RevisionStatistics:
         kept = self._folders.kept(project)
         rows: list[dict] = []
         for deployment in deployments:
-            now = self._metrics(deployment.where, gap)
-            history = [(r, m) for r in rules.earlier(kept, deployment.deployment_id) if (m := self._metrics(r.where, gap))["image_count"]]
+            now = self.metrics(deployment.where, gap)
+            history = [(r, m) for r in rules.earlier(kept, deployment.deployment_id) if (m := self.metrics(r.where, gap))["image_count"]]
             checks: dict[str, dict] = {}
             for key in judging.STATISTIC_CHECKS:
                 try:
@@ -89,4 +89,4 @@ class RevisionStatistics:
             if deployment_id not in kept:
                 raise DeploymentsFailed(f"The deployment '{deployment_id}' isn't in the research project '{project}'.")
         gap = self._settings.gap_seconds()
-        return rules.side_by_side(first, second, self._metrics(kept[first].where, gap), self._metrics(kept[second].where, gap))
+        return rules.side_by_side(first, second, self.metrics(kept[first].where, gap), self.metrics(kept[second].where, gap))

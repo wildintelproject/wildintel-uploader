@@ -1689,10 +1689,11 @@ def test_knocked_down_and_damaged_are_not_accepted_as_the_status_of_a_camera_but
         refused = [_save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2026-02-10", "session": "R0002", "camera_status": s}) for s in ("Knocked down", "Damaged")]
         accepted = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2026-02-10", "session": "R0002", "camera_status": "Altered"})
         # a visit kept before, with a status that is no longer accepted, is read as it was kept
-        from tests.support import built
-        raw = built.kept_visits(tmp_path)._raw("DONA")
+        from wildintel_uploader.shared import storage
+        kept = storage.open_store(tmp_path)   # where the visits are kept: one written by a version before, as it was
+        raw = kept.read_records("DONA", "visits")
         raw[-1]["camera_status"] = "Damaged"
-        built.kept_visits(tmp_path)._write_raw("DONA", raw)
+        kept.write_records("DONA", "visits", raw)
         book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
 
     assert [r.status_code for r in refused] == [422, 422] and all("OK, Altered, Stolen, Not revised, New site or Inactive site" in str(r.json()["detail"]) for r in refused)
