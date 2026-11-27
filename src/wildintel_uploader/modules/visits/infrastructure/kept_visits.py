@@ -1,21 +1,23 @@
 """The visits kept with the records of the research projects — their visits, the unknown ones, the revisions planned —, kept by the ids of what
-they point to and told with what it is called (domain.references): the catalog says it, through its contract, as records."""
+they point to and told with what it is called (domain.references): the catalog says it, through its contract, as the visits see it
+(infrastructure.catalog_view)."""
 from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.domain.records import CatalogRecords
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.visits.infrastructure import catalog_view as view
 from wildintel_uploader.modules.visits.domain import references as refs_of
 from wildintel_uploader.modules.visits.domain.references import Refs
 from wildintel_uploader.shared import audit, storage
 
 
 class KeptVisits:
-    """The visits of the research projects of a collections folder; `records` is its catalog, as records."""
+    """The visits of the research projects of a collections folder; `catalog` is its catalog, through its contract."""
 
-    def __init__(self, root: Path, records: Callable[[], CatalogRecords]) -> None:
-        self.root, self._records = root, records
+    def __init__(self, root: Path, catalog: Callable[[], CatalogService]) -> None:
+        self.root, self._catalog = root, catalog
 
     def _store(self) -> storage.ProjectStore:
         return storage.open_store(self.root)
@@ -27,15 +29,18 @@ class KeptVisits:
         self._store().write_records(project, "visits", visits)
 
     def _refs(self, project: str, trappers=None) -> Refs:
-        records = self._records()
-        return Refs(records.locations(project, include_deleted=True), records.equipment(project, "cameras", include_deleted=True),
-                    records.equipment(project, "sd_cards", include_deleted=True),
-                    records.trapper_records() if trappers is None else [t if isinstance(t, dict) else t.model_dump(mode="json") for t in trappers])
+        catalog = self._catalog()
+        return Refs(self._locations(project), *([{**view.seen(i), "research_project": project} for i in catalog.equipment(project, kind, include_deleted=True)]
+                                                for kind in ("cameras", "sd_cards")),
+                    [view.seen(t) for t in catalog.trappers(include_deleted=True)] if trappers is None
+                    else [t if isinstance(t, dict) else t.model_dump(mode="json") for t in trappers])
+
+    def _locations(self, project: str) -> list[dict]:
+        """The locations of a research project — those removed too: a visit to one still says where it was."""
+        return [view.seen(loc) for loc in self._catalog().locations(project, include_deleted=True)]
 
     def _modifiable(self, project: str) -> None:
-        records = self._records()
-        records.require_modifiable(project)
-        records.require_project(project)
+        self._catalog().require_project(project, modifiable=True)
 
     def kept_count(self, project: str) -> int:
         return len(self._raw(project))
@@ -142,13 +147,13 @@ class KeptVisits:
     # the unknown visits and the revisions planned
 
     def unknown(self, project: str) -> list[dict]:
-        return refs_of.unknown_told(self._store().read_records(project, "unknown_visits"), self._records().locations(project, include_deleted=True))
+        return refs_of.unknown_told(self._store().read_records(project, "unknown_visits"), self._locations(project))
 
     def _write_unknown(self, project: str, unknown: list[dict]) -> None:
         if not unknown:
             self._store().delete_records(project, "unknown_visits")
             return
-        self._store().write_records(project, "unknown_visits", refs_of.unknown_kept(unknown, self._records().locations(project, include_deleted=True)))
+        self._store().write_records(project, "unknown_visits", refs_of.unknown_kept(unknown, self._locations(project)))
 
     def add_unknown(self, project: str, new: list[dict]) -> int:
         """Keeps more unknown visits — those already kept are not repeated —; says how many were added."""

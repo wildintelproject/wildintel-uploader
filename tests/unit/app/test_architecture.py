@@ -122,7 +122,7 @@ def test_no_file_takes_a_private_name_of_another(path: Path):
 
 # The modules that still read and write the catalog as records (catalog.domain.records.CatalogRecords): each that stops leaves this list, and no
 # new one comes in — the others ask the catalog's contract, with its models.
-STILL_ON_THE_RECORDS = {"modules/visits/infrastructure/kept_visits.py", "modules/visits/infrastructure/adapters.py", "modules/backup/infrastructure/outside.py"}
+STILL_ON_THE_RECORDS = {"modules/backup/infrastructure/outside.py"}
 
 
 @pytest.mark.parametrize("path", sorted(p for p in SRC.glob("modules/*/**/*.py") if p.relative_to(SRC / "modules").parts[0] != "catalog"),

@@ -135,7 +135,8 @@ def test_the_visits_to_one_location_are_found_ignoring_case(tmp_path: Path):
 
 
 def test_a_visit_cannot_be_registered_to_a_research_project_that_is_not_kept(tmp_path: Path):
-    with pytest.raises(catalog_files.LocalFolderError, match="isn't in the collections folder"):
+    from wildintel_uploader.modules.catalog.domain.models import UnknownProject
+    with pytest.raises(UnknownProject, match="isn't in the collections folder"):
         built.kept_visits(tmp_path).add("DONA", {"location_id": "DONA_01"})
 
 

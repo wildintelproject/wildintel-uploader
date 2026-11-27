@@ -174,8 +174,8 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
 
 
 def catalog_records(collections_dir: Path, settings: SettingsService | None = None) -> CatalogRecords:
-    """The catalog of a collections folder as records, through its rules — for what still reads and adds to it so (the visits, the sync, the
-    uploads, the backups). See modules.catalog.domain.records."""
+    """The catalog of a collections folder as records, through its rules — for the backups, which read and merge records. See
+    modules.catalog.domain.records."""
     settings = settings or build_settings()
     kept = catalog_repository(collections_dir, settings)
     catalog = build_catalog(collections_dir, settings, repository=kept)
@@ -239,8 +239,8 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     """The visits of the research projects of a collections folder — the one of the settings by default —, kept with the records of their research projects."""
     root = collections_dir or catalog_collections_dir()
     settings = settings or build_settings()
-    records = lambda: catalog_records(root, settings)   # noqa: E731
-    return VisitsUseCases(VisitsKept(KeptVisits(root, records)), CatalogOfTheVisits(records),
+    catalog = lambda: build_catalog(root, settings)   # noqa: E731 — the catalog of that folder, through its contract
+    return VisitsUseCases(VisitsKept(KeptVisits(root, catalog)), CatalogOfTheVisits(catalog),
                           deployments=VisitCollectionFolders(root, lambda: build_deployments().layout()), file=CsvVisitFile(),
                           sources=build_sources(settings), uploads=UploadsOfTheUploaders(build_uploaders(root)), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
                           settings=FieldlogInUse(section("FIELDLOG")), clock=AuditClock())

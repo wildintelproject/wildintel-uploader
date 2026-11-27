@@ -8,7 +8,9 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.domain.records import CatalogRecords
+from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownCamera, UnknownLocation, UnknownProject
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.visits.infrastructure import catalog_view as view
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.visits.domain.models import VisitsFailed
 from wildintel_uploader.modules.visits.domain.visit_file import VisitsCsvError
@@ -22,12 +24,14 @@ from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVis
 
 @contextmanager
 def _failed() -> Iterator[None]:
-    """What the files and the records refuse, as VisitsFailed."""
+    """What the files and the catalog refuse, as VisitsFailed — with the words they say it with."""
     from wildintel_uploader.shared.storage import StorageError
     try:
         yield
-    except (StorageError, VisitsCsvError) as exc:
+    except (StorageError, VisitsCsvError, UnknownProject, UnknownLocation, UnknownCamera) as exc:
         raise VisitsFailed(str(exc)) from exc
+    except CatalogError as exc:
+        raise VisitsFailed(exc.message) from exc
 
 
 class StoredVisits(VisitRepository):
@@ -90,46 +94,46 @@ class StoredVisits(VisitRepository):
 
 
 class CatalogOfTheVisits(VisitCatalog):
-    """The catalog as records — through its contract, given when it is needed."""
+    """The catalog as the visits see it (infrastructure.catalog_view) — asked through its contract, given when it is needed."""
 
-    def __init__(self, records: Callable[[], CatalogRecords]) -> None:
-        self._records = records
+    def __init__(self, catalog: Callable[[], CatalogService]) -> None:
+        self._catalog = catalog
 
     def require_project(self, project: str, *, active: bool = False) -> None:
         with _failed():
-            self._records().require_project(project, active=active)
+            self._catalog().require_project(project, active=active)
 
     def locations(self, project: str, include_deleted: bool = False) -> list[dict]:
         with _failed():
-            return self._records().locations(project, include_deleted)
+            return [view.seen(loc) for loc in self._catalog().locations(project, include_deleted)]
 
     def equipment(self, project: str, kind: str) -> list[dict]:
         with _failed():
-            return self._records().equipment(project, kind)
+            return [{**view.seen(i), "research_project": project} for i in self._catalog().equipment(project, kind)]
 
     def trappers(self) -> list[dict]:
         with _failed():
-            return self._records().trappers()
+            return [view.seen(t) for t in self._catalog().trappers()]
 
     def trapper_names(self) -> list[str]:
         return [t["name"] for t in self.trappers()]
 
     def add_trappers(self, trappers: list[dict]) -> None:
         with _failed():
-            records = self._records()
-            records.keep_trappers([*records.trappers(), *trappers])
+            catalog = self._catalog()
+            catalog.save_trappers([*catalog.trappers(), *(view.trapper(t) for t in trappers)])
 
     def add_location(self, project: str, location: dict) -> None:
         with _failed():
-            self._records().add_location(project, location)
+            self._catalog().add_location(project, view.new_location(location))
 
     def change_location(self, project: str, location_id: str, changes: dict) -> None:
         with _failed():
-            self._records().change_location(project, location_id, changes, by_visit=True)
+            self._catalog().update_location(project, location_id, changes, by_visit=True)
 
     def keep_equipment(self, project: str, kind: str, items: list[dict]) -> None:
         with _failed():
-            self._records().keep_equipment(project, kind, items)
+            self._catalog().save_equipment(project, kind, [view.equipment(i, kind) for i in items])
 
 
 class StoredStateHistory(StateHistory):

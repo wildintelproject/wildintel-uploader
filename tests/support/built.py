@@ -68,9 +68,9 @@ def visit_files():
 
 
 def kept_visits(root: Path):
-    from wildintel_uploader.entrypoints.wiring import catalog_records
+    from wildintel_uploader.entrypoints.wiring import catalog_of
     from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
-    return KeptVisits(root, lambda: catalog_records(root))
+    return KeptVisits(root, lambda: catalog_of(root))
 
 
 def upload_failures(root: Path):

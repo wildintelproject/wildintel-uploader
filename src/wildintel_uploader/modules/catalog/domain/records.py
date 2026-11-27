@@ -3,8 +3,9 @@ research projects, their locations, cameras, SD cards, people and roles as dicts
 
 Two of them, so that it is plain which ones go round the rules of the catalog:
 
-- `CatalogRecords` — what follows the rules of the catalog, as records: what the visits, the sync with TRAPPER, the uploads and the backups
-  read and add. Each operation goes through the catalog's use cases.
+- `CatalogRecords` — what follows the rules of the catalog, as records: what a backup reads and merges in (the research projects, the people
+  and their roles). Each operation goes through the catalog's use cases. The other modules ask the catalog's contract (CatalogService) with
+  its models, and see them as they need (the visits: visits.infrastructure.catalog_view).
 - `CatalogRecordStore` — the records as they are kept, read and written as they are, ids and dates too: what a backup copies and restores,
   and nothing else. It goes round the rules of the catalog on purpose — a restored record is the one that was kept, not a new one.
 
