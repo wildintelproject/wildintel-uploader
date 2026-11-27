@@ -10,6 +10,7 @@ from typing import TypeVar
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.ports import Cards, CollectionStatistics, Deployment, Folders, ImportSessions, Photos, Repairs, Revisions
+from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
 T = TypeVar("T")
 
@@ -165,7 +166,7 @@ class KeptRepairs(Repairs):
 
     def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]:
         """What fails mid-way says so with its words — what the repair itself refuses as it was, anything else as "The repair failed: …"."""
-        from wildintel_uploader.core.services import deployment_import_service, local_folder_service
+        from wildintel_uploader.core.services import deployment_import_service
         rs = self._repair()
         try:
             events = rs.repair_stream(_root(), project, collection, deployment_id)
@@ -175,7 +176,7 @@ class KeptRepairs(Repairs):
         def told() -> Iterator[dict]:
             try:
                 yield from events
-            except (rs.RepairError, local_folder_service.LocalFolderError, deployment_import_service.DeploymentImportError) as exc:
+            except (rs.RepairError, layout.LocalFolderError, deployment_import_service.DeploymentImportError) as exc:
                 raise DeploymentsFailed(str(exc)) from exc
             except Exception as exc:  # noqa: BLE001
                 raise DeploymentsFailed(f"The repair failed: {exc}") from exc

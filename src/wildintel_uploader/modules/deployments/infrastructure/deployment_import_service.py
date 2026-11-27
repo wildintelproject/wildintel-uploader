@@ -21,8 +21,9 @@ from PIL import Image
 
 from wildintel_uploader.core import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import camera_info, local_folder_service
+from wildintel_uploader.core.services import camera_info
 from wildintel_uploader.modules.fileinfo.domain import models as _fileinfo
+from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
 logger = logging.getLogger(__name__)
 
@@ -80,13 +81,13 @@ def log_entry(research_project_id: str, deployment_id: str) -> dict:
     collection = default_collection_dir(research_project_id, deployment_id)
     wanted = deployment_id.lower()
     timestamps = None
-    for row in local_folder_service.read_timestamp_log(local_folder_service.timestamp_log_path(collection)):
+    for row in layout.read_timestamp_log(layout.timestamp_log_path(collection)):
         if row["Deployment"].lower() == wanted and row["StartDate"] and row["EndDate"]:
             # the log writes its dates as the camera does (2024:09:04): ISO here
             timestamps = {"start": f"{row['StartDate'].replace(':', '-')}T{row['StartTime'] or '00:00:00'}",
                           "end": f"{row['EndDate'].replace(':', '-')}T{row['EndTime'] or '00:00:00'}"}
     fieldwork = None
-    for row in local_folder_service.read_fieldwork_log(local_folder_service.fieldwork_log_path(collection)):
+    for row in layout.read_fieldwork_log(layout.fieldwork_log_path(collection)):
         if row["deploymentID"].lower() != wanted:
             continue
         details: dict = {}
@@ -131,7 +132,7 @@ def check_not_kept(dest: Path) -> None:
         DeploymentImportError: the deployment is already kept in dest — importing again would mix the images — or it
             was synced from Trapper, which is not modified here.
     """
-    if local_folder_service.is_synced(dest):
+    if layout.is_synced(dest):
         raise DeploymentImportError(f"{dest.name} was synced from TRAPPER, so it can't be modified here.")
     if dest.exists() and any(dest.iterdir()):
         raise DeploymentImportError(f"{dest} already exists — importing again would mix the images.")
@@ -261,7 +262,7 @@ def guess_details(source_dir: Path) -> dict:
 def _find_timestamp_log(session_dir: Path) -> tuple[Path | None, list[str]]:
     """The <collection>_FileTimestampLog.csv wildintel-tools expects beside a collection's deployments: the one
     named after the folder, else the only one there. None (and a warning when it is ambiguous) otherwise."""
-    suffix = local_folder_service.TIMESTAMP_LOG_SUFFIX
+    suffix = layout.TIMESTAMP_LOG_SUFFIX
     named = session_dir / f"{session_dir.name}{suffix}"
     if named.is_file():
         return named, []
@@ -278,8 +279,8 @@ def _timestamp_log_periods(path: Path) -> tuple[dict[str, tuple[str, datetime, d
     each row that can't be used (a date that isn't %Y:%m:%d %H:%M:%S, or one that ends before it starts)."""
     warnings: list[str] = []
     try:
-        rows = local_folder_service.read_timestamp_log(path)
-    except local_folder_service.LocalFolderError as exc:
+        rows = layout.read_timestamp_log(path)
+    except layout.LocalFolderError as exc:
         return {}, [f"{exc} — its dates were not used."]
     periods: dict[str, tuple[str, datetime, datetime]] = {}
     for row in rows:
@@ -317,7 +318,7 @@ def scan_session(session_dir: Path) -> dict:
     subfolders = sorted((p for p in session_dir.iterdir() if p.is_dir() and not p.name.startswith(".")), key=lambda p: p.name.lower())
     if not subfolders:
         raise DeploymentImportError("This folder has no subfolders — a collection has one subfolder per deployment.")
-    suffix = local_folder_service.TIMESTAMP_LOG_SUFFIX.lower()  # a timestamp log is not a stray file
+    suffix = layout.TIMESTAMP_LOG_SUFFIX.lower()  # a timestamp log is not a stray file
     loose = sum(1 for p in session_dir.iterdir() if p.is_file() and not p.name.startswith(".") and not p.name.lower().endswith(suffix))
     warnings = [f"{loose} loose file(s) beside the subfolders will be ignored."] if loose else []
     deployments = [{"name": p.name, "path": str(p), **scan_folder(p), "start_date": None, "end_date": None, "from_timestamp_log": False, "log_deployment_id": None} for p in subfolders]
@@ -326,7 +327,7 @@ def scan_session(session_dir: Path) -> dict:
     log_path, log_warnings = _find_timestamp_log(session_dir)
     warnings += log_warnings
     if log_path is None and not log_warnings:  # none at all: the dates will have to come from elsewhere
-        warnings.append(f"No timestamp log ({session_dir.name}{local_folder_service.TIMESTAMP_LOG_SUFFIX}) was found in the collection folder, so the dates can't be recovered from it.")
+        warnings.append(f"No timestamp log ({session_dir.name}{layout.TIMESTAMP_LOG_SUFFIX}) was found in the collection folder, so the dates can't be recovered from it.")
     if log_path is not None:
         periods, log_warnings = _timestamp_log_periods(log_path)
         warnings += log_warnings
@@ -418,9 +419,9 @@ def organize_stream(research_project_id: str, source_dir: str, deployment: Deplo
     check_paths(source, dest)
 
     def events() -> Iterator[dict]:
-        local_folder_service.write_collection_metadata(collection, collection.name)
+        layout.write_collection_metadata(collection, collection.name)
         yield from copy_folder(source, dest)
-        local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
+        layout.write_deployment_metadata(dest, deployment.model_dump())
 
     return dest, events()
 
@@ -440,7 +441,7 @@ def copied_images_info(dest: Path) -> list[dict]:
                 width, height = img.width, img.height
         except Exception:
             width = height = None
-        entries.append(local_folder_service.image_entry(
+        entries.append(layout.image_entry(
             str(path.relative_to(dest)), taken.isoformat() if taken else None, "local",
             {"camera": cameras[path].model, "camera_id": cameras[path].camera_id, "width": width, "height": height, "size_bytes": path.stat().st_size},
         ))
@@ -476,10 +477,10 @@ def import_local_stream(source_dir: str, collection_dir: str, collection_name: s
     check_not_kept(dest)
 
     def events() -> Iterator[dict]:
-        local_folder_service.write_collection_metadata(collection, collection_name)
+        layout.write_collection_metadata(collection, collection_name)
         yield from copy_folder(source, dest)
-        local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
-        local_folder_service.write_images_file(dest, deployment.deployment_id, copied_images_info(dest))
+        layout.write_deployment_metadata(dest, deployment.model_dump())
+        layout.write_images_file(dest, deployment.deployment_id, copied_images_info(dest))
         yield {"type": "sealing"}
         sealed = seal_deployment(source, dest, deployment)
         logger.info("Deployment %s organized locally in %s", deployment.deployment_id, dest)

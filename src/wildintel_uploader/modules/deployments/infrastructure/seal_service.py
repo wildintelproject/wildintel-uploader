@@ -26,6 +26,7 @@ from wildintel_uploader.core import config, parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.core.services import deployment_import_service as dis
 from wildintel_uploader.core.services import local_folder_service, statistics_service
+from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,7 @@ def seal(
     body = {
         "version": VERSION, "sealed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "deployment_id": deployment.deployment_id,
         "deployment": {
-            "sha256": _sha256(dest / local_folder_service.DEPLOYMENT_METADATA_FILE), "validated": checked["validated"],
+            "sha256": _sha256(dest / layout.DEPLOYMENT_METADATA_FILE), "validated": checked["validated"],
             "postvalidated": checked["postvalidated"], "preprocessing": preprocessing, **checked["deployment"],
         },
         "images": entries,
@@ -192,7 +193,7 @@ def verify(dest: Path) -> dict:
     changed = sorted(n for n in present if digests[n] != recorded[n])
     missing = sorted(n for n in recorded if n not in files)
     added = sorted(n for n in files if n not in recorded)
-    metadata = dest / local_folder_service.DEPLOYMENT_METADATA_FILE
+    metadata = dest / layout.DEPLOYMENT_METADATA_FILE
     deployment_changed = not metadata.is_file() or _sha256(metadata) != deployment_hash
     broken = bool(changed or missing or added or deployment_changed or seal_changed)
     return {"status": "broken" if broken else "valid", "changed": changed, "missing": missing, "added": added, "deployment_changed": deployment_changed, "seal_changed": seal_changed}

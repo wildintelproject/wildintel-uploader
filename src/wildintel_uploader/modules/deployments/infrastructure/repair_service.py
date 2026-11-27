@@ -37,12 +37,13 @@ from wildintel_uploader.core.services import camera_info, local_folder_service, 
 from wildintel_uploader.core.services import deployment_import_service as dis
 from wildintel_uploader.core.services import preprocessing_service as pre
 from wildintel_uploader.core.services.deployment_import_service import DeploymentImportError
+from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
 logger = logging.getLogger(__name__)
 
 _COLLECTION = re.compile(r"^R\d{4}(_.+)?$")
 _DEPLOYMENT = re.compile(r"^R\d{4}-.+$")
-_METADATA_FILES = (local_folder_service.DEPLOYMENT_METADATA_FILE, local_folder_service.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, seal_service.SEAL_FILE)
+_METADATA_FILES = (layout.DEPLOYMENT_METADATA_FILE, layout.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, seal_service.SEAL_FILE)
 _XMP_BATCH = 200
 
 
@@ -67,8 +68,8 @@ def _collection_dir(collections_dir: Path, research_project_id: str, collection:
     if not _COLLECTION.match(collection):
         raise RepairError(f"'{collection}' isn't a collection's name.")
     try:
-        folder = local_folder_service.project_dir(collections_dir, research_project_id) / collection
-    except local_folder_service.LocalFolderError as exc:
+        folder = layout.project_dir(collections_dir, research_project_id) / collection
+    except layout.LocalFolderError as exc:
         raise RepairError(str(exc)) from exc
     if not folder.is_dir():
         raise RepairError(f"The collection {collection} isn't in {research_project_id}.")
@@ -88,8 +89,8 @@ def list_collections(collections_dir: Path, research_project_id: str) -> list[di
     """The collections kept for a research project and the folders in each that are deployments — whatever state they are in:
     even one with no metadata at all. Cheap: nothing is read but the folder's names (see inspect for the state of one)."""
     try:
-        project = local_folder_service.project_dir(collections_dir, research_project_id)
-    except local_folder_service.LocalFolderError as exc:
+        project = layout.project_dir(collections_dir, research_project_id)
+    except layout.LocalFolderError as exc:
         raise RepairError(str(exc)) from exc
     if not project.is_dir():
         return []
@@ -99,7 +100,7 @@ def list_collections(collections_dir: Path, research_project_id: str) -> list[di
             continue
         deployments = [
             {"deployment_id": folder.name, "images": len(_images_in(folder)), "files": {name: (folder / name).is_file() for name in _METADATA_FILES},
-             "synced": local_folder_service.is_synced(folder)}
+             "synced": layout.is_synced(folder)}
             for folder in sorted(collection.iterdir()) if folder.is_dir() and _DEPLOYMENT.match(folder.name)
         ]
         collections.append({"name": collection.name, "path": str(collection), "deployments": deployments})
@@ -109,8 +110,8 @@ def list_collections(collections_dir: Path, research_project_id: str) -> list[di
 def _log_row(collection: Path, deployment_id: str) -> tuple[dict | None, str | None]:
     """The deployment's row in the collection's timestamp log, and what is wrong with the log if it can't be read."""
     try:
-        rows = local_folder_service.read_timestamp_log(local_folder_service.timestamp_log_path(collection))
-    except local_folder_service.LocalFolderError as exc:
+        rows = layout.read_timestamp_log(layout.timestamp_log_path(collection))
+    except layout.LocalFolderError as exc:
         return None, str(exc)
     return next((r for r in rows if r["Deployment"].upper() == deployment_id.upper()), None), None
 
@@ -134,8 +135,8 @@ def inspect(collections_dir: Path, research_project_id: str, collection: str, de
         path = dest / name
         files[name] = "missing" if not path.is_file() else ("ok" if _read_json(path) is not None else "unreadable")
     row, log_problem = _log_row(dest.parent, deployment_id)
-    log = log_problem or ("row" if row else ("no row" if local_folder_service.timestamp_log_path(dest.parent).is_file() else "no log"))
-    if local_folder_service.is_synced(dest):
+    log = log_problem or ("row" if row else ("no row" if layout.timestamp_log_path(dest.parent).is_file() else "no log"))
+    if layout.is_synced(dest):
         return {"deployment_id": deployment_id, "status": "synced", "seal": None, "files": files, "images": len(images), "log": log,
                 "problems": ["It was synced from TRAPPER: what TRAPPER holds is not modified here."]}
     seal = seal_service.verify(dest)
@@ -249,7 +250,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         RepairError: the deployment isn't there, was synced from Trapper, or what is needed to rebuild it isn't known.
     """
     dest = _deployment_dir(collections_dir, research_project_id, collection, deployment_id)
-    if local_folder_service.is_synced(dest):
+    if layout.is_synced(dest):
         raise RepairError(f"{deployment_id} was synced from TRAPPER, so it can't be modified here.")
     collection_dir = dest.parent
 
@@ -257,7 +258,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         return {"type": "step", "step": name, "status": status, "message": message}
 
     def events() -> Iterator[dict]:
-        old_deployment = _read_json(dest / local_folder_service.DEPLOYMENT_METADATA_FILE)
+        old_deployment = _read_json(dest / layout.DEPLOYMENT_METADATA_FILE)
         old_deployment = old_deployment if isinstance(old_deployment, dict) else None
         old_log = _read_json(dest / pre.PREPROCESSING_LOG_FILE)
         old_log = old_log if isinstance(old_log, dict) and isinstance(old_log.get("images"), list) else None
@@ -284,7 +285,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         exif_times = [t[0] for t in times.values() if t[2] == "exif"] or [t[0] for t in times.values()]
         computed = (min(exif_times), max(exif_times)) if exif_times else None
         row, log_problem = _log_row(collection_dir, deployment_id)
-        if log_problem and local_folder_service.timestamp_log_path(collection_dir).is_file():
+        if log_problem and layout.timestamp_log_path(collection_dir).is_file():
             raise RepairError(log_problem)
         if row:
             start, end = _row_times(row)
@@ -325,17 +326,17 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
             deployment = DeploymentFields.model_validate(merged)
         except ValidationError as exc:
             problems = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
-            file_results.append((local_folder_service.DEPLOYMENT_METADATA_FILE, False, f"could not be rebuilt — {problems}"))
+            file_results.append((layout.DEPLOYMENT_METADATA_FILE, False, f"could not be rebuilt — {problems}"))
             raise RepairError(f"deployment.json can't be rebuilt: {problems}. Add what is missing (the location's coordinates, for one) and repair it again.") from exc
         body = deployment.model_dump()
         if old_deployment != body:
-            local_folder_service.write_deployment_metadata(dest, body)
-            written.append(local_folder_service.DEPLOYMENT_METADATA_FILE)
+            layout.write_deployment_metadata(dest, body)
+            written.append(layout.DEPLOYMENT_METADATA_FILE)
             what = "rebuilt" if old_deployment is None else "updated: " + ", ".join(sorted(k for k in body if (old_deployment or {}).get(k) != body[k]))
-            file_results.append((local_folder_service.DEPLOYMENT_METADATA_FILE, True, what))
+            file_results.append((layout.DEPLOYMENT_METADATA_FILE, True, what))
             yield step("deployment", "done", f"deployment.json {what}.")
         else:
-            file_results.append((local_folder_service.DEPLOYMENT_METADATA_FILE, True, "was fine"))
+            file_results.append((layout.DEPLOYMENT_METADATA_FILE, True, "was fine"))
             yield step("deployment", "done", "deployment.json was fine.")
 
         # ── preprocessing.json and images.json, from the images ──
@@ -343,7 +344,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         sealed = None
         xmp: dict[Path, dict] = {}
         if not images:
-            for name in (pre.PREPROCESSING_LOG_FILE, local_folder_service.IMAGES_FILE, seal_service.SEAL_FILE):
+            for name in (pre.PREPROCESSING_LOG_FILE, layout.IMAGES_FILE, seal_service.SEAL_FILE):
                 yield step({"preprocessing.json": "preprocessing", "images.json": "images", "seal.json": "seal"}[name], "skipped", "There are no images.")
         else:
             yield step("preprocessing", "running", "Rebuilding preprocessing.json from the images…")
@@ -376,13 +377,13 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
             yield step("preprocessing", "done", f"preprocessing.json written for {len(records)} image(s)" + (f"; {missing_source} without the hash of their original" if missing_source else "") + ".")
 
             yield step("images", "running", "Rebuilding images.json…")
-            entries = [local_folder_service.image_entry(r["name"], r["_local"].isoformat(), "local", {
+            entries = [layout.image_entry(r["name"], r["_local"].isoformat(), "local", {
                 "original": r["original"], "taken_at": r["date"], "timestamp": r["_date"].timestamp(), "date_source": r["date_source"], "camera": r["camera"], "camera_id": r.get("camera_id"),
                 "width": r["width"], "height": r["height"], "size_bytes": r["_size"], "resized": r["resized"], "sha1": r["final_hash"], "source_sha1": r["source_hash"],
             }) for r in records]
-            local_folder_service.write_images_file(dest, deployment_id, entries)
-            written.append(local_folder_service.IMAGES_FILE)
-            file_results.append((local_folder_service.IMAGES_FILE, True, "rebuilt from the images"))
+            layout.write_images_file(dest, deployment_id, entries)
+            written.append(layout.IMAGES_FILE)
+            file_results.append((layout.IMAGES_FILE, True, "rebuilt from the images"))
             yield step("images", "done", f"images.json written: {len(entries)} image(s).")
 
             # ── validate, postvalidate, seal ──

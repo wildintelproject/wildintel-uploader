@@ -29,13 +29,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from wildintel_uploader.core.services import camera_info, deployment_import_service as dis, local_folder_service
+from wildintel_uploader.core.services import camera_info, deployment_import_service as dis
 from wildintel_uploader.modules.postvalidation.domain import statistics as _stats
 from wildintel_uploader.modules.postvalidation.domain.models import PostvalidationError
 from wildintel_uploader.modules.postvalidation.domain.statistics import (  # noqa: F401 — the names of before
     LABELS as _LABELS, METHODS, STATISTIC_CHECKS, UNITS as _UNITS, DeploymentTimes, Method, Revision, describe as _describe, fmt as _fmt,
     metrics as _metrics, sequence_lengths,
 )
+from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ def times_of_folder(source_dir: Path) -> DeploymentTimes:
 def times_of_revision(path: Path) -> DeploymentTimes:
     """A previous revision's images: from the images.json kept beside them — only the "local_time" of each is used —
     else from the EXIF of the images."""
-    log = path / local_folder_service.IMAGES_FILE
+    log = path / layout.IMAGES_FILE
     if log.is_file():
         try:
             images = json.loads(log.read_text(encoding="utf-8")).get("images", [])
@@ -239,7 +240,7 @@ def deployment_metrics(path: Path, gap_seconds: float) -> dict:
     Kept in `statistics.json` beside the deployment's images.json and read back from there while the
     images.json and the gap are the same, so the history of a location is not read again for each collection.
     A deployment with no images.json is read from its images and not kept (a folder that is still changing)."""
-    log = path / local_folder_service.IMAGES_FILE
+    log = path / layout.IMAGES_FILE
     cache = path / STATS_FILE
     fingerprint = _fingerprint(log, gap_seconds) if log.is_file() else None
     if fingerprint and cache.is_file():

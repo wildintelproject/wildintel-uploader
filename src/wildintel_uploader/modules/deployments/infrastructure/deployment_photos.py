@@ -4,8 +4,8 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
+from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
-from wildintel_uploader.core.services import local_folder_service
 
 THUMBNAIL = 320
 LARGE = 1280
@@ -18,8 +18,8 @@ class DeploymentPhotosError(Exception):
 
 def _folder(root: Path, research_project_id: str, collection: str, deployment_id: str) -> Path:
     try:
-        project = local_folder_service.project_dir(root, research_project_id)
-    except local_folder_service.LocalFolderError as exc:
+        project = layout.project_dir(root, research_project_id)
+    except layout.LocalFolderError as exc:
         raise DeploymentPhotosError(str(exc)) from exc
     for part in (collection, deployment_id):
         if not part or "/" in part or "\\" in part or part in {".", ".."}:
