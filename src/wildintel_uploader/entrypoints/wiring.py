@@ -200,8 +200,11 @@ def catalog_repository(collections_dir: Path, settings: SettingsService, kind: s
 
 @lru_cache(maxsize=1)
 def file_info() -> FileInfoService:
-    """What is known of the files of the images: one for the whole app, so that one reading of ExifTool runs at a time — the one that asks
-    meanwhile waits for it, and finds what it read. ExifTool reads, Pillow only without it; remembered in memory and in the cache folder."""
+    """What is known of the files of the images: one for the whole process, on purpose, so that one reading of ExifTool runs at a time — the one
+    that asks meanwhile waits for it, and finds what it read. ExifTool reads, Pillow only without it; remembered in memory and in the cache folder.
+
+    It is the one the container gives too (FileInfoService, at the scope of the app): built once here, whoever asks. A test that needs a new one
+    asks for it with `file_info.cache_clear()`."""
     return FileInfoUseCases(reader=ExifToolReader(), fallback=PillowReader(), decoder=PillowDecoder(), hasher=FileHasher(), stamps=OsStamps(),
                             memory=ProcessMemory(), store=SqliteStore())
 
