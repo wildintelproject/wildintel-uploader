@@ -172,7 +172,7 @@ def build_timefix() -> TimeFixService:
 def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — as the code of before keeps it."""
     return UploadersUseCases(TrapperClient(), CollectionsFolder(), SavedUploadReports(build_reports()),
-                             FolderUploads(collections_dir or catalog_collections_dir()))
+                             FolderUploads(collections_dir or catalog_collections_dir()), deployments=build_deployments)
 
 
 def build_backup() -> BackupService:

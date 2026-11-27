@@ -567,16 +567,11 @@ def test_validate_deployment_consistency_rejects_missing_folder(tmp_path: Path):
         svc.validate_deployment_consistency(tmp_path / "nope", _deployment())
 
 
-# ── import_stream ────────────────────────────────────────────────────────────
+# ── organize_stream (what the uploaders register in TRAPPER) ──────────────
 
-def test_import_stream_requires_a_timezone_to_register(tmp_path: Path):
-    source = tmp_path / "source"
-    source.mkdir()
-    with pytest.raises(svc.DeploymentImportError, match="timezone"):
-        svc.import_stream(
-            "https://trapper.example.org", "alice", "s3cret", 2, None,
-            str(source), _deployment(), None, research_project_id="DONA", register=True,
-        )
+def test_organize_stream_refuses_bad_paths_before_anything_is_copied(tmp_path: Path):
+    with pytest.raises(svc.DeploymentImportError):
+        svc.organize_stream("DONA", str(tmp_path / "nothing"), _deployment())
 
 
 # ── import_local_stream ──────────────────────────────────────────────────────

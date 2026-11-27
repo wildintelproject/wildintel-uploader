@@ -118,8 +118,9 @@ class Trapper(ABC):
                delete_files: bool) -> Iterator[dict]: ...
 
     @abstractmethod
-    def import_deployment(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, source_dir: str, deployment: Deployment,
-                          timezone: str | None, research_project_id: str | None, ignore_dst: bool, register: bool) -> Iterator[dict]: ...
+    def register(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, deployment: Deployment, timezone: str,
+                 ignore_dst: bool) -> None:
+        """Registers a deployment in TRAPPER — its errors as the module's."""
 
     @abstractmethod
     def collection_names(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int) -> list[dict]: ...

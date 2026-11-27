@@ -58,7 +58,7 @@ STILL_COUPLED = {
     "backup/infrastructure/backup_service.py": {"local_folder_service"},
     "catalog/infrastructure/status_history.py": {"local_folder_service"},
     "catalog/infrastructure/visits.py": {"local_folder_service"},
-    "deployments/infrastructure/deployment_import_service.py": {"camera_info", "checks", "local_folder_service", "trapper_service"},
+    "deployments/infrastructure/deployment_import_service.py": {"camera_info", "checks", "local_folder_service"},
     "deployments/infrastructure/deployment_photos.py": {"local_folder_service"},
     "deployments/infrastructure/legacy.py": {"local_folder_service"},
     "deployments/infrastructure/repair_service.py": {"camera_info", "local_folder_service", "preprocessing_service", "report_service"},

@@ -101,15 +101,12 @@ class TrapperClient(Trapper):
                                             max_zip_bytes=config.max_zip_mb() * 1024 * 1024, classification_project_pk=classification_project_pk,
                                             delete_after_upload=delete_files)
 
-    def import_deployment(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, source_dir: str, deployment: Deployment,
-                          timezone: str | None, research_project_id: str | None, ignore_dst: bool, register: bool) -> Iterator[dict]:
-        from wildintel_uploader.core.services import deployment_import_service
-        try:
-            events = deployment_import_service.import_stream(*credentials, research_project_pk, classification_project_pk, source_dir, deployment, timezone,
-                                                             research_project_id=research_project_id, ignore_dst=ignore_dst, register=register)
-        except deployment_import_service.DeploymentImportError as exc:
-            raise UploaderError(str(exc)) from exc
-        return _told(events, "Deployment import")
+    def register(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, deployment: Deployment, timezone: str,
+                 ignore_dst: bool) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            _ours(lambda: _services()[0].import_deployment(*credentials, research_project_pk, classification_project_pk, deployment, timezone,
+                                                           Path(tmp) / "deployment.csv", ignore_dst=ignore_dst), "Registering the deployment")
 
     def collection_names(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int) -> list[dict]:
         return _ours(lambda: _services()[2].collections_with_deployments(credentials, research_project_pk, classification_project_pk),

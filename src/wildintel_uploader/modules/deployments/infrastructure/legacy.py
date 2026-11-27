@@ -104,6 +104,10 @@ class CollectionFolders(Folders):
         with _failed():
             return self._dis().import_local_stream(source_dir, collection_dir, collection_name, deployment)
 
+    def organize(self, research_project_id: str, source_dir: str, deployment: Deployment) -> tuple[Path, Iterator[dict]]:
+        with _failed():
+            return self._dis().organize_stream(research_project_id, source_dir, deployment)
+
 
 class KeptRevisions(Revisions):
     def previous(self, project: str, deployment_id: str) -> dict | None:

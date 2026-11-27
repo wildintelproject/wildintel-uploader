@@ -865,12 +865,14 @@ def test_import_registers_the_deployment_in_the_kept_locations_timezone(tmp_path
     }
 
     with patch("wildintel_uploader.core.config.collections_dir", return_value=root), \
-         patch("wildintel_uploader.core.services.deployment_import_service.import_stream", return_value=iter([])) as stream:
+         patch("wildintel_uploader.modules.deployments.application.use_cases.DeploymentsUseCases.organize", return_value=(root, iter([]))), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.import_deployment") as register:
         response = _client().post("/api/deployment-import/import", json=payload)
+        assert [json.loads(line)["type"] for line in response.text.splitlines()] == ["registering", "done"]
 
     assert response.status_code == 200
-    assert stream.call_args.args[7] == "Atlantic/Canary"
-    assert stream.call_args.kwargs["ignore_dst"] is True
+    assert register.call_args.args[6] == "Atlantic/Canary"
+    assert register.call_args.kwargs["ignore_dst"] is True
 
 
 # ── images.json ─────────────────────────────────────────────────────────────

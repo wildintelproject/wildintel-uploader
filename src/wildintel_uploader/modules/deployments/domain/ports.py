@@ -70,6 +70,11 @@ class DeploymentsService(ABC):
     @abstractmethod
     def consolidate(self, source_dir: str, collection_dir: str, deployment: Deployment) -> Iterator[dict]: ...
 
+    @abstractmethod
+    def organize(self, research_project_id: str, source_dir: str, deployment: Deployment) -> tuple[Path, Iterator[dict]]:
+        """The images of a folder copied, as they are, to the folder of the deployment in its collection — the default one of the research
+        project —, with its metadata: where they go, and the events of the copy. DeploymentsFailed, before anything is copied, on bad paths."""
+
     # checking and repairing those kept, and the statistics of a revision
     @abstractmethod
     def repair_collections(self, project: str) -> list[dict]: ...
@@ -201,6 +206,9 @@ class Folders(ABC):
 
     @abstractmethod
     def copy_as_it_is(self, source_dir: str, collection_dir: str, collection_name: str | None, deployment: Deployment) -> Iterator[dict]: ...
+
+    @abstractmethod
+    def organize(self, research_project_id: str, source_dir: str, deployment: Deployment) -> tuple[Path, Iterator[dict]]: ...
 
 
 class Revisions(ABC):

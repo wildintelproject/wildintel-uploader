@@ -115,6 +115,9 @@ class DeploymentsUseCases(DeploymentsService):
         except PreprocessingError as exc:
             raise DeploymentsFailed(str(exc)) from exc
 
+    def organize(self, research_project_id: str, source_dir: str, deployment: Deployment) -> tuple[Path, Iterator[dict]]:
+        return self._folders.organize(research_project_id, source_dir, deployment)
+
     # checking and repairing those kept, and the statistics of a revision
 
     def repair_collections(self, project: str) -> list[dict]:

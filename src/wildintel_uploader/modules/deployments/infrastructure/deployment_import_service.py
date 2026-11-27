@@ -1,6 +1,6 @@
 """Importing a deployment: organize a folder of camera-trap images locally
 (config.collections_dir()), then register the deployment in Trapper from the form
-the caller filled in (see trapper_service.import_deployment).
+the caller filled in (the uploaders register it in TRAPPER).
 
 v1 scope: registers the deployment's metadata only — it does not upload the
 images themselves to Trapper (that's a separate, not yet built, option).
@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import re
 import shutil
-import tempfile
 from collections.abc import Iterator
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -22,7 +21,7 @@ from PIL import Image
 
 from wildintel_uploader.core import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import camera_info, local_folder_service, trapper_service
+from wildintel_uploader.core.services import camera_info, local_folder_service
 from wildintel_uploader.modules.fileinfo.domain import models as _fileinfo
 
 logger = logging.getLogger(__name__)
@@ -405,54 +404,25 @@ def copy_folder(source_dir: Path, dest_dir: Path) -> Iterator[dict]:
         yield {"type": "copy", "index": index, "total": len(files), "name": str(relative)}
 
 
-def import_stream(
-    url: str, username: str, password: str,
-    research_project_pk: int, classification_project_pk: int | None,
-    source_dir: str, deployment: DeploymentFields, timezone: str | None, *,
-    research_project_id: str, ignore_dst: bool = False, register: bool = True,
-) -> Iterator[dict]:
-    """Organizes source_dir's images under <collections folder>/<research
-    project id>/<collection>/<deployment_id> (see default_collection_dir), with
-    the collection's and deployment's metadata beside them as JSON — the same
-    local layout as the "Local folder" destination — then, unless the deployment already exists in Trapper (register=False —
-    it's only being read, not created or changed), registers it. Events:
-      - {"type": "copy", "index", "total", "name"}: one file copied.
-      - {"type": "registering"}: the local copy is done, Trapper is next
-        (skipped entirely when register is false).
-      - {"type": "done", "dest_dir"}: dest_dir is where the images ended
-        up, for the "now upload them" step this app doesn't have yet.
+def organize_stream(research_project_id: str, source_dir: str, deployment: DeploymentFields) -> tuple[Path, Iterator[dict]]:
+    """Organizes source_dir's images under <collections folder>/<research project id>/<collection>/<deployment_id> (see default_collection_dir), with
+    the collection's and deployment's metadata beside them as JSON — the same local layout as the "Local folder" destination. Returns where they go,
+    and the events of the copy: {"type": "copy", "index", "total", "name"} as each file is copied.
 
     Raises:
-        DeploymentImportError: bad source/destination paths, or register is
-            true but no timezone was given.
-        trapper_client.err.APIError: Trapper refused the deployment (e.g. a
-            duplicate deployment_id) — nothing already copied is undone.
+        DeploymentImportError: bad source/destination paths — checked before anything is copied.
     """
     source = Path(source_dir).expanduser()
     collection = default_collection_dir(research_project_id, deployment.deployment_id)
     dest = collection / deployment.deployment_id
     check_paths(source, dest)
-    if register and not timezone:
-        raise DeploymentImportError("A timezone is required to register a new deployment.")
 
     def events() -> Iterator[dict]:
         local_folder_service.write_collection_metadata(collection, collection.name)
         yield from copy_folder(source, dest)
         local_folder_service.write_deployment_metadata(dest, deployment.model_dump())
-        if register:
-            yield {"type": "registering"}
-            with tempfile.TemporaryDirectory() as tmp:
-                csv_path = Path(tmp) / "deployment.csv"
-                trapper_service.import_deployment(
-                    url, username, password, research_project_pk, classification_project_pk,
-                    deployment, timezone, csv_path, ignore_dst=ignore_dst,
-                )
-            logger.info("Deployment %s registered in Trapper (files organized in %s)", deployment.deployment_id, dest)
-        else:
-            logger.info("Deployment %s already in Trapper (files organized in %s)", deployment.deployment_id, dest)
-        yield {"type": "done", "dest_dir": str(dest)}
 
-    return events()
+    return dest, events()
 
 
 def copied_images_info(dest: Path) -> list[dict]:
@@ -493,7 +463,7 @@ def import_local_stream(source_dir: str, collection_dir: str, collection_name: s
     """Organizes source_dir's images under collection_dir/<deployment_id>,
     and records the collection's and deployment's own metadata as JSON —
     the "Local folder" destination, with no Trapper account involved.
-    Events: the same "copy"/"done" shape as import_stream, with no
+    Events: the same "copy" shape as organize_stream, and "done", with no
     "registering" step.
 
     Raises:

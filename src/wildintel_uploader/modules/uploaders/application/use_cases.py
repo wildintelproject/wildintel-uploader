@@ -3,15 +3,25 @@ deployment into it from the wizard, uploading the deployments kept (writing down
 tried again), and bringing back what it has."""
 from __future__ import annotations
 
-from collections.abc import Iterator
+import logging
+from collections.abc import Callable, Iterator
 
+from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
+from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, NotThere, UploaderError
 from wildintel_uploader.modules.uploaders.domain.ports import Deployment, DeploymentUploads, KeptCollections, Trapper, UploadersService, UploadReports
 
 
+logger = logging.getLogger(__name__)
+
+
 class UploadersUseCases(UploadersService):
-    def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports, uploads: DeploymentUploads | None = None) -> None:
+    """`deployments` gives the module of the deployments when it is needed: it is built with the uploaders among what it uses."""
+
+    def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports, uploads: DeploymentUploads | None = None, *,
+                 deployments: Callable[[], DeploymentsService] | None = None) -> None:
         self._trapper, self._kept, self._reports, self._uploads = trapper, kept, reports, uploads
+        self._deployments = deployments
 
     def _record(self, project: str) -> dict:
         record = self._kept.project(project)
@@ -46,12 +56,34 @@ class UploadersUseCases(UploadersService):
 
     def import_deployment(self, account: Account, research_project_pk: int, classification_project_pk: int | None, source_dir: str, deployment: Deployment,
                           research_project_id: str | None, register: bool, timezone: str | None = None) -> Iterator[dict]:
+        """The images organized in their collection, by the deployments, then — unless it is already there (register False) — the deployment
+        registered in TRAPPER: {"type": "copy"…}, {"type": "registering"}, {"type": "done", "dest_dir"}. What fails before anything is copied is
+        said then."""
         credentials = self._trapper.credentials(account)
         # the timezone and the summer-time setting are the kept location's — the only source of them, whatever the request carries — unless one is given
         time = ({"timezone": timezone} if timezone else
                 self._kept.location_time(research_project_id, deployment.location_id) if research_project_id else {})
-        return self._trapper.import_deployment(credentials, research_project_pk, classification_project_pk, source_dir, deployment, time.get("timezone"),
-                                               research_project_id, time.get("ignore_dst", False), register)
+        try:
+            dest, copying = self._deployments().organize(str(research_project_id), source_dir, deployment)
+        except DeploymentsError as exc:
+            raise UploaderError(exc.message) from exc
+        zone, ignore_dst = time.get("timezone"), time.get("ignore_dst", False)
+        if register and not zone:
+            raise UploaderError("A timezone is required to register a new deployment.")
+
+        def events() -> Iterator[dict]:
+            try:
+                yield from copying
+            except DeploymentsError as exc:
+                raise UploaderError(exc.message) from exc
+            if register:
+                yield {"type": "registering"}
+                self._trapper.register(credentials, research_project_pk, classification_project_pk, deployment, zone, ignore_dst)
+                logger.info("Deployment %s registered in Trapper (files organized in %s)", deployment.deployment_id, dest)
+            else:
+                logger.info("Deployment %s already in Trapper (files organized in %s)", deployment.deployment_id, dest)
+            yield {"type": "done", "dest_dir": str(dest)}
+        return events()
 
     # uploading the deployments kept
 

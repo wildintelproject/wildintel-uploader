@@ -74,3 +74,35 @@ def test_its_settings_are_its_own():
     from wildintel_uploader.modules.settings.infrastructure import schema  # noqa: F401 — the format of the sections is registered when the file is read
     assert settings_registry.get("TRAPPER").domain is TrapperSettings
     assert settings_registry.get("AGOUTI").schema.__module__ == "wildintel_uploader.modules.uploaders.infrastructure.settings"
+
+
+class Organizer:
+    def organize(self, research_project_id, source_dir, deployment):
+        return Path("/collections/DONA/R0001/R0001-DONA_01"), iter([{"type": "copy", "index": 1, "total": 1, "name": "a.jpg"}])
+
+
+class Deployment:
+    deployment_id, location_id = "R0001-DONA_01", "DONA_01"
+
+
+class Registering(Trapper):
+    def __init__(self) -> None:
+        super().__init__([])
+        self.registered = []
+
+    def register(self, credentials, rp, cp, deployment, timezone, ignore_dst):
+        self.registered.append((timezone, ignore_dst))
+
+
+class NoTime:
+    def location_time(self, project, location_id):
+        return {}
+
+
+def test_a_deployment_is_organized_by_the_deployments_and_then_registered():
+    trapper = Registering()
+    service = UploadersUseCases(trapper, NoTime(), None, deployments=Organizer)
+    events = list(service.import_deployment(Account(), 2, None, "src", Deployment(), "DONA", True, timezone="Europe/Madrid"))
+    assert [e["type"] for e in events] == ["copy", "registering", "done"] and trapper.registered == [("Europe/Madrid", False)]
+    with pytest.raises(UploaderError, match="A timezone is required"):
+        service.import_deployment(Account(), 2, None, "src", Deployment(), "DONA", True)
