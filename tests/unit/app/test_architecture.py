@@ -65,7 +65,8 @@ def test_no_module_has_plugs():
     assert sorted(SRC.glob("modules/*/infrastructure/plugs.py")) == [] and not (SRC / "shared" / "plugs.py").exists()
 
 
-@pytest.mark.parametrize("path", sorted(p for p in [*SRC.glob("entrypoints/**/*.py"), *SRC.glob("web/*.py")] if p.name not in ("wiring.py", "config.py")),
+@pytest.mark.parametrize("path", sorted(p for p in [*SRC.glob("entrypoints/**/*.py"), *SRC.glob("web/*.py")]
+                                         if p.name != "config.py" and "wiring" not in p.relative_to(SRC).parts),
                          ids=lambda p: str(p.relative_to(SRC)))
 def test_the_entry_points_take_of_a_module_its_contract_and_its_api_schemas_only(path: Path):
     """What an entry point asks of a module is its contract (domain) and the models of its web API (infrastructure.api_schemas): the adapters

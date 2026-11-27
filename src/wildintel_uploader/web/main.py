@@ -31,7 +31,7 @@ from wildintel_uploader.web.settings import configure_logging, settings
 configure_logging()
 
 app = FastAPI(title="WildINTEL Uploader API")
-# The modules, given to the routers that ask for them as FromDishka[...] (see entrypoints/wiring.py).
+# The modules, given to the routers that ask for them as FromDishka[...] (see entrypoints/wiring).
 setup_dishka(wiring.make_app_container(), app)
 
 app.add_middleware(

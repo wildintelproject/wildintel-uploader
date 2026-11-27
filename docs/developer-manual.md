@@ -130,7 +130,7 @@ wildintel-uploader/
 │   │       └── infrastructure/  # its adapters: files, ExifTool, TRAPPER…, its web API models (api_schemas.py), the format of its settings
 │   ├── shared/                  # the shared kernel: ids, identity, audit, storage, camtrap (Camtrap DP), desktop, parallel, logs, version
 │   ├── entrypoints/
-│   │   ├── wiring.py            # where the modules are put together (Dishka): the one place that chooses each adapter
+│   │   ├── wiring/              # where the modules are put together (Dishka): the one place that chooses each adapter — a factory per context
 │   │   ├── config.py            # the settings as the code of before reads them (settings.toml), for the adapters
 │   │   ├── api/                 # FastAPI routers, one per module — thin: a request into a call to the contract, and its answer or error back
 │   │   └── cli/                 # the Typer app (app.py) and the commands of each module
@@ -209,8 +209,9 @@ Each module is a folder of `src/wildintel_uploader/modules/` with three layers, 
 | `backup` | Backups of the settings and of a research project, and restoring them. |
 | `reports` | The reports of what each module did. |
 
-**How they meet.** A module uses another **only through its domain** — its contract —, never its infrastructure. `entrypoints/wiring.py` is
-the one place that puts them together: `build_<module>()` chooses each adapter and gives each module the contracts of the others it uses, and
+**How they meet.** A module uses another **only through its domain** — its contract —, never its infrastructure. `entrypoints/wiring/` is
+the one place that puts them together — a factory for each context (settings, catalog, files, deployments, visits, uploaders, backup) —:
+`build_<module>()` chooses each adapter and gives each module the contracts of the others it uses, and
 the Dishka providers there give them to the entry points (`FromDishka[CatalogService]` in a router, `@inject` in a command). **A module never
 imports the entry points**: what it needs comes in. An adapter that is a class is given it when it is made (`StoredVisits(store, visits)`,
 `TrapperClient(settings)`). An adapter that is still a function of the code of before has no constructor: its module says what it needs in
