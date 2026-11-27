@@ -1,5 +1,5 @@
 """The validators of a deployment — each a class in a file of its own (#246) —, and their registry: the order they run in, which is the order the
-pages list them in; the statistical checks (statistics_service) come after them."""
+pages list them in; the statistical checks (judged against the history the deployments keep) come after them."""
 from __future__ import annotations
 
 from wildintel_uploader.modules.postvalidation.domain.validators import DeploymentValidator

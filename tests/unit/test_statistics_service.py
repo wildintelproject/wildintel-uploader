@@ -1,4 +1,4 @@
-"""services.statistics_service — is this revision of a location like the ones before it?"""
+"""The statistics of the deployments kept (modules.deployments) — is this revision of a location like the ones before it?"""
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from wildintel_uploader.modules.deployments.infrastructure import statistics_service as st
+from tests.support import statistics_service as st
 
 T0 = datetime(2024, 9, 1, 8, 0, 0)
 

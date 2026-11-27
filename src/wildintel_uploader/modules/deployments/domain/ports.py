@@ -5,6 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from pathlib import Path
+
+from wildintel_uploader.modules.deployments.domain.statistics import KeptDeployment
+from wildintel_uploader.modules.postvalidation.domain.statistics import DeploymentTimes
 from typing import Any
 
 Deployment = Any   # the record of a deployment of Camtrap DP (shared.camtrap.DeploymentFields)
@@ -196,14 +199,48 @@ class Repairs(ABC):
         """DeploymentsFailed, before anything is touched, when it isn't there or was synced from TRAPPER."""
 
 
-class CollectionStatistics(ABC):
-    @abstractmethod
-    def revision(self, project: str, collection: str) -> list[dict]:
-        """One row per deployment of the revision against the previous revisions of its location, as the settings of the postvalidation say.
-        DeploymentMissing when the collection isn't there."""
+class RevisionFolders(ABC):
+    """The deployments kept in the collections of the research projects, as their statistics read them."""
 
     @abstractmethod
-    def compare(self, project: str, first: str, second: str) -> dict: ...
+    def kept(self, project: str) -> list[KeptDeployment]:
+        """Every deployment kept in a collection of the research project (R0001, R0002_winter…)."""
+
+    @abstractmethod
+    def in_collection(self, project: str, collection: str) -> list[KeptDeployment] | None:
+        """The deployments of a collection, or None when it isn't there."""
+
+    @abstractmethod
+    def times(self, where: object) -> DeploymentTimes:
+        """When each image of a deployment was taken: from the images.json kept beside them, else from their EXIF."""
+
+    @abstractmethod
+    def cached_metrics(self, where: object, gap_seconds: float) -> dict | None:
+        """The metrics kept beside a deployment, while its images.json and the gap are the same."""
+
+    @abstractmethod
+    def keep_metrics(self, where: object, gap_seconds: float, metrics: dict) -> None: ...
+
+    @abstractmethod
+    def details(self, where: object) -> dict | None:
+        """What its deployment.json keeps."""
+
+
+class StatisticsSettings(ABC):
+    """POSTVALIDATION: what a sequence is and what is similar."""
+
+    @abstractmethod
+    def gap_seconds(self) -> float: ...
+
+    @abstractmethod
+    def min_revisions(self) -> int: ...
+
+    @abstractmethod
+    def method(self) -> str: ...
+
+    @abstractmethod
+    def tolerances(self) -> dict[str, float]: ...
+
 
 class Cards(ABC):
     @abstractmethod
@@ -265,17 +302,6 @@ class Folders(ABC):
 
     @abstractmethod
     def organize(self, research_project_id: str, source_dir: str, deployment: Deployment) -> tuple[Path, Iterator[dict]]: ...
-
-
-class Revisions(ABC):
-    @abstractmethod
-    def previous(self, project: str, deployment_id: str) -> dict | None: ...
-
-    @abstractmethod
-    def before(self, project: str, deployment_id: str) -> list[dict]: ...
-
-    @abstractmethod
-    def next(self, project: str, location_id: str) -> dict: ...
 
 
 class Photos(ABC):

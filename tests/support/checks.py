@@ -72,7 +72,7 @@ def validate_deployment_consistency(
     )
     try:
         postvalidation = _wiring().build_postvalidation()
-        # the statistical checks are run apart, by statistics_service, as they always were here
+        # the statistical checks are run apart, against the history the deployments keep, as they always were here
         wanted = [v for v in postvalidation.validators(checks) if not v.statistical]
         return postvalidation.validate(source_dir, context, wanted, on_check=on_check)
     except _post.PostvalidationError as exc:

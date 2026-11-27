@@ -14,7 +14,7 @@ DeploymentCheck = Literal[
 
 
 class StatisticsParams(BaseModel):
-    """What the statistical checks mean by a sequence and by similar (see services.statistics_service)."""
+    """What the statistical checks mean by a sequence and by similar (see modules.deployments.domain.statistics)."""
 
     # A sequence starts when the gap to the previous image is at least this many seconds.
     sequence_gap_seconds: float = Field(default=60.0, gt=0, le=86400)

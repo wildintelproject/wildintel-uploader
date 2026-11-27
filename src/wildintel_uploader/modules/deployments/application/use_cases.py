@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
+from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.ports import (
-    Cards, CollectionLayout, CollectionStatistics, Deployment, DeploymentsService, Folders, ImportSessions, Photos, Repairs, Revisions,
+    Cards, CollectionLayout, Deployment, DeploymentsService, Folders, ImportSessions, Photos, Repairs,
 )
 from wildintel_uploader.modules.preprocessing.domain.models import PreprocessingError, PreprocessOptions
 from wildintel_uploader.modules.preprocessing.domain.ports import PreprocessingService
@@ -16,8 +17,8 @@ from wildintel_uploader.modules.visits.domain.ports import VisitsService
 
 
 class DeploymentsUseCases(DeploymentsService):
-    def __init__(self, cards: Cards, folders: Folders, revisions: Revisions, photos: Photos, *, visits: VisitsService,
-                 preprocessing: PreprocessingService, repairs: Repairs | None = None, statistics: CollectionStatistics | None = None,
+    def __init__(self, cards: Cards, folders: Folders, revisions: RevisionStatistics, photos: Photos, *, visits: VisitsService,
+                 preprocessing: PreprocessingService, repairs: Repairs | None = None, statistics: RevisionStatistics | None = None,
                  sessions: ImportSessions | None = None, layout: CollectionLayout | None = None) -> None:
         self._cards, self._folders, self._revisions, self._photos = cards, folders, revisions, photos
         self._visits, self._preprocessing, self._repairs, self._statistics = visits, preprocessing, repairs, statistics

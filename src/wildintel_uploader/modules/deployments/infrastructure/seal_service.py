@@ -26,7 +26,6 @@ from wildintel_uploader.modules.deployments.infrastructure.plugs import config
 from wildintel_uploader.shared import parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
-from wildintel_uploader.modules.deployments.infrastructure import statistics_service
 from wildintel_uploader.modules.postvalidation.domain.models import Deployment, DeploymentContext
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
@@ -83,6 +82,14 @@ def _checks(settings_section, names: frozenset[str] | tuple[str, ...]) -> frozen
     return frozenset(name for name in names if getattr(settings_section, name))
 
 
+def _revisions(collections_dir: Path):
+    """The statistics of the deployments kept in this collections folder (application.statistics)."""
+    from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
+    from wildintel_uploader.modules.deployments.infrastructure import plugs
+    from wildintel_uploader.modules.deployments.infrastructure.revision_folders import RevisionFoldersOnDisk
+    return RevisionStatistics(RevisionFoldersOnDisk(lambda: collections_dir, plugs.file_info), None)
+
+
 def _contracts():
     """The prevalidation, the postvalidation and the catalog — through their contracts —, from where the app is put together."""
     from wildintel_uploader.modules.deployments.infrastructure import plugs
@@ -123,7 +130,7 @@ def run_checks(source: Path, dest: Path, deployment: DeploymentFields) -> dict:
         statistics={"sequence_gap_seconds": post.sequence_gap_seconds, "min_revisions": post.min_revisions, "method": post.similarity_method,
                     "image_count_tolerance": post.image_count_tolerance, "sequence_count_tolerance": post.sequence_count_tolerance,
                     "sequence_length_tolerance": post.sequence_length_tolerance},
-        previous=tuple(statistics_service.revisions_before(collections_dir, research_project_id, deployment.deployment_id)) if stat_checks else (),
+        previous=tuple(_revisions(collections_dir).revisions_before(research_project_id, deployment.deployment_id)) if stat_checks else (),
     )
     consistency = postvalidation.validate(source, context, postvalidation.validators(deployment_checks | stat_checks))
     stats = {check: consistency[check] for check in stat_checks if check in consistency}

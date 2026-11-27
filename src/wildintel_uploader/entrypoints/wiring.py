@@ -35,10 +35,12 @@ from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFr
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
+from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
+from wildintel_uploader.modules.deployments.infrastructure.revision_folders import RevisionFoldersOnDisk, StatisticsInUse
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.deployments.infrastructure.legacy import (
-    CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRepairs, KeptRevisions, KeptStatistics, LayoutOfTheCollections, MemoryCards, StoredSessions,
+    CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRepairs, LayoutOfTheCollections, MemoryCards, StoredSessions,
 )
 from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
@@ -192,9 +194,14 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
     """The deployments: the cards, the folders, the revisions and the photos as the code of before keeps them, with the visits and the
     preprocessing through their contracts."""
     settings = settings or build_settings()
-    return DeploymentsUseCases(MemoryCards(), DeploymentFolders(config, catalog_of), KeptRevisions(), DeploymentPhotos(), visits=build_visits(settings=settings),
-                               preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=KeptStatistics(config),
+    return DeploymentsUseCases(MemoryCards(), DeploymentFolders(config, catalog_of), revision_statistics(), DeploymentPhotos(), visits=build_visits(settings=settings),
+                               preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=revision_statistics(),
                                sessions=StoredSessions(), layout=LayoutOfTheCollections())
+
+
+def revision_statistics() -> RevisionStatistics:
+    """The statistics of the deployments kept in the collections folder of the settings, as POSTVALIDATION says."""
+    return RevisionStatistics(RevisionFoldersOnDisk(lambda: config.collections_dir(), file_info), StatisticsInUse(config))
 
 
 def build_timefix() -> TimeFixService:

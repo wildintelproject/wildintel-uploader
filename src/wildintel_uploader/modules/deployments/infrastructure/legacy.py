@@ -1,5 +1,5 @@
 """The ports of the deployments over the code of before: the memory cards (card_copy_service), the folders and the collections
-(deployment_import_service, their collections, seal_service), the revisions (statistics_service), the photos (deployment_photos). What they
+(deployment_import_service, their collections, seal_service), the photos (deployment_photos). What they
 refuse is the deployments', with their words."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import TypeVar
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.ports import (
-    Cards, CollectionLayout, CollectionStatistics, Deployment, Folders, ImportSessions, Photos, Repairs, Revisions,
+    Cards, CollectionLayout, Deployment, Folders, ImportSessions, Photos, Repairs,
 )
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
@@ -118,21 +118,6 @@ class CollectionFolders(Folders):
             return self._dis().organize_stream(research_project_id, source_dir, deployment)
 
 
-class KeptRevisions(Revisions):
-    def previous(self, project: str, deployment_id: str) -> dict | None:
-        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
-        return statistics_service.previous_deployment(_root(), project, deployment_id)
-
-    def next(self, project: str, location_id: str) -> dict:
-        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
-        return statistics_service.next_revision(_root(), project, location_id)
-
-    def before(self, project: str, deployment_id: str) -> list[dict]:
-        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
-        return [{"revision": r.revision, "deployment_id": r.deployment_id, "image_count": r.times.image_count, "times": list(r.times.times)}
-                for r in statistics_service.revisions_before(_root(), project, deployment_id)]
-
-
 class DeploymentPhotos(Photos):
     @staticmethod
     def _missing(call: Callable[[], T]) -> T:
@@ -189,33 +174,6 @@ class KeptRepairs(Repairs):
             except Exception as exc:  # noqa: BLE001
                 raise DeploymentsFailed(f"The repair failed: {exc}") from exc
         return told()
-
-
-class KeptStatistics(CollectionStatistics):
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings   # the settings as settings.toml keeps them
-
-    def revision(self, project: str, collection: str) -> list[dict]:
-        config = self._settings
-        from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
-        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
-        settings = config.load_settings()
-        post = settings.POSTVALIDATION
-        try:
-            return statistics_service.collection_statistics(
-                config.collections_dir(settings), project, collection, sequence_gap_seconds=post.sequence_gap_seconds, min_revisions=post.min_revisions,
-                method=post.similarity_method, tolerances={"image_count": post.image_count_tolerance, "sequence_count": post.sequence_count_tolerance,
-                                                           "sequence_length": post.sequence_length_tolerance})
-        except deployment_import_service.DeploymentImportError as exc:
-            raise DeploymentMissing(str(exc)) from exc
-
-    def compare(self, project: str, first: str, second: str) -> dict:
-        config = self._settings
-        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
-        settings = config.load_settings()
-        with _failed():
-            return statistics_service.compare_deployments(config.collections_dir(settings), project, first, second,
-                                                          sequence_gap_seconds=settings.POSTVALIDATION.sequence_gap_seconds)
 
 
 class StoredSessions(ImportSessions):

@@ -15,7 +15,7 @@ class DeploymentValidator(ABC):
     label: ClassVar[str]
     description: ClassVar[str]
     of_the_visit: ClassVar[bool] = False
-    # compares this revision with the previous ones of the location — what the code of before runs apart (statistics_service)
+    # compares this revision with the previous ones of the location — against the history the deployments keep
     statistical: ClassVar[bool] = False
 
     @abstractmethod
