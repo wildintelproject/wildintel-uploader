@@ -93,13 +93,14 @@ def _in_order(lines: list[dict]) -> list[dict]:
 def _from_the_visits(root: Path, research_project_id: str, recorded: set[tuple]) -> list[dict]:
     """The lines the visits kept make, oldest first, of the locations, the cameras and the SD cards the research project keeps; `recorded` are those that have lines written as
     they happened (no last line brings them to today)."""
-    from wildintel_uploader.core.services import local_folder_service   # noqa: PLC0415 — it uses this module
+    from wildintel_uploader.entrypoints import wiring   # noqa: PLC0415 — the visits, through their contract
+    from wildintel_uploader.modules.catalog.infrastructure import records   # noqa: PLC0415 — it uses this module
 
     items: dict[tuple[str, str], dict] = {}          # (kind, name as it is matched) -> the record
-    for l in local_folder_service.list_locations(root, research_project_id):
+    for l in records.list_locations(root, research_project_id):
         items[("locations", str(l["location_id"]).lower())] = {"name": str(l["location_id"]), "status": l.get("status"), "status_date": l.get("status_date")}
     for kind in ("cameras", "sd_cards"):
-        for i in local_folder_service.list_field_items(root, research_project_id, kind):
+        for i in records.list_field_items(root, research_project_id, kind):
             one = {"name": str(i.get("label") or i.get("camera_id") or ""), "status": i.get("status"), "status_date": i.get("status_date")}
             # a camera is found by its label or by its id, as written (7b and 7B are two), as a visit finds it
             for n in {str(i.get("label") or "").strip()} | ({str(i.get("camera_id") or "").strip()} if kind == "cameras" else set()):
@@ -113,7 +114,7 @@ def _from_the_visits(root: Path, research_project_id: str, recorded: set[tuple])
     status: dict[tuple[str, str], str] = {}          # (kind, name) -> the status the visits give it so far
     out: list[dict] = []
     before: list[dict] = []
-    for visit in sorted(audit.alive(local_folder_service.list_visits(root, research_project_id)), key=visit_rules._stamp):
+    for visit in sorted(audit.alive(wiring.build_visits(root).visits(research_project_id)), key=visit_rules._stamp):
         changes = visit_rules.entity_changes(visit, before)
         if "Archive" in (visit.get("actions") or []):
             changes.append({"kind": "locations", "name": str(visit["location_id"]), "status": "archived"})

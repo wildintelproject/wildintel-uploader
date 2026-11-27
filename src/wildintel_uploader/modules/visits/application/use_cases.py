@@ -148,6 +148,9 @@ class VisitsUseCases(VisitsService):
     def visits(self, project: str, location_id: str | None = None) -> list[Visit]:
         return self._visits.list(project, location_id)
 
+    def unknown(self, project: str) -> list[Visit]:
+        return self._visits.unknown(project)
+
     def save(self, project: str, visit: Visit) -> Visit:
         self._catalog.require_project(project, active=True)
         visit = dict(visit)

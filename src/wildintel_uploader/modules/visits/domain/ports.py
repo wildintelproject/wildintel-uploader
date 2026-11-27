@@ -23,6 +23,10 @@ class VisitsService(ABC):
         """The visits kept for a research project, those to one location when it is given."""
 
     @abstractmethod
+    def unknown(self, project: str) -> list[Visit]:
+        """The visits known only to have been made — a revision before the ones kept."""
+
+    @abstractmethod
     def save(self, project: str, visit: Visit) -> Visit:
         """Registers a visit, if it follows the rules: what it does to the locations, the cameras and the SD cards is done, and the folders of the
         collections it changes are made — the visit kept, with "collection_folders"."""
