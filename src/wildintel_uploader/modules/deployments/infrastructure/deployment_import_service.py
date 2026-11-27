@@ -19,7 +19,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.domain import naming as _naming
 from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName, DeploymentsFailed

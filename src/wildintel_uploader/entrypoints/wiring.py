@@ -17,7 +17,7 @@ from pathlib import Path
 
 from dishka import Container, Provider, Scope, make_container, provide
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared import parallel
 from wildintel_uploader.modules.backup.application.use_cases import BackupUseCases
 from wildintel_uploader.modules.backup.domain.ports import BackupService

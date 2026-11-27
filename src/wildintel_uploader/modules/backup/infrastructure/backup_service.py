@@ -23,7 +23,8 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-from wildintel_uploader.core import config, storage
+from wildintel_uploader.entrypoints import config
+from wildintel_uploader.shared import storage
 
 
 def _records(root: Path):

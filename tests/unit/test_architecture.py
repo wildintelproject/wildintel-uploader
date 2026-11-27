@@ -84,3 +84,9 @@ def _coupled() -> dict[str, set[str]]:
 
 def test_no_module_is_coupled_to_another_but_what_is_still_to_cut():
     assert _coupled() == STILL_COUPLED
+
+
+@pytest.mark.parametrize("path", sorted(p for p in SRC.rglob("*.py") if p.relative_to(SRC).parts[0] != "core"), ids=lambda p: str(p.relative_to(SRC)))
+def test_nothing_of_the_app_asks_the_code_of_before(path: Path):
+    """core is only the old names of what moved to the modules, the shared kernel and the entry points — kept for what has not been told yet."""
+    assert not {i for i in _imports(path) if i == "wildintel_uploader.core" or i.startswith("wildintel_uploader.core.")}

@@ -43,7 +43,7 @@ def configure(name: str | None = None) -> str:
         StorageError: there is no backend with that name."""
     global _selected
     if name is None:
-        from wildintel_uploader.core import config  # here: config does not need the storage
+        from wildintel_uploader.entrypoints import config  # here: config does not need the storage
         name = config.load_settings().DATA.storage
     name = (name or DEFAULT_BACKEND).strip().lower()
     if name not in _FACTORIES:

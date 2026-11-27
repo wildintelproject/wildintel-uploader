@@ -102,7 +102,7 @@ class TrapperClient(Trapper):
 
     def upload(self, credentials: Credentials | None, record: dict, collection_dir: Path, deployment_id: str, mode: str, classification_project_pk: int | None,
                delete_files: bool) -> Iterator[dict]:
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         return _services()[1].upload_stream(credentials, record, collection_dir, deployment_id, config.packages_dir() / record["acronym"], mode=mode,
                                             max_zip_bytes=config.max_zip_mb() * 1024 * 1024, classification_project_pk=classification_project_pk,
                                             delete_after_upload=delete_files)
@@ -120,7 +120,7 @@ class TrapperClient(Trapper):
 
     def sync(self, credentials: Credentials, project: dict, classification_project_pk: int, collections: list[str], deployments: list[str] | None,
              download_images: bool) -> Iterator[dict]:
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         events = _services()[2].sync_stream(credentials, config.collections_dir(), project, classification_project_pk, collections, deployments, download_images)
         return _told(events, "Syncing the local collections")
 
@@ -138,7 +138,7 @@ class CollectionsFolder(KeptCollections):
 
     @staticmethod
     def _root() -> Path:
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         return config.collections_dir()
 
     def _failed(self, call: Callable[[], T]) -> T:

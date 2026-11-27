@@ -27,7 +27,7 @@ class CatalogCameras(CameraRecords):
 
 class LevelsInUse(CameraLevels):
     def levels(self) -> list[list[str]]:
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         return config.load_settings().VALIDATION.camera_levels
 
 

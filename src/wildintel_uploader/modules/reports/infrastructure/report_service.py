@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.deployments.domain.naming import natural_key
 from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECKS

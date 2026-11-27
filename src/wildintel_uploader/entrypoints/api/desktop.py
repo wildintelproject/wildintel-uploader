@@ -7,7 +7,7 @@ from pathlib import Path
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared.desktop import file_manager
 from wildintel_uploader.shared.desktop import folder_picker
 from wildintel_uploader.modules.deployments.infrastructure.api_schemas import BrowseFolderRequest, OpenFolderRequest

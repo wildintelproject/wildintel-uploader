@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 
 
 class InvalidTaskId(ValueError):

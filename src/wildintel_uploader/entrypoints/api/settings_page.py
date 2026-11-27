@@ -12,7 +12,7 @@ from dataclasses import replace
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared import audit
 from wildintel_uploader.modules.settings.domain import folders
 from wildintel_uploader.modules.settings.domain import models as domain

@@ -51,7 +51,7 @@ class FolderUploads(DeploymentUploads):
 
     def uploads_of(self, project: str, deployment_id: str) -> list[dict]:
         """One upload for each platform it was sent to (only "trapper" for now) — "uploaded" with the day and what it did, or "synced"."""
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         folder = self._folder(project, deployment_id)
         upload = self._upload(folder)
         # the page of the deployment in Trapper — or of its revision —, as it was when it was sent; an upload made before that was kept goes to the site
@@ -67,7 +67,7 @@ class FolderUploads(DeploymentUploads):
 
     def upload_states(self, project: str, imported: str | None, deployment_id: str) -> list[dict]:
         """The upload to each uploader in use: "planned" from the start, then "done" or "failed" — {"destination", "state", "kind", "uploaded_at", "note"}."""
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         settings = config.load_settings()
         done = {u["destination"]: u for u in (self.uploads_of(project, imported) if imported else [])}
         failed = {f["destination"]: f for f in failures.list_upload_failures(self.root, project) if f.get("deployment_id") == deployment_id}

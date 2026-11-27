@@ -31,7 +31,7 @@ class ValidationInUse(PrevalidationSettings):
     """VALIDATION as the code of before reads the settings (config.load_settings)."""
 
     def current(self) -> ValidationSettings:
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         kept = config.load_settings().VALIDATION
         return ValidationSettings(**{**kept.model_dump(), "camera_levels": tuple(tuple(level) for level in kept.camera_levels),
                                      "exif_fields": tuple(kept.exif_fields)})

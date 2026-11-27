@@ -223,7 +223,7 @@ class FieldlogInUse(VisitSettings):
 
     @staticmethod
     def _fieldlog():
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         return config.load_settings().FIELDLOG
 
     def keep_seconds(self) -> bool:

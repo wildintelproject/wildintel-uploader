@@ -2,7 +2,7 @@
 the code of before calls, each asking that module; EpicollectError is its SourceError."""
 from __future__ import annotations
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.sources.domain.models import (  # noqa: F401 — the names of before
     VISIT_COLUMNS, VISIT_QUESTIONS, SourceError as EpicollectError, entry_fields, parse_project, unmapped_notes, visit_actions, visit_row,
 )

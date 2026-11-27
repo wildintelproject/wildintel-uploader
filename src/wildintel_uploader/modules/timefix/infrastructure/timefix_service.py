@@ -30,7 +30,7 @@ import logging
 import subprocess
 from pathlib import Path
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.visits.domain.models import VisitsError
 from wildintel_uploader.modules.visits.domain.rules import closes_collection
 from wildintel_uploader.modules.deployments.domain.naming import natural_key

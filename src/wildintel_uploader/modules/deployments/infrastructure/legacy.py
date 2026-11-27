@@ -28,7 +28,7 @@ def _failed() -> Iterator[None]:
 
 
 def _root() -> Path:
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     return config.collections_dir()
 
 
@@ -62,7 +62,7 @@ class CollectionFolders(Folders):
             return self._dis().scan_folder(folder)
 
     def read_ahead(self, folder: Path) -> None:
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         self._dis().prefetch_metadata(folder, config.load_settings().VALIDATION.exif_fields)
 
     def guess(self, folder: Path) -> dict:
@@ -190,7 +190,7 @@ class KeptRepairs(Repairs):
 
 class KeptStatistics(CollectionStatistics):
     def revision(self, project: str, collection: str) -> list[dict]:
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
         from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         settings = config.load_settings()
@@ -204,7 +204,7 @@ class KeptStatistics(CollectionStatistics):
             raise DeploymentMissing(str(exc)) from exc
 
     def compare(self, project: str, first: str, second: str) -> dict:
-        from wildintel_uploader.core import config
+        from wildintel_uploader.entrypoints import config
         from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         settings = config.load_settings()
         with _failed():
