@@ -12,7 +12,7 @@ from tests.support import camera_info
 from wildintel_uploader.modules.fileinfo.infrastructure import store as exif_store
 from wildintel_uploader.modules.fileinfo.infrastructure import memory as file_memo
 from wildintel_uploader.modules.fileinfo.infrastructure.files import stamp
-from tests.support import deployment_import_service as svc
+
 from tests.support import checks as old_checks
 from tests.support import preprocessing_service as pre
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter, pillow as pillow_adapter
@@ -248,8 +248,8 @@ def test_the_reader_is_pillow_when_exiftool_fails(tmp_path: Path, monkeypatch: p
 
 def _opens(monkeypatch: pytest.MonkeyPatch) -> list:
     opened: list = []
-    real = svc.Image.open
-    monkeypatch.setattr(svc.Image, "open", lambda path, *a, **k: opened.append(Path(path).name) or real(path, *a, **k))
+    real = Image.open
+    monkeypatch.setattr(Image, "open", lambda path, *a, **k: opened.append(Path(path).name) or real(path, *a, **k))
     return opened
 
 

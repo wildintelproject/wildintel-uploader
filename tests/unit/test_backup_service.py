@@ -8,7 +8,9 @@ import pytest
 
 from wildintel_uploader.entrypoints import config
 from tests.support import local_folder_service
-from tests.support import backup_service
+from tests.support import built
+from wildintel_uploader.modules.backup.domain.archive import FORMAT
+from wildintel_uploader.modules.backup.domain.ports import BackupError, Choice
 
 
 def _project(root: Path, acronym: str = "DONA") -> Path:
@@ -34,7 +36,8 @@ def _project(root: Path, acronym: str = "DONA") -> Path:
 
 def _make(root: Path, dest: Path, **options) -> dict:
     kwargs = dict(settings=False, research_project_id="DONA", project_files=True, visits=True, deployments=["R0001-DONA_01"], images=False, app_version="9.9.9")
-    events = list(backup_service.create_backup(root, dest, **{**kwargs, **options}))
+    o = {**kwargs, **options}
+    events = list(built.backup(root, o["app_version"]).create(dest, o["research_project_id"], Choice(o["settings"], o["project_files"], o["visits"], list(o["deployments"]), o["images"])))
     assert events[-1]["type"] == "done"
     return events[-1]
 
@@ -42,7 +45,7 @@ def _make(root: Path, dest: Path, **options) -> dict:
 def test_a_project_says_what_can_be_put_in_a_backup(tmp_path: Path):
     _project(tmp_path)
 
-    info = backup_service.describe_project(tmp_path, "DONA")
+    info = built.backup(tmp_path).describe("DONA")
 
     assert (info["locations"], info["cameras"], info["sd_cards"], info["visits"]) == (2, 1, 1, 2)
     [collection] = info["collections"]
@@ -94,10 +97,10 @@ def test_the_settings_go_with_no_passwords_nor_the_folders_of_this_computer(tmp_
 
 def test_a_backup_of_nothing_is_refused(tmp_path: Path):
     _project(tmp_path)
-    with pytest.raises(backup_service.BackupError, match="Nothing was chosen"):
-        list(backup_service.create_backup(tmp_path, tmp_path, settings=False, research_project_id="DONA", project_files=False, visits=False, deployments=[], images=False, app_version="1"))
-    with pytest.raises(backup_service.BackupError, match="is not there"):
-        list(backup_service.create_backup(tmp_path, tmp_path / "nowhere", settings=True, research_project_id=None, project_files=False, visits=False, deployments=[], images=False, app_version="1"))
+    with pytest.raises(BackupError, match="Nothing was chosen"):
+        list(built.backup(tmp_path, "1").create(tmp_path, "DONA", Choice(False, False, False, list([]), False)))
+    with pytest.raises(BackupError, match="is not there"):
+        list(built.backup(tmp_path, "1").create(tmp_path / "nowhere", None, Choice(True, False, False, list([]), False)))
 
 
 def test_a_backup_says_what_it_holds_and_what_of_it_is_already_here(tmp_path: Path):
@@ -106,45 +109,45 @@ def test_a_backup_says_what_it_holds_and_what_of_it_is_already_here(tmp_path: Pa
     dest.mkdir()
     done = _make(tmp_path, dest, images=True)
 
-    read = backup_service.read_backup(tmp_path, Path(done["path"]))
+    read = built.backup(tmp_path).read(Path(done["path"]))
     assert read["manifest"]["scope"]["research_project"] == "DONA" and read["has_images"] == {"R0001-DONA_01": True}
     assert read["here"] == {"project": True, "deployments": {"R0001-DONA_01": True}, "visits": {"in_backup": 2, "already": 2}}
 
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    assert backup_service.read_backup(elsewhere, Path(done["path"]))["here"] == {"project": False, "deployments": {"R0001-DONA_01": False}, "visits": {"in_backup": 2, "already": 0}}
+    assert built.backup(elsewhere).read(Path(done["path"]))["here"] == {"project": False, "deployments": {"R0001-DONA_01": False}, "visits": {"in_backup": 2, "already": 0}}
 
 
 def test_a_file_that_is_not_a_backup_is_refused(tmp_path: Path):
     plain = tmp_path / "plain.zip"
     with zipfile.ZipFile(plain, "w") as zf:
         zf.writestr("notes.txt", "hello")
-    with pytest.raises(backup_service.BackupError, match="no manifest"):
-        backup_service.read_backup(tmp_path, plain)
+    with pytest.raises(BackupError, match="no manifest"):
+        built.backup(tmp_path).read(plain)
     text = tmp_path / "text.zip"
     text.write_text("not a zip")
-    with pytest.raises(backup_service.BackupError, match="not a .zip"):
-        backup_service.read_backup(tmp_path, text)
+    with pytest.raises(BackupError, match="not a .zip"):
+        built.backup(tmp_path).read(text)
     newer = tmp_path / "newer.zip"
     with zipfile.ZipFile(newer, "w") as zf:
-        zf.writestr("manifest.json", json.dumps({"format": backup_service.FORMAT, "version": 99, "scope": {}}))
-    with pytest.raises(backup_service.BackupError, match="newer version"):
-        backup_service.read_backup(tmp_path, newer)
+        zf.writestr("manifest.json", json.dumps({"format": FORMAT, "version": 99, "scope": {}}))
+    with pytest.raises(BackupError, match="newer version"):
+        built.backup(tmp_path).read(newer)
 
 
 def test_a_backup_with_a_path_that_leaves_it_is_not_restored(tmp_path: Path):
     evil = tmp_path / "evil.zip"
     with zipfile.ZipFile(evil, "w") as zf:
-        zf.writestr("manifest.json", json.dumps({"format": backup_service.FORMAT, "version": 1, "scope": {}}))
+        zf.writestr("manifest.json", json.dumps({"format": FORMAT, "version": 1, "scope": {}}))
         zf.writestr("../outside.txt", "x")
-    with pytest.raises(backup_service.BackupError, match="goes out of it"):
-        backup_service.read_backup(tmp_path, evil)
+    with pytest.raises(BackupError, match="goes out of it"):
+        built.backup(tmp_path).read(evil)
 
 
 def _crafted(path: Path, collection: str, entries: dict[str, str], deployment: str = "D1") -> Path:
     """A backup made by hand: its manifest names a deployment of `collection`, and it holds `entries`."""
     with zipfile.ZipFile(path, "w") as zf:
-        zf.writestr("manifest.json", json.dumps({"format": backup_service.FORMAT, "version": 1, "scope": {"research_project": "DONA", "deployments": [{"collection": collection, "id": deployment}]}}))
+        zf.writestr("manifest.json", json.dumps({"format": FORMAT, "version": 1, "scope": {"research_project": "DONA", "deployments": [{"collection": collection, "id": deployment}]}}))
         for name, text in entries.items():
             zf.writestr(name, text)
     return path
@@ -158,10 +161,10 @@ def test_a_backup_whose_manifest_names_a_collection_that_is_not_a_folder_of_the_
     evil = _crafted(tmp_path / "evil.zip", collection, {f"deployments/{collection}/D1/file.txt": "x"})
 
     refused = "not the name of a folder|goes out of it"   # a name with `..` is refused already for the files of the .zip that go with it
-    with pytest.raises(backup_service.BackupError, match=refused):
-        backup_service.read_backup(tmp_path / "root", evil)
-    with pytest.raises(backup_service.BackupError, match=refused):
-        list(backup_service.restore_backup(tmp_path / "root", evil, settings=False, project_files=False, visits=False, deployments=["D1"], images=True, replace=True))
+    with pytest.raises(BackupError, match=refused):
+        built.backup(tmp_path / "root").read(evil)
+    with pytest.raises(BackupError, match=refused):
+        list(built.backup(tmp_path / "root").restore(evil, Choice(False, False, False, list(["D1"]), True), True))
     assert not outside.exists()
 
 
@@ -169,8 +172,8 @@ def test_a_backup_whose_manifest_names_a_deployment_that_is_not_a_folder_is_refu
     _project(tmp_path / "root")
     evil = _crafted(tmp_path / "evil.zip", "R0001", {}, deployment="../../D1")
 
-    with pytest.raises(backup_service.BackupError, match="not the name of a folder"):
-        backup_service.read_backup(tmp_path / "root", evil)
+    with pytest.raises(BackupError, match="not the name of a folder"):
+        built.backup(tmp_path / "root").read(evil)
 
 
 @pytest.mark.parametrize("name", ["deployments/R0001/D1/x\\..\\..\\..\\..\\outside.txt", "deployments/R0001/..\\..\\outside.txt", "\\outside.txt", "C:\\outside.txt"])
@@ -178,8 +181,8 @@ def test_a_backslash_in_the_name_of_a_file_of_the_backup_is_a_separator_as_on_wi
     _project(tmp_path / "root")
     evil = _crafted(tmp_path / "evil.zip", "R0001", {name: "x"})
 
-    with pytest.raises(backup_service.BackupError, match="goes out of it"):
-        backup_service.read_backup(tmp_path / "root", evil)
+    with pytest.raises(BackupError, match="goes out of it"):
+        built.backup(tmp_path / "root").read(evil)
 
 
 def test_no_file_of_a_backup_is_written_out_of_the_research_project(tmp_path: Path):
@@ -187,14 +190,15 @@ def test_no_file_of_a_backup_is_written_out_of_the_research_project(tmp_path: Pa
     (tmp_path / "root" / "DONA" / "R0001" / "link").symlink_to(tmp_path)   # a folder of the project that leads out of it
     evil = _crafted(tmp_path / "evil.zip", "R0001", {"deployments/R0001/link/escaped.txt": "x", "deployments/R0001/D1/fine.txt": "y"}, deployment="link")
 
-    with pytest.raises(backup_service.BackupError, match="goes out of it"):
-        list(backup_service.restore_backup(tmp_path / "root", evil, settings=False, project_files=False, visits=False, deployments=["link"], images=True, replace=True))
+    with pytest.raises(BackupError, match="goes out of it"):
+        list(built.backup(tmp_path / "root").restore(evil, Choice(False, False, False, list(["link"]), True), True))
     assert not (tmp_path / "escaped.txt").exists() and not (tmp_path / "root" / "DONA" / "R0001" / "D1" / "fine.txt").exists()   # none is written
 
 
 def _restore(root: Path, path: str, **options) -> dict:
     kwargs = dict(settings=False, project_files=True, visits=True, deployments=["R0001-DONA_01"], images=True, replace=False)
-    events = list(backup_service.restore_backup(root, Path(path), **{**kwargs, **options}))
+    o = {**kwargs, **options}
+    events = list(built.backup(root).restore(Path(path), Choice(o["settings"], o["project_files"], o["visits"], list(o["deployments"]), o["images"]), o["replace"]))
     assert events[-1]["type"] == "done"
     return events[-1]["summary"]
 
@@ -298,7 +302,7 @@ def test_a_project_that_is_not_here_needs_its_data_restored_too(tmp_path: Path):
     target = tmp_path / "target"
     target.mkdir()
 
-    with pytest.raises(backup_service.BackupError, match="not here: restore its data too"):
+    with pytest.raises(BackupError, match="not here: restore its data too"):
         _restore(target, done["path"], project_files=False)
 
 
@@ -348,9 +352,9 @@ def test_a_name_that_leaves_the_backup_or_is_not_a_folder_is_known_as_such():
 
     assert [archive.leaves_the_backup(n) for n in ("a/b.txt", "../x", "/x", "C:\\x", "a\\..\\..\\x")] == [False, True, True, True, True]
     for bad in ("..", "a/b", "C:", ""):
-        with pytest.raises(backup_service.BackupError, match="not the name of a folder"):
+        with pytest.raises(BackupError, match="not the name of a folder"):
             archive.folder_name(bad, "a deployment")
-    with pytest.raises(backup_service.BackupError, match="newer version"):
+    with pytest.raises(BackupError, match="newer version"):
         archive.checked_manifest({"format": archive.FORMAT, "version": archive.VERSION + 1})
 
 

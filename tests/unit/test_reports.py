@@ -9,7 +9,7 @@ from PIL import Image
 
 from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from tests.support import deployment_import_service as dis
+
 from tests.support import checks as old_checks
 from wildintel_uploader.entrypoints.wiring import build_reports
 from wildintel_uploader.modules.reports.domain import report as rules

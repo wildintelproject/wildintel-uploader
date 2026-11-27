@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 
 from tests.unit.test_preprocessing_service import DEPLOYMENT, NO_XMP, _run, _source
-from tests.support import seal_service
+from tests.support import built
+from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
 from tests.support import preprocessing_service as pre
 
 
@@ -28,11 +29,11 @@ def test_an_import_leaves_a_seal_with_what_each_image_passed(tmp_path: Path):
 
 def test_a_sealed_deployment_verifies_until_something_changes(tmp_path: Path):
     folder = _imported(tmp_path)
-    assert seal_service.verify(folder)["status"] == "valid"
+    assert built.sealing().verify(folder)["status"] == "valid"
 
     image = sorted(folder.glob("*.JPEG"))[0]
     image.write_bytes(image.read_bytes() + b"x")
-    broken = seal_service.verify(folder)
+    broken = built.sealing().verify(folder)
 
     assert broken["status"] == "broken" and broken["changed"] == [image.name]
 
@@ -40,21 +41,21 @@ def test_a_sealed_deployment_verifies_until_something_changes(tmp_path: Path):
 def test_a_changed_deployment_file_an_added_image_or_an_edited_seal_break_it(tmp_path: Path):
     folder = _imported(tmp_path)
     (folder / "deployment.json").write_text("{}", encoding="utf-8")
-    assert seal_service.verify(folder)["deployment_changed"] is True
+    assert built.sealing().verify(folder)["deployment_changed"] is True
 
     folder = _imported(tmp_path / "again")
     (folder / "extra.jpg").write_bytes((sorted(folder.glob("*.JPEG"))[0]).read_bytes())
-    assert seal_service.verify(folder)["added"] == ["extra.jpg"]
+    assert built.sealing().verify(folder)["added"] == ["extra.jpg"]
 
     folder = _imported(tmp_path / "third")
     body = json.loads((folder / "seal.json").read_text(encoding="utf-8"))
     body["images"][0]["validations"]["corrupted"] = "tampered"
     (folder / "seal.json").write_text(json.dumps(body), encoding="utf-8")
-    assert seal_service.verify(folder)["seal_changed"] is True
+    assert built.sealing().verify(folder)["seal_changed"] is True
 
 
 def test_a_deployment_never_sealed_says_so(tmp_path: Path):
-    assert seal_service.verify(tmp_path)["status"] == "none"
+    assert built.sealing().verify(tmp_path)["status"] == "none"
 
 
 # ── what a seal says, plain Python ───────────────────────────────────────────

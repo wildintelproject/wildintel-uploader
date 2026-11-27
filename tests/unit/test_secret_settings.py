@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from wildintel_uploader.entrypoints.cli.app import app as cli
 from wildintel_uploader.entrypoints import config
-from tests.support import backup_service
+from tests.support import built
 from wildintel_uploader.web.main import app
 
 SECRET = "s3cr3t-value-that-must-not-show"
@@ -66,6 +66,6 @@ def test_a_secret_left_blank_on_the_settings_page_keeps_the_saved_one():
 
 
 def test_no_secret_goes_in_a_backup():
-    snapshot = backup_service.settings_snapshot()
+    snapshot = built.backup().settings_snapshot()
 
     assert SECRET not in str(snapshot)

@@ -19,7 +19,7 @@ class VisitFiles:
     def __init__(self, file: VisitFile) -> None:
         self._file = file
 
-    def parse(self, text: str, locations: list[dict], kept: list[Visit], mapping: dict | None, options: dict) -> dict:
+    def parse(self, text: str, locations: list[dict], kept: list[Visit], mapping: dict | None = None, options: dict | None = None) -> dict:
         return parse_visits(self._file, text, locations, kept, mapping, options)
 
     def export(self, visits: list[Visit]) -> str:

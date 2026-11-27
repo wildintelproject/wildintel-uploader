@@ -2,7 +2,8 @@
 from pathlib import Path
 
 from tests.support import local_folder_service as svc
-from tests.support import status_history
+from tests.support import built
+from wildintel_uploader.modules.catalog.domain.history import BY_HAND, because
 
 LOCATION = {"location_id": "DONA_01", "name": "Doñana 1", "timezone": "UTC", "ignore_dst": False, "latitude": 37.1, "longitude": -6.4, "status": "pending"}
 
@@ -12,14 +13,14 @@ def _project(root: Path) -> None:
 
 
 def _lines(root: Path, kind: str | None = None, name: str | None = None) -> list[tuple]:
-    return [(l["kind"], l["name"], l["before"], l["after"], l["reason"], l["day"]) for l in status_history.list_history(root, "DONA", kind, name)]
+    return [(l["kind"], l["name"], l["before"], l["after"], l["reason"], l["day"]) for l in built.status_history(root).lines("DONA", kind, name)]
 
 
 def test_a_location_says_how_it_was_made_and_each_change_of_its_status_with_why_and_the_day_it_is_of(tmp_path: Path):
     _project(tmp_path)
     svc.write_location(tmp_path, "DONA", LOCATION)
 
-    with status_history.because("The visit R0001 to DONA_01.", "2026-10-19"):
+    with because("The visit R0001 to DONA_01.", "2026-10-19"):
         svc.update_location(tmp_path, "DONA", "dona_01", {"status": "active"}, by_visit=True)
     svc.update_location(tmp_path, "DONA", "DONA_01", {"name": "Doñana uno"})   # not the status: nothing is written
 
@@ -37,7 +38,7 @@ def test_what_is_changed_with_no_reason_said_is_a_change_by_hand_and_the_cameras
     svc.write_field_items(tmp_path, "DONA", "cameras", [{**svc.list_field_items(tmp_path, "DONA", "cameras")[0], "model": "Reconyx"}], by_hand=True)   # nothing of the status
 
     lines = _lines(tmp_path, "cameras", "cam1")
-    assert [(l[2], l[3], l[4]) for l in lines] == [(None, "ready", "Created."), ("ready", "planned", status_history.BY_HAND)]
+    assert [(l[2], l[3], l[4]) for l in lines] == [(None, "ready", "Created."), ("ready", "planned", BY_HAND)]
 
 
 def test_each_change_made_at_once_has_the_reason_of_its_own(tmp_path: Path):
@@ -45,7 +46,7 @@ def test_each_change_made_at_once_has_the_reason_of_its_own(tmp_path: Path):
     svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "7b", "status": "active"}, {"label": "8", "status": "active"}])
     items = svc.list_field_items(tmp_path, "DONA", "sd_cards")
 
-    with status_history.because("The visits.", None, {("sd_cards", "7b"): ("The visit R0002 to DONA_01.", "2026-11-02"), ("sd_cards", "8"): ("The visit R0002 to DONA_02.", "2026-11-03")}):
+    with because("The visits.", None, {("sd_cards", "7b"): ("The visit R0002 to DONA_01.", "2026-11-02"), ("sd_cards", "8"): ("The visit R0002 to DONA_02.", "2026-11-03")}):
         svc.write_field_items(tmp_path, "DONA", "sd_cards", [{**i, "status": "ready"} for i in items])
 
     changed = [l for l in _lines(tmp_path, "sd_cards") if l[2] == "active"]
@@ -100,7 +101,7 @@ def _kept_before_the_history(root: Path, location_status: str = "active", status
 def test_a_history_that_is_not_there_is_rebuilt_from_the_visits_the_first_time_it_is_asked_for(tmp_path: Path):
     _kept_before_the_history(tmp_path, "ready")
 
-    lines = status_history.list_history(tmp_path, "DONA")
+    lines = built.status_history(tmp_path).lines("DONA")
 
     assert all(l["reconstructed"] for l in lines)
     by = lambda kind, name: [(l["before"], l["after"], l["day"], l["reason"]) for l in lines if (l["kind"], l["name"]) == (kind, name)]
@@ -114,7 +115,7 @@ def test_a_history_that_is_not_there_is_rebuilt_from_the_visits_the_first_time_i
 def test_when_the_visits_do_not_end_in_the_status_of_today_a_last_line_says_so_of_its_day(tmp_path: Path):
     _kept_before_the_history(tmp_path, "archived", "2026-04-01")
 
-    lines = status_history.list_history(tmp_path, "DONA", "locations", "DONA_01")
+    lines = built.status_history(tmp_path).lines("DONA", "locations", "DONA_01")
 
     assert (lines[-1]["before"], lines[-1]["after"], lines[-1]["day"]) == ("ready", "archived", "2026-04-01")
     assert lines[-1]["reason"] == "The status is archived, the visits say ready."
@@ -122,33 +123,32 @@ def test_when_the_visits_do_not_end_in_the_status_of_today_a_last_line_says_so_o
 
 def test_it_is_rebuilt_once_and_again_on_request_without_writing_a_line_twice_nor_losing_one(tmp_path: Path):
     _kept_before_the_history(tmp_path, "ready")
-    first = status_history.list_history(tmp_path, "DONA")
+    first = built.status_history(tmp_path).lines("DONA")
     svc.write_field_items(tmp_path, "DONA", "cameras", [{**c, "status": "planned"} for c in svc.list_field_items(tmp_path, "DONA", "cameras")], by_hand=True)
 
-    again = status_history.list_history(tmp_path, "DONA")                         # there is one: it is not made again
-    added = status_history.rebuild(tmp_path, "DONA")                             # nothing is lacking: nothing is added, the change by hand stays
+    again = built.status_history(tmp_path).lines("DONA")                         # there is one: it is not made again
+    added = built.status_history(tmp_path).rebuild("DONA")                             # nothing is lacking: nothing is added, the change by hand stays
 
     assert len(again) == len(first) + 1 and added == 0
-    assert status_history.list_history(tmp_path, "DONA") == again
-    assert again[-1]["reason"] == status_history.BY_HAND and not again[-1].get("reconstructed")
+    assert built.status_history(tmp_path).lines("DONA") == again
+    assert again[-1]["reason"] == BY_HAND and not again[-1].get("reconstructed")
 
 
 def test_a_research_project_with_no_visits_has_an_empty_history_written_so_that_it_is_not_made_again(tmp_path: Path):
     from wildintel_uploader.shared import storage
     _project(tmp_path)
 
-    assert status_history.list_history(tmp_path, "DONA") == []
+    assert built.status_history(tmp_path).lines("DONA") == []
     assert storage.open_store(tmp_path).has_records("DONA", "status_history")
 
 
 def test_a_change_a_visit_wrote_as_it_happened_is_not_written_again_and_its_one_needs_no_last_line(tmp_path: Path):
     _kept_before_the_history(tmp_path, "active")                               # the visits say ready
-    with status_history.because("The visit R0003 to DONA_01.", "2026-03-10"):     # as it was written when the visit was saved
-        status_history.record_changes(tmp_path, "DONA", "locations", [{"location_id": "DONA_01", "status": "active"}], [{"location_id": "DONA_01", "status": "ready"}],
-                                      lambda l: l["location_id"], lambda item, old: old[0])
+    with because("The visit R0003 to DONA_01.", "2026-03-10"):     # as it was written when the visit was saved
+        built.status_history(tmp_path).record_changes("DONA", "locations", [{"location_id": "DONA_01", "status": "active"}], [{"location_id": "DONA_01", "status": "ready"}], lambda l: l["location_id"], lambda item, old: old[0])
 
-    status_history.rebuild(tmp_path, "DONA")
-    lines = status_history.list_history(tmp_path, "DONA", "locations", "DONA_01")
+    built.status_history(tmp_path).rebuild("DONA")
+    lines = built.status_history(tmp_path).lines("DONA", "locations", "DONA_01")
 
     assert [(l["after"], l["day"]) for l in lines].count(("ready", "2026-03-10")) == 1
     assert not any(l.get("to_today") for l in lines)

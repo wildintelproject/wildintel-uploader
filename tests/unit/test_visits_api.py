@@ -637,9 +637,9 @@ def test_a_closed_visit_comes_with_what_its_two_visits_say_of_the_deployment_mix
 # ── the settings of the field records, and what the engine of the field records also says ───────────────────────
 
 def _parse(text: str, kept=None, options=None, sites=("DONA_01", "DONA_02", "DONA_03")):
-    from tests.support import visits_csv
+    from tests.support import built
     locations = [{"location_id": s, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.4} for s in sites]
-    return visits_csv.parse_visits(text, locations, kept or [], visits_csv.suggest_mapping(text)["mapping"], options)
+    return built.visit_files().parse(text, locations, kept or [], built.visit_files().columns(text)["mapping"], options)
 
 
 EPI_HEADER = "created_at,1_Responsable,2_Collection,3_Date,4_Location,5_Camera,6_Action,9_Number_of_pictures,10_SD,14_Hour\n"
@@ -1459,7 +1459,7 @@ def test_what_is_kept_of_a_site_given_up_in_the_file_is_the_visits_and_no_false_
 
 
 def test_the_locations_as_the_visits_of_a_file_leave_them():
-    from tests.support.visits_csv import _archived_by
+    from wildintel_uploader.modules.visits.domain.visit_file import archived_by as _archived_by
 
     sites = [{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "active"}, {"location_id": "DONA_03", "status": "archived", "status_date": "2026-01-01"},
              {"location_id": "DONA_04", "status": "archived", "status_date": "2026-05-01"}]
@@ -1535,7 +1535,7 @@ def test_what_is_kept_of_a_site_given_up_in_the_file_is_the_visits_and_no_false_
 
 
 def test_the_locations_as_the_visits_of_a_file_leave_them():
-    from tests.support.visits_csv import _archived_by
+    from wildintel_uploader.modules.visits.domain.visit_file import archived_by as _archived_by
 
     sites = [{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "active"}, {"location_id": "DONA_03", "status": "archived", "status_date": "2026-01-01"},
              {"location_id": "DONA_04", "status": "archived", "status_date": "2026-05-01"}]
@@ -1650,9 +1650,9 @@ def test_a_site_that_says_site_start_is_not_waited_for_before_it_and_one_that_do
 
 
 def test_the_words_site_start_are_an_action_of_a_file():
-    from tests.support import visits_csv
+    from wildintel_uploader.modules.visits.domain import visit_file as file_rules
 
-    assert [visits_csv.ACTIONS[w] for w in ("site start", "sitestart", "site_start", "site setup")] == ["SiteStart"] * 4
+    assert [file_rules.ACTIONS[w] for w in ("site start", "sitestart", "site_start", "site setup")] == ["SiteStart"] * 4
 
 
 def test_a_planned_site_cannot_be_used_not_even_to_start_it_and_a_ready_one_that_starts_stays_ready_or_is_active_with_a_camera(tmp_path: Path):
@@ -1984,7 +1984,6 @@ def test_the_download_of_the_new_form_can_create_what_does_not_exist_with_the_pl
 
 @pytest.mark.entities
 def test_a_visit_with_a_camera_an_sd_card_or_a_trapper_that_does_not_exist_is_refused_by_hand_and_in_a_file(tmp_path: Path):
-    from tests.support import local_folder_service
     install = {**VISIT, "session": "R0001", "date": "2026-01-10", "actions": ["Installation"], "camera_id": "NOCAM", "sd": "NOSD", "trappers": "Nobody", "num_photos": None,
                "camera_height": 1, "camera_interval": 5, "camera_tilt": 0, "camera_heading": 90, "bait_use": False}
     with _in(tmp_path):

@@ -8,7 +8,8 @@ import pytest
 
 from wildintel_uploader.entrypoints import config
 from tests.support import local_folder_service as svc
-from tests.support import backup_service
+from tests.support import built
+from wildintel_uploader.modules.backup.domain.ports import Choice
 from wildintel_uploader.shared import ids
 
 VISIT = {"location_id": "dona_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Installation"], "camera_id": "BR1", "sd": "A13",
@@ -139,13 +140,13 @@ def test_a_backup_says_things_by_what_they_are_called_so_it_is_restored_where_th
         folder.mkdir()
     _project(here)
     svc.write_visit(here, "DONA", VISIT)
-    events = list(backup_service.create_backup(here, dest, settings=False, research_project_id="DONA", project_files=True, visits=True, deployments=[], images=False, app_version="1"))
+    events = list(built.backup(here, "1").create(dest, "DONA", Choice(False, True, True, list([]), False)))
     zip_path = Path(events[-1]["path"])
 
     # another computer: the same research project, its card and its camera made there — with ids of their own
     _project(there)
     other_card = svc.list_field_items(there, "DONA", "sd_cards")[0]["id"]
-    list(backup_service.restore_backup(there, zip_path, settings=False, project_files=False, visits=True, deployments=[], images=False, replace=False))
+    list(built.backup(there).restore(zip_path, Choice(False, False, True, list([]), False), False))
 
     raw = _on_disk(there)[0]
     assert raw["sd_ref"] == other_card                                                          # it points to the card of *this* computer
@@ -171,11 +172,11 @@ def test_the_people_go_in_the_backup_of_the_settings_by_what_they_are_called_and
         folder.mkdir()
     svc.write_trappers(here, [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}])
     with patch.object(config, "collections_dir", lambda *a, **k: here):
-        events = list(backup_service.create_backup(here, dest, settings=True, research_project_id=None, project_files=False, visits=False, deployments=[], images=False, app_version="1"))
+        events = list(built.backup(here, "1").create(dest, None, Choice(True, False, False, list([]), False)))
     zip_path = Path(events[-1]["path"])
 
     svc.write_trappers(there, [{"username": "ana", "name": "Ana Pérez"}])                         # another computer: it has Ana, with her name written otherwise
-    list(backup_service.restore_backup(there, zip_path, settings=True, project_files=False, visits=False, deployments=[], images=False, replace=False))
+    list(built.backup(there).restore(zip_path, Choice(True, False, False, list([]), False), False))
 
     kept = {t["username"]: t["name"] for t in svc.list_trappers(there)}
     assert kept == {"ana": "Ana Pérez", "luis": "Luis"}                                           # Luis was added; Ana, already there, stays as she was

@@ -12,7 +12,9 @@ from PIL import Image
 
 from tests.support import camera_info
 from wildintel_uploader.entrypoints import config as app_config
-from tests.support import deployment_import_service as svc
+from tests.support import built
+from wildintel_uploader.modules.deployments.domain import imports
+from wildintel_uploader.modules.deployments.domain.models import DeploymentImportError
 from tests.support import checks as old_checks
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 
@@ -39,28 +41,28 @@ def _make_jpeg(
 # ── check_paths ──────────────────────────────────────────────────────────────
 
 def test_check_paths_rejects_missing_source(tmp_path: Path):
-    with pytest.raises(svc.DeploymentImportError, match="Not a folder"):
-        svc.check_paths(tmp_path / "nope", tmp_path / "dest")
+    with pytest.raises(DeploymentImportError, match="Not a folder"):
+        built.importing().check_paths(tmp_path / "nope", tmp_path / "dest")
 
 
 def test_check_paths_rejects_dest_equal_to_source(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
-    with pytest.raises(svc.DeploymentImportError, match="cannot be"):
-        svc.check_paths(source, source)
+    with pytest.raises(DeploymentImportError, match="cannot be"):
+        built.importing().check_paths(source, source)
 
 
 def test_check_paths_rejects_dest_nested_in_source(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
-    with pytest.raises(svc.DeploymentImportError, match="cannot be"):
-        svc.check_paths(source, source / "R0001" / "R0001-LOC")
+    with pytest.raises(DeploymentImportError, match="cannot be"):
+        built.importing().check_paths(source, source / "R0001" / "R0001-LOC")
 
 
 def test_check_paths_accepts_a_sibling_destination(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
-    svc.check_paths(source, tmp_path / "dest")  # doesn't raise
+    built.importing().check_paths(source, tmp_path / "dest")  # doesn't raise
 
 
 # ── scan_folder ──────────────────────────────────────────────────────────────
@@ -70,7 +72,7 @@ def test_scan_folder_only_counts_the_files_and_the_images(tmp_path: Path):
     _make_jpeg(tmp_path / "sub" / "b.jpg", taken="2024:09:05 08:00:00", make="Reconyx", model="HC600")
     (tmp_path / "notes.txt").write_text("x")
 
-    result = svc.scan_folder(tmp_path)
+    result = built.importing().scan_folder(tmp_path)
 
     # Reading the images is for the steps that follow: the scan doesn't open them.
     assert result == {"file_count": 3, "image_count": 2, "warnings": []}
@@ -78,18 +80,18 @@ def test_scan_folder_only_counts_the_files_and_the_images(tmp_path: Path):
 
 def test_scan_folder_does_not_open_the_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 13:10:00")
-    monkeypatch.setattr(svc.Image, "open", lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened an image")))
+    monkeypatch.setattr(Image, "open", lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened an image")))
     from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
     monkeypatch.setattr(FileInfoUseCases, "cameras", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read the cameras")))
 
-    assert svc.scan_folder(tmp_path)["image_count"] == 1
+    assert built.importing().scan_folder(tmp_path)["image_count"] == 1
 
 
 def test_guess_details_reads_the_date_range_and_the_camera_model(tmp_path: Path):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 13:10:00", make="Reconyx", model="HC600")
     _make_jpeg(tmp_path / "sub" / "b.jpg", taken="2024:09:05 08:00:00", make="Reconyx", model="HC600")
 
-    result = svc.guess_details(tmp_path)
+    result = built.importing().guess_details(tmp_path)
 
     assert result["start_date"] == "2024-09-04T13:10:00"
     assert result["end_date"] == "2024-09-05T08:00:00"
@@ -105,7 +107,7 @@ def test_scan_session_scans_each_subfolder_in_name_order(tmp_path: Path):
     (tmp_path / ".hidden").mkdir()
     (tmp_path / "notes.txt").write_text("x")
 
-    result = svc.scan_session(tmp_path)
+    result = built.importing().scan_session(tmp_path)
 
     assert [d["name"] for d in result["deployments"]] == ["SITE_01", "SITE_02", "SITE_03"]
     first = result["deployments"][0]
@@ -130,7 +132,7 @@ def test_scan_session_takes_the_dates_from_the_timestamp_log(tmp_path: Path):
          "dona_02,2024:09:02,10:00:00,2024:11:02,11:00:00",
          "R0033-OTHER,2024:09:02,10:00:00,2024:11:02,11:00:00")
 
-    result = svc.scan_session(session)
+    result = built.importing().scan_session(session)
 
     first, second, third = result["deployments"]
     assert (first["start_date"], first["end_date"], first["from_timestamp_log"]) == ("2024-09-01T08:00:00", "2024-11-01T09:30:00", True)
@@ -147,7 +149,7 @@ def _session_with_log(tmp_path: Path, folders: list[str], *rows: str) -> dict:
     for name in folders:
         _make_jpeg(session / name / "a.jpg", taken="2024:09:04 13:10:00")
     _log(session / "R0033_FileTimestampLog.csv", *rows)
-    return svc.scan_session(session)
+    return built.importing().scan_session(session)
 
 
 ROW = ",2024:09:01,08:00:00,2024:11:01,09:30:00"
@@ -178,12 +180,12 @@ def test_a_session_without_a_timestamp_log_is_warned_about(tmp_path: Path):
     session = tmp_path / "R0033"
     _make_jpeg(session / "DONA_01" / "a.jpg", taken="2024:09:04 13:10:00")
 
-    result = svc.scan_session(session)
+    result = built.importing().scan_session(session)
 
     assert result["timestamp_log"] is None
     assert any("No timestamp log (R0033_FileTimestampLog.csv) was found" in w for w in result["warnings"])
     _log(session / "R0033_FileTimestampLog.csv", "R0033-DONA_01" + ROW)
-    assert not any("No timestamp log" in w for w in svc.scan_session(session)["warnings"])  # found now
+    assert not any("No timestamp log" in w for w in built.importing().scan_session(session)["warnings"])  # found now
 
 
 def test_scan_session_gives_no_revision_when_the_ids_disagree_or_have_none(tmp_path: Path):
@@ -191,15 +193,15 @@ def test_scan_session_gives_no_revision_when_the_ids_disagree_or_have_none(tmp_p
     _make_jpeg(tmp_path / "B" / "a.jpg", taken="2024:09:04 13:10:00")
     row = ",2024:09:01,08:00:00,2024:11:01,09:30:00"
     _log(tmp_path / "L_FileTimestampLog.csv", "R0001-A" + row, "R0002-B" + row)
-    assert svc.scan_session(tmp_path)["timestamp_log"]["revision"] is None
+    assert built.importing().scan_session(tmp_path)["timestamp_log"]["revision"] is None
     _log(tmp_path / "L_FileTimestampLog.csv", "A" + row, "B" + row)
-    assert svc.scan_session(tmp_path)["timestamp_log"]["revision"] is None
+    assert built.importing().scan_session(tmp_path)["timestamp_log"]["revision"] is None
 
 
 def test_scan_session_without_a_timestamp_log_gives_no_dates(tmp_path: Path):
     _make_jpeg(tmp_path / "SITE_01" / "a.jpg", taken="2024:09:04 13:10:00")
 
-    result = svc.scan_session(tmp_path)
+    result = built.importing().scan_session(tmp_path)
 
     assert result["timestamp_log"] is None
     assert result["deployments"][0]["from_timestamp_log"] is False
@@ -210,7 +212,7 @@ def test_scan_session_uses_the_only_timestamp_log_whatever_it_is_called(tmp_path
     _make_jpeg(tmp_path / "SITE_01" / "a.jpg", taken="2024:09:04 13:10:00")
     _log(tmp_path / "R0001_FileTimestampLog.csv", "SITE_01,2024:09:01,08:00:00,2024:11:01,09:30:00")
 
-    result = svc.scan_session(tmp_path)
+    result = built.importing().scan_session(tmp_path)
 
     assert result["deployments"][0]["start_date"] == "2024-09-01T08:00:00"
 
@@ -219,12 +221,12 @@ def test_scan_session_ignores_ambiguous_or_unreadable_timestamp_logs(tmp_path: P
     _make_jpeg(tmp_path / "SITE_01" / "a.jpg", taken="2024:09:04 13:10:00")
     _log(tmp_path / "R0001_FileTimestampLog.csv", "SITE_01,2024:09:01,08:00:00,2024:11:01,09:30:00")
     _log(tmp_path / "R0002_FileTimestampLog.csv", "SITE_01,2024:09:01,08:00:00,2024:11:01,09:30:00")
-    ambiguous = svc.scan_session(tmp_path)
+    ambiguous = built.importing().scan_session(tmp_path)
     assert ambiguous["timestamp_log"] is None and any("none is named after the folder" in w for w in ambiguous["warnings"])
 
     (tmp_path / "R0002_FileTimestampLog.csv").unlink()
     (tmp_path / "R0001_FileTimestampLog.csv").write_text("Deployment,StartDate\nSITE_01,2024:09:01\n", encoding="utf-8")
-    unreadable = svc.scan_session(tmp_path)
+    unreadable = built.importing().scan_session(tmp_path)
     assert unreadable["deployments"][0]["from_timestamp_log"] is False
     assert any("missing the columns" in w for w in unreadable["warnings"])
 
@@ -236,7 +238,7 @@ def test_scan_session_skips_timestamp_log_rows_with_bad_dates(tmp_path: Path):
          "SITE_01,2024-09-01,08:00:00,2024:11:01,09:30:00",
          "SITE_02,2024:11:01,09:30:00,2024:09:01,08:00:00")
 
-    result = svc.scan_session(tmp_path)
+    result = built.importing().scan_session(tmp_path)
 
     assert [d["from_timestamp_log"] for d in result["deployments"]] == [False, False]
     assert len(result["warnings"]) >= 2
@@ -244,36 +246,36 @@ def test_scan_session_skips_timestamp_log_rows_with_bad_dates(tmp_path: Path):
 
 def test_scan_session_needs_subfolders(tmp_path: Path):
     (tmp_path / "a.jpg").write_bytes(b"x")
-    with pytest.raises(svc.DeploymentImportError, match="no subfolders"):
-        svc.scan_session(tmp_path)
-    with pytest.raises(svc.DeploymentImportError, match="Not a folder"):
-        svc.scan_session(tmp_path / "missing")
+    with pytest.raises(DeploymentImportError, match="no subfolders"):
+        built.importing().scan_session(tmp_path)
+    with pytest.raises(DeploymentImportError, match="Not a folder"):
+        built.importing().scan_session(tmp_path / "missing")
 
 
 def test_guess_details_warns_about_images_with_no_exif_date(tmp_path: Path):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 13:10:00")
     _make_jpeg(tmp_path / "b.jpg")  # no DateTime tag
 
-    result = svc.guess_details(tmp_path)
+    result = built.importing().guess_details(tmp_path)
 
     assert any("1 of 2 image(s) have no readable EXIF date" in w for w in result["warnings"])
 
 
 def test_scan_folder_warns_when_empty(tmp_path: Path):
-    result = svc.scan_folder(tmp_path)
+    result = built.importing().scan_folder(tmp_path)
     assert result["file_count"] == 0
     assert "empty" in result["warnings"][0]
-    assert svc.guess_details(tmp_path)["start_date"] is None
+    assert built.importing().guess_details(tmp_path)["start_date"] is None
 
 
 def test_scan_folder_warns_when_nothing_looks_like_an_image(tmp_path: Path):
     (tmp_path / "notes.txt").write_text("x")
-    assert "None of the 1 file(s) look like images" in svc.scan_folder(tmp_path)["warnings"][0]
+    assert "None of the 1 file(s) look like images" in built.importing().scan_folder(tmp_path)["warnings"][0]
 
 
 def test_scan_folder_rejects_missing_folder(tmp_path: Path):
-    with pytest.raises(svc.DeploymentImportError):
-        svc.scan_folder(tmp_path / "nope")
+    with pytest.raises(DeploymentImportError):
+        built.importing().scan_folder(tmp_path / "nope")
 
 
 # ── validate_images ──────────────────────────────────────────────────────────
@@ -335,7 +337,7 @@ def test_validate_images_checks_each_subfolder_s_sequence_on_its_own(tmp_path: P
 
 
 def test_validate_images_rejects_missing_folder(tmp_path: Path):
-    with pytest.raises(svc.DeploymentImportError):
+    with pytest.raises(DeploymentImportError):
         old_checks.validate_images(tmp_path / "nope")
 
 
@@ -462,7 +464,7 @@ def test_time_range_the_edge_of_the_tolerance_is_still_inside(tmp_path: Path):
 
 
 def test_time_range_a_negative_tolerance_is_refused(tmp_path: Path):
-    with pytest.raises(svc.DeploymentImportError, match="negative"):
+    with pytest.raises(DeploymentImportError, match="negative"):
         _out_of_range(_shots(tmp_path, "2024:09:04 10:00:00"), tolerance_hours=-1)
 
 
@@ -501,15 +503,15 @@ def test_validate_deployment_consistency_compares_wall_clock_time_ignoring_the_d
 
 
 def test_with_timezone_stamps_the_offset_in_force_at_that_moment():
-    assert svc.with_timezone("2024-07-01T12:00:00", "Europe/Madrid") == "2024-07-01T12:00:00+02:00"  # summer
-    assert svc.with_timezone("2024-12-01T12:00:00", "Europe/Madrid") == "2024-12-01T12:00:00+01:00"  # winter
-    assert svc.with_timezone("2024-07-01T12:00:00Z", "Europe/Madrid") == "2024-07-01T12:00:00Z"  # already stamped
-    assert svc.with_timezone(None, "Europe/Madrid") is None
+    assert imports.with_timezone("2024-07-01T12:00:00", "Europe/Madrid") == "2024-07-01T12:00:00+02:00"  # summer
+    assert imports.with_timezone("2024-12-01T12:00:00", "Europe/Madrid") == "2024-12-01T12:00:00+01:00"  # winter
+    assert imports.with_timezone("2024-07-01T12:00:00Z", "Europe/Madrid") == "2024-07-01T12:00:00Z"  # already stamped
+    assert imports.with_timezone(None, "Europe/Madrid") is None
 
 
 def test_with_timezone_rejects_an_unknown_timezone():
-    with pytest.raises(svc.DeploymentImportError):
-        svc.with_timezone("2024-07-01T12:00:00", "Mars/Olympus")
+    with pytest.raises(DeploymentImportError):
+        imports.with_timezone("2024-07-01T12:00:00", "Mars/Olympus")
 
 
 def test_validate_deployment_consistency_flags_camera_mismatches_and_lists_models_found(tmp_path: Path):
@@ -566,15 +568,15 @@ def test_validate_deployment_consistency_only_runs_the_requested_checks(tmp_path
 
 
 def test_validate_deployment_consistency_rejects_missing_folder(tmp_path: Path):
-    with pytest.raises(svc.DeploymentImportError):
+    with pytest.raises(DeploymentImportError):
         old_checks.validate_deployment_consistency(tmp_path / "nope", _deployment())
 
 
 # ── organize_stream (what the uploaders register in TRAPPER) ──────────────
 
 def test_organize_stream_refuses_bad_paths_before_anything_is_copied(tmp_path: Path):
-    with pytest.raises(svc.DeploymentImportError):
-        svc.organize_stream("DONA", str(tmp_path / "nothing"), _deployment())
+    with pytest.raises(DeploymentImportError):
+        built.importing().organize("DONA", str(tmp_path / "nothing"), _deployment())
 
 
 # ── import_local_stream ──────────────────────────────────────────────────────
@@ -584,7 +586,7 @@ def test_import_local_stream_organizes_files_and_writes_metadata(tmp_path: Path)
     _make_jpeg(source / "a.jpg", taken="2024:09:04 13:10:00")
     collection = tmp_path / "collection"
 
-    events = list(svc.import_local_stream(str(source), str(collection), "Doñana 2024", _deployment()))
+    events = list(built.importing().copy_as_it_is(str(source), str(collection), "Doñana 2024", _deployment()))
 
     assert events[0] == {"type": "copy", "index": 1, "total": 1, "name": "a.jpg"}
     assert [e["type"] for e in events] == ["copy", "sealing", "done"]
@@ -595,8 +597,8 @@ def test_import_local_stream_organizes_files_and_writes_metadata(tmp_path: Path)
 
 
 def test_import_local_stream_rejects_bad_paths(tmp_path: Path):
-    with pytest.raises(svc.DeploymentImportError):
-        svc.import_local_stream(str(tmp_path / "nope"), str(tmp_path / "collection"), None, _deployment())
+    with pytest.raises(DeploymentImportError):
+        built.importing().copy_as_it_is(str(tmp_path / "nope"), str(tmp_path / "collection"), None, _deployment())
 
 
 # ── copy_folder ──────────────────────────────────────────────────────────────
@@ -607,7 +609,7 @@ def test_copy_folder_preserves_structure_without_touching_the_source(tmp_path: P
     _make_jpeg(source / "a.jpg", taken="2024:09:04 13:10:00")
     _make_jpeg(source / "sub" / "b.jpg", taken="2024:09:05 08:00:00")
 
-    events = list(svc.copy_folder(source, dest))
+    events = list(built.importing().copy_folder(source, dest))
 
     assert [e["index"] for e in events] == [1, 2]
     assert (dest / "a.jpg").is_file()
@@ -620,7 +622,7 @@ def test_copy_folder_preserves_structure_without_touching_the_source(tmp_path: P
 
 def test_default_collection_dir_is_research_project_then_collection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(app_config, "collections_dir", lambda: tmp_path)
-    assert svc.default_collection_dir("DONA", "R0003-DONA_0007_B") == tmp_path / "DONA" / "R0003"
+    assert built.importing().default_collection("DONA", "R0003-DONA_0007_B") == tmp_path / "DONA" / "R0003"
 
 
 def test_the_data_folder_defaults_to_a_folder_named_like_the_app_in_the_documents_folder():
@@ -645,18 +647,18 @@ def test_a_different_data_folder_moves_the_collections_with_it(tmp_path: Path):
 
 @pytest.mark.parametrize("deployment_id", ["DONA-DONA_01", "R003-DONA_01", "R0003_DONA_01", "R0003", "r0003-DONA_01"])
 def test_collection_code_needs_r_four_digits_and_a_hyphen(deployment_id: str):
-    with pytest.raises(svc.DeploymentImportError):
-        svc.collection_code(deployment_id)
+    with pytest.raises(DeploymentImportError):
+        imports.collection_code(deployment_id)
 
 
 def test_deployment_id_for_builds_the_wildintel_tools_name():
-    assert svc.deployment_id_for(3, "DONA_01") == "R0003-DONA_01"
-    assert svc.deployment_id_for(1025, " DONA_0007_B ") == "R1025-DONA_0007_B"
+    assert imports.deployment_id_for(3, "DONA_01") == "R0003-DONA_01"
+    assert imports.deployment_id_for(1025, " DONA_0007_B ") == "R1025-DONA_0007_B"
     for bad in (0, 10000, -1):
-        with pytest.raises(svc.DeploymentImportError):
-            svc.deployment_id_for(bad, "DONA_01")
-    with pytest.raises(svc.DeploymentImportError):
-        svc.deployment_id_for(1, "  ")
+        with pytest.raises(DeploymentImportError):
+            imports.deployment_id_for(bad, "DONA_01")
+    with pytest.raises(DeploymentImportError):
+        imports.deployment_id_for(1, "  ")
 
 
 # ── the camera: model and id ────────────────────────────────────────────────
@@ -675,7 +677,7 @@ def _cameras_folder(tmp_path: Path, *cameras: tuple[str, str, str | None]) -> Pa
 def test_guess_details_fills_in_the_camera_model_and_id_when_every_image_agrees(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG08"))
 
-    result = svc.guess_details(folder)
+    result = built.importing().guess_details(folder)
 
     assert result["camera_model"] == "Reconyx HC600"
     assert result["camera_id"] == "P800HG08"
@@ -684,7 +686,7 @@ def test_guess_details_fills_in_the_camera_model_and_id_when_every_image_agrees(
 def test_guess_details_leaves_the_camera_blank_when_the_images_come_from_different_cameras(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG99"), ("Browning", "Recon Force", "P800HG08"))
 
-    result = svc.guess_details(folder)
+    result = built.importing().guess_details(folder)
 
     assert result["camera_model"] is None and result["camera_id"] is None
     assert any("2 different camera models" in w for w in result["warnings"])
@@ -695,7 +697,7 @@ def test_guess_details_needs_every_image_to_have_the_camera_information(tmp_path
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG08"))
     _make_jpeg(folder / "IMG_9999.jpg", taken="2024:09:09 10:00:00")  # no camera information at all
 
-    result = svc.guess_details(folder)
+    result = built.importing().guess_details(folder)
 
     assert result["camera_model"] is None and result["camera_id"] is None
 
@@ -703,14 +705,14 @@ def test_guess_details_needs_every_image_to_have_the_camera_information(tmp_path
 def test_guess_details_can_have_a_model_without_an_id(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", None), ("Reconyx", "HC600", None))
 
-    result = svc.guess_details(folder)
+    result = built.importing().guess_details(folder)
 
     assert result["camera_model"] == "Reconyx HC600"
     assert result["camera_id"] is None
 
 
 def test_guess_details_says_when_exiftool_is_missing(tmp_path: Path, no_exiftool):
-    result = svc.guess_details(_cameras_folder(tmp_path, ("Reconyx", "HC600", "SN1")))
+    result = built.importing().guess_details(_cameras_folder(tmp_path, ("Reconyx", "HC600", "SN1")))
 
     assert any("ExifTool isn't installed" in w for w in result["warnings"])
 
@@ -723,7 +725,7 @@ def test_exiftool_reads_the_model_and_the_serial_number(tmp_path: Path):
 
     assert reader == "exiftool"
     assert {c for c in cameras.values()} == {camera_info.CameraInfo(model="Reconyx HC600", camera_id="P800HG08")}
-    result = svc.guess_details(folder)
+    result = built.importing().guess_details(folder)
     assert (result["camera_model"], result["camera_id"]) == ("Reconyx HC600", "P800HG08")
     assert not any("ExifTool isn't installed" in w for w in result["warnings"])
 
@@ -1157,19 +1159,19 @@ def test_a_deployment_with_images_in_its_folder_already_exists(tmp_path: Path, m
     kept.mkdir(parents=True)
     (kept / "IMG.JPEG").write_bytes(b"x")
 
-    assert svc.existing_deployment_dir("DONA", "R0003-DONA_01") == kept
-    assert svc.existing_deployment_dir("DONA", "R0003-DONA_02") is None  # another location
-    assert svc.existing_deployment_dir("DONA", "R0004-DONA_01") is None  # another revision
-    assert svc.existing_deployment_dir("OTHER", "R0003-DONA_01") is None  # another research project
+    assert built.importing().kept("DONA", "R0003-DONA_01") == kept
+    assert built.importing().kept("DONA", "R0003-DONA_02") is None  # another location
+    assert built.importing().kept("DONA", "R0004-DONA_01") is None  # another revision
+    assert built.importing().kept("OTHER", "R0003-DONA_01") is None  # another research project
 
 
 def test_an_empty_folder_is_not_an_existing_deployment_and_nor_are_bad_ids(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(app_config, "collections_dir", lambda settings=None: tmp_path)
     (tmp_path / "DONA" / "R0003" / "R0003-DONA_01").mkdir(parents=True)  # nothing in it: importing is not refused
 
-    assert svc.existing_deployment_dir("DONA", "R0003-DONA_01") is None
-    assert svc.existing_deployment_dir("DONA", "no-collection-prefix") is None
-    assert svc.existing_deployment_dir("../x", "R0003-DONA_01") is None
+    assert built.importing().kept("DONA", "R0003-DONA_01") is None
+    assert built.importing().kept("DONA", "no-collection-prefix") is None
+    assert built.importing().kept("../x", "R0003-DONA_01") is None
 
 
 # ── bundled ExifTool ─────────────────────────────────────────────────────────

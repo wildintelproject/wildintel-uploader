@@ -17,7 +17,12 @@ from PIL import Image
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from tests.support import preprocessing_service
 from wildintel_uploader.modules.uploaders.infrastructure import trapper_site
-from tests.support import trapper_upload as up
+from tests.support import built
+from wildintel_uploader.modules.uploaders.domain import trapper as rules
+from wildintel_uploader.modules.uploaders.domain.models import UploaderError
+from wildintel_uploader.modules.uploaders.infrastructure.packages import PackagesOnDisk
+from wildintel_uploader.modules.uploaders.infrastructure.trapper import list_collections
+from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import uploader_class
 from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
 from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
 
@@ -65,7 +70,7 @@ def test_the_collections_and_deployments_kept_for_a_research_project_are_listed(
     (collection.parent / "not_a_collection").mkdir()
     (collection.parent / "R0004").mkdir()  # an empty collection
 
-    result = up.list_collections(tmp_path / "collections", "DONA")
+    result = list_collections(tmp_path / "collections", "DONA")
 
     assert [c["name"] for c in result] == ["R0001", "R0003", "R0004"]
     r1, r3, r4 = result
@@ -80,12 +85,12 @@ def test_the_collections_and_deployments_kept_for_a_research_project_are_listed(
 
 
 def test_a_research_project_with_nothing_kept_has_no_collections(tmp_path: Path):
-    assert up.list_collections(tmp_path, "NOPE") == []
+    assert list_collections(tmp_path, "NOPE") == []
 
 
 def test_a_research_project_id_that_is_not_a_folder_name_is_refused(tmp_path: Path):
     with pytest.raises(local_folder_service_error()):
-        up.list_collections(tmp_path, "../x")
+        list_collections(tmp_path, "../x")
 
 
 def local_folder_service_error():
@@ -98,7 +103,7 @@ def local_folder_service_error():
 def _build(tmp_path: Path, collection: Path, **kw):
     log = json.loads((collection / DEPLOYMENT_ID / "preprocessing.json").read_text())
     params = {"project_id": 2, "timezone_name": "Europe/Madrid", "ignore_dst": True, "output_dir": tmp_path / "packages" / "R0003", "stamp": "20260101000000", **kw}
-    return up.build_packages(collection / DEPLOYMENT_ID, "R0003", DEPLOYMENT_ID, log, **params)
+    return [{"yaml": p.yaml, "zip": p.zip, "files": p.files} for p in built.trapper_uploads().build(collection / DEPLOYMENT_ID, "R0003", DEPLOYMENT_ID, log, **params)]
 
 
 def test_the_package_is_a_zip_of_the_images_and_a_yaml_describing_them_as_in_wildintel_tools(tmp_path: Path):
@@ -165,13 +170,13 @@ def test_an_image_the_preprocessing_recorded_but_is_missing_is_refused(tmp_path:
     collection = _imported(tmp_path, 2)
     next((collection / DEPLOYMENT_ID).glob("*.JPEG")).unlink()
 
-    with pytest.raises(up.TrapperUploadError, match="1 image\\(s\\) the preprocessing recorded are missing"):
+    with pytest.raises(UploaderError, match="1 image\\(s\\) the preprocessing recorded are missing"):
         _build(tmp_path, collection)
 
 
 def test_a_deployment_with_no_images_has_nothing_to_pack(tmp_path: Path):
-    with pytest.raises(up.TrapperUploadError, match="no images to upload"):
-        up.build_packages(tmp_path, "R0003", DEPLOYMENT_ID, {"images": []}, project_id=2, timezone_name="UTC", ignore_dst=True, output_dir=tmp_path / "out")
+    with pytest.raises(UploaderError, match="no images to upload"):
+        [{"yaml": p.yaml, "zip": p.zip, "files": p.files} for p in built.trapper_uploads().build(tmp_path, "R0003", DEPLOYMENT_ID, {"images": []}, project_id=2, timezone_name="UTC", ignore_dst=True, output_dir=tmp_path / "out")]
 
 
 # ── Trapper: what exists ─────────────────────────────────────────────────────
@@ -263,20 +268,20 @@ def _with(fake: FakeTrapper):
 def test_the_research_project_is_the_one_it_was_filled_in_from_or_else_the_one_with_its_acronym():
     fake = FakeTrapper(projects=[SimpleNamespace(pk=2, name="Doñana", acronym="DONA"), SimpleNamespace(pk=9, name="Sierra", acronym="SINE")])
     with _with(fake):
-        assert up.find_research_project(CREDENTIALS, {"acronym": "XXXX", "trapper_pk": 9}) == 9   # by its pk
-        assert up.find_research_project(CREDENTIALS, {"acronym": "dona", "trapper_pk": None}) == 2  # by acronym, ignoring case
-        assert up.find_research_project(CREDENTIALS, {"acronym": "SINE", "trapper_pk": 123}) == 9  # its pk isn't there: the acronym is
+        assert built.trapper_uploads().research_project_pk(CREDENTIALS, {"acronym": "XXXX", "trapper_pk": 9}) == 9   # by its pk
+        assert built.trapper_uploads().research_project_pk(CREDENTIALS, {"acronym": "dona", "trapper_pk": None}) == 2  # by acronym, ignoring case
+        assert built.trapper_uploads().research_project_pk(CREDENTIALS, {"acronym": "SINE", "trapper_pk": 123}) == 9  # its pk isn't there: the acronym is
 
 
 def test_a_research_project_trapper_does_not_have_is_not_created_here():
-    with _with(FakeTrapper()), pytest.raises(up.TrapperUploadError, match="TRAPPER has no research project 'NOPE' — create it there first"):
-        up.find_research_project(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None})
+    with _with(FakeTrapper()), pytest.raises(UploaderError, match="TRAPPER has no research project 'NOPE' — create it there first"):
+        built.trapper_uploads().research_project_pk(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None})
 
 
 def test_a_location_trapper_does_not_have_is_created_from_the_deployments_coordinates(tmp_path: Path):
     fake = FakeTrapper(locations=["DONA_0001"])
     with _with(fake):
-        created = up.ensure_location(CREDENTIALS, 2, _deployment(), timezone_name="Europe/Madrid", ignore_dst=True, work_dir=tmp_path)
+        created = built.trapper_uploads().ensure_location(CREDENTIALS, 2, _deployment(), timezone_name="Europe/Madrid", ignore_dst=True)
 
     assert created is True
     [call] = fake.imported_locations
@@ -288,7 +293,7 @@ def test_a_location_trapper_does_not_have_is_created_from_the_deployments_coordi
 def test_a_location_trapper_already_has_is_left_alone_ignoring_case(tmp_path: Path):
     fake = FakeTrapper(locations=["dona_0006_b"])
     with _with(fake):
-        created = up.ensure_location(CREDENTIALS, 2, _deployment(), timezone_name="UTC", ignore_dst=False, work_dir=tmp_path)
+        created = built.trapper_uploads().ensure_location(CREDENTIALS, 2, _deployment(), timezone_name="UTC", ignore_dst=False)
 
     assert created is False and fake.imported_locations == []
 
@@ -296,20 +301,20 @@ def test_a_location_trapper_already_has_is_left_alone_ignoring_case(tmp_path: Pa
 def test_a_location_without_coordinates_or_name_is_still_created_with_what_there_is(tmp_path: Path):
     fake = FakeTrapper()
     with _with(fake):
-        up.ensure_location(CREDENTIALS, 2, _deployment(location_name=None, coordinate_uncertainty=None), timezone_name="UTC", ignore_dst=False, work_dir=tmp_path)
+        built.trapper_uploads().ensure_location(CREDENTIALS, 2, _deployment(location_name=None, coordinate_uncertainty=None), timezone_name="UTC", ignore_dst=False)
 
     assert fake.imported_locations[0]["rows"][1] == "DONA_0006_B,,-6.5,37.0,"
 
 
 def test_a_deployment_without_a_location_cannot_have_one_created(tmp_path: Path):
-    with _with(FakeTrapper()), pytest.raises(up.TrapperUploadError, match="no location id"):
-        up.ensure_location(CREDENTIALS, 2, _deployment(location_id=None), timezone_name="UTC", ignore_dst=False, work_dir=tmp_path)
+    with _with(FakeTrapper()), pytest.raises(UploaderError, match="no location id"):
+        built.trapper_uploads().ensure_location(CREDENTIALS, 2, _deployment(location_id=None), timezone_name="UTC", ignore_dst=False)
 
 
 def test_a_deployment_trapper_does_not_have_is_created_from_its_details(tmp_path: Path):
     fake = FakeTrapper(deployments=["R0003-DONA_0001"])
     with _with(fake):
-        created = up.ensure_deployment(CREDENTIALS, 2, _deployment(), timezone_name="Europe/Madrid", ignore_dst=True, work_dir=tmp_path)
+        created = built.trapper_uploads().ensure_deployment(CREDENTIALS, 2, _deployment(), timezone_name="Europe/Madrid", ignore_dst=True)
 
     assert created is True
     [call] = fake.imported_deployments
@@ -320,16 +325,16 @@ def test_a_deployment_trapper_does_not_have_is_created_from_its_details(tmp_path
 
 def test_a_revision_has_the_acronym_of_its_research_project_before_it_in_trapper():
     # Trapper compares the names of its collections across research projects: R0001 of one would be R0001 of all
-    assert up.trapper_collection_name({"acronym": "WICP_02"}, "R0001") == "WICP_02-R0001"
-    assert up.trapper_collection_name({"acronym": "WICP_02"}, "wicp_02-R0001") == "wicp_02-R0001"   # not twice
-    assert up.trapper_collection_name({}, "R0001") == "R0001"
+    assert rules.collection_name({"acronym": "WICP_02"}, "R0001") == "WICP_02-R0001"
+    assert rules.collection_name({"acronym": "WICP_02"}, "wicp_02-R0001") == "wicp_02-R0001"   # not twice
+    assert rules.collection_name({}, "R0001") == "R0001"
 
 
 def test_a_deployment_names_its_location_as_trapper_has_it_in_lower_case(tmp_path: Path):
     # Trapper keeps the ids of its locations in lower case and refuses a deployment whose location it does not find as it is written
     fake = FakeTrapper(locations=["dona_0006_b"])
     with _with(fake):
-        up.ensure_deployment(CREDENTIALS, 2, _deployment(), timezone_name="UTC", ignore_dst=False, work_dir=tmp_path)
+        built.trapper_uploads().ensure_deployment(CREDENTIALS, 2, _deployment(), timezone_name="UTC", ignore_dst=False)
 
     [call] = fake.imported_deployments
     assert call["rows"][1].startswith(f'"{DEPLOYMENT_ID}","dona_0006_b"')
@@ -338,7 +343,7 @@ def test_a_deployment_names_its_location_as_trapper_has_it_in_lower_case(tmp_pat
 def test_a_deployment_trapper_already_has_is_left_alone(tmp_path: Path):
     fake = FakeTrapper(deployments=[DEPLOYMENT_ID.lower()])
     with _with(fake):
-        created = up.ensure_deployment(CREDENTIALS, 2, _deployment(), timezone_name="UTC", ignore_dst=False, work_dir=tmp_path)
+        created = built.trapper_uploads().ensure_deployment(CREDENTIALS, 2, _deployment(), timezone_name="UTC", ignore_dst=False)
 
     assert created is False and fake.imported_deployments == []
 
@@ -347,9 +352,7 @@ def test_a_deployment_trapper_already_has_is_left_alone(tmp_path: Path):
 
 def _upload(tmp_path: Path, collection: Path, fake: FakeTrapper, **kw) -> list[dict]:
     with _with(fake):
-        return list(up.upload_stream(
-            CREDENTIALS, RECORD, collection, DEPLOYMENT_ID, tmp_path / "packages" / "DONA", wait_seconds=0.2, poll_seconds=0.05, **kw,
-        ))
+        return list(built.trapper_uploads().upload(CREDENTIALS, RECORD, collection, DEPLOYMENT_ID, tmp_path / "packages" / "DONA", wait_seconds=0.2, poll_seconds=0.05, **kw))
 
 
 def test_the_upload_creates_the_location_and_the_deployment_then_packs_uploads_and_processes(tmp_path: Path, fake_uploader):
@@ -395,15 +398,15 @@ def test_the_yaml_names_the_classification_project_and_not_the_research_project(
 def test_the_classification_project_has_to_be_chosen_when_there_are_several_and_must_exist():
     several = FakeTrapper(classification_projects=[SimpleNamespace(pk=7, name="A", is_active=True), SimpleNamespace(pk=8, name="B", is_active=True)])
     with _with(several):
-        with pytest.raises(up.TrapperUploadError, match=r"several classification projects.*A \(#7\), B \(#8\)"):
-            up.resolve_classification_project(CREDENTIALS, 2)
-        assert up.resolve_classification_project(CREDENTIALS, 2, 7)["name"] == "A"
-        with pytest.raises(up.TrapperUploadError, match="isn't one of the research project's"):
-            up.resolve_classification_project(CREDENTIALS, 2, 99)
+        with pytest.raises(UploaderError, match=r"several classification projects.*A \(#7\), B \(#8\)"):
+            built.trapper_uploads().classification_project(CREDENTIALS, 2)
+        assert built.trapper_uploads().classification_project(CREDENTIALS, 2, 7)["name"] == "A"
+        with pytest.raises(UploaderError, match="isn't one of the research project's"):
+            built.trapper_uploads().classification_project(CREDENTIALS, 2, 99)
     with _with(FakeTrapper()):
-        assert up.resolve_classification_project(CREDENTIALS, 2)["pk"] == 7  # the only one
-    with _with(FakeTrapper(classification_projects=[])), pytest.raises(up.TrapperUploadError, match="has no classification project"):
-        up.resolve_classification_project(CREDENTIALS, 2)
+        assert built.trapper_uploads().classification_project(CREDENTIALS, 2)["pk"] == 7  # the only one
+    with _with(FakeTrapper(classification_projects=[])), pytest.raises(UploaderError, match="has no classification project"):
+        built.trapper_uploads().classification_project(CREDENTIALS, 2)
 
 
 def test_the_package_declares_the_timezone_and_summer_time_of_the_location_it_goes_to(tmp_path: Path, fake_uploader):
@@ -458,8 +461,7 @@ def test_a_package_names_the_deployment_it_was_given_and_puts_its_files_in_that_
     collection = _imported(tmp_path, 2)
     log = json.loads((collection / DEPLOYMENT_ID / "preprocessing.json").read_text(encoding="utf-8"))
 
-    [package] = up.build_packages(collection / DEPLOYMENT_ID, "R0003", DEPLOYMENT_ID, log, project_id=7, timezone_name="UTC", ignore_dst=True,
-                                  output_dir=tmp_path / "out", trapper_deployment_id="r0003-dona_0006_b")
+    [package] = [{"yaml": p.yaml, "zip": p.zip, "files": p.files} for p in built.trapper_uploads().build(collection / DEPLOYMENT_ID, "R0003", DEPLOYMENT_ID, log, project_id=7, timezone_name="UTC", ignore_dst=True, output_dir=tmp_path / "out", trapper_deployment_id="r0003-dona_0006_b")]
 
     assert yaml.safe_load(package["yaml"].read_text(encoding="utf-8"))["collections"][0]["deployments"][0]["deployment_id"] == "r0003-dona_0006_b"
     with zipfile.ZipFile(package["zip"]) as z:
@@ -470,7 +472,7 @@ def test_a_package_names_the_deployment_in_lower_case_even_when_trapper_was_not_
     collection = _imported(tmp_path, 2)
     log = json.loads((collection / DEPLOYMENT_ID / "preprocessing.json").read_text(encoding="utf-8"))
 
-    [package] = up.build_packages(collection / DEPLOYMENT_ID, "R0003", DEPLOYMENT_ID, log, project_id=7, timezone_name="UTC", ignore_dst=True, output_dir=tmp_path / "out")
+    [package] = [{"yaml": p.yaml, "zip": p.zip, "files": p.files} for p in built.trapper_uploads().build(collection / DEPLOYMENT_ID, "R0003", DEPLOYMENT_ID, log, project_id=7, timezone_name="UTC", ignore_dst=True, output_dir=tmp_path / "out")]
 
     assert DEPLOYMENT_ID != DEPLOYMENT_ID.lower()
     assert yaml.safe_load(package["yaml"].read_text(encoding="utf-8"))["collections"][0]["deployments"][0]["deployment_id"] == DEPLOYMENT_ID.lower()
@@ -486,7 +488,7 @@ def test_trappers_refusal_to_process_the_package_is_said_in_words_not_as_a_dict(
         raise RuntimeError("{'data': {'message': 'The YAML collection definition file is invalid.', 'errors': 'Deployment X does not exist.', 'task_id': None}}")
 
     fake.collections.trigger_collection = refuse
-    with pytest.raises(up.TrapperUploadError, match=r"refused to process the package: The YAML collection definition file is invalid\. Deployment X does not exist\.$"):
+    with pytest.raises(UploaderError, match=r"refused to process the package: The YAML collection definition file is invalid\. Deployment X does not exist\.$"):
         _upload(tmp_path, collection, fake)
 
 
@@ -589,7 +591,7 @@ def test_a_deployment_that_was_uploaded_shows_so_in_the_list(tmp_path: Path, fak
     collection = _imported(tmp_path, 2)
     _upload(tmp_path, collection, FakeTrapper())
 
-    [dep] = up.list_collections(tmp_path / "collections", "DONA")[0]["deployments"]
+    [dep] = list_collections(tmp_path / "collections", "DONA")[0]["deployments"]
 
     assert dep["uploaded_at"] is not None
 
@@ -620,7 +622,7 @@ def test_the_uploader_refusing_the_account_stops_the_upload_before_anything_is_c
     fake = FakeTrapper()
 
     for mode in ("upload", "dry_run"):
-        with pytest.raises(up.TrapperUploadError, match="uploader refused POST .*403 Forbidden"):
+        with pytest.raises(UploaderError, match="uploader refused POST .*403 Forbidden"):
             _run(tmp_path, collection, fake, mode)
 
     assert fake.imported_locations == [] and fake.imported_deployments == [] and fake.triggered == []
@@ -644,7 +646,7 @@ def test_a_refused_login_says_who_refused_it_and_what_it_answered(tmp_path: Path
     fake_uploader.fail_on, fake_uploader.error = ".zip", httpx.HTTPStatusError("403", request=request, response=response)
 
     try:
-        with pytest.raises(up.TrapperUploadError) as caught:
+        with pytest.raises(UploaderError) as caught:
             _upload(tmp_path, collection, FakeTrapper())
     finally:
         fake_uploader.fail_on = fake_uploader.error = None
@@ -657,7 +659,7 @@ def test_a_refused_login_says_who_refused_it_and_what_it_answered(tmp_path: Path
 def test_when_the_collection_never_appears_in_trapper_it_says_so(tmp_path: Path, fake_uploader):
     collection = _imported(tmp_path, 2)
 
-    with pytest.raises(up.TrapperUploadError, match="didn't appear in TRAPPER within 0 seconds"):
+    with pytest.raises(UploaderError, match="didn't appear in TRAPPER within 0 seconds"):
         _upload(tmp_path, collection, FakeTrapper(collections_appear=False))
 
     assert not (collection / DEPLOYMENT_ID / "upload.json").exists()
@@ -670,7 +672,7 @@ def test_a_deployment_that_was_not_preprocessed_is_refused_before_anything_happe
     (folder / "deployment.json").write_text(_deployment().model_dump_json(), encoding="utf-8")
     fake = FakeTrapper()
 
-    with pytest.raises(up.TrapperUploadError, match="wasn't preprocessed"):
+    with pytest.raises(UploaderError, match="wasn't preprocessed"):
         _upload(tmp_path, collection, fake)
 
     assert fake.imported_locations == [] and fake.imported_deployments == []
@@ -680,7 +682,7 @@ def test_a_folder_that_is_not_a_deployment_is_refused(tmp_path: Path):
     collection = tmp_path / "R0003"
     (collection / DEPLOYMENT_ID).mkdir(parents=True)
 
-    with pytest.raises(up.TrapperUploadError, match="no deployment.json"):
+    with pytest.raises(UploaderError, match="no deployment.json"):
         _upload(tmp_path, collection, FakeTrapper())
 
 
@@ -688,7 +690,7 @@ def test_a_missing_research_project_stops_before_the_location_is_touched(tmp_pat
     collection = _imported(tmp_path, 2)
     fake = FakeTrapper(projects=[])
 
-    with pytest.raises(up.TrapperUploadError, match="create it there first"):
+    with pytest.raises(UploaderError, match="create it there first"):
         _upload(tmp_path, collection, fake)
 
     assert fake.imported_locations == []
@@ -713,7 +715,7 @@ def test_the_timezone_and_the_dst_rule_the_images_were_preprocessed_with_are_the
 
 def _run(tmp_path: Path, collection: Path, fake: FakeTrapper, mode: str, credentials=CREDENTIALS, **kw) -> list[dict]:
     with _with(fake):
-        return list(up.upload_stream(credentials, RECORD, collection, DEPLOYMENT_ID, tmp_path / "packages" / "DONA", mode=mode, wait_seconds=0.2, poll_seconds=0.05, **kw))
+        return list(built.trapper_uploads().upload(credentials, RECORD, collection, DEPLOYMENT_ID, tmp_path / "packages" / "DONA", mode=mode, wait_seconds=0.2, poll_seconds=0.05, **kw))
 
 
 def _tree(root: Path) -> set[str]:
@@ -796,14 +798,14 @@ def test_a_dry_run_still_finds_the_problems_a_real_upload_would(tmp_path: Path, 
     collection = _imported(tmp_path, 2)
     next((collection / DEPLOYMENT_ID).glob("*.JPEG")).unlink()
 
-    with pytest.raises(up.TrapperUploadError, match="missing"):
+    with pytest.raises(UploaderError, match="missing"):
         _run(tmp_path, collection, FakeTrapper(), "dry_run")
-    with pytest.raises(up.TrapperUploadError, match="create it there first"):
+    with pytest.raises(UploaderError, match="create it there first"):
         _run(tmp_path, _imported(tmp_path / "other", 2), FakeTrapper(projects=[]), "dry_run")
 
 
 def test_a_dry_run_needs_the_trapper_account_to_look_at_what_is_there(tmp_path: Path):
-    with pytest.raises(up.TrapperUploadError, match="isn't set up"):
+    with pytest.raises(UploaderError, match="isn't set up"):
         _run(tmp_path, _imported(tmp_path, 2), FakeTrapper(), "dry_run", credentials=None)
 
 
@@ -847,7 +849,7 @@ def test_generating_looks_the_pk_up_in_trapper_when_it_is_not_known_and_there_is
     fake = FakeTrapper(projects=[SimpleNamespace(pk=77, name="Doñana", acronym="DONA")])
 
     with _with(fake):
-        events = list(up.upload_stream(CREDENTIALS, {**RECORD, "trapper_pk": None}, collection, DEPLOYMENT_ID, tmp_path / "packages" / "DONA", mode="generate"))
+        events = list(built.trapper_uploads().upload(CREDENTIALS, {**RECORD, "trapper_pk": None}, collection, DEPLOYMENT_ID, tmp_path / "packages" / "DONA", mode="generate"))
 
     assert [e["step"] for e in events if e["type"] == "step"][:2] == ["connect", "connect"]
     yaml_file = next((tmp_path / "packages" / "DONA" / "R0003").glob("*.yaml"))
@@ -857,15 +859,15 @@ def test_generating_looks_the_pk_up_in_trapper_when_it_is_not_known_and_there_is
 def test_generating_without_an_account_needs_the_classification_project_chosen(tmp_path: Path, fake_uploader):
     collection = _imported(tmp_path, 2)
 
-    with pytest.raises(up.TrapperUploadError, match="classification project's pk"):
+    with pytest.raises(UploaderError, match="classification project's pk"):
         _run(tmp_path, collection, FakeTrapper(), "generate", credentials=None)
 
 
 def test_generating_without_a_known_pk_nor_an_account_says_what_to_do(tmp_path: Path, fake_uploader):
     collection = _imported(tmp_path, 2)
 
-    with pytest.raises(up.TrapperUploadError, match="research project's pk in TRAPPER"):
-        list(up.upload_stream(None, {**RECORD, "trapper_pk": None}, collection, DEPLOYMENT_ID, tmp_path / "packages" / "DONA", mode="generate"))
+    with pytest.raises(UploaderError, match="research project's pk in TRAPPER"):
+        list(built.trapper_uploads().upload(None, {**RECORD, "trapper_pk": None}, collection, DEPLOYMENT_ID, tmp_path / "packages" / "DONA", mode="generate"))
 
 
 def test_generating_splits_the_zips_like_an_upload_would(tmp_path: Path, fake_uploader):
@@ -878,7 +880,7 @@ def test_generating_splits_the_zips_like_an_upload_would(tmp_path: Path, fake_up
 
 
 def test_an_unknown_mode_is_refused(tmp_path: Path):
-    with pytest.raises(up.TrapperUploadError, match="Unknown mode"):
+    with pytest.raises(UploaderError, match="Unknown mode"):
         _run(tmp_path, _imported(tmp_path, 1), FakeTrapper(), "send_it")
 
 
@@ -895,7 +897,7 @@ def test_the_csv_has_wildintel_tools_columns_in_its_order_and_the_coordinates_at
     collection = _imported(tmp_path, 3)
     log = json.loads((collection / DEPLOYMENT_ID / "preprocessing.json").read_text())
 
-    up.upsert_deployments_csv(tmp_path / "R0003_deployments.csv", _deployment(camera_model="RECONYX HF2"), log)
+    PackagesOnDisk().upsert_csv(tmp_path / "R0003_deployments.csv", rules.csv_row(_deployment(camera_model="RECONYX HF2"), log))
 
     header = (tmp_path / "R0003_deployments.csv").read_text(encoding="utf-8").splitlines()[0]
     assert header == "deploymentID,locationID,deploymentStart,deploymentEnd,cameraModel,longitude,latitude"
@@ -912,7 +914,7 @@ def test_the_csv_takes_the_camera_from_the_images_when_the_deployment_does_not_d
     log = json.loads((collection / DEPLOYMENT_ID / "preprocessing.json").read_text())
     log["images"][0]["camera"] = "Bushnell Trophy Cam"
 
-    up.upsert_deployments_csv(tmp_path / "R0003_deployments.csv", _deployment(), log)
+    PackagesOnDisk().upsert_csv(tmp_path / "R0003_deployments.csv", rules.csv_row(_deployment(), log))
 
     assert _csv_rows(tmp_path / "R0003_deployments.csv")[0]["cameraModel"] == "Bushnell Trophy Cam"
 
@@ -921,9 +923,9 @@ def test_the_csv_keeps_the_other_deployments_of_the_collection_sorted_and_replac
     log = {"images": [{"name": "a", "date": "2024-07-01T09:00:00+00:00"}, {"name": "b", "date": "2024-07-05T09:00:00+00:00"}]}
     path = tmp_path / "R0003_deployments.csv"
 
-    first = up.upsert_deployments_csv(path, _deployment(deployment_id="R0003-DONA_0009", location_id="DONA_0009"), log)
-    second = up.upsert_deployments_csv(path, _deployment(deployment_id="R0003-DONA_0001", location_id="DONA_0001"), log)
-    third = up.upsert_deployments_csv(path, _deployment(deployment_id="R0003-DONA_0009", location_id="DONA_0009", longitude=-6.4), log)
+    first = PackagesOnDisk().upsert_csv(path, rules.csv_row(_deployment(deployment_id="R0003-DONA_0009", location_id="DONA_0009"), log))
+    second = PackagesOnDisk().upsert_csv(path, rules.csv_row(_deployment(deployment_id="R0003-DONA_0001", location_id="DONA_0001"), log))
+    third = PackagesOnDisk().upsert_csv(path, rules.csv_row(_deployment(deployment_id="R0003-DONA_0009", location_id="DONA_0009", longitude=-6.4), log))
 
     assert (first["action"], second["action"], third["action"]) == ("added", "added", "updated")
     assert third["rows"] == 2
@@ -938,7 +940,7 @@ def test_a_csv_wildintel_tools_wrote_is_kept_and_extended(tmp_path: Path):
         "deploymentID,locationID,deploymentStart,deploymentEnd,cameraModel\nR0003-DONA_0001,DONA_0001,2024-06-01T00:00:00+0000,2024-06-30T00:00:00+0000,Reconyx\n", encoding="utf-8",
     )
 
-    up.upsert_deployments_csv(path, _deployment(), {"images": [{"name": "a", "date": "2024-07-01T09:00:00+00:00"}]})
+    PackagesOnDisk().upsert_csv(path, rules.csv_row(_deployment(), {"images": [{"name": "a", "date": "2024-07-01T09:00:00+00:00"}]}))
 
     rows = _csv_rows(path)
     assert [r["deploymentID"] for r in rows] == ["R0003-DONA_0001", DEPLOYMENT_ID]
@@ -963,7 +965,7 @@ def test_checking_the_access_reports_the_project_the_locations_and_the_uploader(
     fake = FakeTrapper(locations=["DONA_0001"])
 
     with _with(fake):
-        checks = up.check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, ["DONA_0001", "dona_0002", ""])
+        checks = built.trapper_uploads().check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, ["DONA_0001", "dona_0002", ""])
 
     assert [c["check"] for c in checks] == ["research_project", "classification_project", "location", "uploader"]
     assert all(c["ok"] for c in checks)
@@ -976,28 +978,28 @@ def test_each_access_check_fails_on_its_own(monkeypatch: pytest.MonkeyPatch):
     _refusing_login(monkeypatch, 403)
 
     with _with(FakeTrapper(locations=["DONA_0001"])):
-        checks = up.check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2})
+        checks = built.trapper_uploads().check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2})
     assert [c["ok"] for c in checks] == [True, True, True, False]
     assert "403 Forbidden" in checks[3]["message"] and "The login was refused" in checks[3]["message"]
 
     with _with(FakeTrapper(projects=[])):
-        checks = up.check_access(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None})
+        checks = built.trapper_uploads().check_access(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None})
     assert [c["ok"] for c in checks] == [False, False, False, False]
     assert "create it there first" in checks[0]["message"] and "Not checked" in checks[1]["message"]
 
     with _with(FakeTrapper(classification_projects=[])):
-        checks = up.check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2})
+        checks = built.trapper_uploads().check_access(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2})
     assert [c["ok"] for c in checks] == [True, False, True, False]
     assert "has no classification project" in checks[1]["message"]
 
 
 def test_checking_the_selection_says_whether_the_collection_is_there_or_would_be_created():
     with _with(FakeTrapper(collections_appear=True)):
-        there = up.check_selection(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, "R0003")
+        there = built.trapper_uploads().check_selection(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, "R0003")
     with _with(FakeTrapper(collections_appear=False)):
-        new = up.check_selection(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, "R0003")
+        new = built.trapper_uploads().check_selection(CREDENTIALS, {"acronym": "DONA", "trapper_pk": 2}, "R0003")
     with _with(FakeTrapper(projects=[])):
-        nothing = up.check_selection(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None}, "R0003")
+        nothing = built.trapper_uploads().check_selection(CREDENTIALS, {"acronym": "NOPE", "trapper_pk": None}, "R0003")
 
     assert [(c["check"], c["ok"]) for c in there] == [("research_project", True), ("collection", True)]
     assert "R0003 (#26)" in there[1]["message"] and "already in TRAPPER" in there[1]["message"]
@@ -1012,7 +1014,7 @@ def _login(handler) -> httpx.Request | None:
     """Runs the uploader's login against a fake Trapper answering with `handler`; returns what the page was left with."""
     import asyncio
 
-    uploader = up._uploader_class()(client=SimpleNamespace(user_name="alice", user_password="secret"))
+    uploader = uploader_class()(client=SimpleNamespace(user_name="alice", user_password="secret"))
 
     async def run():
         async with httpx.AsyncClient(base_url="https://trapper.example.org/", transport=httpx.MockTransport(handler)) as http:
@@ -1032,21 +1034,21 @@ def test_the_uploader_login_takes_the_session_from_the_top_of_the_answer_or_from
 
 
 def test_the_uploader_login_says_what_trapper_answered_when_it_gives_no_session():
-    with pytest.raises(up.TrapperUploadError, match=r'gave no session.*200: \{"status":"ok"\}'):
+    with pytest.raises(UploaderError, match=r'gave no session.*200: \{"status":"ok"\}'):
         _login(lambda request: httpx.Response(200, json={"status": "ok"}))
-    with pytest.raises(up.TrapperUploadError, match="gave no session.*Welcome"):
+    with pytest.raises(UploaderError, match="gave no session.*Welcome"):
         _login(lambda request: httpx.Response(200, text="<html>Welcome</html>"))
 
 
 def test_a_location_of_someone_else_is_explained_not_refused():
     theirs = {"location_id": "dona-001", "owner": "bob@x.org", "can_manage": False}
-    problem = up.location_access_problem(theirs, "alice@x.org")
+    problem = rules.location_access_problem(theirs, "alice@x.org")
     assert problem and "bob@x.org" in problem and "dona-001" in problem
 
 
 def _someone_elses_location(monkeypatch: pytest.MonkeyPatch):
     row = {"pk": 1, "location_id": "DONA_0006_B", "name": None, "timezone": "Europe/Madrid", "ignore_dst": True, "owner": "bob@x.org", "can_manage": False}
-    monkeypatch.setattr(up.trapper_site.TrapperSdk, "locations", lambda *a, **k: [row])
+    monkeypatch.setattr(trapper_site.TrapperSdk, "locations", lambda *a, **k: [row])
 
 
 def test_a_dry_run_warns_that_the_location_may_not_be_usable_but_goes_on(tmp_path: Path, fake_uploader, monkeypatch: pytest.MonkeyPatch):
@@ -1070,12 +1072,12 @@ def test_when_trapper_refuses_the_deployment_the_error_says_who_owns_the_locatio
 
     fake.deployments.import_deployments = refuse
 
-    with pytest.raises(up.TrapperUploadError, match="does not exist in the database.*bob@x.org"):
+    with pytest.raises(UploaderError, match="does not exist in the database.*bob@x.org"):
         _run(tmp_path, collection, fake, "upload")
 
 
 def test_the_owner_a_manager_or_an_unknown_location_is_not_a_problem():
-    assert up.location_access_problem({"location_id": "a", "owner": "Alice@x.org", "can_manage": False}, "alice@x.org") is None
-    assert up.location_access_problem({"location_id": "a", "owner": "bob", "can_manage": True}, "alice") is None
-    assert up.location_access_problem({"location_id": "a", "owner": "bob", "can_manage": None}, "alice") is None
-    assert up.location_access_problem(None, "alice") is None
+    assert rules.location_access_problem({"location_id": "a", "owner": "Alice@x.org", "can_manage": False}, "alice@x.org") is None
+    assert rules.location_access_problem({"location_id": "a", "owner": "bob", "can_manage": True}, "alice") is None
+    assert rules.location_access_problem({"location_id": "a", "owner": "bob", "can_manage": None}, "alice") is None
+    assert rules.location_access_problem(None, "alice") is None

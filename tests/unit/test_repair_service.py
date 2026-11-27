@@ -10,8 +10,9 @@ from wildintel_uploader.shared.camtrap import DeploymentFields
 from tests.support import local_folder_service as lfs
 from tests.support import preprocessing_service as pre
 from wildintel_uploader.entrypoints.wiring import build_reports
-from tests.support import repair_service as rep
-from tests.support import seal_service
+from tests.support import built
+from wildintel_uploader.modules.deployments.domain.repair import RepairError
+from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
 
 DEPLOYMENT_ID = "R0003-DONA_01"
 DEPLOYMENT = DeploymentFields.model_validate({
@@ -57,12 +58,12 @@ def _old_log(collection: Path, deployment_id: str, start: datetime, end: datetim
 
 
 def _repair(root: Path, deployment_id=DEPLOYMENT_ID) -> list[dict]:
-    return list(rep.repair_stream(root, "DONA", "R0003", deployment_id))
+    return list(built.repairing(root).repair_stream("DONA", "R0003", deployment_id))
 
 
 def test_a_deployment_that_was_just_imported_is_valid(kept):
     root, _ = kept
-    state = rep.inspect(root, "DONA", "R0003", DEPLOYMENT_ID)
+    state = built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)
 
     assert state["status"] == "valid" and state["images"] == 3 and state["log"] == "row"
     assert state["problems"] == []
@@ -71,10 +72,10 @@ def test_a_deployment_that_was_just_imported_is_valid(kept):
 def test_a_deployment_is_valid_or_not_as_its_seal_says(kept):
     root, dest = kept
     (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
-    assert rep.inspect(root, "DONA", "R0003", DEPLOYMENT_ID)["status"] == "broken"
+    assert built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)["status"] == "broken"
 
-    (dest / seal_service.SEAL_FILE).unlink()
-    state = rep.inspect(root, "DONA", "R0003", DEPLOYMENT_ID)
+    (dest / SEAL_FILE).unlink()
+    state = built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)
     assert state["status"] == "unsealed"
     assert "deployment.json is missing" in state["problems"] and "It has no seal: its images were never sealed." in state["problems"]
 
@@ -82,13 +83,13 @@ def test_a_deployment_is_valid_or_not_as_its_seal_says(kept):
 def test_every_metadata_file_is_rebuilt_from_the_images_and_the_deployment_is_valid_again(kept):
     root, dest = kept
     before = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
-    for name in (lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, seal_service.SEAL_FILE):
+    for name in (lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, SEAL_FILE):
         (dest / name).unlink()
 
     events = _repair(root)
 
     assert events[-1]["type"] == "done" and events[-1]["status"] == "valid" and events[-1]["report_id"]
-    assert sorted(events[-1]["written"]) == sorted([lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, seal_service.SEAL_FILE])
+    assert sorted(events[-1]["written"]) == sorted([lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, SEAL_FILE])
     assert [e["step"] for e in events if e["type"] == "step" and e["status"] == "done"] == ["inspect", "dates", "deployment", "preprocessing", "images", "seal"]
     after = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
     assert after["deployment_id"] == DEPLOYMENT_ID and after["latitude"] == 37.0 and after["location_name"] == "Doñana site 1"
@@ -98,8 +99,8 @@ def test_every_metadata_file_is_rebuilt_from_the_images_and_the_deployment_is_va
     assert [i["name"] for i in log["images"]] == sorted(p.name for p in dest.glob("*.JPEG")) and log["recovered"]
     assert all(i["date"] and i["final_hash"] for i in log["images"])
     assert json.loads((dest / lfs.IMAGES_FILE).read_text(encoding="utf-8"))["image_count"] == 3
-    assert json.loads((dest / seal_service.SEAL_FILE).read_text(encoding="utf-8"))["recovered"]
-    assert rep.inspect(root, "DONA", "R0003", DEPLOYMENT_ID)["status"] == "valid"
+    assert json.loads((dest / SEAL_FILE).read_text(encoding="utf-8"))["recovered"]
+    assert built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)["status"] == "valid"
 
 
 def test_the_timestamp_log_prevails_over_what_the_images_say(kept):
@@ -120,7 +121,7 @@ def test_without_a_log_the_period_is_the_one_left_in_deployment_json_or_the_imag
     root, dest = kept
     collection = dest.parent
     lfs.timestamp_log_path(collection).unlink()
-    assert rep.inspect(root, "DONA", "R0003", DEPLOYMENT_ID)["problems"] == []   # having no log is not a problem (#213)
+    assert built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)["problems"] == []   # having no log is not a problem (#213)
     (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
 
     events = _repair(root)
@@ -135,7 +136,7 @@ def test_what_is_left_of_deployment_json_is_kept(kept):
     metadata = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
     metadata.update({"setup_by": "Ana", "comments": "Near the pond", "camera_height": 1.2})
     (dest / lfs.DEPLOYMENT_METADATA_FILE).write_text(json.dumps(metadata), encoding="utf-8")
-    (dest / seal_service.SEAL_FILE).unlink()
+    (dest / SEAL_FILE).unlink()
 
     _repair(root)
 
@@ -146,7 +147,7 @@ def test_what_is_left_of_deployment_json_is_kept(kept):
 def test_what_the_images_fail_is_reported_and_the_repair_still_seals(kept):
     root, dest = kept
     (dest / "R0003-DONA_01__20240701_3.JPEG").write_bytes((dest / "R0003-DONA_01__20240701_2.JPEG").read_bytes())  # a duplicate, with the same date
-    (dest / seal_service.SEAL_FILE).unlink()
+    (dest / SEAL_FILE).unlink()
 
     events = _repair(root)
 
@@ -174,7 +175,7 @@ def test_a_deployment_with_no_images_gets_its_deployment_json_and_nothing_to_sea
     events = _repair(root)
 
     assert [e["step"] for e in events if e["type"] == "step" and e["status"] == "skipped"] == ["preprocessing", "images", "seal"]
-    assert (dest / lfs.DEPLOYMENT_METADATA_FILE).is_file() and not (dest / seal_service.SEAL_FILE).exists()
+    assert (dest / lfs.DEPLOYMENT_METADATA_FILE).is_file() and not (dest / SEAL_FILE).exists()
     assert events[-1]["status"] == "unsealed"
 
 
@@ -183,7 +184,7 @@ def test_it_says_what_is_missing_when_the_deployment_cannot_be_rebuilt(kept):
     (dest.parent.parent / lfs.LOCATIONS_FILE).write_text("[]", encoding="utf-8")
     (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
 
-    with pytest.raises(rep.RepairError, match="deployment.json can't be rebuilt"):
+    with pytest.raises(RepairError, match="deployment.json can't be rebuilt"):
         _repair(root)
 
 
@@ -191,8 +192,8 @@ def test_a_deployment_synced_from_trapper_is_never_repaired(kept):
     root, dest = kept
     lfs.write_images_file(dest, DEPLOYMENT_ID, [], source="trapper")
 
-    assert rep.inspect(root, "DONA", "R0003", DEPLOYMENT_ID)["status"] == "synced"
-    with pytest.raises(rep.RepairError, match="synced from TRAPPER"):
+    assert built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)["status"] == "synced"
+    with pytest.raises(RepairError, match="synced from TRAPPER"):
         _repair(root)
 
 
@@ -201,7 +202,7 @@ def test_the_collections_list_every_deployment_folder_whatever_state_it_is_in(ke
     (dest.parent / "R0003-DONA_02").mkdir()
     (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
 
-    found = rep.list_collections(root, "DONA")
+    found = built.repairing(root).list_collections("DONA")
 
     assert [c["name"] for c in found] == ["R0003"]
     by_id = {d["deployment_id"]: d for d in found[0]["deployments"]}
@@ -212,5 +213,5 @@ def test_the_collections_list_every_deployment_folder_whatever_state_it_is_in(ke
 @pytest.mark.parametrize("collection, deployment", [("Doñana", DEPLOYMENT_ID), ("R0003", "DONA-01"), ("R0009", DEPLOYMENT_ID), ("R0003", "R0003-OTHER_01")])
 def test_names_that_are_not_there_are_refused(kept, collection: str, deployment: str):
     root, _ = kept
-    with pytest.raises(rep.RepairError):
-        rep.inspect(root, "DONA", collection, deployment)
+    with pytest.raises(RepairError):
+        built.repairing(root).inspection("DONA", collection, deployment)

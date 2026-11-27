@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from tests.support import deployment_import_service as dis
+from tests.support import built
 from tests.support import local_folder_service as lfs
 from wildintel_uploader.entrypoints.wiring import build_timefix
 from wildintel_uploader.modules.timefix.domain import rules
@@ -68,7 +68,7 @@ def _timefix():
 
 
 def _times(folder):
-    return [dis._image_datetime(p).isoformat() for p in sorted(folder.glob("*.JPG"))]
+    return [built.file_info().dates([p]).get(p).isoformat() for p in sorted(folder.glob("*.JPG"))]
 
 
 KEPT = [{"location_id": LOCATION, "date": VISIT[0], "time": VISIT[1], "actions": ["Installation"]},

@@ -7,7 +7,8 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from tests.support import local_folder_service
-from tests.support import sync_service
+from tests.support import built
+from wildintel_uploader.modules.uploaders.domain.sync import wall_clock
 
 CREDS = ("https://trapper.example.org", "alice", "s3cret")
 PROJECT = {"pk": 2, "name": "Doñana", "acronym": "DONA"}
@@ -46,14 +47,14 @@ def _run(root: Path, names=("R0003", "Other")):
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=[n for n in names if n.startswith("R")]):
-        return sync_service.sync(CREDS, root, PROJECT, 10)
+        return built.synced(built.trapper_sync(root).sync(CREDS, PROJECT, 10))
 
 
 def test_wall_clock_follows_the_location_and_its_summer_time_setting():
-    assert sync_service.wall_clock("2024-07-01T08:00:00+00:00", "Europe/Madrid", False).hour == 10
-    assert sync_service.wall_clock("2024-07-01T08:00:00+00:00", "Europe/Madrid", True).hour == 9
-    assert sync_service.wall_clock("2024-12-01T08:00:00Z", "Europe/Madrid", False).hour == 9
-    assert sync_service.wall_clock("2024-07-01T08:00:00+00:00", None, False).hour == 8
+    assert wall_clock("2024-07-01T08:00:00+00:00", "Europe/Madrid", False).hour == 10
+    assert wall_clock("2024-07-01T08:00:00+00:00", "Europe/Madrid", True).hour == 9
+    assert wall_clock("2024-12-01T08:00:00Z", "Europe/Madrid", False).hour == 9
+    assert wall_clock("2024-07-01T08:00:00+00:00", None, False).hour == 8
 
 
 def test_creates_the_expected_structure(tmp_path: Path):
@@ -119,7 +120,7 @@ def test_collection_names_keeps_those_starting_with_r_of_the_classification_proj
     client = MagicMock()
     client.classification_projects.where_project_collections.return_value = [SimpleNamespace(name=n) for n in ("R0002", "Pilot", "r0001", "R0002")]
     with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.client", return_value=client):
-        assert sync_service.collection_names(CREDS, 10) == ["r0001", "R0002"]
+        assert built.trapper_sync().collection_names(CREDS, 10) == ["r0001", "R0002"]
 
 
 def test_only_the_chosen_collections_are_synced(tmp_path: Path):
@@ -127,7 +128,7 @@ def test_only_the_chosen_collections_are_synced(tmp_path: Path):
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=["R0003", "R0004"]):
-        result = sync_service.sync(CREDS, tmp_path, PROJECT, 10, ["r0004"])
+        result = built.synced(built.trapper_sync(tmp_path).sync(CREDS, PROJECT, 10, ["r0004"]))
 
     assert result["collections"] == ["R0004"]
     assert not (tmp_path / "DONA" / "R0003").exists()
@@ -138,7 +139,7 @@ def test_only_the_chosen_deployments_are_synced_and_the_others_are_not_called_un
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=["R0003"]):
-        result = sync_service.sync(CREDS, tmp_path, PROJECT, 10, None, ["r0003-dona_02"])
+        result = built.synced(built.trapper_sync(tmp_path).sync(CREDS, PROJECT, 10, None, ["r0003-dona_02"]))
 
     assert result["created"]["deployments"] == ["R0003-DONA_02"]
     assert not (tmp_path / "DONA" / "R0003" / "R0003-DONA_01").exists()
@@ -179,7 +180,7 @@ def _run_downloading(root: Path, media=MEDIA, fail=(), only=("R0003-DONA_01",)):
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=["R0003"]):
-        return sync_service.sync(CREDS, root, PROJECT, 10, only_deployments=list(only), download_images=True), listed
+        return built.synced(built.trapper_sync(root).sync(CREDS, PROJECT, 10, only_deployments=list(only), download_images=True)), listed
 
 
 def test_the_images_are_not_downloaded_unless_asked(tmp_path: Path):
