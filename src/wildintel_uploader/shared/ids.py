@@ -3,7 +3,7 @@
 Every record that others refer to (a research project, a location, a camera, an SD card, a trapper, a role, a visit) has an `id`, generated when it is kept: a UUID, opaque,
 that never changes and is never typed. What a person calls it — a location's id (`DONA_01`), a card's label, a trapper's username — is another thing, and can be corrected: the
 records that refer to it point to its `id`, so nothing else has to be rewritten. A visit does not say "camera BR5071050724, card A12, Ana Pérez": it says the camera, the card
-and the trapper by their ids, and the app tells it with their names. (`local_folder_service` does the telling, as it does with the instant of a visit.)
+and the trapper by their ids, and the app tells it with their names. (The visits do the telling — visits.domain.references —, as they do with the instant of a visit.)
 
 What was kept before the ids existed gets one the first time it is read: made from what called it (`legacy_id`), so it is the same whenever and wherever it is read, and kept from
 then on — which is what makes a backup of an earlier version restore with its visits still pointing to the same things.

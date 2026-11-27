@@ -4,7 +4,7 @@
     store = storage.open_store(collections_dir)        # a ProjectStore: see storage.base
     store.read_records("DONA", "visits")
 
-The services (`local_folder_service` and those that use it) only ever go through a `ProjectStore`, so **keeping the records in a database is adding a backend, not changing
+The modules only ever go through a `ProjectStore`, so **keeping the records in a database is adding a backend, not changing
 the app**: subclass `ProjectStore`, make a function that gives one for the collections folder, and `register` it under a name —
 
     storage.register("sqlite", lambda root: SqliteStore(root))

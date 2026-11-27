@@ -184,7 +184,7 @@ _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 DEFAULT_TIMEZONE = "UTC"
-# The names of UTC — as core.services.visit_time has them: a location is UTC for the catalog when it is for the visits.
+# The names of UTC — as the visits' wall clock has them (visits.domain.wall_clock): a location is UTC for the catalog when it is for the visits.
 _UTC_ZONES = frozenset({"utc", "etc/utc", "etc/uct", "uct", "gmt", "etc/gmt", "zulu", "etc/zulu", "universal", "etc/universal", "z"})
 
 

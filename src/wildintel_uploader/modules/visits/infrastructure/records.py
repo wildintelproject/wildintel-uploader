@@ -50,12 +50,12 @@ class VisitRecord(BaseModel):
     calibration: Optional[bool] = None
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
-    # The deployment this visit started — the images of the card it left, once they are imported (see local_folder_service.closed_visits).
+    # The deployment this visit started — the images of the card it left, once they are imported (see KeptVisits.closed).
     deployment_id: Optional[str] = None
     # Where the visit is in its life: deployed (it left a camera that is still out), collected (its card was collected), stolen, or not visited (it could not be made).
     # Kept when the visit is added, and changed when a later visit gives it a deployment — see visit_deployments.refresh_states.
     state: Optional[Literal["deployed", "collected", "stolen", "not_visited", "no_camera"]] = None
-    # When the visit was registered and when it was last changed (ISO 8601, UTC, with a Z): written by the app when the visit is kept (see services.audit), never typed —
+    # When the visit was registered and when it was last changed (ISO 8601, UTC, with a Z): written by the app when the visit is kept (see shared.audit), never typed —
     # what is sent for them is not taken.
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

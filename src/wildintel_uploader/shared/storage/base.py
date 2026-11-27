@@ -7,7 +7,7 @@ list of them under a research project can be a backend: a folder of JSON files t
 What is **not** a record stays where it is: the images and what is written beside them (a deployment's `deployment.json`, `images.json`, the logs of a collection…) are
 files of the collections folder, not rows of a table.
 
-The rules of the records — the instants of the visits, the dates `created_at` and `updated_at`, which location can be removed — are the services' (`local_folder_service`),
+The rules of the records — the instants of the visits, the dates `created_at` and `updated_at`, which location can be removed — are the modules',
 above this layer: a backend only keeps and gives back. It never has to know what a visit is.
 """
 from __future__ import annotations
@@ -79,7 +79,7 @@ class ProjectStore(ABC):
     @abstractmethod
     def delete_project(self, research_project_id: str) -> None:
         """Forgets the research project and every record it has, **for good** — a purge. The app does not use it to delete: it removes *logically* (`deleted_at`, see
-        services.audit), and keeps. Nothing happens when it is not kept."""
+        shared.audit), and keeps. Nothing happens when it is not kept."""
 
     def owned_names(self, research_project_id: str) -> set[str]:
         """The names the store keeps inside the research project's folder of the collections folder — a store that keeps its records elsewhere keeps none. What else is in the

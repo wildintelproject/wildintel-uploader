@@ -1,6 +1,6 @@
 """How the collections folder holds the deployments: <collections folder>/<research project>/<collection>/<deployment id>, with collection.json,
 deployment.json and images.json beside the images, the logs of a collection (its FileTimestampLog and FieldworkLog), and what was imported before
-into a research project. Moved from local_folder_service (#248), which still gives these names."""
+into a research project."""
 from __future__ import annotations
 
 import csv

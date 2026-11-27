@@ -51,7 +51,7 @@ class CollectionPathRequest(BaseModel):
 
 
 class PreprocessingRequest(BaseModel):
-    """What to do to the images as they are imported (see services.preprocessing_service)."""
+    """What to do to the images as they are imported (see modules.preprocessing)."""
 
     rename: bool = True
     resize: bool = True
@@ -69,7 +69,7 @@ class PreprocessingRequest(BaseModel):
 
 class ImportLocalRequest(BaseModel):
     """Organizes a deployment into a local collection folder — no Trapper
-    account involved (see services.local_folder_service)."""
+    account involved (see application.imports)."""
 
     source_dir: str = Field(min_length=1)
     collection_dir: str = Field(min_length=1)

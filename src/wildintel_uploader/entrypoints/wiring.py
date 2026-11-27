@@ -1,8 +1,8 @@
 """Where the modules are put together (#248) — the composition root: the one place that chooses the implementation of each module's port in (its use
 cases) and of its ports out (the adapters).
 
-Each module is built by a function here (`build_…`): the Dishka providers below use them, and so does the code from before that still calls the old
-services (core/services/local_folder_service.py), so that there is one way of putting a module together. Dishka works out the rest: to give a
+Each module is built by a function here (`build_…`): the Dishka providers below use them, and so do the entry points that build one on their own,
+so that there is one way of putting a module together. Dishka works out the rest: to give a
 CatalogService it gives the SettingsService the catalog asks for.
 
 The entry points take the modules from the container made here — the web API through dishka's FastAPI integration (`web/main.py`), the command line
