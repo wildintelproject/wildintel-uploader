@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from wildintel_uploader.modules.postvalidation.domain.ports import CameraLevels, CameraRecords, PostvalidationReports
+from wildintel_uploader.modules.reports.domain.ports import ReportsService
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +25,16 @@ class LevelsInUse(CameraLevels):
 
 
 class SavedPostvalidationReports(PostvalidationReports):
+    """Through the contract of the reports."""
+
+    def __init__(self, reports: ReportsService) -> None:
+        self._reports = reports
+
     def postvalidation(self, result: dict, deployment_id: str, folder: Path, parameters: dict) -> str | None:
         """None when it can't be written: that is no reason to fail what it reports."""
         from wildintel_uploader.core.logging_setup import debugging
-        from wildintel_uploader.core.services import report_service
         try:
-            return report_service.save(report_service.postvalidation_report(result, deployment_id, folder, parameters))
+            return self._reports.save_postvalidation(result, deployment_id, folder, parameters)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not write the report: %s", exc, exc_info=debugging())
             return None

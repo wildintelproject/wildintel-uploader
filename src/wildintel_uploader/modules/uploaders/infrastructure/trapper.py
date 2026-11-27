@@ -10,6 +10,7 @@ from typing import Any, TypeVar
 from wildintel_uploader.modules.uploaders.domain.models import (
     Account, Credentials, Forbidden, NotAuthorized, NotThere, TimedOut, Unreachable, UploaderError,
 )
+from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, UploadReports
 
 logger = logging.getLogger(__name__)
@@ -170,6 +171,10 @@ class CollectionsFolder(KeptCollections):
 
 
 class SavedUploadReports(UploadReports):
+    """Through the contract of the reports."""
+
+    def __init__(self, reports: ReportsService) -> None:
+        self._reports = reports
+
     def upload(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str | None:
-        from wildintel_uploader.core.services import report_service
-        return report_service.save(report_service.upload_report(collection, project, items, started_at=started_at, finished_at=finished_at))
+        return self._reports.save_upload(collection, project, items, started_at, finished_at)

@@ -8,6 +8,7 @@ from pathlib import Path
 from wildintel_uploader.modules.prevalidation.domain.models import PrevalidationError
 from wildintel_uploader.modules.prevalidation.domain.ports import ImportedImages, PrevalidationReports, PrevalidationSettings
 from wildintel_uploader.modules.prevalidation.domain.settings import ValidationSettings
+from wildintel_uploader.modules.reports.domain.ports import ReportsService
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +34,16 @@ class ValidationInUse(PrevalidationSettings):
 
 
 class SavedValidationReports(PrevalidationReports):
+    """Through the contract of the reports."""
+
+    def __init__(self, reports: ReportsService) -> None:
+        self._reports = reports
+
     def validation(self, result: dict, folder: Path, checks: frozenset[str] | None) -> str | None:
         """None when it can't be written: that is no reason to fail what it reports."""
         from wildintel_uploader.core.logging_setup import debugging
-        from wildintel_uploader.core.services import report_service
         try:
-            return report_service.save(report_service.validation_report(result, folder, checks))
+            return self._reports.save_validation(result, folder, checks)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not write the report: %s", exc, exc_info=debugging())
             return None

@@ -10,7 +10,7 @@ T = TypeVar("T")
 
 
 def _old():
-    from wildintel_uploader.core.services import report_service
+    from wildintel_uploader.modules.reports.infrastructure import report_service
     return report_service
 
 
@@ -37,3 +37,9 @@ class ReportFiles(KeptReports):
 
     def delete(self, report_id: str) -> None:
         _ours(lambda: _old().delete(report_id))
+
+    def save(self, kind: str, *args, **kwargs) -> str:
+        rs = _old()
+        build = {"validation": rs.validation_report, "postvalidation": rs.postvalidation_report, "preprocessing": rs.preprocessing_report,
+                 "visits": rs.visits_import_report, "upload": rs.upload_report}[kind]
+        return rs.save(build(*args, **kwargs))

@@ -8,6 +8,7 @@ from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
+from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.visits.domain.models import VisitsFailed
 from wildintel_uploader.modules.visits.domain.ports import (
     Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitFile, VisitReports, VisitRepository, VisitSettings,
@@ -245,11 +246,15 @@ class FolderUploads(Uploads):
 
 
 class SavedVisitReports(VisitReports):
+    """Through the contract of the reports."""
+
+    def __init__(self, reports: ReportsService) -> None:
+        self._reports = reports
+
     def import_report(self, project: str, result: dict, saved: int) -> str | None:
         """The report of an import, kept with the other reports — its id; None when it could not be written."""
-        from wildintel_uploader.core.services import report_service
         try:
-            return report_service.save(report_service.visits_import_report(project, result, saved))
+            return self._reports.save_visits_import(project, result, saved)
         except OSError:
             return None
 

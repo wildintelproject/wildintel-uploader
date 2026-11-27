@@ -81,6 +81,11 @@ from wildintel_uploader.shared import storage
 # ── how each module is built ──
 
 
+def build_reports() -> ReportsService:
+    """The reports, as files in the reports folder — what the other modules keep the reports of what they did through."""
+    return ReportsUseCases(ReportFiles())
+
+
 def build_settings(store: SettingsStore | None = None, *, activity_log: ActivityLog | None = None, machine: Machine | None = None,
                    record_storage: RecordStorage | None = None) -> SettingsService:
     """The settings: their use cases over the TOML files of the user's config folder, the log of the app, this computer and the backends of the
@@ -118,19 +123,19 @@ def file_info() -> FileInfoService:
 def build_prevalidation(info: FileInfoService | None = None) -> PrevalidationService:
     """The prevalidation: the validators of the images over what is known of the files, the images gone through in parallel."""
     return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS, imported=PreprocessedImages(), settings=ValidationInUse(),
-                                 reports=SavedValidationReports())
+                                 reports=SavedValidationReports(build_reports()))
 
 
 def build_postvalidation(info: FileInfoService | None = None) -> PostvalidationService:
     """The postvalidation: the validators of a deployment over its images and what is known of them."""
     return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(), levels=LevelsInUse(),
-                                  reports=SavedPostvalidationReports())
+                                  reports=SavedPostvalidationReports(build_reports()))
 
 
 def build_preprocessing(info: FileInfoService | None = None) -> PreprocessingService:
     """The preprocessing: its steps over what is known of the files, in the collections folder as the rest of the app keeps it, with as many
     images at once as the settings say."""
-    return PreprocessingUseCases(info or file_info(), CollectionFolders(), SavedReports(), image_steps=preprocessing_steps.IMAGE_STEPS,
+    return PreprocessingUseCases(info or file_info(), CollectionFolders(), SavedReports(build_reports()), image_steps=preprocessing_steps.IMAGE_STEPS,
                                  folder_steps=preprocessing_steps.FOLDER_STEPS, workers=config.workers, exiftool=lambda: exiftool_adapter.exiftool_path())
 
 
@@ -145,7 +150,7 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     root = collections_dir or catalog_collections_dir()
     settings = settings or build_settings()
     return VisitsUseCases(KeptVisits(root), CatalogOfTheVisits(root), deployments=DeploymentsOfTheVisits(root), file=CsvVisitFile(),
-                          sources=build_sources(settings), uploads=FolderUploads(root), reports=SavedVisitReports(), history=StoredStateHistory(),
+                          sources=build_sources(settings), uploads=FolderUploads(root), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
                           settings=FieldlogInUse(), clock=AuditClock())
 
 
@@ -165,7 +170,7 @@ def build_timefix() -> TimeFixService:
 
 def build_uploaders() -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder as the code of before keeps it."""
-    return UploadersUseCases(TrapperClient(), CollectionsFolder(), SavedUploadReports())
+    return UploadersUseCases(TrapperClient(), CollectionsFolder(), SavedUploadReports(build_reports()))
 
 
 def build_backup() -> BackupService:
@@ -290,7 +295,7 @@ class BackupProvider(Provider):
 class ReportsProvider(Provider):
     @provide(scope=Scope.APP)
     def service(self) -> ReportsService:
-        return ReportsUseCases(ReportFiles())
+        return build_reports()
 
 
 def make_app_container() -> Container:

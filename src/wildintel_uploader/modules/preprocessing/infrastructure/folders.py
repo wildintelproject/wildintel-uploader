@@ -13,6 +13,7 @@ from typing import TypeVar
 from wildintel_uploader.modules.preprocessing.domain.models import STAGING_DIR, DeploymentLike, ImageWork, PreprocessingError
 from wildintel_uploader.modules.preprocessing.domain.ports import DeploymentFolders, Reports
 from wildintel_uploader.modules.preprocessing.infrastructure.images import dimensions
+from wildintel_uploader.modules.reports.domain.ports import ReportsService
 
 T = TypeVar("T")
 # On Windows a file that is open for a moment (the antivirus, the indexer, a viewer, ExifTool finishing) keeps a folder from being renamed: it is
@@ -146,6 +147,10 @@ class CollectionFolders(DeploymentFolders):
 
 
 class SavedReports(Reports):
+    """Through the contract of the reports."""
+
+    def __init__(self, reports: ReportsService) -> None:
+        self._reports = reports
+
     def preprocessing(self, records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> str | None:
-        from wildintel_uploader.core.services import report_service
-        return report_service.save(report_service.preprocessing_report(records, skipped, deployment_id, source, dest, options))
+        return self._reports.save_preprocessing(records, skipped, deployment_id, source, dest, options)
