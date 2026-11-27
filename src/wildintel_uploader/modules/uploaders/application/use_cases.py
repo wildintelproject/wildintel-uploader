@@ -6,12 +6,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, NotThere, UploaderError
-from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, UploadersService, UploadReports
+from wildintel_uploader.modules.uploaders.domain.ports import Deployment, DeploymentUploads, KeptCollections, Trapper, UploadersService, UploadReports
 
 
 class UploadersUseCases(UploadersService):
-    def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports) -> None:
-        self._trapper, self._kept, self._reports = trapper, kept, reports
+    def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports, uploads: DeploymentUploads | None = None) -> None:
+        self._trapper, self._kept, self._reports, self._uploads = trapper, kept, reports, uploads
 
     def _record(self, project: str) -> dict:
         record = self._kept.project(project)
@@ -111,6 +111,17 @@ class UploadersUseCases(UploadersService):
 
     def upload_report(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str | None:
         return self._reports.upload(collection, project, items, started_at, finished_at)
+
+    # where the deployments kept were uploaded
+
+    def trapper_state(self, project: str, deployment_id: str | None) -> tuple[str | None, bool]:
+        return self._uploads.trapper_state(project, deployment_id)
+
+    def uploads_of(self, project: str, deployment_id: str) -> list[dict]:
+        return self._uploads.uploads_of(project, deployment_id)
+
+    def upload_states(self, project: str, imported: str | None, deployment_id: str) -> list[dict]:
+        return self._uploads.upload_states(project, imported, deployment_id)
 
     # bringing back what TRAPPER has
 

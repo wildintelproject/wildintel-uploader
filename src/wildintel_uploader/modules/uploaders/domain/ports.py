@@ -61,6 +61,19 @@ class UploadersService(ABC):
     @abstractmethod
     def upload_report(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str | None: ...
 
+    # where the deployments kept were uploaded
+    @abstractmethod
+    def trapper_state(self, project: str, deployment_id: str | None) -> tuple[str | None, bool]:
+        """When the deployment was uploaded to TRAPPER, and whether it is there — uploaded from here, or synced from there."""
+
+    @abstractmethod
+    def uploads_of(self, project: str, deployment_id: str) -> list[dict]:
+        """One upload for each platform it was sent to: "uploaded" with the day and what it did, or "synced"."""
+
+    @abstractmethod
+    def upload_states(self, project: str, imported: str | None, deployment_id: str) -> list[dict]:
+        """The upload to each uploader in use: planned, done or failed."""
+
     # bringing back what TRAPPER has
     @abstractmethod
     def collection_names(self, account: Account, research_project_pk: int, classification_project_pk: int) -> list[dict]: ...
@@ -144,6 +157,17 @@ class KeptCollections(ABC):
     @abstractmethod
     def note_failure(self, project: str, deployment_id: str, destination: str, note: str | None) -> None:
         """Writes down how the upload of a deployment went: a failure, with why, or that it worked (None)."""
+
+
+class DeploymentUploads(ABC):
+    @abstractmethod
+    def trapper_state(self, project: str, deployment_id: str | None) -> tuple[str | None, bool]: ...
+
+    @abstractmethod
+    def uploads_of(self, project: str, deployment_id: str) -> list[dict]: ...
+
+    @abstractmethod
+    def upload_states(self, project: str, imported: str | None, deployment_id: str) -> list[dict]: ...
 
 
 class UploadReports(ABC):

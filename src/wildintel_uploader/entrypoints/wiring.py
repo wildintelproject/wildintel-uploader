@@ -68,10 +68,11 @@ from wildintel_uploader.modules.timefix.infrastructure.legacy import ImagesWithE
 from wildintel_uploader.modules.uploaders.application.use_cases import UploadersUseCases
 from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
 from wildintel_uploader.modules.uploaders.infrastructure.trapper import CollectionsFolder, SavedUploadReports, TrapperClient
+from wildintel_uploader.modules.uploaders.infrastructure.uploads import FolderUploads
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
 from wildintel_uploader.modules.visits.infrastructure.legacy import (
-    AuditClock, CatalogOfTheVisits, CsvVisitFile, DeploymentsOfTheVisits, FieldlogInUse, FolderUploads, SavedVisitReports, StoredStateHistory,
+    AuditClock, CatalogOfTheVisits, CsvVisitFile, DeploymentsOfTheVisits, FieldlogInUse, SavedVisitReports, StoredStateHistory, UploadsOfTheUploaders,
 )
 from wildintel_uploader.modules.visits.infrastructure.legacy import StoredVisits as KeptVisits
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
@@ -150,7 +151,7 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     root = collections_dir or catalog_collections_dir()
     settings = settings or build_settings()
     return VisitsUseCases(KeptVisits(root), CatalogOfTheVisits(root), deployments=DeploymentsOfTheVisits(root), file=CsvVisitFile(),
-                          sources=build_sources(settings), uploads=FolderUploads(root), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
+                          sources=build_sources(settings), uploads=UploadsOfTheUploaders(build_uploaders(root)), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
                           settings=FieldlogInUse(), clock=AuditClock())
 
 
@@ -168,9 +169,10 @@ def build_timefix() -> TimeFixService:
     return TimeFixUseCases(PeriodsOfTheVisits(), ImagesWithExifTool())
 
 
-def build_uploaders() -> UploadersService:
-    """The uploaders: TRAPPER through its client, the collections folder as the code of before keeps it."""
-    return UploadersUseCases(TrapperClient(), CollectionsFolder(), SavedUploadReports(build_reports()))
+def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
+    """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — as the code of before keeps it."""
+    return UploadersUseCases(TrapperClient(), CollectionsFolder(), SavedUploadReports(build_reports()),
+                             FolderUploads(collections_dir or catalog_collections_dir()))
 
 
 def build_backup() -> BackupService:

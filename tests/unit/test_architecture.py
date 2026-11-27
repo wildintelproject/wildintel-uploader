@@ -72,10 +72,11 @@ STILL_COUPLED = {
     "timefix/infrastructure/timefix_service.py": {"camera_info", "deployment_import_service", "local_folder_service"},
     "uploaders/infrastructure/sync_service.py": {"deployment_import_service", "local_folder_service"},
     "uploaders/infrastructure/trapper.py": {"deployment_import_service", "local_folder_service"},
+    "uploaders/infrastructure/uploads.py": {"local_folder_service"},
     "uploaders/infrastructure/trapper_upload_service.py": {"deployment_import_service", "local_folder_service", "preprocessing_service"},
     "visits/infrastructure/deployments.py": {"local_folder_service"},
     "visits/infrastructure/kept_visits.py": {"local_folder_service"},
-    "visits/infrastructure/legacy.py": {"local_folder_service", "trapper_upload_service"},
+    "visits/infrastructure/legacy.py": {"local_folder_service"},
 }
 
 
