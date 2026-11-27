@@ -53,6 +53,9 @@ class ExifToolReader(MetadataReader):
     def available(self) -> bool:
         return exiftool_path() is not None
 
+    def location(self) -> str | None:
+        return exiftool_path()
+
     def read(self, paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | None]]:
         exiftool = exiftool_path()
         if exiftool is None:

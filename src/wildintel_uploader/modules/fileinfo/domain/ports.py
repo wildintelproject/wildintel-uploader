@@ -51,6 +51,10 @@ class FileInfoService(ABC):
         that asks meanwhile waits for it rather than reading them again. Nothing without ExifTool, or with no images. Gives the thread."""
 
     @abstractmethod
+    def exiftool_path(self) -> str | None:
+        """Where ExifTool is — None when there is none."""
+
+    @abstractmethod
     def forget(self) -> None:
         """Forgets everything, in memory and on disk."""
 
@@ -63,6 +67,10 @@ class MetadataReader(ABC):
     @abstractmethod
     def available(self) -> bool:
         """Whether there is one to read with."""
+
+    def location(self) -> str | None:
+        """Where the reader is, when it is a program — None otherwise."""
+        return None
 
     @abstractmethod
     def read(self, paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | None]]:

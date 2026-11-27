@@ -21,9 +21,15 @@ from PIL import Image
 
 from wildintel_uploader.core import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import camera_info
 from wildintel_uploader.modules.fileinfo.domain import models as _fileinfo
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
+from wildintel_uploader.modules.fileinfo.domain.models import common_value
+
+
+def _files():
+    """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.file_info()
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +178,8 @@ def check_paths(source_dir: Path, dest_dir: Path) -> None:
 
 
 def _image_datetime(path: Path) -> datetime | None:
-    """The capture date of one image (see camera_info.read_dates). For many, read them all at once with read_dates: one run of ExifTool for all."""
-    return camera_info.read_dates([path]).get(path)
+    """The capture date of one image (see modules.fileinfo). For many, read them all at once with read_dates: one run of ExifTool for all."""
+    return _files().dates([path]).get(path)
 
 
 def _files_and_images(source_dir: Path) -> tuple[list[Path], list[Path]]:
@@ -201,13 +207,13 @@ def scan_folder(source_dir: Path) -> dict:
 
 
 def prefetch_metadata(source_dir: Path, exif_fields: list[str] | None = None) -> None:
-    """Starts reading the EXIF of a folder's images in the background (see camera_info.prefetch) — what the checks, the details and the preprocessing
+    """Starts reading the EXIF of a folder's images in the background (see modules.fileinfo) — what the checks, the details and the preprocessing
     will ask —, right after it is scanned: while the user chooses the checks, ExifTool is already reading. Nothing happens if it is not a folder."""
     if not source_dir.is_dir():
         return
     _, images = _files_and_images(source_dir)
     extra = [f for f in (exif_fields or []) if f.lower() not in _fileinfo.CAMERA_FIELDS and f.lower() != "datetimeoriginal"]
-    camera_info.prefetch(images, extra)
+    _files().prefetch(images, extra)
 
 
 def guess_details(source_dir: Path) -> dict:
@@ -224,16 +230,16 @@ def guess_details(source_dir: Path) -> dict:
 
     dates: list[datetime] = []
     dated_images = 0
-    for dt in camera_info.read_dates(images).values():
+    for dt in _files().dates(images).values():
         if dt is not None:
             dates.append(dt)
             dated_images += 1
 
-    cameras, reader = camera_info.read_cameras(images)
+    cameras, reader = _files().cameras(images)
     models = [cameras[p].model for p in images]
     ids = [cameras[p].camera_id for p in images]
-    camera_model = camera_info.common_value(models)
-    camera_id = camera_info.common_value(ids)
+    camera_model = common_value(models)
+    camera_id = common_value(ids)
 
     warnings: list[str] = []
     if not images:
@@ -432,8 +438,8 @@ def copied_images_info(dest: Path) -> list[dict]:
     the EXIF says, so that what comes after does not read the images again (#140); the dates and the camera in one ExifTool run."""
     entries = []
     ordered = sorted((p for p in dest.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: _natural_key(p.relative_to(dest)))
-    dates = camera_info.read_dates(ordered)
-    cameras, _ = camera_info.read_cameras(ordered)   # read with the dates: no other run
+    dates = _files().dates(ordered)
+    cameras, _ = _files().cameras(ordered)   # read with the dates: no other run
     for path in ordered:
         taken = dates[path]
         try:

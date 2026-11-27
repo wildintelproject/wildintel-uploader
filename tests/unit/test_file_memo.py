@@ -196,7 +196,7 @@ def test_the_exif_read_ahead_is_what_the_steps_find_even_when_they_ask_while_it_
     runs = _fake_exiftool(monkeypatch, {p: {"ISO": "100"} for p in images})
     reading, slow, real = threading.Event(), threading.Event(), exiftool_adapter._tags_with_exiftool
     monkeypatch.setattr(exiftool_adapter, "_tags_with_exiftool", lambda *a: (reading.set(), slow.wait(5), real(*a))[2])
-    monkeypatch.setattr(camera_info, "PREFETCH", True)
+    monkeypatch.setattr("wildintel_uploader.modules.fileinfo.application.use_cases.PREFETCH", True)
 
     ahead = camera_info.prefetch(images, ["ISO"])
     assert reading.wait(5)   # ExifTool is reading them
@@ -212,7 +212,7 @@ def test_the_exif_read_ahead_is_what_the_steps_find_even_when_they_ask_while_it_
 
 
 def test_nothing_is_read_ahead_without_exiftool_or_without_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(camera_info, "PREFETCH", True)
+    monkeypatch.setattr("wildintel_uploader.modules.fileinfo.application.use_cases.PREFETCH", True)
     monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
     assert camera_info.prefetch([_jpeg(tmp_path / "a.jpg")]) is None
     monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: "exiftool")

@@ -98,7 +98,7 @@ def test_scan_folder(tmp_path: Path):
 def test_scan_folder_starts_reading_the_exif_of_its_images_with_the_fields_of_the_settings(tmp_path: Path):
     """#140: while the user chooses the checks, ExifTool is already reading what they will ask."""
     _make_jpeg(tmp_path / "a.jpg", "2024:09:04 13:10:00")
-    with patch("wildintel_uploader.core.services.deployment_import_service.camera_info.prefetch") as prefetch:
+    with patch("wildintel_uploader.modules.fileinfo.application.use_cases.FileInfoUseCases.prefetch") as prefetch:
         _client().post("/api/deployment-import/scan-folder", json={"path": str(tmp_path)})
         _client().post("/api/deployment-import/scan-folder", json={"path": str(tmp_path / "empty")})   # not a folder: nothing
 

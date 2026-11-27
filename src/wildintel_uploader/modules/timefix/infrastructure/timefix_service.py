@@ -31,8 +31,14 @@ import subprocess
 from pathlib import Path
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.services import camera_info, local_folder_service
+from wildintel_uploader.core.services import local_folder_service
 from wildintel_uploader.core.services import deployment_import_service as dis
+
+
+def _files():
+    """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.file_info()
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +116,7 @@ def timeline(folder: str, period: tuple[dt.datetime, dt.datetime] | None = None,
     settings = settings or config.load_settings()
     folder = _dir(folder)
     images = _images(folder)
-    read = camera_info.read_dates(images)   # one run of ExifTool for all of them (#227)
+    read = _files().dates(images)   # one run of ExifTool for all of them (#227)
     times = [read[p] for p in images]
     tolerance = dt.timedelta(hours=settings.POSTVALIDATION.tolerance_hours)
     lo, hi = (period[0] - tolerance, period[1] + tolerance) if period else (None, None)
@@ -200,7 +206,7 @@ def shift(folder: str, period: tuple[dt.datetime, dt.datetime] | None, first: st
     path = _dir(folder)
     if not offset_seconds:
         raise TimeFixError("An offset of 0 changes nothing.")
-    exiftool = camera_info.exiftool_path()
+    exiftool = _files().exiftool_path()
     if exiftool is None:
         raise TimeFixError("Fixing the dates needs ExifTool, and it isn't installed.")
     run = _run(_images(path), first, last)

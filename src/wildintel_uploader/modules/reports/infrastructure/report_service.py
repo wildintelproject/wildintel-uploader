@@ -24,7 +24,13 @@ from pathlib import Path
 from typing import Iterable
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.services import camera_info, deployment_import_service as dis
+from wildintel_uploader.core.services import deployment_import_service as dis
+
+
+def _files():
+    """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.file_info()
 
 KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload", "visits")
 DEPLOYMENT = "(deployment)"
@@ -98,7 +104,7 @@ class _Builder:
             return
         root = Path(self.source_dir)
         names = sorted({e["identifier"] for e in self.entries if e["status"] == "failed" and e["identifier"] != DEPLOYMENT})
-        read = camera_info.read_dates([root / n for n in names])
+        read = _files().dates([root / n for n in names])
         taken = {n: read[root / n] for n in names}
         for e in self.entries:
             when = taken.get(e["identifier"]) if e["status"] == "failed" else None

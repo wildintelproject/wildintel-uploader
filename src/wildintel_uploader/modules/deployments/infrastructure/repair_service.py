@@ -33,11 +33,17 @@ from pydantic import ValidationError
 
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import camera_info, local_folder_service, report_service, seal_service
+from wildintel_uploader.core.services import local_folder_service, report_service, seal_service
 from wildintel_uploader.core.services import deployment_import_service as dis
 from wildintel_uploader.core.services import preprocessing_service as pre
 from wildintel_uploader.core.services.deployment_import_service import DeploymentImportError
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
+
+
+def _files():
+    """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.file_info()
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +186,7 @@ def _options_of(old: dict | None, location_time: dict, name_zone: str | None) ->
 
 def _xmp(files: list[Path]) -> dict[Path, dict]:
     """What the XMP of each image says — the identifier and the source hash the preprocessing wrote — if ExifTool is there."""
-    exiftool = camera_info.exiftool_path()
+    exiftool = _files().exiftool_path()
     if not exiftool or not files:
         return {}
     found: dict[Path, dict] = {}
@@ -280,7 +286,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
 
         # ── when it was: the timestamp log prevails over the images ──
         yield step("dates", "running", "Reading the capture dates and the timestamp log…")
-        dates = camera_info.read_dates(images)   # one run of ExifTool for all of them (#227)
+        dates = _files().dates(images)   # one run of ExifTool for all of them (#227)
         times = {p: pre._camera_time(p, options, dates) for p in images}
         exif_times = [t[0] for t in times.values() if t[2] == "exif"] or [t[0] for t in times.values()]
         computed = (min(exif_times), max(exif_times)) if exif_times else None
@@ -310,7 +316,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
 
         # ── deployment.json ──
         yield step("deployment", "running", "Writing deployment.json…")
-        cameras, _ = camera_info.read_cameras(images)
+        cameras, _ = _files().cameras(images)
         models = {c.model for c in cameras.values() if c.model}
         ids = {c.camera_id for c in cameras.values() if c.camera_id}
         fields_: dict = {

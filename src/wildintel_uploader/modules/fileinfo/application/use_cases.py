@@ -14,6 +14,8 @@ from wildintel_uploader.modules.fileinfo.domain.ports import (
 )
 
 logger = logging.getLogger(__name__)
+# Whether prefetch reads ahead at all: the tests turn it off (conftest), so that no reading started by one test is still running in the next.
+PREFETCH = True
 
 
 class FileInfoUseCases(FileInfoService):
@@ -114,7 +116,7 @@ class FileInfoUseCases(FileInfoService):
         return found
 
     def prefetch(self, paths: list[Path], tags: list[str] | None = None) -> threading.Thread | None:
-        if not paths or not self._reader.available():
+        if not PREFETCH or not paths or not self._reader.available():
             return None
 
         def run() -> None:
@@ -163,6 +165,9 @@ class FileInfoUseCases(FileInfoService):
             if digest is not None:
                 self._remember(stamp, algorithm, digest)
         return digest
+
+    def exiftool_path(self) -> str | None:
+        return self._reader.location()
 
     def forget(self) -> None:
         self._memory.clear()

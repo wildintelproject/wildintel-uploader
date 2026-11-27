@@ -77,7 +77,8 @@ def test_scan_folder_only_counts_the_files_and_the_images(tmp_path: Path):
 def test_scan_folder_does_not_open_the_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 13:10:00")
     monkeypatch.setattr(svc.Image, "open", lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened an image")))
-    monkeypatch.setattr(svc.camera_info, "read_cameras", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read the cameras")))
+    from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
+    monkeypatch.setattr(FileInfoUseCases, "cameras", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read the cameras")))
 
     assert svc.scan_folder(tmp_path)["image_count"] == 1
 

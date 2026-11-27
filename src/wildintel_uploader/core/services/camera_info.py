@@ -10,8 +10,6 @@ from wildintel_uploader.modules.fileinfo.domain.models import DATE_TAGS, CameraI
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as _exiftool
 
 _model = model_name
-# Whether prefetch reads ahead at all: the tests turn it off (conftest), so that no reading started by one test is still running in the next.
-PREFETCH = True
 
 
 def exiftool_path() -> str | None:
@@ -41,4 +39,4 @@ def _metadata(paths: list[Path], tags: list[str]) -> dict[Path, Tags] | None:
 
 
 def prefetch(paths: list[Path], tags: list[str] | None = None) -> threading.Thread | None:
-    return _service().prefetch(paths, tags) if PREFETCH else None
+    return _service().prefetch(paths, tags)

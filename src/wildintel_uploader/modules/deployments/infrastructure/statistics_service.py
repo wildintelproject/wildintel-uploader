@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from wildintel_uploader.core.services import camera_info, deployment_import_service as dis
+from wildintel_uploader.core.services import deployment_import_service as dis
 from wildintel_uploader.modules.postvalidation.domain import statistics as _stats
 from wildintel_uploader.modules.postvalidation.domain.models import PostvalidationError
 from wildintel_uploader.modules.postvalidation.domain.statistics import (  # noqa: F401 — the names of before
@@ -37,6 +37,12 @@ from wildintel_uploader.modules.postvalidation.domain.statistics import (  # noq
     metrics as _metrics, sequence_lengths,
 )
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
+
+
+def _files():
+    """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.file_info()
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +71,7 @@ def times_of_folder(source_dir: Path) -> DeploymentTimes:
     """The images of a folder and when each was taken, from their EXIF."""
     images = [p for p in source_dir.rglob("*") if p.is_file() and p.suffix.lower() in dis.IMAGE_EXTENSIONS]
     stamps = []
-    for taken in camera_info.read_dates(images).values():
+    for taken in _files().dates(images).values():
         if taken is not None:
             stamps.append(taken.replace(tzinfo=timezone.utc).timestamp())
     return DeploymentTimes(len(images), sorted(stamps))
