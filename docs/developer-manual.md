@@ -278,6 +278,12 @@ storage.register("sqlite", SqliteStore)                 # then: DATA.storage = "
 `tests/unit/shared/test_storage.py` does exactly that with a backend in memory, and runs the projects, locations, visits and cameras of the app on it. A backup (`modules.backup`) goes through
 the store too, and its `.zip` holds JSON whatever the records are kept in, so a backup made on one backend is restored on another.
 
+**The tables of the catalog in a database** (`DATA.catalog_storage = "sqlite"`, `catalog/infrastructure/sql_repository.py`) keep their version
+in `schema_version`, and `sql_migrations.migrate` brings a database of a version before to the last one when it is opened — each migration in a
+transaction of its own, so one that fails leaves the database at the version before. To change a table: change its model, and add a `Migration`
+at the end of `sql_migrations.MIGRATIONS` (the next number, and what it does to a database of the one before — `ALTER TABLE …`); never change one
+already there. `tests/unit/catalog/test_sql_migrations.py` fails until a database of version 1, migrated, has the tables the models say.
+
 ### Threads
 
 Validating and preprocessing images is CPU-bound (decoding, hashing, resizing), so it runs on a

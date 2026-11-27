@@ -17,6 +17,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from wildintel_uploader.modules.catalog.domain.models import Audit, Camera, Location, ResearchProject, Role, SdCard, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
+from wildintel_uploader.modules.catalog.infrastructure.sql_migrations import migrate
 from wildintel_uploader.shared.storage import StorageError
 from wildintel_uploader.shared.storage.json_files import PROJECT_FILE, RECORD_FILES
 
@@ -180,12 +181,13 @@ def sqlite_engine(path: Path) -> Engine:
 
 
 class SqlCatalogRepository(CatalogRepository):
-    """The catalog in the database of `engine` — its tables made when they are not there. It keeps records only: the folders of the research
+    """The catalog in the database of `engine` — its tables made when they are not there, and migrated when they are of a version before. It keeps records only: the folders of the research
     projects are not its own (ports.ProjectFolders)."""
 
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
-        SQLModel.metadata.create_all(engine, tables=_TABLES)
+        # made when they are not there, brought to the last version when they are of one before (sql_migrations)
+        migrate(engine, lambda e: SQLModel.metadata.create_all(e, tables=_TABLES), [t.name for t in _TABLES])
 
     # the people
 
