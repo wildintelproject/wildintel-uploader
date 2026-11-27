@@ -1,17 +1,6 @@
-"""The running version — the release's own (_version.py, written by the
-release workflow from its tag), else the installed package's, else "dev"."""
-from __future__ import annotations
+"""Moved to `wildintel_uploader.shared.version` (#248): this name is that very module — not a copy —, so that what imports or patches it here keeps working."""
+import sys
 
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from wildintel_uploader.shared import version as _moved
 
-
-def current_version() -> str:
-    try:
-        from wildintel_uploader._version import __version__
-        return __version__
-    except ImportError:
-        pass
-    try:
-        return _pkg_version("wildintel-uploader")
-    except PackageNotFoundError:
-        return "dev"
+sys.modules[__name__] = _moved

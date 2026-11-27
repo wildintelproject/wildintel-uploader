@@ -22,7 +22,8 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from wildintel_uploader.core import config, parallel
+from wildintel_uploader.core import config
+from wildintel_uploader.shared import parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
 from wildintel_uploader.modules.deployments.infrastructure import statistics_service

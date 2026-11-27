@@ -60,6 +60,6 @@ settings = ServerSettings()
 def configure_logging() -> None:
     """Console + log file, at the settings page's level (see logging_setup).
     `log_level` here is only uvicorn's own, in development (wucli)."""
-    from wildintel_uploader.core import logging_setup
+    from wildintel_uploader.modules.settings.infrastructure import activity_log as logging_setup
 
     logging_setup.configure()

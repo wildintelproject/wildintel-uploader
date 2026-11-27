@@ -32,7 +32,8 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from wildintel_uploader.core import config, parallel
+from wildintel_uploader.core import config
+from wildintel_uploader.shared import parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.infrastructure import seal_service
 from wildintel_uploader.modules.deployments.infrastructure.deployment_import_service import DeploymentImportError

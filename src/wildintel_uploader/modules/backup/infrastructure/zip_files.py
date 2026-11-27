@@ -42,7 +42,7 @@ def _told(events: Iterator[dict], what: str) -> Iterator[dict]:
     except _old().BackupError as exc:
         raise BackupError(str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        from wildintel_uploader.core.logging_setup import debugging
+        from wildintel_uploader.shared.logs import debugging
         logger.warning("%s failed: %s", what, exc, exc_info=debugging())
         raise BackupError(f"{what} failed: {exc}") from exc
 
@@ -52,7 +52,7 @@ class ZipBackups(Backups):
         return _ours(lambda: _old().describe_project(_root(), project))
 
     def create(self, dest_dir: Path, project: str | None, choice: Choice) -> Iterator[dict]:
-        from wildintel_uploader.core.version import current_version
+        from wildintel_uploader.shared.version import current_version
         events = _ours(lambda: _old().create_backup(_root(), dest_dir, settings=choice.settings, research_project_id=project, project_files=choice.project_files,
                                                     visits=choice.visits, deployments=choice.deployments, images=choice.images, app_version=current_version()))
         return _told(events, "The backup")

@@ -58,7 +58,7 @@ def show(service: FromDishka[SettingsService],
 @inject
 def path(service: FromDishka[SettingsService]) -> None:
     """Where settings.toml, the log and the app's folders are."""
-    from wildintel_uploader.core import logging_setup
+    from wildintel_uploader.modules.settings.infrastructure import activity_log as logging_setup
 
     places = service.places()
     console.print(f"Settings:    {places.settings_file}")

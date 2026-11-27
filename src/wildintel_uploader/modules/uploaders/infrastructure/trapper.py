@@ -59,7 +59,7 @@ def _ours(call: Callable[[], T], what: str = "A TRAPPER call") -> T:
         return call()
     except Exception as exc:  # noqa: BLE001 — every error is one of the module's
         if not isinstance(exc, UploaderError):
-            from wildintel_uploader.core.logging_setup import debugging
+            from wildintel_uploader.shared.logs import debugging
             logger.warning("%s failed: %s", what, exc, exc_info=debugging())
         raise as_uploader_error(exc) from exc
 
@@ -69,7 +69,7 @@ def _told(events: Iterator[dict], what: str) -> Iterator[dict]:
     try:
         yield from events
     except Exception as exc:  # noqa: BLE001
-        from wildintel_uploader.core.logging_setup import debugging
+        from wildintel_uploader.shared.logs import debugging
         logger.warning("%s failed: %s", what, exc, exc_info=debugging())
         raise UploaderError(str(exc) if _own_words(exc) else as_uploader_error(exc).message) from exc
 
@@ -125,7 +125,7 @@ class TrapperClient(Trapper):
         return _told(events, "Syncing the local collections")
 
     def describe(self, exc: Exception) -> str:
-        from wildintel_uploader.core.logging_setup import debugging
+        from wildintel_uploader.shared.logs import debugging
         logger.warning("A TRAPPER check failed: %s", exc, exc_info=debugging())
         return str(exc) if _own_words(exc) or isinstance(exc, UploaderError) else as_uploader_error(exc).message
 

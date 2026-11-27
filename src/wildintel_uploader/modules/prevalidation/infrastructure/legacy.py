@@ -45,7 +45,7 @@ class SavedValidationReports(PrevalidationReports):
 
     def validation(self, result: dict, folder: Path, checks: frozenset[str] | None) -> str | None:
         """None when it can't be written: that is no reason to fail what it reports."""
-        from wildintel_uploader.core.logging_setup import debugging
+        from wildintel_uploader.shared.logs import debugging
         try:
             return self._reports.save_validation(result, folder, checks)
         except Exception as exc:  # noqa: BLE001

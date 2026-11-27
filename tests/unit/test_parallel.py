@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from wildintel_uploader.core import parallel
+from wildintel_uploader.shared import parallel
 
 
 def test_the_results_come_in_the_order_of_the_items_whichever_finishes_first():
@@ -38,8 +38,10 @@ def test_a_failure_is_raised_to_the_caller():
 
 
 def test_it_takes_the_workers_from_the_settings_by_default(monkeypatch):
+    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import wiring  # noqa: F401 — where the app is put together tells it to ask the settings
     seen = []
-    monkeypatch.setattr(parallel.config, "workers", lambda: seen.append("asked") or 1)
+    monkeypatch.setattr(config, "workers", lambda: seen.append("asked") or 1)
 
     assert parallel.pmap(lambda n: n, [1, 2]) == [1, 2]
     assert seen == ["asked"]

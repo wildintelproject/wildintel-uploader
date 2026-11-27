@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator
 
 from fastapi.responses import StreamingResponse
 
-from wildintel_uploader.core.logging_setup import debugging
+from wildintel_uploader.shared.logs import debugging
 
 logger = logging.getLogger(__name__)
 # what is told while the work runs; any other event ends it

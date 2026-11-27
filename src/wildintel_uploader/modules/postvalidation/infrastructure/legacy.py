@@ -39,7 +39,7 @@ class SavedPostvalidationReports(PostvalidationReports):
 
     def postvalidation(self, result: dict, deployment_id: str, folder: Path, parameters: dict) -> str | None:
         """None when it can't be written: that is no reason to fail what it reports."""
-        from wildintel_uploader.core.logging_setup import debugging
+        from wildintel_uploader.shared.logs import debugging
         try:
             return self._reports.save_postvalidation(result, deployment_id, folder, parameters)
         except Exception as exc:  # noqa: BLE001

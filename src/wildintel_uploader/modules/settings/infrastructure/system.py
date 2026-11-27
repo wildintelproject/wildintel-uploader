@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from wildintel_uploader.core import logging_setup
+from wildintel_uploader.modules.settings.infrastructure import activity_log as logging_setup
 from wildintel_uploader.shared import storage
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage
 

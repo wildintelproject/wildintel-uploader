@@ -6,7 +6,7 @@ import platform
 import httpx
 from fastapi import APIRouter
 
-from wildintel_uploader.core.version import current_version
+from wildintel_uploader.shared.version import current_version
 
 router = APIRouter(tags=["health"])
 

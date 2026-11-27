@@ -17,7 +17,8 @@ from pathlib import Path
 
 from dishka import Container, Provider, Scope, make_container, provide
 
-from wildintel_uploader.core import config, parallel
+from wildintel_uploader.core import config
+from wildintel_uploader.shared import parallel
 from wildintel_uploader.modules.backup.application.use_cases import BackupUseCases
 from wildintel_uploader.modules.backup.domain.ports import BackupService
 from wildintel_uploader.modules.backup.infrastructure.zip_files import ZipBackups
@@ -81,6 +82,9 @@ from wildintel_uploader.modules.settings.infrastructure.system import AppActivit
 from wildintel_uploader.shared import storage
 
 # ── how each module is built ──
+
+# how many images are worked on at once: the setting GENERAL.workers, asked each time
+parallel.use_workers(lambda: config.workers())
 
 
 def build_reports() -> ReportsService:
