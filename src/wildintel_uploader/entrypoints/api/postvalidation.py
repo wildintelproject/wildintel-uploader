@@ -39,7 +39,7 @@ def validate_deployment(req: ValidateDeploymentRequest, postvalidation: Postvali
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/validate-deployment/stream")
+@router.post("/validate-deployment/stream", response_model=None)
 def validate_deployment_stream(req: ValidateDeploymentRequest, postvalidation: Postvalidation) -> StreamingResponse:
     """The same checks as /validate-deployment, told as NDJSON while they run: {"type": "check", "check", "state"} when each starts ("running") and
     ends ("done") and, at the end, {"type": "done", "result": <what /validate-deployment answers>}. A failure is {"type": "error", "detail"}."""

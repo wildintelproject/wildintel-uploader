@@ -60,7 +60,7 @@ def activate_config(config_id: str, service: Service) -> list[dict]:
         raise HTTPException(404, f"There's no config {config_id!r}.") from None
 
 
-@router.get("/configs/{config_id}/download")
+@router.get("/configs/{config_id}/download", response_model=None)
 def download_config(config_id: str, service: Service) -> FileResponse:
     """The settings file itself, as saved — passwords included, since it's a backup of the file; it's the user's own file, on their own machine."""
     path = _config_file(service, config_id)
@@ -130,7 +130,7 @@ def save_general(req: GeneralRequest, service: Service) -> dict:
         raise HTTPException(422, {"setting": exc.setting, "message": exc.message}) from exc
 
 
-@router.get("/log")
+@router.get("/log", response_model=None)
 def download_log(service: Service) -> FileResponse:
     """The current log file — to attach to a bug report."""
     try:

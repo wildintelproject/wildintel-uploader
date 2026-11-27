@@ -42,7 +42,7 @@ def project_info(req: ProjectInfoRequest, backups: Backups) -> dict:
     return _http(lambda: backups.describe(req.research_project_id))
 
 
-@router.post("/create")
+@router.post("/create", response_model=None)
 def create(req: CreateBackupRequest, backups: Backups) -> StreamingResponse:
     """Makes a backup in a folder — or to be downloaded. NDJSON: a {"type": "step"} or {"type": "file"} per step, then {"type": "done", "path",
     "bytes", "manifest"}; a failure midway is an {"type": "error", "detail"} line."""
@@ -51,7 +51,7 @@ def create(req: CreateBackupRequest, backups: Backups) -> StreamingResponse:
     return streaming.from_events(_http(lambda: backups.create(dest, req.research_project_id, choice)), "The backup")
 
 
-@router.get("/download/{name}")
+@router.get("/download/{name}", response_model=None)
 def download(name: str, backups: Backups) -> FileResponse:
     """A backup made to be downloaded: the browser gets it as a file to save. Only the backups made there are served."""
     path = _http(lambda: backups.download(name))
@@ -64,7 +64,7 @@ def read(req: ReadBackupRequest, backups: Backups) -> dict:
     return _http(lambda: backups.read(Path(req.path).expanduser()))
 
 
-@router.post("/restore")
+@router.post("/restore", response_model=None)
 def restore(req: RestoreRequest, backups: Backups) -> StreamingResponse:
     """Restores what is picked of a backup. NDJSON like /create: steps, files, and last {"type": "done", "summary"}."""
     choice = Choice(settings=req.settings, project_files=req.project_files, visits=req.visits, deployments=req.deployments, images=req.images)

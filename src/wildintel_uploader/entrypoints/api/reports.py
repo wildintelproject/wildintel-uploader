@@ -34,14 +34,14 @@ def get_report(report_id: str, reports: Reports) -> dict:
     return _http(lambda: reports.read(report_id))
 
 
-@router.get("/{report_id}/download")
+@router.get("/{report_id}/download", response_model=None)
 def download_report(report_id: str, reports: Reports, format: str = "json") -> Response:
     """The report as a file: its own JSON, or a CSV with a row per image and check."""
     body, media_type = _http(lambda: reports.as_file(report_id, format))
     return Response(body, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{report_id}.{format}"'})
 
 
-@router.get("/{report_id}/image")
+@router.get("/{report_id}/image", response_model=None)
 def report_image(report_id: str, path: str, reports: Reports, size: str = "thumb") -> Response:
     """An image the report lists, as a JPEG — a thumbnail, or (size=large) one to look at closely."""
     body = _http(lambda: reports.image(report_id, path, size == "large"))

@@ -36,7 +36,7 @@ def _http(call: Callable[[], T]) -> T:
 
 # ── the memory card ──
 
-@router.post("/copy-card")
+@router.post("/copy-card", response_model=None)
 def copy_card(req: CardRequest, deployments: Deployments) -> StreamingResponse:
     """Copies a camera's memory card — read only — to a temporary folder of this computer, so that its images are processed as any local folder.
     Streamed: "start", "progress" after each file and "done" with the `path` of the copy; removed with /discard-card-copy when the import is over."""
@@ -135,13 +135,13 @@ def _import_local(req: ImportLocalRequest, deployments: DeploymentsService, cons
     return streaming.from_events(events, "Local import failed")
 
 
-@router.post("/import-local")
+@router.post("/import-local", response_model=None)
 def import_local(req: ImportLocalRequest, deployments: Deployments) -> StreamingResponse:
     """The images of a folder into a local collection — preprocessed, or copied as they are — and sealed, as NDJSON events."""
     return _import_local(req, deployments, consolidate=True)
 
 
-@router.post("/preprocess")
+@router.post("/preprocess", response_model=None)
 def preprocess(req: ImportLocalRequest, deployments: Deployments) -> StreamingResponse:
     """Preprocesses the images into the collection, leaving the deployment pending — not sealed, so it can be done again — until /consolidate
     freezes it. The same NDJSON events as /import-local, less the sealing."""
@@ -150,7 +150,7 @@ def preprocess(req: ImportLocalRequest, deployments: Deployments) -> StreamingRe
     return _import_local(req, deployments, consolidate=False)
 
 
-@router.post("/consolidate")
+@router.post("/consolidate", response_model=None)
 def consolidate(req: ImportLocalRequest, deployments: Deployments) -> StreamingResponse:
     """Freezes the preprocessed deployment: its metadata is written and it is sealed. Events: "sealing" and "done"."""
     events = _http(lambda: deployments.consolidate(req.source_dir, req.collection_dir, req.deployment))
@@ -165,7 +165,7 @@ def deployment_photos_list(research_project_id: str, collection: str, deployment
     return {"photos": _http(lambda: deployments.photos(research_project_id, collection, deployment_id))}
 
 
-@router.get("/photo")
+@router.get("/photo", response_model=None)
 def deployment_photo(research_project_id: str, collection: str, deployment_id: str, name: str, deployments: Deployments, size: str = "thumb") -> Response:
     """A photo of a created deployment, as a JPEG: a thumbnail, or (size=large) one to look at closely."""
     body = _http(lambda: deployments.photo(research_project_id, collection, deployment_id, name, size == "large"))
@@ -186,7 +186,7 @@ def inspect(req: RepairRequest, deployments: Deployments) -> dict:
     return _http(lambda: deployments.inspect(req.research_project_id, req.collection, req.deployment_id))
 
 
-@repair_router.post("/deployment")
+@repair_router.post("/deployment", response_model=None)
 def repair(req: RepairRequest, deployments: Deployments) -> StreamingResponse:
     """Repairs a deployment: its metadata files are written again from what its folder holds. NDJSON: a {"type": "step"} per step and, last,
     {"type": "done", ...}; a failure midway is an {"type": "error", "detail"} line. One that isn't there or was synced from Trapper is a plain 4xx."""

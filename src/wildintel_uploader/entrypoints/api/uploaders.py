@@ -74,7 +74,7 @@ def deployments(req: DeploymentsRequest, uploaders: Uploaders) -> dict:
 
 # ── importing a deployment into TRAPPER from the wizard ──
 
-@import_router.post("/import")
+@import_router.post("/import", response_model=None)
 def import_deployment(req: ImportDeploymentRequest, uploaders: Uploaders) -> StreamingResponse:
     """The import's events, as NDJSON: {"type": "copy", "index", "total", "name"}, {"type": "registering"}, {"type": "done", "dest_dir"}, and
     {"type": "error", "detail"} when something fails midway. Bad paths are a plain 400, checked before any file is touched."""
@@ -110,7 +110,7 @@ def check_access(req: AccessCheckRequest, uploaders: Uploaders) -> dict:
                                                            req.classification_project_pk))}
 
 
-@upload_router.post("/deployment")
+@upload_router.post("/deployment", response_model=None)
 def upload_deployment(req: UploadDeploymentRequest, uploaders: Uploaders) -> StreamingResponse:
     """Uploads one deployment, as NDJSON events — a failure midway is an {"type": "error", "detail"} line. What can be checked first is a plain 4xx."""
     events = _http(lambda: uploaders.upload(_account(req), req.research_project_id, req.collection, req.deployment_id, req.mode,
@@ -132,7 +132,7 @@ def collection_names(req: SyncCollectionNamesRequest, uploaders: Uploaders) -> d
     return {"results": _http(lambda: uploaders.collection_names(_account(req), req.research_project_pk, req.classification_project_pk))}
 
 
-@sync_router.post("/collections")
+@sync_router.post("/collections", response_model=None)
 def sync_collections(req: SyncCollectionsRequest, uploaders: Uploaders) -> StreamingResponse:
     """Creates in the collections folder what TRAPPER has for the classification project and it lacks, as NDJSON."""
     project = {"pk": req.research_project_pk, "name": req.research_project_name, "acronym": req.research_project_acronym}

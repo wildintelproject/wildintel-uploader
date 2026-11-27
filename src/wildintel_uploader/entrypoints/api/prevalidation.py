@@ -32,7 +32,7 @@ def validate_images(req: ValidateImagesRequest, prevalidation: Prevalidation) ->
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/validate-images/stream")
+@router.post("/validate-images/stream", response_model=None)
 def validate_images_stream(req: ValidateImagesRequest, prevalidation: Prevalidation) -> StreamingResponse:
     """The same checks as /validate-images, told as NDJSON while they run: {"type": "check", "check", "state"} when each starts ("running") and
     ends ("done"), {"type": "progress", "step", "done", "total"} (at most a few a second, and the last of each step) and, at the end,
