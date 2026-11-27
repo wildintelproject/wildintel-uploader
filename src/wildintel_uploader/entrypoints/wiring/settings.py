@@ -1,11 +1,13 @@
 """The settings: their store, the log, the machine and the storage of the records."""
 from __future__ import annotations
 
-from dishka import Provider, Scope, provide
+from dishka import Provider, Scope, alias, provide
 
 from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
-from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
+from wildintel_uploader.modules.settings.domain.ports import (
+    ActivityLog, Machine, RecordStorage, SettingsConfigs, SettingsEditing, SettingsOfBefore, SettingsReading, SettingsService, SettingsStore,
+)
 from wildintel_uploader.modules.settings.infrastructure.system import AppRecordStorage, ThisMachine
 from wildintel_uploader.entrypoints import wiring as w   # the other factories, asked when called
 
@@ -40,3 +42,9 @@ class SettingsProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def service(self, store: SettingsStore, activity_log: ActivityLog, machine: Machine, record_storage: RecordStorage) -> SettingsService:
         return build_settings(store, activity_log=activity_log, machine=machine, record_storage=record_storage)
+
+    # each part of the contract, for whoever needs only that one: the same service of the request
+    reading = alias(source=SettingsService, provides=SettingsReading)
+    editing = alias(source=SettingsService, provides=SettingsEditing)
+    configs = alias(source=SettingsService, provides=SettingsConfigs)
+    of_before = alias(source=SettingsService, provides=SettingsOfBefore)

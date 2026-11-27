@@ -10,7 +10,9 @@ from wildintel_uploader.entrypoints.cli.app import app as cli
 from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.settings.domain.models import SettingsError
-from wildintel_uploader.modules.settings.domain.ports import NoLogFile, NoSettingsFile, SettingsService, UnknownConfig, UnknownSetting
+from wildintel_uploader.modules.settings.domain.ports import (
+    NoLogFile, NoSettingsFile, SettingsConfigs, SettingsEditing, SettingsOfBefore, SettingsReading, SettingsService, UnknownConfig, UnknownSetting,
+)
 from wildintel_uploader.modules.settings.infrastructure.toml_files import TomlSettingsStore
 
 
@@ -81,9 +83,23 @@ def service(store: TomlSettingsStore, tmp_path: Path, log: FakeLog, storage: Fak
     return SettingsUseCases(store, tmp_path / "docs", activity_log=log, machine=FakeMachine(), record_storage=storage)
 
 
+PARTS = (SettingsReading, SettingsEditing, SettingsConfigs, SettingsOfBefore)
+
+
+def _operations(contract) -> set[str]:
+    return {name for name, value in vars(contract).items() if not name.startswith("_") and callable(value)}
+
+
 def test_the_use_cases_implement_every_operation_of_the_contract():
-    offered = {name for name in vars(SettingsService) if not name.startswith("_")}
+    offered = set().union(*(_operations(part) for part in PARTS))
     assert offered and offered <= {name for name in vars(SettingsUseCases) if not name.startswith("_")}
+
+
+def test_the_contract_is_its_parts_each_operation_in_one_of_them():
+    """#248: whoever needs only a part of the settings asks for that one; the whole contract is the four, and adds nothing of its own."""
+    assert set(SettingsService.__bases__) >= set(PARTS) and not _operations(SettingsService)
+    counted = [name for part in PARTS for name in _operations(part)]
+    assert len(counted) == len(set(counted)) == 22
 
 
 # ── the use cases ────────────────────────────────────────────────────────────
@@ -320,6 +336,7 @@ def test_the_container_gives_the_contract_made_with_its_adapters(store):
         service = request.get(SettingsService)
         assert isinstance(service, SettingsUseCases) and isinstance(service.store, TomlSettingsStore)
         assert request.get(SettingsService) is service     # one for the whole request
+        assert all(request.get(part) is service for part in PARTS)   # and each part of it is that one
     container.close()
 
 

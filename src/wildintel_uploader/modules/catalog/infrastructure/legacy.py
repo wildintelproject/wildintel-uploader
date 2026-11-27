@@ -9,11 +9,11 @@ from wildintel_uploader.modules.catalog.domain.ports import LegacyFieldwork, Leg
 from wildintel_uploader.modules.catalog.infrastructure.mapping import (
     equipment_from_record, equipment_to_record, role_from_record, role_to_record, trapper_from_record,
 )
-from wildintel_uploader.modules.settings.domain.ports import SettingsService
+from wildintel_uploader.modules.settings.domain.ports import SettingsOfBefore
 
 
 class TrappersFromTheSettings(LegacyTrappers):
-    def __init__(self, settings: SettingsService) -> None:
+    def __init__(self, settings: SettingsOfBefore) -> None:
         self.settings = settings
 
     def take(self) -> list[Trapper]:
@@ -26,7 +26,7 @@ class TrappersFromTheSettings(LegacyTrappers):
 class FieldworkFromTheSettings(LegacyFieldwork):
     """The cameras, the SD cards and the roles versions before left in the settings, through the contract of their module."""
 
-    def __init__(self, settings: SettingsService) -> None:
+    def __init__(self, settings: SettingsOfBefore) -> None:
         self.settings = settings
 
     def items(self, kind: str) -> list[tuple[str | None, Any]]:

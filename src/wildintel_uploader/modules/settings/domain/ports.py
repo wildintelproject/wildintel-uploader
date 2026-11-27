@@ -117,11 +117,68 @@ class NoLogFile(LookupError):
 
 # ── in: what the module offers ──
 
-class SettingsService(Protocol):
-    """What the user can do with the settings, from the web app or the command line. Besides the errors each method names, a value that cannot be is
-    the domain's SettingsError."""
+class SettingsReading(Protocol):
+    """What the settings are, for whoever only reads them: the settings of the config in use, each section, what is shown of them and where the app
+    keeps its files."""
 
-    # the configs
+    def shown_settings(self) -> dict[str, list[ShownSetting]]:
+        """Every setting of the config in use, section by section, the secrets kept out of sight."""
+
+    def places(self) -> Places:
+        """Where the app keeps its files."""
+
+    def current(self) -> Settings:
+        """The settings of the config in use."""
+
+    def section(self, section: str) -> SectionView:
+        """One section, named as settings.toml names it — TRAPPER, VALIDATION… UnknownSetting."""
+
+    def is_secret(self, key: str) -> bool:
+        """Whether a setting, named SECTION.field, is a secret: never shown, hidden while it is typed."""
+
+    def general(self) -> GeneralView:
+        """The General section: its settings, the folders and what the system says."""
+
+    def log_file(self) -> Path:
+        """The log file, to download it. NoLogFile."""
+
+
+class SettingsEditing(Protocol):
+    """How the settings of the config in use are changed: all at once, a section, one setting by its name, or what the app changes on its own.
+    Besides the errors each method names, a value that cannot be is the domain's SettingsError."""
+
+    def set_show_welcome(self, show: bool) -> Settings:
+        """Whether the welcome page is shown when the app opens."""
+
+    def set_data_dir(self, folder: str | None) -> Path:
+        """The data folder — blank, the default one —, and the folder it is now: the folders that were inside the old one go inside the new one."""
+
+    def change_setting(self, key: str, text: str | None) -> Settings:
+        """One setting, named as settings.toml names it — TRAPPER.base_url —, to a value typed as text. UnknownSetting."""
+
+    def check_settings(self, settings: Settings) -> None:
+        """Whether they could be saved — what only the outside knows: that the storage they name exists. SettingsError."""
+
+    def save_settings(self, settings: Settings) -> Settings:
+        """Saves all the settings, as the settings page does, and gives what was kept: a secret left blank keeps the one saved; when the data folder
+        changes, the folders that were inside it go inside the new one; the storage of the records has to exist, and is the one in use from then on;
+        the level of the log applies at once. SettingsError."""
+
+    def save_section(self, section: str, values: dict[str, Any]) -> SectionView:
+        """Changes the settings of one section that `values` names — the others stay —, with the rules of save_settings. UnknownSetting: a section or a
+        setting that is not one; SettingsError: a value it does not take."""
+
+    def save_general(self, general: GeneralSettings, folders: DataSettings) -> GeneralView:
+        """Saves the General section — its settings and the folders —, and the level of the log applies at once. When the data folder changes, the
+        folders that were inside the old one go inside the new one. What DATA says besides the folders (the storage) is kept as it was."""
+
+    def clear_log(self) -> int:
+        """Deletes the log file and its older copies — logging goes on, into a new one —, and says how many."""
+
+
+class SettingsConfigs(Protocol):
+    """The configs — the sets of settings the user keeps, one in use at a time."""
+
     def list_configs(self) -> list[ConfigInfo]:
         """Every config, the default one first, the one in use flagged."""
 
@@ -134,47 +191,10 @@ class SettingsService(Protocol):
     def config_file(self, config_id: str) -> Path:
         """The file of a config, to download it or open its folder. UnknownConfig, NoSettingsFile."""
 
-    # what the app changes on its own
-    def set_show_welcome(self, show: bool) -> Settings:
-        """Whether the welcome page is shown when the app opens."""
 
-    def set_data_dir(self, folder: str | None) -> Path:
-        """The data folder — blank, the default one —, and the folder it is now: the folders that were inside the old one go inside the new one."""
+class SettingsOfBefore(Protocol):
+    """What the settings still hold of the field work, as versions before kept it there — for the catalog, which takes it in."""
 
-    # one setting by its name
-    def change_setting(self, key: str, text: str | None) -> Settings:
-        """One setting, named as settings.toml names it — TRAPPER.base_url —, to a value typed as text. UnknownSetting."""
-
-    def is_secret(self, key: str) -> bool:
-        """Whether a setting, named SECTION.field, is a secret: never shown, hidden while it is typed."""
-
-    # what the settings are
-    def shown_settings(self) -> dict[str, list[ShownSetting]]:
-        """Every setting of the config in use, section by section, the secrets kept out of sight."""
-
-    def places(self) -> Places:
-        """Where the app keeps its files."""
-
-    # all the settings, and each section
-    def current(self) -> Settings:
-        """The settings of the config in use."""
-
-    def check_settings(self, settings: Settings) -> None:
-        """Whether they could be saved — what only the outside knows: that the storage they name exists. SettingsError."""
-
-    def save_settings(self, settings: Settings) -> Settings:
-        """Saves all the settings, as the settings page does, and gives what was kept: a secret left blank keeps the one saved; when the data folder
-        changes, the folders that were inside it go inside the new one; the storage of the records has to exist, and is the one in use from then on;
-        the level of the log applies at once. SettingsError."""
-
-    def section(self, section: str) -> SectionView:
-        """One section, named as settings.toml names it — TRAPPER, VALIDATION… UnknownSetting."""
-
-    def save_section(self, section: str, values: dict[str, Any]) -> SectionView:
-        """Changes the settings of one section that `values` names — the others stay —, with the rules of save_settings. UnknownSetting: a section or a
-        setting that is not one; SettingsError: a value it does not take."""
-
-    # what the settings still hold of the field work
     def legacy_fieldwork(self) -> LegacyFieldwork:
         """The cameras, SD cards, trappers and roles versions before kept in the settings — not settings: they go to the catalog."""
 
@@ -184,19 +204,10 @@ class SettingsService(Protocol):
     def keep_legacy_fieldwork(self, kind: str, items: list[dict[str, Any]]) -> None:
         """What is left of one kind once the catalog took what it could — the rest is no longer in the settings."""
 
-    # the General section
-    def general(self) -> GeneralView:
-        """The General section: its settings, the folders and what the system says."""
 
-    def save_general(self, general: GeneralSettings, folders: DataSettings) -> GeneralView:
-        """Saves the General section — its settings and the folders —, and the level of the log applies at once. When the data folder changes, the
-        folders that were inside the old one go inside the new one. What DATA says besides the folders (the storage) is kept as it was."""
-
-    def log_file(self) -> Path:
-        """The log file, to download it. NoLogFile."""
-
-    def clear_log(self) -> int:
-        """Deletes the log file and its older copies — logging goes on, into a new one —, and says how many."""
+class SettingsService(SettingsReading, SettingsEditing, SettingsConfigs, SettingsOfBefore, Protocol):
+    """All that can be done with the settings, from the web app or the command line — what the module of the settings offers. Whoever needs only a
+    part asks for that one: SettingsReading, SettingsEditing, SettingsConfigs or SettingsOfBefore."""
 
 
 # ── out: what the module needs ──

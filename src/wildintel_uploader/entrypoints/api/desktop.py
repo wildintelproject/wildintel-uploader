@@ -11,7 +11,7 @@ from wildintel_uploader.shared.desktop import file_manager
 from wildintel_uploader.shared.desktop import folder_picker
 from wildintel_uploader.modules.deployments.infrastructure.api_schemas import BrowseFolderRequest, OpenFolderRequest
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
-from wildintel_uploader.modules.settings.domain.ports import SettingsService
+from wildintel_uploader.modules.settings.domain.ports import SettingsReading
 
 router = APIRouter(prefix="/api/deployment-import", tags=["desktop"], route_class=DishkaSyncRoute)
 
@@ -40,7 +40,7 @@ def _open_in_file_manager(path: Path) -> None:
 
 
 @router.post("/open-folder")
-def open_folder(req: OpenFolderRequest, settings: FromDishka[SettingsService]) -> dict:
+def open_folder(req: OpenFolderRequest, settings: FromDishka[SettingsReading]) -> dict:
     """Opens a folder kept by the app (inside its data folder, or its collections, reports or packages folder — nothing else) in the file explorer."""
     target = Path(req.path).expanduser().resolve()
     places = settings.places()

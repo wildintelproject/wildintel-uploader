@@ -19,7 +19,7 @@ from pathlib import Path
 from wildintel_uploader.entrypoints.catalog_storage import move_catalog
 from wildintel_uploader.modules.catalog.application.migration import TargetNotEmpty
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
-from wildintel_uploader.modules.settings.domain.ports import SettingsService
+from wildintel_uploader.modules.settings.domain.ports import SettingsReading, SettingsService
 
 catalog_app = typer.Typer(help="The catalog: the research projects, their locations, cameras and SD cards, and the people who go to the field.",
                           no_args_is_help=True)
@@ -161,7 +161,7 @@ def projects_delete(catalog: FromDishka[CatalogService], acronym: Annotated[str,
 
 @catalog_app.command("where")
 @inject
-def where(settings: FromDishka[SettingsService]) -> None:
+def where(settings: FromDishka[SettingsReading]) -> None:
     """Where the catalog is kept: the JSON files of the collections folder, or a SQLite database."""
     places = settings.places()
     # a path as it is, on one line, to be copied
