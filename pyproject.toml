@@ -39,6 +39,7 @@ dev = [
     "mike>=2.0",
     "mkdocs-material>=9.7",
     "mkdocs-static-i18n>=1.2",
+    "mypy>=1.13",
     "playwright>=1.63.0",
     "pyinstaller>=6.21.0",
     "pytest>=8.0",
@@ -55,6 +56,13 @@ wucli = "wildintel_uploader.wucli:app"
 # git tag once the changes this app needs are released:
 #   wildintel-trapper-sdk = { git = "https://github.com/wildintelproject/wildintelproject-trapper-sdk", tag = "vX.Y.Z" }
 wildintel-trapper-sdk = { path = "../wildintel-trapper-sdk", editable = true }
+
+[tool.mypy]
+# The modules that keep to their types — checked in CI (uv run mypy). One at a time: a module joins when mypy finds nothing in it.
+files = ["src/wildintel_uploader/modules/visits"]
+python_version = "3.13"
+ignore_missing_imports = true
+follow_imports = "silent"
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]

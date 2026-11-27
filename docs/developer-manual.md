@@ -576,9 +576,13 @@ A check is a class, and has a setting. To add, say, an image check `x`:
 
 ```bash
 uv run wucli backend test              # pytest; -v, -k NAME
+uv run mypy                            # the type checker, over the modules listed in [tool.mypy] (pyproject.toml) — run by CI too
 uv run wucli frontend test             # vitest (frontend/)
 uv run wucli frontend lint
 ```
+
+**Types.** The modules listed in `[tool.mypy]` keep to their types, and CI checks it — the visits so far: their shapes (a visit, a location, a
+camera… as `TypedDict`s of `domain.shapes`) say what each function takes and gives. A module joins the list when mypy finds nothing in it.
 
 - **Backend** — `tests/unit/<module>/`, a folder for each module, `app/` for the whole app (the architecture, the routes) and `shared/` for
   the shared kernel: the use cases over ports in memory, or built for the test's collections folder by `tests/support/built.py`, and the

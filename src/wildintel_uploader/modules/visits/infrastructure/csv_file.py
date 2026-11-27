@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import io
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
@@ -164,15 +165,15 @@ class CsvVisitFile(VisitFile):
 
     def record(self, visit: Visit) -> Visit:
         try:
-            return VisitRecord.model_validate(visit).model_dump(mode="json")
+            return cast(Visit, VisitRecord.model_validate(visit).model_dump(mode="json"))   # checked: a visit
         except ValidationError as exc:
             raise _problem_of(exc) from exc
 
     def location(self, fields: Location) -> Location:
         try:
-            return LocationRecord(**fields).model_dump(mode="json")
+            return cast(Location, LocationRecord.model_validate(dict(fields)).model_dump(mode="json"))   # checked: a location
         except ValidationError as exc:
             raise RowError("create_invalid", f"To create the location {fields.get('location_id')}: {_first(exc)}") from exc
 
     def normalized(self, visit: Visit) -> Visit:
-        return VisitRecord.model_validate(visit).model_dump(mode="json")
+        return cast(Visit, VisitRecord.model_validate(visit).model_dump(mode="json"))
