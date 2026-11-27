@@ -27,6 +27,14 @@ class VisitsService(ABC):
         """The visits known only to have been made — a revision before the ones kept."""
 
     @abstractmethod
+    def kept_count(self, project: str) -> int:
+        """How many records of visits the research project keeps — those removed too: what a backup takes."""
+
+    @abstractmethod
+    def replace_all(self, project: str, visits: list[Visit]) -> None:
+        """Keeps these visits, as `visits` tells them, as all of the research project's — a backup restored: each keeps its id and its dates."""
+
+    @abstractmethod
     def save(self, project: str, visit: Visit) -> Visit:
         """Registers a visit, if it follows the rules: what it does to the locations, the cameras and the SD cards is done, and the folders of the
         collections it changes are made — the visit kept, with "collection_folders"."""
@@ -100,6 +108,12 @@ class VisitRepository(ABC):
     @abstractmethod
     def unknown(self, project: str) -> list[Visit]:
         """The visits known only to have been made (a revision before the ones kept)."""
+
+    @abstractmethod
+    def kept_count(self, project: str) -> int: ...
+
+    @abstractmethod
+    def replace_all(self, project: str, visits: list[Visit]) -> None: ...
 
     @abstractmethod
     def add_unknown(self, project: str, unknown: list[Visit]) -> int: ...

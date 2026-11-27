@@ -54,6 +54,14 @@ class StoredVisits(VisitRepository):
         with _failed():
             return kept_visits.list_unknown(self.root, project)
 
+    def kept_count(self, project: str) -> int:
+        with _failed():
+            return len(kept_visits._raw_visits(self.root, project))
+
+    def replace_all(self, project: str, visits: list[Visit]) -> None:
+        with _failed():
+            kept_visits.replace_visits(self.root, project, visits)
+
     def add_unknown(self, project: str, unknown: list[Visit]) -> int:
         with _failed():
             return kept_visits.write_unknown(self.root, project, unknown)

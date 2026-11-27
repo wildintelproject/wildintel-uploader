@@ -151,6 +151,12 @@ class VisitsUseCases(VisitsService):
     def unknown(self, project: str) -> list[Visit]:
         return self._visits.unknown(project)
 
+    def kept_count(self, project: str) -> int:
+        return self._visits.kept_count(project)
+
+    def replace_all(self, project: str, visits: list[Visit]) -> None:
+        self._visits.replace_all(project, visits)
+
     def save(self, project: str, visit: Visit) -> Visit:
         self._catalog.require_project(project, active=True)
         visit = dict(visit)

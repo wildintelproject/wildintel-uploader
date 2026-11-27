@@ -24,7 +24,18 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 from wildintel_uploader.core import config, storage
-from wildintel_uploader.core.services import local_folder_service
+
+
+def _records(root: Path):
+    """The catalog of this collections folder as records — through its contract —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_catalog(root, wiring.build_settings()).records()
+
+
+def _visits(root: Path):
+    """The visits of this collections folder — through their contract —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_visits(root)
 
 FORMAT = "wildintel-uploader-backup"
 VERSION = 1
@@ -61,10 +72,10 @@ def describe_project(root: Path, research_project_id: str) -> dict:
         BackupError: the research project is not kept in the collections folder.
     """
     try:
-        local_folder_service.require_research_project(root, research_project_id)
-    except local_folder_service.LocalFolderError as exc:
+        _records(root).require_project(research_project_id)
+    except storage.StorageError as exc:
         raise BackupError(str(exc)) from exc
-    pdir = local_folder_service.project_dir(root, research_project_id)
+    pdir = (root / storage.valid_project_id(research_project_id))
     collections = []
     for collection in sorted((c for c in pdir.iterdir() if c.is_dir() and _COLLECTION.match(c.name)), key=lambda c: c.name, reverse=True):
         deployments = []
@@ -78,10 +89,10 @@ def describe_project(root: Path, research_project_id: str) -> dict:
         collections.append({"name": collection.name, "deployments": deployments})
     return {
         "research_project_id": research_project_id,
-        "locations": len(local_folder_service.list_locations(root, research_project_id)),
-        "cameras": len(local_folder_service.list_field_items(root, research_project_id, "cameras")),
-        "sd_cards": len(local_folder_service.list_field_items(root, research_project_id, "sd_cards")),
-        "visits": len(local_folder_service._raw_visits(root, research_project_id)),
+        "locations": len(_records(root).locations(research_project_id)),
+        "cameras": len(_records(root).equipment(research_project_id, "cameras")),
+        "sd_cards": len(_records(root).equipment(research_project_id, "sd_cards")),
+        "visits": _visits(root).kept_count(research_project_id),
         "collections": collections,
     }
 
@@ -97,7 +108,7 @@ def settings_snapshot(settings: config.Settings | None = None, root: Path | None
     data["FIELDWORK"]["sd_cards"] = []
     data["FIELDWORK"]["roles"] = []
     # the people are not kept in the settings but beside the research projects: they go in the backup of the settings, by what they are called
-    data["FIELDWORK"]["trappers"] = local_folder_service.list_trappers(root or config.collections_dir(settings))
+    data["FIELDWORK"]["trappers"] = _records(root or config.collections_dir(settings)).trappers()
     return data
 
 
@@ -126,23 +137,23 @@ def create_backup(
     counts: dict = {}
     if wants_project:
         info = describe_project(root, research_project_id)  # type: ignore[arg-type]
-        pdir = local_folder_service.project_dir(root, research_project_id)  # type: ignore[arg-type]
+        pdir = (root / storage.valid_project_id(research_project_id))  # type: ignore[arg-type]
         store = storage.open_store(root)
         if project_files:
-            project = local_folder_service.project_record(root, research_project_id)  # type: ignore[arg-type]   # wherever the catalog is kept
+            project = _records(root).project_record(research_project_id)  # type: ignore[arg-type]   # wherever the catalog is kept
             if project is not None:
                 entries.append((f"project/{PROJECT}", None, project))
             for kind, name in PROJECT_RECORDS.items():
                 # what is kept points to other things by their ids, which are the app's own: the backup says them by what they are called, so that it can be restored anywhere
-                records = (local_folder_service.list_roles(root, research_project_id, include_deleted=True) if kind == "roles"
-                           else local_folder_service.location_records(root, research_project_id) if kind == "locations"   # wherever the catalog is kept
-                           else local_folder_service.equipment_records(root, research_project_id, kind))  # type: ignore[arg-type]
+                records = (_records(root).roles(research_project_id, include_deleted=True) if kind == "roles"
+                           else _records(root).location_records(research_project_id) if kind == "locations"   # wherever the catalog is kept
+                           else _records(root).equipment_records(research_project_id, kind))  # type: ignore[arg-type]
                 if records:
                     entries.append((f"project/{name}", None, records))
             if history := store.read_records(research_project_id, "status_history"):  # type: ignore[arg-type]
                 entries.append((f"project/{HISTORY}", None, history))
             counts.update({"locations": info["locations"], "cameras": info["cameras"], "sd_cards": info["sd_cards"]})
-        if visits and (kept_visits := local_folder_service.list_visits(root, research_project_id)):  # type: ignore[arg-type]
+        if visits and (kept_visits := _visits(root).visits(research_project_id)):  # type: ignore[arg-type]
             entries.append((f"project/{VISITS}", None, kept_visits))
             counts["visits"] = info["visits"]
         done_collections: set[str] = set()
@@ -265,16 +276,16 @@ def read_backup(root: Path, path: Path) -> dict:
         here: dict = {"project": False, "deployments": {}, "visits": {"in_backup": 0, "already": 0}}
         if project:
             try:
-                pdir = local_folder_service.project_dir(root, project)
-            except local_folder_service.LocalFolderError as exc:
+                pdir = (root / storage.valid_project_id(project))
+            except storage.StorageError as exc:
                 raise BackupError(str(exc)) from exc
-            here["project"] = local_folder_service.has_research_project(root, project)
+            here["project"] = _records(root).has_project(project)
             for d in scope.get("deployments", []):
                 folder = pdir / d["collection"] / d["id"]
                 here["deployments"][d["id"]] = folder.is_dir() and any(folder.iterdir())
             if f"project/{VISITS}" in names:
                 backed = json.loads(zf.read(f"project/{VISITS}"))
-                mine = {_key(v) for v in local_folder_service.list_visits(root, project)} if here["project"] else set()
+                mine = {_key(v) for v in _visits(root).visits(project)} if here["project"] else set()
                 here["visits"] = {"in_backup": len(backed), "already": sum(_key(v) in mine for v in backed)}
         has_images = {d["id"]: any(n.startswith(f"deployments/{d['collection']}/{d['id']}/") and _is_image(n) for n in names) for d in scope.get("deployments", [])}
     return {"manifest": manifest, "here": here, "has_images": has_images}
@@ -321,22 +332,22 @@ def restore_backup(
         wants_project = project_files or visits or bool(deployments)
         if wants_project and not project:
             raise BackupError("That backup holds no research project.")
-        pdir = local_folder_service.project_dir(root, project) if wants_project else None
+        pdir = (root / storage.valid_project_id(project)) if wants_project else None
         if wants_project:
             for d in deployments:
                 if not any(x["id"] == d for x in scope.get("deployments", [])):
                     raise BackupError(f"The deployment {d} is not in that backup.")
-            if not local_folder_service.has_research_project(root, project) and not (project_files and f"project/{PROJECT}" in names):
+            if not _records(root).has_project(project) and not (project_files and f"project/{PROJECT}" in names):
                 raise BackupError(f"The research project {project} is not here: restore its data too.")  # type: ignore[arg-type]
 
         store = storage.open_store(root)
         if wants_project and project_files:
             yield {"type": "step", "message": f"Restoring the data of {project}…"}
             if f"project/{PROJECT}" in names:
-                if replace or local_folder_service.project_record(root, project) is None:  # type: ignore[arg-type]
+                if replace or _records(root).project_record(project) is None:  # type: ignore[arg-type]
                     # as the backup has it — its id and dates too —, wherever the catalog is kept
-                    local_folder_service.put_project_record(root, json.loads(zf.read(f"project/{PROJECT}")))
-                    local_folder_service.project_dir(root, project).mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
+                    _records(root).put_project_record(json.loads(zf.read(f"project/{PROJECT}")))
+                    (root / storage.valid_project_id(project)).mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
                     summary["project_files"]["research_project"] = "written"
                 else:
                     summary["project_files"]["research_project"] = "kept"
@@ -348,17 +359,17 @@ def restore_backup(
                     continue
                 backed = [i for i in json.loads(zf.read(f"project/{PROJECT_RECORDS[kind]}")) if isinstance(i, dict)]
                 if kind == "roles":   # told by the name of the trapper: it is kept by its id, whoever the trapper is here
-                    current = local_folder_service.list_roles(root, project)  # type: ignore[arg-type]
+                    current = _records(root).roles(project)  # type: ignore[arg-type]
                     merged, added, replaced, skipped = _merge(current, [r for r in backed if not r.get("deleted_at")], key, replace=replace)
-                    local_folder_service.write_roles(root, project, merged)  # type: ignore[arg-type]
+                    _records(root).keep_roles(project, merged)  # type: ignore[arg-type]
                 elif kind == "locations":   # wherever the catalog is kept
-                    current = local_folder_service.location_records(root, project)  # type: ignore[arg-type]
+                    current = _records(root).location_records(project)  # type: ignore[arg-type]
                     merged, added, replaced, skipped = _merge(current, backed, key, replace=replace)
-                    local_folder_service.put_location_records(root, project, merged)  # type: ignore[arg-type]
+                    _records(root).put_location_records(project, merged)  # type: ignore[arg-type]
                 else:   # the cameras and the SD cards, wherever the catalog is kept
-                    current = local_folder_service.equipment_records(root, project, kind)  # type: ignore[arg-type]
+                    current = _records(root).equipment_records(project, kind)  # type: ignore[arg-type]
                     merged, added, replaced, skipped = _merge(current, backed, key, replace=replace)
-                    local_folder_service.put_equipment_records(root, project, kind, merged)  # type: ignore[arg-type]
+                    _records(root).put_equipment_records(project, kind, merged)  # type: ignore[arg-type]
                 summary["project_files"][label] = {"added": added, "replaced": replaced, "kept": skipped}
             if f"project/{HISTORY}" in names:   # a line of the history is never changed: the ones the backup has that are not here are added
                 backed = [i for i in json.loads(zf.read(f"project/{HISTORY}")) if isinstance(i, dict)]
@@ -371,9 +382,9 @@ def restore_backup(
             if f"project/{VISITS}" not in names:
                 raise BackupError("That backup holds no visits.")
             backed = [v for v in json.loads(zf.read(f"project/{VISITS}")) if isinstance(v, dict)]
-            current = local_folder_service.list_visits(root, project)  # type: ignore[arg-type]
+            current = _visits(root).visits(project)  # type: ignore[arg-type]
             merged, added, replaced, skipped = _merge(current, backed, _key, replace=replace)
-            local_folder_service.replace_visits(root, project, merged)  # type: ignore[arg-type]
+            _visits(root).replace_all(project, merged)  # type: ignore[arg-type]
             summary["visits"] = {"added": added, "replaced": replaced, "kept": skipped}
         if wants_project and deployments:
             wanted = {d["id"]: d for d in scope.get("deployments", []) if d["id"] in deployments}
@@ -419,8 +430,8 @@ def restore_backup(
                 merged[section] = {**merged[section], **values, **kept_secrets}
             if isinstance(backed.get("FIELDWORK"), dict) and backed["FIELDWORK"].get("trappers"):   # the people, kept beside the projects; the cameras and the SD cards are the projects'
                 people = [t for t in backed["FIELDWORK"]["trappers"] if isinstance(t, dict) and t.get("username") and not t.get("deleted_at")]
-                kept, added, replaced, skipped = _merge(local_folder_service.list_trappers(root), people, lambda t: str(t.get("username", "")).lower(), replace=replace)
-                local_folder_service.write_trappers(root, kept)
+                kept, added, replaced, skipped = _merge(_records(root).trappers(), people, lambda t: str(t.get("username", "")).lower(), replace=replace)
+                _records(root).keep_trappers(kept)
                 summary["trappers"] = {"added": added, "replaced": replaced, "kept": skipped}
             try:
                 config.save_settings(config.Settings.model_validate(merged, context={"migrate": True}))
