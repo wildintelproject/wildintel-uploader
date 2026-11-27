@@ -118,6 +118,11 @@ class KeptRevisions(Revisions):
         from wildintel_uploader.core.services import statistics_service
         return statistics_service.next_revision(_root(), project, location_id)
 
+    def before(self, project: str, deployment_id: str) -> list[dict]:
+        from wildintel_uploader.core.services import statistics_service
+        return [{"revision": r.revision, "deployment_id": r.deployment_id, "image_count": r.times.image_count, "times": list(r.times.times)}
+                for r in statistics_service.revisions_before(_root(), project, deployment_id)]
+
 
 class DeploymentPhotos(Photos):
     @staticmethod

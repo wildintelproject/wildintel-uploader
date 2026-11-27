@@ -59,6 +59,11 @@ class DeploymentsService(ABC):
     @abstractmethod
     def next_revision(self, project: str, location_id: str) -> dict: ...
 
+    @abstractmethod
+    def previous_revisions(self, project: str, deployment_id: str) -> list[dict]:
+        """The previous revisions of the location of a deployment, oldest first: {"revision", "deployment_id", "image_count", "times"} — the
+        times when its images were taken, in seconds, sorted."""
+
     # importing one
     @abstractmethod
     def import_local(self, source_dir: str, collection_dir: str, collection_name: str | None, deployment: Deployment, preprocessing: dict | None,
@@ -214,6 +219,9 @@ class Folders(ABC):
 class Revisions(ABC):
     @abstractmethod
     def previous(self, project: str, deployment_id: str) -> dict | None: ...
+
+    @abstractmethod
+    def before(self, project: str, deployment_id: str) -> list[dict]: ...
 
     @abstractmethod
     def next(self, project: str, location_id: str) -> dict: ...

@@ -78,6 +78,9 @@ class DeploymentsUseCases(DeploymentsService):
     def next_revision(self, project: str, location_id: str) -> dict:
         return self._revisions.next(project, location_id)
 
+    def previous_revisions(self, project: str, deployment_id: str) -> list[dict]:
+        return self._revisions.before(project, deployment_id)
+
     # importing one
 
     def _require_visit(self, collection_dir: str, deployment_id: str) -> None:

@@ -43,7 +43,7 @@ from wildintel_uploader.modules.fileinfo.infrastructure.store import SqliteStore
 from wildintel_uploader.modules.postvalidation.application.use_cases import PostvalidationUseCases
 from wildintel_uploader.modules.postvalidation.domain.ports import PostvalidationService
 from wildintel_uploader.modules.postvalidation.infrastructure import validators as deployment_validators
-from wildintel_uploader.modules.postvalidation.infrastructure.legacy import CatalogCameras, LevelsInUse, SavedPostvalidationReports
+from wildintel_uploader.modules.postvalidation.infrastructure.legacy import CatalogCameras, LevelsInUse, RevisionsOfTheDeployments, SavedPostvalidationReports
 from wildintel_uploader.modules.preprocessing.application.use_cases import PreprocessingUseCases
 from wildintel_uploader.modules.preprocessing.domain.ports import PreprocessingService
 from wildintel_uploader.modules.preprocessing.infrastructure import steps as preprocessing_steps
@@ -130,7 +130,8 @@ def build_prevalidation(info: FileInfoService | None = None) -> PrevalidationSer
 def build_postvalidation(info: FileInfoService | None = None) -> PostvalidationService:
     """The postvalidation: the validators of a deployment over its images and what is known of them."""
     return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(), levels=LevelsInUse(),
-                                  reports=SavedPostvalidationReports(build_reports()))
+                                  reports=SavedPostvalidationReports(build_reports()),
+                                  revisions=RevisionsOfTheDeployments(build_deployments))
 
 
 def build_preprocessing(info: FileInfoService | None = None) -> PreprocessingService:

@@ -45,6 +45,12 @@ class CameraLevels(ABC):
         """How two images are told to be of the same camera, as the settings say (VALIDATION.camera_levels)."""
 
 
+class PreviousRevisions(ABC):
+    @abstractmethod
+    def of(self, research_project_id: str, deployment_id: str) -> list:
+        """The previous revisions of the location of a deployment, oldest first — statistics.Revision."""
+
+
 class PostvalidationReports(ABC):
     @abstractmethod
     def postvalidation(self, result: dict, deployment_id: str, folder: Path, parameters: dict) -> str | None:

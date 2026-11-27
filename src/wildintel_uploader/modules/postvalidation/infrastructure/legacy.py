@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from wildintel_uploader.modules.postvalidation.domain.ports import CameraLevels, CameraRecords, PostvalidationReports
+from wildintel_uploader.modules.postvalidation.domain.ports import CameraLevels, CameraRecords, PostvalidationReports, PreviousRevisions
+from wildintel_uploader.modules.postvalidation.domain.statistics import DeploymentTimes, Revision
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
 
 logger = logging.getLogger(__name__)
@@ -38,3 +39,14 @@ class SavedPostvalidationReports(PostvalidationReports):
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not write the report: %s", exc, exc_info=debugging())
             return None
+
+
+class RevisionsOfTheDeployments(PreviousRevisions):
+    """As the deployments say them — through their contract, given when it is needed."""
+
+    def __init__(self, deployments) -> None:
+        self._deployments = deployments
+
+    def of(self, research_project_id: str, deployment_id: str) -> list:
+        return [Revision(r["revision"], r["deployment_id"], DeploymentTimes(r["image_count"], r["times"]))
+                for r in self._deployments().previous_revisions(research_project_id, deployment_id)]

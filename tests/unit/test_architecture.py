@@ -65,7 +65,6 @@ STILL_COUPLED = {
     "deployments/infrastructure/seal_service.py": {"local_folder_service"},
     "deployments/infrastructure/statistics_service.py": {"camera_info", "local_folder_service"},
     "postvalidation/infrastructure/legacy.py": {"local_folder_service"},
-    "postvalidation/infrastructure/validators/statistics.py": {"statistics_service"},
     "preprocessing/infrastructure/folders.py": {"deployment_import_service", "disk_space", "local_folder_service"},
     "prevalidation/infrastructure/legacy.py": {"local_folder_service"},
     "reports/infrastructure/report_service.py": {"camera_info", "deployment_import_service"},

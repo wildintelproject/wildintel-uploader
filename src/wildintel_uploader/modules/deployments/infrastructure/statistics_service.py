@@ -28,29 +28,20 @@ import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal
 
 from wildintel_uploader.core.services import camera_info, deployment_import_service as dis, local_folder_service
+from wildintel_uploader.modules.postvalidation.domain import statistics as _stats
+from wildintel_uploader.modules.postvalidation.domain.models import PostvalidationError
+from wildintel_uploader.modules.postvalidation.domain.statistics import (  # noqa: F401 — the names of before
+    LABELS as _LABELS, METHODS, STATISTIC_CHECKS, UNITS as _UNITS, DeploymentTimes, Method, Revision, describe as _describe, fmt as _fmt,
+    metrics as _metrics, sequence_lengths,
+)
 
 logger = logging.getLogger(__name__)
 
-Method = Literal["median", "mean", "last", "range"]
-METHODS: tuple[str, ...] = ("median", "mean", "last", "range")
 
 _DEPLOYMENT_RE = re.compile(r"^R(\d{4})-(.+)$")
 _COLLECTION_RE = re.compile(r"^R\d{4}(_.+)?$")
-
-
-@dataclass(frozen=True)
-class DeploymentTimes:
-    """One deployment's images: how many there are, and when each dated one was taken."""
-
-    image_count: int
-    times: list[float]  # seconds since the epoch, sorted
-
-    def sequences(self, gap_seconds: float) -> list[int]:
-        """The images in each sequence — a new one starts when the gap to the previous image is at least gap_seconds."""
-        return sequence_lengths(self.times, gap_seconds)
 
 
 @dataclass(frozen=True)
@@ -58,20 +49,6 @@ class PreviousRevision:
     revision: int
     deployment_id: str
     path: Path
-
-
-def sequence_lengths(times: list[float], gap_seconds: float) -> list[int]:
-    """The number of images in each sequence of the (sorted) times. A gap of exactly
-    gap_seconds starts a new one: "at least X seconds"."""
-    lengths: list[int] = []
-    previous: float | None = None
-    for t in sorted(times):
-        if previous is None or t - previous >= gap_seconds:
-            lengths.append(1)
-        else:
-            lengths[-1] += 1
-        previous = t
-    return lengths
 
 
 def _timestamp(iso: str) -> float | None:
@@ -160,86 +137,34 @@ def previous_deployment(collections_dir: Path, research_project_id: str, deploym
     return None
 
 
-def _fmt(value: float) -> str:
-    return f"{value:.1f}".rstrip("0").rstrip(".") if value != int(value) else str(int(value))
-
-
 def compare(value: float, previous: list[float], *, method: str, tolerance_percent: float, min_revisions: int) -> dict:
-    """Whether `value` is similar to the `previous` revisions' values, and why.
-
-    Returns {"ok", "skipped", "value", "reference", "lower", "upper", "previous"}: skipped
-    (and ok) when there aren't min_revisions previous values to go by.
-    """
-    if method not in METHODS:
-        raise dis.DeploymentImportError(f"Unknown method '{method}' — use one of {', '.join(METHODS)}.")
-    base = {"value": value, "previous": len(previous), "reference": None, "lower": None, "upper": None}
-    if len(previous) < max(min_revisions, 1):
-        return {**base, "ok": True, "skipped": True}
-    tolerance = tolerance_percent / 100
-    reference = {
-        "median": lambda: statistics.median(previous), "mean": lambda: statistics.fmean(previous),
-        "last": lambda: previous[-1], "range": lambda: statistics.median(previous),
-    }[method]()
-    if method == "range":
-        lower, upper = min(previous) * (1 - tolerance), max(previous) * (1 + tolerance)
-    else:
-        lower, upper = reference * (1 - tolerance), reference * (1 + tolerance)
-    return {**base, "ok": lower <= value <= upper, "skipped": False, "reference": reference, "lower": lower, "upper": upper}
+    """See modules.postvalidation.domain.statistics.compare — an unknown method is a DeploymentImportError here, as it was."""
+    try:
+        return _stats.compare(value, previous, method=method, tolerance_percent=tolerance_percent, min_revisions=min_revisions)
+    except PostvalidationError as exc:
+        raise dis.DeploymentImportError(str(exc)) from exc
 
 
-def _describe(label: str, unit: str, result: dict, *, method: str, tolerance_percent: float, min_revisions: int, location: str) -> str:
-    if result["skipped"]:
-        return (f"Not enough history to judge the {label}: {result['previous']} previous revision(s) of {location} found, "
-                f"{max(min_revisions, 1)} needed.")
-    allowed = f"{_fmt(result['lower'])}–{_fmt(result['upper'])}"
-    how = {"median": "the median of", "mean": "the mean of", "last": "the last of", "range": "the range of"}[method]
-    verb = "is similar to" if result["ok"] else "is not similar to"
-    return (f"The {label} ({_fmt(result['value'])}{unit}) {verb} {how} the {result['previous']} previous revision(s) of {location} "
-            f"(allowed {allowed}, ±{_fmt(tolerance_percent)}%).")
-
-
-STATISTIC_CHECKS = ("image_count", "sequence_count", "sequence_length")
-_LABELS = {"image_count": "number of images", "sequence_count": "number of sequences", "sequence_length": "length of the sequences"}
-_UNITS = {"image_count": "", "sequence_count": "", "sequence_length": " images per sequence"}
-
-
-def _metrics(times: DeploymentTimes, gap_seconds: float) -> dict[str, float]:
-    lengths = times.sequences(gap_seconds)
-    return {
-        "image_count": float(times.image_count),
-        "sequence_count": float(len(lengths)),
-        "sequence_length": (sum(lengths) / len(lengths)) if lengths else 0.0,  # the mean number of images per sequence
-    }
+def revisions_before(collections_dir: Path, research_project_id: str | None, deployment_id: str) -> list[Revision]:
+    """The previous revisions of the location of a deployment, with when their images were taken — oldest first."""
+    if not research_project_id:
+        return []
+    return [Revision(r.revision, r.deployment_id, times_of_revision(r.path)) for r in previous_revisions(collections_dir, research_project_id, deployment_id)]
 
 
 def statistical_checks(
     current: DeploymentTimes, collections_dir: Path, research_project_id: str | None, deployment_id: str, checks: frozenset[str], *,
     sequence_gap_seconds: float, min_revisions: int, method: str, tolerances: dict[str, float],
 ) -> dict[str, dict]:
-    """The statistical checks asked for, by name — each as compare() gives it plus "message" and "history"
-    (the value in each previous revision). Without a research project or a location in the deployment
-    id there's no history to look at, which also skips them."""
-    wanted = [c for c in STATISTIC_CHECKS if c in checks]
-    if not wanted:
+    """The statistical checks asked for, by name (see modules.postvalidation.domain.statistics.judge), against the previous revisions kept in the
+    collections folder. Without a research project or a location in the deployment id there's no history to look at, which also skips them."""
+    if not any(c in checks for c in STATISTIC_CHECKS):
         return {}
-    match = _DEPLOYMENT_RE.match(deployment_id)
-    location = match.group(2) if match else deployment_id
-    revisions = previous_revisions(collections_dir, research_project_id, deployment_id) if research_project_id else []
-    histories = []
-    for revision in revisions:
-        times = times_of_revision(revision.path)
-        if times.image_count > 0:
-            histories.append((revision, _metrics(times, sequence_gap_seconds)))
-    now = _metrics(current, sequence_gap_seconds)
-    out: dict[str, dict] = {}
-    for key in wanted:
-        previous = [metrics[key] for _, metrics in histories]
-        tolerance = tolerances[key]
-        result = compare(now[key], previous, method=method, tolerance_percent=tolerance, min_revisions=min_revisions)
-        result["message"] = _describe(_LABELS[key], _UNITS[key], result, method=method, tolerance_percent=tolerance, min_revisions=min_revisions, location=location)
-        result["history"] = [{"revision": rev.revision, "deployment_id": rev.deployment_id, "value": metrics[key]} for rev, metrics in histories]
-        out[key] = result
-    return out
+    try:
+        return _stats.judge(current, revisions_before(collections_dir, research_project_id, deployment_id), deployment_id, checks,
+                            sequence_gap_seconds=sequence_gap_seconds, min_revisions=min_revisions, method=method, tolerances=tolerances)
+    except PostvalidationError as exc:
+        raise dis.DeploymentImportError(str(exc)) from exc
 
 
 # ── Statistics of a collection: every deployment against the previous revisions of its location ──────────

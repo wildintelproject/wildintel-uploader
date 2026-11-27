@@ -45,6 +45,8 @@ class DeploymentContext:
     # by similar: {"sequence_gap_seconds", "min_revisions", "method", "<check>_tolerance": percent}
     research_project_id: str | None = None
     statistics: dict | None = None
+    # the previous revisions of the location — statistics.Revision —, for the statistical checks: none, there is no history to judge by
+    previous: tuple = ()
 
 
 def ok(message: str) -> dict:
