@@ -31,7 +31,8 @@ import subprocess
 from pathlib import Path
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.services import local_folder_service
+from wildintel_uploader.modules.visits.domain.models import VisitsError
+from wildintel_uploader.modules.visits.domain.rules import closes_collection
 from wildintel_uploader.modules.deployments.domain.naming import natural_key
 from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 
@@ -88,20 +89,21 @@ def _when(visit: dict) -> dt.datetime | None:
 
 def visit_period(research_project_id: str, location_id: str, date: str, time: str, settings: config.Settings | None = None) -> tuple[dt.datetime, dt.datetime]:
     """The period of the deployment a visit started, as the cameras' clock shows it: from that visit to the next one at the same
-    location that collected the card (local_folder_service.closes_collection). The visits' own date and time are the field's wall clock.
+    location that collected the card (the rules of the visits). The visits' own date and time are the field's wall clock.
 
     Raises:
         TimeFixError: the visit isn't in the research project, or no later visit collected its card.
     """
-    try:
-        visits = local_folder_service.list_visits(config.collections_dir(settings), research_project_id, location_id)
-    except local_folder_service.LocalFolderError as exc:
-        raise TimeFixError(str(exc)) from exc
+    from wildintel_uploader.entrypoints import wiring
+    try:   # the visits, through their contract
+        visits = wiring.build_visits(config.collections_dir(settings)).visits(research_project_id, location_id)
+    except VisitsError as exc:
+        raise TimeFixError(exc.message) from exc
     visits = sorted((v for v in visits if _when(v)), key=_when)
     index = next((i for i, v in enumerate(visits) if v.get("date") == date and v.get("time") == time), None)
     if index is None:
         raise TimeFixError(f"There is no visit to {location_id} on {date} at {time} in {research_project_id}.")
-    end = next((v for v in visits[index + 1:] if local_folder_service.closes_collection(v)), None)
+    end = next((v for v in visits[index + 1:] if closes_collection(v)), None)
     if end is None:
         raise TimeFixError(f"No visit to {location_id} after {date} {time} collected the card, so the deployment has no end yet.")
     return _when(visits[index]), _when(end)

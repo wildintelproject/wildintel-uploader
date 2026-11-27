@@ -1,5 +1,5 @@
 """The ports of the deployments over the code of before: the memory cards (card_copy_service), the folders and the collections
-(deployment_import_service, local_folder_service, seal_service), the revisions (statistics_service), the photos (deployment_photos). What they
+(deployment_import_service, their collections, seal_service), the revisions (statistics_service), the photos (deployment_photos). What they
 refuse is the deployments', with their words."""
 from __future__ import annotations
 
@@ -54,11 +54,6 @@ class CollectionFolders(Folders):
         from wildintel_uploader.core.services import deployment_import_service
         return deployment_import_service
 
-    @staticmethod
-    def _lfs():
-        from wildintel_uploader.core.services import local_folder_service
-        return local_folder_service
-
     def root(self) -> Path:
         return _root()
 
@@ -79,7 +74,7 @@ class CollectionFolders(Folders):
             return self._dis().scan_session(folder)
 
     def check_collection(self, folder: Path) -> dict:
-        return self._lfs().check_collection(folder)
+        return layout.check_collection(folder)
 
     def default_collection(self, project: str, deployment_id: str) -> Path:
         with _failed():
@@ -89,7 +84,11 @@ class CollectionFolders(Folders):
         return self._dis().existing_deployment_dir(project, deployment_id)
 
     def local_deployments(self, folder: Path) -> list[dict]:
-        return self._lfs().list_deployments(folder)
+        return layout.list_deployments(folder)
+
+    def imported(self, project: str, exclude_deployment: str | None) -> dict[str, list[dict]]:
+        with _failed():
+            return layout.imported_source_hashes(_root(), project, exclude_deployment)
 
     def log_entry(self, project: str, deployment_id: str) -> dict:
         with _failed():
@@ -100,8 +99,12 @@ class CollectionFolders(Folders):
         return seal_service.verify(folder)
 
     def location_time(self, project_dir: Path, location_id: str | None) -> dict:
-        with _failed():
-            return self._lfs().location_time_in(project_dir, location_id)
+        from wildintel_uploader.entrypoints import wiring
+        from wildintel_uploader.modules.catalog.domain.models import CatalogError
+        try:   # the research project of that folder, in the catalog of its collections folder — through its contract
+            return wiring.build_catalog(project_dir.parent, wiring.build_settings()).location_time(project_dir.name, location_id)
+        except CatalogError as exc:
+            raise DeploymentsFailed(exc.message) from exc
 
     def copy_as_it_is(self, source_dir: str, collection_dir: str, collection_name: str | None, deployment: Deployment) -> Iterator[dict]:
         with _failed():

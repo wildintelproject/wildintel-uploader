@@ -21,8 +21,9 @@ from wildintel_uploader.core.services import audit, visit_rules
 from wildintel_uploader.modules.deployments.infrastructure.collections import (  # noqa: F401 — how the collections folder holds the deployments is theirs
     COLLECTION_METADATA_FILE, DEPLOYMENT_METADATA_FILE, FIELDWORK_LOG_FIELDS, FIELDWORK_LOG_SUFFIX, IMAGES_FILE, TIMESTAMP_LOG_FIELDS, TIMESTAMP_LOG_SUFFIX, _read_json, check_collection, fieldwork_log_path, image_entry, imported_source_hashes, is_synced, list_deployments, project_dir, read_fieldwork_log, read_timestamp_log, timestamp_log_path, write_collection_metadata, write_deployment_metadata, write_images_file,
 )
+from wildintel_uploader.modules.uploaders.infrastructure.failures import list_upload_failures, set_upload_failure  # noqa: F401
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import (  # noqa: F401 — the visits kept are the module of the visits'
-    _POINTS_TO, _CALLED, _Refs, _kept, _linked, _raw_visits, _refs, _site, _told, _unlinked, _write_raw_visits, _write_unknown, camera_model_of, closed_visits, closes_collection, link_visit, list_planned_revisions, list_unknown, list_upload_failures, list_visits, plan_revision, replace_visits, set_upload_failure, update_visit, write_states, write_unknown, write_visit, write_visits,
+    _POINTS_TO, _CALLED, _Refs, _kept, _linked, _raw_visits, _refs, _site, _told, _unlinked, _write_raw_visits, _write_unknown, camera_model_of, closed_visits, closes_collection, link_visit, list_planned_revisions, list_unknown, list_visits, plan_revision, replace_visits, update_visit, write_states, write_unknown, write_visit, write_visits,
 )
 
 logger = logging.getLogger(__name__)

@@ -92,6 +92,10 @@ class DeploymentsService(ABC):
     def local_deployments(self, folder: Path) -> list[dict]: ...
 
     @abstractmethod
+    def imported_images(self, project: str, exclude_deployment: str | None = None) -> dict[str, list[dict]]:
+        """The images already imported into a research project, by the SHA-1 of the original: {"deployment_id", "collection", "original"}."""
+
+    @abstractmethod
     def log_entry(self, project: str, deployment_id: str) -> dict: ...
 
     @abstractmethod
@@ -242,6 +246,9 @@ class Folders(ABC):
 
     @abstractmethod
     def local_deployments(self, folder: Path) -> list[dict]: ...
+
+    @abstractmethod
+    def imported(self, project: str, exclude_deployment: str | None) -> dict[str, list[dict]]: ...
 
     @abstractmethod
     def log_entry(self, project: str, deployment_id: str) -> dict: ...

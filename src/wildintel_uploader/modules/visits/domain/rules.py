@@ -1033,3 +1033,16 @@ def history_notes(new: list[dict], kept: list[dict]) -> list[str]:
         if nocount:
             notes.append(f"R{session:04d}: {len(nocount)} visit(s) without image count (count forgotten), counted as the end of the collection: {', '.join(nocount)}.")
     return notes
+
+
+def closes_collection(visit: dict) -> bool:
+    """Whether a visit closes a deployment: it collected the card — a Revision or a Desinstallation — and something was on it. Not an
+    explicit 0 photos (nothing to timestamp), not an Installation (no card is taken), not a stolen camera, not a visit where nothing was
+    collected (status 'Not revised')."""
+    actions = visit.get("actions") or []
+    if "Stolen" in actions or not {"Revision", "Desinstallation"} & set(actions):
+        return False
+    if str(visit.get("camera_status") or "").lower() in ("not revised", "no revisada", "no revisado"):
+        return False
+    photos = visit.get("num_photos")
+    return photos is None or photos > 0

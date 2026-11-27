@@ -123,13 +123,13 @@ def file_info() -> FileInfoService:
 
 def build_prevalidation(info: FileInfoService | None = None) -> PrevalidationService:
     """The prevalidation: the validators of the images over what is known of the files, the images gone through in parallel."""
-    return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS, imported=PreprocessedImages(), settings=ValidationInUse(),
+    return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS, imported=PreprocessedImages(build_deployments), settings=ValidationInUse(),
                                  reports=SavedValidationReports(build_reports()))
 
 
 def build_postvalidation(info: FileInfoService | None = None) -> PostvalidationService:
     """The postvalidation: the validators of a deployment over its images and what is known of them."""
-    return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(), levels=LevelsInUse(),
+    return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(lambda: build_catalog(catalog_collections_dir(), build_settings())), levels=LevelsInUse(),
                                   reports=SavedPostvalidationReports(build_reports()),
                                   revisions=RevisionsOfTheDeployments(build_deployments))
 

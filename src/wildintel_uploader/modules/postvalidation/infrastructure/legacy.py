@@ -1,4 +1,4 @@
-"""The ports of the postvalidation over the code of before: the record of a camera (the catalog's functions of before), how a camera is told
+"""The ports of the postvalidation over the code of before: the record of a camera (the catalog, through its contract), how a camera is told
 (VALIDATION, as config reads it), the reports (report_service)."""
 from __future__ import annotations
 
@@ -13,10 +13,16 @@ logger = logging.getLogger(__name__)
 
 
 class CatalogCameras(CameraRecords):
+    """The record of a camera as the catalog keeps it — through its contract, given when it is needed."""
+
+    def __init__(self, catalog) -> None:
+        self._catalog = catalog
+
     def camera(self, research_project_id: str | None, camera_id: str | None) -> dict | None:
-        from wildintel_uploader.core import config
-        from wildintel_uploader.core.services import local_folder_service
-        return local_folder_service.camera_record(config.collections_dir(), research_project_id, camera_id)
+        camera = self._catalog().camera(research_project_id, camera_id) if research_project_id and camera_id else None
+        if camera is None:
+            return None
+        return {"label": camera.label, "camera_id": camera.camera_id, "camera_make": camera.camera_make, "camera_model": camera.camera_model}
 
 
 class LevelsInUse(CameraLevels):

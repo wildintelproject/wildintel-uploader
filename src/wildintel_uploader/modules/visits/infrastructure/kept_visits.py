@@ -3,10 +3,10 @@ with the names of what they point to and kept by their ids (the locations, the c
 local_folder_service (#248), which still gives these names; what it needs of the catalog it asks there, as the catalog's functions of before."""
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 from wildintel_uploader.modules.visits.domain import rules as visit_rules, wall_clock as visit_time
+from wildintel_uploader.modules.visits.domain.rules import closes_collection  # noqa: F401 — where the code of before finds it
 from wildintel_uploader.shared import audit, identity, ids, storage
 
 
@@ -368,24 +368,6 @@ def replace_visits(root: Path, research_project_id: str, visits: list[dict]) -> 
     _write_raw_visits(root, research_project_id, [_kept(v, refs) for v in visits])
 
 
-def list_upload_failures(root: Path, research_project_id: str) -> list[dict]:
-    """The uploads of the deployments of a research project that were tried and failed: {"deployment_id", "destination", "note", "at"}. An upload that was done is not here:
-    it is told by the deployment's own folder — and a success takes the failure away."""
-    return _lfs()._store(root).read_records(research_project_id, "upload_failures")
-
-
-def set_upload_failure(root: Path, research_project_id: str, deployment_id: str, destination: str, note: str | None) -> None:
-    """Keeps that the upload of a deployment to a destination failed, with why — or, with no note (None), takes the failure away: it was tried again and worked.
-
-    Raises:
-        storage.StorageError: the research project isn't there."""
-    _lfs().require_research_project(root, research_project_id)
-    failures = [f for f in list_upload_failures(root, research_project_id) if not (f.get("deployment_id") == deployment_id and f.get("destination") == destination)]
-    if note is not None:
-        failures.append({"deployment_id": deployment_id, "destination": destination, "note": note.strip() or None, "at": datetime.now().astimezone().isoformat(timespec="seconds")})
-    _lfs()._store(root).write_records(research_project_id, "upload_failures", failures)
-
-
 def write_states(root: Path, research_project_id: str, states: dict[tuple[str, str], str | None]) -> int:
     """Keeps the `state` of the visits — found by their site (ignoring case) and their instant — where it changed; returns how many changed."""
     list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
@@ -401,19 +383,6 @@ def write_states(root: Path, research_project_id: str, states: dict[tuple[str, s
     if changed:
         _write_raw_visits(root, research_project_id, raw)
     return changed
-
-
-def closes_collection(visit: dict) -> bool:
-    """Whether a visit closes a deployment: it collected the card — a Revision or a Desinstallation — and something was on it. Not an
-    explicit 0 photos (nothing to timestamp), not an Installation (no card is taken), not a stolen camera, not a visit where nothing was
-    collected (status 'Not revised')."""
-    actions = visit.get("actions") or []
-    if "Stolen" in actions or not {"Revision", "Desinstallation"} & set(actions):
-        return False
-    if str(visit.get("camera_status") or "").lower() in ("not revised", "no revisada", "no revisado"):
-        return False
-    photos = visit.get("num_photos")
-    return photos is None or photos > 0
 
 
 def closed_visits(root: Path, research_project_id: str) -> list[dict]:

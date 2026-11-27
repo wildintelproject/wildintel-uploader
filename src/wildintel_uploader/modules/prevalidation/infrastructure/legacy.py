@@ -1,4 +1,4 @@
-"""The ports of the prevalidation over the code of before: the images imported before (their preprocessing.json, local_folder_service), the
+"""The ports of the prevalidation over the code of before: the images imported before (the deployments, through their contract), the
 settings in use, the reports (report_service)."""
 from __future__ import annotations
 
@@ -14,13 +14,17 @@ logger = logging.getLogger(__name__)
 
 
 class PreprocessedImages(ImportedImages):
+    """As the deployments say them — through their contract, given when it is needed."""
+
+    def __init__(self, deployments) -> None:
+        self._deployments = deployments
+
     def source_hashes(self, research_project_id: str, exclude_deployment: str | None = None) -> dict[str, list[dict]]:
-        from wildintel_uploader.core import config
-        from wildintel_uploader.core.services import local_folder_service
+        from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
         try:
-            return local_folder_service.imported_source_hashes(config.collections_dir(), research_project_id, exclude_deployment)
-        except local_folder_service.LocalFolderError as exc:
-            raise PrevalidationError(str(exc)) from exc
+            return self._deployments().imported_images(research_project_id, exclude_deployment)
+        except DeploymentsError as exc:
+            raise PrevalidationError(exc.message) from exc
 
 
 class ValidationInUse(PrevalidationSettings):

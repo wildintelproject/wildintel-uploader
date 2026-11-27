@@ -66,6 +66,9 @@ class DeploymentsUseCases(DeploymentsService):
     def local_deployments(self, folder: Path) -> list[dict]:
         return self._folders.local_deployments(folder)
 
+    def imported_images(self, project: str, exclude_deployment: str | None = None) -> dict[str, list[dict]]:
+        return self._folders.imported(project, exclude_deployment)
+
     def log_entry(self, project: str, deployment_id: str) -> dict:
         return self._folders.log_entry(project, deployment_id)
 
