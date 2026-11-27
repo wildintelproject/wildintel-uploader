@@ -23,12 +23,14 @@ def _read_json(path: Path):
 class FolderUploads(DeploymentUploads):
     """Where a deployment was uploaded, as its folder says: its upload.json, or images.json when it was synced from TRAPPER."""
 
-    def __init__(self, root: Path, trapper: Callable[[], Any], agouti: Callable[[], Any], layout: Callable[[], CollectionLayout], failures: UploadFailures) -> None:
+    def __init__(self, root: Callable[[], Path], trapper: Callable[[], Any], agouti: Callable[[], Any], layout: Callable[[], CollectionLayout],
+                 failures: UploadFailures) -> None:
         """`trapper` and `agouti` give the sections of the uploaders in the settings, asked each time."""
-        self.root, self._trapper, self._agouti, self._layout, self._failures = root, trapper, agouti, layout, failures
+        """`root` says the collections folder, asked each time."""
+        self._root, self._trapper, self._agouti, self._layout, self._failures = root, trapper, agouti, layout, failures
 
     def _folder(self, project: str, deployment_id: str) -> Path:
-        return self.root / project / deployment_id.split("-", 1)[0] / deployment_id
+        return self._root() / project / deployment_id.split("-", 1)[0] / deployment_id
 
     @staticmethod
     def _upload(folder: Path):

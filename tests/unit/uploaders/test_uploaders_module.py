@@ -237,3 +237,21 @@ def test_an_upload_creates_what_trapper_lacks_declares_the_locations_time_and_ma
                                                                            "R0001-DONA_01", Path("/p"), mode="dry_run"))
     assert dry[-1] == {"type": "done", "mode": "dry_run", "collection": "R0001", "deployment_id": "R0001-DONA_01", "would_create_location": True,
                        "would_create_deployment": True, "parts": 1}
+
+
+def test_the_uploaders_made_once_follow_the_collections_folder_when_it_changes(tmp_path, monkeypatch):
+    """The uploaders are made once for the app (Scope.APP): the collections folder is asked each time, not kept from when they were made."""
+    import json
+
+    from wildintel_uploader.entrypoints import config, wiring
+    from wildintel_uploader.modules.uploaders.infrastructure.packages import UPLOAD_LOG_FILE
+    first, then = tmp_path / "first", tmp_path / "then"
+    monkeypatch.setattr(config, "collections_dir", lambda settings=None: first)
+    uploaders = wiring.build_uploaders()
+    monkeypatch.setattr(config, "collections_dir", lambda settings=None: then)   # the data folder moved while the app runs
+    folder = then / "DONA" / "R0001" / "R0001-DONA_01"
+    folder.mkdir(parents=True)
+    (folder / UPLOAD_LOG_FILE).write_text(json.dumps({"uploaded_at": "2026-11-27T10:00:00Z", "parts": 1}), encoding="utf-8")
+
+    [upload] = uploaders.uploads_of("DONA", "R0001-DONA_01")
+    assert upload["kind"] == "uploaded" and upload["uploaded_at"] == "2026-11-27T10:00:00Z"

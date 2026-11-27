@@ -8,8 +8,16 @@ CatalogService it gives the SettingsService the catalog asks for.
 The entry points take the modules from the container made here — the web API through dishka's FastAPI integration (`web/main.py`), the command line
 through `entrypoints.cli.injection` — and ask only for contracts: `FromDishka[SettingsService]`, `FromDishka[CatalogService]`.
 
-What is made for a request or a command is made then (Scope.REQUEST), from the settings files config points at: so a test that points them elsewhere
-is heeded. What lives as long as the app — with nothing to read anew — is Scope.APP."""
+What is resolved when
+---------------------
+- Scope.REQUEST — the settings, the catalog, the sources, the visits and the deployments: made for each request or command, from the settings files
+  config points at then; a test that points them elsewhere is heeded.
+- Scope.APP — the log, the machine, the storage of the records, the clock, what is known of the files, the checks, the preprocessing, the fixes of
+  the dates, the uploaders, the backups and the reports: made once. None of them keeps a folder or a setting from when it was made: each asks for
+  them when it needs them — `section("…")`, `lambda: config.collections_dir()`, a `root()` — so a change to the settings while the app runs (the
+  data folder moved, an account kept) is heeded at once. An adapter given a Path where it should be given a function that says it would keep the
+  folder of the start: that is the mistake to look for here.
+- What is known of the files (file_info) is one for the whole process, on purpose — see it."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -289,9 +297,10 @@ def build_timefix() -> TimeFixService:
 
 def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — with the uploads kept in it."""
-    root = collections_dir or catalog_collections_dir()
-    failures = UploadFailures(lambda: root, catalog_of)
-    return UploadersUseCases(TrapperClient(section("TRAPPER"), keep_trapper_account, TrapperSdk()), CollectionsFolder(lambda: config.collections_dir(), catalog_of, UploadFailures(lambda: config.collections_dir(), catalog_of)),
+    def root() -> Path:   # asked each time: the uploaders are made once for the app, and the collections folder may change while it runs
+        return collections_dir or catalog_collections_dir()
+    failures = UploadFailures(root, catalog_of)
+    return UploadersUseCases(TrapperClient(section("TRAPPER"), keep_trapper_account, TrapperSdk()), CollectionsFolder(root, catalog_of, failures),
                              SavedUploadReports(build_reports()), FolderUploads(root, section("TRAPPER"), section("AGOUTI"), lambda: build_deployments().layout(), failures),
                              deployments=build_deployments,
                              sending=trapper_uploads(), places=PlacesInUse(lambda: config.packages_dir(), lambda: config.max_zip_mb()),
