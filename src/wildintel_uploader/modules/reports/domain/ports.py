@@ -48,6 +48,10 @@ class ReportsService(ABC):
     @abstractmethod
     def save_upload(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str: ...
 
+    @abstractmethod
+    def save_repair(self, deployment_id: str, dest: Path, files: list[tuple[str, bool, str]], seal: dict | None,
+                    preprocessing: dict[str, dict[str, str]]) -> str: ...
+
 
 class KeptReports(ABC):
     @abstractmethod

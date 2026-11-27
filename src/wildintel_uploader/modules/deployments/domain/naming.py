@@ -10,6 +10,11 @@ from wildintel_uploader.modules.deployments.domain.models import BadDeploymentNa
 
 _COLLECTION_PREFIX = re.compile(r"^(R\d{4})-")
 
+# What a collection and a deployment keep beside their images.
+COLLECTION_METADATA_FILE = "collection.json"
+DEPLOYMENT_METADATA_FILE = "deployment.json"
+IMAGES_FILE = "images.json"
+
 
 def deployment_id_for(revision: int, location_id: str) -> str:
     """BadDeploymentName: the revision isn't 1..9999 or the location is empty."""

@@ -7,17 +7,15 @@ import csv
 import json
 from pathlib import Path
 
+from wildintel_uploader.modules.deployments.domain.naming import COLLECTION_METADATA_FILE, DEPLOYMENT_METADATA_FILE, IMAGES_FILE  # noqa: F401
 from wildintel_uploader.shared import storage
 
 LocalFolderError = storage.StorageError   # what can't be read or kept in the collections folder
 
-COLLECTION_METADATA_FILE = "collection.json"
 
 
-DEPLOYMENT_METADATA_FILE = "deployment.json"
 
 
-IMAGES_FILE = "images.json"
 
 
 def check_collection(path: Path) -> dict:

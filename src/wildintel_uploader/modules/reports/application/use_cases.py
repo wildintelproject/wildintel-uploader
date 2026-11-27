@@ -46,3 +46,7 @@ class ReportsUseCases(ReportsService):
 
     def save_upload(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str:
         return self._kept.save("upload", collection, project, items, started_at=started_at, finished_at=finished_at)
+
+    def save_repair(self, deployment_id: str, dest: Path, files: list[tuple[str, bool, str]], seal: dict | None,
+                    preprocessing: dict[str, dict[str, str]]) -> str:
+        return self._kept.save("repair", deployment_id, dest, files, seal, preprocessing)

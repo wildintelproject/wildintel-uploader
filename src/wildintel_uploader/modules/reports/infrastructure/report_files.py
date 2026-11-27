@@ -41,5 +41,5 @@ class ReportFiles(KeptReports):
     def save(self, kind: str, *args, **kwargs) -> str:
         rs = _old()
         build = {"validation": rs.validation_report, "postvalidation": rs.postvalidation_report, "preprocessing": rs.preprocessing_report,
-                 "visits": rs.visits_import_report, "upload": rs.upload_report}[kind]
+                 "visits": rs.visits_import_report, "upload": rs.upload_report, "repair": rs.repair_report}[kind]
         return rs.save(build(*args, **kwargs))

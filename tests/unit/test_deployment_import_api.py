@@ -1183,7 +1183,6 @@ def test_validate_images_progress_counts_every_image_once(tmp_path: Path):
         _make_jpeg(tmp_path / f"IMG_{number:04d}.jpg", f"2024:05:01 10:0{number}:00")
     told: list[tuple[str, int, int]] = []
 
-    from wildintel_uploader.core.services import deployment_import_service
 
     from wildintel_uploader.core.services import checks as old_checks
     old_checks.validate_images(tmp_path, frozenset({"corrupted"}), progress=lambda *args: told.append(args))

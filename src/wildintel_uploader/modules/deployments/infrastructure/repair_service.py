@@ -20,6 +20,7 @@ What can't be known is left as it was or empty: the original name of a renamed i
 with, unless a preprocessing.json that is left says so. A deployment synced from Trapper is not touched."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -33,11 +34,47 @@ from pydantic import ValidationError
 
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import local_folder_service, report_service, seal_service
-from wildintel_uploader.core.services import deployment_import_service as dis
-from wildintel_uploader.core.services import preprocessing_service as pre
+from wildintel_uploader.core.services import seal_service
 from wildintel_uploader.core.services.deployment_import_service import DeploymentImportError
+from wildintel_uploader.modules.preprocessing.domain import models as pre
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
+
+
+def _contracts():
+    """The catalog and the reports — through their contracts —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_catalog(config.collections_dir(), wiring.build_settings()), wiring.build_reports()
+
+
+def _locations(research_project_id: str) -> list[dict]:
+    """The locations of the research project, as the catalog keeps them — as dicts, what the repair reads of them."""
+    return [{"location_id": loc.location_id, "name": loc.name, "latitude": loc.latitude, "longitude": loc.longitude,
+             "coordinate_uncertainty": loc.coordinate_uncertainty} for loc in _contracts()[0].locations(research_project_id)]
+
+
+def _zone_of(name: str):
+    """A timezone — an unknown one is a DeploymentImportError here, as it was."""
+    try:
+        return pre.zone_of(name)
+    except pre.PreprocessingError as exc:
+        raise DeploymentImportError(str(exc)) from exc
+
+
+def _camera_time(path: Path, options: pre.PreprocessOptions, dates: dict) -> tuple[datetime, datetime, str]:
+    """The capture time as the camera's wall clock, the same in its timezone, and where it came from: "exif", or "file" — the modification time
+    of the file when the image has no date —, as the preprocessing reads it."""
+    naive, source = dates.get(path), "exif"
+    if naive is None:
+        naive, source = datetime.fromtimestamp(path.stat().st_mtime).replace(microsecond=0), "file"
+    return naive, pre.localize(naive, _zone_of(options.timezone), ignore_dst=options.ignore_dst), source
+
+
+def _sha1(path: Path) -> str:
+    digest = hashlib.sha1()  # noqa: S324 — an identifier, not a security measure; what wildintel-tools used
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _files():
@@ -180,7 +217,7 @@ def _options_of(old: dict | None, location_time: dict, name_zone: str | None) ->
         base["timezone"] = name_zone or ""
     if not base["timezone"]:
         raise RepairError("There is no timezone to read the capture dates in: set it in the location's time settings first.")
-    pre.zone_of(base["timezone"])
+    _zone_of(base["timezone"])
     return pre.PreprocessOptions(**base)
 
 
@@ -207,7 +244,7 @@ def _location_of(root: Path, research_project_id: str, deployment_id: str, old: 
     """The id of the deployment's location — the one deployment.json says, else the end of the deployment's id — and the record
     kept for it in the research project (found ignoring case)."""
     wanted = (old or {}).get("location_id") or (deployment_id.split("-", 1)[1] if "-" in deployment_id else None)
-    record = next((l for l in local_folder_service.list_locations(root, research_project_id) if wanted and str(l.get("location_id", "")).lower() == wanted.lower()), {})
+    record = next((l for l in _locations(research_project_id) if wanted and str(l.get("location_id", "")).lower() == wanted.lower()), {})
     return (record.get("location_id") or wanted), record
 
 
@@ -278,16 +315,16 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         yield step("inspect", "done", f"{len(images)} image(s), {sum((dest / n).is_file() for n in _METADATA_FILES)} of {len(_METADATA_FILES)} metadata files.")
 
         location_id, location = _location_of(collections_dir, research_project_id, deployment_id, old_deployment)
-        location_time = local_folder_service.location_time(collections_dir, research_project_id, location_id)
+        location_time = _contracts()[0].location_time(research_project_id, location_id)
         zone_name = location_time.get("timezone") or ((old_log or {}).get("options") or {}).get("timezone")
         options = _options_of(old_log, location_time, zone_name)
-        zone = pre.zone_of(zone_name or options.timezone)
+        zone = _zone_of(zone_name or options.timezone)
         ignore_dst = location_time["ignore_dst"] if location_time.get("ignore_dst") is not None else options.ignore_dst
 
         # ── when it was: the timestamp log prevails over the images ──
         yield step("dates", "running", "Reading the capture dates and the timestamp log…")
         dates = _files().dates(images)   # one run of ExifTool for all of them (#227)
-        times = {p: pre._camera_time(p, options, dates) for p in images}
+        times = {p: _camera_time(p, options, dates) for p in images}
         exif_times = [t[0] for t in times.values() if t[2] == "exif"] or [t[0] for t in times.values()]
         computed = (min(exif_times), max(exif_times)) if exif_times else None
         row, log_problem = _log_row(collection_dir, deployment_id)
@@ -355,7 +392,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         else:
             yield step("preprocessing", "running", "Rebuilding preprocessing.json from the images…")
             xmp = _xmp(images)
-            hashes = dict(zip(images, parallel.pmap(pre._sha1, images)))
+            hashes = dict(zip(images, parallel.pmap(_sha1, images)))
             for path, name in zip(images, names):
                 naive, aware, source = times[path]
                 date = aware.astimezone(timezone.utc) if options.convert_to_utc else aware
@@ -406,11 +443,11 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         preprocessing = _preprocessing_problems(dest, deployment_id, records, options, old_by_name, xmp) if records else {}
         report_id = None
         try:
-            report_id = report_service.save(report_service.repair_report(deployment_id, dest, file_results, sealed, preprocessing))
+            report_id = _contracts()[1].save_repair(deployment_id, dest, file_results, sealed, preprocessing)
         except Exception as exc:  # the repair is done: not having its report is no reason to fail it
             logger.warning("Could not write the report of the repair of %s: %s", deployment_id, exc)
         status = seal_service.verify(dest)["status"] if sealed else "unsealed"
-        problems = (report_service.read(report_id)["totals"]["failed"] if report_id else 0)
+        problems = (_contracts()[1].read(report_id)["totals"]["failed"] if report_id else 0)
         logger.info("Deployment %s repaired: wrote %s", deployment_id, ", ".join(written))
         yield {"type": "done", "deployment_id": deployment_id, "images": len(images), "written": written, "problems": problems, "status": {"valid": "valid", "broken": "broken", "none": "unsealed"}.get(status, status), "report_id": report_id}
 

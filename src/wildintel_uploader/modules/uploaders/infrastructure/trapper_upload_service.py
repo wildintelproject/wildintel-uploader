@@ -38,8 +38,10 @@ import httpx
 from PIL import Image
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import local_folder_service, preprocessing_service, trapper_service
-from wildintel_uploader.core.services.deployment_import_service import DeploymentImportError
+from wildintel_uploader.core.services import trapper_service
+from wildintel_uploader.modules.deployments.domain.naming import DEPLOYMENT_METADATA_FILE
+from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
+from wildintel_uploader.shared import storage
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ _COLLECTION_RE = re.compile(r"^R\d{4}(_.+)?$")
 _DEPLOYMENT_RE = re.compile(r"^R\d{4}-.+$")
 
 
-class TrapperUploadError(DeploymentImportError):
+class TrapperUploadError(ValueError):
     """The upload can't go on — and why."""
 
 
@@ -81,7 +83,7 @@ def _size(path: Path) -> int:
 def list_collections(collections_dir: Path, research_project_id: str) -> list[dict]:
     """The collections kept for a research project, and the deployments in each: how many
     images, whether it was preprocessed (a requirement) and whether it was uploaded."""
-    project = local_folder_service.project_dir(collections_dir, research_project_id)
+    project = collections_dir / storage.valid_project_id(research_project_id)
     if not project.is_dir():
         return []
     collections = []
@@ -90,10 +92,10 @@ def list_collections(collections_dir: Path, research_project_id: str) -> list[di
             continue
         deployments = []
         for folder in sorted(collection.iterdir()):
-            metadata = _read_json(folder / local_folder_service.DEPLOYMENT_METADATA_FILE) if folder.is_dir() and _DEPLOYMENT_RE.match(folder.name) else None
+            metadata = _read_json(folder / DEPLOYMENT_METADATA_FILE) if folder.is_dir() and _DEPLOYMENT_RE.match(folder.name) else None
             if not isinstance(metadata, dict):
                 continue
-            log = _read_json(folder / preprocessing_service.PREPROCESSING_LOG_FILE)
+            log = _read_json(folder / PREPROCESSING_LOG_FILE)
             upload = _read_json(folder / UPLOAD_LOG_FILE)
             images = log["images"] if isinstance(log, dict) and isinstance(log.get("images"), list) else []
             deployments.append({
@@ -705,12 +707,12 @@ def upload_stream(
     deployment_dir = collection_dir / deployment_id
     collection = collection_dir.name
     trapper_collection = trapper_collection_name(research_project, collection)  # what Trapper calls it: the packages, the csv and the search of it are by this name
-    metadata = _read_json(deployment_dir / local_folder_service.DEPLOYMENT_METADATA_FILE)
-    log = _read_json(deployment_dir / preprocessing_service.PREPROCESSING_LOG_FILE)
+    metadata = _read_json(deployment_dir / DEPLOYMENT_METADATA_FILE)
+    log = _read_json(deployment_dir / PREPROCESSING_LOG_FILE)
     if not isinstance(metadata, dict):
         raise TrapperUploadError(f"{deployment_id} isn't a deployment kept in {collection}: it has no deployment.json.")
     if not isinstance(log, dict) or not log.get("images"):
-        raise TrapperUploadError(f"{deployment_id} wasn't preprocessed (no {preprocessing_service.PREPROCESSING_LOG_FILE}): import it again through the wizard first.")
+        raise TrapperUploadError(f"{deployment_id} wasn't preprocessed (no {PREPROCESSING_LOG_FILE}): import it again through the wizard first.")
     if mode != "generate" and credentials is None:
         raise TrapperUploadError("The TRAPPER account isn't set up: save its URL, username and password in the settings.")
     deployment = DeploymentFields.model_validate(metadata)
