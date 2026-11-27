@@ -14,15 +14,16 @@ from wildintel_uploader.modules.catalog.domain.models import (
     UnknownCamera, UnknownLocation, UnknownProject, UnknownTrapper, is_utc,
 )
 from wildintel_uploader.modules.catalog.domain.ports import (
+    ProjectFolders,
     AddedTrappers, CatalogRepository, CatalogService, Clock, Equipment, Fieldwork, LegacyFieldwork, LegacyTrappers, StatusHistory, VisitHistory,
 )
 from wildintel_uploader.shared import ids
 
 
 class CatalogUseCases(CatalogService):
-    def __init__(self, repository: CatalogRepository, *, legacy_trappers: LegacyTrappers, visits: VisitHistory, status_history: StatusHistory,
-                 clock: Clock, legacy_fieldwork: LegacyFieldwork | None = None, new_id: Callable[[], str] = ids.new_id) -> None:
-        self.repository, self.legacy_trappers, self.visits, self._history = repository, legacy_trappers, visits, status_history
+    def __init__(self, repository: CatalogRepository, *, folders: ProjectFolders, legacy_trappers: LegacyTrappers, visits: VisitHistory,
+                 status_history: StatusHistory, clock: Clock, legacy_fieldwork: LegacyFieldwork | None = None, new_id: Callable[[], str] = ids.new_id) -> None:
+        self.repository, self.folders, self.legacy_trappers, self.visits, self._history = repository, folders, legacy_trappers, visits, status_history
         self.clock, self.legacy_fieldwork, self.new_id = clock, legacy_fieldwork, new_id
 
     # ── the people ──
@@ -89,6 +90,7 @@ class CatalogUseCases(CatalogService):
         kept = rules.stamped(project, before, self.clock.now(), self.new_id)
         if before is None:
             self.repository.add_project(kept)
+            self.folders.make(kept.acronym)   # its folder, where its collections will go
         else:
             self.repository.save_project(kept)
         return kept
@@ -108,7 +110,7 @@ class CatalogUseCases(CatalogService):
         project = self._kept(acronym)
         if project.status == "archived":
             raise ProjectArchived(acronym)
-        held = self.repository.held_by_project(project.acronym)
+        held = self.folders.held(project.acronym, self.repository.files_of(project.acronym))
         if held:
             raise ProjectNotEmpty(acronym, held)
         self.repository.save_project(rules.removed(project, self.clock.now()))

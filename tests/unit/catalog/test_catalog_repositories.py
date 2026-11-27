@@ -9,6 +9,7 @@ from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseC
 from wildintel_uploader.modules.catalog.domain.models import Audit, ProjectExists, ResearchProject, Trapper
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
+from wildintel_uploader.modules.catalog.infrastructure.project_folders import ResearchProjectFolders
 from wildintel_uploader.shared import storage
 from wildintel_uploader.shared.storage import StorageError
 
@@ -18,8 +19,8 @@ def repository(request, tmp_path: Path):
     collections = tmp_path / "collections"
     collections.mkdir()
     if request.param == "json":
-        return StoreCatalogRepository(storage.open_store(collections), collections)
-    return SqlCatalogRepository(sqlite_engine(tmp_path / "db" / "catalog.sqlite3"), collections)
+        return StoreCatalogRepository(storage.open_store(collections))
+    return SqlCatalogRepository(sqlite_engine(tmp_path / "db" / "catalog.sqlite3"))
 
 
 def test_the_people_are_kept_as_they_were_written_in_their_order_with_their_dates_and_what_this_version_does_not_know(repository):
@@ -32,7 +33,7 @@ def test_the_people_are_kept_as_they_were_written_in_their_order_with_their_date
     assert repository.read_trappers() == people[:1]
 
 
-def test_the_research_projects_are_kept_with_their_folder_and_found_by_their_acronym(repository):
+def test_the_research_projects_are_kept_and_found_by_their_acronym(repository):
     dona = ResearchProject(acronym="DONA", name="Doñana", status="planned", keywords="lynx", trapper_pk=3, audit=Audit(id="p", created_at="T1"),
                            extra={"marker": "x"})
     repository.add_project(dona)
@@ -40,7 +41,6 @@ def test_the_research_projects_are_kept_with_their_folder_and_found_by_their_acr
 
     assert repository.read_project("DONA") == dona and repository.read_project("NOPE") is None
     assert [p.acronym for p in repository.read_projects()] == ["ALBA", "DONA"]
-    assert (repository.collections_dir / "DONA").is_dir()
     with pytest.raises(StorageError):
         repository.add_project(dona)
     changed = ResearchProject(acronym="DONA", name="Doñana NP", audit=Audit(id="p", created_at="T1", updated_at="T2"))
@@ -50,14 +50,16 @@ def test_the_research_projects_are_kept_with_their_folder_and_found_by_their_acr
         repository.save_project(ResearchProject(acronym="NOPE", name="Nope"))
 
 
-def test_what_a_research_project_holds_is_what_its_folder_has_besides_its_records(repository):
+def test_what_a_research_project_holds_is_what_its_folder_has_besides_its_records(repository, tmp_path: Path):
+    folders = ResearchProjectFolders(lambda: tmp_path / "collections")
     repository.add_project(ResearchProject(acronym="DONA", name="Doñana"))
-    folder = repository.collections_dir / "DONA"
+    folders.make("DONA")
+    folder = tmp_path / "collections" / "DONA"
     (folder / "visits.json").write_text("[]", encoding="utf-8")                # a record, not held
-    assert repository.held_by_project("DONA") == []
+    assert folders.held("DONA", repository.files_of("DONA")) == []
     (folder / "R0001").mkdir()
-    assert repository.held_by_project("DONA") == ["R0001"]
-    assert repository.held_by_project("NOPE") == []
+    assert folders.held("DONA", repository.files_of("DONA")) == ["R0001"]
+    assert folders.held("NOPE", repository.files_of("NOPE")) == []
 
 
 def test_the_locations_are_kept_for_each_research_project_in_their_order(repository):
@@ -96,13 +98,15 @@ def test_the_whole_catalog_works_the_same_on_a_database(tmp_path: Path):
         def record_location(self, project, before, after):
             pass
 
-    catalog = CatalogUseCases(SqlCatalogRepository(sqlite_engine(tmp_path / "catalog.sqlite3"), tmp_path), legacy_trappers=NoLegacy(),
+    catalog = CatalogUseCases(SqlCatalogRepository(sqlite_engine(tmp_path / "catalog.sqlite3")), folders=ResearchProjectFolders(lambda: tmp_path),
+                              legacy_trappers=NoLegacy(),
                               visits=NoVisits(), status_history=NoHistory(), clock=Clock())
     catalog.add_trappers([Trapper(username="ana", name="Ana")])
     catalog.add_project(ResearchProject(acronym="DONA", name="Doñana"))
+    assert (tmp_path / "DONA").is_dir()   # its folder, where its collections will go — beside the database, not in it
     with pytest.raises(ProjectExists):
         catalog.add_project(ResearchProject(acronym="DONA", name="Again"))
     catalog.update_project("dona", {"status": "finished"})
 
-    again = SqlCatalogRepository(sqlite_engine(tmp_path / "catalog.sqlite3"), tmp_path)      # what was kept is there for the next one
+    again = SqlCatalogRepository(sqlite_engine(tmp_path / "catalog.sqlite3"))      # what was kept is there for the next one
     assert [t.username for t in again.read_trappers()] == ["ana"] and again.read_project("DONA").status == "finished"

@@ -101,8 +101,16 @@ class Clock:
 
 def _catalog(repository=None, legacy=None) -> CatalogService:
     ids = iter(f"new-{n}" for n in range(100))
-    return CatalogUseCases(repository or MemoryRepository(), legacy_trappers=legacy or Legacy(), visits=NoVisits(), status_history=NoHistory(), clock=Clock(),
-                           new_id=lambda: next(ids))
+    return CatalogUseCases(repository or MemoryRepository(), folders=NoFolders(), legacy_trappers=legacy or Legacy(), visits=NoVisits(),
+                           status_history=NoHistory(), clock=Clock(), new_id=lambda: next(ids))
+
+
+class NoFolders:
+    def make(self, acronym):
+        pass
+
+    def held(self, acronym, besides):
+        return []
 
 
 def test_the_people_versions_before_left_in_the_settings_come_in_as_they_were_kept():

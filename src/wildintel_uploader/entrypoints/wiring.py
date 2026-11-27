@@ -32,6 +32,7 @@ from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseC
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
 from wildintel_uploader.modules.catalog.domain.records import CatalogRecords, CatalogRecordStore
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
+from wildintel_uploader.modules.catalog.infrastructure.project_folders import ResearchProjectFolders
 from wildintel_uploader.modules.catalog.infrastructure.records import RecordsOf, RecordStoreOf
 from wildintel_uploader.modules.catalog.infrastructure.clock import SystemClock
 from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, TrappersFromTheSettings
@@ -167,7 +168,7 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
     store = storage.open_store(collections_dir)
     kept = repository or catalog_repository(collections_dir, settings)
     visits = VisitsAsKept(store, lambda: kept)   # the visits as they are kept, told with the catalog's own records: the catalog needs not the visits
-    return CatalogUseCases(kept, legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store, visits),
+    return CatalogUseCases(kept, folders=ResearchProjectFolders(lambda: collections_dir), legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store, visits),
                            status_history=KeptStatusHistory(collections_dir, lambda: kept, lambda: visits), clock=clock or SystemClock(),
                            legacy_fieldwork=FieldworkFromTheSettings(settings))
 
@@ -193,8 +194,8 @@ def catalog_repository(collections_dir: Path, settings: SettingsService, kind: s
     `database` say: "json", the files of the collections folder; "sqlite", a database (SqlCatalogRepository)."""
     places = settings.places()
     if (kind or places.catalog_storage) == "sqlite":
-        return SqlCatalogRepository(sqlite_engine(database or places.catalog_database), collections_dir)
-    return StoreCatalogRepository(storage.open_store(collections_dir), collections_dir)
+        return SqlCatalogRepository(sqlite_engine(database or places.catalog_database))
+    return StoreCatalogRepository(storage.open_store(collections_dir))
 
 
 @lru_cache(maxsize=1)

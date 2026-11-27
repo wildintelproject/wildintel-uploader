@@ -102,3 +102,11 @@ def test_the_catalog_does_not_need_the_module_of_the_visits(path: Path):
     contract of the visits (VisitsService), so that the two are not put together in a circle."""
     assert "wildintel_uploader.modules.visits.domain.ports" not in _imports(path)
 
+
+@pytest.mark.parametrize("path", sorted(SRC.glob("modules/catalog/infrastructure/*_repository.py")), ids=lambda p: p.name)
+def test_a_repository_of_the_catalog_keeps_records_only(path: Path):
+    """Where the records of the catalog are kept — files or a database — knows nothing of the folders of the research projects
+    (ports.ProjectFolders): a backend of records can be swapped for another."""
+    text = path.read_text(encoding="utf-8")
+    assert "iterdir(" not in text and "collections_dir" not in text and ".acronym).mkdir(" not in text
+

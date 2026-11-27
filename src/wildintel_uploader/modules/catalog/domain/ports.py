@@ -6,7 +6,8 @@
 - **Out** — what it needs from outside: `CatalogRepository`, where its records are kept (the JSON files of the collections folder,
   `infrastructure.json_repository`); `LegacyTrappers`, the people versions before kept in the settings (`infrastructure.legacy`, through the contract
   of the module of the settings); `VisitHistory`, what the visits say, read only (`infrastructure.visits` — the module of the visits, once there is
-  one); `StatusHistory`, where each change of status is written down; `Clock`, the instant and the day."""
+  one); `StatusHistory`, where each change of status is written down; `ProjectFolders`, the folders of the research projects in the collections
+  folder; `Clock`, the instant and the day."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -180,8 +181,9 @@ class CatalogRepository(Protocol):
     def save_project(self, project: ResearchProject) -> None:
         """Replaces a research project that is kept."""
 
-    def held_by_project(self, acronym: str) -> list[str]:
-        """What the folder of the research project holds besides its own records — collections, deployments, images —, by name."""
+    def files_of(self, acronym: str) -> set[str]:
+        """The names of the files the records of a research project are kept in, in its folder of the collections folder — none of its own for
+        a database, which still leaves out the files of records a move from them may have left."""
 
     def read_locations(self, project: str) -> list[Location]:
         """The locations of a research project as they are kept, the removed ones too; one kept before the ids existed gets the same id whenever it is
@@ -261,3 +263,14 @@ class Clock(Protocol):
 
     def today(self) -> str:
         """The day, here, YYYY-MM-DD."""
+
+
+class ProjectFolders(Protocol):
+    """The folders of the research projects in the collections folder, where their collections go."""
+
+    def make(self, acronym: str) -> None:
+        """Makes the folder of a research project, when it is not there."""
+
+    def held(self, acronym: str, besides: set[str]) -> list[str]:
+        """What the folder of a research project holds besides the files `besides` — collections, deployments, images —, by name."""
+

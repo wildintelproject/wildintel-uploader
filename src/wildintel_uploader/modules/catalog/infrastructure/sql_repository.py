@@ -180,11 +180,11 @@ def sqlite_engine(path: Path) -> Engine:
 
 
 class SqlCatalogRepository(CatalogRepository):
-    """The catalog in the database of `engine` — its tables made when they are not there —; the research projects keep their folders in
-    `collections_dir`."""
+    """The catalog in the database of `engine` — its tables made when they are not there. It keeps records only: the folders of the research
+    projects are not its own (ports.ProjectFolders)."""
 
-    def __init__(self, engine: Engine, collections_dir: Path) -> None:
-        self.engine, self.collections_dir = engine, collections_dir
+    def __init__(self, engine: Engine) -> None:
+        self.engine = engine
         SQLModel.metadata.create_all(engine, tables=_TABLES)
 
     # the people
@@ -217,7 +217,6 @@ class SqlCatalogRepository(CatalogRepository):
                 raise StorageError(f"The research project '{project.acronym}' already exists.")
             session.add(_set_project(ProjectRow(acronym=project.acronym, name=project.name), project))
             session.commit()
-        (self.collections_dir / project.acronym).mkdir(parents=True, exist_ok=True)   # its folder, where its collections will go
 
     def save_project(self, project: ResearchProject) -> None:
         with Session(self.engine) as session:
@@ -227,9 +226,8 @@ class SqlCatalogRepository(CatalogRepository):
             session.add(_set_project(row, project))
             session.commit()
 
-    def held_by_project(self, acronym: str) -> list[str]:
-        folder = self.collections_dir / acronym
-        return sorted(e.name for e in folder.iterdir() if e.name not in _RECORD_FILE_NAMES) if folder.is_dir() else []
+    def files_of(self, acronym: str) -> set[str]:
+        return set(_RECORD_FILE_NAMES)   # none of its own: those a move from the files may have left
 
     # the locations
 

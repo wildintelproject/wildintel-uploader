@@ -2,7 +2,6 @@
 research projects; each research project has its folder, named by its acronym, which holds its record and, besides, its collections."""
 from __future__ import annotations
 
-from pathlib import Path
 
 from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject, Role, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
@@ -14,8 +13,8 @@ from wildintel_uploader.shared.storage import ProjectStore, StorageError
 
 
 class StoreCatalogRepository(CatalogRepository):
-    def __init__(self, store: ProjectStore, collections_dir: Path) -> None:
-        self.store, self.collections_dir = store, collections_dir
+    def __init__(self, store: ProjectStore) -> None:
+        self.store = store
 
     def read_trappers(self) -> list[Trapper]:
         return [trapper_from_record(r) for r in self.store.read_global("trappers")]
@@ -32,15 +31,12 @@ class StoreCatalogRepository(CatalogRepository):
 
     def add_project(self, project: ResearchProject) -> None:
         self.store.add_project(project_to_record(project))
-        (self.collections_dir / project.acronym).mkdir(parents=True, exist_ok=True)   # its folder, where its collections will go
 
     def save_project(self, project: ResearchProject) -> None:
         self.store.save_project(project.acronym, project_to_record(project))
 
-    def held_by_project(self, acronym: str) -> list[str]:
-        folder = self.collections_dir / acronym
-        own = self.store.owned_names(acronym)
-        return sorted(e.name for e in folder.iterdir() if e.name not in own) if folder.is_dir() else []
+    def files_of(self, acronym: str) -> set[str]:
+        return self.store.owned_names(acronym)
 
     def read_locations(self, project: str) -> list[Location]:
         try:

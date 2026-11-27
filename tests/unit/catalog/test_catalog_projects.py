@@ -35,10 +35,23 @@ def test_what_a_record_says_that_this_version_does_not_know_is_kept():
 
 # ── the use cases, over a repository in memory ───────────────────────────────
 
+class Folders:
+    """The folders of the research projects, in memory: what each holds besides its records, and which were made."""
+
+    def __init__(self) -> None:
+        self.holding: dict[str, list[str]] = {}
+        self.made: list[str] = []
+
+    def make(self, acronym):
+        self.made.append(acronym)
+
+    def held(self, acronym, besides):
+        return [name for name in self.holding.get(acronym, []) if name not in besides]
+
+
 class Repository:
     def __init__(self) -> None:
         self.projects: dict[str, ResearchProject] = {}
-        self.held: dict[str, list[str]] = {}
         self.locations: dict[str, list] = {}
 
     def read_trappers(self):
@@ -59,8 +72,8 @@ class Repository:
     def save_project(self, project) -> None:
         self.projects[project.acronym] = project
 
-    def held_by_project(self, acronym):
-        return self.held.get(acronym, [])
+    def files_of(self, acronym):
+        return set()
 
     def read_locations(self, project):
         return list(self.locations.get(project, []))
@@ -111,8 +124,10 @@ class History:
 @pytest.fixture
 def world():
     repository, visits, clock = Repository(), Visits(), Clock()
+    repository.folders = Folders()   # beside the records, as the collections folder has them
     ids = iter(f"id-{n}" for n in range(100))
-    catalog = CatalogUseCases(repository, legacy_trappers=NoLegacy(), visits=visits, status_history=History(), clock=clock, new_id=lambda: next(ids))
+    catalog = CatalogUseCases(repository, folders=repository.folders, legacy_trappers=NoLegacy(), visits=visits, status_history=History(), clock=clock,
+                              new_id=lambda: next(ids))
     return catalog, repository, visits, clock
 
 
@@ -155,7 +170,7 @@ def test_a_research_project_changes_what_is_asked_and_never_its_acronym(world):
 def test_a_research_project_that_holds_collections_is_not_removed(world):
     catalog, repository, _, _ = world
     catalog.add_project(ResearchProject(acronym="DONA", name="Doñana"))
-    repository.held["DONA"] = ["R0001", "R0002"]
+    repository.folders.holding["DONA"] = ["R0001", "R0002"]
     with pytest.raises(ProjectNotEmpty) as held:
         catalog.delete_project("DONA")
     assert "still holds R0001, R0002" in held.value.message
