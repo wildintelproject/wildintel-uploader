@@ -6,12 +6,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, UploaderError
+from wildintel_uploader.shared.deployment_record import DeploymentRecord
 
-Deployment = Any   # the record of a deployment of Camtrap DP (shared.camtrap.DeploymentFields)
+Deployment = DeploymentRecord   # the record of a deployment of Camtrap DP: plain Python (shared.deployment_record)
 
 
 class UploadersService(ABC):

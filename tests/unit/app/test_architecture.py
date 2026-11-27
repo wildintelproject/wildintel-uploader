@@ -237,7 +237,7 @@ def test_no_file_reaches_for_a_private_name_of_another_module(path: Path):
 # how their names are compared, the dates they keep of themselves, and the errors the kernel tells of. The rest of `shared` (storage, desktop, camtrap, parallel, logs, version) is for
 # the adapters and the entry points.
 SHARED_KERNEL = {"wildintel_uploader.shared", "wildintel_uploader.shared.ids", "wildintel_uploader.shared.identity", "wildintel_uploader.shared.audit",
-                 "wildintel_uploader.shared.errors"}
+                 "wildintel_uploader.shared.errors", "wildintel_uploader.shared.deployment_record"}
 
 
 @pytest.mark.parametrize("path", _files("domain") + _files("application"), ids=lambda p: str(p.relative_to(SRC / "modules")))

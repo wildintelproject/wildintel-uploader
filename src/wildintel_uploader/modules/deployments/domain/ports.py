@@ -8,9 +8,10 @@ from pathlib import Path
 
 from wildintel_uploader.modules.deployments.domain.statistics import KeptDeployment
 from wildintel_uploader.modules.postvalidation.domain.statistics import DeploymentTimes
+from wildintel_uploader.shared.deployment_record import DeploymentRecord
 from typing import Any, Protocol
 
-Deployment = Any   # the record of a deployment of Camtrap DP (shared.camtrap.DeploymentFields)
+Deployment = DeploymentRecord   # the record of a deployment of Camtrap DP: plain Python (shared.deployment_record)
 
 
 class CollectionLayout(ABC):
