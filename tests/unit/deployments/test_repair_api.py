@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from tests.unit.deployments.test_repair_service import DEPLOYMENT_ID, kept  # noqa: F401 — the fixture the service's own tests use
+from tests.unit.deployments.test_repair import DEPLOYMENT_ID, kept  # noqa: F401 — the fixture the repair's own tests use
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE

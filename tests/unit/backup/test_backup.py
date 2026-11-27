@@ -1,4 +1,4 @@
-"""Backups of the settings and of a research project, and their restoration (services.backup_service)."""
+"""Backups of the settings and of a research project, and their restoration (modules.backup)."""
 import json
 import zipfile
 from pathlib import Path

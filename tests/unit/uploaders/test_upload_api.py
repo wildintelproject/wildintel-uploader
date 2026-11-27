@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.unit.uploaders.test_trapper_upload_service import (  # noqa: F401 — the fixtures and fakes the service's own tests use
+from tests.unit.uploaders.test_trapper_upload import (  # noqa: F401 — the fixtures and fakes the upload's own tests use
     DEPLOYMENT_ID, FakeTrapper, _deployment, _imported, fake_uploader, uploader_login,
 )
 from wildintel_uploader.entrypoints import config

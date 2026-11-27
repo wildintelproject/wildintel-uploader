@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tests.unit.preprocessing.test_preprocessing_service import DEPLOYMENT, _run, _source
+from tests.unit.preprocessing.test_preprocessing import DEPLOYMENT, _run, _source
 from tests.support import built
 
 

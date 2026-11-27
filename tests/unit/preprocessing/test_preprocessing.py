@@ -1,4 +1,4 @@
-"""services.preprocessing_service — the dates, the names, the resizing and the XMP
+"""The preprocessing of a deployment (modules.preprocessing) — the dates, the names, the resizing and the XMP
 metadata images get as they are imported into their collection."""
 import hashlib
 import json
