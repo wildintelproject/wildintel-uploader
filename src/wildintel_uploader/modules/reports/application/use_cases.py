@@ -2,6 +2,8 @@
 listed, given as a file, its images shown small, deleted."""
 from __future__ import annotations
 
+import builtins
+
 import json
 from collections.abc import Callable, Iterable
 from datetime import datetime, timedelta, timezone
@@ -36,14 +38,14 @@ class ReportsUseCases(ReportsService):
     def postvalidation_report(self, result: dict, deployment_id: str, source: Path, parameters: dict | None = None) -> dict:
         return self._built(rules.postvalidation_report(result, deployment_id, source, self._images.images(source), parameters))
 
-    def repair_report(self, deployment_id: str, dest: Path, files: list[tuple[str, bool, str]], seal: dict | None,
+    def repair_report(self, deployment_id: str, dest: Path, files: builtins.list[tuple[str, bool, str]], seal: dict | None,
                       preprocessing: dict[str, dict[str, str]]) -> dict:
         return self._built(rules.repair_report(deployment_id, dest, self._images.images(dest), files, seal, preprocessing))
 
-    def preprocessing_report(self, records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> dict:
+    def preprocessing_report(self, records: builtins.list[dict], skipped: builtins.list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> dict:
         return self._built(rules.preprocessing_report(records, skipped, deployment_id, source, dest, options))
 
-    def upload_report(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> dict:
+    def upload_report(self, collection: str, project: str, items: builtins.list[dict], started_at: str, finished_at: str) -> dict:
         return self._built(rules.upload_report(collection, project, items, started_at=started_at, finished_at=finished_at))
 
     def visits_import_report(self, project: str, result: dict, saved: int) -> dict:
@@ -61,7 +63,7 @@ class ReportsUseCases(ReportsService):
             raise ReportMissing(f"'{report_id}' isn't a report.")
         return self._kept.read(report_id)
 
-    def list(self) -> list[dict]:
+    def list(self) -> builtins.list[dict]:
         return [rules.summary(r) for r in self._kept.all()]
 
     def as_file(self, report_id: str, fmt: str) -> tuple[str, str]:
@@ -103,15 +105,15 @@ class ReportsUseCases(ReportsService):
     def save_postvalidation(self, result: dict, deployment_id: str, folder: Path, parameters: dict | None) -> str:
         return self.save(self.postvalidation_report(result, deployment_id, folder, parameters))
 
-    def save_preprocessing(self, records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> str:
+    def save_preprocessing(self, records: builtins.list[dict], skipped: builtins.list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> str:
         return self.save(self.preprocessing_report(records, skipped, deployment_id, source, dest, options))
 
     def save_visits_import(self, project: str, result: dict, saved: int) -> str:
         return self.save(self.visits_import_report(project, result, saved))
 
-    def save_upload(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str:
+    def save_upload(self, collection: str, project: str, items: builtins.list[dict], started_at: str, finished_at: str) -> str:
         return self.save(self.upload_report(collection, project, items, started_at, finished_at))
 
-    def save_repair(self, deployment_id: str, dest: Path, files: list[tuple[str, bool, str]], seal: dict | None,
+    def save_repair(self, deployment_id: str, dest: Path, files: builtins.list[tuple[str, bool, str]], seal: dict | None,
                     preprocessing: dict[str, dict[str, str]]) -> str:
         return self.save(self.repair_report(deployment_id, dest, files, seal, preprocessing))

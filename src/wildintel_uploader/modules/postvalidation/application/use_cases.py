@@ -43,7 +43,7 @@ class PostvalidationUseCases(PostvalidationService):
 
     def check_deployment(self, folder: Path, context: DeploymentContext, checks: frozenset[str] | None = None, *, on_check: OnCheck | None = None) -> dict:
         camera = self._cameras.camera(context.research_project_id, context.deployment.camera_id) if self._cameras else context.camera
-        context = replace(context, camera=camera, **({"camera_levels": self._levels.levels()} if self._levels is not None else {}))
+        context = replace(context, camera=camera, camera_levels=self._levels.levels() if self._levels is not None else context.camera_levels)
         validators = self.validators(checks)
         # the previous revisions of the location, read once for the statistical checks — and only when one of them is asked for
         if self._revisions is not None and context.research_project_id and any(v.statistical for v in validators):

@@ -32,6 +32,7 @@ def _first_then(events: Iterator[dict], what: str, empty: dict | None = None) ->
             logger.warning("%s failed: %s", what, exc, exc_info=True)
             raise BackupError(f"{what} failed: {exc}") from exc
     stream = told()
+    first: dict | None
     try:
         first = next(stream)
     except StopIteration:
@@ -80,7 +81,8 @@ class BackupUseCases(BackupService):
 
     def create(self, dest_dir: Path | None, project: str | None, choice: Choice) -> Iterator[dict]:
         staged = dest_dir is None
-        events = _first_then(self._made(self._archives.staging_dir() if staged else dest_dir, project, choice), "The backup")
+        folder = self._archives.staging_dir() if dest_dir is None else dest_dir
+        events = _first_then(self._made(folder, project, choice), "The backup")
 
         def told() -> Iterator[dict]:
             for event in events:

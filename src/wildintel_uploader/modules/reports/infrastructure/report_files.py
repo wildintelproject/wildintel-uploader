@@ -69,8 +69,8 @@ class ImagesOnDisk(FolderImages):
         if folder not in path.parents or not path.is_file():
             raise ReportMissing(f"The report doesn't have the image '{relative}'.")
         try:
-            with Image.open(path) as img:
-                img = ImageOps.exif_transpose(img)
+            with Image.open(path) as opened:
+                img = ImageOps.exif_transpose(opened)
                 img.thumbnail((size, size))
                 out = io.BytesIO()
                 img.convert("RGB").save(out, "JPEG", quality=75)

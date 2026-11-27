@@ -12,10 +12,11 @@ from pathlib import Path
 from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 from wildintel_uploader.modules.preprocessing.domain.models import (
-    DeploymentLike, ImageWork, PreprocessingError, PreprocessOptions, natural_key, public_record, resize_summary, zone_of,
+    ImageWork, PreprocessingError, PreprocessOptions, natural_key, public_record, resize_summary, zone_of,
 )
 from wildintel_uploader.modules.preprocessing.domain.ports import DeploymentFolders, PreprocessingService, Reports
 from wildintel_uploader.modules.preprocessing.domain.steps import FolderStep, ImageStep, Job
+from wildintel_uploader.shared.deployment_record import DeploymentRecord
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class PreprocessingUseCases(PreprocessingService):
         self._image_steps, self._folder_steps = image_steps, folder_steps
         self._workers, self._exiftool = workers, exiftool
 
-    def preprocess(self, source_dir: Path, collection_dir: Path, collection_name: str | None, deployment: DeploymentLike, options: PreprocessOptions,
+    def preprocess(self, source_dir: Path, collection_dir: Path, collection_name: str | None, deployment: DeploymentRecord, options: PreprocessOptions,
                    consolidate: bool = True) -> Iterator[dict]:
         source, collection = source_dir.expanduser(), collection_dir.expanduser()
         dest = collection / deployment.deployment_id
@@ -116,7 +117,7 @@ class PreprocessingUseCases(PreprocessingService):
         yield {"type": "done", "dest_dir": str(where), "processed": len(records), "skipped": len(skipped), "sealed": sealed, "report_id": report_id,
                **({"resize": resize_summary(records)} if options.resize else {})}
 
-    def consolidate(self, source_dir: Path, collection_dir: Path, deployment: DeploymentLike) -> Iterator[dict]:
+    def consolidate(self, source_dir: Path, collection_dir: Path, deployment: DeploymentRecord) -> Iterator[dict]:
         source, collection = source_dir.expanduser(), collection_dir.expanduser()
         dest = collection / deployment.deployment_id
         work = self._folders.staging(collection, deployment.deployment_id)
@@ -137,7 +138,7 @@ class PreprocessingUseCases(PreprocessingService):
             raise PreprocessingError(f"Could not read the record of the preprocessing of {dest.name}: {exc}") from exc
         return self._consolidate(source, dest, work, deployment, staged, log, images, options)
 
-    def _consolidate(self, source: Path, dest: Path, work: Path, deployment: DeploymentLike, staged: bool, log: dict, images: list,
+    def _consolidate(self, source: Path, dest: Path, work: Path, deployment: DeploymentRecord, staged: bool, log: dict, images: list,
                      options: dict) -> Iterator[dict]:
         yield {"type": "sealing"}
         if staged:

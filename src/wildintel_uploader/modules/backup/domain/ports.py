@@ -3,7 +3,7 @@ the archives, and the settings of the app."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -153,7 +153,7 @@ class Archives(ABC):
         """Raises BackupError when the file is not there, is not an archive, or has a file whose path goes out of it."""
 
     @abstractmethod
-    def make(self, dest_dir: Path, name: str, manifest: dict, entries: list[Entry]) -> Iterator[dict]:
+    def make(self, dest_dir: Path, name: str, manifest: dict, entries: list[Entry]) -> Generator[dict, None, tuple[Path, int]]:
         """Writes the archive — its manifest first —, whole or not at all: an event for each file — {"type": "file", "index", "total", "name"} —;
         it returns its path and how many bytes it is."""
 

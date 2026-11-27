@@ -16,7 +16,7 @@ def visits_from_csv(text: str) -> str:
     """The CSV of the form, as the text of a CSV with a row per visit and the columns a visit has. SourceError: no rows, or not the form."""
     reader = csv.DictReader(io.StringIO(text.lstrip("﻿")))
     headers = reader.fieldnames or []
-    refs, place = form_refs(headers)
+    refs, place = form_refs(list(headers))
     # the day and the time of a visit are when its entry was created (created_at): the form has no date or time to ask for
     missing = [name for name, field in (("locationID", "location_id"), ("Status of the camera", "camera_status")) if field not in refs]
     if "created_at" not in (reader.fieldnames or []):

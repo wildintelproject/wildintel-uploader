@@ -8,7 +8,7 @@ import os
 import tempfile
 import time
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
 
 from wildintel_uploader.modules.backup.domain import archive as rules
@@ -48,7 +48,7 @@ class ZipBackups(Archives):
             raise BackupError("That backup has files with a path that goes out of it: it is not restored.")
         return ZipArchive(zf)
 
-    def make(self, dest_dir: Path, name: str, manifest: dict, entries: list[Entry]) -> Iterator[dict]:
+    def make(self, dest_dir: Path, name: str, manifest: dict, entries: list[Entry]) -> Generator[dict, None, tuple[Path, int]]:
         target = dest_dir / name
         fd, tmp = tempfile.mkstemp(dir=dest_dir, prefix=".backup.", suffix=".tmp")
         os.close(fd)

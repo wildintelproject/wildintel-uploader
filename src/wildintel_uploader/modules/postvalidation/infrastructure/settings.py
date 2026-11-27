@@ -1,7 +1,7 @@
 """The section POSTVALIDATION of settings.toml as Pydantic reads and writes it — registered with the module of the settings."""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -26,7 +26,7 @@ class PostvalidationSettings(BaseModel):
     sd_card: bool = Field(default=True, description="The SD card is the one the visit left in the camera. (POSTVALIDATION.sd_card)")
     photo_count: bool = Field(default=True, description="The folder has the number of images the visit counted on the card. (POSTVALIDATION.photo_count)")
     defaults: dict[str, CheckLevel] = Field(
-        default_factory=lambda: dict(DEPLOYMENT_CHECK_DEFAULTS),
+        default_factory=lambda: cast(dict[str, CheckLevel], dict(DEPLOYMENT_CHECK_DEFAULTS)),
         description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (POSTVALIDATION.defaults)",
     )
 

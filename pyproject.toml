@@ -59,7 +59,18 @@ wildintel-trapper-sdk = { path = "../wildintel-trapper-sdk", editable = true }
 
 [tool.mypy]
 # The modules that keep to their types — checked in CI (uv run mypy). One at a time: a module joins when mypy finds nothing in it.
-files = ["src/wildintel_uploader/modules/visits"]
+files = [
+    "src/wildintel_uploader/shared",
+    "src/wildintel_uploader/modules/backup",
+    "src/wildintel_uploader/modules/fileinfo",
+    "src/wildintel_uploader/modules/postvalidation",
+    "src/wildintel_uploader/modules/prevalidation",
+    "src/wildintel_uploader/modules/preprocessing",
+    "src/wildintel_uploader/modules/reports",
+    "src/wildintel_uploader/modules/sources",
+    "src/wildintel_uploader/modules/timefix",
+    "src/wildintel_uploader/modules/visits",
+]
 python_version = "3.13"
 ignore_missing_imports = true
 follow_imports = "silent"

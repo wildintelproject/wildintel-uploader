@@ -8,9 +8,11 @@ before ended."""
 from __future__ import annotations
 
 import datetime as dt
+from typing import cast
 
 from wildintel_uploader.modules.timefix.domain.ports import Period, TimeFixError
 from wildintel_uploader.modules.visits.domain.rules import closes_collection
+from wildintel_uploader.modules.visits.domain.shapes import Visit
 
 
 def _when(visit: dict) -> dt.datetime | None:
@@ -27,14 +29,14 @@ def deployment_period(visits: list[dict], research_project_id: str, location_id:
     Raises:
         TimeFixError: the visit isn't there, or no later visit collected its card.
     """
-    dated = sorted((v for v in visits if _when(v)), key=_when)
+    dated = sorted((v for v in visits if _when(v)), key=lambda v: _when(v) or dt.datetime.min)
     index = next((i for i, v in enumerate(dated) if v.get("date") == date and v.get("time") == time), None)
     if index is None:
         raise TimeFixError(f"There is no visit to {location_id} on {date} at {time} in {research_project_id}.")
-    end = next((v for v in dated[index + 1:] if closes_collection(v)), None)
+    end = next((v for v in dated[index + 1:] if closes_collection(cast(Visit, v))), None)
     if end is None:
         raise TimeFixError(f"No visit to {location_id} after {date} {time} collected the card, so the deployment has no end yet.")
-    return _when(dated[index]), _when(end)
+    return cast(dt.datetime, _when(dated[index])), cast(dt.datetime, _when(end))   # dated: each has its date and time
 
 
 def segments(names: list[str], times: list[dt.datetime | None], period: Period | None, tolerance: dt.timedelta) -> list[dict]:
@@ -51,7 +53,7 @@ def segments(names: list[str], times: list[dt.datetime | None], period: Period |
         segment = out[-1]
         segment.update(last_index=index, last=name, last_time=when)
         segment["count"] += 1
-        segment["inside"] += lo is None or lo <= when <= hi
+        segment["inside"] += int(lo is None or hi is None or lo <= when <= hi)
         previous = when
     for i, segment in enumerate(out):
         suggestion = None
@@ -75,7 +77,7 @@ def timeline(folder: str, names: list[str], times: list[dt.datetime | None], per
     lo, hi = (period[0] - tolerance, period[1] + tolerance) if period else (None, None)
     found = segments(names, times, period, tolerance)
     undated = [n for n, t in zip(names, times) if t is None]
-    outside = sum(1 for t in times if t is not None and lo is not None and not lo <= t <= hi)
+    outside = sum(1 for t in times if t is not None and lo is not None and hi is not None and not lo <= t <= hi)
     problems = []
     if undated:
         problems.append(f"{len(undated)} image(s) have no date.")

@@ -41,10 +41,15 @@ class PreprocessOptions:
 
 
 class DeploymentLike(Protocol):
-    """What the preprocessing needs of a deployment: its id and where it is."""
-    deployment_id: str
-    location_id: str | None
-    location_name: str | None
+    """What the steps of the preprocessing read of a deployment: its id and where it is. Read only — the record of a deployment (DeploymentRecord)
+    is one."""
+
+    @property
+    def deployment_id(self) -> str: ...
+    @property
+    def location_id(self) -> str | None: ...
+    @property
+    def location_name(self) -> str | None: ...
 
 
 @dataclass

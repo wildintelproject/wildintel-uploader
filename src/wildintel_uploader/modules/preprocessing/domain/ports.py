@@ -6,13 +6,14 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from pathlib import Path
 
-from wildintel_uploader.modules.preprocessing.domain.models import DeploymentLike, PreprocessOptions
+from wildintel_uploader.modules.preprocessing.domain.models import PreprocessOptions
+from wildintel_uploader.shared.deployment_record import DeploymentRecord
 
 
 class PreprocessingService(ABC):
 
     @abstractmethod
-    def preprocess(self, source_dir: Path, collection_dir: Path, collection_name: str | None, deployment: DeploymentLike, options: PreprocessOptions,
+    def preprocess(self, source_dir: Path, collection_dir: Path, collection_name: str | None, deployment: DeploymentRecord, options: PreprocessOptions,
                    consolidate: bool = True) -> Iterator[dict]:
         """Imports the images of source_dir preprocessed as `options` say, prepared in collection_dir/.staging/<deployment id> and — with
         consolidate — moved to collection_dir/<deployment id> and sealed there; without it, left pending in .staging. What can't be done is said
@@ -21,7 +22,7 @@ class PreprocessingService(ABC):
         {"type": "done", dest_dir, processed, skipped, sealed, report_id, resize?}."""
 
     @abstractmethod
-    def consolidate(self, source_dir: Path, collection_dir: Path, deployment: DeploymentLike) -> Iterator[dict]:
+    def consolidate(self, source_dir: Path, collection_dir: Path, deployment: DeploymentRecord) -> Iterator[dict]:
         """Saves a preprocessed (pending) deployment: moves it to its place in the collection and seals it. Events: {"type": "sealing"} and
         {"type": "done", dest_dir, processed, skipped, sealed}. PreprocessingError: not preprocessed, already sealed or synced, its place taken."""
 
@@ -77,7 +78,7 @@ class DeploymentFolders(ABC):
         """Moves a prepared deployment to its place in the collection, in one rename. PreprocessingError when it can't."""
 
     @abstractmethod
-    def write_deployment_metadata(self, dest: Path, deployment: DeploymentLike) -> None: ...
+    def write_deployment_metadata(self, dest: Path, deployment: DeploymentRecord) -> None: ...
 
     @abstractmethod
     def files(self, folder: Path) -> list[Path]:
@@ -100,7 +101,7 @@ class DeploymentFolders(ABC):
         """Whether the deployment in its place has its seal."""
 
     @abstractmethod
-    def seal(self, source: Path, dest: Path, deployment: DeploymentLike, *, originals: dict[str, str], source_hashes: dict[str, str],
+    def seal(self, source: Path, dest: Path, deployment: DeploymentRecord, *, originals: dict[str, str], source_hashes: dict[str, str],
              preprocessing: dict) -> bool:
         """Seals a deployment in its place: from then on the app notices any change to it. Whether it was sealed."""
 

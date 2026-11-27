@@ -13,10 +13,11 @@ from typing import TypeVar
 from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
 from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
 from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
-from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE, STAGING_DIR, DeploymentLike, ImageWork, PreprocessingError
+from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE, STAGING_DIR, ImageWork, PreprocessingError
 from wildintel_uploader.modules.preprocessing.domain.ports import DeploymentFolders, Reports
 from wildintel_uploader.modules.preprocessing.infrastructure.images import dimensions
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
+from wildintel_uploader.shared.deployment_record import DeploymentRecord
 
 T = TypeVar("T")
 # On Windows a file that is open for a moment (the antivirus, the indexer, a viewer, ExifTool finishing) keeps a folder from being renamed: it is
@@ -76,7 +77,7 @@ def publish(work: Path, dest: Path) -> None:
         pass
 
 
-def _as_dict(deployment: DeploymentLike) -> dict:
+def _as_dict(deployment: DeploymentRecord) -> dict:
     return deployment.model_dump() if hasattr(deployment, "model_dump") else dict(vars(deployment))  # type: ignore[attr-defined]
 
 
@@ -162,10 +163,10 @@ class CollectionFolders(DeploymentFolders):
     def publish(self, work: Path, dest: Path) -> None:
         publish(work, dest)
 
-    def write_deployment_metadata(self, dest: Path, deployment: DeploymentLike) -> None:
+    def write_deployment_metadata(self, dest: Path, deployment: DeploymentRecord) -> None:
         self._layout().write_deployment_metadata(dest, _as_dict(deployment))
 
-    def seal(self, source: Path, dest: Path, deployment: DeploymentLike, *, originals: dict[str, str], source_hashes: dict[str, str],
+    def seal(self, source: Path, dest: Path, deployment: DeploymentRecord, *, originals: dict[str, str], source_hashes: dict[str, str],
              preprocessing: dict) -> bool:
         return self._layout().seal(source, dest, deployment, originals=originals, source_hashes=source_hashes, preprocessing=preprocessing)
 

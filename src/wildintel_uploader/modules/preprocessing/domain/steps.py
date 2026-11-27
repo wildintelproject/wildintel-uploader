@@ -11,7 +11,8 @@ from typing import ClassVar
 
 from wildintel_uploader.modules.fileinfo.domain.models import CameraInfo
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
-from wildintel_uploader.modules.preprocessing.domain.models import DeploymentLike, ImageWork, PreprocessOptions
+from wildintel_uploader.modules.preprocessing.domain.models import ImageWork, PreprocessOptions
+from wildintel_uploader.shared.deployment_record import DeploymentRecord
 
 
 @dataclass(frozen=True)
@@ -19,7 +20,7 @@ class Job:
     """What every step of a deployment is given: its options, the deployment, what is known of the files, what was read of all its images at
     once — their dates and their cameras (one run of ExifTool, #227) —, and where ExifTool is (None: it isn't)."""
     options: PreprocessOptions
-    deployment: DeploymentLike
+    deployment: DeploymentRecord          # the whole record: it is written beside the images and sealed with them
     info: FileInfoService
     dates: dict = field(default_factory=dict)
     cameras: dict = field(default_factory=dict)

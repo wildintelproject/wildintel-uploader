@@ -2,6 +2,8 @@
 file together with it."""
 from __future__ import annotations
 
+from typing import cast
+
 import re
 
 from pydantic import BaseModel, Field, field_validator
@@ -61,7 +63,7 @@ class ValidationSettings(BaseModel):
         return out
     duplicates: bool = Field(default=True, description="Duplicate images (same content). (VALIDATION.duplicates)")
     defaults: dict[str, CheckLevel] = Field(
-        default_factory=lambda: dict(IMAGE_CHECK_DEFAULTS),
+        default_factory=lambda: cast(dict[str, CheckLevel], dict(IMAGE_CHECK_DEFAULTS)),
         description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (VALIDATION.defaults)",
     )
 

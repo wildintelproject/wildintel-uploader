@@ -2,6 +2,8 @@
 taken, and an image of a report made small to be shown."""
 from __future__ import annotations
 
+import builtins
+
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from datetime import datetime
@@ -19,7 +21,7 @@ class BadFormat(Exception):
 
 class ReportsService(ABC):
     @abstractmethod
-    def list(self) -> list[dict]:
+    def list(self) -> builtins.list[dict]:
         """What each report says of itself, newest first."""
 
     @abstractmethod
@@ -47,16 +49,16 @@ class ReportsService(ABC):
     def save_postvalidation(self, result: dict, deployment_id: str, folder: Path, parameters: dict | None) -> str: ...
 
     @abstractmethod
-    def save_preprocessing(self, records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> str: ...
+    def save_preprocessing(self, records: builtins.list[dict], skipped: builtins.list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> str: ...
 
     @abstractmethod
     def save_visits_import(self, project: str, result: dict, saved: int) -> str: ...
 
     @abstractmethod
-    def save_upload(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str: ...
+    def save_upload(self, collection: str, project: str, items: builtins.list[dict], started_at: str, finished_at: str) -> str: ...
 
     @abstractmethod
-    def save_repair(self, deployment_id: str, dest: Path, files: list[tuple[str, bool, str]], seal: dict | None,
+    def save_repair(self, deployment_id: str, dest: Path, files: builtins.list[tuple[str, bool, str]], seal: dict | None,
                     preprocessing: dict[str, dict[str, str]]) -> str: ...
 
 
@@ -72,7 +74,7 @@ class KeptReports(ABC):
         """Raises ReportMissing when there is no such report."""
 
     @abstractmethod
-    def all(self) -> list[dict]:
+    def all(self) -> builtins.list[dict]:
         """Every report kept, newest first."""
 
     @abstractmethod
@@ -81,7 +83,7 @@ class KeptReports(ABC):
 
 class FolderImages(ABC):
     @abstractmethod
-    def images(self, folder: Path) -> list[str]:
+    def images(self, folder: Path) -> builtins.list[str]:
         """The images of a folder, as their paths in it, in natural file-name order."""
 
     @abstractmethod
@@ -90,6 +92,6 @@ class FolderImages(ABC):
 
 
 class ImageDates(Protocol):
-    def dates(self, paths: list[Path]) -> dict[Path, datetime | None]:
+    def dates(self, paths: builtins.list[Path]) -> dict[Path, datetime | None]:
         """When each image says it was taken (modules.fileinfo)."""
         ...

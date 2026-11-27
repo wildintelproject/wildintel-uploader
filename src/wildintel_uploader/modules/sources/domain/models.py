@@ -148,8 +148,8 @@ def entry_fields(entry: dict, mapping: dict[str, str]) -> dict:
     if (value := cell_text(raw.get("location_id"))) is not None:
         found["location_id"] = value
     for key in _NUMBER:
-        if (value := _number(raw.get(key))) is not None:
-            found[key] = value
+        if (number := _number(raw.get(key))) is not None:
+            found[key] = number
     for key in _BOOL:
         if (flag := _yes_no(raw.get(key))) is not None:
             found[key] = flag
@@ -164,12 +164,12 @@ def entry_fields(entry: dict, mapping: dict[str, str]) -> dict:
     # A GPS input gives all three; a decimal input gives its own.
     for key, part in (("latitude", "latitude"), ("longitude", "longitude"), ("coordinate_uncertainty", "accuracy")):
         place = _place(entry.get(mapping.get(key) or ""))
-        value = _number(place.get(part)) if place else _number(raw.get(key))
-        if value is not None:
-            found[key] = value
+        number = _number(place.get(part)) if place else _number(raw.get(key))
+        if number is not None:
+            found[key] = number
 
-    if (value := _number(raw.get("revision"))) is not None:
-        found["revision"] = int(value)
+    if (number := _number(raw.get("revision"))) is not None:
+        found["revision"] = int(number)
     for key in ("start_date", "end_date"):
         if (day := _day(raw.get(key))) is not None:
             found[key] = day.isoformat()

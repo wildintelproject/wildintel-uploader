@@ -41,7 +41,7 @@ def resize_to_width(source: Path, dest: Path, width: int, on_decoded: Callable[[
             shutil.copy2(source, dest)
             return False
         height = max(1, round(img.height * width / img.width))
-        resized = img.resize((width, height), Image.LANCZOS)
+        resized = img.resize((width, height), Image.Resampling.LANCZOS)
         keep = {key: img.info[key] for key in ("exif", "icc_profile") if key in img.info}
         fmt = img.format or "JPEG"
         if fmt == "JPEG":

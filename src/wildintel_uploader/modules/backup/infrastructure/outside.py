@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 from wildintel_uploader.modules.backup.domain.ports import AppSettings, BackupError
 from wildintel_uploader.modules.catalog.domain.records import CatalogRecords, CatalogRecordStore
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
+from wildintel_uploader.modules.visits.domain.shapes import Visit
 from wildintel_uploader.shared import storage
 
 
@@ -79,13 +81,13 @@ class RecordsOfTheProject:
         storage.open_store(self._root()).write_records(project, "status_history", lines)
 
     def visits(self, project: str) -> list[dict]:
-        return self._visits(self._root()).visits(project)
+        return cast(list[dict], self._visits(self._root()).visits(project))   # a backup keeps them as the records they are
 
     def kept_visits(self, project: str) -> int:
         return self._visits(self._root()).kept_count(project)
 
     def replace_visits(self, project: str, visits: list[dict]) -> None:
-        self._visits(self._root()).replace_all(project, visits)
+        self._visits(self._root()).replace_all(project, cast(list[Visit], visits))
 
 
 class SettingsOfTheApp(AppSettings):

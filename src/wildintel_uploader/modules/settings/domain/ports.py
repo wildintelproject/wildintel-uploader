@@ -282,6 +282,10 @@ class StoredSettings(Protocol):
     settings whole — the backup of the settings — is given them all (entrypoints.config); every other adapter is given the section or the
     folder it reads, by entrypoints.wiring."""
 
+    @property
+    def Settings(self) -> Any:   # noqa: N802 — the format of the file (infrastructure.schema.Settings), as entrypoints.config names it
+        """What a whole settings file is validated with — the settings a backup holds are restored through it."""
+
     def load_settings(self) -> Any:
         ...
 
