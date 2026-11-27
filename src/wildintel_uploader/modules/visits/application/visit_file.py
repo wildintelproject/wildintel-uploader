@@ -229,7 +229,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
     # The first camera put up at a pending site starts it.
     seen_sites = {str(v.get("location_id", "")).lower() for v in kept}
     by_site: dict[str, Location] = {str(l.get("location_id", "")).lower(): l for l in [*locations, *new_locations.values()]}
-    for record in sorted(visits, key=visit_rules._stamp):
+    for record in sorted(visits, key=visit_rules.visit_stamp):
         site = record["location_id"].lower()
         if site not in seen_sites:
             record["actions"] = visit_rules.with_site_start(record, [], by_site.get(site))["actions"]
@@ -263,16 +263,16 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
     # the visits that fill an unknown one come last: each is checked with the visits after it that it touches, and those need the other visits of its revision to be there
     # at the same instant, a visit that takes a camera away is taken first: the camera it takes can be put up at another site at that same minute
     for visit in sorted(visits, key=lambda v: (fills_unknown(v), *visit_rules.by_time_takings_first(v))):
-        number = visit_rules._session_number(visit.get("session"))
+        number = visit_rules.session_number(visit.get("session"))
         fills = fills_unknown(visit)
         if number is not None and number not in gate and not fills:
             # a revision starts when the one before it is finished — said once for the revision, with the visits that were kept before it
-            day = min(str(v["date"]) for v in visits if visit_rules._session_number(v.get("session")) == number)
+            day = min(str(v["date"]) for v in visits if visit_rules.session_number(v.get("session")) == number)
             # a site given up by a visit taken so far (an Archive) is out of use from then on, as if the revisions had come in one file each: archiving is only kept when saving
             in_use = rules.archived_by(all_locations, accepted)
-            before = [v for v in accepted if visit_rules._session_number(v.get("session")) == number - 1]
+            before = [v for v in accepted if visit_rules.session_number(v.get("session")) == number - 1]
             if number > 1 and not before:
-                gate[number] = visit_rules._reason("revision_without_previous", f"R{number:04d} cannot start: R{number - 1:04d} has no visit. Import the visits of R{number - 1:04d} first.")
+                gate[number] = visit_rules.make_reason("revision_without_previous", f"R{number:04d} cannot start: R{number - 1:04d} has no visit. Import the visits of R{number - 1:04d} first.")
             closes = None
             # the day to close on matters only to a revision that has locations still to be visited: one that is finished is left as it is
             if number > 1 and before and options.get("close_revisions") and close_after and visit_rules.revision_missing(number - 1, accepted, in_use, day, [*unknown_kept, *unknown], visits):
@@ -293,7 +293,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
                     close_notes.append(f"R{number - 1:04d} would be closed on {close_day}, {lasted}, when R{number:04d} has started ({day}): it is closed on {before_next}, the day before.")
                     close_day = before_next
                 # on the day of the first visit after it, just before that visit
-                earliest = min(str(v.get("time") or "00:00:00") for v in visits if visit_rules._session_number(v.get("session")) == number and str(v["date"]) == day) if close_day == day else None
+                earliest = min(str(v.get("time") or "00:00:00") for v in visits if visit_rules.session_number(v.get("session")) == number and str(v["date"]) == day) if close_day == day else None
                 closes = (close_day, rules.minute_before(earliest) if earliest else "23:59:00")
             if number not in gate and options.get("close_revisions"):
                 # the revision before is closed as the form does when asked: its locations still planned are marked as not visited
@@ -317,12 +317,12 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
         camera, card = str(visit.get("camera_id") or ""), str(visit.get("sd") or "")
         check = options.get("check_entities", True)
         if check and camera and options.get("cameras") is not None and camera not in cameras_known and not create.get("cameras"):
-            reasons.append(visit_rules._reason("camera_unknown", f"The camera {visit['camera_id']} is not one of the cameras of the research project."))
+            reasons.append(visit_rules.make_reason("camera_unknown", f"The camera {visit['camera_id']} is not one of the cameras of the research project."))
         if check and card and options.get("cards") is not None and card not in cards_known and not create.get("sd_cards"):
-            reasons.append(visit_rules._reason("card_unknown", f"The SD card {visit['sd']} is not one of the SD cards of the research project."))
+            reasons.append(visit_rules.make_reason("card_unknown", f"The SD card {visit['sd']} is not one of the SD cards of the research project."))
         if check and options.get("trappers") is not None and not create.get("trappers"):
             known_trappers = {str(t) for t in options["trappers"]}   # as written: two people that differ only in case are two
-            reasons += [visit_rules._reason("trapper_unknown", f"{t} is not one of the trappers.") for t in (x.strip() for x in str(visit.get("trappers") or "").split(",")) if t and t not in known_trappers]
+            reasons += [visit_rules.make_reason("trapper_unknown", f"{t} is not one of the trappers.") for t in (x.strip() for x in str(visit.get("trappers") or "").split(",")) if t and t not in known_trappers]
         if reasons:
             # the kind of error is that of the first rule it breaks; every reason is told
             own = [r for r in reasons if getattr(r, "code", None) not in rules.WAITING]
@@ -352,7 +352,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
             notes.append(f"The location {location['location_id']} is made because its visit says New site: its place is the one of the visit and its timezone is {location['timezone']} — "
                          f"change it in the settings if it is not that one.")
     notes += close_notes
-    closed_now = [m for m in closing if any(visit_rules._session_number(v.get("session")) == (visit_rules._session_number(m["session"]) or 0) + 1 for v in visits)]
+    closed_now = [m for m in closing if any(visit_rules.session_number(v.get("session")) == (visit_rules.session_number(m["session"]) or 0) + 1 for v in visits)]
     for session in sorted({m["session"] for m in closed_now}):
         notes.append(f"{session} is closed to start the revision after it: {', '.join(m['location_id'] for m in closed_now if m['session'] == session)} still planned in it, marked as not visited.")
     # a site that has no visit in a revision the file gives was not there: the revision after it has to put its camera up
@@ -365,8 +365,8 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
         # the revisions in a row that have the same sites are told once: R0005–R0009
         groups: list[tuple[list[str], list[str]]] = []
         for session, sites in sorted(by_revision.items()):
-            number, wanted = visit_rules._session_number(session), sorted(sites)
-            if groups and groups[-1][1] == wanted and visit_rules._session_number(groups[-1][0][-1]) == (number or 0) - 1:
+            number, wanted = visit_rules.session_number(session), sorted(sites)
+            if groups and groups[-1][1] == wanted and visit_rules.session_number(groups[-1][0][-1]) == (number or 0) - 1:
                 groups[-1][0].append(session)
             else:
                 groups.append(([session], wanted))

@@ -405,7 +405,7 @@ class CatalogUseCases(CatalogService):
                 archived = {i.label: i for i in kept if i.status == "archived"}
                 for p, item in items:
                     before = archived.get(item.label) if p == project else None
-                    if before is not None and rules._content(item) != rules._content(before):
+                    if before is not None and rules.record_content(item) != rules.record_content(before):
                         raise EquipmentArchived(kind, item.label)
             free = [item for p, item in items if not p]
             if free:

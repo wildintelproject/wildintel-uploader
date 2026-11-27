@@ -17,7 +17,7 @@ def site_status_refusal(visits: list[Visit], unknown: list[UnknownVisit], locati
     if wanted == "ready" and location.get("status") != "ready":
         return f"{site} is ready when a visit says Location start: its status cannot be set to ready by hand."
     if wanted in ("planned", "archived"):
-        numbers = sorted({n for n in (rules._session_number(v.get("session")) for v in visits) if n is not None})
+        numbers = sorted({n for n in (rules.session_number(v.get("session")) for v in visits) if n is not None})
         pending = [f"R{n:04d}" for n in numbers if any(str(s).lower() == site.lower() for s in rules.revision_missing(n, visits, locations, "", unknown))]
         if pending:
             return f"{site} still has a visit to be made in {', '.join(pending)}: it cannot be {wanted} until the revision is finished."

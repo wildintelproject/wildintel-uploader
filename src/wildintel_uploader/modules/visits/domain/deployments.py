@@ -31,9 +31,7 @@ _EXTRAS: list[tuple[str, str, str]] = [
 
 
 
-def session_number(session: str | None) -> int | None:
-    m = re.search(r"\d+", session or "")
-    return int(m.group(0)) if m else None
+session_number = visit_rules.session_number   # the number of a revision: R0013 is 13 — the rule of the visits
 
 
 
@@ -261,7 +259,7 @@ def visit_book(visits: list[Visit], keep_seconds: bool = True, locations: list[L
     # a visit of which nothing is known: it has no day, no time and no actions, and it cannot be edited — only a known one takes its place
     starts = visit_rules.site_starts(visits)
     # a revision before the start of a site has nothing of it: not an unknown visit, nor a planned one
-    for u in (x for x in unknown or [] if (visit_rules._session_number(x["session"]) or 0) >= starts.get(str(x["location_id"]).lower(), 0)):
+    for u in (x for x in unknown or [] if (visit_rules.session_number(x["session"]) or 0) >= starts.get(str(x["location_id"]).lower(), 0)):
         out.append({"location_id": u["location_id"], "session": str(u["session"]).upper(), "date": "", "time": "", "when": None, "actions": [], "deployment": None, "deployment_status": None,
                     "not_done": False, "not_visited": False, "unknown": True, "locked": True, "state": "unknown"})
     if locations:
@@ -272,9 +270,9 @@ def visit_book(visits: list[Visit], keep_seconds: bool = True, locations: list[L
                 site = str(location.get("location_id", ""))
                 if not site or location.get("status") in ("archived", "planned") or (session, site.lower()) in visited:
                     continue
-                if (visit_rules._session_number(session) or 0) < starts.get(site.lower(), 0):
+                if (visit_rules.session_number(session) or 0) < starts.get(site.lower(), 0):
                     continue   # the site starts after this revision
-                if not visit_rules._in_play(location, visits):
+                if not visit_rules.in_play(location, visits):
                     continue   # a site that is pending has not started: nothing is waited for of it
                 out.append({"location_id": site, "session": session, "date": "", "time": "", "when": None, "actions": [], "deployment": None, "deployment_status": None, "not_done": True, "not_visited": False, "state": "planned"})
     return out

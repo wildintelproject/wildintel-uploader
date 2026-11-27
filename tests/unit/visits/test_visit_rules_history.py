@@ -63,14 +63,14 @@ def _conflicts_by_looking_at_every_pair(new, kept):
     """What revision_order_conflicts said before it compared the revisions by their first and last instants: each visit against every other."""
     out = []
     for v in new:
-        number = visit_rules._session_number(v.get("session"))
+        number = visit_rules.session_number(v.get("session"))
         if number is None:
             continue
         for other in (w for w in [*kept, *new] if w is not v):
-            n = visit_rules._session_number(other.get("session"))
+            n = visit_rules.session_number(other.get("session"))
             if n is None or n == number:
                 continue
-            if n < number and visit_rules._stamp(other) >= visit_rules._stamp(v) or n > number and visit_rules._stamp(other) <= visit_rules._stamp(v):
+            if n < number and visit_rules.visit_stamp(other) >= visit_rules.visit_stamp(v) or n > number and visit_rules.visit_stamp(other) <= visit_rules.visit_stamp(v):
                 out.append((id(v), id(other)))
                 break
     return out

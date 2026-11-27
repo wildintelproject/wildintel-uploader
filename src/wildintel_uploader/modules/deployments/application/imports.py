@@ -14,7 +14,7 @@ from wildintel_uploader.modules.deployments.domain.models import DeploymentImpor
 from wildintel_uploader.modules.deployments.domain.naming import natural_key
 from wildintel_uploader.modules.deployments.domain.ports import Deployment, ImportFolder
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
-from wildintel_uploader.shared.storage import StorageError
+from wildintel_uploader.shared.errors import StorageError
 
 logger = logging.getLogger(__name__)
 

@@ -179,7 +179,7 @@ def with_the_camera_there(visits: list[Visit]) -> list[Visit]:
     so it is told as that one (it is not kept: it would say twice what the visit that put it up says)."""
     out = [cast(Visit, dict(v)) for v in visits]
     there: dict[str, tuple[str, str | None]] = {}
-    for v in sorted(out, key=visit_rules._stamp):
+    for v in sorted(out, key=visit_rules.visit_stamp):
         site = str(v.get("location_id") or "").lower()
         if visit_rules.is_not_revised(v):
             continue
@@ -188,9 +188,9 @@ def with_the_camera_there(visits: list[Visit]) -> list[Visit]:
             v["camera_id"], model = there[site]
             if model and not v.get("camera_model"):
                 v["camera_model"] = model
-        if visit_rules._takes_away(v):
+        if visit_rules.takes_away(v):
             there.pop(site, None)
-        if visit_rules._leaves_camera(v) and v.get("camera_id"):
+        if visit_rules.leaves_camera(v) and v.get("camera_id"):
             there[site] = (str(v["camera_id"]), v.get("camera_model"))
     return out
 

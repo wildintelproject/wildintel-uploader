@@ -18,7 +18,7 @@ from wildintel_uploader.modules.deployments.domain.ports import RepairFolder
 from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
 from wildintel_uploader.modules.preprocessing.domain import models as pre
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
-from wildintel_uploader.shared.storage import StorageError
+from wildintel_uploader.shared.errors import StorageError
 
 logger = logging.getLogger(__name__)
 

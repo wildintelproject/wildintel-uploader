@@ -96,7 +96,7 @@ def reconstructed_lines(locations: list[dict], equipment: dict[str, list[dict]],
     status: dict[tuple[str, str], str] = {}          # (kind, name) -> the status the visits give it so far
     out: list[dict] = []
     before: list[dict] = []
-    for visit in sorted(audit.alive(visits), key=visit_rules._stamp):
+    for visit in sorted(audit.alive(visits), key=visit_rules.visit_stamp):
         changes = visit_rules.entity_changes(visit, before)
         if "Archive" in (visit.get("actions") or []):
             changes.append({"kind": "locations", "name": str(visit["location_id"]), "status": "archived"})

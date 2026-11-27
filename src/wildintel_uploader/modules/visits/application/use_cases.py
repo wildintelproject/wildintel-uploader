@@ -112,7 +112,7 @@ class VisitsUseCases(VisitsService):
         when stolen. What is archived is for good, and is never changed; what the research project does not keep is left alone."""
         history = list(before)
         changes: list[tuple[Visit, dict]] = []
-        for visit in sorted(new, key=rules._stamp):
+        for visit in sorted(new, key=rules.visit_stamp):
             changes += [(visit, c) for c in rules.entity_changes(visit, history)]
             history.append(visit)
         for visit, change in [(v, c) for v, c in changes if c["kind"] == "locations"]:
@@ -233,9 +233,9 @@ class VisitsUseCases(VisitsService):
         self._catalog.require_project(project, active=True)
         visits, locations = self._visits.list(project), self._catalog.locations(project)
         unknown, planned = self._visits.unknown(project), self._visits.planned_revisions(project)
-        made = {n for n in (rules._session_number(v.get("session")) for v in visits) if n is not None}
-        known = made | {n for n in (rules._session_number(s) for s in planned) if n is not None} | \
-            {n for n in (rules._session_number(u.get("session")) for u in unknown) if n is not None}
+        made = {n for n in (rules.session_number(v.get("session")) for v in visits) if n is not None}
+        known = made | {n for n in (rules.session_number(s) for s in planned) if n is not None} | \
+            {n for n in (rules.session_number(u.get("session")) for u in unknown) if n is not None}
         latest = max(known, default=0)
         if latest and latest not in made:
             raise VisitLocked(f"R{latest:04d} is planned and has no visit yet: register its first visit before planning the next revision.")
@@ -253,7 +253,7 @@ class VisitsUseCases(VisitsService):
         self._catalog.require_project(project)
         locations, kept = self._catalog.locations(project), self._visits.list(project)
         number = int(session[1:])
-        planned = {n for n in (rules._session_number(x) for x in self._visits.planned_revisions(project)) if n is not None}
+        planned = {n for n in (rules.session_number(x) for x in self._visits.planned_revisions(project)) if n is not None}
         # a revision that was planned and has no visit yet is marked as not visited on today's day: it has no day of its own
         records = rules.not_visited_records(number, kept, locations, on=self._clock.today() if number in planned else None)
         for record in records:

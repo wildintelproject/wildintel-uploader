@@ -4,6 +4,7 @@
 - Its application — the use cases — uses its domain only: no infrastructure, no framework.
 - Nothing asks for the code of before (core): each module has its own models, in its infrastructure (api_schemas.py)."""
 import ast
+import sys
 import re
 from pathlib import Path
 
@@ -13,18 +14,35 @@ SRC = Path(__file__).resolve().parents[3] / "src" / "wildintel_uploader"
 FRAMEWORKS = ("pydantic", "sqlmodel", "sqlalchemy", "fastapi", "typer", "rich", "dynaconf", "dishka", "starlette")
 
 
+def _module_of(path: Path) -> str:
+    """The dotted name of a file of the app: src/wildintel_uploader/modules/visits/domain/rules.py is wildintel_uploader.modules.visits.domain.rules."""
+    parts = path.relative_to(SRC.parent).with_suffix("").parts
+    return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
+
+
 def _imports(path: Path) -> set[str]:
+    """What a file imports, by the absolute name — a relative import (from . import x, from ..domain import y) resolved where the file is."""
     names: set[str] = set()
+    package = _module_of(path) if path.name == "__init__.py" else _module_of(path).rpartition(".")[0]
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if isinstance(node, ast.Import):
             names |= {a.name for a in node.names}
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            names.add(node.module)
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                up = package.split(".")[: len(package.split(".")) - (node.level - 1)]
+                base = ".".join([*up, *([base] if base else [])])
+            if base:
+                names.add(base)
+                # `from package import module` imports that module too
+                names |= {f"{base}.{a.name}" for a in node.names if (SRC.parent / f"{base}.{a.name}".replace(".", "/")).with_suffix(".py").exists()
+                          or (SRC.parent / f"{base}.{a.name}".replace(".", "/") / "__init__.py").exists()}
     return names
 
 
 def _files(layer: str) -> list[Path]:
-    return sorted(SRC.glob(f"modules/*/{layer}/*.py"))
+    """Every file of that layer of every module — those in its subfolders too (infrastructure/validators/…)."""
+    return sorted(SRC.glob(f"modules/*/{layer}/**/*.py"))
 
 
 @pytest.mark.parametrize("path", _files("domain"), ids=lambda p: f"{p.parts[-3]}/domain/{p.name}")
@@ -171,4 +189,67 @@ def test_the_shared_kernel_needs_no_module_and_no_entry_point(path: Path):
     """The shared kernel is under every module: it never reaches up for one of them, nor for the entry points — what it needs of them is given."""
     wrong = {i for i in _imports(path) if i.startswith(("wildintel_uploader.modules", "wildintel_uploader.entrypoints", "wildintel_uploader.web"))}
     assert not wrong, f"{path.name} imports {sorted(wrong)}"
+
+
+def test_the_parser_resolves_relative_imports_and_finds_the_files_in_subfolders(tmp_path):
+    """The tests above hold only as far as they see: a relative import is read as the module it names, and the files of a layer's subfolders are
+    among those checked."""
+    here = SRC / "modules" / "visits" / "domain" / "rules.py"
+    probe = here.with_name("_probe_of_the_tests.py")
+    probe.write_text("from . import rules\nfrom ..infrastructure import csv_file\n", encoding="utf-8")
+    try:
+        found = _imports(probe)
+    finally:
+        probe.unlink()
+    assert {"wildintel_uploader.modules.visits.domain", "wildintel_uploader.modules.visits.infrastructure"} <= found
+    assert any("infrastructure/validators" in str(p) for p in _files("infrastructure"))
+
+
+@pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=lambda p: str(p.relative_to(SRC)))
+def test_no_file_reaches_for_a_private_name_of_another_module(path: Path):
+    """What another module offers is named so: `rules._stamp` of a module imported from elsewhere is reaching into it, as `from rules import _stamp`
+    would be."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    modules: dict[str, str] = {}   # the names in this file that are modules of the app
+    package = _module_of(path) if path.name == "__init__.py" else _module_of(path).rpartition(".")[0]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith("wildintel_uploader") and a.asname:
+                    modules[a.asname] = a.name
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                up = package.split(".")[: len(package.split(".")) - (node.level - 1)]
+                base = ".".join([*up, *([base] if base else [])])
+            for a in node.names:
+                full = f"{base}.{a.name}"
+                if full.startswith("wildintel_uploader") and ((SRC.parent / full.replace(".", "/")).with_suffix(".py").exists()
+                                                             or (SRC.parent / full.replace(".", "/") / "__init__.py").exists()):
+                    modules[a.asname or a.name] = full
+    reached = {f"{modules[n.value.id]}.{n.attr}" for n in ast.walk(tree)
+               if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id in modules
+               and n.attr.startswith("_") and not n.attr.startswith("__") and modules[n.value.id] != _module_of(path)}
+    assert not reached, f"{path.name} reaches for {sorted(reached)}"
+
+
+# What of the shared kernel the domain and the use cases may lean on: plain Python, with no file, no process, no library — the ids of the records,
+# how their names are compared, the dates they keep of themselves, and the errors the kernel tells of. The rest of `shared` (storage, desktop, camtrap, parallel, logs, version) is for
+# the adapters and the entry points.
+SHARED_KERNEL = {"wildintel_uploader.shared", "wildintel_uploader.shared.ids", "wildintel_uploader.shared.identity", "wildintel_uploader.shared.audit",
+                 "wildintel_uploader.shared.errors"}
+
+
+@pytest.mark.parametrize("path", _files("domain") + _files("application"), ids=lambda p: str(p.relative_to(SRC / "modules")))
+def test_the_domain_and_the_use_cases_take_of_shared_only_its_plain_kernel(path: Path):
+    shared = {name for name in _imports(path) if name == "wildintel_uploader.shared" or name.startswith("wildintel_uploader.shared.")}
+    assert shared <= SHARED_KERNEL, f"{path.name} takes {sorted(shared - SHARED_KERNEL)} of shared: only {sorted(SHARED_KERNEL)} are plain"
+
+
+@pytest.mark.parametrize("name", sorted(SHARED_KERNEL - {"wildintel_uploader.shared"}))
+def test_the_plain_kernel_of_shared_imports_only_the_standard_library(name: str):
+    path = SRC.parent / (name.replace(".", "/") + ".py")
+    others = {n.split(".")[0] for n in _imports(path)} - {"__future__", "wildintel_uploader"}
+    assert others <= set(sys.stdlib_module_names), f"{path.name} imports {sorted(others - set(sys.stdlib_module_names))}"
+    assert {n for n in _imports(path) if n.startswith("wildintel_uploader")} <= SHARED_KERNEL
 

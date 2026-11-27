@@ -12,7 +12,7 @@ from wildintel_uploader.modules.catalog.domain.models import Audit, CatalogError
 R = TypeVar("R", bound=Any)  # a record of the catalog: a dataclass with an `audit`
 
 
-def _content(record) -> dict:
+def record_content(record) -> dict:
     """What a record says, apart from its audit, with what it leaves empty taken as not said."""
     return {f.name: getattr(record, f.name) for f in fields(record) if f.name != "audit" and getattr(record, f.name) not in (None, "")}
 
@@ -24,7 +24,7 @@ def stamped(record: R, before: R | None, at: str, new_id: Callable[[], str]) -> 
         return replace(record, audit=Audit(id=new_id(), created_at=at, updated_at=at))
     if before.audit.deleted:
         return replace(record, audit=Audit(id=before.audit.id or new_id(), created_at=before.audit.created_at, updated_at=at))
-    updated = at if _content(record) != _content(before) else before.audit.updated_at
+    updated = at if record_content(record) != record_content(before) else before.audit.updated_at
     return replace(record, audit=Audit(id=before.audit.id or new_id(), created_at=before.audit.created_at, updated_at=updated))
 
 

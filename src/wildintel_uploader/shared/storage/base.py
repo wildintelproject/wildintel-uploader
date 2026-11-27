@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 
+from wildintel_uploader.shared.errors import StorageError  # noqa: F401 — told by the kernel, so the use cases catch it without the storage
+
 # What is kept for each research project, besides the project itself. Each is a list of records, in the order they were kept. (Locations, cameras, SD cards and roles
 # belong to the project; the trappers, the people, are global and are not here.)
 RECORD_KINDS = ("locations", "visits", "unknown_visits", "planned_revisions", "cameras", "sd_cards", "roles", "upload_failures", "status_history")
@@ -23,10 +25,6 @@ RECORD_KINDS = ("locations", "visits", "unknown_visits", "planned_revisions", "c
 GLOBAL_KINDS = ("trappers",)
 
 _PROJECT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-
-
-class StorageError(Exception):
-    """The records cannot be read or kept — the message says why, for the person."""
 
 
 def valid_project_id(research_project_id: str) -> str:
