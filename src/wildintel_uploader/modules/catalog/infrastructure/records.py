@@ -1,6 +1,6 @@
 """The catalog as records — the research projects, their locations, cameras, SD cards, people and roles as dicts, the shape they are kept in —,
-for what still reads and writes them so (the visits, the backups, the sync): the contract CatalogRecords, over the catalog's use cases and its
-repository."""
+for what still reads and writes them so (see domain.records): CatalogRecords over the catalog's use cases, and CatalogRecordStore over its
+repository, for a backup."""
 from __future__ import annotations
 
 import logging
@@ -9,7 +9,8 @@ from contextlib import contextmanager
 from dataclasses import replace
 
 from wildintel_uploader.modules.catalog.domain.models import Audit, CatalogError, Role, UnknownCamera, UnknownLocation, UnknownProject
-from wildintel_uploader.modules.catalog.domain.ports import CatalogRecords, CatalogRepository, CatalogService
+from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService
+from wildintel_uploader.modules.catalog.domain.records import CatalogRecords, CatalogRecordStore
 from wildintel_uploader.modules.catalog.infrastructure.mapping import (
     equipment_from_record, equipment_to_record, location_from_record, location_to_record, project_from_record, project_to_record, role_to_record,
     trapper_from_record, trapper_to_record,
@@ -35,9 +36,8 @@ LocalFolderError = storage.StorageError   # a research project or location can't
 
 
 class RecordsOf(CatalogRecords):
-    """The catalog of a collections folder as records: its use cases (`catalog`) for what follows its rules, its repository for what is read and
-    written as it is kept — a backup, a move to another storage —, which the use cases would date anew. The errors are told as the callers of
-    before catch them (LocalFolderError, with the same words)."""
+    """The catalog of a collections folder as records, through its use cases (`catalog`) — and its repository only to tell whether a research
+    project is archived. The errors are told as the callers have always caught them (LocalFolderError, with the same words)."""
 
     def __init__(self, catalog: Callable[[], CatalogService], repository: Callable[[], CatalogRepository]) -> None:
         self._catalog, self._repository = catalog, repository
@@ -74,22 +74,9 @@ class RecordsOf(CatalogRecords):
     def require_modifiable(self, project: str) -> None:
         """Raises LocalFolderError when the research project is archived: an archived one can't be modified — nor its locations, cameras, SD cards,
         roles or visits — and never goes back."""
-        if str((self.project_record(project) or {}).get("status") or "active") == "archived":
-            raise LocalFolderError(f"The research project '{project}' is archived: it can't be modified.")
-
-    def project_record(self, project: str) -> dict | None:
-        """The record of a research project as it is kept — removed or not —, or None."""
         found = self._repository().read_project(project)
-        return project_to_record(found) if found is not None else None
-
-    def put_project_record(self, record: dict) -> None:
-        """Keeps the record of a research project as it is given — its id and dates too, as a backup has them —, in place of the one kept, or as a
-        new one (with its folder)."""
-        repository, project = self._repository(), project_from_record(record)
-        if repository.read_project(project.acronym) is not None:
-            repository.save_project(project)
-        else:
-            repository.add_project(project)
+        if found is not None and str(project_to_record(found).get("status") or "active") == "archived":
+            raise LocalFolderError(f"The research project '{project}' is archived: it can't be modified.")
 
     # the locations
 
@@ -117,12 +104,6 @@ class RecordsOf(CatalogRecords):
         valid_project_id(project)
         return self._catalog().location_time(project, location_id)
 
-    def location_records(self, project: str) -> list[dict]:
-        return [location_to_record(loc) for loc in self._repository().read_locations(project)]
-
-    def put_location_records(self, project: str, records: list[dict]) -> None:
-        self._repository().write_locations(project, [location_from_record(r, project) for r in records])
-
     # the cameras and the SD cards
 
     def equipment(self, project: str, kind: str, include_deleted: bool = False) -> list[dict]:
@@ -147,12 +128,6 @@ class RecordsOf(CatalogRecords):
         with _as_local_folder_error():
             self._catalog().save_equipment(project, kind, [_equipment(i, kind, project) for i in items], by_hand=by_hand)
 
-    def equipment_records(self, project: str, kind: str) -> list[dict]:
-        return [equipment_to_record(i, kind) for i in self._repository().read_equipment(project, kind)]
-
-    def put_equipment_records(self, project: str, kind: str, records: list[dict]) -> None:
-        self._repository().write_equipment(project, kind, [equipment_from_record(r, kind, project) for r in records])
-
     # the people and their roles
 
     def trappers(self, include_deleted: bool = False) -> list[dict]:
@@ -175,6 +150,40 @@ class RecordsOf(CatalogRecords):
     def keep_roles(self, project: str, roles: list[dict]) -> None:
         with _as_local_folder_error():
             self._catalog().save_roles(project, [Role(trapper=r.get("trapper"), role=r.get("role") or "contributor", audit=Audit(id=r.get("id"))) for r in roles])
+
+
+class RecordStoreOf(CatalogRecordStore):
+    """The records of the catalog of a collections folder as its repository keeps them — round the rules of the catalog, which would date them
+    anew: what a backup copies and restores."""
+
+    def __init__(self, repository: Callable[[], CatalogRepository]) -> None:
+        self._repository = repository
+
+    def project_record(self, project: str) -> dict | None:
+        """The record of a research project as it is kept — removed or not —, or None."""
+        found = self._repository().read_project(project)
+        return project_to_record(found) if found is not None else None
+
+    def put_project_record(self, record: dict) -> None:
+        """Keeps the record of a research project as it is given — its id and dates too, as a backup has them —, in place of the one kept, or as a
+        new one (with its folder)."""
+        repository, project = self._repository(), project_from_record(record)
+        if repository.read_project(project.acronym) is not None:
+            repository.save_project(project)
+        else:
+            repository.add_project(project)
+
+    def location_records(self, project: str) -> list[dict]:
+        return [location_to_record(loc) for loc in self._repository().read_locations(project)]
+
+    def put_location_records(self, project: str, records: list[dict]) -> None:
+        self._repository().write_locations(project, [location_from_record(r, project) for r in records])
+
+    def equipment_records(self, project: str, kind: str) -> list[dict]:
+        return [equipment_to_record(i, kind) for i in self._repository().read_equipment(project, kind)]
+
+    def put_equipment_records(self, project: str, kind: str, records: list[dict]) -> None:
+        self._repository().write_equipment(project, kind, [equipment_from_record(r, kind, project) for r in records])
 
 
 @contextmanager

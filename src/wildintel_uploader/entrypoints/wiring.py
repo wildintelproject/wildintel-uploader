@@ -30,8 +30,9 @@ from wildintel_uploader.modules.backup.infrastructure.zip_files import ZipBackup
 from wildintel_uploader.shared.version import current_version
 from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseCases
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
+from wildintel_uploader.modules.catalog.domain.records import CatalogRecords, CatalogRecordStore
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
-from wildintel_uploader.modules.catalog.infrastructure.records import RecordsOf
+from wildintel_uploader.modules.catalog.infrastructure.records import RecordsOf, RecordStoreOf
 from wildintel_uploader.modules.catalog.infrastructure.clock import SystemClock
 from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
@@ -165,12 +166,25 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
     settings through their module. Its records are kept in `repository`, or — none given — where the settings say (see catalog_repository)."""
     store = storage.open_store(collections_dir)
     kept = repository or catalog_repository(collections_dir, settings)
-    catalog: list[CatalogService] = []     # the records are the catalog's own, as records: they are given it once it is made
-    made = CatalogUseCases(kept, legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store, lambda: build_visits(collections_dir)),
+    return CatalogUseCases(kept, legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store, lambda: build_visits(collections_dir)),
                            status_history=KeptStatusHistory(collections_dir, lambda: kept, lambda: build_visits(collections_dir)), clock=clock or SystemClock(),
-                           legacy_fieldwork=FieldworkFromTheSettings(settings), records=RecordsOf(lambda: catalog[0], lambda: kept))
-    catalog.append(made)
-    return made
+                           legacy_fieldwork=FieldworkFromTheSettings(settings))
+
+
+def catalog_records(collections_dir: Path, settings: SettingsService | None = None) -> CatalogRecords:
+    """The catalog of a collections folder as records, through its rules — for what still reads and adds to it so (the visits, the sync, the
+    uploads, the backups). See modules.catalog.domain.records."""
+    settings = settings or build_settings()
+    kept = catalog_repository(collections_dir, settings)
+    catalog = build_catalog(collections_dir, settings, repository=kept)
+    return RecordsOf(lambda: catalog, lambda: kept)
+
+
+def catalog_record_store(collections_dir: Path, settings: SettingsService | None = None) -> CatalogRecordStore:
+    """The records of the catalog of a collections folder as they are kept, round its rules — for a backup only."""
+    settings = settings or build_settings()
+    kept = catalog_repository(collections_dir, settings)
+    return RecordStoreOf(lambda: kept)
 
 
 def catalog_repository(collections_dir: Path, settings: SettingsService, kind: str | None = None, database: Path | None = None) -> CatalogRepository:
@@ -220,7 +234,7 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     """The visits of the research projects of a collections folder — the one of the settings by default —, kept with the records of their research projects."""
     root = collections_dir or catalog_collections_dir()
     settings = settings or build_settings()
-    records = lambda: build_catalog(root, settings).records()   # noqa: E731
+    records = lambda: catalog_records(root, settings)   # noqa: E731
     return VisitsUseCases(VisitsKept(KeptVisits(root, records)), CatalogOfTheVisits(records),
                           deployments=VisitCollectionFolders(root, lambda: build_deployments().layout()), file=CsvVisitFile(),
                           sources=build_sources(settings), uploads=UploadsOfTheUploaders(build_uploaders(root)), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
@@ -272,11 +286,11 @@ def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — with the uploads kept in it."""
     root = collections_dir or catalog_collections_dir()
     failures = UploadFailures(lambda: root, catalog_of)
-    return UploadersUseCases(TrapperClient(section("TRAPPER"), keep_trapper_account, TrapperSdk()), CollectionsFolder(lambda: config.collections_dir(), catalog_of, UploadFailures(lambda: config.collections_dir(), catalog_of)),
+    return UploadersUseCases(TrapperClient(section("TRAPPER"), keep_trapper_account, TrapperSdk()), CollectionsFolder(lambda: config.collections_dir(), catalog_records, UploadFailures(lambda: config.collections_dir(), catalog_of)),
                              SavedUploadReports(build_reports()), FolderUploads(root, section("TRAPPER"), section("AGOUTI"), lambda: build_deployments().layout(), failures),
                              deployments=build_deployments,
                              sending=trapper_uploads(), places=PlacesInUse(lambda: config.packages_dir(), lambda: config.max_zip_mb()),
-                             syncing=TrapperSync(TrapperSdk(), lambda: catalog_of(config.collections_dir()).records(),
+                             syncing=TrapperSync(TrapperSdk(), lambda: catalog_records(config.collections_dir()),
                                                  SyncedCollections(lambda: config.collections_dir(), lambda: build_deployments().layout())))
 
 
@@ -289,7 +303,7 @@ def build_backup(collections_dir: Path | None = None, version: Callable[[], str]
     """The backups, as zip files, of the collections folder — the settings' by default —: the catalog and the visits through their contracts."""
     def root() -> Path:
         return collections_dir or config.collections_dir()
-    return BackupUseCases(RecordsOfTheProject(root, lambda r: catalog_of(r).records(), lambda r: build_visits(r)), ProjectFoldersOnDisk(root), ZipBackups(),
+    return BackupUseCases(RecordsOfTheProject(root, catalog_records, catalog_record_store, lambda r: build_visits(r)), ProjectFoldersOnDisk(root), ZipBackups(),
                           SettingsOfTheApp(config), version)
 
 

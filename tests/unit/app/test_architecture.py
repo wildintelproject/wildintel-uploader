@@ -80,3 +80,18 @@ def test_an_adapter_is_given_what_it_reads_of_the_settings_not_all_of_them(path:
     takes_all = "StoredSettings" in path.read_text(encoding="utf-8")
     assert not takes_all or path.relative_to(SRC).as_posix() == "modules/backup/infrastructure/outside.py"
 
+
+@pytest.mark.parametrize("path", sorted(p for p in SRC.glob("modules/*/**/*.py") if p.relative_to(SRC / "modules").parts[0] != "catalog"),
+                         ids=lambda p: str(p.relative_to(SRC)))
+def test_only_a_backup_takes_the_records_of_the_catalog_round_its_rules(path: Path):
+    """The records of the catalog as they are kept (CatalogRecordStore) go round its rules: only the backup, which copies and restores them as
+    they are, is given them."""
+    takes_them = "CatalogRecordStore" in path.read_text(encoding="utf-8")
+    assert not takes_them or path.relative_to(SRC).as_posix() == "modules/backup/infrastructure/outside.py"
+
+
+def test_the_catalog_does_not_hand_out_its_records():
+    """The catalog (CatalogService) is its rules: the catalog as records is a contract of its own (catalog.domain.records), given apart."""
+    from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+    assert not hasattr(CatalogService, "records")
+

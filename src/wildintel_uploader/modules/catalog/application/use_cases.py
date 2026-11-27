@@ -14,7 +14,6 @@ from wildintel_uploader.modules.catalog.domain.models import (
     UnknownCamera, UnknownLocation, UnknownProject, UnknownTrapper, is_utc,
 )
 from wildintel_uploader.modules.catalog.domain.ports import (
-    CatalogRecords,
     AddedTrappers, CatalogRepository, CatalogService, Clock, Equipment, Fieldwork, LegacyFieldwork, LegacyTrappers, StatusHistory, VisitHistory,
 )
 from wildintel_uploader.shared import ids
@@ -22,11 +21,9 @@ from wildintel_uploader.shared import ids
 
 class CatalogUseCases(CatalogService):
     def __init__(self, repository: CatalogRepository, *, legacy_trappers: LegacyTrappers, visits: VisitHistory, status_history: StatusHistory,
-                 clock: Clock, legacy_fieldwork: LegacyFieldwork | None = None, new_id: Callable[[], str] = ids.new_id,
-                 records: CatalogRecords | None = None) -> None:
+                 clock: Clock, legacy_fieldwork: LegacyFieldwork | None = None, new_id: Callable[[], str] = ids.new_id) -> None:
         self.repository, self.legacy_trappers, self.visits, self._history = repository, legacy_trappers, visits, status_history
         self.clock, self.legacy_fieldwork, self.new_id = clock, legacy_fieldwork, new_id
-        self._records = records
 
     # ── the people ──
 
@@ -41,8 +38,6 @@ class CatalogUseCases(CatalogService):
             self.repository.write_trappers(adopted)
         return adopted
 
-    def records(self) -> CatalogRecords:
-        return self._records
 
     def trappers(self, include_deleted: bool = False) -> list[Trapper]:
         everyone = self._all_trappers()

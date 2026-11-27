@@ -30,12 +30,12 @@ def importing():
 
 
 def trapper_sync(root: Path | None = None):
-    from wildintel_uploader.entrypoints.wiring import build_deployments, catalog_of, config
+    from wildintel_uploader.entrypoints.wiring import build_deployments, catalog_records, config
     from wildintel_uploader.modules.uploaders.application.sync import TrapperSync
     from wildintel_uploader.modules.uploaders.infrastructure.synced_folder import SyncedCollections
     from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
     where = (lambda: root) if root is not None else (lambda: config.collections_dir())
-    return TrapperSync(TrapperSdk(), lambda: catalog_of(where()).records(), SyncedCollections(where, lambda: build_deployments().layout()))
+    return TrapperSync(TrapperSdk(), lambda: catalog_records(where()), SyncedCollections(where, lambda: build_deployments().layout()))
 
 
 def synced(events) -> dict:
@@ -65,9 +65,9 @@ def visit_files():
 
 
 def kept_visits(root: Path):
-    from wildintel_uploader.entrypoints.wiring import catalog_of
+    from wildintel_uploader.entrypoints.wiring import catalog_records
     from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
-    return KeptVisits(root, lambda: catalog_of(root).records())
+    return KeptVisits(root, lambda: catalog_records(root))
 
 
 def upload_failures(root: Path):
@@ -124,6 +124,6 @@ def preprocessing():
 
 
 def records(root: Path):
-    """The catalog of the collections folder as records — what the other modules ask of it."""
-    from wildintel_uploader.entrypoints.wiring import catalog_of
-    return catalog_of(root).records()
+    """The catalog of the collections folder as records, through its rules — what the other modules ask of it."""
+    from wildintel_uploader.entrypoints.wiring import catalog_records
+    return catalog_records(root)

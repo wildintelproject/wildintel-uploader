@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.domain.ports import CatalogRecords
+from wildintel_uploader.modules.catalog.domain.records import CatalogRecords
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.visits.domain.models import VisitsFailed
 from wildintel_uploader.modules.visits.domain.visit_file import VisitsCsvError

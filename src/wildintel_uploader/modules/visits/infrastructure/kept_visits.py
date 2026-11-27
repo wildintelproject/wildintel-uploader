@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.domain.ports import CatalogRecords
+from wildintel_uploader.modules.catalog.domain.records import CatalogRecords
 from wildintel_uploader.modules.visits.domain import references as refs_of
 from wildintel_uploader.modules.visits.domain.references import Refs
 from wildintel_uploader.shared import audit, ids, storage

@@ -19,7 +19,7 @@ from wildintel_uploader.modules.uploaders.infrastructure.packages import UPLOAD_
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
 from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, TrapperSite, UploadPlaces, UploadReports
-from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.catalog.domain.records import CatalogRecords
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -117,12 +117,12 @@ class TrapperClient(Trapper):
 
 
 class CollectionsFolder(KeptCollections):
-    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogService], failures: UploadFailures) -> None:
-        self._root_dir, self._catalog_of, self._failures = root, catalog_of, failures   # the catalog of a collections folder, through its contract
+    def __init__(self, root: Callable[[], Path], records_of: Callable[[Path], CatalogRecords], failures: UploadFailures) -> None:
+        self._root_dir, self._records_of, self._failures = root, records_of, failures   # the catalog of a collections folder as records, through its rules
 
     def _records(self):
         """The catalog of the collections folder as records — through its contract."""
-        return self._catalog_of(self._root()).records()
+        return self._records_of(self._root())
 
     def _root(self) -> Path:
         return self._root_dir()
