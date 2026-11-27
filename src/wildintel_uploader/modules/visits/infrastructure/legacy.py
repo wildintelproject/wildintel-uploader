@@ -1,6 +1,6 @@
 """The ports of the visits over the code of before, as the rest of the app still keeps them: the visits in the folders of the research projects
-(local_folder_service), the catalog as dicts, the deployments the visits say (visit_deployments), the history of the states (status_history), the
-file of visits (visits_csv), where the deployments were uploaded (their folders, the settings of TRAPPER and Agouti), the reports. What they refuse
+(local_folder_service), the catalog as dicts, the deployments the visits say (deployments), the history of the states (the catalog's), the
+file of visits (csv_file), where the deployments were uploaded (their folders, the settings of TRAPPER and Agouti), the reports. What they refuse
 is VisitsFailed, with their words. Each is moved into the module as the module that keeps it comes to be."""
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def _old():
 @contextmanager
 def _failed() -> Iterator[None]:
     """What the code of before refuses, as VisitsFailed."""
-    from wildintel_uploader.core.services import visits_csv
+    from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
     from wildintel_uploader.shared.storage import StorageError
     try:
         yield
@@ -120,8 +120,8 @@ class CatalogOfTheVisits(VisitCatalog):
 
 class StoredStateHistory(StateHistory):
     def because(self, reason: str, day: str | None, why: dict | None = None) -> AbstractContextManager:
-        from wildintel_uploader.core.services import status_history
-        return status_history.because(reason, day, why)
+        from wildintel_uploader.modules.catalog.domain.history import because
+        return because(reason, day, why)
 
 
 class DeploymentsOfTheVisits(VisitDeployments):
@@ -130,8 +130,8 @@ class DeploymentsOfTheVisits(VisitDeployments):
 
     @staticmethod
     def _vd():
-        from wildintel_uploader.core.services import visit_deployments
-        return visit_deployments
+        from wildintel_uploader.modules.visits.infrastructure import deployments
+        return deployments
 
     def refresh_states(self, project: str, keep_seconds: bool) -> None:
         with _failed():
@@ -158,8 +158,8 @@ class DeploymentsOfTheVisits(VisitDeployments):
 class CsvVisitFile(VisitFile):
     @staticmethod
     def _csv():
-        from wildintel_uploader.core.services import visits_csv
-        return visits_csv
+        from wildintel_uploader.modules.visits.infrastructure import csv_file
+        return csv_file
 
     def parse(self, text: str, locations: list[dict], kept: list[Visit], mapping: dict | None, options: dict) -> dict:
         with _failed():

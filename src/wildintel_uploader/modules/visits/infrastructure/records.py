@@ -6,8 +6,11 @@ from __future__ import annotations
 from datetime import date as date_type, time as time_type
 from typing import Literal, Optional
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from wildintel_uploader.modules.visits.domain.wall_clock import is_utc
 from wildintel_uploader.modules.visits.domain.rules import CAMERA_STATUSES, battery_status_code, camera_status_code, card_status_code, split_card_batteries
 
 # The kinds of place a deployment is at, as Camtrap DP names them (featureType).
@@ -153,4 +156,47 @@ class VisitRecord(BaseModel):
     def _height_or_depth(self) -> "VisitRecord":
         if self.camera_height is not None and self.camera_depth is not None:
             raise ValueError("camera_height and camera_depth are mutually exclusive: only one should be set.")
+        return self
+
+
+class NewLocationRecord(BaseModel):
+    """A location a file of visits makes (a New site), as the catalog takes one: with its timezone and its summer-time setting, and where it is."""
+
+    location_id: str = Field(min_length=1, max_length=100)
+    name: Optional[str] = None
+    # IANA timezone and whether its cameras ignore summer time. Both belong to the location — never to a deployment: every deployment there uses them,
+    # and Trapper only accepts a package that declares the same. They are always said when a location is made: the cameras' clocks are taken as UTC, and the
+    # time of a field visit is read in the timezone of its location.
+    timezone: str = Field(min_length=1)
+    ignore_dst: bool
+    # Where it is — WGS84 decimal degrees, as in Camtrap DP's deployments table. Always said.
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    coordinate_uncertainty: Optional[int] = Field(default=None, ge=1)
+    # The day it was put into production (YYYY-MM-DD).
+    in_service: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    trapper_pk: Optional[int] = None
+    # Whether it is in use; an archived or a planned one is not offered for a visit. When it changed (YYYY-MM-DD) and why are free to leave out. A new one is pending: its first
+    # visit starts it — it is not waited for in the revisions before.
+    status: Literal["planned", "pending", "ready", "active", "archived"] = "pending"
+    status_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    status_note: Optional[str] = None
+
+    # what was kept as "retired" is archived now
+    _legacy_status = field_validator("status", mode="before")(lambda cls, v: "archived" if v == "retired" else v)
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("is not a known IANA timezone") from exc
+        return value
+
+    @model_validator(mode="after")
+    def _no_summer_time_in_utc(self) -> "NewLocationRecord":
+        # UTC has no summer time: whether the cameras ignore it does not apply there, so it is never said to.
+        if is_utc(self.timezone):
+            self.ignore_dst = False
         return self

@@ -41,21 +41,21 @@ class StoredStatusHistory(StatusHistory):
         self.collections_dir = collections_dir
 
     def record_location(self, project: str, before: Location | None, after: Location) -> None:
-        from wildintel_uploader.core.services import status_history
+        from wildintel_uploader.modules.catalog.infrastructure import status_history
         status_history.record_changes(self.collections_dir, project, "locations", [location_to_record(before)] if before else [],
                                       [location_to_record(after)], lambda record: str(record["location_id"]),
                                       (lambda item, old: old[0]) if before else (lambda item, old: None))
 
     def record_equipment(self, project: str, kind: str, before: list, after: list) -> None:
-        from wildintel_uploader.core.services import status_history
+        from wildintel_uploader.modules.catalog.infrastructure import status_history
         status_history.record_changes(self.collections_dir, project, kind, [equipment_to_record(i, kind) for i in before],
                                       [equipment_to_record(i, kind) for i in after], lambda r: str(r.get("label") or r.get("camera_id") or ""),
                                       lambda item, old: next((r for r in old if r.get("id") and r.get("id") == item.get("id")), None))
 
     def lines(self, project: str, kind: str | None, name: str | None) -> list[dict[str, Any]]:
-        from wildintel_uploader.core.services import status_history
+        from wildintel_uploader.modules.catalog.infrastructure import status_history
         return status_history.list_history(self.collections_dir, project, kind, name)
 
     def rebuild(self, project: str) -> int:
-        from wildintel_uploader.core.services import status_history
+        from wildintel_uploader.modules.catalog.infrastructure import status_history
         return status_history.rebuild(self.collections_dir, project)
