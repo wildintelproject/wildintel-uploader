@@ -22,7 +22,7 @@ from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 @contextmanager
 def _failed() -> Iterator[None]:
-    """What the code of before refuses, as VisitsFailed."""
+    """What the files and the records refuse, as VisitsFailed."""
     from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
     from wildintel_uploader.shared.storage import StorageError
     try:

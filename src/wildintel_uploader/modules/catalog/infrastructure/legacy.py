@@ -2,17 +2,14 @@
 does not know where or how the settings are kept: it asks their module."""
 from __future__ import annotations
 
-from datetime import datetime
-
 from wildintel_uploader.modules.catalog.domain.models import Trapper
 from typing import Any
 
-from wildintel_uploader.modules.catalog.domain.ports import Clock, LegacyFieldwork, LegacyTrappers
+from wildintel_uploader.modules.catalog.domain.ports import LegacyFieldwork, LegacyTrappers
 from wildintel_uploader.modules.catalog.infrastructure.mapping import (
     equipment_from_record, equipment_to_record, role_from_record, role_to_record, trapper_from_record,
 )
 from wildintel_uploader.modules.settings.domain.ports import SettingsService
-from wildintel_uploader.shared import audit
 
 
 class TrappersFromTheSettings(LegacyTrappers):
@@ -24,17 +21,6 @@ class TrappersFromTheSettings(LegacyTrappers):
         if legacy:
             self.settings.forget_legacy_fieldwork("trappers")
         return legacy
-
-
-class SystemClock(Clock):
-    """The clock of the app — shared.audit.now, the one every record of before is dated by."""
-
-    def now(self) -> str:
-        return audit.now()
-
-    def today(self) -> str:
-        """The day here — as the day a location is put into production always was."""
-        return datetime.now().date().isoformat()
 
 
 class FieldworkFromTheSettings(LegacyFieldwork):

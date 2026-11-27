@@ -1896,7 +1896,7 @@ def test_the_examples_of_the_new_form_for_wicp_02_are_imported_in_order_with_no_
     rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
     order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up", "revision_6_new_site"]
     answers = []
-    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.legacy.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
+    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.adapters.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
         _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "name": "WICP_02", "acronym": "WICP_02"})
         for l in rows("locations.csv"):
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "WICP_02", "location": {
@@ -1943,7 +1943,7 @@ def _wicp_02_until(root: Path, last: int) -> None:
 def test_a_visit_that_says_new_site_makes_its_site_with_no_need_of_the_switch_and_says_which_timezone_it_has(tmp_path: Path):
     examples = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
     text = (examples / "revision_6_new_site.csv").read_text(encoding="utf-8")
-    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.legacy.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
+    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.adapters.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
         _wicp_02_until(tmp_path, 5)                      # R0006 needs the revisions before it
         asked = _client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": text, "format": "epicollect-csv", "create": {"cameras": True, "sd_cards": True}}).json()
         given = _client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": text, "format": "epicollect-csv", "create": {"cameras": True, "sd_cards": True},
@@ -1970,7 +1970,7 @@ def test_the_download_of_the_new_form_can_create_what_does_not_exist_with_the_pl
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         trappers = {"Ana Pérez", "Luis Gómez"}
-        with patch("wildintel_uploader.modules.visits.infrastructure.legacy.CatalogOfTheVisits.trapper_names", return_value=trappers):
+        with patch("wildintel_uploader.modules.visits.infrastructure.adapters.CatalogOfTheVisits.trapper_names", return_value=trappers):
             result = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "epicollect-csv",
                                                                      "create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"timezone": "Europe/Madrid", "daylight_saving": "yes"}}).json()
 
@@ -2259,7 +2259,7 @@ def test_the_template_of_the_custom_csv_is_the_valid_example_and_is_read_by_itse
     template = (root / "frontend" / "src" / "visitsTemplate.csv").read_text(encoding="utf-8")
     assert template == (root / "examples" / "visits_example" / "custom_csv" / "wicp_02" / "template.csv").read_text(encoding="utf-8")
     rows = lambda name: list(csv.DictReader((root / "examples" / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
-    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.legacy.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
+    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.adapters.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
         _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "name": "WICP_02", "acronym": "WICP_02"})
         for l in rows("locations.csv"):
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "WICP_02", "location": {

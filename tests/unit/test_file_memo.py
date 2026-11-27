@@ -1,4 +1,4 @@
-"""services.file_memo — what the steps of an import remember of a file while it is the same one: what ExifTool read of an image (kept on disk too), its camera, and that it decoded in full (#140)."""
+"""What is remembered of a file (fileinfo.infrastructure.memory) — what the steps of an import remember of a file while it is the same one: what ExifTool read of an image (kept on disk too), its camera, and that it decoded in full (#140)."""
 import os
 import sqlite3
 import threading
@@ -11,6 +11,7 @@ from PIL import Image
 from tests.support import camera_info
 from wildintel_uploader.modules.fileinfo.infrastructure import store as exif_store
 from wildintel_uploader.modules.fileinfo.infrastructure import memory as file_memo
+from wildintel_uploader.modules.fileinfo.infrastructure.files import stamp
 from tests.support import deployment_import_service as svc
 from tests.support import checks as old_checks
 from tests.support import preprocessing_service as pre
@@ -46,7 +47,7 @@ def test_a_memory_keeps_what_was_asked_for_last():
 
 
 def test_a_file_that_cannot_be_looked_at_has_no_stamp_and_nothing_is_kept_of_it(tmp_path: Path):
-    assert file_memo.stamp(tmp_path / "nothing.jpg") is None
+    assert stamp(tmp_path / "nothing.jpg") is None
     memo = file_memo.FileMemo()
     memo.put(None, 1)
     assert memo.get(None) is None and len(memo) == 0
@@ -55,12 +56,12 @@ def test_a_file_that_cannot_be_looked_at_has_no_stamp_and_nothing_is_kept_of_it(
 def test_a_file_changed_in_size_or_in_time_has_another_stamp(tmp_path: Path):
     path = tmp_path / "a.bin"
     path.write_bytes(b"one")
-    before = file_memo.stamp(path)
+    before = stamp(path)
     path.write_bytes(b"three")
-    assert file_memo.stamp(path) != before
-    again = file_memo.stamp(path)
+    assert stamp(path) != before
+    again = stamp(path)
     os.utime(path, ns=(1, 1))
-    assert file_memo.stamp(path) != again
+    assert stamp(path) != again
 
 
 # ── the camera ───────────────────────────────────────────────────────────────

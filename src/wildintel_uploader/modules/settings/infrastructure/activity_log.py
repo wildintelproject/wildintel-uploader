@@ -1,6 +1,8 @@
 """The app's logging: to the console and to a rotating log file in
-the log folder of the system (config.get_logs_dir()), at the level the settings page sets
+the log folder of the system, at the level the settings page sets
 (GENERAL.log_level) — changed on the fly when it's saved (apply_level).
+Where the file is, and the level, are what it is given (system.AppActivityLog
+gives them from the settings).
 
 WILDINTEL_UPLOADER_WEB_LOG_LEVEL, when set, wins over the settings page:
 handy for a one-off debugging session without touching settings.toml.
@@ -12,13 +14,13 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Callable
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from wildintel_uploader.modules.settings.infrastructure.plugs import config
-
 LEVELS = ("ERROR", "WARNING", "INFO", "DEBUG")
+LOG_NAME = "wildintel-uploader.log"
 LOG_FORMAT = "%(asctime)s  %(levelname)-8s  %(threadName)-18s  %(name)s  %(message)s"
 MAX_BYTES = 5 * 1024 * 1024
 BACKUP_COUNT = 5
@@ -33,19 +35,18 @@ _UVICORN = ("uvicorn", "uvicorn.access")
 _MARK = "_wildintel_uploader"
 
 
-def log_file() -> Path:
-    return config.get_logs_dir() / "wildintel-uploader.log"
+def log_file(logs_dir: Path) -> Path:
+    return logs_dir / LOG_NAME
 
 
-def migrate_legacy_logs() -> None:
-    """Moves the log files kept where they used to be (next to settings.toml) to the log folder of the system — the ones that are
-    not there already; the old folder goes when it is empty."""
-    old, new = config.legacy_logs_dir(), config.get_logs_dir()
+def migrate_legacy_logs(old: Path, new: Path) -> None:
+    """Moves the log files kept where they used to be (`old`, next to settings.toml) to the log folder of the system (`new`) — the ones that
+    are not there already; the old folder goes when it is empty."""
     if not old.is_dir() or old.resolve() == new.resolve():
         return
     try:
         for entry in old.iterdir():
-            if entry.is_file() and entry.name.startswith("wildintel-uploader.log") and not (new / entry.name).exists():
+            if entry.is_file() and entry.name.startswith(LOG_NAME) and not (new / entry.name).exists():
                 new.mkdir(parents=True, exist_ok=True)
                 entry.replace(new / entry.name)
         old.rmdir()
@@ -59,13 +60,13 @@ def env_override() -> str | None:
     return env if env in LEVELS else None
 
 
-def effective_level() -> str:
+def effective_level(settings_level: Callable[[], str]) -> str:
     """The environment's level if set, else the settings page's."""
     if (env := env_override()) is not None:
         return env
     try:
-        return config.load_settings().GENERAL.log_level
-    except Exception:  # an unreadable settings.toml mustn't stop logging
+        return settings_level()
+    except Exception:  # noqa: BLE001 — an unreadable settings.toml mustn't stop logging
         return "INFO"
 
 
@@ -90,11 +91,12 @@ def _mark(handler: logging.Handler) -> logging.Handler:
     return handler
 
 
-def configure(level: str | None = None, *, console_level: str | None = None) -> None:
+def configure(logs_dir: Path, old_logs_dir: Path, level: str, *, console_level: str | None = None) -> None:
     """Sets the handlers up — once, however many times it's called — and the
     level. console_level, if given, raises the console's own threshold (the
     command-line app shows only warnings unless --verbose; its log file
     still gets everything at the level set)."""
+    path = log_file(logs_dir)
     root = logging.getLogger()
     for handler in list(root.handlers):
         if type(handler) is logging.StreamHandler and not _ours(handler):
@@ -104,12 +106,12 @@ def configure(level: str | None = None, *, console_level: str | None = None) -> 
         console._wildintel_console = True  # type: ignore[attr-defined]
         root.addHandler(console)
         try:
-            migrate_legacy_logs()
-            log_file().parent.mkdir(parents=True, exist_ok=True)
-            file_handler = _mark(RotatingFileHandler(log_file(), maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT,
+            migrate_legacy_logs(old_logs_dir, logs_dir)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = _mark(RotatingFileHandler(path, maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT,
                                                      encoding="utf-8", delay=True))
         except OSError as exc:  # a read-only config folder: console only
-            logging.getLogger(__name__).warning("Can't write the log file %s: %s", log_file(), exc)
+            logging.getLogger(__name__).warning("Can't write the log file %s: %s", path, exc)
         else:
             root.addHandler(file_handler)
             for name in _UVICORN:
@@ -120,22 +122,19 @@ def configure(level: str | None = None, *, console_level: str | None = None) -> 
     for handler in root.handlers:
         if getattr(handler, "_wildintel_console", False):
             handler.setLevel(console_level.upper() if console_level else logging.NOTSET)
-    apply_level(level or effective_level())
+    apply_level(level, path)
 
 
-def apply_level(level: str) -> None:
-    """Changes the level on the fly (the settings page's Save)."""
+def apply_level(level: str, path: Path) -> None:
+    """Changes the level on the fly (the settings page's Save); `path` is the log file, said in the log."""
     level = level.upper() if level.upper() in LEVELS else "INFO"
     logging.getLogger().setLevel(level)
     for name in _NOISY:
         logging.getLogger(name).setLevel(max(logging.getLevelName(level), logging.INFO))
-    logging.getLogger(__name__).info("Log level: %s — log file: %s", level, log_file())
+    logging.getLogger(__name__).info("Log level: %s — log file: %s", level, path)
 
 
-from wildintel_uploader.shared.logs import debugging  # noqa: E402,F401 — where the code of before finds it
-
-
-def clear_log() -> int:
+def clear_log(path: Path) -> int:
     """Deletes the log file and its rotated copies — closing the file first
     (Windows can't delete an open file); it's reopened on the next line
     logged. Returns how many files were deleted."""
@@ -146,7 +145,6 @@ def clear_log() -> int:
                 handler.close()
             finally:
                 handler.release()
-    path = log_file()
     deleted = 0
     for candidate in [path, *(path.with_name(f"{path.name}.{i}") for i in range(1, BACKUP_COUNT + 1))]:
         try:

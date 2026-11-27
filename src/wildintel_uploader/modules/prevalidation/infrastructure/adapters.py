@@ -1,5 +1,5 @@
-"""The ports of the prevalidation over the code of before: the images imported before (the deployments, through their contract), the
-settings in use, the reports (through their contract)."""
+"""The ports out of the prevalidation: the images imported before (the deployments, through their contract), VALIDATION as the settings keep
+it, and the reports (through their contract)."""
 from __future__ import annotations
 
 import logging
@@ -31,8 +31,6 @@ class PreprocessedImages(ImportedImages):
 class ValidationInUse(PrevalidationSettings):
     def __init__(self, settings: StoredSettings) -> None:
         self._settings = settings   # the settings as settings.toml keeps them
-
-    """VALIDATION as the code of before reads the settings (config.load_settings)."""
 
     def current(self) -> ValidationSettings:
         kept = self._settings.load_settings().VALIDATION

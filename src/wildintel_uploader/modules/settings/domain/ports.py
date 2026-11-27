@@ -249,8 +249,8 @@ class RecordStorage(Protocol):
 
 
 class StoredSettings(Protocol):
-    """The settings as `settings.toml` keeps them, by section (`.VALIDATION`, `.TRAPPER`…), and the folders they say — what the adapters that are
-    still functions of the code of before ask for (see shared.plugs). The app plugs in entrypoints.config."""
+    """The settings as `settings.toml` keeps them, by section (`.VALIDATION`, `.TRAPPER`…), and the folders they say — what the adapters are
+    given when the app is put together (entrypoints.wiring gives them entrypoints.config)."""
 
     def load_settings(self) -> Any:
         ...

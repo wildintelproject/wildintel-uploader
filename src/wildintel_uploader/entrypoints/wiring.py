@@ -31,7 +31,8 @@ from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseC
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
 from wildintel_uploader.modules.catalog.infrastructure.records import RecordsOf
-from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, SystemClock, TrappersFromTheSettings
+from wildintel_uploader.modules.catalog.infrastructure.clock import SystemClock
+from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
@@ -64,7 +65,7 @@ from wildintel_uploader.modules.fileinfo.infrastructure.store import SqliteStore
 from wildintel_uploader.modules.postvalidation.application.use_cases import PostvalidationUseCases
 from wildintel_uploader.modules.postvalidation.domain.ports import PostvalidationService
 from wildintel_uploader.modules.postvalidation.infrastructure import validators as deployment_validators
-from wildintel_uploader.modules.postvalidation.infrastructure.legacy import CatalogCameras, LevelsInUse, RevisionsOfTheDeployments, SavedPostvalidationReports
+from wildintel_uploader.modules.postvalidation.infrastructure.adapters import CatalogCameras, LevelsInUse, RevisionsOfTheDeployments, SavedPostvalidationReports
 from wildintel_uploader.modules.preprocessing.application.use_cases import PreprocessingUseCases
 from wildintel_uploader.modules.preprocessing.domain.ports import PreprocessingService
 from wildintel_uploader.modules.preprocessing.infrastructure import steps as preprocessing_steps
@@ -72,7 +73,7 @@ from wildintel_uploader.modules.preprocessing.infrastructure.folders import Coll
 from wildintel_uploader.modules.prevalidation.application.use_cases import PrevalidationUseCases
 from wildintel_uploader.modules.prevalidation.domain.ports import PrevalidationService
 from wildintel_uploader.modules.prevalidation.infrastructure import validators as image_validators
-from wildintel_uploader.modules.prevalidation.infrastructure.legacy import PreprocessedImages, SavedValidationReports, ValidationInUse
+from wildintel_uploader.modules.prevalidation.infrastructure.adapters import PreprocessedImages, SavedValidationReports, ValidationInUse
 from wildintel_uploader.modules.reports.application.use_cases import ReportsUseCases
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.reports.infrastructure.report_files import ImagesOnDisk, ReportFiles
@@ -100,10 +101,10 @@ from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import Tra
 from wildintel_uploader.modules.uploaders.infrastructure.uploads import FolderUploads
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
-from wildintel_uploader.modules.visits.infrastructure.legacy import (
+from wildintel_uploader.modules.visits.infrastructure.adapters import (
     AuditClock, CatalogOfTheVisits, CollectionFolders as VisitCollectionFolders, CsvVisitFile, FieldlogInUse, SavedVisitReports, StoredStateHistory, UploadsOfTheUploaders,
 )
-from wildintel_uploader.modules.visits.infrastructure.legacy import StoredVisits as VisitsKept
+from wildintel_uploader.modules.visits.infrastructure.adapters import StoredVisits as VisitsKept
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
@@ -130,7 +131,7 @@ def build_settings(store: SettingsStore | None = None, *, activity_log: Activity
                    record_storage: RecordStorage | None = None) -> SettingsService:
     """The settings: their use cases over the TOML files of the user's config folder, the log of the app, this computer and the backends of the
     records."""
-    return SettingsUseCases(store or config.settings_store(), config.default_data_dir(), activity_log=activity_log or AppActivityLog(),
+    return SettingsUseCases(store or config.settings_store(), config.default_data_dir(), activity_log=activity_log or AppActivityLog(config),
                             machine=machine or ThisMachine(), record_storage=record_storage or AppRecordStorage())
 
 
@@ -191,7 +192,7 @@ def build_sources(settings: SettingsService | None = None) -> SourcesService:
 
 
 def build_visits(collections_dir: Path | None = None, settings: SettingsService | None = None) -> VisitsService:
-    """The visits of the research projects of a collections folder — the one of the settings by default —, over the code of before that keeps them."""
+    """The visits of the research projects of a collections folder — the one of the settings by default —, kept with the records of their research projects."""
     root = collections_dir or catalog_collections_dir()
     settings = settings or build_settings()
     records = lambda: build_catalog(root, settings).records()   # noqa: E731
@@ -243,7 +244,7 @@ def build_timefix() -> TimeFixService:
 
 
 def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
-    """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — as the code of before keeps it."""
+    """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — with the uploads kept in it."""
     root = collections_dir or catalog_collections_dir()
     failures = UploadFailures(lambda: root, catalog_of)
     return UploadersUseCases(TrapperClient(config, TrapperSdk()), CollectionsFolder(config, catalog_of, UploadFailures(lambda: config.collections_dir(), catalog_of)),
@@ -267,43 +268,6 @@ def build_backup(collections_dir: Path | None = None, version: Callable[[], str]
                           SettingsOfTheApp(config), version)
 
 
-# ── the plugs: what the adapters that are still functions of the code of before need, plugged in (see shared.plugs) ──
-
-PLUGGED = {
-    "config": config,     # the module itself: what it is asked for is looked up when asked, so a test may patch it
-    "catalog_of": lambda root: catalog_of(root),
-    "visits_of": lambda root=None: build_visits(root),
-    "file_info": lambda: file_info(),
-    "deployments": lambda: build_deployments(),
-    "reports": lambda: build_reports(),
-    "prevalidation": lambda: build_prevalidation(),
-    "postvalidation": lambda: build_postvalidation(),
-    "sealing": lambda: sealing(),
-}
-
-
-def plug_the_modules() -> None:
-    """Plugs into each plug of each module what it says it is (by its name, from PLUGGED)."""
-    import importlib
-    import pkgutil
-
-    from wildintel_uploader import modules
-    from wildintel_uploader.shared.plugs import Plug
-    for found in pkgutil.iter_modules(modules.__path__):
-        try:
-            plugs = importlib.import_module(f"wildintel_uploader.modules.{found.name}.infrastructure.plugs")
-        except ModuleNotFoundError as exc:
-            if exc.name != f"wildintel_uploader.modules.{found.name}.infrastructure.plugs":
-                raise
-            continue
-        for name, plug in vars(plugs).items():
-            if isinstance(plug, Plug):
-                plug.plug(PLUGGED[name])
-
-
-plug_the_modules()
-
-
 # ── the providers of the container ──
 
 
@@ -316,7 +280,7 @@ class SettingsProvider(Provider):
 
     @provide(scope=Scope.APP)
     def activity_log(self) -> ActivityLog:
-        return AppActivityLog()
+        return AppActivityLog(config)
 
     @provide(scope=Scope.APP)
     def machine(self) -> Machine:

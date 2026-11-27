@@ -8,7 +8,6 @@ from typing import Generic, TypeVar
 
 from wildintel_uploader.modules.fileinfo.domain.models import CameraInfo, Stamp, Tags
 from wildintel_uploader.modules.fileinfo.domain.ports import Memory
-from wildintel_uploader.modules.fileinfo.infrastructure.files import stamp  # noqa: F401 — where the code of before looks for it (file_memo.stamp)
 
 V = TypeVar("V")
 K = TypeVar("K")

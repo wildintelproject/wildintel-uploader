@@ -351,7 +351,7 @@ def test_saving_applies_the_log_level_at_once():
 
     _put(GENERAL={"log_level": "WARNING"})
     assert logging.getLogger().level == logging.WARNING
-    logging_setup.apply_level("INFO")
+    logging_setup.apply_level("INFO", logging_setup.log_file(config.get_logs_dir()))
 
 
 def test_a_log_level_that_is_not_one_is_refused():
@@ -362,7 +362,7 @@ def test_a_log_level_that_is_not_one_is_refused():
 
 
 def test_the_log_can_be_downloaded_once_there_is_one_and_cleared():
-    path = logging_setup.log_file()
+    path = logging_setup.log_file(config.get_logs_dir())
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("a log line\n", encoding="utf-8")
 
@@ -501,7 +501,7 @@ def test_log_files_left_next_to_the_settings_are_moved_to_the_log_folder():
     (old / "wildintel-uploader.log").write_text("an old line\n", encoding="utf-8")
     (old / "wildintel-uploader.log.1").write_text("an older one\n", encoding="utf-8")
 
-    logging_setup.migrate_legacy_logs()
+    logging_setup.migrate_legacy_logs(config.legacy_logs_dir(), config.get_logs_dir())
 
     assert (config.get_logs_dir() / "wildintel-uploader.log").read_text(encoding="utf-8") == "an old line\n"
     assert (config.get_logs_dir() / "wildintel-uploader.log.1").is_file()

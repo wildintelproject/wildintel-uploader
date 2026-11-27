@@ -21,7 +21,7 @@ ENV_PREFIX = "WILDINTEL_UPLOADER"
 
 
 # What was read of each settings file, while it is the same file and the environment says the same: reading one with Dynaconf takes time, and the app
-# reads the settings at almost every step. A copy is given each time: code of before changes what it is given.
+# reads the settings at almost every step. A copy is given each time: what is given may be changed by who asked.
 _read: dict[Path, tuple[tuple, Settings]] = {}
 _reading = threading.Lock()
 

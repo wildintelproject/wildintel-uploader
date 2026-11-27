@@ -15,8 +15,8 @@ from typing import Any, Mapping
 
 
 from wildintel_uploader.modules.settings.domain.registry import discover, settings_registry
-from wildintel_uploader.modules.settings.domain.rules import (  # noqa: F401 — where the sections of the other modules, and the code of before, find them
-    CHECK_LEVELS, SettingsError, _blank_is_none, _check_levels, _exif_name, _in_range, _one_of, _set, secret,
+from wildintel_uploader.modules.settings.domain.rules import (  # noqa: F401 — SettingsError: where the entry points find it
+    SettingsError, _blank_is_none, _in_range, _one_of, _set,
 )
 
 

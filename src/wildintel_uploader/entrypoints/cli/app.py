@@ -9,7 +9,7 @@ from typing import Annotated
 
 import typer
 
-from wildintel_uploader.entrypoints import wiring  # noqa: F401 — the app put together, its modules plugged (shared.plugs)
+from wildintel_uploader.entrypoints import wiring  # noqa: F401 — the app put together
 from wildintel_uploader.shared.version import current_version
 from wildintel_uploader.entrypoints.cli.catalog import catalog_app
 from wildintel_uploader.entrypoints.cli.common import console
@@ -36,9 +36,10 @@ def main(
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show the log's messages as it works.")] = False,
     version: Annotated[bool, typer.Option("--version", help="Show the version and exit.", is_eager=True, callback=_show_version)] = False,
 ) -> None:
-    from wildintel_uploader.modules.settings.infrastructure import activity_log as logging_setup
+    from wildintel_uploader.entrypoints import config
+    from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog
 
-    logging_setup.configure(console_level="DEBUG" if verbose else "WARNING")
+    AppActivityLog(config).configure(console_level="DEBUG" if verbose else "WARNING")
 
 
 app.command("test-connection")(test_connection)
