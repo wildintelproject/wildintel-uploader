@@ -8,7 +8,7 @@ import pytest
 
 from wildintel_uploader.entrypoints import config
 from tests.support import local_folder_service as svc
-from wildintel_uploader.modules.backup.infrastructure import backup_service
+from tests.support import backup_service
 from wildintel_uploader.shared import ids
 
 VISIT = {"location_id": "dona_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Installation"], "camera_id": "BR1", "sd": "A13",

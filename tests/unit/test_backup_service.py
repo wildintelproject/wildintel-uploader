@@ -8,7 +8,7 @@ import pytest
 
 from wildintel_uploader.entrypoints import config
 from tests.support import local_folder_service
-from wildintel_uploader.modules.backup.infrastructure import backup_service
+from tests.support import backup_service
 
 
 def _project(root: Path, acronym: str = "DONA") -> Path:
@@ -327,3 +327,39 @@ def test_the_settings_are_restored_keeping_the_passwords_and_the_folders_here(tm
     assert new.TRAPPER.user_name == "ana@x.org"          # what the backup says
     assert new.TRAPPER.user_password == "my-secret"      # the password of this computer stays
     assert new.DATA.dir == "/here"                       # so does its folder
+
+
+# ── the rules of a backup, plain Python ──────────────────────────────────────
+
+def test_restoring_adds_what_is_not_here_replaces_only_when_asked_and_never_what_is_archived():
+    from wildintel_uploader.modules.backup.domain import archive
+
+    here = [{"id": "a", "label": "A", "status": "active"}, {"id": "b", "label": "B", "status": "archived"}]
+    backed = [{"label": "A", "status": "retired"}, {"label": "B", "status": "active"}, {"label": "C"}]
+    key = archive.RECORD_KEYS["sd_cards"]
+
+    assert archive.merge(here, backed, key, replace=False)[1:] == (1, 0, 2)
+    merged, added, replaced, kept = archive.merge(here, backed, key, replace=True)
+    assert (added, replaced, kept) == (1, 1, 1) and merged[0] == {"id": "a", "label": "A", "status": "retired"} and merged[1]["status"] == "archived"
+
+
+def test_a_name_that_leaves_the_backup_or_is_not_a_folder_is_known_as_such():
+    from wildintel_uploader.modules.backup.domain import archive
+
+    assert [archive.leaves_the_backup(n) for n in ("a/b.txt", "../x", "/x", "C:\\x", "a\\..\\..\\x")] == [False, True, True, True, True]
+    for bad in ("..", "a/b", "C:", ""):
+        with pytest.raises(backup_service.BackupError, match="not the name of a folder"):
+            archive.folder_name(bad, "a deployment")
+    with pytest.raises(backup_service.BackupError, match="newer version"):
+        archive.checked_manifest({"format": archive.FORMAT, "version": archive.VERSION + 1})
+
+
+def test_the_settings_of_a_backup_have_no_secrets_nor_folders_and_restoring_keeps_those_here():
+    from wildintel_uploader.modules.backup.domain import archive
+
+    here = {"DATA": {"dir": "/mine"}, "TRAPPER": {"base_url": "https://a", "password": "secret"}, "FIELDWORK": {"cameras": [1]}}
+    snapshot = archive.settings_for_a_backup(here, [("TRAPPER", "password")], [{"username": "ana"}])
+    assert "DATA" not in snapshot and snapshot["TRAPPER"]["password"] is None and snapshot["FIELDWORK"]["trappers"] == [{"username": "ana"}]
+    assert here["TRAPPER"]["password"] == "secret"                                          # what is here is not touched
+    restored = archive.settings_restored(here, {"TRAPPER": {"base_url": "https://b", "password": None}, "DATA": {"dir": "/theirs"}}, [("TRAPPER", "password")])
+    assert restored["TRAPPER"] == {"base_url": "https://b", "password": "secret"} and restored["DATA"] == {"dir": "/mine"}

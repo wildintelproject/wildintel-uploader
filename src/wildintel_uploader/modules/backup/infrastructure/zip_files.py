@@ -1,61 +1,71 @@
-"""Backups over the code of before (backup_service): zip files with a manifest, the collections folder they are of, the version of the app that
-made them. What it refuses is the module's BackupError; what fails mid-way says what failed."""
+"""The backups as zip files: a manifest first, the data compressed, the images stored as they are — already compressed —, written whole or not
+at all; read only when no file of it has a path that goes out of it. Those made to be downloaded are made in a folder of the system's, and kept
+a day."""
 from __future__ import annotations
 
-import logging
-import re
+import json
+import os
 import tempfile
 import time
-from collections.abc import Callable, Iterator
+import zipfile
+from collections.abc import Iterator
 from pathlib import Path
-from typing import TypeVar
 
-from wildintel_uploader.modules.backup.domain.ports import BackupError, Backups, Choice
+from wildintel_uploader.modules.backup.domain import archive as rules
+from wildintel_uploader.modules.backup.domain.ports import Archives, BackupArchive, BackupError, Entry
 
-logger = logging.getLogger(__name__)
-T = TypeVar("T")
-_DOWNLOADS = re.compile(r"^wildintel-backup_[A-Za-z0-9_.-]+_\d{8}-\d{6}\.zip$")
 _KEPT_FOR = 24 * 3600   # a backup made to be downloaded is kept a day: it can be downloaded again meanwhile
 
 
-def _old():
-    from wildintel_uploader.modules.backup.infrastructure import backup_service
-    return backup_service
+class ZipArchive(BackupArchive):
+    def __init__(self, zf: zipfile.ZipFile) -> None:
+        self._zf = zf
+
+    def names(self) -> set[str]:
+        return set(self._zf.namelist())
+
+    def read(self, name: str) -> bytes:
+        return self._zf.read(name)
+
+    def __exit__(self, *exc) -> None:
+        self._zf.close()
 
 
-def _root() -> Path:
-    from wildintel_uploader.modules.backup.infrastructure.plugs import config
-    return config.collections_dir()
+class ZipBackups(Archives):
+    def check_destination(self, dest_dir: Path) -> None:
+        if not dest_dir.is_dir():
+            raise BackupError(f"The folder {dest_dir} is not there.")
 
+    def open(self, path: Path) -> BackupArchive:
+        if not path.is_file():
+            raise BackupError(f"The file {path} is not there.")
+        try:
+            zf = zipfile.ZipFile(path)
+        except zipfile.BadZipFile as exc:
+            raise BackupError("That file is not a backup: it is not a .zip.") from exc
+        if any(rules.leaves_the_backup(name) for name in zf.namelist()):
+            zf.close()
+            raise BackupError("That backup has files with a path that goes out of it: it is not restored.")
+        return ZipArchive(zf)
 
-def _ours(call: Callable[[], T]) -> T:
-    try:
-        return call()
-    except _old().BackupError as exc:
-        raise BackupError(str(exc)) from exc
-
-
-def _told(events: Iterator[dict], what: str) -> Iterator[dict]:
-    """The events; the first is taken as they are asked for — what can't be done at all is said then, before anything is written."""
-    try:
-        yield from events
-    except _old().BackupError as exc:
-        raise BackupError(str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        from wildintel_uploader.shared.logs import debugging
-        logger.warning("%s failed: %s", what, exc, exc_info=debugging())
-        raise BackupError(f"{what} failed: {exc}") from exc
-
-
-class ZipBackups(Backups):
-    def describe(self, project: str) -> dict:
-        return _ours(lambda: _old().describe_project(_root(), project))
-
-    def create(self, dest_dir: Path, project: str | None, choice: Choice) -> Iterator[dict]:
-        from wildintel_uploader.shared.version import current_version
-        events = _ours(lambda: _old().create_backup(_root(), dest_dir, settings=choice.settings, research_project_id=project, project_files=choice.project_files,
-                                                    visits=choice.visits, deployments=choice.deployments, images=choice.images, app_version=current_version()))
-        return _told(events, "The backup")
+    def make(self, dest_dir: Path, name: str, manifest: dict, entries: list[Entry]) -> Iterator[dict]:
+        target = dest_dir / name
+        fd, tmp = tempfile.mkstemp(dir=dest_dir, prefix=".backup.", suffix=".tmp")
+        os.close(fd)
+        try:
+            with zipfile.ZipFile(tmp, "w") as zf:
+                zf.writestr(rules.MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False), compress_type=zipfile.ZIP_DEFLATED)
+                for index, entry in enumerate(entries, start=1):
+                    if entry.path is None:
+                        zf.writestr(entry.name, json.dumps(entry.data, indent=2, ensure_ascii=False), compress_type=zipfile.ZIP_DEFLATED)
+                    else:   # an image is already compressed: it is stored as it is
+                        zf.write(entry.path, entry.name, compress_type=zipfile.ZIP_STORED if rules.is_image(entry.name) else zipfile.ZIP_DEFLATED)
+                    yield {"type": "file", "index": index, "total": len(entries), "name": entry.name}
+            os.replace(tmp, target)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+        return target, target.stat().st_size
 
     def staging_dir(self) -> Path:
         folder = Path(tempfile.gettempdir()) / "wildintel-uploader-backups"
@@ -67,14 +77,3 @@ class ZipBackups(Backups):
             except OSError:
                 pass
         return folder
-
-    def is_download_name(self, name: str) -> bool:
-        return bool(_DOWNLOADS.match(name))
-
-    def read(self, path: Path) -> dict:
-        return _ours(lambda: _old().read_backup(_root(), path))
-
-    def restore(self, path: Path, choice: Choice, replace: bool) -> Iterator[dict]:
-        events = _ours(lambda: _old().restore_backup(_root(), path, settings=choice.settings, project_files=choice.project_files, visits=choice.visits,
-                                                     deployments=choice.deployments, images=choice.images, replace=replace))
-        return _told(events, "The restoration")

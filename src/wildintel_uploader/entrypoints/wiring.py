@@ -12,6 +12,8 @@ What is made for a request or a command is made then (Scope.REQUEST), from the s
 is heeded. What lives as long as the app — with nothing to read anew — is Scope.APP."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -21,7 +23,10 @@ from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared import parallel
 from wildintel_uploader.modules.backup.application.use_cases import BackupUseCases
 from wildintel_uploader.modules.backup.domain.ports import BackupService
+from wildintel_uploader.modules.backup.infrastructure.folders import CollectionsFolder as ProjectFoldersOnDisk
+from wildintel_uploader.modules.backup.infrastructure.outside import RecordsOfTheProject, SettingsOfTheApp
 from wildintel_uploader.modules.backup.infrastructure.zip_files import ZipBackups
+from wildintel_uploader.shared.version import current_version
 from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseCases
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
@@ -192,9 +197,12 @@ def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
                              FolderUploads(collections_dir or catalog_collections_dir(), config), deployments=build_deployments)
 
 
-def build_backup() -> BackupService:
-    """The backups, as zip files, over the code of before."""
-    return BackupUseCases(ZipBackups())
+def build_backup(collections_dir: Path | None = None, version: Callable[[], str] = current_version) -> BackupService:
+    """The backups, as zip files, of the collections folder — the settings' by default —: the catalog and the visits through their contracts."""
+    def root() -> Path:
+        return collections_dir or config.collections_dir()
+    return BackupUseCases(RecordsOfTheProject(root, lambda r: catalog_of(r).records(), lambda r: build_visits(r)), ProjectFoldersOnDisk(root), ZipBackups(),
+                          SettingsOfTheApp(config), version)
 
 
 # ── the plugs: what the adapters that are still functions of the code of before need, plugged in (see shared.plugs) ──

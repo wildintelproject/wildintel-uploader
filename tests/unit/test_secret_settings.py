@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from wildintel_uploader.entrypoints.cli.app import app as cli
 from wildintel_uploader.entrypoints import config
-from wildintel_uploader.modules.backup.infrastructure import backup_service
+from tests.support import backup_service
 from wildintel_uploader.web.main import app
 
 SECRET = "s3cr3t-value-that-must-not-show"
