@@ -2,6 +2,7 @@
 deployment.json and its seal.json —, and the sections of the settings that say which checks run."""
 from __future__ import annotations
 
+from collections.abc import Callable
 import hashlib
 import json
 from pathlib import Path
@@ -11,7 +12,6 @@ from wildintel_uploader.modules.deployments.domain import naming
 from wildintel_uploader.modules.deployments.domain.ports import CheckSettings, SealedFolder
 from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
 from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
-from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 from wildintel_uploader.shared import parallel
 
 
@@ -53,11 +53,13 @@ class DeploymentSealFolder(SealedFolder):
 
 
 class ChecksInUse(CheckSettings):
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings
+    """VALIDATION and POSTVALIDATION as settings.toml keeps them — each given by a function, asked each time."""
+
+    def __init__(self, validation: Callable[[], Any], postvalidation: Callable[[], Any]) -> None:
+        self._validation, self._postvalidation = validation, postvalidation
 
     def validation(self) -> Any:
-        return self._settings.load_settings().VALIDATION
+        return self._validation()
 
     def postvalidation(self) -> Any:
-        return self._settings.load_settings().POSTVALIDATION
+        return self._postvalidation()

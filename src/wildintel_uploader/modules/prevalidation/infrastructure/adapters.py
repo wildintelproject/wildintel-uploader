@@ -2,6 +2,8 @@
 it, and the reports (through their contract)."""
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
 import logging
 from pathlib import Path
 
@@ -9,7 +11,6 @@ from wildintel_uploader.modules.prevalidation.domain.models import Prevalidation
 from wildintel_uploader.modules.prevalidation.domain.ports import ImportedImages, PrevalidationReports, PrevalidationSettings
 from wildintel_uploader.modules.prevalidation.domain.settings import ValidationSettings
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
-from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +30,13 @@ class PreprocessedImages(ImportedImages):
 
 
 class ValidationInUse(PrevalidationSettings):
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings   # the settings as settings.toml keeps them
+    """VALIDATION as settings.toml keeps it — `validation` gives it, asked each time."""
+
+    def __init__(self, validation: Callable[[], Any]) -> None:
+        self._validation = validation
 
     def current(self) -> ValidationSettings:
-        kept = self._settings.load_settings().VALIDATION
+        kept = self._validation()
         return ValidationSettings(**{**kept.model_dump(), "camera_levels": tuple(tuple(level) for level in kept.camera_levels),
                                      "exif_fields": tuple(kept.exif_fields)})
 

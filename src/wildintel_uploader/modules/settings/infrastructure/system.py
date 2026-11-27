@@ -4,29 +4,30 @@ backends the records of the research projects can be kept in (`RecordStorage`, o
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from wildintel_uploader.modules.settings.infrastructure import activity_log as logging_setup
 from wildintel_uploader.shared import storage
-from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, StoredSettings
+from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage
 
 
 class AppActivityLog(ActivityLog):
-    """`settings` say the log folders and the level, as settings.toml keeps them."""
+    """`logs_dir` and `old_logs_dir` say where the log is kept and where it used to be, and `level` the level the settings say — each asked each
+    time."""
 
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings
+    def __init__(self, logs_dir: Callable[[], Path], old_logs_dir: Callable[[], Path], level: Callable[[], str]) -> None:
+        self._logs_dir, self._old_logs_dir, self._level = logs_dir, old_logs_dir, level
 
     def file(self) -> Path:
-        return logging_setup.log_file(self._settings.get_logs_dir())
+        return logging_setup.log_file(self._logs_dir())
 
     def level_override(self) -> str | None:
         return logging_setup.env_override()
 
     def configure(self, *, console_level: str | None = None) -> None:
         """The handlers set up, at the level the environment or the settings say."""
-        level = logging_setup.effective_level(lambda: self._settings.load_settings().GENERAL.log_level)
-        logging_setup.configure(self._settings.get_logs_dir(), self._settings.legacy_logs_dir(), level, console_level=console_level)
+        logging_setup.configure(self._logs_dir(), self._old_logs_dir(), logging_setup.effective_level(self._level), console_level=console_level)
 
     def apply_level(self, level: str) -> None:
         logging_setup.apply_level(logging_setup.env_override() or level, self.file())

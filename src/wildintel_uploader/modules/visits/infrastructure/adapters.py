@@ -3,6 +3,7 @@
 they refuse is VisitsFailed, with their words."""
 from __future__ import annotations
 
+from typing import Any
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
@@ -16,7 +17,6 @@ from wildintel_uploader.modules.visits.domain.ports import (
 )
 from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
-from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 
 
@@ -182,11 +182,8 @@ class SavedVisitReports(VisitReports):
 class FieldlogInUse(VisitSettings):
     """FIELDLOG as settings.toml keeps it."""
 
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings   # the settings as settings.toml keeps them
-
-    def _fieldlog(self):
-        return self._settings.load_settings().FIELDLOG
+    def __init__(self, fieldlog: Callable[[], Any]) -> None:
+        self._fieldlog = fieldlog   # the section, asked each time
 
     def keep_seconds(self) -> bool:
         return self._fieldlog().keep_seconds

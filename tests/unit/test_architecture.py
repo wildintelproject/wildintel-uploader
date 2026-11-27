@@ -72,3 +72,11 @@ def test_the_entry_points_take_of_a_module_its_contract_and_its_api_schemas_only
     wrong = {i for i in _imports(path) if i.startswith("wildintel_uploader.modules.") and ".infrastructure" in i and not i.endswith(".infrastructure.api_schemas")}
     assert not wrong, f"{path.name} imports {sorted(wrong)}"
 
+
+@pytest.mark.parametrize("path", sorted(SRC.glob("modules/*/infrastructure/*.py")), ids=lambda p: str(p.relative_to(SRC)))
+def test_an_adapter_is_given_what_it_reads_of_the_settings_not_all_of_them(path: Path):
+    """An adapter is given the section or the folder of the settings it reads, not the settings whole — but the backup of the settings, which
+    keeps them whole."""
+    takes_all = "StoredSettings" in path.read_text(encoding="utf-8")
+    assert not takes_all or path.relative_to(SRC).as_posix() == "modules/backup/infrastructure/outside.py"
+

@@ -1,9 +1,9 @@
 """What the fixes of the dates take from other modules: the visits of a location — through their contract —, and the tolerance of the settings."""
 from __future__ import annotations
 
+from typing import Any
 from collections.abc import Callable
 
-from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 from wildintel_uploader.modules.timefix.domain.ports import TimeFixError, Tolerance, VisitsOfTheLocation
 from wildintel_uploader.modules.visits.domain.models import VisitsError
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
@@ -21,8 +21,10 @@ class VisitsThroughTheirContract(VisitsOfTheLocation):
 
 
 class ToleranceInUse(Tolerance):
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings
+    """The tolerance POSTVALIDATION says — `postvalidation` gives it, asked each time."""
+
+    def __init__(self, postvalidation: Callable[[], Any]) -> None:
+        self._postvalidation = postvalidation
 
     def hours(self) -> float:
-        return self._settings.load_settings().POSTVALIDATION.tolerance_hours
+        return self._postvalidation().tolerance_hours

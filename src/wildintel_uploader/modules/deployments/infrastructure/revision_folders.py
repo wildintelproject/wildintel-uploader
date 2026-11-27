@@ -3,6 +3,7 @@ images.json kept beside them, whether the deployment was imported here or synced
 —, their metrics kept in statistics.json beside them, and their deployment.json."""
 from __future__ import annotations
 
+from typing import Any
 import json
 import logging
 from collections.abc import Callable
@@ -16,7 +17,6 @@ from wildintel_uploader.modules.deployments.domain.statistics import KeptDeploym
 from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 from wildintel_uploader.modules.postvalidation.domain.statistics import DeploymentTimes
-from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 logger = logging.getLogger(__name__)
 
@@ -115,11 +115,10 @@ class RevisionFoldersOnDisk(RevisionFolders):
 
 
 class StatisticsInUse(StatisticsSettings):
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings
+    """The statistics as POSTVALIDATION says them — `postvalidation` gives it, asked each time."""
 
-    def _post(self):
-        return self._settings.load_settings().POSTVALIDATION
+    def __init__(self, postvalidation: Callable[[], Any]) -> None:
+        self._post = postvalidation
 
     def gap_seconds(self) -> float:
         return self._post().sequence_gap_seconds

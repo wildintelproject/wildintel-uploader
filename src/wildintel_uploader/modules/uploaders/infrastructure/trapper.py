@@ -7,7 +7,7 @@ import logging
 import re
 from collections.abc import Callable
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from wildintel_uploader.modules.uploaders.domain.models import (
     Account, Credentials, Forbidden, NotAuthorized, NotThere, TimedOut, Unreachable, UploaderError,
@@ -19,7 +19,6 @@ from wildintel_uploader.modules.uploaders.infrastructure.packages import UPLOAD_
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
 from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, TrapperSite, UploadPlaces, UploadReports
-from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
 
 logger = logging.getLogger(__name__)
@@ -63,12 +62,14 @@ def _ours(call: Callable[[], T], what: str = "A TRAPPER call") -> T:
 
 
 class TrapperClient(Trapper):
-    def __init__(self, settings: StoredSettings, site: TrapperSite) -> None:
-        self._settings, self._site = settings, site   # the settings as settings.toml keeps them; TRAPPER's API
+    """`trapper` gives the TRAPPER section of the settings, asked each time, and `keep_account` keeps an account in it; `site` is TRAPPER's API."""
+
+    def __init__(self, trapper: Callable[[], Any], keep_account: Callable[[Credentials], None], site: TrapperSite) -> None:
+        self._trapper, self._keep_account, self._site = trapper, keep_account, site
 
     def credentials(self, account: Account) -> Credentials:
         """The account, completed from the settings — what is still missing named."""
-        trapper = self._settings.load_settings().TRAPPER
+        trapper = self._trapper()
         resolved = (account.url or trapper.base_url, account.username or trapper.user_name, account.password or trapper.user_password)
         missing = [name for name, value in zip(("URL", "username", "password"), resolved) if not value]
         if missing:
@@ -76,13 +77,11 @@ class TrapperClient(Trapper):
         return resolved  # type: ignore[return-value]
 
     def defaults(self) -> dict:
-        trapper = self._settings.load_settings().TRAPPER
+        trapper = self._trapper()
         return {"base_url": trapper.base_url, "user_name": trapper.user_name, "has_password": bool(trapper.user_password)}
 
     def keep_account(self, credentials: Credentials) -> None:
-        settings = self._settings.load_settings()
-        settings.TRAPPER.base_url, settings.TRAPPER.user_name, settings.TRAPPER.user_password = credentials
-        self._settings.save_settings(settings)
+        self._keep_account(credentials)
 
     def test_connection(self, credentials: Credentials) -> dict:
         return _ours(lambda: self._site.test_connection(credentials), "Trapper call")
@@ -118,15 +117,15 @@ class TrapperClient(Trapper):
 
 
 class CollectionsFolder(KeptCollections):
-    def __init__(self, settings: StoredSettings, catalog_of: Callable[[Path], CatalogService], failures: UploadFailures) -> None:
-        self._settings, self._catalog_of, self._failures = settings, catalog_of, failures   # the catalog of a collections folder, through its contract
+    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogService], failures: UploadFailures) -> None:
+        self._root_dir, self._catalog_of, self._failures = root, catalog_of, failures   # the catalog of a collections folder, through its contract
 
     def _records(self):
         """The catalog of the collections folder as records — through its contract."""
         return self._catalog_of(self._root()).records()
 
     def _root(self) -> Path:
-        return self._settings.collections_dir()
+        return self._root_dir()
 
     def _failed(self, call: Callable[[], T]) -> T:
         try:
@@ -205,11 +204,11 @@ def list_collections(collections_dir: Path, research_project_id: str) -> list[di
 class PlacesInUse(UploadPlaces):
     """Where the packages are made and how big a zip may be, as the settings say."""
 
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings
+    def __init__(self, packages_dir: Callable[[], Path], max_zip_mb: Callable[[], int]) -> None:
+        self._packages_dir, self._max_zip_mb = packages_dir, max_zip_mb
 
     def packages_dir(self, project: str) -> Path:
-        return self._settings.packages_dir() / project
+        return self._packages_dir() / project
 
     def max_zip_bytes(self) -> int:
-        return self._settings.max_zip_mb() * 1024 * 1024
+        return self._max_zip_mb() * 1024 * 1024

@@ -13,6 +13,7 @@ is heeded. What lives as long as the app — with nothing to read anew — is Sc
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from functools import lru_cache
 from pathlib import Path
@@ -128,9 +129,21 @@ def build_reports(reports_dir: Path | None = None) -> ReportsService:
     return ReportsUseCases(ReportFiles(lambda: reports_dir or config.reports_dir()), ImagesOnDisk(), file_info())
 
 
+def section(name: str) -> Callable[[], Any]:
+    """A section of the settings as settings.toml keeps them (VALIDATION, TRAPPER…) — what an adapter is given of them, asked each time."""
+    return lambda: getattr(config.load_settings(), name)
+
+
+def keep_trapper_account(credentials) -> None:
+    """The account of TRAPPER kept in the settings: its address, its user and its password."""
+    settings = config.load_settings()
+    settings.TRAPPER.base_url, settings.TRAPPER.user_name, settings.TRAPPER.user_password = credentials
+    config.save_settings(settings)
+
+
 def app_log() -> AppActivityLog:
     """The log of the app, in the log folder and at the level the settings say — what the entry points set up when they start."""
-    return AppActivityLog(config)
+    return AppActivityLog(lambda: config.get_logs_dir(), lambda: config.legacy_logs_dir(), lambda: config.load_settings().GENERAL.log_level)
 
 
 def error_words(exc: Exception) -> str:
@@ -179,13 +192,13 @@ def file_info() -> FileInfoService:
 
 def build_prevalidation(info: FileInfoService | None = None) -> PrevalidationService:
     """The prevalidation: the validators of the images over what is known of the files, the images gone through in parallel."""
-    return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS, imported=PreprocessedImages(build_deployments), settings=ValidationInUse(config),
+    return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS, imported=PreprocessedImages(build_deployments), settings=ValidationInUse(section("VALIDATION")),
                                  reports=SavedValidationReports(build_reports()))
 
 
 def build_postvalidation(info: FileInfoService | None = None) -> PostvalidationService:
     """The postvalidation: the validators of a deployment over its images and what is known of them."""
-    return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(lambda: build_catalog(catalog_collections_dir(), build_settings())), levels=LevelsInUse(config),
+    return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(lambda: build_catalog(catalog_collections_dir(), build_settings())), levels=LevelsInUse(section("VALIDATION")),
                                   reports=SavedPostvalidationReports(build_reports()),
                                   revisions=RevisionsOfTheDeployments(build_deployments))
 
@@ -211,7 +224,7 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     return VisitsUseCases(VisitsKept(KeptVisits(root, records)), CatalogOfTheVisits(records),
                           deployments=VisitCollectionFolders(root, lambda: build_deployments().layout()), file=CsvVisitFile(),
                           sources=build_sources(settings), uploads=UploadsOfTheUploaders(build_uploaders(root)), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
-                          settings=FieldlogInUse(config), clock=AuditClock())
+                          settings=FieldlogInUse(section("FIELDLOG")), clock=AuditClock())
 
 
 def build_deployments(settings: SettingsService | None = None) -> DeploymentsService:
@@ -232,8 +245,8 @@ def importing() -> Importing:
 
 def sealing() -> Sealing:
     """The seal of the deployments: the checks the settings turn on, the prevalidation's and the postvalidation's through their contracts."""
-    return Sealing(DeploymentSealFolder(), ChecksInUse(config), prevalidation=build_prevalidation, postvalidation=build_postvalidation,
-                   catalog_of=catalog_of, revisions_of=lambda root: RevisionStatistics(RevisionFoldersOnDisk(lambda: root, file_info), StatisticsInUse(config)))
+    return Sealing(DeploymentSealFolder(), ChecksInUse(section("VALIDATION"), section("POSTVALIDATION")), prevalidation=build_prevalidation, postvalidation=build_postvalidation,
+                   catalog_of=catalog_of, revisions_of=lambda root: RevisionStatistics(RevisionFoldersOnDisk(lambda: root, file_info), StatisticsInUse(section("POSTVALIDATION"))))
 
 
 def repairing() -> Repairing:
@@ -244,7 +257,7 @@ def repairing() -> Repairing:
 
 def revision_statistics() -> RevisionStatistics:
     """The statistics of the deployments kept in the collections folder of the settings, as POSTVALIDATION says."""
-    return RevisionStatistics(RevisionFoldersOnDisk(lambda: config.collections_dir(), file_info), StatisticsInUse(config))
+    return RevisionStatistics(RevisionFoldersOnDisk(lambda: config.collections_dir(), file_info), StatisticsInUse(section("POSTVALIDATION")))
 
 
 def build_timefix() -> TimeFixService:
@@ -252,17 +265,17 @@ def build_timefix() -> TimeFixService:
     modules.fileinfo reads them, ExifTool to shift them, the fixes written down beside them."""
     files = file_info()
     return TimeFixUseCases(VisitsThroughTheirContract(lambda: build_visits()), FolderOfImages(), files, ExifToolShifter(files.exiftool_path),
-                           CorrectionsFile(), ToleranceInUse(config))
+                           CorrectionsFile(), ToleranceInUse(section("POSTVALIDATION")))
 
 
 def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — with the uploads kept in it."""
     root = collections_dir or catalog_collections_dir()
     failures = UploadFailures(lambda: root, catalog_of)
-    return UploadersUseCases(TrapperClient(config, TrapperSdk()), CollectionsFolder(config, catalog_of, UploadFailures(lambda: config.collections_dir(), catalog_of)),
-                             SavedUploadReports(build_reports()), FolderUploads(root, config, lambda: build_deployments().layout(), failures),
+    return UploadersUseCases(TrapperClient(section("TRAPPER"), keep_trapper_account, TrapperSdk()), CollectionsFolder(lambda: config.collections_dir(), catalog_of, UploadFailures(lambda: config.collections_dir(), catalog_of)),
+                             SavedUploadReports(build_reports()), FolderUploads(root, section("TRAPPER"), section("AGOUTI"), lambda: build_deployments().layout(), failures),
                              deployments=build_deployments,
-                             sending=trapper_uploads(), places=PlacesInUse(config),
+                             sending=trapper_uploads(), places=PlacesInUse(lambda: config.packages_dir(), lambda: config.max_zip_mb()),
                              syncing=TrapperSync(TrapperSdk(), lambda: catalog_of(config.collections_dir()).records(),
                                                  SyncedCollections(lambda: config.collections_dir(), lambda: build_deployments().layout())))
 
