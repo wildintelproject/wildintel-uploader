@@ -291,7 +291,7 @@ def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — with the uploads kept in it."""
     root = collections_dir or catalog_collections_dir()
     failures = UploadFailures(lambda: root, catalog_of)
-    return UploadersUseCases(TrapperClient(section("TRAPPER"), keep_trapper_account, TrapperSdk()), CollectionsFolder(lambda: config.collections_dir(), catalog_records, UploadFailures(lambda: config.collections_dir(), catalog_of)),
+    return UploadersUseCases(TrapperClient(section("TRAPPER"), keep_trapper_account, TrapperSdk()), CollectionsFolder(lambda: config.collections_dir(), catalog_of, UploadFailures(lambda: config.collections_dir(), catalog_of)),
                              SavedUploadReports(build_reports()), FolderUploads(root, section("TRAPPER"), section("AGOUTI"), lambda: build_deployments().layout(), failures),
                              deployments=build_deployments,
                              sending=trapper_uploads(), places=PlacesInUse(lambda: config.packages_dir(), lambda: config.max_zip_mb()),

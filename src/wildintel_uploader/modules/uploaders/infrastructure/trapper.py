@@ -19,7 +19,8 @@ from wildintel_uploader.modules.uploaders.infrastructure.packages import UPLOAD_
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
 from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, TrapperSite, UploadPlaces, UploadReports
-from wildintel_uploader.modules.catalog.domain.records import CatalogRecords
+from wildintel_uploader.modules.catalog.domain.models import CatalogError
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -117,12 +118,11 @@ class TrapperClient(Trapper):
 
 
 class CollectionsFolder(KeptCollections):
-    def __init__(self, root: Callable[[], Path], records_of: Callable[[Path], CatalogRecords], failures: UploadFailures) -> None:
-        self._root_dir, self._records_of, self._failures = root, records_of, failures   # the catalog of a collections folder as records, through its rules
+    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogService], failures: UploadFailures) -> None:
+        self._root_dir, self._catalog_of, self._failures = root, catalog_of, failures   # the catalog of a collections folder, through its contract
 
-    def _records(self):
-        """The catalog of the collections folder as records — through its contract."""
-        return self._records_of(self._root())
+    def _catalog(self) -> CatalogService:
+        return self._catalog_of(self._root())
 
     def _root(self) -> Path:
         return self._root_dir()
@@ -132,9 +132,13 @@ class CollectionsFolder(KeptCollections):
             return call()
         except StorageError as exc:
             raise UploaderError(str(exc)) from exc
+        except CatalogError as exc:
+            raise UploaderError(exc.message) from exc
 
     def project(self, project: str) -> dict | None:
-        return self._failed(lambda: {p["acronym"]: p for p in self._records().research_projects()}.get(project))
+        """What an upload needs of a research project kept: its acronym, its name and its pk in TRAPPER."""
+        found = self._failed(lambda: next((p for p in self._catalog().projects() if p.acronym == project), None))
+        return {"acronym": found.acronym, "name": found.name, "trapper_pk": found.trapper_pk} if found is not None else None
 
     def collection_dir(self, project: str, collection: str) -> Path:
         return self._failed(lambda: (self._root() / valid_project_id(project)) / collection)
@@ -147,7 +151,7 @@ class CollectionsFolder(KeptCollections):
         return metadata.get("location_id") if isinstance(metadata, dict) else None
 
     def location_time(self, project: str, location_id: str | None) -> dict:
-        return self._failed(lambda: self._records().location_time(project, location_id))
+        return self._failed(lambda: self._catalog().location_time(project, location_id))
 
     def check_project_dir(self, project: str) -> None:
         self._failed(lambda: (self._root() / valid_project_id(project)))

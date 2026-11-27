@@ -119,3 +119,19 @@ def test_no_file_takes_a_private_name_of_another(path: Path):
              for a in node.names if a.name.startswith("_") and not a.name.startswith("__")}
     assert not taken, f"{path.name} takes {sorted(taken)}"
 
+
+# The modules that still read and write the catalog as records (catalog.domain.records.CatalogRecords): each that stops leaves this list, and no
+# new one comes in — the others ask the catalog's contract, with its models.
+STILL_ON_THE_RECORDS = {"modules/visits/infrastructure/kept_visits.py", "modules/visits/infrastructure/adapters.py", "modules/backup/infrastructure/outside.py"}
+
+
+@pytest.mark.parametrize("path", sorted(p for p in SRC.glob("modules/*/**/*.py") if p.relative_to(SRC / "modules").parts[0] != "catalog"),
+                         ids=lambda p: str(p.relative_to(SRC)))
+def test_only_the_modules_of_before_read_the_catalog_as_records(path: Path):
+    uses_them = "CatalogRecords" in path.read_text(encoding="utf-8")
+    assert not uses_them or path.relative_to(SRC).as_posix() in STILL_ON_THE_RECORDS
+
+
+def test_the_list_of_those_on_the_records_only_shrinks():
+    assert all("CatalogRecords" in (SRC / p).read_text(encoding="utf-8") for p in STILL_ON_THE_RECORDS)
+
