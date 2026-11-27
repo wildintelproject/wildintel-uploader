@@ -9,7 +9,7 @@ import typer
 from dishka import FromDishka
 from rich.table import Table
 
-from wildintel_uploader.cli.common import console, fail
+from wildintel_uploader.entrypoints.cli.common import console, fail
 from wildintel_uploader.entrypoints.cli.injection import inject
 from wildintel_uploader.modules.catalog.domain.models import (
     LOCATION_STATUSES, PROJECT_STATUSES, CatalogError, Location, ResearchProject, Trapper, UnknownLocation, UnknownProject,

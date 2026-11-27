@@ -45,10 +45,11 @@ class UploadersUseCases(UploadersService):
     # importing a deployment into TRAPPER from the wizard
 
     def import_deployment(self, account: Account, research_project_pk: int, classification_project_pk: int | None, source_dir: str, deployment: Deployment,
-                          research_project_id: str | None, register: bool) -> Iterator[dict]:
+                          research_project_id: str | None, register: bool, timezone: str | None = None) -> Iterator[dict]:
         credentials = self._trapper.credentials(account)
-        # the timezone and the summer-time setting are the kept location's — the only source of them, whatever the request carries
-        time = self._kept.location_time(research_project_id, deployment.location_id) if research_project_id else {}
+        # the timezone and the summer-time setting are the kept location's — the only source of them, whatever the request carries — unless one is given
+        time = ({"timezone": timezone} if timezone else
+                self._kept.location_time(research_project_id, deployment.location_id) if research_project_id else {})
         return self._trapper.import_deployment(credentials, research_project_pk, classification_project_pk, source_dir, deployment, time.get("timezone"),
                                                research_project_id, time.get("ignore_dst", False), register)
 

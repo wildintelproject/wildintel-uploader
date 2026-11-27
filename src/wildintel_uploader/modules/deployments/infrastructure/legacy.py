@@ -187,6 +187,14 @@ class KeptStatistics(CollectionStatistics):
         except deployment_import_service.DeploymentImportError as exc:
             raise DeploymentMissing(str(exc)) from exc
 
+    def compare(self, project: str, first: str, second: str) -> dict:
+        from wildintel_uploader.core import config
+        from wildintel_uploader.core.services import statistics_service
+        settings = config.load_settings()
+        with _failed():
+            return statistics_service.compare_deployments(config.collections_dir(settings), project, first, second,
+                                                          sequence_gap_seconds=settings.POSTVALIDATION.sequence_gap_seconds)
+
 
 class StoredSessions(ImportSessions):
     """Over session_store: a file a session, in the app's data."""

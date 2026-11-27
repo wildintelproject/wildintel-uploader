@@ -9,7 +9,7 @@ from typing import Annotated, Optional
 import typer
 from rich.table import Table
 
-from wildintel_uploader.cli.common import console, fail
+from wildintel_uploader.entrypoints.cli.common import console, fail
 from dishka import FromDishka
 
 from wildintel_uploader.entrypoints.cli.injection import inject

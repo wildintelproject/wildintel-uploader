@@ -83,6 +83,10 @@ class DeploymentsService(ABC):
     @abstractmethod
     def revision_statistics(self, project: str, collection: str) -> list[dict]: ...
 
+    @abstractmethod
+    def compare(self, project: str, first: str, second: str) -> dict:
+        """Two deployments side by side — the same location in two revisions: {"first", "second", "metrics"}."""
+
     # the sessions of the wizard
     @abstractmethod
     def sessions(self) -> "ImportSessions":
@@ -139,6 +143,9 @@ class CollectionStatistics(ABC):
     def revision(self, project: str, collection: str) -> list[dict]:
         """One row per deployment of the revision against the previous revisions of its location, as the settings of the postvalidation say.
         DeploymentMissing when the collection isn't there."""
+
+    @abstractmethod
+    def compare(self, project: str, first: str, second: str) -> dict: ...
 
 class Cards(ABC):
     @abstractmethod

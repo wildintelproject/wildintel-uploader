@@ -129,6 +129,9 @@ class DeploymentsUseCases(DeploymentsService):
     def revision_statistics(self, project: str, collection: str) -> list[dict]:
         return self._statistics.revision(project, collection)
 
+    def compare(self, project: str, first: str, second: str) -> dict:
+        return self._statistics.compare(project, first, second)
+
     # the sessions of the wizard
 
     def sessions(self) -> ImportSessions:

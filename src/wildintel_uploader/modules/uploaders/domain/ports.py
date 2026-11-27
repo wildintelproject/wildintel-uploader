@@ -37,7 +37,8 @@ class UploadersService(ABC):
     # importing a deployment into TRAPPER from the wizard
     @abstractmethod
     def import_deployment(self, account: Account, research_project_pk: int, classification_project_pk: int | None, source_dir: str, deployment: Deployment,
-                          research_project_id: str | None, register: bool) -> Iterator[dict]: ...
+                          research_project_id: str | None, register: bool, timezone: str | None = None) -> Iterator[dict]:
+        """The images in the timezone of the location kept — or in `timezone`, when it is given (the command line asks it)."""
 
     # uploading the deployments kept
     @abstractmethod
