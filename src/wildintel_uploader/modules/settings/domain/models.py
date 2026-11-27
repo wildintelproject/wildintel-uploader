@@ -100,20 +100,6 @@ class DataSettings:
             _set(self, name, value)
 
 
-TIME_SOURCES = ("created_at", "hour")
-
-
-@settings_registry.section("FIELDLOG", "fieldlog", order=110)
-@dataclass(frozen=True)
-class FieldlogSettings:
-    """How the visits of a field trip are read from the file of the field app, and what is made of them."""
-    time_source: str = "created_at"         # when a visit happened: when its entry was created (UTC), or the hour typed (the wall clock of its location)
-    keep_seconds: bool = False              # the seconds of the visits kept in the logs; off, cut to the minute
-
-    def __post_init__(self) -> None:
-        _one_of("FIELDLOG.time_source", self.time_source, TIME_SOURCES)
-
-
 @settings_registry.section("FIELDWORK", "legacy_fieldwork", order=100)
 @dataclass(frozen=True)
 class LegacyFieldwork:

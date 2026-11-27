@@ -49,6 +49,12 @@ from wildintel_uploader.modules.sources.infrastructure import sources as visit_s
 from wildintel_uploader.modules.sources.infrastructure.epicollect5 import PyEpicollect5
 from wildintel_uploader.modules.sources.infrastructure.settings_in_use import SettingsOfTheSources
 from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import form_columns, form_error
+from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
+from wildintel_uploader.modules.visits.domain.ports import VisitsService
+from wildintel_uploader.modules.visits.infrastructure.legacy import (
+    AuditClock, CatalogOfTheVisits, CsvVisitFile, DeploymentsOfTheVisits, FieldlogInUse, FolderUploads, SavedVisitReports, StoredStateHistory,
+)
+from wildintel_uploader.modules.visits.infrastructure.legacy import StoredVisits as KeptVisits
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
 from wildintel_uploader.shared import storage
@@ -111,6 +117,15 @@ def build_sources(settings: SettingsService | None = None) -> SourcesService:
     """The sources of the visits: Epicollect5 through pyepicollect, the settings through their module."""
     return SourcesUseCases(PyEpicollect5(), SettingsOfTheSources(settings or build_settings()), visit_sources.SOURCES,
                            form_columns=form_columns, form_error=form_error)
+
+
+def build_visits(collections_dir: Path | None = None, settings: SettingsService | None = None) -> VisitsService:
+    """The visits of the research projects of a collections folder — the one of the settings by default —, over the code of before that keeps them."""
+    root = collections_dir or catalog_collections_dir()
+    settings = settings or build_settings()
+    return VisitsUseCases(KeptVisits(root), CatalogOfTheVisits(root), deployments=DeploymentsOfTheVisits(root), file=CsvVisitFile(),
+                          sources=build_sources(settings), uploads=FolderUploads(root), reports=SavedVisitReports(), history=StoredStateHistory(),
+                          settings=FieldlogInUse(), clock=AuditClock())
 
 
 # ── the providers of the container ──
@@ -193,6 +208,14 @@ class SourcesProvider(Provider):
         return build_sources(settings)
 
 
+class VisitsProvider(Provider):
+    """The visits, in the collections folder the settings say."""
+
+    @provide(scope=Scope.REQUEST)
+    def service(self, settings: SettingsService) -> VisitsService:
+        return build_visits(catalog_collections_dir(), settings)
+
+
 def make_app_container() -> Container:
     """The container of the app: every module's provider."""
-    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider())
+    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider())

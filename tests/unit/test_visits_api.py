@@ -26,7 +26,7 @@ def entities_unchecked(request, monkeypatch):
     """Most tests save visits of cameras, cards and trappers that nobody registered: the check that they exist is off, except in the tests marked `entities`.
     Every visit of a file needs its coordinates, so the rows of the samples that do not give them get these, as a default."""
     from wildintel_uploader.core.services import visit_rules, visits_csv
-    from wildintel_uploader.web.api.routers import visits as router
+    from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
     real = visits_csv.parse_visits
     entities = request.node.get_closest_marker("entities")
     if not request.node.get_closest_marker("gps"):
@@ -41,8 +41,8 @@ def entities_unchecked(request, monkeypatch):
         return real(*a[:4], options)
 
     if not entities:
-        monkeypatch.setattr(router, "_not_entities", lambda *a, **k: [])
-    monkeypatch.setattr(router.visits_csv, "parse_visits", parse)
+        monkeypatch.setattr(VisitsUseCases, "_not_entities", lambda *a, **k: [])
+    monkeypatch.setattr(visits_csv, "parse_visits", parse)
 
 
 def _client() -> TestClient:
@@ -66,9 +66,9 @@ def _in(tmp_path: Path):
     from wildintel_uploader.core import config
     with ExitStack() as stack:
         stack.enter_context(patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=tmp_path))
-        stack.enter_context(patch("wildintel_uploader.web.api.routers.visits.config.collections_dir", return_value=tmp_path))
+        stack.enter_context(patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path))
         if not isinstance(config.load_settings, Mock):   # a test that gives its own settings keeps them
-            stack.enter_context(patch("wildintel_uploader.web.api.routers.visits.config.load_settings", side_effect=_settings))
+            stack.enter_context(patch("wildintel_uploader.core.config.load_settings", side_effect=_settings))
         # the trappers Ana and Luis, in the catalog — which takes those versions before left in the settings from the settings files, not from a
         # load_settings that is patched (#248)
         from wildintel_uploader.core.services import local_folder_service
@@ -686,7 +686,7 @@ def test_the_seconds_are_cut_from_the_deployments_unless_they_are_kept_and_an_im
         root = tmp_path / str(keep)
         root.mkdir()
         settings = config.Settings.model_validate({"FIELDLOG": {"keep_seconds": keep}})
-        with patch("wildintel_uploader.web.api.routers.visits.config.load_settings", return_value=settings):
+        with patch("wildintel_uploader.core.config.load_settings", return_value=settings):
             body = _import(root, text, save=True, given_up="2000-01-01").json()
             with _in(root):
                 found = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
@@ -1093,8 +1093,9 @@ def test_importing_a_csv_creates_the_locations_cameras_and_sd_cards_it_is_asked_
 
 
 def test_the_entries_of_epicollect_are_downloaded_as_a_csv(monkeypatch):
-    from wildintel_uploader.core.services import epicollect_service
-    monkeypatch.setattr(epicollect_service, "visits_csv", lambda settings=None: "location_id,date\nA,2026-01-01\n")
+    from wildintel_uploader.modules.sources.domain.ports import VisitRows
+    from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_api import EpicollectApi
+    monkeypatch.setattr(EpicollectApi, "visits", lambda self, text, epicollect, settings: VisitRows(csv="location_id,date\nA,2026-01-01\n"))
     body = _client().post("/api/visits/epicollect-download").json()
     assert body == {"csv": "location_id,date\nA,2026-01-01\n", "count": 1}
 
@@ -1552,14 +1553,14 @@ def test_the_locations_as_the_visits_of_a_file_leave_them():
 
 def test_only_one_save_of_visits_runs_at_a_time_for_a_research_project(tmp_path: Path):
     """Pressing Add again while the visits are being saved does not start a second save that would keep them twice: it is refused, and reading is not."""
-    from wildintel_uploader.web.api.routers import visits as router
+    from wildintel_uploader.modules.visits.application import use_cases as router
     text = "location_id,session,date,time,actions,num_photos\nDONA_01,R0013,2026-02-01,08:00,Revision,5\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos")}
     body = {"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "close_revisions": True}
     with _in(tmp_path):
         _project(archived=(3,))
         _installed((1, 2))
-        lock = router._save_lock("DONA")
+        lock = router.save_lock("DONA")
         lock.acquire()                                       # a save of DONA is running
         try:
             busy = _client().post("/api/visits/import-csv", json={**body, "save": True})
@@ -1576,34 +1577,34 @@ def test_only_one_save_of_visits_runs_at_a_time_for_a_research_project(tmp_path:
 def test_the_save_lock_is_let_go_when_a_save_fails_and_each_research_project_has_its_own(tmp_path: Path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from wildintel_uploader.web.api.routers import visits as router
+    from wildintel_uploader.modules.visits.application import use_cases as router
     from wildintel_uploader.web.main import app
     text = "location_id,session,date,time,actions,num_photos\nDONA_01,R0013,2026-02-01,08:00,Revision,5\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos")}
     body = {"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "close_revisions": True, "save": True}
-    real = router._import_visits_csv
+    real = router.VisitsUseCases._import
 
-    def broken(req):
+    def broken(self, options):
         raise RuntimeError("the disk is full")
 
     with _in(tmp_path):
         _project(archived=(3,))
         _installed((1, 2))
-        monkeypatch.setattr(router, "_import_visits_csv", broken)
+        monkeypatch.setattr(router.VisitsUseCases, "_import", broken)
         failed = TestClient(app, raise_server_exceptions=False).post("/api/visits/import-csv", json=body)
-        monkeypatch.setattr(router, "_import_visits_csv", real)
+        monkeypatch.setattr(router.VisitsUseCases, "_import", real)
         again = _client().post("/api/visits/import-csv", json=body)
         # a save of one research project does not hold the others, and its name is the same whatever its case
-        lock = router._save_lock("DONA")
+        lock = router.save_lock("DONA")
         free = lock.acquire(blocking=False)          # a save that failed left it free (a test that waits here forever would be the lock kept)
         try:
-            other = router._save_lock("OTHER").acquire(blocking=False)
-            same = router._save_lock("dona").acquire(blocking=False)
+            other = router.save_lock("OTHER").acquire(blocking=False)
+            same = router.save_lock("dona").acquire(blocking=False)
         finally:
             if free:
                 lock.release()
             if other:
-                router._save_lock("OTHER").release()
+                router.save_lock("OTHER").release()
 
     assert failed.status_code == 500
     assert free and again.status_code == 200 and again.json()["saved"]    # the failed save did not keep the next ones out
@@ -1894,7 +1895,7 @@ def test_the_examples_of_the_new_form_for_wicp_02_are_imported_in_order_with_no_
     rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
     order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up", "revision_6_new_site"]
     answers = []
-    with _in(tmp_path), patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
+    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.legacy.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
         _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "name": "WICP_02", "acronym": "WICP_02"})
         for l in rows("locations.csv"):
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "WICP_02", "location": {
@@ -1941,7 +1942,7 @@ def _wicp_02_until(root: Path, last: int) -> None:
 def test_a_visit_that_says_new_site_makes_its_site_with_no_need_of_the_switch_and_says_which_timezone_it_has(tmp_path: Path):
     examples = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
     text = (examples / "revision_6_new_site.csv").read_text(encoding="utf-8")
-    with _in(tmp_path), patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
+    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.legacy.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
         _wicp_02_until(tmp_path, 5)                      # R0006 needs the revisions before it
         asked = _client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": text, "format": "epicollect-csv", "create": {"cameras": True, "sd_cards": True}}).json()
         given = _client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": text, "format": "epicollect-csv", "create": {"cameras": True, "sd_cards": True},
@@ -1968,7 +1969,7 @@ def test_the_download_of_the_new_form_can_create_what_does_not_exist_with_the_pl
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         trappers = {"Ana Pérez", "Luis Gómez"}
-        with patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=trappers):
+        with patch("wildintel_uploader.modules.visits.infrastructure.legacy.CatalogOfTheVisits.trapper_names", return_value=trappers):
             result = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "epicollect-csv",
                                                                      "create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"timezone": "Europe/Madrid", "daylight_saving": "yes"}}).json()
 
@@ -2257,7 +2258,7 @@ def test_the_template_of_the_custom_csv_is_the_valid_example_and_is_read_by_itse
     template = (root / "frontend" / "src" / "visitsTemplate.csv").read_text(encoding="utf-8")
     assert template == (root / "examples" / "visits_example" / "custom_csv" / "wicp_02" / "template.csv").read_text(encoding="utf-8")
     rows = lambda name: list(csv.DictReader((root / "examples" / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
-    with _in(tmp_path), patch("wildintel_uploader.web.api.routers.visits._trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
+    with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.legacy.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
         _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "name": "WICP_02", "acronym": "WICP_02"})
         for l in rows("locations.csv"):
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "WICP_02", "location": {

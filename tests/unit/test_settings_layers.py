@@ -11,6 +11,7 @@ from wildintel_uploader.modules.postvalidation.domain import settings as postval
 from wildintel_uploader.modules.preprocessing.domain import settings as preprocessing_settings
 from wildintel_uploader.modules.prevalidation.domain import settings as prevalidation_settings
 from wildintel_uploader.modules.settings.domain import models as domain
+from wildintel_uploader.modules.visits.domain import settings as visits_settings
 from wildintel_uploader.modules.settings.infrastructure import schema
 from wildintel_uploader.modules.settings.infrastructure.mapping import to_domain, to_schema
 from wildintel_uploader.modules.settings.infrastructure.toml_files import TomlSettingsStore
@@ -34,7 +35,7 @@ def test_the_defaults_of_the_domain_are_those_of_the_files():
     (lambda: postvalidation_settings.PostvalidationSettings(sequence_gap_seconds=0), "POSTVALIDATION.sequence_gap_seconds"),
     (lambda: postvalidation_settings.PostvalidationSettings(similarity_method="mode"), "POSTVALIDATION.similarity_method"),
     (lambda: preprocessing_settings.PreprocessingSettings(resize_width=50), "PREPROCESSING.resize_width"),
-    (lambda: domain.FieldlogSettings(time_source="sundial"), "FIELDLOG.time_source"),
+    (lambda: visits_settings.FieldlogSettings(time_source="sundial"), "FIELDLOG.time_source"),
 ])
 def test_a_setting_that_cannot_be_is_refused_naming_it(make, setting):
     with pytest.raises(domain.SettingsError) as refused:
