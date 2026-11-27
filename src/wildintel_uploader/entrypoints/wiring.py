@@ -77,7 +77,10 @@ from wildintel_uploader.modules.timefix.infrastructure.images import ExifToolShi
 from wildintel_uploader.modules.timefix.infrastructure.outside import ToleranceInUse, VisitsThroughTheirContract
 from wildintel_uploader.modules.uploaders.application.use_cases import UploadersUseCases
 from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
+from wildintel_uploader.modules.uploaders.application.sync import TrapperSync
 from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
+from wildintel_uploader.modules.uploaders.infrastructure.synced_folder import SyncedCollections
+from wildintel_uploader.modules.uploaders.infrastructure.failures import UploadFailures
 from wildintel_uploader.modules.uploaders.infrastructure.packages import DeploymentFolder, PackagesOnDisk
 from wildintel_uploader.modules.uploaders.infrastructure.trapper import CollectionsFolder, PlacesInUse, SavedUploadReports, TrapperClient
 from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
@@ -201,9 +204,14 @@ def build_timefix() -> TimeFixService:
 
 def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — as the code of before keeps it."""
-    return UploadersUseCases(TrapperClient(config), CollectionsFolder(config, catalog_of), SavedUploadReports(build_reports()),
-                             FolderUploads(collections_dir or catalog_collections_dir(), config), deployments=build_deployments,
-                             sending=trapper_uploads(), places=PlacesInUse(config))
+    root = collections_dir or catalog_collections_dir()
+    failures = UploadFailures(lambda: root, catalog_of)
+    return UploadersUseCases(TrapperClient(config), CollectionsFolder(config, catalog_of, UploadFailures(lambda: config.collections_dir(), catalog_of)),
+                             SavedUploadReports(build_reports()), FolderUploads(root, config, lambda: build_deployments().layout(), failures),
+                             deployments=build_deployments,
+                             sending=trapper_uploads(), places=PlacesInUse(config),
+                             syncing=TrapperSync(TrapperSdk(), lambda: catalog_of(config.collections_dir()).records(),
+                                                 SyncedCollections(lambda: config.collections_dir(), lambda: build_deployments().layout())))
 
 
 def trapper_uploads() -> TrapperUploads:

@@ -1,11 +1,11 @@
 """TRAPPER for the uploaders — the account, as the settings keep it; what TRAPPER has, through its SDK (trapper_service); a deployment
-registered from the wizard; the sync (sync_service) — and its errors as the module's: what the client of TRAPPER says of an account or a resource,
+registered from the wizard — and its errors as the module's: what the client of TRAPPER says of an account or a resource,
 of the network, or the words of what the uploads refuse. And the research projects and the collections kept in the collections folder."""
 from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -14,7 +14,7 @@ from wildintel_uploader.modules.uploaders.domain.models import (
 )
 from wildintel_uploader.modules.deployments.domain.naming import DEPLOYMENT_METADATA_FILE
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
-from wildintel_uploader.modules.uploaders.infrastructure import failures
+from wildintel_uploader.modules.uploaders.infrastructure.failures import UploadFailures
 from wildintel_uploader.modules.uploaders.infrastructure.packages import UPLOAD_LOG_FILE, read_json, size_of
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
@@ -27,9 +27,8 @@ T = TypeVar("T")
 
 
 def _services():
-    from wildintel_uploader.modules.uploaders.infrastructure import sync_service
     from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
-    return trapper_service, None, sync_service
+    return (trapper_service,)
 
 
 def _own_words(exc: Exception) -> bool:
@@ -68,16 +67,6 @@ def _ours(call: Callable[[], T], what: str = "A TRAPPER call") -> T:
         raise as_uploader_error(exc) from exc
 
 
-def _told(events: Iterator[dict], what: str) -> Iterator[dict]:
-    """The events of a stream; what fails mid-way is an UploaderError with the words the pages have always shown."""
-    try:
-        yield from events
-    except Exception as exc:  # noqa: BLE001
-        from wildintel_uploader.shared.logs import debugging
-        logger.warning("%s failed: %s", what, exc, exc_info=debugging())
-        raise UploaderError(str(exc) if _own_words(exc) else as_uploader_error(exc).message) from exc
-
-
 class TrapperClient(Trapper):
     def __init__(self, settings: StoredSettings) -> None:
         self._settings = settings   # the settings as settings.toml keeps them
@@ -110,15 +99,6 @@ class TrapperClient(Trapper):
             _ours(lambda: _services()[0].import_deployment(*credentials, research_project_pk, classification_project_pk, deployment, timezone,
                                                            Path(tmp) / "deployment.csv", ignore_dst=ignore_dst), "Registering the deployment")
 
-    def collection_names(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int) -> list[dict]:
-        return _ours(lambda: _services()[2].collections_with_deployments(credentials, research_project_pk, classification_project_pk),
-                     "Reading the collections of the classification project")
-
-    def sync(self, credentials: Credentials, project: dict, classification_project_pk: int, collections: list[str], deployments: list[str] | None,
-             download_images: bool) -> Iterator[dict]:
-        events = _services()[2].sync_stream(credentials, self._settings.collections_dir(), project, classification_project_pk, collections, deployments, download_images)
-        return _told(events, "Syncing the local collections")
-
     def failure(self, exc: Exception) -> UploaderError:
         """An error of TRAPPER, of the network or of what is asked of it, as the module's — logged when it is not one of its own."""
         if not isinstance(exc, UploaderError):
@@ -133,8 +113,8 @@ class TrapperClient(Trapper):
 
 
 class CollectionsFolder(KeptCollections):
-    def __init__(self, settings: StoredSettings, catalog_of: Callable[[Path], CatalogService]) -> None:
-        self._settings, self._catalog_of = settings, catalog_of   # the settings; the catalog of a collections folder, through its contract
+    def __init__(self, settings: StoredSettings, catalog_of: Callable[[Path], CatalogService], failures: UploadFailures) -> None:
+        self._settings, self._catalog_of, self._failures = settings, catalog_of, failures   # the catalog of a collections folder, through its contract
 
     def _records(self):
         """The catalog of the collections folder as records — through its contract."""
@@ -170,7 +150,7 @@ class CollectionsFolder(KeptCollections):
 
     def note_failure(self, project: str, deployment_id: str, destination: str, note: str | None) -> None:
         try:
-            failures.set_upload_failure(self._root(), project, deployment_id, destination, note)
+            self._failures.note(project, deployment_id, destination, note)
         except StorageError:
             pass
 

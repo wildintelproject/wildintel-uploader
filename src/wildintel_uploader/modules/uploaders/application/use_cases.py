@@ -10,6 +10,7 @@ from typing import TypeVar
 from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, NotThere, UploaderError
+from wildintel_uploader.modules.uploaders.application.sync import TrapperSync
 from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
 from wildintel_uploader.modules.uploaders.domain.ports import (
     Deployment, DeploymentUploads, KeptCollections, Trapper, UploadersService, UploadPlaces, UploadReports,
@@ -25,9 +26,9 @@ class UploadersUseCases(UploadersService):
 
     def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports, uploads: DeploymentUploads | None = None, *,
                  deployments: Callable[[], DeploymentsService] | None = None, sending: TrapperUploads | None = None,
-                 places: UploadPlaces | None = None) -> None:
+                 places: UploadPlaces | None = None, syncing: TrapperSync | None = None) -> None:
         self._trapper, self._kept, self._reports, self._uploads = trapper, kept, reports, uploads
-        self._deployments, self._sending, self._places = deployments, sending, places
+        self._deployments, self._sending, self._places, self._syncing = deployments, sending, places, syncing
 
     def _ours(self, call: Callable[[], T]) -> T:
         try:
@@ -173,10 +174,18 @@ class UploadersUseCases(UploadersService):
     # bringing back what TRAPPER has
 
     def collection_names(self, account: Account, research_project_pk: int, classification_project_pk: int) -> list[dict]:
-        return self._trapper.collection_names(self._trapper.credentials(account), research_project_pk, classification_project_pk)
+        credentials = self._trapper.credentials(account)
+        return self._ours(lambda: self._syncing.collections_with_deployments(credentials, research_project_pk, classification_project_pk))
 
     def sync(self, account: Account, project: dict, classification_project_pk: int, collections: list[str], deployments: list[str] | None,
              download_images: bool) -> Iterator[dict]:
         credentials = self._trapper.credentials(account)
         self._kept.check_project_dir(project["acronym"] or str(project["pk"]))
-        return self._trapper.sync(credentials, project, classification_project_pk, collections, deployments, download_images)
+        events = self._syncing.sync(credentials, project, classification_project_pk, collections, deployments, download_images)
+
+        def told() -> Iterator[dict]:
+            try:
+                yield from events
+            except Exception as exc:  # noqa: BLE001 — what fails mid-way is one of the module's errors, with its words
+                raise self._trapper.failure(exc) from exc
+        return told()

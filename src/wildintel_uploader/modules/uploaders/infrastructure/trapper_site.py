@@ -138,3 +138,16 @@ class TrapperSdk(TrapperSite):
     def collection(self, credentials: Credentials, research_project_pk: int, name: str) -> dict | None:
         found = next((c for c in trapper_service.client(*credentials).collections.where(research_projects=research_project_pk, search=name) if c.name == name), None)
         return {"pk": getattr(found, "pk", None), "name": found.name} if found is not None else None
+
+    def collection_names(self, credentials: Credentials, classification_project_pk: int) -> list[str]:
+        client = trapper_service.client(*credentials)
+        return [c.name for c in client.classification_projects.where_project_collections(classification_project_pk, page_size=trapper_service.LIST_PAGE_SIZE)]
+
+    def resources(self, credentials: Credentials, deployment_pk: int) -> list[dict]:
+        return trapper_service.list_deployment_resources(*credentials, deployment_pk)
+
+    def media(self, credentials: Credentials, classification_project_pk: int, deployment_pk: int) -> list[dict]:
+        return trapper_service.list_deployment_media(*credentials, classification_project_pk, deployment_pk)
+
+    def downloader(self, credentials: Credentials) -> Callable[[str, Path], int]:
+        return trapper_service.file_downloader(*credentials)

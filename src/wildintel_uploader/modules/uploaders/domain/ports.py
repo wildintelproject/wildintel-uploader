@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, UploaderError
 
@@ -110,13 +110,6 @@ class Trapper(ABC):
         """Registers a deployment in TRAPPER — its errors as the module's."""
 
     @abstractmethod
-    def collection_names(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int) -> list[dict]: ...
-
-    @abstractmethod
-    def sync(self, credentials: Credentials, project: dict, classification_project_pk: int, collections: list[str], deployments: list[str] | None,
-             download_images: bool) -> Iterator[dict]: ...
-
-    @abstractmethod
     def failure(self, exc: Exception) -> UploaderError:
         """An error of TRAPPER, of the network or of what is asked of it, as the module's."""
 
@@ -212,6 +205,22 @@ class TrapperSite(ABC):
     def collection(self, credentials: Credentials, research_project_pk: int, name: str) -> dict | None:
         """The collection of the research project with that name — its pk —, or None."""
 
+    @abstractmethod
+    def collection_names(self, credentials: Credentials, classification_project_pk: int) -> list[str]:
+        """The names of the collections of a classification project."""
+
+    @abstractmethod
+    def resources(self, credentials: Credentials, deployment_pk: int) -> list[dict]:
+        """What TRAPPER holds of the images of a deployment: pk, name, date_recorded, mime and what they show."""
+
+    @abstractmethod
+    def media(self, credentials: Credentials, classification_project_pk: int, deployment_pk: int) -> list[dict]:
+        """The images of a deployment the classification project holds — the only place that gives a file's access token —: pk, name, url."""
+
+    @abstractmethod
+    def downloader(self, credentials: Credentials) -> Callable[[str, Path], int]:
+        """What downloads a file to a path, whole or not at all, and says how many bytes it was."""
+
 
 class KeptDeployment(ABC):
     """A deployment kept in its collection's folder, as an upload reads it and marks it."""
@@ -291,3 +300,46 @@ class UploadPlaces(ABC):
 
     @abstractmethod
     def max_zip_bytes(self) -> int: ...
+
+
+class SyncedRecords(Protocol):
+    """The catalog of the collections folder as records — its contract —, as a sync reads and adds to it."""
+
+    def has_project(self, project: str) -> bool: ...
+    def add_project(self, record: dict) -> dict: ...
+    def locations(self, project: str, include_deleted: bool = False) -> list[dict]: ...
+    def add_location(self, project: str, location: dict, by_hand: bool = False) -> dict: ...
+
+
+class SyncedFolder(ABC):
+    """The collections folder as a sync fills it — what a collection and a deployment hold, as the deployments keep them. Every method raises a
+    StorageError when the research project can't be a folder's name."""
+
+    @abstractmethod
+    def project_folder(self, project: str) -> Path: ...
+
+    @abstractmethod
+    def has_collection(self, project: str, collection: str) -> bool: ...
+
+    @abstractmethod
+    def add_collection(self, project: str, collection: str) -> None: ...
+
+    @abstractmethod
+    def has_deployment(self, project: str, collection: str, deployment_id: str) -> bool: ...
+
+    @abstractmethod
+    def add_deployment(self, project: str, collection: str, deployment_id: str, record: dict) -> None:
+        """Raises ValueError, saying what is wrong, when the record is not a valid deployment."""
+
+    @abstractmethod
+    def has_images(self, project: str, collection: str, deployment_id: str) -> bool: ...
+
+    @abstractmethod
+    def add_images(self, project: str, collection: str, deployment_id: str, images: list[tuple[str, str | None, dict]]) -> None: ...
+
+    @abstractmethod
+    def images_listed(self, project: str, collection: str, deployment_id: str) -> list[str]:
+        """The names of the images its images.json lists."""
+
+    @abstractmethod
+    def image_path(self, project: str, collection: str, deployment_id: str, name: str) -> Path: ...
