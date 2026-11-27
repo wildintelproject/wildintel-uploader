@@ -694,8 +694,8 @@ def test_the_seconds_are_cut_from_the_deployments_unless_they_are_kept_and_an_im
         d = next(d for d in found if d["deployment_id"] == "R0001-DONA_01")
         assert (d["start"], d["end"]) == expected, (keep, d)
     # the report is kept with the other reports, with an entry for each row of the file
-    from wildintel_uploader.modules.reports.infrastructure import report_service
-    report = report_service.read(body["report"], reports)
+    from wildintel_uploader.entrypoints.wiring import build_reports
+    report = build_reports(reports).read(body["report"])
     assert report["kind"] == "visits" and report["title"] == "Visits imported to DONA" and report["checked"] == 2 and report["parameters"]["saved"] == 2
     assert [e["identifier"] for e in report["entries"]][:2] == ["Row 2 · DONA_01 · R0001 · 2024-09-04 09:00", "Row 3 · DONA_01 · R0002 · 2024-10-12 09:05"]
     assert not list(root.glob("DONA/visits_import_*"))                                          # nothing is left beside the visits

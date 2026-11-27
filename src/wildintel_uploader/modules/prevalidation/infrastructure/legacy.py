@@ -1,5 +1,5 @@
 """The ports of the prevalidation over the code of before: the images imported before (the deployments, through their contract), the
-settings in use, the reports (report_service)."""
+settings in use, the reports (through their contract)."""
 from __future__ import annotations
 
 import logging

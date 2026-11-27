@@ -9,7 +9,7 @@ from PIL import Image
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from tests.support import local_folder_service as lfs
 from tests.support import preprocessing_service as pre
-from wildintel_uploader.modules.reports.infrastructure import report_service
+from wildintel_uploader.entrypoints.wiring import build_reports
 from wildintel_uploader.modules.deployments.infrastructure import repair_service as rep
 from wildintel_uploader.modules.deployments.infrastructure import seal_service
 
@@ -150,7 +150,7 @@ def test_what_the_images_fail_is_reported_and_the_repair_still_seals(kept):
 
     events = _repair(root)
 
-    report = report_service.read(events[-1]["report_id"])
+    report = build_reports().read(events[-1]["report_id"])
     assert report["kind"] == "repair" and report["checks"]["duplicates"]["failed"] == 2
     assert events[-1]["problems"] >= 2 and events[-1]["status"] == "valid"
 
@@ -161,7 +161,7 @@ def test_the_names_of_the_images_are_checked_as_preprocessing_leaves_them(kept):
 
     events = _repair(root)
 
-    report = report_service.read(events[-1]["report_id"])
+    report = build_reports().read(events[-1]["report_id"])
     names = {e["identifier"]: e["message"] for e in report["entries"] if e["check"] == "preprocessing_names" and e["status"] == "failed"}
     assert list(names) == ["holiday.jpg"] and "is not named" in names["holiday.jpg"]
 

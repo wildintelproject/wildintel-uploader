@@ -1,7 +1,7 @@
-"""The reports: a record of what a validation, a postvalidation or a preprocessing found and did — what the
+"""The reports — plain Python: a record of what a check, a preprocessing, a repair, an upload or an import of visits found and did, what the
 screen shows of it and what can be downloaded to look at it in detail afterwards.
 
-A report is a JSON file in config.reports_dir():
+A report is:
 
     {"id", "kind": "validation" | "postvalidation" | "preprocessing" | "repair" | "upload" | "visits", "title", "created_at", "source_dir",
      "deployment_id", "parameters", "checked",
@@ -10,35 +10,24 @@ A report is a JSON file in config.reports_dir():
      "entries": [{"identifier", "check", "status": "ok" | "failed", "message", "tag"?, "taken"?}]}
 
 A failed image's entry also has a short "tag" (what is wrong, in a few words, for a badge) and "taken", its capture date.
-An entry is one check of one thing: an image (identified by its path in the source folder) or the whole
-deployment ("(deployment)"). A check that looks at every image has an entry for each, the ones that
-passed too — so the report says what was checked, not only what failed. The same file gives the CSV."""
+An entry is one check of one thing: an image (identified by its path in the source folder) or the whole deployment ("(deployment)"). A check
+that looks at every image has an entry for each, the ones that passed too — so the report says what was checked, not only what failed. The
+same report gives the CSV."""
 from __future__ import annotations
 
 import csv
 import io
-import json
 import re
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterable
+from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
-from wildintel_uploader.modules.reports.infrastructure.plugs import config
 from wildintel_uploader.modules.deployments.domain.naming import natural_key
-from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECKS
-
-
-def _files():
-    """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
-    from wildintel_uploader.modules.reports.infrastructure import plugs
-    return plugs.file_info()
 
 KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload", "visits")
 DEPLOYMENT = "(deployment)"
 CSV_COLUMNS = ("identifier", "check", "status", "message")
-
-_ID = re.compile(r"^\d{8}-\d{6}_(validation|postvalidation|preprocessing|repair|upload|visits)_[0-9A-Za-z_.-]*$")
 
 LABELS = {
     "corrupted": "Corrupted images", "sequence": "Shooting order vs. filename sequence", "structure": "Folder structure",
@@ -54,13 +43,17 @@ LABELS = {
 }
 
 
-class ReportError(ValueError):
-    """A report that isn't there, or isn't a report's id — reported to the user."""
+_ID = re.compile(r"^\d{8}-\d{6}_(validation|postvalidation|preprocessing|repair|upload|visits)_[0-9A-Za-z_.-]*$")
 
 
-# ── building ─────────────────────────────────────────────────────────────────
+def is_report_id(text: str) -> bool:
+    """Only a report's id is taken for one: never a path."""
+    return bool(_ID.match(text))
 
-class _Builder:
+
+# ── building ──
+
+class ReportBuilder:
     def __init__(self, kind: str, title: str, *, source_dir: str | None, deployment_id: str | None, parameters: dict) -> None:
         self.kind, self.title, self.source_dir, self.deployment_id, self.parameters = kind, title, source_dir, deployment_id, parameters
         self.entries: list[dict] = []
@@ -85,47 +78,35 @@ class _Builder:
             problem = problems.get(name)
             self.add(name, check, problem is None, problem if problem is not None else ok_message, tag=(tags or {}).get(name, tag))
 
-    def build(self) -> dict:
+    def failed_images(self) -> list[str]:
+        """The images that failed a check — whose capture date the report gives —, by their paths in the source folder."""
+        return sorted({e["identifier"] for e in self.entries if e["status"] == "failed" and e["identifier"] != DEPLOYMENT}) if self.source_dir else []
+
+    def build(self, created_at: str, taken: dict[str, datetime | None] | None = None) -> dict:
+        """The report, made at `created_at`; `taken` is when each failed image was taken, as its EXIF says (the images that are fine aren't
+        opened)."""
         checks: dict[str, dict] = {}
         for entry in self.entries:
             info = checks.setdefault(entry["check"], {"label": LABELS.get(entry["check"], entry["check"]), "scope": self.scopes[entry["check"]], "ok": 0, "failed": 0})
             info["ok" if entry["status"] == "ok" else "failed"] += 1
         failed = sum(1 for e in self.entries if e["status"] == "failed")
-        self._date_the_failures()
+        for e in self.entries:
+            when = (taken or {}).get(e["identifier"]) if e["status"] == "failed" else None
+            if when is not None:
+                e["taken"] = when.isoformat()
         with_issues = {e["identifier"] for e in self.entries if e["status"] == "failed" and checks[e["check"]]["scope"] == "images"}
         return {
-            "kind": self.kind, "title": self.title, "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "kind": self.kind, "title": self.title, "created_at": created_at,
             "source_dir": self.source_dir, "deployment_id": self.deployment_id, "parameters": self.parameters, "checked": self.checked,
             "checks": checks, "totals": {"entries": len(self.entries), "ok": len(self.entries) - failed, "failed": failed, "images_with_issues": len(with_issues)},
             "entries": self.entries,
         }
 
-    def _date_the_failures(self) -> None:
-        """Gives each failed image's entries its capture date, as its EXIF says — the images that are fine aren't opened."""
-        if self.source_dir is None:
-            return
-        root = Path(self.source_dir)
-        names = sorted({e["identifier"] for e in self.entries if e["status"] == "failed" and e["identifier"] != DEPLOYMENT})
-        read = _files().dates([root / n for n in names])
-        taken = {n: read[root / n] for n in names}
-        for e in self.entries:
-            when = taken.get(e["identifier"]) if e["status"] == "failed" else None
-            if when is not None:
-                e["taken"] = when.isoformat()
 
-
-def images_of(folder: Path) -> list[str]:
-    """The images of a folder, as their paths in it, in natural file-name order."""
-    return [str(p.relative_to(folder)) for p in sorted(
-        (p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: natural_key(p.relative_to(folder)),
-    )]
-
-
-def validation_report(found: dict, source: Path, checks: Iterable[str] | None = None) -> dict:
-    """The report of validate_images(source, checks, detail=True)'s result."""
+def validation_report(found: dict, source: Path, images: list[str], checks: Iterable[str] | None = None) -> ReportBuilder:
+    """The report of what the checks of the images of `source` found (`images`: their paths in it)."""
     ran = set(checks) if checks is not None else set(IMAGE_CHECKS)
-    images = images_of(source)
-    b = _Builder("validation", f"Validation of {source.name}", source_dir=str(source), deployment_id=None, parameters={"checks": sorted(ran)})
+    b = ReportBuilder("validation", f"Validation of {source.name}", source_dir=str(source), deployment_id=None, parameters={"checks": sorted(ran)})
     b.checked = found.get("checked_count", len(images))
 
     if "corrupted" in ran:
@@ -154,14 +135,13 @@ def validation_report(found: dict, source: Path, checks: Iterable[str] | None = 
         without = found.get("cameras_without_info", 0)
         by = f" (compared by {' + '.join(found['camera_by'])})" if found.get("camera_by") else ""
         b.deployment("camera", len(cameras) <= 1 and not without, f"{len(cameras)} camera(s){by}: {names or 'none'}" + (f"; {without} image(s) without camera information" if without else ""))
-    return b.build()
+    return b
 
 
-def postvalidation_report(result: dict, deployment_id: str, source: Path, parameters: dict | None = None) -> dict:
+def postvalidation_report(result: dict, deployment_id: str, source: Path, images: list[str], parameters: dict | None = None) -> ReportBuilder:
     """The report of validate_deployment_consistency's result — with the statistical checks' added to it, as the
     endpoint does."""
-    images = images_of(source)
-    b = _Builder("postvalidation", f"Postvalidation of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters=parameters or {})
+    b = ReportBuilder("postvalidation", f"Postvalidation of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters=parameters or {})
     b.checked = result.get("checked_count", len(images))
     for check in ("deployment_id", "collection_prefix", "collection_name", "location", "sd_card", "photo_count", "image_count", "sequence_count", "sequence_length"):
         item = result.get(check)
@@ -173,15 +153,15 @@ def postvalidation_report(result: dict, deployment_id: str, source: Path, parame
     if "camera_mismatches" in result:
         problems = {i["path"]: f"camera {i['detected']} is not the deployment's" for i in result["camera_mismatches"]}
         b.per_image("camera", images, problems, "its camera is the deployment's", tag="Other camera")
-    return b.build()
+    return b
 
 
-def repair_report(deployment_id: str, dest: Path, files: list[tuple[str, bool, str]], seal: dict | None, preprocessing: dict[str, dict[str, str]]) -> dict:
+def repair_report(deployment_id: str, dest: Path, images: list[str], files: list[tuple[str, bool, str]], seal: dict | None,
+                  preprocessing: dict[str, dict[str, str]]) -> ReportBuilder:
     """What a repair did and found: which metadata files it wrote (files: (name, ok, what)), what the folder's own images
     passed of the validation and the postvalidation — as the seal it wrote says — and of the preprocessing
     (preprocessing: check -> {image: problem}; an image that isn't in a check's dict passed it)."""
-    images = images_of(dest)
-    b = _Builder("repair", f"Repair of {deployment_id}", source_dir=str(dest), deployment_id=deployment_id, parameters={})
+    b = ReportBuilder("repair", f"Repair of {deployment_id}", source_dir=str(dest), deployment_id=deployment_id, parameters={})
     b.checked = len(images)
     for name, ok, message in files:
         b.add(name, "metadata_files", ok, message, scope="deployment", tag="Not rebuilt")
@@ -201,7 +181,7 @@ def repair_report(deployment_id: str, dest: Path, files: list[tuple[str, bool, s
                     b.deployment(check, bool(result.get("ok")) or bool(result.get("skipped")), result.get("message", ""))
     for check, problems in preprocessing.items():
         b.per_image(check, images, problems, "passed", tag="Not as preprocessed")
-    return b.build()
+    return b
 
 
 def _megabytes(size: int | None) -> str:
@@ -213,9 +193,9 @@ def _size(record: dict, prefix: str) -> str:
     return f"{record[prefix + 'width']}×{record[prefix + 'height']}, {_megabytes(record.get(prefix + 'bytes'))}"
 
 
-def preprocessing_report(records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> dict:
+def preprocessing_report(records: list[dict], skipped: list[dict], deployment_id: str, source: Path, dest: Path, options: dict) -> ReportBuilder:
     """What preprocessing did to each image — and the ones it couldn't process."""
-    b = _Builder("preprocessing", f"Processing of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters={**options, "destination": str(dest)})
+    b = ReportBuilder("preprocessing", f"Processing of {deployment_id}", source_dir=str(source), deployment_id=deployment_id, parameters={**options, "destination": str(dest)})
     b.checked = len(records) + len(skipped)
     for r in records:
         steps = [f"{r['original']} → {r['name']}" if r["name"] != r["original"] else r["original"], f"date {r['date']} ({r['date_source']})"]
@@ -227,14 +207,14 @@ def preprocessing_report(records: list[dict], skipped: list[dict], deployment_id
     for item in skipped:
         b.add(item["name"], "preprocessing", False, item["detail"])
     b.entries.sort(key=lambda e: natural_key(Path(e["identifier"])))
-    return b.build()
+    return b
 
 
-def upload_report(collection: str, research_project: str, items: list[dict], *, started_at: str, finished_at: str) -> dict:
+def upload_report(collection: str, research_project: str, items: list[dict], *, started_at: str, finished_at: str) -> ReportBuilder:
     """The report of an upload to Trapper: for each deployment the steps it went through — what each said — and, when it
     failed, the check "Upload" with the reason. `items` are the page's: {"id", "state": "done" | "failed", "images", "bytes",
     "location_id", "location_created", "deployment_created", "error", "steps": [{"label", "message"}]}."""
-    b = _Builder("upload", f"Upload of {collection}", source_dir=None, deployment_id=None,
+    b = ReportBuilder("upload", f"Upload of {collection}", source_dir=None, deployment_id=None,
                  parameters={"collection": collection, "research_project": research_project, "started_at": started_at, "finished_at": finished_at})
     b.checked = len(items)
     for item in items:
@@ -244,13 +224,13 @@ def upload_report(collection: str, research_project: str, items: list[dict], *, 
         detail = (f"{item.get('images', 0)} image(s), {item.get('bytes', 0)} bytes sent"
                   f"{'; location created' if item.get('location_created') else ''}{'; deployment created' if item.get('deployment_created') else ''}.")
         b.add(item["id"], "Upload", done, detail if done else (item.get("error") or "It was not uploaded."), scope="deployment")
-    return b.build()
+    return b
 
 
-def visits_import_report(research_project_id: str, result: dict, saved: int) -> dict:
+def visits_import_report(research_project_id: str, result: dict, saved: int) -> ReportBuilder:
     """The report of an import of visits: an entry for each row of the file — what became of it, and why — then what was odd about the visits, what was worth knowing,
     what the import created and the sites that are not locations. `result` is what visits_csv.parse_visits gave (with the folder's changes told by `saved`)."""
-    b = _Builder("visits", f"Visits imported to {research_project_id}", source_dir=None, deployment_id=None,
+    b = ReportBuilder("visits", f"Visits imported to {research_project_id}", source_dir=None, deployment_id=None,
                  parameters={"research_project": research_project_id, "saved": saved, "skipped": result.get("skipped", 0)})
     rows = result.get("rows", [])
     b.checked = len(rows)
@@ -275,77 +255,29 @@ def visits_import_report(research_project_id: str, result: dict, saved: int) -> 
     for kind, name, key in (("locations", "location", "location_id"), ("cameras", "camera", "camera_id"), ("sd_cards", "SD card", "label")):
         for entity in made.get(kind, []):
             b.add(f"{name} {entity.get(key)}", "Created", True, f"The {name} {entity.get(key)} was created with the visits." if saved else f"The {name} {entity.get(key)} would be created.", scope="deployment")
-    return b.build()
+    return b
 
 
-# ── keeping ──────────────────────────────────────────────────────────────────
+# ── keeping and giving ──
 
 def _slug(text: str) -> str:
     return re.sub(r"[^0-9A-Za-z_.-]+", "-", text).strip("-")[:60] or "report"
 
 
-def save(report: dict, root: Path | None = None) -> str:
-    """Writes the report to the reports folder and returns its id — also set in the report."""
-    root = root or config.reports_dir()
-    root.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    name = _slug(report.get("deployment_id") or Path(report.get("source_dir") or "").name or (report["parameters"]["research_project"] if report["kind"] == "visits" else report["kind"]))
-    report_id, n = f"{stamp}_{report['kind']}_{name}", 1
-    while (root / f"{report_id}.json").exists():
-        n += 1
-        report_id = f"{stamp}_{report['kind']}_{name}-{n}"
-    report["id"] = report_id
-    tmp = root / f"{report_id}.json.tmp"
-    tmp.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(root / f"{report_id}.json")
-    return report_id
+def report_name(report: dict) -> str:
+    """What a report's id says after its date and kind: its deployment, its folder, its research project — or its kind."""
+    return _slug(report.get("deployment_id") or Path(report.get("source_dir") or "").name
+                 or (report["parameters"]["research_project"] if report["kind"] == "visits" else report["kind"]))
 
 
-def _path(report_id: str, root: Path | None) -> Path:
-    if not _ID.match(report_id):
-        raise ReportError(f"'{report_id}' isn't a report.")
-    path = (root or config.reports_dir()) / f"{report_id}.json"
-    if not path.is_file():
-        raise ReportError(f"There is no report '{report_id}'.")
-    return path
+def lists(report: dict, relative: str) -> bool:
+    """Whether a report names an image of its folder: only those are shown."""
+    return bool(report.get("source_dir")) and relative in {e["identifier"] for e in report["entries"]}
 
 
-def read(report_id: str, root: Path | None = None) -> dict:
-    """Raises:
-        ReportError: it isn't a report's id, or there is no such report.
-    """
-    return json.loads(_path(report_id, root).read_text(encoding="utf-8"))
-
-
-def list_reports(root: Path | None = None) -> list[dict]:
-    """What each report says of itself, newest first — without its entries."""
-    root = root or config.reports_dir()
-    out = []
-    for path in sorted(root.glob("*.json"), reverse=True) if root.is_dir() else []:
-        try:
-            report = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        out.append({k: report.get(k) for k in ("id", "kind", "title", "created_at", "source_dir", "deployment_id", "checked", "totals")})
-    return out
-
-
-def delete(report_id: str, root: Path | None = None) -> None:
-    _path(report_id, root).unlink()
-
-
-def delete_older_than(days: int, root: Path | None = None) -> int:
-    """Deletes the reports older than `days` days, and says how many."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    gone = 0
-    for item in list_reports(root):
-        try:
-            if datetime.fromisoformat(item["created_at"]) < cutoff:
-                delete(item["id"], root)
-                gone += 1
-        except (TypeError, ValueError, ReportError):
-            continue
-    return gone
+def summary(report: dict) -> dict:
+    """What a report says of itself — without its entries."""
+    return {k: report.get(k) for k in ("id", "kind", "title", "created_at", "source_dir", "deployment_id", "checked", "totals")}
 
 
 def to_csv(report: dict) -> str:
@@ -356,36 +288,3 @@ def to_csv(report: dict) -> str:
     for entry in report["entries"]:
         writer.writerow([entry[c] for c in CSV_COLUMNS])
     return out.getvalue()
-
-
-# ── the images of a report ───────────────────────────────────────────────────
-
-THUMBNAIL = 320
-LARGE = 1280
-
-
-def image_jpeg(report_id: str, relative: str, size: int = THUMBNAIL, root: Path | None = None) -> bytes:
-    """An image a report names, as a JPEG that fits in size × size — to show it without sending the original.
-    Only the images the report lists are served, so this is no way to read other files.
-
-    Raises:
-        ReportError: there is no such report, it doesn't list the image, or the image can't be read.
-    """
-    from PIL import Image, ImageOps
-
-    report = read(report_id, root)
-    if not report.get("source_dir") or relative not in {e["identifier"] for e in report["entries"]}:
-        raise ReportError(f"The report doesn't have the image '{relative}'.")
-    folder = Path(report["source_dir"]).resolve()
-    path = (folder / relative).resolve()
-    if folder not in path.parents or not path.is_file():
-        raise ReportError(f"The report doesn't have the image '{relative}'.")
-    try:
-        with Image.open(path) as img:
-            img = ImageOps.exif_transpose(img)
-            img.thumbnail((size, size))
-            out = io.BytesIO()
-            img.convert("RGB").save(out, "JPEG", quality=75)
-            return out.getvalue()
-    except Exception as exc:
-        raise ReportError(f"'{relative}' can't be shown: {exc}") from exc

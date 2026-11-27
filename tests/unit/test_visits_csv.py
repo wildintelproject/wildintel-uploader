@@ -326,11 +326,11 @@ def test_what_is_odd_goes_to_the_rows_that_make_it_odd_and_what_is_about_no_row_
 
 
 def test_the_report_of_an_import_tells_what_is_odd_in_the_rows_it_is_about():
-    from wildintel_uploader.modules.reports.infrastructure import report_service
+    from wildintel_uploader.entrypoints.wiring import build_reports
     result = {"rows": [{"row": 2, "site": "WICP_0001", "session": "R0002", "date": "2026-10-14", "time": "11:40", "result": "ok", "label": "", "message": "", "warnings": ["R0002 WICP_0001: Revision with 0 photos."]},
                        {"row": 3, "site": "WICP_0002", "session": "R0002", "date": "2026-10-14", "time": "13:15", "result": "ok", "label": "", "message": ""}],
               "problems": [], "warnings": ["R0002 WICP_0001: Revision with 0 photos.", "from the history"], "loose_warnings": ["from the history"], "notes": [], "new_sites": [], "create": {}}
-    report = report_service.visits_import_report("WICP", result, 2)
+    report = build_reports().visits_import_report("WICP", result, 2)
     checks = [(e["identifier"], e["check"], e["status"]) for e in report["entries"]]
     assert ("Row 2 · WICP_0001 · R0002 · 2026-10-14 11:40", "Things to check", "failed") in checks
     assert ("(import)", "Things to check", "failed") in checks and len([c for c in checks if c[1] == "Things to check"]) == 2   # the one of the row is not said twice

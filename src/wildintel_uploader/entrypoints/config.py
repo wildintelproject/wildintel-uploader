@@ -147,7 +147,7 @@ def collections_dir(settings: Settings | None = None) -> Path:
 
 
 def reports_dir(settings: Settings | None = None) -> Path:
-    """Where the reports of the validations, postvalidations and preprocessings are kept (see services.report_service)."""
+    """Where the reports of the validations, postvalidations and preprocessings are kept (see modules.reports)."""
     settings = settings or load_settings()
     return folders.reports_dir(_data(settings), data_dir(settings))
 

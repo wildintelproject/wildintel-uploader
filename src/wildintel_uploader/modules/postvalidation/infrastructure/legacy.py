@@ -1,5 +1,5 @@
 """The ports of the postvalidation over the code of before: the record of a camera (the catalog, through its contract), how a camera is told
-(VALIDATION, as config reads it), the reports (report_service)."""
+(VALIDATION, as config reads it), the reports (through their contract)."""
 from __future__ import annotations
 
 import logging

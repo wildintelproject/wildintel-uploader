@@ -56,7 +56,7 @@ from wildintel_uploader.modules.prevalidation.infrastructure import validators a
 from wildintel_uploader.modules.prevalidation.infrastructure.legacy import PreprocessedImages, SavedValidationReports, ValidationInUse
 from wildintel_uploader.modules.reports.application.use_cases import ReportsUseCases
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
-from wildintel_uploader.modules.reports.infrastructure.report_files import ReportFiles
+from wildintel_uploader.modules.reports.infrastructure.report_files import ImagesOnDisk, ReportFiles
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.sources.application.use_cases import SourcesUseCases
 from wildintel_uploader.modules.sources.domain.ports import SourcesService
@@ -94,9 +94,10 @@ def catalog_of(collections_dir: Path) -> CatalogService:
     return build_catalog(collections_dir, build_settings())
 
 
-def build_reports() -> ReportsService:
-    """The reports, as files in the reports folder — what the other modules keep the reports of what they did through."""
-    return ReportsUseCases(ReportFiles())
+def build_reports(reports_dir: Path | None = None) -> ReportsService:
+    """The reports, as files in the reports folder — the settings' by default —, the failed images dated as modules.fileinfo reads them: what
+    the other modules keep the reports of what they did through."""
+    return ReportsUseCases(ReportFiles(lambda: reports_dir or config.reports_dir()), ImagesOnDisk(), file_info())
 
 
 def build_settings(store: SettingsStore | None = None, *, activity_log: ActivityLog | None = None, machine: Machine | None = None,

@@ -1,4 +1,4 @@
-"""The reports of the validations, postvalidations and preprocessings — built, kept, listed, downloaded."""
+"""The reports of the validations, postvalidations and preprocessings (modules.reports) — built, kept, listed, downloaded."""
 import csv
 import io
 from pathlib import Path
@@ -11,7 +11,9 @@ from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
 from tests.support import checks as old_checks
-from wildintel_uploader.modules.reports.infrastructure import report_service as rs
+from wildintel_uploader.entrypoints.wiring import build_reports
+from wildintel_uploader.modules.reports.domain import report as rules
+from wildintel_uploader.modules.reports.domain.ports import ReportMissing
 
 
 def _jpeg(path: Path, taken: str | None) -> None:
@@ -47,7 +49,7 @@ def _entry(report: dict, identifier: str, check: str) -> dict:
 def test_a_validation_report_says_which_image_failed_which_check(source: Path):
     found = old_checks.validate_images(source, None, detail=True)
 
-    report = rs.validation_report(found, source)
+    report = build_reports().validation_report(found, source)
 
     assert report["kind"] == "validation" and report["checked"] == 4
     assert _entry(report, "IMG_0004.JPG", "corrupted")["status"] == "failed"
@@ -62,7 +64,7 @@ def test_a_validation_report_says_which_image_failed_which_check(source: Path):
 def test_only_the_checks_that_ran_are_in_the_report(source: Path):
     found = old_checks.validate_images(source, frozenset({"corrupted"}), detail=True)
 
-    report = rs.validation_report(found, source, ["corrupted"])
+    report = build_reports().validation_report(found, source, ["corrupted"])
 
     assert list(report["checks"]) == ["corrupted"]
     assert report["parameters"] == {"checks": ["corrupted"]}
@@ -73,10 +75,10 @@ def test_a_postvalidation_report_has_the_deployment_checks_and_the_images_out_of
                                   start_date="2024-09-04T10:00:00+02:00", end_date="2024-09-05T10:00:00+02:00", camera_model="X")
     result = old_checks.validate_deployment_consistency(source, deployment, None, collection_name="R0003", expected_location_id="DONA_01")
 
-    report = rs.postvalidation_report(result, "R0003-DONA_01", source)
+    report = build_reports().postvalidation_report(result, "R0003-DONA_01", source)
 
     assert report["kind"] == "postvalidation" and report["deployment_id"] == "R0003-DONA_01"
-    assert _entry(report, rs.DEPLOYMENT, "deployment_id")["status"] == "ok"
+    assert _entry(report, rules.DEPLOYMENT, "deployment_id")["status"] == "ok"
     assert report["checks"]["time_range"]["scope"] == "images"
     assert report["checks"]["time_range"]["ok"] + report["checks"]["time_range"]["failed"] == 4
 
@@ -85,7 +87,7 @@ def test_a_preprocessing_report_lists_what_was_done_and_what_was_skipped(source:
     records = [{"original": "IMG_0001.JPG", "name": "R0003-DONA_01__20240904_1.JPEG", "date": "2024-09-04T08:00:00+00:00", "date_source": "exif", "resized": True}]
     skipped = [{"name": "IMG_0004.JPG", "detail": "cannot identify image file"}]
 
-    report = rs.preprocessing_report(records, skipped, "R0003-DONA_01", source, tmp_path / "out", {"resize": True})
+    report = build_reports().preprocessing_report(records, skipped, "R0003-DONA_01", source, tmp_path / "out", {"resize": True})
 
     done = _entry(report, "IMG_0001.JPG", "preprocessing")
     assert done["status"] == "ok" and "→ R0003-DONA_01__20240904_1.JPEG" in done["message"] and "resized" in done["message"]
@@ -102,55 +104,55 @@ def test_a_preprocessing_report_says_the_size_of_each_image_before_and_after_it_
          "width": 1920, "height": 1080, "bytes": 900_000},
     ]
 
-    report = rs.preprocessing_report(records, [], "R0003-DONA_01", source, tmp_path / "out", {"resize": True, "resize_width": 2400})
+    report = build_reports().preprocessing_report(records, [], "R0003-DONA_01", source, tmp_path / "out", {"resize": True, "resize_width": 2400})
 
     assert _entry(report, "IMG_0001.JPG", "preprocessing")["message"].endswith("; resized 6000×4000, 8.7 MB → 2400×1600, 1.4 MB")
     assert _entry(report, "IMG_0002.JPG", "preprocessing")["message"].endswith("; not resized: 1920 px wide, no wider than 2400")
 
 
 def test_a_report_is_kept_read_listed_and_deleted(source: Path, reports: Path):
-    report = rs.validation_report(old_checks.validate_images(source, None, detail=True), source)
+    report = build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source)
 
-    report_id = rs.save(report)
+    report_id = build_reports().save(report)
 
     assert report_id.endswith("_validation_R0003-DONA_01") and (reports / f"{report_id}.json").is_file()
-    assert rs.read(report_id)["entries"] == report["entries"]
-    listed = rs.list_reports()
+    assert build_reports().read(report_id)["entries"] == report["entries"]
+    listed = build_reports().list()
     assert [r["id"] for r in listed] == [report_id] and "entries" not in listed[0]
-    rs.delete(report_id)
-    assert rs.list_reports() == []
-    with pytest.raises(rs.ReportError, match="no report"):
-        rs.read(report_id)
+    build_reports().delete(report_id)
+    assert build_reports().list() == []
+    with pytest.raises(ReportMissing, match="no report"):
+        build_reports().read(report_id)
 
 
 def test_two_reports_in_the_same_second_do_not_overwrite_each_other(source: Path, reports: Path):
-    report = rs.validation_report(old_checks.validate_images(source, None, detail=True), source)
-    assert rs.save(dict(report)) != rs.save(dict(report))
+    report = build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source)
+    assert build_reports().save(dict(report)) != build_reports().save(dict(report))
 
 
 def test_only_a_reports_id_is_taken_for_a_path(reports: Path):
     for bad in ("../settings", "20240101-000000_validation_x/../../y", "anything"):
-        with pytest.raises(rs.ReportError, match="isn't a report"):
-            rs.read(bad)
+        with pytest.raises(ReportMissing, match="isn't a report"):
+            build_reports().read(bad)
 
 
 def test_the_csv_has_a_row_per_entry(source: Path):
-    report = rs.validation_report(old_checks.validate_images(source, frozenset({"corrupted"}), detail=True), source, ["corrupted"])
+    report = build_reports().validation_report(old_checks.validate_images(source, frozenset({"corrupted"}), detail=True), source, ["corrupted"])
 
-    rows = list(csv.DictReader(io.StringIO(rs.to_csv(report))))
+    rows = list(csv.DictReader(io.StringIO(rules.to_csv(report))))
 
     assert len(rows) == 4 and set(rows[0]) == {"identifier", "check", "status", "message"}
     assert [r["identifier"] for r in rows if r["status"] == "failed"] == ["IMG_0004.JPG"]
 
 
 def test_reports_older_than_some_days_are_deleted(source: Path, reports: Path):
-    old = rs.validation_report(old_checks.validate_images(source, None, detail=True), source)
+    old = build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source)
     old["created_at"] = "2020-01-01T00:00:00+00:00"
-    old_id = rs.save(old)
-    new_id = rs.save(rs.validation_report(old_checks.validate_images(source, None, detail=True), source))
+    old_id = build_reports().save(old)
+    new_id = build_reports().save(build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source))
 
-    assert rs.delete_older_than(30) == 1
-    assert [r["id"] for r in rs.list_reports()] == [new_id] and old_id not in [r["id"] for r in rs.list_reports()]
+    assert build_reports().delete_older_than(30) == 1
+    assert [r["id"] for r in build_reports().list()] == [new_id] and old_id not in [r["id"] for r in build_reports().list()]
 
 
 # ── the API ──────────────────────────────────────────────────────────────────
@@ -188,13 +190,13 @@ def test_postvalidating_answers_with_the_id_of_its_report(source: Path, reports:
     answer = _client().post("/api/deployment-import/validate-deployment", json=body).json()
 
     assert answer["report_id"].endswith("_postvalidation_R0003-DONA_01")
-    assert rs.read(answer["report_id"])["kind"] == "postvalidation"
+    assert build_reports().read(answer["report_id"])["kind"] == "postvalidation"
 
 
 # ── what the dashboard shows of each failure ─────────────────────────────────
 
 def test_a_failed_image_has_a_short_tag_and_its_capture_date(source: Path):
-    report = rs.validation_report(old_checks.validate_images(source, None, detail=True), source)
+    report = build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source)
 
     out_of_order = _entry(report, "IMG_0002.JPG", "sequence")
     assert out_of_order["tag"] == "Out of order" and out_of_order["taken"] == "2024-09-04T09:00:00"
@@ -205,7 +207,7 @@ def test_a_failed_image_has_a_short_tag_and_its_capture_date(source: Path):
 
 def test_the_totals_count_the_images_with_issues(source: Path):
     checks = frozenset({"corrupted", "sequence", "duplicates", "structure"})
-    report = rs.validation_report(old_checks.validate_images(source, checks, detail=True), source, checks)
+    report = build_reports().validation_report(old_checks.validate_images(source, checks, detail=True), source, checks)
 
     # IMG_0002 is out of order and IMG_0004 is corrupted; a check of the whole folder has no image to count.
     assert report["totals"]["images_with_issues"] == 2
@@ -213,16 +215,16 @@ def test_the_totals_count_the_images_with_issues(source: Path):
 
 def test_the_images_of_a_report_are_served_as_thumbnails_and_only_those(source: Path, reports: Path):
     (source / "other.txt").write_text("secret")
-    report_id = rs.save(rs.validation_report(old_checks.validate_images(source, None, detail=True), source))
+    report_id = build_reports().save(build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source))
 
-    jpeg = rs.image_jpeg(report_id, "IMG_0001.JPG")
+    jpeg = build_reports().image(report_id, "IMG_0001.JPG")
 
     assert jpeg[:2] == b"\xff\xd8"  # a JPEG
     for bad in ("other.txt", "../R0003-DONA_01/IMG_0001.JPG", "/etc/passwd", "IMG_9999.JPG"):
-        with pytest.raises(rs.ReportError, match="doesn't have the image"):
-            rs.image_jpeg(report_id, bad)
-    with pytest.raises(rs.ReportError, match="can't be shown"):  # listed, but it isn't an image
-        rs.image_jpeg(report_id, "IMG_0004.JPG")
+        with pytest.raises(ReportMissing, match="doesn't have the image"):
+            build_reports().image(report_id, bad)
+    with pytest.raises(ReportMissing, match="can't be shown"):  # listed, but it isn't an image
+        build_reports().image(report_id, "IMG_0004.JPG")
 
 
 def test_the_api_serves_a_reports_image(source: Path, reports: Path):
@@ -234,3 +236,59 @@ def test_the_api_serves_a_reports_image(source: Path, reports: Path):
     assert client.get(f"/api/reports/{report_id}/image", params={"path": "IMG_0001.JPG", "size": "large"}).status_code == 200
     assert client.get(f"/api/reports/{report_id}/image", params={"path": "IMG_0004.JPG"}).status_code == 404
     assert client.get(f"/api/reports/{report_id}/image", params={"path": "../x.jpg"}).status_code == 404
+
+
+# ── the use cases, over ports in memory: no disk ─────────────────────────────
+
+def test_the_use_cases_build_date_keep_and_refuse_reports_over_any_ports():
+    from datetime import datetime, timezone
+
+    from wildintel_uploader.modules.reports.application.use_cases import ReportsUseCases
+
+    class Kept:
+        def __init__(self):
+            self.reports = {}
+
+        def keep(self, report, kind, name):
+            report_id = f"20260101-000000_{kind}_{name}"
+            self.reports[report_id] = {**report, "id": report_id}
+            return report_id
+
+        def read(self, report_id):
+            if report_id not in self.reports:
+                raise ReportMissing(f"There is no report '{report_id}'.")
+            return self.reports[report_id]
+
+        def all(self):
+            return list(self.reports.values())
+
+        def delete(self, report_id):
+            del self.reports[report_id]
+
+    class Images:
+        def images(self, folder):
+            return ["a.jpg", "b.jpg"]
+
+        def small(self, folder, relative, size):
+            return b"jpeg"
+
+    class Dates:
+        def dates(self, paths):
+            return {p: datetime(2026, 1, 1, 9) for p in paths}
+
+    kept = Kept()
+    clock = [datetime(2026, 1, 2, tzinfo=timezone.utc)]
+    reports = ReportsUseCases(kept, Images(), Dates(), now=lambda: clock[0])
+    report_id = reports.save_validation({"corrupted": [{"path": "b.jpg", "error": "broken"}]}, Path("/card"), ["corrupted"])
+
+    report = reports.read(report_id)
+    assert report_id == "20260101-000000_validation_card" and report["created_at"] == "2026-01-02T00:00:00+00:00"
+    assert [(e["identifier"], e["status"], e.get("taken")) for e in report["entries"]] == [("a.jpg", "ok", None), ("b.jpg", "failed", "2026-01-01T09:00:00")]
+    assert reports.image(report_id, "a.jpg") == b"jpeg"
+    with pytest.raises(ReportMissing, match="doesn't have the image"):
+        reports.image(report_id, "../secret")
+    with pytest.raises(ReportMissing, match="isn't a report"):
+        reports.read("../settings")
+    assert reports.delete_older_than(30) == 0
+    clock[0] = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    assert reports.delete_older_than(30) == 1 and kept.reports == {}

@@ -359,7 +359,7 @@ def test_the_files_exiftool_leaves_when_it_is_interrupted_are_removed(tmp_path: 
 
 def test_the_import_leaves_a_report_of_what_was_done_to_each_image(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from wildintel_uploader.entrypoints import config
-    from wildintel_uploader.modules.reports.infrastructure import report_service
+    from wildintel_uploader.entrypoints.wiring import build_reports
 
     reports = tmp_path / "reports"
     monkeypatch.setattr(config, "reports_dir", lambda settings=None: reports)
@@ -371,7 +371,7 @@ def test_the_import_leaves_a_report_of_what_was_done_to_each_image(tmp_path: Pat
 
     done = events[-1]
     assert done["type"] == "done" and done["skipped"] == 1
-    report = report_service.read(done["report_id"])
+    report = build_reports().read(done["report_id"])
     assert report["kind"] == "preprocessing" and report["deployment_id"] == "R0003-DONA_01"
     by_image = {e["identifier"]: e for e in report["entries"]}
     assert by_image["IMG_0001.JPG"]["status"] == "ok" and "→ R0003-DONA_01__" in by_image["IMG_0001.JPG"]["message"]
