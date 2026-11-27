@@ -93,7 +93,7 @@ def _in_order(lines: list[dict]) -> list[dict]:
 def _from_the_visits(root: Path, research_project_id: str, recorded: set[tuple]) -> list[dict]:
     """The lines the visits kept make, oldest first, of the locations, the cameras and the SD cards the research project keeps; `recorded` are those that have lines written as
     they happened (no last line brings them to today)."""
-    from wildintel_uploader.entrypoints import wiring   # noqa: PLC0415 — the visits, through their contract
+    from wildintel_uploader.modules.catalog.infrastructure import plugs
     from wildintel_uploader.modules.catalog.infrastructure import records   # noqa: PLC0415 — it uses this module
 
     items: dict[tuple[str, str], dict] = {}          # (kind, name as it is matched) -> the record
@@ -114,7 +114,7 @@ def _from_the_visits(root: Path, research_project_id: str, recorded: set[tuple])
     status: dict[tuple[str, str], str] = {}          # (kind, name) -> the status the visits give it so far
     out: list[dict] = []
     before: list[dict] = []
-    for visit in sorted(audit.alive(wiring.build_visits(root).visits(research_project_id)), key=visit_rules._stamp):
+    for visit in sorted(audit.alive(plugs.visits_of(root).visits(research_project_id)), key=visit_rules._stamp):
         changes = visit_rules.entity_changes(visit, before)
         if "Archive" in (visit.get("actions") or []):
             changes.append({"kind": "locations", "name": str(visit["location_id"]), "status": "archived"})

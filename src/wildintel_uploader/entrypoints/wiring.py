@@ -87,6 +87,11 @@ from wildintel_uploader.shared import storage
 parallel.use_workers(lambda: config.workers())
 
 
+def catalog_of(collections_dir: Path) -> CatalogService:
+    """The catalog of a collections folder, with the settings of the app."""
+    return build_catalog(collections_dir, build_settings())
+
+
 def build_reports() -> ReportsService:
     """The reports, as files in the reports folder — what the other modules keep the reports of what they did through."""
     return ReportsUseCases(ReportFiles())
@@ -105,7 +110,7 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
     settings through their module. Its records are kept in `repository`, or — none given — where the settings say (see catalog_repository)."""
     store = storage.open_store(collections_dir)
     return CatalogUseCases(repository or catalog_repository(collections_dir, settings), legacy_trappers=TrappersFromTheSettings(settings),
-                           visits=StoredVisits(store, collections_dir), status_history=StoredStatusHistory(collections_dir), clock=clock or SystemClock(),
+                           visits=StoredVisits(store, lambda: build_visits(collections_dir)), status_history=StoredStatusHistory(collections_dir), clock=clock or SystemClock(),
                            legacy_fieldwork=FieldworkFromTheSettings(settings), records=RecordsOf(collections_dir))
 
 
@@ -128,13 +133,13 @@ def file_info() -> FileInfoService:
 
 def build_prevalidation(info: FileInfoService | None = None) -> PrevalidationService:
     """The prevalidation: the validators of the images over what is known of the files, the images gone through in parallel."""
-    return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS, imported=PreprocessedImages(build_deployments), settings=ValidationInUse(),
+    return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS, imported=PreprocessedImages(build_deployments), settings=ValidationInUse(config),
                                  reports=SavedValidationReports(build_reports()))
 
 
 def build_postvalidation(info: FileInfoService | None = None) -> PostvalidationService:
     """The postvalidation: the validators of a deployment over its images and what is known of them."""
-    return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(lambda: build_catalog(catalog_collections_dir(), build_settings())), levels=LevelsInUse(),
+    return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(lambda: build_catalog(catalog_collections_dir(), build_settings())), levels=LevelsInUse(config),
                                   reports=SavedPostvalidationReports(build_reports()),
                                   revisions=RevisionsOfTheDeployments(build_deployments))
 
@@ -158,15 +163,15 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     settings = settings or build_settings()
     return VisitsUseCases(KeptVisits(root), CatalogOfTheVisits(lambda: build_catalog(root, settings).records()), deployments=DeploymentsOfTheVisits(root), file=CsvVisitFile(),
                           sources=build_sources(settings), uploads=UploadsOfTheUploaders(build_uploaders(root)), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
-                          settings=FieldlogInUse(), clock=AuditClock())
+                          settings=FieldlogInUse(config), clock=AuditClock())
 
 
 def build_deployments(settings: SettingsService | None = None) -> DeploymentsService:
     """The deployments: the cards, the folders, the revisions and the photos as the code of before keeps them, with the visits and the
     preprocessing through their contracts."""
     settings = settings or build_settings()
-    return DeploymentsUseCases(MemoryCards(), DeploymentFolders(), KeptRevisions(), DeploymentPhotos(), visits=build_visits(settings=settings),
-                               preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=KeptStatistics(),
+    return DeploymentsUseCases(MemoryCards(), DeploymentFolders(config, catalog_of), KeptRevisions(), DeploymentPhotos(), visits=build_visits(settings=settings),
+                               preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=KeptStatistics(config),
                                sessions=StoredSessions(), layout=LayoutOfTheCollections())
 
 
@@ -177,13 +182,50 @@ def build_timefix() -> TimeFixService:
 
 def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — as the code of before keeps it."""
-    return UploadersUseCases(TrapperClient(), CollectionsFolder(), SavedUploadReports(build_reports()),
-                             FolderUploads(collections_dir or catalog_collections_dir()), deployments=build_deployments)
+    return UploadersUseCases(TrapperClient(config), CollectionsFolder(config, catalog_of), SavedUploadReports(build_reports()),
+                             FolderUploads(collections_dir or catalog_collections_dir(), config), deployments=build_deployments)
 
 
 def build_backup() -> BackupService:
     """The backups, as zip files, over the code of before."""
     return BackupUseCases(ZipBackups())
+
+
+# ── the plugs: what the adapters that are still functions of the code of before need, plugged in (see shared.plugs) ──
+
+PLUGGED = {
+    "config": config,     # the module itself: what it is asked for is looked up when asked, so a test may patch it
+    "catalog_of": lambda root: catalog_of(root),
+    "catalog_repository_of": lambda root: catalog_repository(root, build_settings()),
+    "visits_of": lambda root=None: build_visits(root),
+    "file_info": lambda: file_info(),
+    "deployments": lambda: build_deployments(),
+    "reports": lambda: build_reports(),
+    "prevalidation": lambda: build_prevalidation(),
+    "postvalidation": lambda: build_postvalidation(),
+}
+
+
+def plug_the_modules() -> None:
+    """Plugs into each plug of each module what it says it is (by its name, from PLUGGED)."""
+    import importlib
+    import pkgutil
+
+    from wildintel_uploader import modules
+    from wildintel_uploader.shared.plugs import Plug
+    for found in pkgutil.iter_modules(modules.__path__):
+        try:
+            plugs = importlib.import_module(f"wildintel_uploader.modules.{found.name}.infrastructure.plugs")
+        except ModuleNotFoundError as exc:
+            if exc.name != f"wildintel_uploader.modules.{found.name}.infrastructure.plugs":
+                raise
+            continue
+        for name, plug in vars(plugs).items():
+            if isinstance(plug, Plug):
+                plug.plug(PLUGGED[name])
+
+
+plug_the_modules()
 
 
 # ── the providers of the container ──

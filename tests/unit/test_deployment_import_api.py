@@ -207,7 +207,7 @@ def test_import_deployment_skips_registration_for_an_existing_deployment(tmp_pat
     }
 
     with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=fake_client), \
-         patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir):
+         patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/import", json=payload)
 
     assert response.status_code == 200
@@ -237,7 +237,7 @@ def test_import_deployment_streams_progress_then_registers(tmp_path: Path):
 
     with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=fake_client), \
          patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir), \
-         patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir):
+         patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/import", json=payload)
 
     assert response.status_code == 200
@@ -265,7 +265,7 @@ def test_import_deployment_writes_the_collection_and_deployment_metadata_beside_
     }
 
     with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=MagicMock()), \
-         patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir):
+         patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir):
         assert _client().post("/api/deployment-import/import", json=payload).status_code == 200
 
     collection = data_dir / "DONA" / "R0003"
@@ -286,7 +286,7 @@ def test_import_deployment_needs_an_id_starting_with_its_collection(tmp_path: Pa
         "register_deployment": False,
     }
 
-    with patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=tmp_path / "data"):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path / "data"):
         response = _client().post("/api/deployment-import/import", json=payload)
 
     assert response.status_code == 400
@@ -295,7 +295,7 @@ def test_import_deployment_needs_an_id_starting_with_its_collection(tmp_path: Pa
 
 def test_collection_path_is_research_project_then_collection_inside_the_collections_folder(tmp_path: Path):
     data_dir = tmp_path / "data"
-    with patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/collection-path", json={"research_project_id": "DONA", "deployment_id": "R0003-DONA_01"})
 
     assert response.status_code == 200
@@ -303,7 +303,7 @@ def test_collection_path_is_research_project_then_collection_inside_the_collecti
 
 
 def test_collection_path_rejects_a_research_project_id_that_is_not_a_folder_name(tmp_path: Path):
-    with patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         for bad in ("../x", "a/b", "..", "with space"):
             response = _client().post("/api/deployment-import/collection-path", json={"research_project_id": bad, "deployment_id": "R0003-DONA_01"})
             assert response.status_code == 400, bad
@@ -315,7 +315,7 @@ PROJECT = {"name": "Doñana", "acronym": "DONA", "event_interval": 0}
 
 
 def _in(data_dir: Path):
-    return patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir)
+    return patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir)
 
 
 def test_the_first_run_has_no_research_projects(tmp_path: Path):
@@ -816,7 +816,7 @@ def test_existing_deployments_says_where_each_one_is_kept(tmp_path: Path):
     kept.mkdir(parents=True)
     (kept / "IMG.JPEG").write_bytes(b"x")
 
-    with patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         response = _client().post("/api/deployment-import/existing-deployments", json={
             "research_project_id": "DONA", "deployment_ids": ["R0003-DONA_01", "R0003-DONA_02"],
         })

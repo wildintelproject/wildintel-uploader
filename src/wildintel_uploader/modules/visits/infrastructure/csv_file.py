@@ -12,7 +12,7 @@ import unicodedata
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.visits.infrastructure.plugs import config
 from wildintel_uploader.modules.visits.domain import rules as visit_rules, wall_clock as visit_time
 from wildintel_uploader.modules.visits.infrastructure.records import NewLocationRecord as LocationRecord, VisitRecord
 

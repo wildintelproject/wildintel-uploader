@@ -28,7 +28,7 @@ def _client() -> TestClient:
 
 
 def _in(collections: Path):
-    return patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=collections)
+    return patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=collections)
 
 
 def _kept(tmp_path: Path, *, trapper_pk=2) -> Path:
@@ -164,7 +164,7 @@ def test_names_that_are_not_collections_or_deployments_are_a_422(tmp_path: Path,
 
 
 def test_missing_trapper_credentials_are_a_400_naming_what_is_missing(tmp_path: Path):
-    with _in(tmp_path), patch.object(trapper_service.config, "load_settings", return_value=config.Settings()):
+    with _in(tmp_path), patch.object(config, "load_settings", return_value=config.Settings()):
         response = _client().post("/api/upload/deployment", json={**PAYLOAD, "url": None, "username": None, "password": None})
 
     assert response.status_code == 400
@@ -200,7 +200,7 @@ def _post(tmp_path: Path, payload: dict, fake: FakeTrapper | None = None, settin
     stack = [_in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path),
              patch.object(trapper_service, "_client", return_value=fake or FakeTrapper())]
     if settings is not None:
-        stack.append(patch.object(trapper_service.config, "load_settings", return_value=settings))
+        stack.append(patch.object(config, "load_settings", return_value=settings))
     from contextlib import ExitStack
 
     with ExitStack() as exits:
@@ -248,7 +248,7 @@ def test_generating_the_files_needs_no_trapper_account(tmp_path: Path, fake_uplo
 def test_the_other_modes_do_need_the_account(tmp_path: Path):
     _kept(tmp_path)
     for mode in ("upload", "dry_run"):
-        with _in(tmp_path / "collections"), patch.object(trapper_service.config, "load_settings", return_value=config.Settings()):
+        with _in(tmp_path / "collections"), patch.object(config, "load_settings", return_value=config.Settings()):
             response = _client().post("/api/upload/deployment", json={"research_project_id": "DONA", "collection": "R0003", "deployment_id": DEPLOYMENT_ID, "mode": mode})
 
         assert response.status_code == 400, mode

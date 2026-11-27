@@ -9,6 +9,7 @@ from wildintel_uploader.modules.prevalidation.domain.models import Prevalidation
 from wildintel_uploader.modules.prevalidation.domain.ports import ImportedImages, PrevalidationReports, PrevalidationSettings
 from wildintel_uploader.modules.prevalidation.domain.settings import ValidationSettings
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
+from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,13 @@ class PreprocessedImages(ImportedImages):
 
 
 class ValidationInUse(PrevalidationSettings):
+    def __init__(self, settings: StoredSettings) -> None:
+        self._settings = settings   # the settings as settings.toml keeps them
+
     """VALIDATION as the code of before reads the settings (config.load_settings)."""
 
     def current(self) -> ValidationSettings:
-        from wildintel_uploader.entrypoints import config
-        kept = config.load_settings().VALIDATION
+        kept = self._settings.load_settings().VALIDATION
         return ValidationSettings(**{**kept.model_dump(), "camera_levels": tuple(tuple(level) for level in kept.camera_levels),
                                      "exif_fields": tuple(kept.exif_fields)})
 

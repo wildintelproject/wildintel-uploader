@@ -41,8 +41,8 @@ from wildintel_uploader.modules.deployments.infrastructure import collections as
 
 def _files():
     """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.file_info()
+    from wildintel_uploader.modules.deployments.infrastructure import plugs
+    return plugs.file_info()
 
 logger = logging.getLogger(__name__)
 

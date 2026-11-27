@@ -19,7 +19,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.deployments.infrastructure.plugs import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.domain import naming as _naming
 from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName, DeploymentsFailed
@@ -30,8 +30,8 @@ from wildintel_uploader.modules.fileinfo.domain.models import common_value
 
 def _files():
     """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.file_info()
+    from wildintel_uploader.modules.deployments.infrastructure import plugs
+    return plugs.file_info()
 
 logger = logging.getLogger(__name__)
 

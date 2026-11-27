@@ -15,6 +15,8 @@ from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.uploaders.infrastructure import failures
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
 from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, UploadReports
+from wildintel_uploader.modules.settings.domain.ports import StoredSettings
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -75,6 +77,9 @@ def _told(events: Iterator[dict], what: str) -> Iterator[dict]:
 
 
 class TrapperClient(Trapper):
+    def __init__(self, settings: StoredSettings) -> None:
+        self._settings = settings   # the settings as settings.toml keeps them
+
     def credentials(self, account: Account) -> Credentials:
         try:
             return _services()[0].resolve_credentials(account.url, account.username, account.password)
@@ -102,7 +107,7 @@ class TrapperClient(Trapper):
 
     def upload(self, credentials: Credentials | None, record: dict, collection_dir: Path, deployment_id: str, mode: str, classification_project_pk: int | None,
                delete_files: bool) -> Iterator[dict]:
-        from wildintel_uploader.entrypoints import config
+        config = self._settings
         return _services()[1].upload_stream(credentials, record, collection_dir, deployment_id, config.packages_dir() / record["acronym"], mode=mode,
                                             max_zip_bytes=config.max_zip_mb() * 1024 * 1024, classification_project_pk=classification_project_pk,
                                             delete_after_upload=delete_files)
@@ -120,8 +125,7 @@ class TrapperClient(Trapper):
 
     def sync(self, credentials: Credentials, project: dict, classification_project_pk: int, collections: list[str], deployments: list[str] | None,
              download_images: bool) -> Iterator[dict]:
-        from wildintel_uploader.entrypoints import config
-        events = _services()[2].sync_stream(credentials, config.collections_dir(), project, classification_project_pk, collections, deployments, download_images)
+        events = _services()[2].sync_stream(credentials, self._settings.collections_dir(), project, classification_project_pk, collections, deployments, download_images)
         return _told(events, "Syncing the local collections")
 
     def describe(self, exc: Exception) -> str:
@@ -131,15 +135,15 @@ class TrapperClient(Trapper):
 
 
 class CollectionsFolder(KeptCollections):
-    def _records(self):
-        """The catalog of the collections folder as records — through its contract —, from where the app is put together."""
-        from wildintel_uploader.entrypoints import wiring
-        return wiring.build_catalog(self._root(), wiring.build_settings()).records()
+    def __init__(self, settings: StoredSettings, catalog_of: Callable[[Path], CatalogService]) -> None:
+        self._settings, self._catalog_of = settings, catalog_of   # the settings; the catalog of a collections folder, through its contract
 
-    @staticmethod
-    def _root() -> Path:
-        from wildintel_uploader.entrypoints import config
-        return config.collections_dir()
+    def _records(self):
+        """The catalog of the collections folder as records — through its contract."""
+        return self._catalog_of(self._root()).records()
+
+    def _root(self) -> Path:
+        return self._settings.collections_dir()
 
     def _failed(self, call: Callable[[], T]) -> T:
         try:

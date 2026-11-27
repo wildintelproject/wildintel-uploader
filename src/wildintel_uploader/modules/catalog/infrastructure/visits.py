@@ -12,19 +12,17 @@ from wildintel_uploader.modules.catalog.domain.ports import StatusHistory, Visit
 from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record, location_to_record
 from wildintel_uploader.modules.visits.domain import refusals
 from wildintel_uploader.shared.storage import ProjectStore
+from collections.abc import Callable
+
+from wildintel_uploader.modules.visits.domain.ports import VisitsService
 
 
 class StoredVisits(VisitHistory):
-    def __init__(self, store: ProjectStore, collections_dir: Path) -> None:
-        self.store, self.collections_dir = store, collections_dir
+    def __init__(self, store: ProjectStore, visits: Callable[[], VisitsService]) -> None:
+        self.store, self._visits = store, visits   # the visits of the same collections folder, through their contract
 
     def has_visits(self, acronym: str) -> bool:
         return bool(self.store.read_records(acronym, "visits"))
-
-    def _visits(self):
-        """The visits of this collections folder — through their contract —, from where the app is put together."""
-        from wildintel_uploader.entrypoints import wiring
-        return wiring.build_visits(self.collections_dir)
 
     def visits_at(self, project: str, location_id: str) -> int:
         return len(self._visits().visits(project, location_id))

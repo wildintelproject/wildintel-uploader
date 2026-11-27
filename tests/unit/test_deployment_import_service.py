@@ -11,6 +11,7 @@ import pytest
 from PIL import Image
 
 from tests.support import camera_info
+from wildintel_uploader.entrypoints import config as app_config
 from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as svc
 from tests.support import checks as old_checks
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
@@ -618,7 +619,7 @@ def test_copy_folder_preserves_structure_without_touching_the_source(tmp_path: P
 # ── collection layout ────────────────────────────────────────────────────────
 
 def test_default_collection_dir_is_research_project_then_collection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(svc.config, "collections_dir", lambda: tmp_path)
+    monkeypatch.setattr(app_config, "collections_dir", lambda: tmp_path)
     assert svc.default_collection_dir("DONA", "R0003-DONA_0007_B") == tmp_path / "DONA" / "R0003"
 
 
@@ -1140,7 +1141,7 @@ def test_the_image_checks_find_the_same_whatever_the_workers(tmp_path: Path, mon
 
     outcomes = []
     for workers in (1, 4):
-        monkeypatch.setattr(svc.config, "workers", lambda settings=None, w=workers: w)
+        monkeypatch.setattr(app_config, "workers", lambda settings=None, w=workers: w)
         outcomes.append(old_checks.validate_images(tmp_path, checks))
 
     assert outcomes[0] == outcomes[1]
@@ -1151,7 +1152,7 @@ def test_the_image_checks_find_the_same_whatever_the_workers(tmp_path: Path, mon
 # ── a deployment that is already kept ────────────────────────────────────────
 
 def test_a_deployment_with_images_in_its_folder_already_exists(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(svc.config, "collections_dir", lambda settings=None: tmp_path)
+    monkeypatch.setattr(app_config, "collections_dir", lambda settings=None: tmp_path)
     kept = tmp_path / "DONA" / "R0003" / "R0003-DONA_01"
     kept.mkdir(parents=True)
     (kept / "IMG.JPEG").write_bytes(b"x")
@@ -1163,7 +1164,7 @@ def test_a_deployment_with_images_in_its_folder_already_exists(tmp_path: Path, m
 
 
 def test_an_empty_folder_is_not_an_existing_deployment_and_nor_are_bad_ids(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(svc.config, "collections_dir", lambda settings=None: tmp_path)
+    monkeypatch.setattr(app_config, "collections_dir", lambda settings=None: tmp_path)
     (tmp_path / "DONA" / "R0003" / "R0003-DONA_01").mkdir(parents=True)  # nothing in it: importing is not refused
 
     assert svc.existing_deployment_dir("DONA", "R0003-DONA_01") is None

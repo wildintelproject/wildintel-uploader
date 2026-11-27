@@ -22,7 +22,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.deployments.infrastructure.plugs import config
 from wildintel_uploader.shared import parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
@@ -85,9 +85,8 @@ def _checks(settings_section, names: frozenset[str] | tuple[str, ...]) -> frozen
 
 def _contracts():
     """The prevalidation, the postvalidation and the catalog — through their contracts —, from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    settings = wiring.build_settings()
-    return wiring.build_prevalidation(), wiring.build_postvalidation(), wiring.build_catalog(config.collections_dir(), settings)
+    from wildintel_uploader.modules.deployments.infrastructure import plugs
+    return plugs.prevalidation(), plugs.postvalidation(), plugs.catalog_of(config.collections_dir())
 
 
 def _camera_record(catalog, research_project_id: str, label: str | None) -> dict | None:

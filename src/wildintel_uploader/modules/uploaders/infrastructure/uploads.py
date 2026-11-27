@@ -7,6 +7,7 @@ from pathlib import Path
 
 from wildintel_uploader.modules.uploaders.domain.ports import DeploymentUploads
 from wildintel_uploader.modules.uploaders.infrastructure import failures
+from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 
 def _read_json(path: Path):
@@ -18,8 +19,8 @@ def _read_json(path: Path):
 
 def _layout():
     """How a collection holds its deployments — the contract of the deployments —, from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.build_deployments().layout()
+    from wildintel_uploader.modules.uploaders.infrastructure import plugs
+    return plugs.deployments().layout()
 
 
 # Where a deployment can be sent, and the settings that say whether each is used: only the uploaders in use have an upload planned.
@@ -29,8 +30,8 @@ UPLOADERS = {"trapper": lambda settings: settings.TRAPPER.enabled, "agouti": lam
 class FolderUploads(DeploymentUploads):
     """Where a deployment was uploaded, as its folder says: its upload.json, or images.json when it was synced from TRAPPER."""
 
-    def __init__(self, root: Path) -> None:
-        self.root = root
+    def __init__(self, root: Path, settings: StoredSettings) -> None:
+        self.root, self._settings = root, settings
 
     def _folder(self, project: str, deployment_id: str) -> Path:
         return self.root / project / deployment_id.split("-", 1)[0] / deployment_id
@@ -51,7 +52,7 @@ class FolderUploads(DeploymentUploads):
 
     def uploads_of(self, project: str, deployment_id: str) -> list[dict]:
         """One upload for each platform it was sent to (only "trapper" for now) — "uploaded" with the day and what it did, or "synced"."""
-        from wildintel_uploader.entrypoints import config
+        config = self._settings
         folder = self._folder(project, deployment_id)
         upload = self._upload(folder)
         # the page of the deployment in Trapper — or of its revision —, as it was when it was sent; an upload made before that was kept goes to the site
@@ -67,7 +68,7 @@ class FolderUploads(DeploymentUploads):
 
     def upload_states(self, project: str, imported: str | None, deployment_id: str) -> list[dict]:
         """The upload to each uploader in use: "planned" from the start, then "done" or "failed" — {"destination", "state", "kind", "uploaded_at", "note"}."""
-        from wildintel_uploader.entrypoints import config
+        config = self._settings
         settings = config.load_settings()
         done = {u["destination"]: u for u in (self.uploads_of(project, imported) if imported else [])}
         failed = {f["destination"]: f for f in failures.list_upload_failures(self.root, project) if f.get("deployment_id") == deployment_id}

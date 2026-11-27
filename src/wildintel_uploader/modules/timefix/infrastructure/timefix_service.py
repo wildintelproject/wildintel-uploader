@@ -30,7 +30,7 @@ import logging
 import subprocess
 from pathlib import Path
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.timefix.infrastructure.plugs import config
 from wildintel_uploader.modules.visits.domain.models import VisitsError
 from wildintel_uploader.modules.visits.domain.rules import closes_collection
 from wildintel_uploader.modules.deployments.domain.naming import natural_key
@@ -39,8 +39,8 @@ from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 
 def _files():
     """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.file_info()
+    from wildintel_uploader.modules.timefix.infrastructure import plugs
+    return plugs.file_info()
 
 logger = logging.getLogger(__name__)
 
@@ -94,9 +94,9 @@ def visit_period(research_project_id: str, location_id: str, date: str, time: st
     Raises:
         TimeFixError: the visit isn't in the research project, or no later visit collected its card.
     """
-    from wildintel_uploader.entrypoints import wiring
+    from wildintel_uploader.modules.timefix.infrastructure import plugs
     try:   # the visits, through their contract
-        visits = wiring.build_visits(config.collections_dir(settings)).visits(research_project_id, location_id)
+        visits = plugs.visits_of(config.collections_dir(settings)).visits(research_project_id, location_id)
     except VisitsError as exc:
         raise TimeFixError(exc.message) from exc
     visits = sorted((v for v in visits if _when(v)), key=_when)

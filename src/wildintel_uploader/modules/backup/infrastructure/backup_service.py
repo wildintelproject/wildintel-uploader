@@ -23,20 +23,20 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.backup.infrastructure.plugs import config
 from wildintel_uploader.shared import storage
 
 
 def _records(root: Path):
     """The catalog of this collections folder as records — through its contract —, from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.build_catalog(root, wiring.build_settings()).records()
+    from wildintel_uploader.modules.backup.infrastructure import plugs
+    return plugs.catalog_of(root).records()
 
 
 def _visits(root: Path):
     """The visits of this collections folder — through their contract —, from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.build_visits(root)
+    from wildintel_uploader.modules.backup.infrastructure import plugs
+    return plugs.visits_of(root)
 
 FORMAT = "wildintel-uploader-backup"
 VERSION = 1
@@ -50,7 +50,9 @@ HISTORY = "status_history.json"   # the history of the status of the locations, 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp", ".mp4", ".avi", ".mov", ".mkv", ".m4v"}
 _COLLECTION = re.compile(r"^R\d+$", re.IGNORECASE)
 # what a settings backup does not hold: the secrets, and the folders of this computer
-_SECRETS = config.secret_fields()   # never in a backup, and the ones here are kept when its settings are restored
+def _secrets():
+    """The secret settings: never in a backup, and the ones here are kept when its settings are restored."""
+    return config.secret_fields()
 
 
 class BackupError(ValueError):
@@ -102,7 +104,7 @@ def settings_snapshot(settings: config.Settings | None = None, root: Path | None
     """The global settings as they go in a backup: without passwords or secrets, and without the folders of this computer — nor the cameras and the SD cards, which
     belong to their research projects."""
     data = (settings or config.load_settings()).model_dump(mode="json")
-    for section, field in _SECRETS:
+    for section, field in _secrets():
         data[section][field] = None
     data.pop("DATA", None)
     data["FIELDWORK"]["cameras"] = []
@@ -427,7 +429,7 @@ def restore_backup(
             for section, values in backed.items():
                 if section in ("DATA", "FIELDWORK") or section not in merged or not isinstance(values, dict):
                     continue
-                kept_secrets = {f: merged[section].get(f) for s, f in _SECRETS if s == section}
+                kept_secrets = {f: merged[section].get(f) for s, f in _secrets() if s == section}
                 merged[section] = {**merged[section], **values, **kept_secrets}
             if isinstance(backed.get("FIELDWORK"), dict) and backed["FIELDWORK"].get("trappers"):   # the people, kept beside the projects; the cameras and the SD cards are the projects'
                 people = [t for t in backed["FIELDWORK"]["trappers"] if isinstance(t, dict) and t.get("username") and not t.get("deleted_at")]

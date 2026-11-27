@@ -13,6 +13,8 @@ from wildintel_uploader.modules.deployments.domain.ports import (
     Cards, CollectionLayout, CollectionStatistics, Deployment, Folders, ImportSessions, Photos, Repairs, Revisions,
 )
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
+from wildintel_uploader.modules.settings.domain.ports import StoredSettings
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService
 
 T = TypeVar("T")
 
@@ -28,7 +30,7 @@ def _failed() -> Iterator[None]:
 
 
 def _root() -> Path:
-    from wildintel_uploader.entrypoints import config
+    from wildintel_uploader.modules.deployments.infrastructure.plugs import config
     return config.collections_dir()
 
 
@@ -49,6 +51,9 @@ class MemoryCards(Cards):
 
 
 class CollectionFolders(Folders):
+    def __init__(self, settings: StoredSettings, catalog_of: Callable[[Path], CatalogService]) -> None:
+        self._settings, self._catalog_of = settings, catalog_of   # the settings; the catalog of a collections folder, through its contract
+
     @staticmethod
     def _dis():
         from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
@@ -62,8 +67,7 @@ class CollectionFolders(Folders):
             return self._dis().scan_folder(folder)
 
     def read_ahead(self, folder: Path) -> None:
-        from wildintel_uploader.entrypoints import config
-        self._dis().prefetch_metadata(folder, config.load_settings().VALIDATION.exif_fields)
+        self._dis().prefetch_metadata(folder, self._settings.load_settings().VALIDATION.exif_fields)
 
     def guess(self, folder: Path) -> dict:
         with _failed():
@@ -99,10 +103,9 @@ class CollectionFolders(Folders):
         return seal_service.verify(folder)
 
     def location_time(self, project_dir: Path, location_id: str | None) -> dict:
-        from wildintel_uploader.entrypoints import wiring
         from wildintel_uploader.modules.catalog.domain.models import CatalogError
         try:   # the research project of that folder, in the catalog of its collections folder — through its contract
-            return wiring.build_catalog(project_dir.parent, wiring.build_settings()).location_time(project_dir.name, location_id)
+            return self._catalog_of(project_dir.parent).location_time(project_dir.name, location_id)
         except CatalogError as exc:
             raise DeploymentsFailed(exc.message) from exc
 
@@ -189,8 +192,11 @@ class KeptRepairs(Repairs):
 
 
 class KeptStatistics(CollectionStatistics):
+    def __init__(self, settings: StoredSettings) -> None:
+        self._settings = settings   # the settings as settings.toml keeps them
+
     def revision(self, project: str, collection: str) -> list[dict]:
-        from wildintel_uploader.entrypoints import config
+        config = self._settings
         from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
         from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         settings = config.load_settings()
@@ -204,7 +210,7 @@ class KeptStatistics(CollectionStatistics):
             raise DeploymentMissing(str(exc)) from exc
 
     def compare(self, project: str, first: str, second: str) -> dict:
-        from wildintel_uploader.entrypoints import config
+        config = self._settings
         from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         settings = config.load_settings()
         with _failed():

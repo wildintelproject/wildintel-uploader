@@ -90,3 +90,26 @@ def test_no_module_is_coupled_to_another_but_what_is_still_to_cut():
 def test_nothing_of_the_app_asks_the_code_of_before(path: Path):
     """core is only the old names of what moved to the modules, the shared kernel and the entry points — kept for what has not been told yet."""
     assert not {i for i in _imports(path) if i == "wildintel_uploader.core" or i.startswith("wildintel_uploader.core.")}
+
+
+@pytest.mark.parametrize("path", sorted(SRC.glob("modules/**/*.py")), ids=lambda p: str(p.relative_to(SRC)))
+def test_no_module_imports_the_entry_points(path: Path):
+    """What a module needs from outside comes in — given to its classes when they are made, or plugged into its plugs (shared.plugs) —:
+    the entry points, and where the app is put together, use the modules, never the other way round."""
+    assert not {i for i in _imports(path) if i.startswith("wildintel_uploader.entrypoints") or i.startswith("wildintel_uploader.web")}
+
+
+def test_every_plug_of_every_module_is_plugged_when_the_app_is_put_together():
+    import importlib
+    import pkgutil
+
+    from wildintel_uploader import modules
+    from wildintel_uploader.entrypoints import wiring
+    from wildintel_uploader.shared.plugs import Plug
+    wiring.plug_the_modules()
+    plugs = {}
+    for found in pkgutil.iter_modules(modules.__path__):
+        if (SRC / "modules" / found.name / "infrastructure" / "plugs.py").is_file():
+            module = importlib.import_module(f"wildintel_uploader.modules.{found.name}.infrastructure.plugs")
+            plugs |= {f"{found.name}.{n}": p for n, p in vars(module).items() if isinstance(p, Plug)}
+    assert plugs and [n for n, p in plugs.items() if not p.plugged] == []

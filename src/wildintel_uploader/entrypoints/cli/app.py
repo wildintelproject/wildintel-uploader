@@ -9,6 +9,7 @@ from typing import Annotated
 
 import typer
 
+from wildintel_uploader.entrypoints import wiring  # noqa: F401 — the app put together, its modules plugged (shared.plugs)
 from wildintel_uploader.shared.version import current_version
 from wildintel_uploader.entrypoints.cli.catalog import catalog_app
 from wildintel_uploader.entrypoints.cli.common import console

@@ -246,3 +246,41 @@ class RecordStorage(Protocol):
 
     def use(self, name: str) -> None:
         """From now on, the records are kept in that one."""
+
+
+class StoredSettings(Protocol):
+    """The settings as `settings.toml` keeps them, by section (`.VALIDATION`, `.TRAPPER`…), and the folders they say — what the adapters that are
+    still functions of the code of before ask for (see shared.plugs). The app plugs in entrypoints.config."""
+
+    def load_settings(self) -> Any:
+        ...
+
+    def save_settings(self, settings: Any) -> None:
+        ...
+
+    def collections_dir(self, settings: Any = None) -> Path:
+        ...
+
+    def reports_dir(self, settings: Any = None) -> Path:
+        ...
+
+    def packages_dir(self, settings: Any = None) -> Path:
+        ...
+
+    def max_zip_mb(self, settings: Any = None) -> int:
+        ...
+
+    def get_sessions_dir(self) -> Path:
+        ...
+
+    def legacy_sessions_dir(self) -> Path:
+        ...
+
+    def get_logs_dir(self) -> Path:
+        ...
+
+    def legacy_logs_dir(self) -> Path:
+        ...
+
+    def secret_fields(self) -> Any:
+        ...

@@ -16,6 +16,7 @@ from wildintel_uploader.modules.visits.domain.ports import (
 )
 from wildintel_uploader.modules.visits.infrastructure import kept_visits
 from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
+from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 
 
@@ -219,12 +220,13 @@ class SavedVisitReports(VisitReports):
 
 
 class FieldlogInUse(VisitSettings):
-    """FIELDLOG as the code of before reads the settings (config.load_settings), as the other adapters here do."""
+    """FIELDLOG as settings.toml keeps it."""
 
-    @staticmethod
-    def _fieldlog():
-        from wildintel_uploader.entrypoints import config
-        return config.load_settings().FIELDLOG
+    def __init__(self, settings: StoredSettings) -> None:
+        self._settings = settings   # the settings as settings.toml keeps them
+
+    def _fieldlog(self):
+        return self._settings.load_settings().FIELDLOG
 
     def keep_seconds(self) -> bool:
         return self._fieldlog().keep_seconds

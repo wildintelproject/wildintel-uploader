@@ -233,15 +233,15 @@ def _as_local_folder_error():
 
 def _catalog(root: Path):
     """The catalog kept in this collections folder (modules.catalog, #248), put together as the entry points put it (entrypoints.wiring)."""
-    from wildintel_uploader.entrypoints import wiring   # here: wiring puts together modules that import this one
-    return wiring.build_catalog(root, wiring.build_settings())
+    from wildintel_uploader.modules.catalog.infrastructure import plugs
+    return plugs.catalog_of(root)
 
 
 def _catalog_repository(root: Path):
     """Where the catalog of this collections folder is kept, as the settings say (DATA.catalog_storage): what is read and written as it is kept —
     a backup, a move to another storage — goes there, not through the use cases, which would date it anew."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.catalog_repository(root, wiring.build_settings())
+    from wildintel_uploader.modules.catalog.infrastructure import plugs
+    return plugs.catalog_repository_of(root)
 
 
 def project_record(root: Path, research_project_id: str) -> dict | None:

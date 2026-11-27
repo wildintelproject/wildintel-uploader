@@ -209,8 +209,12 @@ Each module is a folder of `src/wildintel_uploader/modules/` with three layers, 
 
 **How they meet.** A module uses another **only through its domain** — its contract —, never its infrastructure. `entrypoints/wiring.py` is
 the one place that puts them together: `build_<module>()` chooses each adapter and gives each module the contracts of the others it uses, and
-the Dishka providers there give them to the entry points (`FromDishka[CatalogService]` in a router, `@inject` in a command). Where an adapter
-of the code before is a plain function, it asks the contract it needs from `wiring` when it is called (`_files()`, `_records()`, `_layout()`).
+the Dishka providers there give them to the entry points (`FromDishka[CatalogService]` in a router, `@inject` in a command). **A module never
+imports the entry points**: what it needs comes in. An adapter that is a class is given it when it is made (`StoredVisits(store, visits)`,
+`TrapperClient(settings)`). An adapter that is still a function of the code of before has no constructor: its module says what it needs in
+`infrastructure/plugs.py` — `catalog_of`, `visits_of`, `file_info`, `config` (the settings as `settings.toml` keeps them)… —, each a
+`shared.plugs.Plug` typed with a contract, and `wiring.plug_the_modules()` plugs into each what it is when the app is put together. A test patches
+what is plugged in (`entrypoints.config`), never the plug, which refuses it.
 
 **Settings by module.** A module with settings registers its section: the dataclass of `domain/settings.py` with
 `@settings_registry.section("VALIDATION", "validation", order=70)`, its format in `infrastructure/settings.py` with
@@ -221,7 +225,8 @@ and `description`, run over a `MediaFolder` that asks what is known of the files
 `__init__.py` gives their order. The same for the checks of a deployment and the steps of the preprocessing.
 
 **Tests of the architecture** (`tests/unit/test_architecture.py`): a domain is plain Python, a use case uses its domain only, the new code
-takes no models of the code before, a module uses another only through its domain, and nothing of the app imports what was `core`.
+takes no models of the code before, a module uses another only through its domain, no module imports the entry points, every plug is plugged,
+and nothing of the app imports what was `core`.
 
 ### The record of a visit
 

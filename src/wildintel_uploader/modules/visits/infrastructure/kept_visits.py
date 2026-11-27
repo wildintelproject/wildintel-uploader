@@ -12,8 +12,8 @@ from wildintel_uploader.shared import audit, identity, ids, storage
 
 def _records(root: Path):
     """The catalog of this collections folder as records — through its contract —, from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.build_catalog(root, wiring.build_settings()).records()
+    from wildintel_uploader.modules.visits.infrastructure import plugs
+    return plugs.catalog_of(root).records()
 
 
 def _raw_visits(root: Path, research_project_id: str) -> list[dict]:

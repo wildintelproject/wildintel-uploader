@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from trapper_client import TrapperClient
 from trapper_client.err import BadRequestError
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.uploaders.infrastructure.plugs import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
 
 logger = logging.getLogger(__name__)

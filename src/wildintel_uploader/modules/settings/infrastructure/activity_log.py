@@ -16,7 +16,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.settings.infrastructure.plugs import config
 
 LEVELS = ("ERROR", "WARNING", "INFO", "DEBUG")
 LOG_FORMAT = "%(asctime)s  %(levelname)-8s  %(threadName)-18s  %(name)s  %(message)s"

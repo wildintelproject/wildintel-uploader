@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.reports.infrastructure.plugs import config
 from wildintel_uploader.modules.deployments.domain.naming import natural_key
 from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECKS
@@ -31,8 +31,8 @@ from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECK
 
 def _files():
     """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.file_info()
+    from wildintel_uploader.modules.reports.infrastructure import plugs
+    return plugs.file_info()
 
 KINDS = ("validation", "postvalidation", "preprocessing", "repair", "upload", "visits")
 DEPLOYMENT = "(deployment)"

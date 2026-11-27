@@ -39,14 +39,14 @@ from wildintel_uploader.shared import storage
 
 def _records(root: Path):
     """The catalog of this collections folder as records — through its contract —, from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.build_catalog(root, wiring.build_settings()).records()
+    from wildintel_uploader.modules.uploaders.infrastructure import plugs
+    return plugs.catalog_of(root).records()
 
 
 def _layout():
     """How a collection holds its deployments — the contract of the deployments —, from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.build_deployments().layout()
+    from wildintel_uploader.modules.uploaders.infrastructure import plugs
+    return plugs.deployments().layout()
 
 logger = logging.getLogger(__name__)
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from wildintel_uploader.modules.postvalidation.domain.ports import CameraLevels, CameraRecords, PostvalidationReports, PreviousRevisions
 from wildintel_uploader.modules.postvalidation.domain.statistics import DeploymentTimes, Revision
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
+from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,11 @@ class CatalogCameras(CameraRecords):
 
 
 class LevelsInUse(CameraLevels):
+    def __init__(self, settings: StoredSettings) -> None:
+        self._settings = settings   # the settings as settings.toml keeps them
+
     def levels(self) -> list[list[str]]:
-        from wildintel_uploader.entrypoints import config
-        return config.load_settings().VALIDATION.camera_levels
+        return self._settings.load_settings().VALIDATION.camera_levels
 
 
 class SavedPostvalidationReports(PostvalidationReports):

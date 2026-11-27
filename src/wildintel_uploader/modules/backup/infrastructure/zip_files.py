@@ -24,7 +24,7 @@ def _old():
 
 
 def _root() -> Path:
-    from wildintel_uploader.entrypoints import config
+    from wildintel_uploader.modules.backup.infrastructure.plugs import config
     return config.collections_dir()
 
 

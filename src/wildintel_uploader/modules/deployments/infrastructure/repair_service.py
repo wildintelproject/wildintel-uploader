@@ -32,7 +32,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.deployments.infrastructure.plugs import config
 from wildintel_uploader.shared import parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.infrastructure import seal_service
@@ -43,14 +43,14 @@ from wildintel_uploader.modules.deployments.infrastructure import collections as
 
 def _catalog(collections_dir: Path):
     """The catalog of the collections folder being repaired — through its contract —, from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.build_catalog(collections_dir, wiring.build_settings())
+    from wildintel_uploader.modules.deployments.infrastructure import plugs
+    return plugs.catalog_of(collections_dir)
 
 
 def _reports():
     """The reports, through their contract."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.build_reports()
+    from wildintel_uploader.modules.deployments.infrastructure import plugs
+    return plugs.reports()
 
 
 def _locations(collections_dir: Path, research_project_id: str) -> list[dict]:
@@ -86,8 +86,8 @@ def _sha1(path: Path) -> str:
 
 def _files():
     """What is known of the files of the images (the contract of modules.fileinfo), from where the app is put together."""
-    from wildintel_uploader.entrypoints import wiring
-    return wiring.file_info()
+    from wildintel_uploader.modules.deployments.infrastructure import plugs
+    return plugs.file_info()
 
 logger = logging.getLogger(__name__)
 

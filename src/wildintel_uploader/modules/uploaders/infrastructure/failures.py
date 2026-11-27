@@ -10,10 +10,10 @@ from wildintel_uploader.shared import storage
 
 def _require_project(root: Path, research_project_id: str) -> None:
     """StorageError when the research project isn't kept — the catalog says it, through its contract."""
-    from wildintel_uploader.entrypoints import wiring
+    from wildintel_uploader.modules.uploaders.infrastructure import plugs
     from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownProject
     try:
-        wiring.build_catalog(root, wiring.build_settings()).require_project(research_project_id)
+        plugs.catalog_of(root).require_project(research_project_id)
     except (CatalogError, UnknownProject) as exc:
         raise storage.StorageError(getattr(exc, "message", str(exc))) from exc
 
