@@ -827,7 +827,9 @@ def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_cam
     import pytest  # noqa: PLC0415
     from unittest.mock import patch  # noqa: PLC0415
     from wildintel_uploader.core.services import epicollect_service  # noqa: PLC0415
-    with patch.object(epicollect_service, "fetch_form", return_value={"project": {}, "inputs": EPI_INPUTS}), patch.object(epicollect_service, "_all_entries", return_value=EPI_ENTRIES):
+    from wildintel_uploader.modules.sources.infrastructure.epicollect5 import PyEpicollect5  # noqa: PLC0415
+    from wildintel_uploader.modules.sources.infrastructure.sources import epicollect_api  # noqa: PLC0415
+    with patch.object(epicollect_api, "project_form", return_value={"project": {}, "inputs": EPI_INPUTS}), patch.object(PyEpicollect5, "entries", return_value=EPI_ENTRIES):
         text = epicollect_service.visits_csv()
         done = _import(tmp_path, "", save=True, fmt="epicollect-api", given_up="2000-01-01")
     rows = {r["date"]: r for r in __import__("csv").DictReader(__import__("io").StringIO(text))}
@@ -845,7 +847,8 @@ def test_a_form_that_is_not_the_one_of_a_visit_is_said_plainly():
     import pytest  # noqa: PLC0415
     from unittest.mock import patch  # noqa: PLC0415
     from wildintel_uploader.core.services import epicollect_service  # noqa: PLC0415
-    with patch.object(epicollect_service, "fetch_form", return_value={"project": {}, "inputs": [{"ref": "x", "label": "Other"}]}):
+    from wildintel_uploader.modules.sources.infrastructure.sources import epicollect_api  # noqa: PLC0415
+    with patch.object(epicollect_api, "project_form", return_value={"project": {}, "inputs": [{"ref": "x", "label": "Other"}]}):
         with pytest.raises(epicollect_service.EpicollectError, match="locationID"):
             epicollect_service.visits_csv()
 

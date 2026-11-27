@@ -43,6 +43,12 @@ from wildintel_uploader.modules.prevalidation.application.use_cases import Preva
 from wildintel_uploader.modules.prevalidation.domain.ports import PrevalidationService
 from wildintel_uploader.modules.prevalidation.infrastructure import validators as image_validators
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
+from wildintel_uploader.modules.sources.application.use_cases import SourcesUseCases
+from wildintel_uploader.modules.sources.domain.ports import SourcesService
+from wildintel_uploader.modules.sources.infrastructure import sources as visit_sources
+from wildintel_uploader.modules.sources.infrastructure.epicollect5 import PyEpicollect5
+from wildintel_uploader.modules.sources.infrastructure.settings_in_use import SettingsOfTheSources
+from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import form_columns, form_error
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
 from wildintel_uploader.shared import storage
@@ -99,6 +105,12 @@ def build_preprocessing(info: FileInfoService | None = None) -> PreprocessingSer
     images at once as the settings say."""
     return PreprocessingUseCases(info or file_info(), CollectionFolders(), SavedReports(), image_steps=preprocessing_steps.IMAGE_STEPS,
                                  folder_steps=preprocessing_steps.FOLDER_STEPS, workers=config.workers, exiftool=lambda: exiftool_adapter.exiftool_path())
+
+
+def build_sources(settings: SettingsService | None = None) -> SourcesService:
+    """The sources of the visits: Epicollect5 through pyepicollect, the settings through their module."""
+    return SourcesUseCases(PyEpicollect5(), SettingsOfTheSources(settings or build_settings()), visit_sources.SOURCES,
+                           form_columns=form_columns, form_error=form_error)
 
 
 # ── the providers of the container ──
@@ -173,6 +185,14 @@ class PreprocessingProvider(Provider):
         return build_preprocessing(info)
 
 
+class SourcesProvider(Provider):
+    """The sources of the visits."""
+
+    @provide(scope=Scope.REQUEST)
+    def service(self, settings: SettingsService) -> SourcesService:
+        return build_sources(settings)
+
+
 def make_app_container() -> Container:
     """The container of the app: every module's provider."""
-    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider())
+    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider())
