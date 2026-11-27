@@ -4,6 +4,7 @@
 - Its application — the use cases — uses its domain only: no infrastructure, no framework.
 - Nothing asks for the code of before (core): each module has its own models, in its infrastructure (api_schemas.py)."""
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -134,4 +135,16 @@ def test_only_the_modules_of_before_read_the_catalog_as_records(path: Path):
 
 def test_the_list_of_those_on_the_records_only_shrinks():
     assert all("CatalogRecords" in (SRC / p).read_text(encoding="utf-8") for p in STILL_ON_THE_RECORDS)
+
+
+_IO = re.compile(r"\.(read_text|write_text|read_bytes|write_bytes|rglob|glob|iterdir|mkdir|unlink|rmdir|touch)\(|\.(is_file|is_dir|exists|stat|resolve)\(\)"
+                 r"|(?<![\w.])(?<!def )open\(|\bshutil\.|\bsubprocess\b|\bos\.(?!path\.sep)|\bjson\.(load|dump)\(|\b(requests|httpx|urllib)\.")
+
+
+@pytest.mark.parametrize("path", [*_files("domain"), *_files("application")], ids=lambda p: f"{p.parts[-3]}/{p.parts[-2]}/{p.name}")
+def test_the_domain_and_the_use_cases_touch_no_file_process_or_network(path: Path):
+    """What a module reads or writes — files, folders, processes, the network — goes through its ports: the domain and the use cases only ask them."""
+    found = [f"{n}: {line.strip()}" for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+             if _IO.search(line) and not line.lstrip().startswith(("#", '"""'))]
+    assert not found, "\n".join(found)
 

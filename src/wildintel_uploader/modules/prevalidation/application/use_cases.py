@@ -26,7 +26,7 @@ class PrevalidationUseCases(PrevalidationService):
     def validate(self, folder: Path, validators: Sequence[ImageValidator] | None = None, *, detail: bool = False,
                  imported: dict[str, list[dict]] | None = None, progress: Progress | None = None, exif_fields: list[str] | None = None,
                  camera_levels: list[list[str]] | None = None, on_check: OnCheck | None = None) -> dict:
-        if not folder.is_dir():
+        if not self._info.is_folder(folder):
             raise PrevalidationError(f"Not a folder: {folder}")
         media = MediaFolder(folder, self._info, self._pmap, progress)
         options = ImageOptions(detail=detail, exif_fields=exif_fields, camera_levels=camera_levels, imported=imported)

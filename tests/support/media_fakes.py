@@ -19,6 +19,12 @@ class Info:
     def tags(self, paths, tags):
         return {p: {t: None for t in tags} for p in paths}
 
+    def is_folder(self, path):
+        return path.is_dir()
+
+    def files_in(self, folder):
+        return [p for p in folder.rglob("*") if p.is_file()]
+
     def decode_error(self, path):
         self.asked["decode"] += 1
         return None

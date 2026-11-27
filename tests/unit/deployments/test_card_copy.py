@@ -169,6 +169,9 @@ class _Copies:
     def base(self):
         return Path("/tmp/wildintel-sd")
 
+    def resolve(self, path):
+        return Path(path).resolve()
+
     def holders(self):
         return list(self.kept.items())
 

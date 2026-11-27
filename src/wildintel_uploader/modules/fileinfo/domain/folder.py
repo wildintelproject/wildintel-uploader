@@ -25,7 +25,7 @@ class MediaFolder:
     def __init__(self, root: Path, info: FileInfoService, pmap: ParallelMap, progress: Progress | None = None,
                  files: list[Path] | None = None) -> None:
         self.root, self._info, self._pmap, self._progress = root, info, pmap, progress
-        self.files = files if files is not None else [p for p in root.rglob("*") if p.is_file()]
+        self.files = files if files is not None else info.files_in(root)
         self.images = [p for p in self.files if p.suffix.lower() in IMAGE_EXTENSIONS]
         self._known: dict[str, object] = {}
         self._locks: dict[str, threading.Lock] = {}

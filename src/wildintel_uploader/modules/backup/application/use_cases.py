@@ -142,7 +142,7 @@ class BackupUseCases(BackupService):
         if not rules.is_download_name(name):
             raise BackupGone("There is no such backup.")
         path = self._archives.staging_dir() / name
-        if not path.is_file():
+        if not self._archives.is_there(path):
             raise BackupGone("That backup is not there any more: make it again.")
         return path
 

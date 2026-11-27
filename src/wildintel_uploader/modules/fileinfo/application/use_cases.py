@@ -29,6 +29,12 @@ class FileInfoUseCases(FileInfoService):
 
     # ── the metadata ──
 
+    def is_folder(self, path: Path) -> bool:
+        return self._stamps.is_folder(path)
+
+    def files_in(self, folder: Path) -> list[Path]:
+        return self._stamps.files_in(folder)
+
     def tags(self, paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | None]]:
         if not tags or not paths:
             return {path: {} for path in paths}

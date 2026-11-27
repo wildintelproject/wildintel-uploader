@@ -96,15 +96,15 @@ class DeploymentsUseCases(DeploymentsService):
     def _require_visit(self, collection_dir: str, deployment_id: str) -> None:
         """A deployment is always of a visit: a collection of a research project kept in the collections folder takes only the deployments its
         visits say — or one already linked to a visit —; one that is not is refused before any image is touched."""
-        folder = Path(collection_dir).expanduser().resolve().parent
-        if folder.parent != self._folders.root().expanduser().resolve():
+        project = self._folders.project_of(collection_dir)
+        if project is None:
             return  # not a research project's collection: there are no visits to ask
         try:
-            known = self._visits.has_deployment(folder.name, deployment_id)
+            known = self._visits.has_deployment(project, deployment_id)
         except VisitsError as exc:
             raise DeploymentsFailed(exc.message) from exc
         if not known:
-            raise DeploymentsFailed(f"The deployment {deployment_id or '(none)'} is not of any visit of {folder.name}: a deployment is always linked to a "
+            raise DeploymentsFailed(f"The deployment {deployment_id or '(none)'} is not of any visit of {project}: a deployment is always linked to a "
                                     "visit. Register the visits first, by hand or from a file with their history.")
 
     def import_local(self, source_dir: str, collection_dir: str, collection_name: str | None, deployment: Deployment, preprocessing: dict | None,

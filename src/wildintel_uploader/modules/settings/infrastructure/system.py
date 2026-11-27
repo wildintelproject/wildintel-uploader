@@ -22,6 +22,9 @@ class AppActivityLog(ActivityLog):
     def file(self) -> Path:
         return logging_setup.log_file(self._logs_dir())
 
+    def has_file(self) -> bool:
+        return self.file().is_file()
+
     def level_override(self) -> str | None:
         return logging_setup.env_override()
 

@@ -32,6 +32,9 @@ class FakeLog:
     def file(self) -> Path:
         return self.path
 
+    def has_file(self) -> bool:
+        return self.path.is_file()
+
     def level_override(self):
         return self.forced
 

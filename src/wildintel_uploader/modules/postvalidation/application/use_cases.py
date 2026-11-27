@@ -27,7 +27,7 @@ class PostvalidationUseCases(PostvalidationService):
 
     def validate(self, folder: Path, context: DeploymentContext, validators: Sequence[DeploymentValidator] | None = None, *,
                  on_check: OnCheck | None = None) -> dict:
-        if not folder.is_dir():
+        if not self._info.is_folder(folder):
             raise PostvalidationError(f"Not a folder: {folder}")
         if context.tolerance_hours < 0:
             raise PostvalidationError("The tolerance can't be negative.")

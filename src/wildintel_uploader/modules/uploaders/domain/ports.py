@@ -140,6 +140,10 @@ class KeptCollections(ABC):
     def collection_dir(self, project: str, collection: str) -> Path: ...
 
     @abstractmethod
+    def has_deployment(self, collection_dir: Path, deployment_id: str) -> bool:
+        """Whether the collection holds the folder of the deployment."""
+
+    @abstractmethod
     def collections(self, project: str) -> list[dict]: ...
 
     @abstractmethod
@@ -371,3 +375,7 @@ class SyncedFolder(ABC):
 
     @abstractmethod
     def image_path(self, project: str, collection: str, deployment_id: str, name: str) -> Path: ...
+
+    @abstractmethod
+    def has_image(self, project: str, collection: str, deployment_id: str, name: str) -> bool:
+        """Whether an image of the deployment is already there."""

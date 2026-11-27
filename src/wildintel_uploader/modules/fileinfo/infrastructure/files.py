@@ -25,6 +25,12 @@ class OsStamps(FileStamps):
     def stamp(self, path: Path) -> Stamp | None:
         return stamp(path)
 
+    def is_folder(self, path: Path) -> bool:
+        return path.is_dir()
+
+    def files_in(self, folder: Path) -> list[Path]:
+        return [p for p in folder.rglob("*") if p.is_file()]
+
 
 class FileHasher(Hasher):
     def hash(self, path: Path, algorithm: str) -> str | None:

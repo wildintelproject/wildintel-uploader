@@ -249,6 +249,10 @@ class CardCopies(ABC):
         """The folder of the copies, resolved."""
 
     @abstractmethod
+    def resolve(self, path: str) -> Path:
+        """A path as the system has it — its user folder and its links followed."""
+
+    @abstractmethod
     def holders(self) -> list[tuple[Path, float]]:
         """The holders kept, with when each was last modified."""
 
@@ -273,6 +277,10 @@ class Folders(ABC):
 
     @abstractmethod
     def root(self) -> Path: ...
+
+    @abstractmethod
+    def project_of(self, collection_dir: str) -> str | None:
+        """The research project a collection is of, when it is in the collections folder — None when it is elsewhere."""
 
     @abstractmethod
     def check_collection(self, folder: Path) -> dict: ...

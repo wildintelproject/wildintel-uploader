@@ -173,7 +173,7 @@ class SettingsUseCases(SettingsService):
             path = self.store.path_of(config_id)
         except KeyError:
             raise UnknownConfig(config_id) from None
-        if not path.is_file():
+        if not self.store.has_file(path):
             raise NoSettingsFile(config_id)
         return path
 
@@ -270,7 +270,7 @@ class SettingsUseCases(SettingsService):
 
     def log_file(self) -> Path:
         path = self.activity_log.file()
-        if not path.is_file():
+        if not self.activity_log.has_file():
             raise NoLogFile(str(path))
         return path
 

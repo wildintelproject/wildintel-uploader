@@ -122,3 +122,6 @@ class TomlSettingsStore(SettingsStore):
 
     def save(self, settings: models.Settings) -> None:
         write_settings_file(to_schema(settings), self.active_path())
+
+    def has_file(self, path: Path) -> bool:
+        return path.is_file()

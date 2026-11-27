@@ -80,6 +80,26 @@ class DeploymentFolders(ABC):
     def write_deployment_metadata(self, dest: Path, deployment: DeploymentLike) -> None: ...
 
     @abstractmethod
+    def files(self, folder: Path) -> list[Path]:
+        """Every file under a folder."""
+
+    @abstractmethod
+    def size_of(self, files: list[Path]) -> int:
+        """How many bytes the files take."""
+
+    @abstractmethod
+    def write_log(self, folder: Path, log: dict) -> None:
+        """The record of the preprocessing (preprocessing.json) kept in the folder of a deployment."""
+
+    @abstractmethod
+    def read_log(self, folder: Path) -> dict | None:
+        """The record of the preprocessing kept in a folder — None when there is none. PreprocessingError when it can't be read."""
+
+    @abstractmethod
+    def is_sealed(self, dest: Path) -> bool:
+        """Whether the deployment in its place has its seal."""
+
+    @abstractmethod
     def seal(self, source: Path, dest: Path, deployment: DeploymentLike, *, originals: dict[str, str], source_hashes: dict[str, str],
              preprocessing: dict) -> bool:
         """Seals a deployment in its place: from then on the app notices any change to it. Whether it was sealed."""

@@ -61,6 +61,14 @@ class FileInfoService(ABC):
 
 # ── out: what the use cases are given ──
 
+    @abstractmethod
+    def is_folder(self, path: Path) -> bool: ...
+
+    @abstractmethod
+    def files_in(self, folder: Path) -> list[Path]:
+        """Every file under a folder — what a folder of images is looked at by."""
+
+
 class MetadataReader(ABC):
     """What reads the metadata of many images at once — ExifTool."""
 
@@ -107,9 +115,18 @@ class Hasher(ABC):
 
 
 class FileStamps(ABC):
+    """What the system says of the files: their stamps, and which there are in a folder."""
+
     @abstractmethod
     def stamp(self, path: Path) -> Stamp | None:
         """The stamp of a file, or None when it cannot be looked at: then nothing is remembered of it."""
+
+    @abstractmethod
+    def is_folder(self, path: Path) -> bool: ...
+
+    @abstractmethod
+    def files_in(self, folder: Path) -> list[Path]:
+        """Every file under a folder."""
 
 
 class Memory(ABC):

@@ -208,6 +208,9 @@ class SettingsStore(Protocol):
     def path_of(self, config_id: str) -> Path:
         """Where a config is kept, to download it or open its folder. Raises KeyError: there is no config with that id."""
 
+    def has_file(self, path: Path) -> bool:
+        """Whether the file of a config is there."""
+
     def load(self) -> Settings:
         """The settings of the active config — its defaults, the first time."""
 
@@ -220,6 +223,9 @@ class ActivityLog(Protocol):
 
     def file(self) -> Path:
         """Where it is written."""
+
+    def has_file(self) -> bool:
+        """Whether anything has been written to it yet."""
 
     def level_override(self) -> str | None:
         """A level the environment forces, if any: it wins over the setting."""

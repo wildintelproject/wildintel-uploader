@@ -2,6 +2,7 @@
 <collection>/.staging/<deployment id>, moved to its place in one rename. What the deployments refuse is the preprocessing's error, with its words."""
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
@@ -11,7 +12,8 @@ from typing import TypeVar
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
 from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
-from wildintel_uploader.modules.preprocessing.domain.models import STAGING_DIR, DeploymentLike, ImageWork, PreprocessingError
+from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
+from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE, STAGING_DIR, DeploymentLike, ImageWork, PreprocessingError
 from wildintel_uploader.modules.preprocessing.domain.ports import DeploymentFolders, Reports
 from wildintel_uploader.modules.preprocessing.infrastructure.images import dimensions
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
@@ -135,6 +137,27 @@ class CollectionFolders(DeploymentFolders):
                 "source_sha1": record["source_hash"],
             })
         layout.write_images_file(work, deployment_id, [entry(w.record) for w in works])
+
+    def files(self, folder: Path) -> list[Path]:
+        return [p for p in folder.rglob("*") if p.is_file()]
+
+    def size_of(self, files: list[Path]) -> int:
+        return sum(p.stat().st_size for p in files)
+
+    def write_log(self, folder: Path, log: dict) -> None:
+        (folder / PREPROCESSING_LOG_FILE).write_text(json.dumps(log, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def read_log(self, folder: Path) -> dict | None:
+        path = folder / PREPROCESSING_LOG_FILE
+        if not path.is_file():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            raise PreprocessingError(f"Could not read {path}: {exc}") from exc
+
+    def is_sealed(self, dest: Path) -> bool:
+        return (dest / SEAL_FILE).exists()
 
     def publish(self, work: Path, dest: Path) -> None:
         publish(work, dest)

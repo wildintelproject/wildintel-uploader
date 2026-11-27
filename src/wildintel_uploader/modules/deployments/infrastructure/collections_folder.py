@@ -24,6 +24,10 @@ class CollectionFolders(Folders):
     def root(self) -> Path:
         return self._root()
 
+    def project_of(self, collection_dir: str) -> str | None:
+        folder = Path(collection_dir).expanduser().resolve().parent
+        return folder.name if folder.parent == self.root().expanduser().resolve() else None
+
     def check_collection(self, folder: Path) -> dict:
         return layout.check_collection(folder)
 

@@ -130,7 +130,7 @@ class TrapperSync:
         media = self._site.media(credentials, classification_project_pk, deployment["pk"])
         held = {m["name"] for m in media}
         not_held = sorted(set(self._folder.images_listed(project, collection, deployment_id)) - held)
-        todo = [m for m in media if rules.plain_name(m["name"]) and not self._folder.image_path(project, collection, deployment_id, m["name"]).is_file()]
+        todo = [m for m in media if rules.plain_name(m["name"]) and not self._folder.has_image(project, collection, deployment_id, m["name"])]
         already = len(media) - len(todo)
         result: dict = {"downloaded": 0, "bytes": 0, "failed": [], "not_held": not_held, "already": already}
         yield _say(f"{prefix}: {len(todo)} image(s) to download" + (f", {already} already here" if already else "")

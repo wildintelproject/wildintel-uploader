@@ -26,8 +26,8 @@ MAX_WORKERS = 64
 
 
 def default_workers() -> int:
-    """How many images are worked on at once unless the settings say otherwise: the CPUs there are, up to 4."""
-    return max(1, min(4, os.cpu_count() or 1))
+    """How many images are worked on at once unless the settings say otherwise: the CPUs of this machine, by the domain's rule (workers_for)."""
+    return _domain.workers_for(os.cpu_count())
 
 
 @settings_registry.schema("GENERAL")

@@ -77,3 +77,6 @@ class ZipBackups(Archives):
             except OSError:
                 pass
         return folder
+
+    def is_there(self, path: Path) -> bool:
+        return path.is_file()

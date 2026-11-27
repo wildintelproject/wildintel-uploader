@@ -63,6 +63,9 @@ class SyncedCollections(SyncedFolder):
     def image_path(self, project: str, collection: str, deployment_id: str, name: str) -> Path:
         return self._deployment(project, collection, deployment_id) / name
 
+    def has_image(self, project: str, collection: str, deployment_id: str, name: str) -> bool:
+        return self.image_path(project, collection, deployment_id, name).is_file()
+
 
 class CatalogOfTheSync(SyncedCatalog):
     """The catalog of the collections folder as a sync reads and adds to it — through its contract, given when it is needed."""

@@ -8,7 +8,6 @@ Where they are kept, and in what format, is the infrastructure's business: setti
 are attributes (`settings.general`, `settings.data`), and `infrastructure.mapping` turns one into the other."""
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field, fields, make_dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
@@ -26,16 +25,20 @@ LOG_LEVELS = ("ERROR", "WARNING", "INFO", "DEBUG")
 MAX_WORKERS = 64
 
 
-def default_workers() -> int:
-    """How many images are worked on at once unless the settings say otherwise: the CPUs there are, up to 4."""
-    return max(1, min(4, os.cpu_count() or 1))
+WORKERS_AT_MOST = 4
+
+
+def workers_for(cpus: int | None) -> int:
+    """How many images are worked on at once unless the settings say otherwise: the CPUs there are, up to 4 — one when they can't be told.
+    The CPUs are counted where the settings are read (infrastructure.schema): the domain does not look at the machine."""
+    return max(1, min(WORKERS_AT_MOST, cpus or 1))
 
 
 @settings_registry.section("GENERAL", "general", order=10)
 @dataclass(frozen=True)
 class GeneralSettings:
     log_level: str = "INFO"                              # how much the app logs, to the console and its log file
-    workers: int = field(default_factory=default_workers)   # how many images are validated or preprocessed at once
+    workers: int = WORKERS_AT_MOST                       # how many images are validated or preprocessed at once (see workers_for)
     default_research_project: str | None = None          # the one that comes filled in wherever one is asked for
     show_welcome: bool = True                            # whether the welcome page is shown when the app opens
 

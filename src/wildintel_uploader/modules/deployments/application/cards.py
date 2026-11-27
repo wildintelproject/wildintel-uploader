@@ -51,7 +51,7 @@ class CardCopying:
 
     def discard(self, copy: str) -> bool:
         """Removes a copy made by `copy` — only one inside the folder of the copies, whatever the path says. Whether something was removed."""
-        holder = rules.holder_of(self._copies.base(), Path(copy).expanduser().resolve())
+        holder = rules.holder_of(self._copies.base(), self._copies.resolve(copy))
         return holder is not None and self._copies.remove(Path(holder))
 
     def eject(self, card: str) -> dict:

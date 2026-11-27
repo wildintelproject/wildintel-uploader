@@ -3,7 +3,6 @@ going through the steps in their order; then the steps over all of them —, its
 sealed. What can't be done is said before anything is written."""
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -13,7 +12,7 @@ from pathlib import Path
 from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 from wildintel_uploader.modules.preprocessing.domain.models import (
-    PREPROCESSING_LOG_FILE, DeploymentLike, ImageWork, PreprocessingError, PreprocessOptions, natural_key, public_record, resize_summary, zone_of,
+    DeploymentLike, ImageWork, PreprocessingError, PreprocessOptions, natural_key, public_record, resize_summary, zone_of,
 )
 from wildintel_uploader.modules.preprocessing.domain.ports import DeploymentFolders, PreprocessingService, Reports
 from wildintel_uploader.modules.preprocessing.domain.steps import FolderStep, ImageStep, Job
@@ -47,7 +46,7 @@ class PreprocessingUseCases(PreprocessingService):
         self._folders.clear_staging(work)
         # the images are prepared in .staging, on the disk of the collection, and moved to their place from there: room for all of them — as much as
         # the folder takes, at most, as resizing only makes them smaller — before anything is written
-        needed = sum(p.stat().st_size for p in source.rglob("*") if p.is_file())
+        needed = self._folders.size_of(self._folders.files(source))
         short = self._folders.shortfall(work.parent, needed, f"Preparing the images of {deployment.deployment_id}")
         if short:
             raise PreprocessingError(short)
@@ -57,7 +56,7 @@ class PreprocessingUseCases(PreprocessingService):
                  folder_steps: list[FolderStep], consolidate: bool) -> Iterator[dict]:
         deployment, options = job.deployment, job.options
         self._folders.write_collection_metadata(collection, collection_name)
-        files = sorted((p for p in source.rglob("*") if p.is_file()), key=lambda p: natural_key(p.relative_to(source)))
+        files = sorted(self._folders.files(source), key=lambda p: natural_key(p.relative_to(source)))
         images = [p for p in files if p.suffix.lower() in IMAGE_EXTENSIONS]
         image_set = set(images)
         others = [p for p in files if p not in image_set]
@@ -97,11 +96,8 @@ class PreprocessingUseCases(PreprocessingService):
 
         records = [w.record for w in works]
         self._folders.write_images_file(work, deployment.deployment_id, works)
-        (work / PREPROCESSING_LOG_FILE).write_text(
-            json.dumps({"options": asdict(options), "processed": len(records), "skipped": len(skipped), "images": [public_record(r) for r in records]},
-                       indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        self._folders.write_log(work, {"options": asdict(options), "processed": len(records), "skipped": len(skipped),
+                                        "images": [public_record(r) for r in records]})
         sealed = None
         if consolidate:
             yield {"type": "sealing"}
@@ -126,19 +122,19 @@ class PreprocessingUseCases(PreprocessingService):
         work = self._folders.staging(collection, deployment.deployment_id)
         if self._folders.is_synced(dest):
             raise PreprocessingError(f"{dest.name} was synced from TRAPPER, so it can't be modified here.")
-        if (dest / "seal.json").exists():
+        if self._folders.is_sealed(dest):
             raise PreprocessingError(f"{dest.name} is already consolidated.")
-        staged = (work / PREPROCESSING_LOG_FILE).is_file()
-        log_file = (work if staged else dest) / PREPROCESSING_LOG_FILE
-        if not log_file.is_file():
+        staged_log = self._folders.read_log(work)
+        staged = staged_log is not None
+        log = staged_log if staged else self._folders.read_log(dest)
+        if log is None:
             raise PreprocessingError(f"{dest.name} has not been preprocessed yet.")
         if staged:
             self._folders.check_not_kept(dest)
         try:
-            log = json.loads(log_file.read_text(encoding="utf-8"))
             images, options = log["images"], log["options"]
-        except (json.JSONDecodeError, OSError, KeyError, TypeError) as exc:
-            raise PreprocessingError(f"Could not read {log_file}: {exc}") from exc
+        except (KeyError, TypeError) as exc:
+            raise PreprocessingError(f"Could not read the record of the preprocessing of {dest.name}: {exc}") from exc
         return self._consolidate(source, dest, work, deployment, staged, log, images, options)
 
     def _consolidate(self, source: Path, dest: Path, work: Path, deployment: DeploymentLike, staged: bool, log: dict, images: list,

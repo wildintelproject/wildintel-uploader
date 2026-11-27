@@ -26,6 +26,9 @@ class CopiesInTemp(CardCopies):
     def base(self) -> Path:
         return base_dir().resolve()
 
+    def resolve(self, path: str) -> Path:
+        return Path(path).expanduser().resolve()
+
     def holders(self) -> list[tuple[Path, float]]:
         base = base_dir()
         if not base.is_dir():

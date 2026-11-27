@@ -161,6 +161,10 @@ class Archives(ABC):
     def staging_dir(self) -> Path:
         """Where the backups to be downloaded are made; those older than a day are removed."""
 
+    @abstractmethod
+    def is_there(self, path: Path) -> bool:
+        """Whether a backup made is still there."""
+
 
 class AppSettings(ABC):
     @abstractmethod

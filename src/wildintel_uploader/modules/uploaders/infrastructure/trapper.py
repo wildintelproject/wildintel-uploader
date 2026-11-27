@@ -162,6 +162,9 @@ class CollectionsFolder(KeptCollections):
         except StorageError:
             pass
 
+    def has_deployment(self, collection_dir: Path, deployment_id: str) -> bool:
+        return (collection_dir / deployment_id).is_dir()
+
 
 class SavedUploadReports(UploadReports):
     """Through the contract of the reports."""

@@ -48,6 +48,9 @@ class Kept:
     def collection_dir(self, project, collection):
         return self.root / collection
 
+    def has_deployment(self, collection_dir, deployment_id):
+        return (collection_dir / deployment_id).is_dir()
+
     def note_failure(self, project, deployment_id, destination, note):
         self.notes.append(note)
 

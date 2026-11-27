@@ -15,6 +15,10 @@ class Folders:
     def root(self):
         return self.root_
 
+    def project_of(self, collection_dir):
+        folder = Path(collection_dir).resolve().parent
+        return folder.name if folder.parent == self.root_.resolve() else None
+
     def location_time(self, project_dir, location_id):
         return self.time
 

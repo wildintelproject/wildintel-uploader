@@ -135,7 +135,7 @@ class UploadersUseCases(UploadersService):
             credentials = self._trapper.credentials(account)
         record = self._record(project)
         collection_dir = self._kept.collection_dir(project, collection)
-        if not (collection_dir / deployment_id).is_dir():
+        if not self._kept.has_deployment(collection_dir, deployment_id):
             raise NotThere(f"{deployment_id} isn't in the collection {collection}.")
         events = self._sending.upload(credentials, record, collection_dir, deployment_id, self._places.packages_dir(record["acronym"]), mode=mode,
                                       max_zip_bytes=self._places.max_zip_bytes(), classification_project_pk=classification_project_pk,
