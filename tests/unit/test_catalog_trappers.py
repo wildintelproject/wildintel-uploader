@@ -133,7 +133,7 @@ def test_the_web_api_lists_and_saves_the_people(tmp_path: Path):
 
     from wildintel_uploader.web.main import app
 
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         client = TestClient(app)
         assert client.post("/api/setup/trappers", json={"trappers": [{"username": "ana", "name": "Ana"}]}).json() == {"added": ["ana"], "skipped": []}
         listed = client.get("/api/catalog/trappers").json()
@@ -149,11 +149,11 @@ def test_the_web_api_lists_and_saves_the_people(tmp_path: Path):
 def test_the_command_line_lists_and_adds_people(tmp_path: Path):
     from unittest.mock import patch
 
-    from wildintel_uploader.cli.app import app as cli
+    from wildintel_uploader.entrypoints.cli.app import app as cli
     from wildintel_uploader.entrypoints.cli import injection
 
     injection._container = None      # a container of its own: made with the patched collections folder
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         run = CliRunner()
         assert run.invoke(cli, ["catalog", "trappers", "add", "ana", "Ana Pérez", "--email", "ana@example.org"]).exit_code == 0
         again = run.invoke(cli, ["catalog", "trappers", "add", "ANA", "Other"])

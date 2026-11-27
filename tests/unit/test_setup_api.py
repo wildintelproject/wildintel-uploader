@@ -5,14 +5,14 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from wildintel_uploader.core.services import local_folder_service
+from tests.support import local_folder_service
 from wildintel_uploader.web.main import app
 
 
 @pytest.fixture(autouse=True)
 def collections(tmp_path: Path):
     local_folder_service.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         yield tmp_path
 
 

@@ -78,7 +78,7 @@ export interface CorruptedImage {
 }
 
 /** A higher-numbered shot with an earlier EXIF date than a lower-numbered
- * one in the same folder — see core.services.deployment_import_service
+ * one in the same folder — see modules/deployments
  * .validate_images. */
 export interface SequenceIssue {
   path_a: string
@@ -90,7 +90,7 @@ export interface SequenceIssue {
 }
 
 /** The "Validate folder contents" step's checks — see
- * core.services.deployment_import_service.IMAGE_CHECKS. Only the results of
+ * the registry of modules/prevalidation/infrastructure/validators. Only the results of
  * whichever were asked for are present. */
 export type ImageCheck = 'corrupted' | 'sequence' | 'structure' | 'camera' | 'exif' | 'duplicates'
 
@@ -178,7 +178,7 @@ export interface CameraMismatch {
 }
 
 /** The postvalidation step's checks — see
- * core.services.deployment_import_service.DEPLOYMENT_CHECKS. */
+ * the registry of modules/postvalidation/infrastructure/validators. */
 export type DeploymentCheck =
   | 'deployment_id' | 'collection_prefix' | 'collection_name' | 'location' | 'time_range' | 'camera'
   | 'image_count' | 'sequence_count' | 'sequence_length' | 'sd_card' | 'photo_count'
@@ -351,7 +351,7 @@ export type ImportEvent =
   | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean | null; report_id?: string | null; resize?: ResizeSummary }
 
 /** What is done to the images as they are imported, and the values it uses — see
- * core.services.preprocessing_service. */
+ * modules/preprocessing. */
 export interface PreprocessingOptions {
   rename: boolean
   resize: boolean

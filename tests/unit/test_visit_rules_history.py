@@ -3,7 +3,7 @@ import random
 
 import pytest
 
-from wildintel_uploader.core.services import visit_rules
+from wildintel_uploader.modules.visits.domain import rules as visit_rules
 
 SITES = ["DONA_01", "dona_02", "DONA_03", "DONA_04"]
 ACTIONS = [["Installation"], ["Revision"], ["Revision", "Installation"], ["Desinstallation"], ["Stolen"], ["Installation", "Desinstallation"], ["SiteStart", "Installation"]]

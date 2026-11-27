@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from wildintel_uploader.core.services import camera_info
+from tests.support import camera_info
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 
 

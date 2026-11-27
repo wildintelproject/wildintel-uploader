@@ -6,8 +6,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from tests.unit.test_repair_service import DEPLOYMENT_ID, kept  # noqa: F401 — the fixture the service's own tests use
-from wildintel_uploader.core.services import local_folder_service as lfs
-from wildintel_uploader.core.services import preprocessing_service as pre
+from tests.support import local_folder_service as lfs
+from tests.support import preprocessing_service as pre
 from wildintel_uploader.web.main import app
 
 PAYLOAD = {"research_project_id": "DONA", "collection": "R0003", "deployment_id": DEPLOYMENT_ID}
@@ -18,7 +18,7 @@ def _client() -> TestClient:
 
 
 def _in(root: Path):
-    return patch("wildintel_uploader.core.config.collections_dir", return_value=root)
+    return patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=root)
 
 
 def _events(response) -> list[dict]:

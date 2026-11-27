@@ -125,7 +125,7 @@ def test_discarding_a_session_removes_it():
 
 
 def test_sessions_are_kept_in_the_state_folder():
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
 
     saved = _client().post("/api/sessions/scan", json={"source_dir": "/home/me/DONA_01", "scan": SCAN}).json()
 
@@ -136,8 +136,8 @@ def test_sessions_are_kept_in_the_state_folder():
 def test_sessions_left_where_they_used_to_be_are_moved_to_where_they_are_kept_now():
     import json
 
-    from wildintel_uploader.core import config
-    from wildintel_uploader.core.services import session_store
+    from wildintel_uploader.entrypoints import config
+    from wildintel_uploader.modules.deployments.infrastructure import session_store
 
     old = config.legacy_sessions_dir() / "11111111-1111-1111-1111-111111111111"
     old.mkdir(parents=True)
@@ -151,7 +151,7 @@ def test_sessions_left_where_they_used_to_be_are_moved_to_where_they_are_kept_no
 
 
 def test_an_id_that_is_not_one_the_app_makes_names_no_session_and_nothing_out_of_the_sessions_folder_is_touched():
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
 
     state = config.get_sessions_dir().parent
     state.mkdir(parents=True, exist_ok=True)
@@ -172,7 +172,7 @@ def test_an_id_that_is_not_one_the_app_makes_names_no_session_and_nothing_out_of
 def test_a_folder_of_the_sessions_folder_that_is_not_named_as_a_session_is_not_listed():
     import json
 
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
 
     odd = config.get_sessions_dir() / "odd"
     odd.mkdir(parents=True)

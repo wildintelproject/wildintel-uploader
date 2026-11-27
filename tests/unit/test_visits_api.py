@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from wildintel_uploader.core.config import load_settings as _real_load_settings  # noqa: E402
+from wildintel_uploader.entrypoints.config import load_settings as _real_load_settings  # noqa: E402
 
 PROJECT = {"name": "Doñana", "acronym": "DONA"}
 VISIT = {"location_id": "DONA_01", "session": "R0013", "date": "2026-10-02", "time": "08:14:05", "actions": ["Revision"], "camera_id": "12", "num_photos": 1620, "trappers": "Ana, Luis", "setup_by": "Ana", "comments": "pilas cambiadas"}
@@ -15,7 +15,7 @@ VISIT = {"location_id": "DONA_01", "session": "R0013", "date": "2026-10-02", "ti
 @pytest.fixture(autouse=True)
 def reports(tmp_path_factory, monkeypatch) -> Path:
     """The reports an import leaves go to a folder of the test, never to the one of the user."""
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     folder = tmp_path_factory.mktemp("reports")
     monkeypatch.setattr(config, "reports_dir", lambda settings=None: folder)
     return folder
@@ -25,7 +25,8 @@ def reports(tmp_path_factory, monkeypatch) -> Path:
 def entities_unchecked(request, monkeypatch):
     """Most tests save visits of cameras, cards and trappers that nobody registered: the check that they exist is off, except in the tests marked `entities`.
     Every visit of a file needs its coordinates, so the rows of the samples that do not give them get these, as a default."""
-    from wildintel_uploader.core.services import visit_rules, visits_csv
+    from wildintel_uploader.modules.visits.domain import rules as visit_rules
+    from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
     from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
     real = visits_csv.parse_visits
     entities = request.node.get_closest_marker("entities")
@@ -52,7 +53,7 @@ def _client() -> TestClient:
 
 def _settings():
     """The settings as they were, with the trappers Ana and Luis."""
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     settings = _real_load_settings()
     settings.FIELDWORK.trappers = [config.Trapper(username="ana", name="Ana"), config.Trapper(username="luis", name="Luis")]
     return settings
@@ -63,15 +64,15 @@ def _in(tmp_path: Path):
     from contextlib import ExitStack
     from unittest.mock import Mock
 
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     with ExitStack() as stack:
-        stack.enter_context(patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path))
-        stack.enter_context(patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path))
+        stack.enter_context(patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path))
+        stack.enter_context(patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path))
         if not isinstance(config.load_settings, Mock):   # a test that gives its own settings keeps them
-            stack.enter_context(patch("wildintel_uploader.core.config.load_settings", side_effect=_settings))
+            stack.enter_context(patch("wildintel_uploader.entrypoints.config.load_settings", side_effect=_settings))
         # the trappers Ana and Luis, in the catalog — which takes those versions before left in the settings from the settings files, not from a
         # load_settings that is patched (#248)
-        from wildintel_uploader.core.services import local_folder_service
+        from tests.support import local_folder_service
         local_folder_service.write_trappers(tmp_path, [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}])
         yield
 
@@ -327,9 +328,9 @@ def _visit(day: str, actions: list[str], site: str = "DONA_01", **more) -> dict:
 
 def _save_all(visits: list[dict]) -> None:
     """Keeps visits as they are, without the rules of a visit made by hand: these tests are about which of them are closed."""
-    from wildintel_uploader.core import config
-    from wildintel_uploader.core.schemas.requests import VisitRecord
-    from wildintel_uploader.core.services import local_folder_service
+    from wildintel_uploader.entrypoints import config
+    from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
+    from tests.support import local_folder_service
     _project()
     local_folder_service.write_visits(config.collections_dir(), "DONA", [VisitRecord.model_validate(v).model_dump(mode="json") for v in visits])
 
@@ -509,7 +510,7 @@ def test_a_csv_refuses_the_visits_that_break_the_rules_of_a_visit_as_the_form_do
 
 def test_a_file_with_rows_that_cannot_be_added_is_not_kept_in_part(tmp_path: Path):
     """#206: all or nothing — a file with a row that cannot be added keeps nothing, not even its good rows: the rows are corrected and the file read again."""
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     text = (
         "location_id,date,time,actions,num_photos,sd,camera_id\n"
         "DONA_01,2026-10-02,08:00,Installation,,A13,P800\n"
@@ -636,7 +637,7 @@ def test_a_closed_visit_comes_with_what_its_two_visits_say_of_the_deployment_mix
 # ── the settings of the field records, and what the engine of the field records also says ───────────────────────
 
 def _parse(text: str, kept=None, options=None, sites=("DONA_01", "DONA_02", "DONA_03")):
-    from wildintel_uploader.core.services import visits_csv
+    from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
     locations = [{"location_id": s, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.4} for s in sites]
     return visits_csv.parse_visits(text, locations, kept or [], visits_csv.suggest_mapping(text)["mapping"], options)
 
@@ -679,21 +680,21 @@ def test_a_row_that_is_a_visit_kept_already_by_its_session_site_camera_and_actio
 def test_the_seconds_are_cut_from_the_deployments_unless_they_are_kept_and_an_import_leaves_its_report(tmp_path: Path, reports: Path):
     from unittest.mock import patch
 
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     text = ("location_id,date,time,actions,session,num_photos,sd,camera_id\nDONA_01,2024-09-04,09:00:41,Installation,R0001,,A13,P800\n"
             "DONA_01,2024-10-12,09:05:17,Revision,R0002,241,B2,P800\n")
     for keep, expected in ((False, ("2024-09-04T09:00:00Z", "2024-10-12T09:05:00Z")), (True, ("2024-09-04T09:00:41Z", "2024-10-12T09:05:17Z"))):
         root = tmp_path / str(keep)
         root.mkdir()
         settings = config.Settings.model_validate({"FIELDLOG": {"keep_seconds": keep}})
-        with patch("wildintel_uploader.core.config.load_settings", return_value=settings):
+        with patch("wildintel_uploader.entrypoints.config.load_settings", return_value=settings):
             body = _import(root, text, save=True, given_up="2000-01-01").json()
             with _in(root):
                 found = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
         d = next(d for d in found if d["deployment_id"] == "R0001-DONA_01")
         assert (d["start"], d["end"]) == expected, (keep, d)
     # the report is kept with the other reports, with an entry for each row of the file
-    from wildintel_uploader.core.services import report_service
+    from wildintel_uploader.modules.reports.infrastructure import report_service
     report = report_service.read(body["report"], reports)
     assert report["kind"] == "visits" and report["title"] == "Visits imported to DONA" and report["checked"] == 2 and report["parameters"]["saved"] == 2
     assert [e["identifier"] for e in report["entries"]][:2] == ["Row 2 · DONA_01 · R0001 · 2024-09-04 09:00", "Row 3 · DONA_01 · R0002 · 2024-10-12 09:05"]
@@ -826,7 +827,7 @@ EPI_ENTRIES = [
 def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_camera_at_the_site(tmp_path: Path):
     import pytest  # noqa: PLC0415
     from unittest.mock import patch  # noqa: PLC0415
-    from wildintel_uploader.core.services import epicollect_service  # noqa: PLC0415
+    from tests.support import epicollect_service  # noqa: PLC0415
     from wildintel_uploader.modules.sources.infrastructure.epicollect5 import PyEpicollect5  # noqa: PLC0415
     from wildintel_uploader.modules.sources.infrastructure.sources import epicollect_api  # noqa: PLC0415
     with patch.object(epicollect_api, "project_form", return_value={"project": {}, "inputs": EPI_INPUTS}), patch.object(PyEpicollect5, "entries", return_value=EPI_ENTRIES):
@@ -846,7 +847,7 @@ def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_cam
 def test_a_form_that_is_not_the_one_of_a_visit_is_said_plainly():
     import pytest  # noqa: PLC0415
     from unittest.mock import patch  # noqa: PLC0415
-    from wildintel_uploader.core.services import epicollect_service  # noqa: PLC0415
+    from tests.support import epicollect_service  # noqa: PLC0415
     from wildintel_uploader.modules.sources.infrastructure.sources import epicollect_api  # noqa: PLC0415
     with patch.object(epicollect_api, "project_form", return_value={"project": {}, "inputs": [{"ref": "x", "label": "Other"}]}):
         with pytest.raises(epicollect_service.EpicollectError, match="locationID"):
@@ -1015,8 +1016,8 @@ def test_a_visit_has_no_actions_only_when_it_could_not_be_made(tmp_path: Path):
 
 
 def test_an_upload_is_planned_for_each_deployment_and_each_uploader_in_use_and_a_failed_one_is_tried_again(tmp_path: Path):
-    from wildintel_uploader.core import config
-    from wildintel_uploader.core.services import local_folder_service
+    from wildintel_uploader.entrypoints import config
+    from tests.support import local_folder_service
 
     def states():
         shown = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
@@ -1127,7 +1128,7 @@ def test_a_revision_starts_after_the_last_visit_of_the_one_before(tmp_path: Path
 
 
 def test_a_file_that_starts_after_the_first_revision_is_not_imported_when_the_revision_before_it_has_no_visit(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     with _in(tmp_path):
         _project(archived=(3,))
         text = ("location_id,actions,date,time,session,camera_id,sd\n"
@@ -1213,7 +1214,7 @@ def test_a_visit_linked_to_its_deployment_where_it_starts_it_locks_the_two_visit
 
 
 def test_an_unknown_visit_is_filled_by_a_known_one_where_its_day_puts_it(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     with _in(tmp_path):
         _project(archived=(2, 3))
         later = {**VISIT, "session": "R0002", "date": "2026-03-01", "time": "10:00:00", "when": "2026-03-01T10:00:00Z", "actions": ["Revision"], "camera_id": "C1", "sd": "S1", "num_photos": 5}
@@ -1232,7 +1233,7 @@ def test_an_unknown_visit_is_filled_by_a_known_one_where_its_day_puts_it(tmp_pat
 
 @pytest.mark.entities
 def test_an_edit_cannot_put_a_camera_an_sd_card_or_a_trapper_that_does_not_exist(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     with _in(tmp_path):
         _project()
         local_folder_service.write_field_items(tmp_path, "DONA", "cameras", [{"label": c, "camera_id": c, "camera_model": None, "research_project": "DONA"} for c in ("12", "C2", "C3")])
@@ -1290,7 +1291,7 @@ def test_a_visit_of_a_revision_is_after_those_of_the_revisions_before_it_and_bef
 # ── the new form of Epicollect: its cut headers, the inactive site and the camera removed after a theft ─────────
 
 def test_an_inactive_site_has_a_camera_put_up_again_and_a_camera_removed_after_a_theft_is_a_theft_alone():
-    from wildintel_uploader.core.services import epicollect_service
+    from tests.support import epicollect_service
     actions = epicollect_service.visit_actions
     assert actions("New site", None, None) == actions("Inactive site", None, None) == "Installation"
     assert actions("Stolen", None, "Camera replacement") == "Stolen + Installation"
@@ -1305,7 +1306,7 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
     import csv
     import io
 
-    from wildintel_uploader.core.services import epicollect_service
+    from tests.support import epicollect_service
     folder = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
 
     def read(name: str) -> tuple[str, list[dict]]:
@@ -1397,7 +1398,7 @@ def test_a_revision_that_is_closed_marks_what_it_lacks_as_not_visited_so_long_af
 
 
 def test_a_revision_lasts_so_many_days_weeks_or_months_and_a_month_is_one_of_the_calendar():
-    from wildintel_uploader.core.services import visit_rules
+    from wildintel_uploader.modules.visits.domain import rules as visit_rules
     assert visit_rules.shifted("2026-01-31", 10, "days") == "2026-02-10"
     assert visit_rules.shifted("2026-01-31", 2, "weeks") == "2026-02-14"
     assert visit_rules.shifted("2026-01-31", 1, "months") == "2026-02-28"       # its last day
@@ -1458,7 +1459,7 @@ def test_what_is_kept_of_a_site_given_up_in_the_file_is_the_visits_and_no_false_
 
 
 def test_the_locations_as_the_visits_of_a_file_leave_them():
-    from wildintel_uploader.core.services.visits_csv import _archived_by
+    from wildintel_uploader.modules.visits.infrastructure.csv_file import _archived_by
 
     sites = [{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "active"}, {"location_id": "DONA_03", "status": "archived", "status_date": "2026-01-01"},
              {"location_id": "DONA_04", "status": "archived", "status_date": "2026-05-01"}]
@@ -1534,7 +1535,7 @@ def test_what_is_kept_of_a_site_given_up_in_the_file_is_the_visits_and_no_false_
 
 
 def test_the_locations_as_the_visits_of_a_file_leave_them():
-    from wildintel_uploader.core.services.visits_csv import _archived_by
+    from wildintel_uploader.modules.visits.infrastructure.csv_file import _archived_by
 
     sites = [{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "active"}, {"location_id": "DONA_03", "status": "archived", "status_date": "2026-01-01"},
              {"location_id": "DONA_04", "status": "archived", "status_date": "2026-05-01"}]
@@ -1649,7 +1650,7 @@ def test_a_site_that_says_site_start_is_not_waited_for_before_it_and_one_that_do
 
 
 def test_the_words_site_start_are_an_action_of_a_file():
-    from wildintel_uploader.core.services import visits_csv
+    from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
 
     assert [visits_csv.ACTIONS[w] for w in ("site start", "sitestart", "site_start", "site setup")] == ["SiteStart"] * 4
 
@@ -1706,7 +1707,7 @@ def test_a_pending_site_starts_with_its_first_camera_and_is_ready_or_active_by_w
 
 @pytest.mark.parametrize("status", [None, "ready", "active", "pending"])
 def test_new_site_in_a_manual_visit_starts_the_site_regardless_of_status(tmp_path: Path, status: str | None):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
 
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
@@ -1724,7 +1725,7 @@ def test_new_site_in_a_manual_visit_starts_the_site_regardless_of_status(tmp_pat
 
 
 def test_new_site_in_an_import_is_saved_for_a_trapper_location_without_a_status(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
 
     text = "location_id,session,date,time,actions,camera_status,camera_id,sd\nDONA_04,R0001,2026-04-10,09:00,Installation,New site,C4,S4\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "camera_status", "camera_id", "sd")}
@@ -1764,7 +1765,7 @@ def test_knocked_down_and_damaged_are_not_accepted_as_the_status_of_a_camera_but
         refused = [_save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2026-02-10", "session": "R0002", "camera_status": s}) for s in ("Knocked down", "Damaged")]
         accepted = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2026-02-10", "session": "R0002", "camera_status": "Altered"})
         # a visit kept before, with a status that is no longer accepted, is read as it was kept
-        from wildintel_uploader.core.services import local_folder_service as lfs
+        from tests.support import local_folder_service as lfs
         raw = lfs._raw_visits(tmp_path, "DONA")
         raw[-1]["camera_status"] = "Damaged"
         lfs._write_raw_visits(tmp_path, "DONA", raw)
@@ -1788,8 +1789,8 @@ def test_a_file_with_knocked_down_or_damaged_says_the_status_is_not_one_of_the_o
 
 
 def test_an_sd_card_id_with_spaces_or_signs_is_said_not_refused_and_one_that_is_kept_already_is_not_said(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as lfs
-    from wildintel_uploader.core.services.visit_rules import unusual_card_id
+    from tests.support import local_folder_service as lfs
+    from wildintel_uploader.modules.visits.domain.rules import unusual_card_id
 
     assert [unusual_card_id(x) for x in ("A13", "47b", "693", "32J", "84 (10)", "85(78)", "38_B", " 7 ", "A-1")] == [False, False, False, False, True, True, True, False, True]
 
@@ -1809,7 +1810,7 @@ def test_an_sd_card_id_with_spaces_or_signs_is_said_not_refused_and_one_that_is_
 
 
 def test_the_id_of_an_sd_card_is_kept_as_written_in_the_cards_and_the_visits(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as lfs
+    from tests.support import local_folder_service as lfs
     text = "location_id,session,date,time,actions,num_photos,camera_id,sd,sd_brand\nDONA_01,R0001,2026-01-10,08:00,Installation,,P1,47b,SanDisk\nDONA_01,R0002,2026-02-10,08:00,Revision,10,P1,52c,SanDisk\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos", "camera_id", "sd", "sd_brand")}
     with _in(tmp_path):
@@ -1839,7 +1840,7 @@ def test_a_row_with_no_coordinates_takes_those_of_its_location_unless_the_import
 
 @pytest.mark.entities
 def test_the_trappers_a_file_says_are_created_when_asked_and_the_visits_are_kept_with_them(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as lfs
+    from tests.support import local_folder_service as lfs
     text = "location_id,session,date,time,actions,num_photos,who\nDONA_01,R0013,2026-02-01,08:00,Revision,5,\"Luis Gómez, Ana Pérez\"\n"
     mapping = {"location_id": "location_id", "session": "session", "date": "date", "time": "time", "actions": "actions", "num_photos": "num_photos", "trappers": "who"}
     body = {"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping}
@@ -1879,7 +1880,7 @@ def test_the_question_action_after_inspection_of_the_form_is_found_whole_and_cut
     import csv
     import io
 
-    from wildintel_uploader.core.services import epicollect_service
+    from tests.support import epicollect_service
     for header in ("10_Action_after_insp", "10_Action_after_inspection"):
         text = f"ec5_uuid,created_at,4_locationID,5_Status_of_the_came,{header}\nr1,2026-09-14T08:30:00.000Z,DONA_01,OK,Camera removal\n"
         [row] = list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
@@ -1890,7 +1891,7 @@ def test_the_examples_of_the_new_form_for_wicp_02_are_imported_in_order_with_no_
     """The six downloads of examples/visits_example/wildintel_csv/wicp_02, one after the other on the entities of examples/entities_example/wicp_02: the last makes a new site."""
     import csv
 
-    from wildintel_uploader.core.services import local_folder_service as lfs
+    from tests.support import local_folder_service as lfs
     examples = Path(__file__).parents[2] / "examples"
     rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
     order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up", "revision_6_new_site"]
@@ -1922,7 +1923,7 @@ def _wicp_02_until(root: Path, last: int) -> None:
     """The research project WICP_02 with the entities of examples/entities_example/wicp_02, and the downloads of examples/visits_example/wildintel_csv/wicp_02 kept up to revision `last`."""
     import csv
 
-    from wildintel_uploader.core.services import local_folder_service as lfs
+    from tests.support import local_folder_service as lfs
     examples = Path(__file__).parents[2] / "examples"
     rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
     order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up"][:last]
@@ -1955,7 +1956,7 @@ def test_a_visit_that_says_new_site_makes_its_site_with_no_need_of_the_switch_an
 
 
 def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its_entry_was_created():
-    from wildintel_uploader.core.services import epicollect_service
+    from tests.support import epicollect_service
     text = "ec5_uuid,created_at,1_setupBy,4_locationID,5_Status_of_the_came,10_Action_after_the_\nr1,2026-09-14T08:30:00.000Z,Ana,DONA_01,OK,\n"
     import csv
     import io
@@ -1983,7 +1984,7 @@ def test_the_download_of_the_new_form_can_create_what_does_not_exist_with_the_pl
 
 @pytest.mark.entities
 def test_a_visit_with_a_camera_an_sd_card_or_a_trapper_that_does_not_exist_is_refused_by_hand_and_in_a_file(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     install = {**VISIT, "session": "R0001", "date": "2026-01-10", "actions": ["Installation"], "camera_id": "NOCAM", "sd": "NOSD", "trappers": "Nobody", "num_photos": None,
                "camera_height": 1, "camera_interval": 5, "camera_tilt": 0, "camera_heading": 90, "bait_use": False}
     with _in(tmp_path):
@@ -2014,7 +2015,7 @@ def test_a_visit_that_left_no_camera_whether_it_took_it_away_found_it_stolen_or_
 
 
 def test_the_cameras_and_the_cards_are_in_the_field_back_to_ready_or_archived_when_stolen(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
 
     def status(kind: str) -> dict:
         return {i["label"]: (i["status"], i.get("archive_reason")) for i in svc.list_field_items(tmp_path, "DONA", kind)}
@@ -2043,7 +2044,7 @@ def test_the_cameras_and_the_cards_are_in_the_field_back_to_ready_or_archived_wh
 
 
 def test_new_visits_are_only_kept_to_an_active_research_project(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
 
     with _in(tmp_path):
         _project(archived=(2, 3))
@@ -2060,7 +2061,7 @@ def test_new_visits_are_only_kept_to_an_active_research_project(tmp_path: Path):
 
 
 def test_a_research_project_goes_back_to_planned_only_without_visits_and_an_archived_one_is_never_modified(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
 
     with _in(tmp_path):
         _project(archived=(2, 3))
@@ -2094,7 +2095,7 @@ def test_a_research_project_goes_back_to_planned_only_without_visits_and_an_arch
 
 
 def test_a_planned_site_is_not_in_the_app_and_a_pending_one_is(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
 
     with _in(tmp_path):
         _project(archived=(2, 3))
@@ -2108,7 +2109,7 @@ def test_a_planned_site_is_not_in_the_app_and_a_pending_one_is(tmp_path: Path):
 
 
 def test_the_status_of_a_site_by_hand_follows_what_the_visits_say(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
 
     def change(status: str):
         try:
@@ -2132,7 +2133,7 @@ def test_the_status_of_a_site_by_hand_follows_what_the_visits_say(tmp_path: Path
 
 
 def test_a_site_with_a_visit_still_to_be_made_in_a_revision_that_has_begun_does_not_leave_the_app(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
 
     with _in(tmp_path):
         _project(archived=(3,))
@@ -2214,7 +2215,7 @@ def test_a_planned_revision_with_no_visit_is_closed_by_marking_every_location_as
 
 @pytest.mark.entities
 def test_two_sd_cards_that_differ_only_in_case_are_two_cards_each_kept_as_written_and_what_says_another_case_is_refused(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as lfs
+    from tests.support import local_folder_service as lfs
     rows = ["DONA_01,R0001,2026-01-10,08:00,Installation,,P1,7b", "DONA_02,R0001,2026-01-10,09:00,Installation,,P2,7B"]
     text = "location_id,session,date,time,actions,num_photos,camera_id,sd\n" + "\n".join(rows) + "\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos", "camera_id", "sd")}
@@ -2234,7 +2235,7 @@ def test_two_sd_cards_that_differ_only_in_case_are_two_cards_each_kept_as_writte
 
 @pytest.mark.entities
 def test_the_case_of_an_sd_card_counts_where_a_visit_names_it_a_card_that_exists_with_another_case_is_not_it(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as lfs
+    from tests.support import local_folder_service as lfs
     text = "location_id,session,date,time,actions,num_photos,camera_id,sd\nDONA_01,R0001,2026-01-10,08:00,Installation,,P1,7b\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos", "camera_id", "sd")}
     with _in(tmp_path):
@@ -2253,7 +2254,7 @@ def test_the_template_of_the_custom_csv_is_the_valid_example_and_is_read_by_itse
     help and its twenty visits — five revisions, with a theft, a camera replaced, one taken away and a site given up —, on the entities of examples/entities_example/wicp_02, are kept with no problem and no warning."""
     import csv
 
-    from wildintel_uploader.core.services import local_folder_service as lfs
+    from tests.support import local_folder_service as lfs
     root = Path(__file__).parents[2]
     template = (root / "frontend" / "src" / "visitsTemplate.csv").read_text(encoding="utf-8")
     assert template == (root / "examples" / "visits_example" / "custom_csv" / "wicp_02" / "template.csv").read_text(encoding="utf-8")

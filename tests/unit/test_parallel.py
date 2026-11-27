@@ -38,7 +38,7 @@ def test_a_failure_is_raised_to_the_caller():
 
 
 def test_it_takes_the_workers_from_the_settings_by_default(monkeypatch):
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     from wildintel_uploader.entrypoints import wiring  # noqa: F401 — where the app is put together tells it to ask the settings
     seen = []
     monkeypatch.setattr(config, "workers", lambda: seen.append("asked") or 1)

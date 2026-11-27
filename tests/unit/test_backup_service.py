@@ -6,8 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
-from wildintel_uploader.core import config
-from wildintel_uploader.core.services import backup_service, local_folder_service
+from wildintel_uploader.entrypoints import config
+from tests.support import local_folder_service
+from wildintel_uploader.modules.backup.infrastructure import backup_service
 
 
 def _project(root: Path, acronym: str = "DONA") -> Path:

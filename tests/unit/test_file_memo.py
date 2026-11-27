@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from wildintel_uploader.core.services import camera_info, exif_store, file_memo
-from wildintel_uploader.core.services import deployment_import_service as svc
-from wildintel_uploader.core.services import checks as old_checks
-from wildintel_uploader.core.services import preprocessing_service as pre
+from tests.support import camera_info
+from wildintel_uploader.modules.fileinfo.infrastructure import store as exif_store
+from wildintel_uploader.modules.fileinfo.infrastructure import memory as file_memo
+from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as svc
+from tests.support import checks as old_checks
+from tests.support import preprocessing_service as pre
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter, pillow as pillow_adapter
 
 

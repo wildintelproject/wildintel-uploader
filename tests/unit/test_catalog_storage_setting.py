@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.catalog.application.migration import TargetNotEmpty, copy_catalog
 from wildintel_uploader.modules.catalog.domain.models import ResearchProject, Trapper
 from wildintel_uploader.modules.settings.domain import folders
@@ -92,7 +92,7 @@ def app_folders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _cli():
-    from wildintel_uploader.cli.app import app
+    from wildintel_uploader.entrypoints.cli.app import app
     return app
 
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from wildintel_uploader.core.services import statistics_service as st
+from wildintel_uploader.modules.deployments.infrastructure import statistics_service as st
 
 T0 = datetime(2024, 9, 1, 8, 0, 0)
 

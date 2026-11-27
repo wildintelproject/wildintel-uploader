@@ -1,4 +1,5 @@
-from wildintel_uploader.core import config, identity
+from wildintel_uploader.entrypoints import config
+from wildintel_uploader.shared import identity
 
 
 def test_an_sd_card_a_camera_and_a_trapper_are_the_same_only_when_written_the_same():

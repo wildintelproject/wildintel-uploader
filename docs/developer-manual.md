@@ -20,14 +20,14 @@
 
 ## 1. Architecture
 
-One Python package, `wildintel_uploader`, with a **core** and two faces on top of it:
+One Python package, `wildintel_uploader`, built as a **hexagonal architecture** (ports and adapters, #248): **modules** that do the
+work, each behind a contract, and two faces that drive them:
 
 - **web** — a **FastAPI** backend serving a **React** frontend, both on the user's own computer;
-- **cli** — the `wildintel-uploader` command (**Typer** + rich), a smaller flow over the same core.
+- **cli** — the `wildintel-uploader` command (**Typer** + rich), a smaller flow over the same modules.
 
-The core's services do the work and know nothing of either: long operations return **generators
-of event dicts**, which the web routers stream to the browser as NDJSON and the command line
-prints. Both use the same `settings.toml` and log. Released as a single executable (PyInstaller)
+The modules know nothing of either (see [Modules](#modules)): long operations return **generators of event dicts**, which the web entry points
+stream to the browser as NDJSON and the command line prints. Both use the same `settings.toml` and log. Released as a single executable (PyInstaller)
 that runs the web app — starting the server and opening the browser — or, given any argument, the
 command line.
 
@@ -44,8 +44,8 @@ flowchart LR
     API -- "wildintel-trapper-sdk (httpx)" --> T["TRAPPER"]
 ```
 
-(The command line takes the backend's place in the diagram: it calls the same services
-directly, in the same process, without HTTP.)
+(The command line takes the backend's place in the diagram: it calls the same modules, through the same contracts, in the same process,
+without HTTP.)
 
 - **Local first.** The app's own data — the **collections folder** — is plain files and JSON
   (see the [user manual](user-manual.md#the-collections-folder)); there is no database. TRAPPER
@@ -115,7 +115,7 @@ wins over the settings page's. Both can also go in `src/wildintel_uploader/web/.
 
 !!! note "Two kinds of settings"
     `web/settings.py` is the **server's** (port, log level, CORS — environment variables).
-    `core/config.py` is the **app's** own `settings.toml` (TRAPPER account, the data folder,
+    `entrypoints/config.py` reads the **app's** own `settings.toml` (TRAPPER account, the data folder,
     checks, preprocessing — the ⚙️ page, and `wildintel-uploader config`).
 
 ## 3. Repository layout
@@ -123,22 +123,21 @@ wins over the settings page's. Both can also go in `src/wildintel_uploader/web/.
 ```text
 wildintel-uploader/
 ├── src/wildintel_uploader/
-│   ├── core/
-│   │   ├── config.py            # the app's settings.toml (pydantic + Dynaconf), several configs
-│   │   ├── logging_setup.py     # the log file and console
-│   │   ├── parallel.py          # a bounded thread pool, for validating/preprocessing images
-│   │   ├── version.py
-│   │   ├── schemas/requests.py  # request models — DeploymentFields is Camtrap DP's deployments row
-│   │   ├── storage/             # where the records are kept: the ProjectStore interface, the JSON backend, the registry (see Storage)
-│   │   └── services/            # the actual work (see below)
+│   ├── modules/                 # what the app does, one module per concern (see Modules)
+│   │   └── <module>/
+│   │       ├── domain/          # plain Python: its records, its rules, its contract and its ports (ports.py), its settings (settings.py)
+│   │       ├── application/     # its use cases: the contract implemented over the ports
+│   │       └── infrastructure/  # its adapters: files, ExifTool, TRAPPER…, its web API models (api_schemas.py), the format of its settings
+│   ├── shared/                  # the shared kernel: ids, identity, audit, storage, camtrap (Camtrap DP), desktop, parallel, logs, version
+│   ├── entrypoints/
+│   │   ├── wiring.py            # where the modules are put together (Dishka): the one place that chooses each adapter
+│   │   ├── config.py            # the settings as the code of before reads them (settings.toml), for the adapters
+│   │   ├── api/                 # FastAPI routers, one per module — thin: a request into a call to the contract, and its answer or error back
+│   │   └── cli/                 # the Typer app (app.py) and the commands of each module
 │   ├── web/
-│   │   ├── main.py              # FastAPI app: routers + the built frontend as static files
+│   │   ├── main.py              # the FastAPI app: the routers of entrypoints/api + the built frontend as static files
 │   │   ├── app_entry.py         # executable entry point: the web app — or, with arguments, the CLI
-│   │   ├── settings.py          # the server's settings (env vars / .env)
-│   │   └── api/routers/         # one router per area — thin: resolve credentials, map errors, stream
-│   ├── cli/
-│   │   ├── app.py               # the Typer app: config, trapper lookups, import-deployment
-│   │   └── common.py            # the console, credentials, errors
+│   │   └── settings.py          # the server's settings (env vars / .env)
 │   └── wucli.py                 # the development CLI (uv run wucli …)
 ├── tests/unit/                  # pytest — TRAPPER always faked
 ├── frontend/
@@ -181,52 +180,74 @@ something to say for each check.
 
 ## 4. Backend
 
-### Services
+### Modules
 
-`core/services/`, one module per concern:
+Each module is a folder of `src/wildintel_uploader/modules/` with three layers, and the rule that **a layer only looks inwards**:
+
+- **`domain/`** — plain Python, no framework: the module's records (dataclasses) and their rules, its **contract** — the abstract class or
+  protocol the rest of the app asks it through (`ports.py`: `CatalogService`, `VisitsService`…) — and its **ports out**, what it needs from
+  outside (a repository, ExifTool, TRAPPER…). Its settings, if it has any, are its `settings.py` (see below).
+- **`application/`** — the **use cases**: the class that implements the contract over the ports (`CatalogUseCases(CatalogService)`).
+- **`infrastructure/`** — the **adapters**: each implements a port (JSON files, a SQL database, ExifTool, Pillow, pyepicollect, the TRAPPER SDK…),
+  the models of its web API (`api_schemas.py`) and the format of its settings in `settings.toml`.
 
 | Module | Does |
 |---|---|
-| `deployment_import_service` | The wizard's backbone: scan a folder (EXIF dates, camera), the image **validations** and deployment **postvalidations**, the deployment id and revisions, copying, and the import streams. |
-| `preprocessing_service` | Dates, rename, resize and XMP metadata; writes `preprocessing.json`. Drives the import. |
-| `statistics_service` | The statistical postvalidation: sequences, and whether this revision is like the earlier ones of the location. Also the statistics of a whole revision (`collection_statistics`, `POST /api/statistics/revision`, the CLI's `statistics`), with each deployment's metrics kept in `statistics.json` beside its `images.json`. |
-| `report_service` | The reports: builds them from a validation's, a postvalidation's or a preprocessing's results, keeps them as JSON in `<data dir>/reports/`, lists, deletes and exports them to CSV. |
-| `seal_service` | Runs the checks over the source images and writes/verifies `seal.json`. |
-| `local_folder_service` | The collections folder: research projects, locations, visits, cameras and SD cards (the *rules* of the records, which are kept through `core/storage`), collections, deployments, `images.json`, the timestamp log and the fieldwork log of older folders (only read, #213). |
-| `audit` | The two dates every visit, camera and SD card keeps — `created_at` and `updated_at` — written by the app when it is kept, as an ORM does. |
-| `camera_info` | The camera's model and id, through ExifTool when it's there (bundled or on the `PATH`), else Pillow. |
-| `trapper_service` | Thin wrapper over the SDK for lookups; registers a deployment through the classic import form. |
-| `trapper_upload_service` | Uploading a deployment: location, deployment, packing in zips + yaml, upload, wait. Also the access check. |
-| `repair_service` | Looks at a deployment folder (valid as its `seal.json` says) and rebuilds its metadata files from the folder's own contents; an older timestamp log prevails over the images. |
-| `sync_service` | Fills the collections folder from a TRAPPER classification project. |
-| `session_store` | The wizard's resumable runs. |
-| `folder_picker`, `file_manager` | The OS's native folder dialog and file explorer — this is a local tool, so the backend can open them on the user's screen. |
+| `settings` | `settings.toml` and its configs: reading, checking and saving the settings, by sections that each module registers. |
+| `catalog` | The research projects, their locations, cameras, SD cards, the people and their roles, the history of their states — kept as JSON files or in SQLite. |
+| `fileinfo` | What is known of each image while the file is the same — what ExifTool reads, whether it decodes, its hashes —, in memory and in a cache on disk; and `MediaFolder`, the images of a folder. |
+| `prevalidation` | The checks of the images of a folder — each a validator in `infrastructure/validators/`. Settings: `VALIDATION`. |
+| `postvalidation` | The checks of a deployment, the statistical ones too — each a validator in `infrastructure/validators/`. Settings: `POSTVALIDATION`. |
+| `preprocessing` | Dates, names, resizing, hashes and XMP, each a step in `infrastructure/steps/`; preparing in `.staging`, saving and sealing. Settings: `PREPROCESSING`. |
+| `sources` | Where the visits come from: the Epicollect5 API and the CSV downloaded from it, each a source in `infrastructure/sources/`. Settings: `EPICOLLECT5`, `EPICOLLECTCSV`. |
+| `visits` | The visits and their rules, files of visits, the deployments they say and the visit book. Settings: `FIELDLOG`. |
+| `deployments` | A memory card, a folder of images, the collections, importing a deployment, its seal, its photos, repairing it, the statistics of a revision, the sessions of the wizard. |
+| `timefix` | Checking and fixing the dates of the images of a folder. |
+| `uploaders` | TRAPPER: the account, uploading the deployments kept, importing one from the wizard, syncing. Settings: `TRAPPER`, `AGOUTI`. |
+| `backup` | Backups of the settings and of a research project, and restoring them. |
+| `reports` | The reports of what each module did. |
+
+**How they meet.** A module uses another **only through its domain** — its contract —, never its infrastructure. `entrypoints/wiring.py` is
+the one place that puts them together: `build_<module>()` chooses each adapter and gives each module the contracts of the others it uses, and
+the Dishka providers there give them to the entry points (`FromDishka[CatalogService]` in a router, `@inject` in a command). Where an adapter
+of the code before is a plain function, it asks the contract it needs from `wiring` when it is called (`_files()`, `_records()`, `_layout()`).
+
+**Settings by module.** A module with settings registers its section: the dataclass of `domain/settings.py` with
+`@settings_registry.section("VALIDATION", "validation", order=70)`, its format in `infrastructure/settings.py` with
+`@settings_registry.schema("VALIDATION")`. The module `settings` finds them by itself and puts them together, in the order the file has always had.
+
+**Checks and steps as classes** (#246). A check of the images is a class of `prevalidation/infrastructure/validators/` with its `key`, `label`
+and `description`, run over a `MediaFolder` that asks what is known of the files once, whatever check asks; the registry in the package's
+`__init__.py` gives their order. The same for the checks of a deployment and the steps of the preprocessing.
+
+**Tests of the architecture** (`tests/unit/test_architecture.py`): a domain is plain Python, a use case uses its domain only, the new code
+takes no models of the code before, a module uses another only through its domain, and nothing of the app imports what was `core`.
 
 ### The record of a visit
 
-A visit is kept as a **`VisitRecord`**, the Pydantic class in `core/schemas/requests.py` that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks **each field on its own** (its type, its range, the values it may take: the status of the camera is one of `visit_rules.CAMERA_STATUSES`, the card and the batteries one of four codes) and two things on the **whole** visit: it does at least one action (only a visit that could not be made — status *Not revised* — has none), and it has a height or a depth, not both.
+A visit is kept as a **`VisitRecord`**, the Pydantic class in `modules/visits/infrastructure/records.py` that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks **each field on its own** (its type, its range, the values it may take: the status of the camera is one of `visit_rules.CAMERA_STATUSES`, the card and the batteries one of four codes) and two things on the **whole** visit: it does at least one action (only a visit that could not be made — status *Not revised* — has none), and it has a height or a depth, not both.
 
 Six fields are not typed, the app fills them in: `id` (a UUID that never changes), `when` (the instant, ISO 8601 in UTC with a `Z`, worked out from the day and the time of the wall clock of the location), `state` (`deployed`, `collected`, `stolen`, `not_visited` or `no_camera`, worked out by `visit_deployments.visit_states` and refreshed whenever a visit is added), `deployment_id` (the deployment the visit closed, once its images are imported) and `created_at` / `updated_at` (written each time the visit is kept, as an ORM does: a visit saved again with nothing changed keeps both). What a visit points to — location, camera, SD card, trappers — is kept by id: see *Storage*.
 
-What the visits do to the **entities** is `visit_rules.entity_changes`, applied by the visits router when visits are kept (by hand and from a file): the camera and the card put in the field are *active*, the ones taken away are *ready*, and a camera found stolen is archived with its card.
+What the visits do to the **entities** is `rules.entity_changes` (`modules/visits/domain/rules.py`), applied by the use cases of the visits when they are kept (by hand and from a file): the camera and the card put in the field are *active*, the ones taken away are *ready*, and a camera found stolen is archived with its card.
 
 ### Storage
 
 The **records** — the research projects and, for each, its locations, visits, unknown visits, planned revisions, cameras, SD cards and failed uploads — are kept through a **layer of
-abstraction**, `core/storage`: today they are JSON files in the collections folder, and a database can be added later **without changing the code that uses them**.
+abstraction**, `shared/storage`: today they are JSON files in the collections folder, and a database can be added later **without changing the code that uses them**.
 
 - `storage.base.ProjectStore` is the interface — a few methods: the research projects (`list_projects`, `has_project`, `get_project`, `add_project`, `save_project`,
   `delete_project`) and the records of one of them by kind (`read_records`, `write_records`, `delete_records`). A record is a plain `dict`; the kinds are `RECORD_KINDS`.
 - `storage.json_files.JsonFolderStore` is the backend called `json`, the default: `<collections folder>/<research project>/visits.json` and its companions, each put in place
   at once, so a file is never left half written.
-- The **rules** are not the store's. `local_folder_service` has them — the instants of the visits, which location can be removed, the dates `created_at` and `updated_at` (see
-  `services/audit.py`) —, and only asks the store to keep or give back. That is why a new backend is small, and why it cannot change what the app does.
+- The **rules** are not the store's. The modules have them — the instants of the visits, which location can be removed, the dates `created_at` and `updated_at` (see
+  `shared/audit.py`) —, and only asks the store to keep or give back. That is why a new backend is small, and why it cannot change what the app does.
 - What is not a record stays a file of the collections folder: the images and what is written beside them (`deployment.json`, `images.json`, the logs of a collection…).
   Nor the settings (`settings.toml`), which have their own place.
 - The settings choose the backend: `DATA.storage` (`json` by default), read the first time it is needed and applied again when the settings are saved.
 
-- **The records point to each other by internal id** (`services/ids.py`). Every record that others refer to has an `id` — a UUID the app generates (`ids.new_id`); a record kept before the ids existed gets one made from what called it (`ids.legacy_id`, the same one everywhere) the first time it is read, and keeps it. A visit is **kept** with `location_ref`, `camera_ref`, `sd_ref`, `trapper_refs` and `setup_by_ref`, and **told** with what they are called (`local_folder_service._kept` and `_told`, as with the instant `when`); a role is kept with `trapper_ref`; an unknown visit with `location_ref`. What is not registered (a card nobody has) is kept as it was said and linked when it is. A backup says the visits and the roles by name, so it is restored where the ids are others. What the page sends back for an item — its `id` — tells it from a new one, so a rename is not a deletion plus an addition; an id the page makes up is not taken.
-- **Nothing is deleted for good**: a record that is removed gets `deleted_at` (`services/audit.py`) and is no longer listed; it comes back when it is added again. `ProjectStore.delete_project` is a purge the app does not use.
+- **The records point to each other by internal id** (`shared/ids.py`). Every record that others refer to has an `id` — a UUID the app generates (`ids.new_id`); a record kept before the ids existed gets one made from what called it (`ids.legacy_id`, the same one everywhere) the first time it is read, and keeps it. A visit is **kept** with `location_ref`, `camera_ref`, `sd_ref`, `trapper_refs` and `setup_by_ref`, and **told** with what they are called (`modules/visits/infrastructure/kept_visits.py`: `_kept` and `_told`, as with the instant `when`); a role is kept with `trapper_ref`; an unknown visit with `location_ref`. What is not registered (a card nobody has) is kept as it was said and linked when it is. A backup says the visits and the roles by name, so it is restored where the ids are others. What the page sends back for an item — its `id` — tells it from a new one, so a rename is not a deletion plus an addition; an id the page makes up is not taken.
+- **Nothing is deleted for good**: a record that is removed gets `deleted_at` (`shared/audit.py`) and is no longer listed; it comes back when it is added again. `ProjectStore.delete_project` is a purge the app does not use.
 - **The trappers** are global records (`ProjectStore.read_global` / `write_global`, `trappers.json` beside the projects): the people belong to no research project. Those an earlier version kept in the settings are moved to the store the first time they are asked for.
 - **What is not in the layer yet.** With a database, *all* the information should go to it, except the images. For now the layer has the records of the research projects and the trappers; the metadata of collections and deployments (`deployment.json`, `images.json`…) and the settings themselves (which say where the records are, so they stay a file) are not through it. The reports and the sessions stay files, for now.
 
@@ -235,7 +256,7 @@ abstraction**, `core/storage`: today they are JSON files in the collections fold
 To keep the records somewhere else — a database, say — **add a backend**; nothing else is touched:
 
 ```python
-from wildintel_uploader.core import storage
+from wildintel_uploader.shared import storage
 
 class SqliteStore(storage.ProjectStore):
     def __init__(self, root): ...                       # the collections folder; the connection is the backend's own business
@@ -250,38 +271,38 @@ the store too, and its `.zip` holds JSON whatever the records are kept in, so a 
 ### Threads
 
 Validating and preprocessing images is CPU-bound (decoding, hashing, resizing), so it runs on a
-pool of threads — `GENERAL.workers` of them, default the CPUs up to 4 (`core/parallel.py`).
+pool of threads — `GENERAL.workers` of them, default the CPUs up to 4 (`shared/parallel.py`, told how many by `wiring`).
 Pillow and ExifTool, which is a subprocess, release the GIL for the heavy parts. Events are still
 yielded in order, from the generator's own thread.
 
 ### Camera and ExifTool
 
 The serial number of a camera trap lives in the maker's own MakerNotes, which only ExifTool
-decodes across brands. `camera_info.exiftool_path()` finds the copy bundled with the executable
+decodes across brands. `exiftool_path()` (`modules/fileinfo/infrastructure/exiftool.py`) finds the copy bundled with the executable
 (`exiftool/` inside the PyInstaller bundle — the release workflow unpacks it into
 `build/exiftool`), then the one on the `PATH`. Without it, Pillow gives the make and model, and the
 result says which reader was used so the UI can say "may be incomplete". ExifTool also writes the
 XMP metadata of the preprocessing, which is why that step is disabled without it.
 
-**Each image is read once** (#140). `read_cameras`, `read_dates` and `read_tags` all go through
-`camera_info._metadata`: one ExifTool run asks for the camera (make, model, serial-number tags) and
+**Each image is read once** (#140). `cameras`, `dates` and `tags` of the contract of `fileinfo` (`FileInfoService`) all go through
+`FileInfoUseCases.metadata`: one ExifTool run asks for the camera (make, model, serial-number tags) and
 the capture dates (`DateTimeOriginal`, `CreateDate`, `ModifyDate`) besides whatever tags the caller
 wants, so the steps after it (the checks of the deployment, the statistics, the preprocessing, the
 seal) find what they need already read. What was read is kept by the stamp of the file — its path,
-size and modification time, see `file_memo` — in memory (`file_memo.EXIF`) and on disk
-(`exif_store`: a SQLite database `exif.sqlite3` in the cache folder of the system, e.g.
-`~/.cache/wildintel-uploader`, at most `exif_store.LIMIT` images, the oldest written forgotten
+size and modification time, see `fileinfo/infrastructure/files.py` — in memory (`fileinfo/infrastructure/memory.py`) and on disk
+(`fileinfo/infrastructure/store.py`: a SQLite database `exif.sqlite3` in the cache folder of the system, e.g.
+`~/.cache/wildintel-uploader`, at most `store.LIMIT` images, the oldest written forgotten
 first), so a restart in the middle of an import does not read the images again. A changed file has
 another stamp and is read again; a file ExifTool could not read is not kept. The store is only a
 cache: it can be deleted at any time, and when it cannot be opened it is as if it were empty. The
 tests point the cache folder to their throwaway home and clear it before each test (`conftest.py`).
 
 **Read ahead.** Scanning a folder (`POST /scan-folder`) also starts reading its images' EXIF in a background thread
-(`deployment_import_service.prefetch_metadata` → `camera_info.prefetch`), with the extra fields of
+(`deployment_import_service.prefetch_metadata` → `FileInfoService.prefetch`), with the extra fields of
 `VALIDATION.exif_fields`: while the user chooses the checks, ExifTool is already reading. Only one ExifTool reading runs
-at a time (`camera_info._reading`): a step that asks while the reading ahead is under way waits for it and then finds
+at a time (a lock of `FileInfoUseCases`): a step that asks while the reading ahead is under way waits for it and then finds
 its result, rather than reading the same images again. Nothing is read ahead without ExifTool. The tests turn it off
-(`camera_info.PREFETCH = False` in `conftest.py`), so that no reading started by one test is still running in the next.
+(`fileinfo.application.use_cases.PREFETCH = False` in `conftest.py`), so that no reading started by one test is still running in the next.
 
 ### Scan and guess
 
@@ -319,7 +340,7 @@ The wizard's import does **not** talk to TRAPPER: the deployment is registered w
 deployment form — is the command line's flow.
 
 The **timezone** is read from the location, in the research project's `locations.json`
-(`local_folder_service.location_time`), never from the request: `import-local` refuses a location
+(the location's time, from the catalog), never from the request: `import-local` refuses a location
 with none. This is deliberate — see the [user manual](user-manual.md#23-locations).
 
 ### Reports
@@ -355,14 +376,14 @@ To report a new check, add its entries where the report is built (`report_servic
 
 | File | Written by | Content |
 |---|---|---|
-| `deployment.json` | `local_folder_service.write_deployment_metadata` | A `DeploymentFields`. |
-| `images.json` | `local_folder_service.write_images_file` | `{deployment_id, source, image_count, first, last, images: [{name, local_time, source, extra}]}`. `source` is `local` or `trapper`; `extra` holds what each source knows. `local_time` is the camera's wall clock — what the statistics read. |
+| `deployment.json` | `deployments/infrastructure/collections.py`: `write_deployment_metadata` | A `DeploymentFields`. |
+| `images.json` | `deployments/infrastructure/collections.py`: `write_images_file` | `{deployment_id, source, image_count, first, last, images: [{name, local_time, source, extra}]}`. `source` is `local` or `trapper`; `extra` holds what each source knows. `local_time` is the camera's wall clock — what the statistics read. |
 | `preprocessing.json` | `preprocessing_service` | `{options, images: […]}`: per image its original name, name, capture date and where it came from, and `source_hash` / `hash` / `final_hash`. **Its presence is what "preprocessed" means** to the upload. |
 | `seal.json` | `seal_service.seal` | Per image and for the deployment, which checks passed; `sha256` of the images and of `deployment.json`; `seal`, the hash of all of it. `seal_service.verify` recomputes and reports `valid`, `broken` (with what `changed`, is `missing`, was `added`) or `none`. |
 | `upload.json` | `trapper_upload_service` | `{uploaded_at, research_project_pk, classification_project_pk, collection, …}`. |
 
 A deployment whose `images.json` says `"source": "trapper"` was **synced**: its images were never
-here, and it isn't modified (`local_folder_service.is_synced`).
+here, and it isn't modified (`collections.is_synced`).
 
 ### The upload
 
@@ -410,13 +431,13 @@ in `failed`, not raised.
 
 A **session** is one wizard run's own directory under `<Documents>/wildintel-uploader/sessions/<task_id>/`,
 holding a `session.json`, in the phases `scanned` → `selected` → `ready`
-(`services/session_store.py`). Each writer merges its own section into what is on disk, writes
+(`modules/deployments/infrastructure/session_store.py`). Each writer merges its own section into what is on disk, writes
 atomically (`.tmp` then replace), and no phase erases another's. The session is offered back on
 start-up until the import reaches `done`, which discards it. Credentials never reach this module.
 
 ### Logging
 
-`core/logging_setup.py`: console and a rotating file (`wildintel-uploader.log`, 5 MB × 5, in `platformdirs.user_log_dir` — `~/.local/state/wildintel-uploader/log` on Linux; the sessions are in `user_state_dir()/sessions`; neither is configurable, and what an earlier version left beside `settings.toml` or in Documents is moved at start) at
+`modules/settings/infrastructure/activity_log.py`: console and a rotating file (`wildintel-uploader.log`, 5 MB × 5, in `platformdirs.user_log_dir` — `~/.local/state/wildintel-uploader/log` on Linux; the sessions are in `user_state_dir()/sessions`; neither is configurable, and what an earlier version left beside `settings.toml` or in Documents is moved at start) at
 `GENERAL.log_level`, changed on the fly when the settings are saved. At `DEBUG` each file and each
 TRAPPER query is logged, and tracebacks are kept; the libraries' byte-level chatter stays at INFO.
 The command line only prints warnings unless given `-v`.
@@ -525,23 +546,23 @@ timeout → 502/504. The command line has its own `describe()` with the same wor
 
 ## 7. Adding a check
 
-A check runs in three places — a service, the API and the UI — and has a setting. To add, say,
-an image check `x`:
+A check is a class, and has a setting. To add, say, an image check `x`:
 
-1. **The service.** In `deployment_import_service`, add `"x"` to `IMAGE_CHECKS` and its logic in
-   `validate_images` (`DEPLOYMENT_CHECKS` and `validate_deployment_consistency` for a
-   postvalidation; a statistical one goes in `statistics_service`'s `STATISTIC_CHECKS`). It returns its findings in the
-   result, under its own key.
-2. **The seal.** `seal_service.run_checks` turns the same results into what `seal.json` records for
-   each image — add what `x` found there, or the seal will say `ok` for it.
-3. **The API.** Add `"x"` to the `ImageCheck` literal in `schemas/requests.py` (or
-   `DeploymentCheck`), so a request can ask for it.
-4. **The setting.** Add `x: bool = True` to `ValidationSettings` (or `PostvalidationSettings`) in
-   `core/config.py` — the switch in the settings page — and to the page's list.
-5. **The UI.** Add it to `IMAGE_CHECK_OPTIONS` (or `DEPLOYMENT_CHECK_OPTIONS`), its type in
-   `types.ts`, and render its findings in `ValidationReport` (or `DeploymentCheckReport`).
+1. **The validator.** A file `modules/prevalidation/infrastructure/validators/x.py` with a class `X(ImageValidator)` — `key = "x"`, its `label`
+   and `description` — whose `run(folder, options)` returns its findings under its own key, asking the `MediaFolder` for what it needs. Add it to
+   `VALIDATORS` in that package's `__init__.py`, where it should run. (A check of a deployment is a `DeploymentValidator` of
+   `modules/postvalidation/infrastructure/validators/`; `of_the_visit` or `statistical` say which kind.)
+2. **The setting.** Add `"x"` to `IMAGE_CHECKS` and `x: bool = True` to `ValidationSettings` in `modules/prevalidation/domain/settings.py`, and
+   the field to its format in `modules/prevalidation/infrastructure/settings.py` — the switch in the settings page — and to the page's list.
+3. **The API.** Add `"x"` to the `ImageCheck` literal in `modules/prevalidation/infrastructure/api_schemas.py` (or `DeploymentCheck` in the
+   postvalidation's), so a request can ask for it.
+4. **The seal.** `seal_service.run_checks` turns the results into what `seal.json` records for each image — add what `x` found there, or the
+   seal will say `ok` for it.
+5. **The UI.** Add it to `IMAGE_CHECK_OPTIONS` (or `DEPLOYMENT_CHECK_OPTIONS`), its type in `types.ts`, and render its findings in
+   `ValidationReport` (or `DeploymentCheckReport`).
 6. **The report.** Add its entries to the report of its phase in `report_service`, and its label to `LABELS`.
-7. **Tests** — see below — and a line in the user manual's table of checks.
+7. **Tests** — the validator on its own, over a fake `FileInfoService` (see `tests/unit/test_prevalidation.py`) — and a line in the user
+   manual's table of checks.
 
 ## 8. Testing
 
@@ -579,10 +600,10 @@ uv run wucli package build -f appimage -v 0.1.0
 | macOS | `wildintel-uploader-X.Y.Z-macos-arm64.dmg`, Apple Silicon |
 
 The command builds the frontend first. The version defaults to the git tag, or `0.0.0-dev` —
-written into `src/wildintel_uploader/_version.py` (not committed), which `core/version.py` reads.
+written into `src/wildintel_uploader/_version.py` (not committed), which `shared/version.py` reads.
 ExifTool is taken from `build/exiftool` when there is one: the release workflow downloads and
 unpacks it there. The spec excludes tkinter — which is why the folder picker
-(`services/folder_picker.py`) uses the platform's own dialog tool instead.
+(`shared/desktop/folder_picker.py`) uses the platform's own dialog tool instead.
 
 `web/app_entry.py` is the executable's entry point: with no arguments it picks a free port from
 8769, starts uvicorn and opens the browser; with any, it runs the command line.
@@ -634,7 +655,7 @@ a new endpoint the UI calls needs its answer in `mock_api.js`, in the shape of `
     Not `npm run build`, which also runs `tsc -b` — the screenshots only need the bundle.
 
 The user manuals describe what the UI says: when a label, step or default changes, update them in
-the same commit — settings defaults are in `core/config.py`.
+the same commit — settings defaults are in the modules' `domain/settings.py` and `infrastructure/settings.py`.
 
 ## 11. CI/CD and releases
 

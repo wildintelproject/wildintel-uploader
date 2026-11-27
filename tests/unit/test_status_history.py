@@ -1,8 +1,8 @@
 """The history of the status of the locations, the cameras and the SD cards: a line for each change, with why."""
 from pathlib import Path
 
-from wildintel_uploader.core.services import local_folder_service as svc
-from wildintel_uploader.core.services import status_history
+from tests.support import local_folder_service as svc
+from wildintel_uploader.modules.catalog.infrastructure import status_history
 
 LOCATION = {"location_id": "DONA_01", "name": "Doñana 1", "timezone": "UTC", "ignore_dst": False, "latitude": 37.1, "longitude": -6.4, "status": "pending"}
 
@@ -78,8 +78,8 @@ def test_the_history_is_read_with_an_endpoint_by_kind_and_by_name(tmp_path: Path
 
 def _kept_before_the_history(root: Path, location_status: str = "active", status_date: str | None = None) -> None:
     """A research project whose location, camera, cards and visits were kept before the history was: it has none."""
-    from wildintel_uploader.core import storage
-    from wildintel_uploader.core.schemas.requests import VisitRecord
+    from wildintel_uploader.shared import storage
+    from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
     _project(root)
     svc.write_location(root, "DONA", {**LOCATION, "status": "pending"})
     svc.write_field_items(root, "DONA", "cameras", [{"label": "CAM1", "camera_id": "12", "status": "ready"}])
@@ -134,7 +134,7 @@ def test_it_is_rebuilt_once_and_again_on_request_without_writing_a_line_twice_no
 
 
 def test_a_research_project_with_no_visits_has_an_empty_history_written_so_that_it_is_not_made_again(tmp_path: Path):
-    from wildintel_uploader.core import storage
+    from wildintel_uploader.shared import storage
     _project(tmp_path)
 
     assert status_history.list_history(tmp_path, "DONA") == []

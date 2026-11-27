@@ -8,14 +8,15 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from wildintel_uploader.core import config, logging_setup
+from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.settings.infrastructure import activity_log as logging_setup
 from wildintel_uploader.web.main import app
 
 
 @pytest.fixture(autouse=True)
 def fresh_settings_file(tmp_path: Path):
     """Every test starts from defaults, whatever an earlier one saved — with a collections folder of its own that has two research projects."""
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
     for acronym in ("DONA", "TATR"):
         local_folder_service.write_research_project(tmp_path, {"name": acronym, "acronym": acronym})
@@ -491,7 +492,7 @@ def test_a_config_can_be_downloaded_and_its_folder_opened(config_dir):
 
 
 def test_log_files_left_next_to_the_settings_are_moved_to_the_log_folder():
-    from wildintel_uploader.core import logging_setup
+    from wildintel_uploader.modules.settings.infrastructure import activity_log as logging_setup
 
     for leftover in config.get_logs_dir().glob("wildintel-uploader.log*"):  # the tests' own logging may have started one already
         leftover.unlink()
@@ -566,7 +567,7 @@ def test_what_an_upload_to_agouti_needs_is_kept_and_its_key_is_not_shown(tmp_pat
 
 
 def test_a_trapper_can_have_several_roles_in_a_project_but_not_the_same_one_twice():
-    from wildintel_uploader.core.config import FieldworkSettings
+    from wildintel_uploader.entrypoints.config import FieldworkSettings
     roles = FieldworkSettings(roles=[
         {"research_project": "DONA", "trapper": "Ana Pérez", "role": "contact"},
         {"research_project": "DONA", "trapper": "Ana Pérez", "role": "principalInvestigator"},
@@ -576,7 +577,7 @@ def test_a_trapper_can_have_several_roles_in_a_project_but_not_the_same_one_twic
 
 
 def test_a_camera_and_an_sd_card_get_the_date_they_were_created_and_changed_from_the_app_and_never_from_the_page():
-    from wildintel_uploader.core.services import audit
+    from wildintel_uploader.shared import audit
     with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
         first = _put(FIELDWORK={"sd_cards": [{"label": "A12", "research_project": "DONA", "created_at": "1999-01-01T00:00:00Z"}],
                                 "cameras": [{"label": "C1", "research_project": "DONA"}]})["FIELDWORK"]
@@ -604,7 +605,7 @@ def test_where_the_records_are_kept_is_a_setting_and_only_a_backend_that_exists_
 
 
 def test_the_page_that_does_not_send_where_the_records_are_kept_does_not_lose_it():
-    from wildintel_uploader.core import storage
+    from wildintel_uploader.shared import storage
     storage.register("other", storage.JsonFolderStore)
     try:
         body = _client().get("/api/settings").json()
@@ -619,7 +620,8 @@ def test_the_page_that_does_not_send_where_the_records_are_kept_does_not_lose_it
 
 
 def test_nothing_is_deleted_for_good_what_the_page_no_longer_lists_is_kept_with_its_deleted_at_and_comes_back_when_it_is_listed_again(tmp_path: Path):
-    from wildintel_uploader.core.services import audit, local_folder_service as svc
+    from tests.support import local_folder_service as svc
+    from wildintel_uploader.shared import audit
     with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
         _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}], "sd_cards": [{"label": "A1", "research_project": "DONA"}, {"label": "A2", "research_project": "DONA"}],
                         "cameras": [{"label": "C1", "research_project": "DONA"}], "roles": [{"research_project": "DONA", "trapper": "Ana", "role": "contact"}]})
@@ -643,7 +645,7 @@ def test_nothing_is_deleted_for_good_what_the_page_no_longer_lists_is_kept_with_
 
 
 def test_the_roles_are_the_projects_and_not_the_settings(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
     saved = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}], "roles": [{"research_project": "DONA", "trapper": "Ana", "role": "contact"}, {"research_project": "NOWHERE", "trapper": "Ana", "role": "publisher"}]})
     assert sorted((r["research_project"], r["role"]) for r in saved["FIELDWORK"]["roles"]) == [("DONA", "contact"), ("NOWHERE", "publisher")]
     assert [r["role"] for r in svc.list_roles(tmp_path, "DONA")] == ["contact"]                                   # kept in the research project
@@ -660,7 +662,7 @@ def test_a_trapper_without_a_username_or_with_one_that_another_has_is_refused_an
     body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana", "email": "ana@uhu.es"}]
     assert _client().put("/api/settings", json=body).status_code == 200
     # changing the name of a username is a change of that trapper, not another one: it keeps when it was created
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
     first = svc.list_trappers(tmp_path)[0]
     body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana Pérez López"}]
     _client().put("/api/settings", json=body)
@@ -669,7 +671,7 @@ def test_a_trapper_without_a_username_or_with_one_that_another_has_is_refused_an
 
 
 def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_is_renamed(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
     first = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}], "sd_cards": [{"label": "A1", "research_project": "DONA"}]})["FIELDWORK"]
     ana, card = first["trappers"][0], first["sd_cards"][0]
     assert len(ana["id"]) == 36 and len(card["id"]) == 36                                          # the ids the app generated
@@ -688,8 +690,8 @@ def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_
 
 
 def test_the_status_of_a_camera_by_hand_follows_what_the_visits_say(tmp_path, monkeypatch):
-    from wildintel_uploader.core.services import local_folder_service as svc
-    from wildintel_uploader.core.config import FieldworkSettings  # noqa: F401
+    from tests.support import local_folder_service as svc
+    from wildintel_uploader.entrypoints.config import FieldworkSettings  # noqa: F401
 
     svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0})
     svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM-1", "camera_id": "P800", "status": "ready"}])
@@ -714,7 +716,7 @@ def test_the_status_of_a_camera_by_hand_follows_what_the_visits_say(tmp_path, mo
 
 
 def test_the_status_of_an_sd_card_by_hand_follows_what_the_visits_say(tmp_path):
-    from wildintel_uploader.core.services import local_folder_service as svc
+    from tests.support import local_folder_service as svc
 
     svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0})
     svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "A1", "status": "ready"}])

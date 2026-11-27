@@ -25,7 +25,7 @@ Q = {"research_project_id": "DONA", "collection": "R0003", "deployment_id": "R00
 
 
 def _get(root: Path, path: str, **extra):
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=root):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=root):
         return TestClient(app).get(f"/api/deployment-import/{path}", params={**Q, **extra})
 
 

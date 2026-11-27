@@ -1,5 +1,5 @@
 """A revision after a gap (#37): the site was skipped in one revision and revised in the next."""
-from wildintel_uploader.core.services import visit_rules
+from wildintel_uploader.modules.visits.domain import rules as visit_rules
 
 
 def _visit(location: str, session: str, date: str, actions: list[str], camera: str) -> dict:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints import config
 
 
 def test_settings_roundtrip(tmp_path: Path):

@@ -1,5 +1,5 @@
 """The SD card a visit leaves: archived (from its day), in another camera, collected by the same revision."""
-from wildintel_uploader.core.services import visit_rules
+from wildintel_uploader.modules.visits.domain import rules as visit_rules
 
 
 def _v(**over):

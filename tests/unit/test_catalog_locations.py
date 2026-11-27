@@ -121,7 +121,7 @@ LOCATION = {"location_id": "DONA_01", "timezone": "Europe/Madrid", "ignore_dst":
 @pytest.fixture
 def client(tmp_path: Path):
     from wildintel_uploader.web.main import app
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         client = TestClient(app)
         client.post("/api/catalog/projects", json={"name": "Doñana", "acronym": "DONA"})
         yield client
@@ -152,11 +152,11 @@ def test_the_addresses_of_before_answer_as_they_did(client):
 
 
 def test_the_command_line_of_the_locations(tmp_path: Path):
-    from wildintel_uploader.cli.app import app as cli
+    from wildintel_uploader.entrypoints.cli.app import app as cli
     from wildintel_uploader.entrypoints.cli import injection
 
     injection._container = None
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         run = CliRunner()
         assert run.invoke(cli, ["catalog", "projects", "add", "DONA", "Doñana"]).exit_code == 0
         added = run.invoke(cli, ["catalog", "locations", "add", "DONA", "DONA_01", "--latitude", "37", "--longitude", "-6.4", "--timezone", "Europe/Madrid", "--name", "One"])

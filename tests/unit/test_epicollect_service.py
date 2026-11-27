@@ -5,8 +5,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from wildintel_uploader.core import config
-from wildintel_uploader.core.services import epicollect_service
+from wildintel_uploader.entrypoints import config
+from tests.support import epicollect_service
 from wildintel_uploader.web.main import app
 
 PROJECT = {"data": {"project": {"name": "Doñana cameras", "slug": "donana-cameras", "forms": [{

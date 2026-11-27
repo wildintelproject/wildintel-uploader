@@ -6,8 +6,10 @@ from unittest.mock import patch
 
 import pytest
 
-from wildintel_uploader.core import config
-from wildintel_uploader.core.services import backup_service, ids, local_folder_service as svc
+from wildintel_uploader.entrypoints import config
+from tests.support import local_folder_service as svc
+from wildintel_uploader.modules.backup.infrastructure import backup_service
+from wildintel_uploader.shared import ids
 
 VISIT = {"location_id": "dona_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Installation"], "camera_id": "BR1", "sd": "A13",
          "trappers": "Pedro Pérez, Luis", "setup_by": "Pedro Pérez", "num_photos": None}
@@ -192,7 +194,7 @@ def test_the_status_of_the_camera_kept_as_status_before_is_read_and_written_as_c
 
 def test_the_status_of_the_camera_is_one_of_a_few_values_written_as_they_are_and_refused_otherwise():
     from pydantic import ValidationError
-    from wildintel_uploader.core.schemas.requests import VisitRecord
+    from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
 
     base = {"location_id": "DONA_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Revision"]}
     assert [VisitRecord(**base, camera_status=s).camera_status for s in ("ok", "Altered", "not revised", "", None)] == ["OK", "Altered", "Not revised", None, None]
@@ -210,7 +212,7 @@ def test_the_status_of_the_camera_is_one_of_a_few_values_written_as_they_are_and
 
 
 def test_the_batteries_and_the_card_are_two_fields_and_a_visit_kept_with_one_is_moved(tmp_path: Path, people):
-    from wildintel_uploader.core.schemas.requests import VisitRecord
+    from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
 
     base = {"location_id": "DONA_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "actions": ["Revision"]}
     assert [(v.battery_status, v.card_status) for v in (VisitRecord(**base, card_batteries_ok=c) for c in ("OK", "CarFull", "NoBatteries", "CarFullNoBatteries", "CarFullSinPilas"))] == [
@@ -227,7 +229,7 @@ def test_the_batteries_and_the_card_are_two_fields_and_a_visit_kept_with_one_is_
 def test_a_visit_points_to_its_camera_by_id_and_what_the_camera_is_is_the_records(tmp_path: Path, people):
     """#231: the visit says only which camera it was — kept as the id of its record, told by its label —; its make, model and serial number are the record's,
     not kept in the visit, and the deployment gets them copied: the serial number as cameraID, make-model as cameraModel."""
-    from wildintel_uploader.core.services import visit_deployments
+    from wildintel_uploader.modules.visits.infrastructure import deployments as visit_deployments
     _project(tmp_path)
     svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM-1", "camera_id": "BR1", "camera_make": "Browning", "camera_model": "BTC-6DCL"}])
     # named by its serial number, with the model the field wrote: the record is found, and neither is kept

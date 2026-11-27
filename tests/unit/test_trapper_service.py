@@ -7,8 +7,8 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import trapper_service
+from wildintel_uploader.shared.camtrap import DeploymentFields
+from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
 
 
 def _fields(**overrides) -> DeploymentFields:
@@ -63,7 +63,7 @@ def test_list_deployments_maps_the_export_shape_and_serializes_dates():
     client.deployments.export.return_value = [
         _export(), _export(pk=8, deployment_id="R0001-DONA_02", location_id="DONA_02"),
     ]
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
         result = trapper_service.list_deployments("https://trapper.example.org", "alice", "s3cret", 2)
 
     client.deployments.export.assert_called_once_with(query={"research_project": 2})
@@ -77,18 +77,18 @@ def test_list_deployments_of_a_research_project_with_none_is_empty_not_an_error(
     from trapper_client.err import BadRequestError
     client = MagicMock()
     client.deployments.export.side_effect = BadRequestError('["Empty queryset or you have no permission to access the requested objects."]')
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
         assert trapper_service.list_deployments("https://trapper.example.org", "alice", "s3cret", 17) == []
 
     client.deployments.export.side_effect = BadRequestError("something else is wrong")
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
         with pytest.raises(BadRequestError):
             trapper_service.list_deployments("https://trapper.example.org", "alice", "s3cret", 17)
 
 
 def test_import_deployment_calls_the_sdk_with_the_csv(tmp_path: Path):
     client = MagicMock()
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client) as factory:
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client) as factory:
         trapper_service.import_deployment(
             "https://trapper.example.org", "alice", "s3cret",
             research_project_pk=2, classification_project_pk=10,
@@ -113,7 +113,7 @@ def test_list_locations_carries_the_coordinates_from_the_export():
         SimpleNamespace(pk=5, latitude=37.0, longitude=-6.5), SimpleNamespace(pk=6, latitude=None, longitude=None),
     ]
 
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
         result = trapper_service.list_locations("https://trapper.example.org", "alice", "s3cret", 2)
 
     assert [(l["location_id"], l["latitude"], l["longitude"]) for l in result] == [("DONA_01", 37.0, -6.5), ("DONA_02", None, None)]
@@ -125,7 +125,7 @@ def test_list_locations_still_works_when_the_export_fails():
     client.locations.where.return_value = [_location(5, "DONA_01")]
     client.locations.export.side_effect = RuntimeError("boom")
 
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
         [location] = trapper_service.list_locations("https://trapper.example.org", "alice", "s3cret", 2)
 
     assert location["location_id"] == "DONA_01" and location["latitude"] is None and location["longitude"] is None
@@ -163,7 +163,7 @@ def test_list_locations_says_who_owns_a_location_and_whether_the_account_can_man
     ]
     client.locations.export.return_value = []
 
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=client):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
         mine, theirs = trapper_service.list_locations("https://trapper.example.org", "alice", "s3cret", 2)
 
     assert (mine["owner"], mine["can_manage"]) == ("alice", True)

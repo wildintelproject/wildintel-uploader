@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from wildintel_uploader.core.services import local_folder_service
+from tests.support import local_folder_service
 
 
 def _client() -> TestClient:
@@ -33,14 +33,14 @@ def test_a_backup_is_made_read_and_restored_over_http(tmp_path: Path):
         folder.mkdir()
     _project(source)
 
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=source):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=source):
         info = _client().post("/api/backup/project-info", json={"research_project_id": "DONA"}).json()
         made = _events(_client().post("/api/backup/create", json={"dest_dir": str(out), "research_project_id": "DONA", "project_files": True, "visits": True, "deployments": ["R0001-DONA_01"], "images": True}))
     assert info["visits"] == 1 and info["collections"][0]["deployments"][0]["images"] == 1
     assert made[0]["type"] == "step" and made[-1]["type"] == "done" and made[-1]["path"].endswith(".zip")
     assert any(e["type"] == "file" and e["name"].endswith("IMG_0001.JPG") for e in made)
 
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=target):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=target):
         read = _client().post("/api/backup/read", json={"path": made[-1]["path"]}).json()
         restored = _events(_client().post("/api/backup/restore", json={"path": made[-1]["path"], "project_files": True, "visits": True, "deployments": ["R0001-DONA_01"], "images": True}))
     assert read["manifest"]["scope"]["research_project"] == "DONA" and read["here"]["project"] is False
@@ -54,7 +54,7 @@ def test_a_backup_with_no_folder_is_made_to_be_downloaded_and_only_those_are_ser
     source = tmp_path / "source"
     source.mkdir()
     _project(source)
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=source), patch("wildintel_uploader.modules.backup.infrastructure.zip_files.tempfile.gettempdir", return_value=str(tmp_path)):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=source), patch("wildintel_uploader.modules.backup.infrastructure.zip_files.tempfile.gettempdir", return_value=str(tmp_path)):
         made = _events(_client().post("/api/backup/create", json={"research_project_id": "DONA", "project_files": True, "visits": True, "deployments": ["R0001-DONA_01"], "images": False}))
         name = made[-1]["download"]
         answer = _client().get(f"/api/backup/download/{name}")
@@ -69,7 +69,7 @@ def test_a_backup_with_no_folder_is_made_to_be_downloaded_and_only_those_are_ser
 
 
 def test_what_cannot_be_backed_up_or_restored_is_a_plain_400_before_anything_is_touched(tmp_path: Path):
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         nothing = _client().post("/api/backup/create", json={"dest_dir": str(tmp_path)})
         no_folder = _client().post("/api/backup/create", json={"dest_dir": str(tmp_path / "nowhere"), "settings": True})
         not_a_backup = _client().post("/api/backup/read", json={"path": str(tmp_path / "nothing.zip")})

@@ -6,8 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-from wildintel_uploader.cli.app import app as cli
-from wildintel_uploader.core import config
+from wildintel_uploader.entrypoints.cli.app import app as cli
+from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.settings.domain.models import SettingsError
 from wildintel_uploader.modules.settings.domain.ports import NoLogFile, NoSettingsFile, SettingsService, UnknownConfig, UnknownSetting

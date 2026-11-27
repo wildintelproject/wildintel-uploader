@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import preprocessing_service as pre
+from wildintel_uploader.shared.camtrap import DeploymentFields
+from tests.support import preprocessing_service as pre
 from wildintel_uploader.modules.preprocessing.infrastructure import folders as folders_adapter
 from wildintel_uploader.modules.preprocessing.infrastructure.steps import metadata as xmp_step
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
@@ -358,8 +358,8 @@ def test_the_files_exiftool_leaves_when_it_is_interrupted_are_removed(tmp_path: 
 
 
 def test_the_import_leaves_a_report_of_what_was_done_to_each_image(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    from wildintel_uploader.core import config
-    from wildintel_uploader.core.services import report_service
+    from wildintel_uploader.entrypoints import config
+    from wildintel_uploader.modules.reports.infrastructure import report_service
 
     reports = tmp_path / "reports"
     monkeypatch.setattr(config, "reports_dir", lambda settings=None: reports)
@@ -382,7 +382,7 @@ def test_the_import_leaves_a_report_of_what_was_done_to_each_image(tmp_path: Pat
 def test_the_images_are_not_prepared_when_the_disk_of_the_collection_has_no_room_for_them(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """#212: the images are prepared in .staging, on the disk of the collection; with no room for them — as much as the folder takes —, it is said before
     anything is written."""
-    from wildintel_uploader.core.services import disk_space
+    from wildintel_uploader.modules.deployments.infrastructure import disk_space
     source = _source(tmp_path, 2)
     monkeypatch.setattr(disk_space, "free_bytes", lambda path: 100)
 
@@ -394,7 +394,7 @@ def test_the_images_are_not_prepared_when_the_disk_of_the_collection_has_no_room
 
 
 def test_disk_space_says_sizes_as_they_are_read_and_finds_the_disk_of_a_folder_not_made_yet(tmp_path: Path):
-    from wildintel_uploader.core.services import disk_space
+    from wildintel_uploader.modules.deployments.infrastructure import disk_space
     assert [disk_space.size_text(n) for n in (31_200_000_000, 640_000_000, 12_000, 500)] == ["31.2 GB", "640.0 MB", "12 KB", "500 bytes"]
     assert disk_space.free_bytes(tmp_path / "not" / "made" / "yet") is not None   # the nearest folder that exists
     assert disk_space.shortfall(tmp_path, 1, "This", "there") is None

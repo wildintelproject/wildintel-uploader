@@ -9,7 +9,7 @@ from wildintel_uploader.web.main import app
 
 
 def _in(root: Path):
-    return patch("wildintel_uploader.core.config.collections_dir", return_value=root)
+    return patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=root)
 
 
 def test_a_revision_gives_a_row_per_deployment_with_the_revisions_of_its_location(tmp_path):

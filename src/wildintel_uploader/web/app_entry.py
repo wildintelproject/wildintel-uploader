@@ -45,7 +45,7 @@ def _serve() -> None:
 
 if __name__ == "__main__":
     if sys.argv[1:]:
-        from wildintel_uploader.cli.app import run
+        from wildintel_uploader.entrypoints.cli.app import run
 
         run()
     else:

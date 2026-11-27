@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from wildintel_uploader.core import storage
-from wildintel_uploader.core.services import local_folder_service as svc
-from wildintel_uploader.core.storage import ProjectStore, StorageError
+from wildintel_uploader.shared import storage
+from tests.support import local_folder_service as svc
+from wildintel_uploader.shared.storage import ProjectStore, StorageError
 
 
 @pytest.fixture(autouse=True)

@@ -22,21 +22,21 @@ def _make_jpeg(path: Path, taken: str) -> None:
 
 
 def test_browse_folder_returns_the_chosen_path():
-    with patch("wildintel_uploader.core.services.folder_picker.pick_folder", return_value="/home/me/DONA_01"):
+    with patch("wildintel_uploader.shared.desktop.folder_picker.pick_folder", return_value="/home/me/DONA_01"):
         response = _client().post("/api/deployment-import/browse-folder")
     assert response.status_code == 200
     assert response.json() == {"path": "/home/me/DONA_01"}
 
 
 def test_browse_folder_reports_when_no_dialog_tool_is_available():
-    from wildintel_uploader.core.services import folder_picker
-    with patch("wildintel_uploader.core.services.folder_picker.pick_folder", side_effect=folder_picker.FolderPickerUnavailable("nope")):
+    from wildintel_uploader.shared.desktop import folder_picker
+    with patch("wildintel_uploader.shared.desktop.folder_picker.pick_folder", side_effect=folder_picker.FolderPickerUnavailable("nope")):
         response = _client().post("/api/deployment-import/browse-folder")
     assert response.status_code == 501
 
 
 def test_browse_folder_passes_a_custom_title_through():
-    with patch("wildintel_uploader.core.services.folder_picker.pick_folder", return_value="/home/me/Collections") as pick:
+    with patch("wildintel_uploader.shared.desktop.folder_picker.pick_folder", return_value="/home/me/Collections") as pick:
         _client().post("/api/deployment-import/browse-folder", json={"title": "Select the collection's folder"})
     pick.assert_called_once_with("Select the collection's folder")
 
@@ -48,7 +48,7 @@ def test_check_collection(tmp_path: Path):
 
 
 def test_list_local_deployments(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     local_folder_service.write_deployment_metadata(
         tmp_path / "R0001-DONA_01", {"deployment_id": "R0001-DONA_01", "location_id": "DONA_01", "start_date": "2024-09-04T13:10:00"},
     )
@@ -206,8 +206,8 @@ def test_import_deployment_skips_registration_for_an_existing_deployment(tmp_pat
         "register_deployment": False,
     }
 
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=fake_client), \
-         patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=data_dir):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=fake_client), \
+         patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/import", json=payload)
 
     assert response.status_code == 200
@@ -235,9 +235,9 @@ def test_import_deployment_streams_progress_then_registers(tmp_path: Path):
     }
     _keep_location(data_dir, timezone="Europe/Madrid")
 
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=fake_client), \
-         patch("wildintel_uploader.core.config.collections_dir", return_value=data_dir), \
-         patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=data_dir):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=fake_client), \
+         patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir), \
+         patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/import", json=payload)
 
     assert response.status_code == 200
@@ -264,8 +264,8 @@ def test_import_deployment_writes_the_collection_and_deployment_metadata_beside_
         "register_deployment": False,
     }
 
-    with patch("wildintel_uploader.core.services.trapper_service._client", return_value=MagicMock()), \
-         patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=data_dir):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=MagicMock()), \
+         patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir):
         assert _client().post("/api/deployment-import/import", json=payload).status_code == 200
 
     collection = data_dir / "DONA" / "R0003"
@@ -286,7 +286,7 @@ def test_import_deployment_needs_an_id_starting_with_its_collection(tmp_path: Pa
         "register_deployment": False,
     }
 
-    with patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=tmp_path / "data"):
+    with patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=tmp_path / "data"):
         response = _client().post("/api/deployment-import/import", json=payload)
 
     assert response.status_code == 400
@@ -295,7 +295,7 @@ def test_import_deployment_needs_an_id_starting_with_its_collection(tmp_path: Pa
 
 def test_collection_path_is_research_project_then_collection_inside_the_collections_folder(tmp_path: Path):
     data_dir = tmp_path / "data"
-    with patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=data_dir):
+    with patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/collection-path", json={"research_project_id": "DONA", "deployment_id": "R0003-DONA_01"})
 
     assert response.status_code == 200
@@ -303,7 +303,7 @@ def test_collection_path_is_research_project_then_collection_inside_the_collecti
 
 
 def test_collection_path_rejects_a_research_project_id_that_is_not_a_folder_name(tmp_path: Path):
-    with patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=tmp_path):
         for bad in ("../x", "a/b", "..", "with space"):
             response = _client().post("/api/deployment-import/collection-path", json={"research_project_id": bad, "deployment_id": "R0003-DONA_01"})
             assert response.status_code == 400, bad
@@ -315,7 +315,7 @@ PROJECT = {"name": "Doñana", "acronym": "DONA", "event_interval": 0}
 
 
 def _in(data_dir: Path):
-    return patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=data_dir)
+    return patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=data_dir)
 
 
 def test_the_first_run_has_no_research_projects(tmp_path: Path):
@@ -425,7 +425,7 @@ def test_a_location_is_deleted_unless_it_has_visits_or_comes_from_trapper(tmp_pa
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         for location in ({"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_02", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_03", "trapper_pk": 7, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}):
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": location})
-        from wildintel_uploader.core.services import local_folder_service
+        from tests.support import local_folder_service
         local_folder_service.write_field_items(tmp_path, "DONA", "cameras", [{"label": "12", "camera_id": "12", "camera_model": None, "research_project": "DONA"}])
         local_folder_service.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "A13", "research_project": "DONA"}])
         _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit})
@@ -558,7 +558,7 @@ def test_validate_images_looks_for_the_images_imported_before_into_the_research_
     (folder / "b.jpg").write_bytes(b"new")
     payload = {"path": str(folder), "checks": ["duplicates"], "research_project_id": "DONA"}
 
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=data_dir):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/validate-images", json=payload)
         elsewhere = _client().post("/api/deployment-import/validate-images", json={**payload, "deployment_id": "R0001-DONA_01"})
         alone = _client().post("/api/deployment-import/validate-images", json={"path": str(folder), "checks": ["duplicates"]})
@@ -610,7 +610,7 @@ def _keep_location(root: Path, **fields) -> None:
 
 def _visits_of_r0003(tmp_path: Path, visits: bool = True) -> None:
     """The research project, and the visits that make R0003-DONA_01 a deployment: the one that left the camera and the one that collected its card."""
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     local_folder_service.write_research_project(tmp_path / "collections", {"name": "Doñana", "acronym": "DONA"})
     if not visits:
         return
@@ -795,7 +795,7 @@ def test_previous_deployments_gives_each_ones_earlier_revision(tmp_path: Path):
     old.mkdir(parents=True)
     (old / "deployment.json").write_text(json.dumps({"deployment_id": "R0001-DONA_01", "habitat": "pine"}), encoding="utf-8")
 
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         response = _client().post("/api/deployment-import/previous-deployments", json={
             "research_project_id": "DONA", "deployment_ids": ["R0002-DONA_01", "R0002-DONA_02"],
         })
@@ -816,7 +816,7 @@ def test_existing_deployments_says_where_each_one_is_kept(tmp_path: Path):
     kept.mkdir(parents=True)
     (kept / "IMG.JPEG").write_bytes(b"x")
 
-    with patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.modules.deployments.infrastructure.deployment_import_service.config.collections_dir", return_value=tmp_path):
         response = _client().post("/api/deployment-import/existing-deployments", json={
             "research_project_id": "DONA", "deployment_ids": ["R0003-DONA_01", "R0003-DONA_02"],
         })
@@ -864,7 +864,7 @@ def test_import_registers_the_deployment_in_the_kept_locations_timezone(tmp_path
         },
     }
 
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=root), \
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=root), \
          patch("wildintel_uploader.modules.deployments.application.use_cases.DeploymentsUseCases.organize", return_value=(root, iter([]))), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.import_deployment") as register:
         response = _client().post("/api/deployment-import/import", json=payload)
@@ -1080,7 +1080,7 @@ def test_a_archived_location_never_goes_back_to_active_or_planned(tmp_path: Path
 
 
 def test_a_location_in_utc_never_ignores_summer_time_since_utc_has_none(tmp_path: Path):
-    from wildintel_uploader.core.schemas.requests import LocationRecord
+    from wildintel_uploader.modules.catalog.infrastructure.api_schemas import LocationRecord
 
     def made(zone: str) -> LocationRecord:
         return LocationRecord(location_id="X_1", timezone=zone, ignore_dst=True, latitude=1, longitude=1)
@@ -1184,14 +1184,14 @@ def test_validate_images_progress_counts_every_image_once(tmp_path: Path):
     told: list[tuple[str, int, int]] = []
 
 
-    from wildintel_uploader.core.services import checks as old_checks
+    from tests.support import checks as old_checks
     old_checks.validate_images(tmp_path, frozenset({"corrupted"}), progress=lambda *args: told.append(args))
 
     assert told == [("corrupted", done, 7) for done in range(1, 8)]
 
 
 def test_the_make_and_the_model_the_images_say_are_kept_in_the_record_of_the_camera(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service as lfs
+    from tests.support import local_folder_service as lfs
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json={"name": "Doñana", "acronym": "DONA"})
         lfs.write_field_items(tmp_path, "DONA", "cameras", [{"label": "4", "camera_model": "Browning Strike Force HD PRO X"}])

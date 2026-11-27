@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from wildintel_uploader.core.services import local_folder_service as svc
-from wildintel_uploader.core.storage import json_files
+from tests.support import local_folder_service as svc
+from wildintel_uploader.shared.storage import json_files
 
 
 def test_reading_records_kept_before_the_ids_existed_gives_them_ids_but_writes_nothing(tmp_path: Path):
@@ -68,11 +68,11 @@ def test_a_file_that_the_system_says_is_in_use_is_tried_again_and_the_error_is_s
             raise PermissionError(5, "Acceso denegado")
         return real(src, dst)
 
-    with patch("wildintel_uploader.core.storage.json_files.time.sleep") as sleep, patch("wildintel_uploader.core.storage.json_files.os.replace", side_effect=busy_twice):
+    with patch("wildintel_uploader.shared.storage.json_files.time.sleep") as sleep, patch("wildintel_uploader.shared.storage.json_files.os.replace", side_effect=busy_twice):
         json_files.write_json(path, [{"a": 1}])
     assert json.loads(path.read_text(encoding="utf-8")) == [{"a": 1}] and len(calls) == 3 and sleep.call_count == 2
 
-    with patch("wildintel_uploader.core.storage.json_files.time.sleep"), patch("wildintel_uploader.core.storage.json_files.os.replace", side_effect=PermissionError(5, "Acceso denegado")):
+    with patch("wildintel_uploader.shared.storage.json_files.time.sleep"), patch("wildintel_uploader.shared.storage.json_files.os.replace", side_effect=PermissionError(5, "Acceso denegado")):
         with pytest.raises(PermissionError):
             json_files.write_json(path, [{"a": 2}])
     assert json.loads(path.read_text(encoding="utf-8")) == [{"a": 1}]                  # it stays as it was

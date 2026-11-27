@@ -10,9 +10,9 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from wildintel_uploader.core.services import deployment_import_service as dis
-from wildintel_uploader.core.services import local_folder_service as lfs
-from wildintel_uploader.core.services import timefix_service as tf
+from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
+from tests.support import local_folder_service as lfs
+from wildintel_uploader.modules.timefix.infrastructure import timefix_service as tf
 from wildintel_uploader.web.main import app
 
 needs_exiftool = pytest.mark.skipif(shutil.which("exiftool") is None, reason="ExifTool isn't installed")
@@ -49,7 +49,7 @@ def visits(tmp_path):
         {"location_id": LOCATION, "session": "R0001", "date": VISIT[0], "time": VISIT[1], "actions": ["Installation"]},
         {"location_id": LOCATION, "session": "R0002", "date": "2026-03-30", "time": "08:15:00", "actions": ["Revision"], "num_photos": 4},
     ])
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=root):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=root):
         yield root
 
 

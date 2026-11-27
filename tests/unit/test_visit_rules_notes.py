@@ -1,5 +1,5 @@
 """The notes of a file of visits about the sites that have no visit in a revision (#38)."""
-from wildintel_uploader.core.services import visit_rules
+from wildintel_uploader.modules.visits.domain import rules as visit_rules
 
 
 def _visit(location: str, session: str, date: str, actions: list[str], camera: str, photos: int | None = None) -> dict:

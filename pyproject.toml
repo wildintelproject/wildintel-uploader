@@ -46,7 +46,7 @@ dev = [
 
 [project.scripts]
 # Not "cli": wildintel-trapper-sdk, in the same environment, already has its own.
-wildintel-uploader = "wildintel_uploader.cli.app:run"
+wildintel-uploader = "wildintel_uploader.entrypoints.cli.app:run"
 wucli = "wildintel_uploader.wucli:app"
 
 [tool.uv.sources]

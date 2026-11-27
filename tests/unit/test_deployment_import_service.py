@@ -10,9 +10,9 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from wildintel_uploader.core.services import camera_info
-from wildintel_uploader.core.services import deployment_import_service as svc
-from wildintel_uploader.core.services import checks as old_checks
+from tests.support import camera_info
+from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as svc
+from tests.support import checks as old_checks
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 
 needs_exiftool = pytest.mark.skipif(shutil.which("exiftool") is None, reason="ExifTool isn't installed")
@@ -361,7 +361,7 @@ def test_validate_images_sequence_check_alone_still_finds_corrupted_files_but_do
 # ── validate_deployment_consistency ─────────────────────────────────────────
 
 def _deployment(**overrides):
-    from wildintel_uploader.core.schemas.requests import DeploymentFields
+    from wildintel_uploader.shared.camtrap import DeploymentFields
     base = dict(
         deployment_id="R0001-DONA_01", location_id="DONA_01", latitude=37.0, longitude=-6.5,
         start_date="2024-09-04T00:00:00+02:00", end_date="2024-12-31T00:00:00+01:00",
@@ -623,20 +623,20 @@ def test_default_collection_dir_is_research_project_then_collection(tmp_path: Pa
 
 
 def test_the_data_folder_defaults_to_a_folder_named_like_the_app_in_the_documents_folder():
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     assert config.default_data_dir() == config.get_app_documents_dir()
     assert config.default_data_dir().name == "wildintel-uploader"
     assert config.default_data_dir().parent == Path(__import__("platformdirs").user_documents_dir())
 
 
 def test_the_collections_live_in_a_collections_folder_inside_the_data_folder():
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     assert config.collections_dir() == config.data_dir() / "collections"
     assert config.collections_dir().parts[-2:] == ("wildintel-uploader", "collections")
 
 
 def test_a_different_data_folder_moves_the_collections_with_it(tmp_path: Path):
-    from wildintel_uploader.core import config
+    from wildintel_uploader.entrypoints import config
     settings = config.Settings(DATA=config.DataSettings(dir=str(tmp_path / "images")))
     assert config.data_dir(settings) == tmp_path / "images"
     assert config.collections_dir(settings) == tmp_path / "images" / "collections"
@@ -966,7 +966,7 @@ def _kept_deployment(root: Path, project: str, collection: str, deployment: str,
 
 
 def test_validate_images_duplicates_finds_the_images_imported_before_into_the_research_project(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     root = tmp_path / "collections"
     _kept_deployment(root, "DONA", "R0001", "R0001-DONA_01", {"IMG_0001.JPG": b"first", "IMG_0002.JPG": b"second"})
     _kept_deployment(root, "OTHER", "R0001", "R0001-OTHER_01", {"IMG_0009.JPG": b"third"})   # another research project: not looked at
@@ -984,7 +984,7 @@ def test_validate_images_duplicates_finds_the_images_imported_before_into_the_re
 
 
 def test_validate_images_duplicates_leaves_out_the_deployment_that_is_imported_again(tmp_path: Path):
-    from wildintel_uploader.core.services import local_folder_service
+    from tests.support import local_folder_service
     root = tmp_path / "collections"
     _kept_deployment(root, "DONA", "R0001", "R0001-DONA_01", {"IMG_0001.JPG": b"first"})
     folder = tmp_path / "card"

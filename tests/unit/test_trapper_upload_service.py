@@ -14,9 +14,10 @@ import pytest
 import yaml
 from PIL import Image
 
-from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import preprocessing_service, trapper_service
-from wildintel_uploader.core.services import trapper_upload_service as up
+from wildintel_uploader.shared.camtrap import DeploymentFields
+from tests.support import preprocessing_service
+from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
+from wildintel_uploader.modules.uploaders.infrastructure import trapper_upload_service as up
 
 CREDENTIALS = ("https://trapper.example.org", "alice@example.org", "s3cret")
 RECORD = {"name": "Doñana", "acronym": "DONA", "trapper_pk": 2}
@@ -86,7 +87,7 @@ def test_a_research_project_id_that_is_not_a_folder_name_is_refused(tmp_path: Pa
 
 
 def local_folder_service_error():
-    from wildintel_uploader.core.services.local_folder_service import LocalFolderError
+    from tests.support.local_folder_service import LocalFolderError
     return LocalFolderError
 
 

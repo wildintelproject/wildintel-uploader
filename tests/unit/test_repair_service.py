@@ -6,10 +6,12 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import local_folder_service as lfs
-from wildintel_uploader.core.services import preprocessing_service as pre
-from wildintel_uploader.core.services import report_service, repair_service as rep, seal_service
+from wildintel_uploader.shared.camtrap import DeploymentFields
+from tests.support import local_folder_service as lfs
+from tests.support import preprocessing_service as pre
+from wildintel_uploader.modules.reports.infrastructure import report_service
+from wildintel_uploader.modules.deployments.infrastructure import repair_service as rep
+from wildintel_uploader.modules.deployments.infrastructure import seal_service
 
 DEPLOYMENT_ID = "R0003-DONA_01"
 DEPLOYMENT = DeploymentFields.model_validate({

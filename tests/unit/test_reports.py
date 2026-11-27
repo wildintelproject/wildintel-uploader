@@ -7,11 +7,11 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from wildintel_uploader.core import config
-from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import deployment_import_service as dis
-from wildintel_uploader.core.services import checks as old_checks
-from wildintel_uploader.core.services import report_service as rs
+from wildintel_uploader.entrypoints import config
+from wildintel_uploader.shared.camtrap import DeploymentFields
+from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
+from tests.support import checks as old_checks
+from wildintel_uploader.modules.reports.infrastructure import report_service as rs
 
 
 def _jpeg(path: Path, taken: str | None) -> None:

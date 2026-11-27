@@ -177,7 +177,7 @@ def test_new_visits_need_an_active_research_project(world):
 @pytest.fixture
 def client(tmp_path: Path):
     from wildintel_uploader.web.main import app
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         yield TestClient(app)
 
 
@@ -209,11 +209,11 @@ def test_the_addresses_of_before_answer_as_they_did(client):
 
 
 def test_the_command_line_of_the_research_projects(tmp_path: Path):
-    from wildintel_uploader.cli.app import app as cli
+    from wildintel_uploader.entrypoints.cli.app import app as cli
     from wildintel_uploader.entrypoints.cli import injection
 
     injection._container = None
-    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         run = CliRunner()
         assert run.invoke(cli, ["catalog", "projects", "add", "DONA", "Doñana", "--status", "planned"]).exit_code == 0
         taken = run.invoke(cli, ["catalog", "projects", "add", "DONA", "Again"])
@@ -228,6 +228,6 @@ def test_the_command_line_of_the_research_projects(tmp_path: Path):
 
 
 def test_utc_is_the_same_for_the_catalog_and_for_the_visits():
-    from wildintel_uploader.core.services import visit_time
+    from wildintel_uploader.modules.visits.domain import wall_clock as visit_time
     from wildintel_uploader.modules.catalog.domain import models
     assert models._UTC_ZONES == visit_time._UTC_ZONES and models.DEFAULT_TIMEZONE == visit_time.DEFAULT_TIMEZONE

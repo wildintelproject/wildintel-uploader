@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 
 from tests.unit.test_preprocessing_service import DEPLOYMENT, NO_XMP, _run, _source
-from wildintel_uploader.core.services import seal_service
-from wildintel_uploader.core.services import preprocessing_service as pre
+from wildintel_uploader.modules.deployments.infrastructure import seal_service
+from tests.support import preprocessing_service as pre
 
 
 def _imported(tmp_path: Path, count: int = 2) -> Path:
