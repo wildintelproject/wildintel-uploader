@@ -50,3 +50,58 @@ def test_a_module_uses_another_only_through_its_domain(path: Path):
     wrong = {i for i in _imports(path) if i.startswith("wildintel_uploader.modules.") and i.split(".")[2] != own
              and (len(i.split(".")) < 4 or i.split(".")[3] != "domain")}
     assert not wrong, f"{path.name} imports {sorted(wrong)}"
+
+
+# ── what a module still asks of the code of before, or of another module, through the old names of core.services ──
+# Each line is a coupling to cut: a new one fails this test, and one that is cut has to leave this list — it only shrinks.
+STILL_COUPLED = {
+    "backup/infrastructure/backup_service.py": {"local_folder_service"},
+    "catalog/infrastructure/status_history.py": {"local_folder_service"},
+    "catalog/infrastructure/visits.py": {"local_folder_service"},
+    "deployments/infrastructure/deployment_import_service.py": {"camera_info", "checks", "local_folder_service", "trapper_service"},
+    "deployments/infrastructure/deployment_photos.py": {"local_folder_service"},
+    "deployments/infrastructure/legacy.py": {"local_folder_service"},
+    "deployments/infrastructure/repair_service.py": {"camera_info", "local_folder_service", "preprocessing_service", "report_service"},
+    "deployments/infrastructure/seal_service.py": {"local_folder_service"},
+    "deployments/infrastructure/statistics_service.py": {"camera_info", "local_folder_service"},
+    "postvalidation/infrastructure/legacy.py": {"local_folder_service", "report_service"},
+    "postvalidation/infrastructure/validators/statistics.py": {"statistics_service"},
+    "preprocessing/infrastructure/folders.py": {"deployment_import_service", "disk_space", "local_folder_service", "report_service"},
+    "prevalidation/infrastructure/legacy.py": {"local_folder_service", "report_service"},
+    "reports/infrastructure/report_service.py": {"camera_info", "deployment_import_service"},
+    "timefix/infrastructure/timefix_service.py": {"camera_info", "deployment_import_service", "local_folder_service"},
+    "uploaders/infrastructure/sync_service.py": {"deployment_import_service", "local_folder_service"},
+    "uploaders/infrastructure/trapper.py": {"deployment_import_service", "local_folder_service", "report_service"},
+    "uploaders/infrastructure/trapper_upload_service.py": {"deployment_import_service", "local_folder_service", "preprocessing_service"},
+    "visits/infrastructure/deployments.py": {"local_folder_service"},
+    "visits/infrastructure/kept_visits.py": {"local_folder_service"},
+    "visits/infrastructure/legacy.py": {"local_folder_service", "report_service", "trapper_upload_service"},
+}
+
+
+def _owner(name: str) -> str:
+    """The module a name of core.services is now — or "core", while it is still the code of before there."""
+    import re
+    text = (SRC / "core" / "services" / f"{name}.py").read_text(encoding="utf-8")
+    found = re.search(r"from wildintel_uploader\.(?:modules\.(\w+)|shared)[\w.]* import", text) if "sys.modules[__name__] = _moved" in text else None
+    return (found.group(1) or "shared") if found else "core"
+
+
+def _coupled() -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {}
+    for path in SRC.glob("modules/*/**/*.py"):
+        module = path.relative_to(SRC / "modules").parts[0]
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names = []
+            if isinstance(node, ast.ImportFrom) and node.module == "wildintel_uploader.core.services":
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("wildintel_uploader.core.services."):
+                names = [node.module.rsplit(".", 1)[1]]
+            for name in names:
+                if _owner(name) not in (module, "shared"):
+                    out.setdefault(str(path.relative_to(SRC / "modules")), set()).add(name)
+    return out
+
+
+def test_no_module_is_coupled_to_another_but_what_is_still_to_cut():
+    assert _coupled() == STILL_COUPLED
