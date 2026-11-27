@@ -24,6 +24,7 @@ from wildintel_uploader.modules.backup.infrastructure.zip_files import ZipBackup
 from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseCases
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
+from wildintel_uploader.modules.catalog.infrastructure.records import RecordsOf
 from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, SystemClock, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredStatusHistory, StoredVisits
@@ -101,7 +102,7 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
     store = storage.open_store(collections_dir)
     return CatalogUseCases(repository or catalog_repository(collections_dir, settings), legacy_trappers=TrappersFromTheSettings(settings),
                            visits=StoredVisits(store, collections_dir), status_history=StoredStatusHistory(collections_dir), clock=clock or SystemClock(),
-                           legacy_fieldwork=FieldworkFromTheSettings(settings))
+                           legacy_fieldwork=FieldworkFromTheSettings(settings), records=RecordsOf(collections_dir))
 
 
 def catalog_repository(collections_dir: Path, settings: SettingsService, kind: str | None = None, database: Path | None = None) -> CatalogRepository:
@@ -151,7 +152,7 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     """The visits of the research projects of a collections folder — the one of the settings by default —, over the code of before that keeps them."""
     root = collections_dir or catalog_collections_dir()
     settings = settings or build_settings()
-    return VisitsUseCases(KeptVisits(root), CatalogOfTheVisits(root), deployments=DeploymentsOfTheVisits(root), file=CsvVisitFile(),
+    return VisitsUseCases(KeptVisits(root), CatalogOfTheVisits(lambda: build_catalog(root, settings).records()), deployments=DeploymentsOfTheVisits(root), file=CsvVisitFile(),
                           sources=build_sources(settings), uploads=UploadsOfTheUploaders(build_uploaders(root)), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
                           settings=FieldlogInUse(), clock=AuditClock())
 

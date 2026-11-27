@@ -4,10 +4,11 @@ file of visits (csv_file), where the deployments were uploaded (their folders, t
 is VisitsFailed, with their words. Each is moved into the module as the module that keeps it comes to be."""
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
+from wildintel_uploader.modules.catalog.domain.ports import CatalogRecords
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.visits.domain.models import VisitsFailed
 from wildintel_uploader.modules.visits.domain.ports import (
@@ -16,10 +17,6 @@ from wildintel_uploader.modules.visits.domain.ports import (
 from wildintel_uploader.modules.visits.infrastructure import kept_visits
 from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
 
-
-def _old():
-    from wildintel_uploader.core.services import local_folder_service
-    return local_folder_service
 
 
 @contextmanager
@@ -79,45 +76,46 @@ class StoredVisits(VisitRepository):
 
 
 class CatalogOfTheVisits(VisitCatalog):
-    """The catalog through the functions of before, which ask the module of the catalog."""
+    """The catalog as records — through its contract, given when it is needed."""
 
-    def __init__(self, root: Path) -> None:
-        self.root = root
+    def __init__(self, records: Callable[[], CatalogRecords]) -> None:
+        self._records = records
 
     def require_project(self, project: str, *, active: bool = False) -> None:
         with _failed():
-            (_old().require_active_research_project if active else _old().require_research_project)(self.root, project)
+            self._records().require_project(project, active=active)
 
     def locations(self, project: str, include_deleted: bool = False) -> list[dict]:
         with _failed():
-            return _old().list_locations(self.root, project, include_deleted=include_deleted)
+            return self._records().locations(project, include_deleted)
 
     def equipment(self, project: str, kind: str) -> list[dict]:
         with _failed():
-            return _old().list_field_items(self.root, project, kind)
+            return self._records().equipment(project, kind)
 
     def trappers(self) -> list[dict]:
         with _failed():
-            return _old().list_trappers(self.root)
+            return self._records().trappers()
 
     def trapper_names(self) -> list[str]:
         return [t["name"] for t in self.trappers()]
 
     def add_trappers(self, trappers: list[dict]) -> None:
         with _failed():
-            _old().write_trappers(self.root, [*_old().list_trappers(self.root), *trappers])
+            records = self._records()
+            records.keep_trappers([*records.trappers(), *trappers])
 
     def add_location(self, project: str, location: dict) -> None:
         with _failed():
-            _old().write_location(self.root, project, location)
+            self._records().add_location(project, location)
 
     def change_location(self, project: str, location_id: str, changes: dict) -> None:
         with _failed():
-            _old().update_location(self.root, project, location_id, changes, by_visit=True)
+            self._records().change_location(project, location_id, changes, by_visit=True)
 
     def keep_equipment(self, project: str, kind: str, items: list[dict]) -> None:
         with _failed():
-            _old().write_field_items(self.root, project, kind, items)
+            self._records().keep_equipment(project, kind, items)
 
 
 class StoredStateHistory(StateHistory):

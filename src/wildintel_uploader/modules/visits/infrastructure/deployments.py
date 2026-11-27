@@ -1,7 +1,7 @@
 """The deployments a research project's visits say, and the logs of their collections — what the field records of a trip come to.
 
 Each site's visits, in order, give a deployment for every pair of consecutive ones where the first left a camera (an Installation or a Revision) and
-the second collected its card (see local_folder_service.closes_collection): the deployment goes from the one to the other, and is **closed**. It belongs to
+the second collected its card (see closes_collection): the deployment goes from the one to the other, and is **closed**. It belongs to
 the collection **the session of the visit that collected it names, minus one** (R0013 collects the deployments of R0012). A camera that was left and
 has not been collected yet is an **open** deployment: it will belong to the collection the visit that collects it will name — the one being completed if it
 was left before the last trip, the next one if it was left on it.
@@ -20,8 +20,21 @@ import logging
 import re
 from pathlib import Path
 
-from wildintel_uploader.core.services import local_folder_service
+from wildintel_uploader.modules.visits.domain.rules import closes_collection
+from wildintel_uploader.modules.visits.infrastructure import kept_visits
 from wildintel_uploader.modules.visits.domain import rules as visit_rules
+
+
+def _records(root: Path):
+    """The catalog of this collections folder as records — through its contract —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_catalog(root, wiring.build_settings()).records()
+
+
+def _layout():
+    """How a collection holds its deployments — the contract of the deployments —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_deployments().layout()
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +199,7 @@ def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
             if "Stolen" in (later.get("actions") or []):
                 # a stolen camera closes its deployment with no images: nothing was on a card that was taken away
                 out.append(_deployment(number - 1, earlier, later, keep_seconds, no_images="stolen"))
-            elif local_folder_service.closes_collection(later):
+            elif closes_collection(later):
                 out.append(_deployment(number - 1, earlier, later, keep_seconds))
         last = group[-1]
         number = session_number(last.get("session"))
@@ -217,7 +230,7 @@ def visit_states(visits: list[dict], keep_seconds: bool = True) -> dict[tuple[st
 def refresh_states(root: Path, research_project_id: str, keep_seconds: bool = True) -> int:
     """Keeps the state of the visits of a research project — worked out from all of them: a visit that left a camera is deployed until a later visit collects its
     card, and then it is collected (or stolen). Called when a visit is added and when one is given its deployment. Returns how many visits changed."""
-    return local_folder_service.write_states(root, research_project_id, visit_states(local_folder_service.list_visits(root, research_project_id), keep_seconds))
+    return kept_visits.write_states(root, research_project_id, visit_states(kept_visits.list_visits(root, research_project_id), keep_seconds))
 
 
 def locked(visits: list[dict], keep_seconds: bool = True) -> set[tuple[str, str]]:
@@ -289,8 +302,8 @@ def make_collection_folders(root: Path, research_project_id: str, collections: l
     Raises:
         LocalFolderError: the research project isn't kept in the collections folder.
     """
-    local_folder_service.require_research_project(root, research_project_id)
-    visits = local_folder_service.list_visits(root, research_project_id)
+    _records(root).require_project(research_project_id)
+    visits = kept_visits.list_visits(root, research_project_id)
     project = root / research_project_id
     wanted = {c.upper() for c in collections} if collections is not None else None
     by_collection: dict[str, list[dict]] = {}
@@ -299,7 +312,7 @@ def make_collection_folders(root: Path, research_project_id: str, collections: l
             by_collection.setdefault(d["collection"], []).append(d)
     result = []
     for collection, items in sorted(by_collection.items()):
-        local_folder_service.write_collection_metadata(project / collection, collection)   # the collection's folder, with its collection.json
+        _layout().write_collection_metadata(project / collection, collection)   # the collection's folder, with its collection.json
         result.append({"collection": collection, "closed": sum(d["status"] == "closed" for d in items), "open": sum(d["status"] == "open" for d in items)})
     return {"collections": result}
 

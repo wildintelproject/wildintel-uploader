@@ -59,9 +59,6 @@ STILL_COUPLED = {
     "uploaders/infrastructure/sync_service.py": {"local_folder_service"},
     "uploaders/infrastructure/trapper.py": {"local_folder_service"},
     "uploaders/infrastructure/uploads.py": {"local_folder_service"},
-    "visits/infrastructure/deployments.py": {"local_folder_service"},
-    "visits/infrastructure/kept_visits.py": {"local_folder_service"},
-    "visits/infrastructure/legacy.py": {"local_folder_service"},
 }
 
 

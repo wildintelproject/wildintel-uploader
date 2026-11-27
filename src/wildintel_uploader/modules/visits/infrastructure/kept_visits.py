@@ -1,6 +1,6 @@
 """The visits kept in the folders of the research projects — visits.json, unknown_visits.json, the revisions planned, the upload failures —, told
 with the names of what they point to and kept by their ids (the locations, the cameras, the SD cards and the people of the catalog). Moved from
-local_folder_service (#248), which still gives these names; what it needs of the catalog it asks there, as the catalog's functions of before."""
+local_folder_service (#248), which still gives these names; what it needs of the catalog it asks its contract, as records."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,17 +10,18 @@ from wildintel_uploader.modules.visits.domain.rules import closes_collection  # 
 from wildintel_uploader.shared import audit, identity, ids, storage
 
 
-def _lfs():
-    from wildintel_uploader.core.services import local_folder_service
-    return local_folder_service
+def _records(root: Path):
+    """The catalog of this collections folder as records — through its contract —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_catalog(root, wiring.build_settings()).records()
 
 
 def _raw_visits(root: Path, research_project_id: str) -> list[dict]:
-    return _lfs()._store(root).read_records(research_project_id, "visits")
+    return storage.open_store(root).read_records(research_project_id, "visits")
 
 
 def _write_raw_visits(root: Path, research_project_id: str, visits: list[dict]) -> None:
-    _lfs()._store(root).write_records(research_project_id, "visits", visits)
+    storage.open_store(root).write_records(research_project_id, "visits", visits)
 
 
 class _Refs:
@@ -73,8 +74,8 @@ def _what_the_camera_is(record: dict) -> dict:
 
 def _refs(root: Path, research_project_id: str, trappers=None) -> _Refs:
     return _Refs(
-        _lfs().list_locations(root, research_project_id, include_deleted=True), _lfs().list_field_items(root, research_project_id, "cameras", include_deleted=True),
-        _lfs().list_field_items(root, research_project_id, "sd_cards", include_deleted=True), _lfs()._trapper_records(root, trappers),
+        _records(root).locations(research_project_id, include_deleted=True), _records(root).equipment(research_project_id, "cameras", include_deleted=True),
+        _records(root).equipment(research_project_id, "sd_cards", include_deleted=True), (_records(root).trapper_records() if trappers is None else [t if isinstance(t, dict) else t.model_dump(mode="json") for t in trappers]),
     )
 
 
@@ -254,9 +255,9 @@ def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
 
 def list_unknown(root: Path, research_project_id: str) -> list[dict]:
     """The visits that are unknown — {"location_id", "session"}: the revisions before the first one kept to a site, of which nothing is known (see visit_rules.unknown_records)."""
-    where = {l["id"]: l for l in _lfs().list_locations(root, research_project_id, include_deleted=True) if l.get("id")}
+    where = {l["id"]: l for l in _records(root).locations(research_project_id, include_deleted=True) if l.get("id")}
     out = []
-    for u in _lfs()._store(root).read_records(research_project_id, "unknown_visits"):
+    for u in storage.open_store(root).read_records(research_project_id, "unknown_visits"):
         site = (where.get(u.get("location_ref")) or {}).get("location_id") or u.get("location_id")
         if site and u.get("session"):
             out.append({"location_id": site, "session": u["session"]})
@@ -266,14 +267,14 @@ def list_unknown(root: Path, research_project_id: str) -> list[dict]:
 def _write_unknown(root: Path, research_project_id: str, unknown: list[dict]) -> None:
     """Keeps the unknown visits — each pointing to its location by id, when the research project has it."""
     if not unknown:
-        _lfs()._store(root).delete_records(research_project_id, "unknown_visits")
+        storage.open_store(root).delete_records(research_project_id, "unknown_visits")
         return
-    where = {str(l.get("location_id", "")).lower(): l for l in _lfs().list_locations(root, research_project_id, include_deleted=True)}
+    where = {str(l.get("location_id", "")).lower(): l for l in _records(root).locations(research_project_id, include_deleted=True)}
     stored = []
     for u in unknown:
         place = where.get(str(u["location_id"]).lower())
         stored.append({"location_ref": place["id"], "session": u["session"]} if place and place.get("id") else {"location_id": u["location_id"], "session": u["session"]})
-    _lfs()._store(root).write_records(research_project_id, "unknown_visits", stored)
+    storage.open_store(root).write_records(research_project_id, "unknown_visits", stored)
 
 
 def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
@@ -281,8 +282,8 @@ def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
 
     Raises:
         storage.StorageError: the research project isn't there."""
-    _lfs()._require_modifiable(root, research_project_id)
-    _lfs().require_research_project(root, research_project_id)
+    _records(root).require_modifiable(research_project_id)
+    _records(root).require_project(research_project_id)
     have = list_unknown(root, research_project_id)
     keys = {(u["location_id"].lower(), u["session"].upper()) for u in have}
     added = [{"location_id": u["location_id"], "session": u["session"].upper()} for u in new if (u["location_id"].lower(), u["session"].upper()) not in keys]
@@ -294,7 +295,7 @@ def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
 def list_planned_revisions(root: Path, research_project_id: str) -> list[str]:
     """The revisions that were planned before any visit was made to them — "R0003": a revision is a trip to every location, and it exists in the visit book, with a planned
     visit to each location, from the day it is planned, not only from its first visit. Oldest first."""
-    kept = {str(r.get("session") or "").upper() for r in _lfs()._store(root).read_records(research_project_id, "planned_revisions") if r.get("session")}
+    kept = {str(r.get("session") or "").upper() for r in storage.open_store(root).read_records(research_project_id, "planned_revisions") if r.get("session")}
     return sorted(kept)
 
 
@@ -303,12 +304,12 @@ def plan_revision(root: Path, research_project_id: str, session: str) -> str:
 
     Raises:
         storage.StorageError: the research project isn't there or cannot be changed."""
-    _lfs()._require_modifiable(root, research_project_id)
-    _lfs().require_research_project(root, research_project_id)
+    _records(root).require_modifiable(research_project_id)
+    _records(root).require_project(research_project_id)
     session = session.upper()
     if session not in list_planned_revisions(root, research_project_id):
-        records = _lfs()._store(root).read_records(research_project_id, "planned_revisions")
-        _lfs()._store(root).write_records(research_project_id, "planned_revisions", [*records, {"session": session, "created_at": audit.now()}])
+        records = storage.open_store(root).read_records(research_project_id, "planned_revisions")
+        storage.open_store(root).write_records(research_project_id, "planned_revisions", [*records, {"session": session, "created_at": audit.now()}])
     return session
 
 
@@ -318,8 +319,8 @@ def update_visit(root: Path, research_project_id: str, location_id: str, session
 
     Raises:
         storage.StorageError: the research project isn't there, or it has no visit to that site in that revision."""
-    _lfs()._require_modifiable(root, research_project_id)
-    _lfs().require_research_project(root, research_project_id)
+    _records(root).require_modifiable(research_project_id)
+    _records(root).require_project(research_project_id)
     list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
     refs = _refs(root, research_project_id)
     raw = _raw_visits(root, research_project_id)
@@ -340,8 +341,8 @@ def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
     Raises:
         storage.StorageError: the research project isn't there.
     """
-    _lfs()._require_modifiable(root, research_project_id)
-    _lfs().require_research_project(root, research_project_id)
+    _records(root).require_modifiable(research_project_id)
+    _records(root).require_project(research_project_id)
     if new:
         list_visits(root, research_project_id)  # an earlier file is moved to instants and to ids first
         refs = _refs(root, research_project_id)
@@ -362,8 +363,8 @@ def replace_visits(root: Path, research_project_id: str, visits: list[dict]) -> 
 
     Raises:
         storage.StorageError: the research project isn't there."""
-    _lfs()._require_modifiable(root, research_project_id)
-    _lfs().require_research_project(root, research_project_id)
+    _records(root).require_modifiable(research_project_id)
+    _records(root).require_project(research_project_id)
     refs = _refs(root, research_project_id)
     _write_raw_visits(root, research_project_id, [_kept(v, refs) for v in visits])
 

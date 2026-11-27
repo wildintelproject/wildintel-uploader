@@ -8,6 +8,7 @@ from dataclasses import replace
 import logging
 from pathlib import Path
 
+from wildintel_uploader.modules.catalog.domain.ports import CatalogRecords
 from wildintel_uploader.shared import audit, storage
 from wildintel_uploader.shared.storage import valid_project_id
 
@@ -395,3 +396,75 @@ def location_time_in(project_folder: Path, location_id: str | None) -> dict:
 # collected its card), the SD card and the photos counted on it. Times are UTC, with a Z. It is no longer written (#213): it is
 # only read, when an older folder has it.
 
+
+class RecordsOf(CatalogRecords):
+    """The catalog of a collections folder as records — the functions above, bound to it."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    def research_projects(self, include_deleted: bool = False) -> list[dict]:
+        return list_research_projects(self.root, include_deleted)
+
+    def has_project(self, project: str) -> bool:
+        return has_research_project(self.root, project)
+
+    def add_project(self, record: dict) -> dict:
+        return write_research_project(self.root, record)
+
+    def require_project(self, project: str, *, active: bool = False) -> None:
+        (require_active_research_project if active else require_research_project)(self.root, project)
+
+    def require_modifiable(self, project: str) -> None:
+        _require_modifiable(self.root, project)
+
+    def project_record(self, project: str) -> dict | None:
+        return project_record(self.root, project)
+
+    def put_project_record(self, record: dict) -> None:
+        put_project_record(self.root, record)
+
+    def locations(self, project: str, include_deleted: bool = False) -> list[dict]:
+        return list_locations(self.root, project, include_deleted)
+
+    def add_location(self, project: str, location: dict, by_hand: bool = False) -> dict:
+        return write_location(self.root, project, location, by_hand)
+
+    def change_location(self, project: str, location_id: str, changes: dict, by_visit: bool = False) -> dict:
+        return update_location(self.root, project, location_id, changes, by_visit)
+
+    def location_time(self, project: str, location_id: str | None) -> dict:
+        return location_time(self.root, project, location_id)
+
+    def location_records(self, project: str) -> list[dict]:
+        return location_records(self.root, project)
+
+    def put_location_records(self, project: str, records: list[dict]) -> None:
+        put_location_records(self.root, project, records)
+
+    def equipment(self, project: str, kind: str, include_deleted: bool = False) -> list[dict]:
+        return list_field_items(self.root, project, kind, include_deleted)
+
+    def keep_equipment(self, project: str, kind: str, items: list[dict], by_hand: bool = False) -> None:
+        write_field_items(self.root, project, kind, items, by_hand)
+
+    def equipment_records(self, project: str, kind: str) -> list[dict]:
+        return equipment_records(self.root, project, kind)
+
+    def put_equipment_records(self, project: str, kind: str, records: list[dict]) -> None:
+        put_equipment_records(self.root, project, kind, records)
+
+    def trappers(self, include_deleted: bool = False) -> list[dict]:
+        return list_trappers(self.root, include_deleted)
+
+    def trapper_records(self) -> list[dict]:
+        return _trapper_records(self.root)
+
+    def keep_trappers(self, trappers: list[dict]) -> None:
+        write_trappers(self.root, trappers)
+
+    def roles(self, project: str, include_deleted: bool = False) -> list[dict]:
+        return list_roles(self.root, project, include_deleted)
+
+    def keep_roles(self, project: str, roles: list[dict]) -> None:
+        write_roles(self.root, project, roles)
