@@ -1,4 +1,4 @@
-/** Client-side mirror of core.schemas.requests.DeploymentFields — the
+/** Client-side mirror of shared/camtrap.py DeploymentFields — the
  * Camtrap DP "deployments" table (deployments-table-schema.json): what's
  * required, numeric ranges, integer types, the ISO 8601 dates with a
  * timezone designator, and cameraHeight/cameraDepth being mutually

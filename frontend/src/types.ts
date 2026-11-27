@@ -287,7 +287,7 @@ export type FeatureType =
  * names this mirrors (deploymentID -> deployment_id, etc.). The standard
  * requires deployment_id, latitude, longitude, start_date and end_date (the
  * dates as ISO 8601 with a timezone designator) — see deploymentValidation.ts
- * and core.schemas.requests.DeploymentFields, which enforce it. */
+ * and shared/camtrap.py DeploymentFields, which enforce it. */
 export interface DeploymentFields {
   deployment_id: string
   location_id?: string | null
@@ -460,7 +460,7 @@ export interface CollectionPath extends CollectionCheck {
 }
 
 /** How the deployment is identified for this run — see
- * core.schemas.requests.DeploymentSelection. research_project/
+ * modules/deployments/infrastructure/api_schemas.py DeploymentSelection. research_project/
  * classification_project/location only apply to destination "trapper";
  * collection_dir/collection_name only to "local". An "existing" deployment's
  * own fields (including its location) come from wherever it was found (see
