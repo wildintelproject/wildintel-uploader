@@ -110,3 +110,12 @@ def test_a_repository_of_the_catalog_keeps_records_only(path: Path):
     text = path.read_text(encoding="utf-8")
     assert "iterdir(" not in text and "collections_dir" not in text and ".acronym).mkdir(" not in text
 
+
+@pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=lambda p: str(p.relative_to(SRC)))
+def test_no_file_takes_a_private_name_of_another(path: Path):
+    """What a file offers to the others is named so: a name with an underscore in front is its own, never imported from elsewhere."""
+    taken = {f"{node.module}.{a.name}" for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+             if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("wildintel_uploader")
+             for a in node.names if a.name.startswith("_") and not a.name.startswith("__")}
+    assert not taken, f"{path.name} takes {sorted(taken)}"
+

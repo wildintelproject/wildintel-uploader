@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
-from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS, VISIT_QUESTIONS, SourceError, Unreachable, _label, parse_project, visit_row
+from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS, VISIT_QUESTIONS, SourceError, Unreachable, label_key, parse_project, visit_row
 from wildintel_uploader.modules.sources.domain.ports import Epicollect5, VisitRows, VisitSource
 from wildintel_uploader.modules.sources.domain.settings import Epicollect5Settings
 
@@ -23,9 +23,9 @@ class EpicollectApi(VisitSource):
 
     def visits(self, text: str | None, epicollect: Epicollect5, settings: Epicollect5Settings) -> VisitRows:
         form = project_form(epicollect, settings)
-        labels = {_label(i.get("label", "")) for i in form["inputs"]}
-        refs = {VISIT_QUESTIONS[_label(i["label"])]: i["ref"] for i in form["inputs"] if _label(i.get("label", "")) in VISIT_QUESTIONS}
-        missing = [name for name in ("locationID", "Date", "Status of the camera") if _label(name) not in labels]
+        labels = {label_key(i.get("label", "")) for i in form["inputs"]}
+        refs = {VISIT_QUESTIONS[label_key(i["label"])]: i["ref"] for i in form["inputs"] if label_key(i.get("label", "")) in VISIT_QUESTIONS}
+        missing = [name for name in ("locationID", "Date", "Status of the camera") if label_key(name) not in labels]
         if missing:
             raise SourceError(f"The form of the project does not have the questions of a visit: {', '.join(missing)}.")
         try:

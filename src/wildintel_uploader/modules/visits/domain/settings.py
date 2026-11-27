@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from wildintel_uploader.modules.settings.domain.registry import settings_registry
-from wildintel_uploader.modules.settings.domain.rules import _one_of
+from wildintel_uploader.modules.settings.domain.rules import one_of
 
 TIME_SOURCES = ("created_at", "hour")
 
@@ -18,4 +18,4 @@ class FieldlogSettings:
     keep_seconds: bool = False              # the seconds of the visits kept in the logs; off, cut to the minute
 
     def __post_init__(self) -> None:
-        _one_of("FIELDLOG.time_source", self.time_source, TIME_SOURCES)
+        one_of("FIELDLOG.time_source", self.time_source, TIME_SOURCES)

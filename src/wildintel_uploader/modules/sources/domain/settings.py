@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from wildintel_uploader.modules.settings.domain.registry import settings_registry
-from wildintel_uploader.modules.settings.domain.rules import _blank_is_none, _set, secret
+from wildintel_uploader.modules.settings.domain.rules import blank_is_none, tidy_field, secret
 
 
 @settings_registry.section("EPICOLLECT5", "epicollect5", order=30)
@@ -19,8 +19,8 @@ class Epicollect5Settings:
     mapping: Mapping[str, str] = field(default_factory=dict)   # deployment field -> input ref of the form
 
     def __post_init__(self) -> None:
-        _set(self, "project_slug", _blank_is_none(self.project_slug))
-        _set(self, "client_id", _blank_is_none(self.client_id))
+        tidy_field(self, "project_slug", blank_is_none(self.project_slug))
+        tidy_field(self, "client_id", blank_is_none(self.client_id))
 
 
 @settings_registry.section("EPICOLLECTCSV", "epicollect_csv", order=50)

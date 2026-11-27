@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from wildintel_uploader.modules.settings.domain.registry import settings_registry
-from wildintel_uploader.modules.settings.domain.rules import _check_levels, _exif_name, _set
+from wildintel_uploader.modules.settings.domain.rules import check_levels, exif_name, tidy_field
 
 
 IMAGE_CHECKS = ("corrupted", "sequence", "structure", "camera", "exif", "duplicates")
@@ -36,17 +36,17 @@ class ValidationSettings:
         for level in self.camera_levels:
             names: list[str] = []
             for name in ((level,) if isinstance(level, str) else level):
-                name = _exif_name("VALIDATION.camera_levels", name)
+                name = exif_name("VALIDATION.camera_levels", name)
                 if name.lower() not in (n.lower() for n in names):
                     names.append(name)
             if names and [n.lower() for n in names] not in ([n.lower() for n in kept] for kept in levels):
                 levels.append(tuple(names))
-        _set(self, "camera_levels", tuple(levels))
+        tidy_field(self, "camera_levels", tuple(levels))
         # each field once, as written; the capture date is always expected, so it is not one of them
         exif: list[str] = []
         for name in self.exif_fields:
-            name = _exif_name("VALIDATION.exif_fields", name)
+            name = exif_name("VALIDATION.exif_fields", name)
             if name.lower() != "datetimeoriginal" and name.lower() not in (n.lower() for n in exif):
                 exif.append(name)
-        _set(self, "exif_fields", tuple(exif))
-        _set(self, "defaults", _check_levels("VALIDATION.defaults", self.defaults, IMAGE_CHECKS, IMAGE_CHECK_DEFAULTS))
+        tidy_field(self, "exif_fields", tuple(exif))
+        tidy_field(self, "defaults", check_levels("VALIDATION.defaults", self.defaults, IMAGE_CHECKS, IMAGE_CHECK_DEFAULTS))

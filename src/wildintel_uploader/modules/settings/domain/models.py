@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 from wildintel_uploader.modules.settings.domain.registry import discover, settings_registry
 from wildintel_uploader.modules.settings.domain.rules import (  # noqa: F401 — SettingsError: where the entry points find it
-    SettingsError, _blank_is_none, _in_range, _one_of, _set,
+    SettingsError, blank_is_none, in_range, one_of, tidy_field,
 )
 
 
@@ -40,9 +40,9 @@ class GeneralSettings:
     show_welcome: bool = True                            # whether the welcome page is shown when the app opens
 
     def __post_init__(self) -> None:
-        _one_of("GENERAL.log_level", self.log_level, LOG_LEVELS)
-        _in_range("GENERAL.workers", self.workers, 1, MAX_WORKERS)
-        _set(self, "default_research_project", _blank_is_none(self.default_research_project))
+        one_of("GENERAL.log_level", self.log_level, LOG_LEVELS)
+        in_range("GENERAL.workers", self.workers, 1, MAX_WORKERS)
+        tidy_field(self, "default_research_project", blank_is_none(self.default_research_project))
 
 
 # Where the catalog — the research projects, the people, their equipment — can be kept.
@@ -62,12 +62,12 @@ class DataSettings:
     catalog_database: str | None = None                  # the SQLite database of the catalog; else <data folder>/catalog.sqlite3
 
     def __post_init__(self) -> None:
-        _one_of("DATA.catalog_storage", self.catalog_storage, CATALOG_STORAGES)
+        one_of("DATA.catalog_storage", self.catalog_storage, CATALOG_STORAGES)
         for name in ("dir", "collections_dir", "reports_dir", "packages_dir", "catalog_database"):
-            value = _blank_is_none(getattr(self, name))
+            value = blank_is_none(getattr(self, name))
             if value is not None and not Path(value).expanduser().is_absolute():
                 raise SettingsError(f"DATA.{name}", "must be an absolute path (or start with ~)")
-            _set(self, name, value)
+            tidy_field(self, name, value)
 
 
 @settings_registry.section("FIELDWORK", "legacy_fieldwork", order=100)

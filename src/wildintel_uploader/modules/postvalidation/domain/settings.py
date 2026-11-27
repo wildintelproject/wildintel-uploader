@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from wildintel_uploader.modules.settings.domain.registry import settings_registry
-from wildintel_uploader.modules.settings.domain.rules import _check_levels, _in_range, _one_of, _set
+from wildintel_uploader.modules.settings.domain.rules import check_levels, in_range, one_of, tidy_field
 
 
 DEPLOYMENT_CHECKS = ("deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera", "image_count", "sequence_count",
@@ -43,10 +43,10 @@ class PostvalidationSettings:
     tolerance_hours: float = 1.0            # leeway around the start and the end when the dates of the images are checked
 
     def __post_init__(self) -> None:
-        _set(self, "defaults", _check_levels("POSTVALIDATION.defaults", self.defaults, DEPLOYMENT_CHECKS, DEPLOYMENT_CHECK_DEFAULTS))
-        _in_range("POSTVALIDATION.sequence_gap_seconds", self.sequence_gap_seconds, 0, 86400, low_open=True)
-        _in_range("POSTVALIDATION.min_revisions", self.min_revisions, 1, 50)
-        _one_of("POSTVALIDATION.similarity_method", self.similarity_method, SIMILARITY_METHODS)
+        tidy_field(self, "defaults", check_levels("POSTVALIDATION.defaults", self.defaults, DEPLOYMENT_CHECKS, DEPLOYMENT_CHECK_DEFAULTS))
+        in_range("POSTVALIDATION.sequence_gap_seconds", self.sequence_gap_seconds, 0, 86400, low_open=True)
+        in_range("POSTVALIDATION.min_revisions", self.min_revisions, 1, 50)
+        one_of("POSTVALIDATION.similarity_method", self.similarity_method, SIMILARITY_METHODS)
         for name in ("image_count_tolerance", "sequence_count_tolerance", "sequence_length_tolerance"):
-            _in_range(f"POSTVALIDATION.{name}", getattr(self, name), 0, 1000)
-        _in_range("POSTVALIDATION.tolerance_hours", self.tolerance_hours, 0, 8760)
+            in_range(f"POSTVALIDATION.{name}", getattr(self, name), 0, 1000)
+        in_range("POSTVALIDATION.tolerance_hours", self.tolerance_hours, 0, 8760)

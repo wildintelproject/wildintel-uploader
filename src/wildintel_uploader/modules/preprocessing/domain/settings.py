@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from wildintel_uploader.modules.settings.domain.registry import settings_registry
-from wildintel_uploader.modules.settings.domain.rules import _in_range, _set
+from wildintel_uploader.modules.settings.domain.rules import in_range, tidy_field
 
 
 @settings_registry.section("PREPROCESSING", "preprocessing", order=90)
@@ -24,6 +24,6 @@ class PreprocessingSettings:
     convert_to_utc: bool = True             # the capture dates, in names and metadata, in UTC
 
     def __post_init__(self) -> None:
-        _in_range("PREPROCESSING.resize_width", self.resize_width, 100, 20000)
+        in_range("PREPROCESSING.resize_width", self.resize_width, 100, 20000)
         for name in ("owner", "publisher", "coverage", "license_url"):
-            _set(self, name, (getattr(self, name) or "").strip())
+            tidy_field(self, name, (getattr(self, name) or "").strip())

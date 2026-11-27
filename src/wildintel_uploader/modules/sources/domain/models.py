@@ -74,14 +74,14 @@ _NUMBER = ("camera_interval", "detection_distance", "camera_height", "camera_dep
 _BOOL = ("bait_use", "timestamp_issues")
 
 
-def _text(value: Any) -> str | None:
+def cell_text(value: Any) -> str | None:
     if value is None or isinstance(value, (dict, list)):
         return None
     return str(value).strip() or None
 
 
 def _number(value: Any) -> float | int | None:
-    text = _text(value)
+    text = cell_text(value)
     if text is None:
         return None
     try:
@@ -93,7 +93,7 @@ def _number(value: Any) -> float | int | None:
 
 def _day(value: Any) -> date | None:
     """A date as Epicollect5 gives it: ISO (with or without a time), or as the form's own format — day first, as in Europe."""
-    text = _text(value)
+    text = cell_text(value)
     if text is None:
         return None
     text = text.replace("Z", "")
@@ -106,7 +106,7 @@ def _day(value: Any) -> date | None:
 
 
 def _clock(value: Any) -> time | None:
-    text = _text(value)
+    text = cell_text(value)
     if text is None:
         return None
     match = re.search(r"(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?", text)
@@ -127,7 +127,7 @@ def _yes_no(value: Any) -> bool | None:
     """A radio or a dropdown says yes or no; a checkbox is a list, ticked or not. Nothing answered is not recorded."""
     if isinstance(value, list):
         return any(str(v).strip().lower() in _YES for v in value)
-    text = _text(value)
+    text = cell_text(value)
     return None if text is None else text.lower() in _YES
 
 
@@ -143,9 +143,9 @@ def entry_fields(entry: dict, mapping: dict[str, str]) -> dict:
     found: dict[str, Any] = {}
 
     for key in _TEXT:
-        if (value := _text(raw.get(key))) is not None:
+        if (value := cell_text(raw.get(key))) is not None:
             found[key] = value
-    if (value := _text(raw.get("location_id"))) is not None:
+    if (value := cell_text(raw.get("location_id"))) is not None:
         found["location_id"] = value
     for key in _NUMBER:
         if (value := _number(raw.get(key))) is not None:
@@ -153,11 +153,11 @@ def entry_fields(entry: dict, mapping: dict[str, str]) -> dict:
     for key in _BOOL:
         if (flag := _yes_no(raw.get(key))) is not None:
             found[key] = flag
-    if (value := _text(raw.get("feature_type"))) in FEATURE_TYPES:
+    if (value := cell_text(raw.get("feature_type"))) in FEATURE_TYPES:
         found["feature_type"] = value
 
     tags = raw.get("tags")
-    items = tags if isinstance(tags, list) else (str(tags).split(",") if _text(tags) else [])
+    items = tags if isinstance(tags, list) else (str(tags).split(",") if cell_text(tags) else [])
     if tags_found := [str(t).strip() for t in items if str(t).strip()]:
         found["tags"] = tags_found
 
@@ -193,7 +193,7 @@ def _answer_text(value: Any) -> str | None:
         return f"{lat}, {lon}" if lat not in (None, "") and lon not in (None, "") else None
     if isinstance(value, list):
         return ", ".join(str(v).strip() for v in value if str(v).strip()) or None
-    return _text(value)
+    return cell_text(value)
 
 
 def unmapped_notes(entry: dict, inputs: list[dict], mapping: dict[str, str]) -> str | None:
@@ -233,7 +233,7 @@ VISIT_COLUMNS = (
 )
 
 
-def _label(text: str) -> str:
+def label_key(text: str) -> str:
     return re.sub(r"\s+", "", text or "").lower()
 
 
@@ -265,43 +265,43 @@ def visit_row(entry: dict, refs: dict[str, str]) -> dict[str, str]:
     entry leaves blank is not in the row. The camera's height is noted in centimetres and a visit keeps it in metres."""
     raw = {field: entry.get(ref) for field, ref in refs.items()}
     row: dict[str, str] = {}
-    if (text := _text(raw.get("location_id"))) is not None:
+    if (text := cell_text(raw.get("location_id"))) is not None:
         row["location_id"] = text
-    if (text := _text(raw.get("session"))) is not None:
+    if (text := cell_text(raw.get("session"))) is not None:
         row["session"] = text
     if (day := _day(raw.get("date"))) is not None:
         row["date"] = day.isoformat()
     if (clock := _clock(raw.get("time"))) is not None:
         row["time"] = clock.strftime("%H:%M:%S")
-    if _text(entry.get("created_at")):
+    if cell_text(entry.get("created_at")):
         row["created_at"] = str(entry["created_at"])
-    if actions := visit_actions(_text(raw.get("camera_status")), _text(raw.get("action")), _text(raw.get("action_after_theft"))):
+    if actions := visit_actions(cell_text(raw.get("camera_status")), cell_text(raw.get("action")), cell_text(raw.get("action_after_theft"))):
         row["actions"] = actions
     trappers = raw.get("trappers")
-    names = trappers if isinstance(trappers, list) else ([trappers] if _text(trappers) else [])
+    names = trappers if isinstance(trappers, list) else ([trappers] if cell_text(trappers) else [])
     if names := [str(n).strip() for n in names if str(n).strip()]:
         row["trappers"] = ", ".join(names)
         row["setup_by"] = names[0]
-    if (text := _text(raw.get("camera_status"))) is not None and text.strip().lower() != "no camera at the site":   # no camera is not a status of a camera: nothing is kept
+    if (text := cell_text(raw.get("camera_status"))) is not None and text.strip().lower() != "no camera at the site":   # no camera is not a status of a camera: nothing is kept
         row["camera_status"] = text
-    if (text := _text(raw.get("card_batteries_ok"))) is not None and text.lower() in _CARD_CODES:
+    if (text := cell_text(raw.get("card_batteries_ok"))) is not None and text.lower() in _CARD_CODES:
         row["battery_status"], row["card_status"] = _CARD_CODES[text.lower()]
     # the form that asks the batteries and the card apart: each answer is its own column (the codes are read as they are written)
     for field in ("battery_status", "card_status"):
-        if (text := _text(raw.get(field))) is not None:
+        if (text := cell_text(raw.get(field))) is not None:
             row[field] = text
     if (number := _number(raw.get("num_photos"))) is not None:
         row["num_photos"] = str(int(number))
-    if (text := _text(raw.get("date_time_ok"))) is not None:
+    if (text := cell_text(raw.get("date_time_ok"))) is not None:
         row["date_time_ok"] = "Yes" if text.lower().startswith("ok") else "No"
     # the camera is what it is called in the field — its name (#231); its serial number only finds it, or creates or completes its record
-    if (text := _text(raw.get("camera_label")) or _text(raw.get("camera_id"))) is not None:
+    if (text := cell_text(raw.get("camera_label")) or cell_text(raw.get("camera_id"))) is not None:
         row["camera_id"] = text
     for field in ("camera_serial", "camera_model", "feature_type", "habitat", "comments"):
-        if (text := _text(raw.get(field))) is not None:
+        if (text := cell_text(raw.get(field))) is not None:
             row[field] = text
     # the card is what the SD cards of the project are called — its number: the form is a free text, where it is written "SD 7", "sd-7" or "7"
-    if (text := _text(raw.get("sd"))) is not None:
+    if (text := cell_text(raw.get("sd"))) is not None:
         row["sd"] = re.sub(r"^sd\s*[-_#.:]?\s*", "", text, flags=re.IGNORECASE) or text
     if (number := _number(raw.get("camera_height"))) is not None:
         row["camera_height"] = str(round(number / 100, 4))
@@ -331,7 +331,7 @@ def _header_key(header: str) -> tuple[str, str | None]:
     return re.sub(r"[\W_]+", "", header).lower(), part
 
 
-def _form_refs(headers: list[str]) -> tuple[dict[str, str], dict[str, str]]:
+def form_refs(headers: list[str]) -> tuple[dict[str, str], dict[str, str]]:
     """The columns of the CSV of the form that answer each question of a visit (the field of the visit, the header of the column) and the ones that say where it was (`lat`, `long`)."""
     questions = {re.sub(r"[\W_]+", "", k).lower(): v for k, v in VISIT_QUESTIONS.items()} | {"npicturescollected": "num_photos"}
     refs: dict[str, str] = {}

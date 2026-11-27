@@ -7,7 +7,7 @@ import csv
 import io
 from typing import Any
 
-from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS, SourceError, _form_refs, _text, visit_row
+from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS, SourceError, form_refs, cell_text, visit_row
 from wildintel_uploader.modules.sources.domain.ports import Epicollect5, VisitRows, VisitSource
 from wildintel_uploader.modules.sources.domain.settings import Epicollect5Settings
 
@@ -16,7 +16,7 @@ def visits_from_csv(text: str) -> str:
     """The CSV of the form, as the text of a CSV with a row per visit and the columns a visit has. SourceError: no rows, or not the form."""
     reader = csv.DictReader(io.StringIO(text.lstrip("﻿")))
     headers = reader.fieldnames or []
-    refs, place = _form_refs(headers)
+    refs, place = form_refs(headers)
     # the day and the time of a visit are when its entry was created (created_at): the form has no date or time to ask for
     missing = [name for name, field in (("locationID", "location_id"), ("Status of the camera", "camera_status")) if field not in refs]
     if "created_at" not in (reader.fieldnames or []):
@@ -29,10 +29,10 @@ def visits_from_csv(text: str) -> str:
     for line in reader:
         entry: dict[str, Any] = {ref: line.get(header) for ref, header in ((h, h) for h in refs.values())}
         entry["created_at"] = line.get("created_at")
-        if "trappers" in refs and (names := _text(line.get(refs["trappers"]))):
+        if "trappers" in refs and (names := cell_text(line.get(refs["trappers"]))):
             entry[refs["trappers"]] = [n.strip() for n in names.split(",")]
         if place:
-            lat, lon = _text(line.get(place.get("lat", ""))), _text(line.get(place.get("long", "")))
+            lat, lon = cell_text(line.get(place.get("lat", ""))), cell_text(line.get(place.get("long", "")))
             if lat:
                 entry["__place"] = {"latitude": lat, "longitude": lon or ""}
         refs_now = dict(refs)
@@ -48,7 +48,7 @@ def form_columns(text: str) -> dict[str, str]:
     if form_error(text) is not None:
         return {}
     headers = csv.DictReader(io.StringIO(text.lstrip("\ufeff"))).fieldnames or []
-    refs, place = _form_refs(list(headers))
+    refs, place = form_refs(list(headers))
     coordinates = {field: place[part] for field, part in (("latitude", "lat"), ("longitude", "long")) if part in place}
     return {**refs, **coordinates, "created_at": "created_at"}
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from wildintel_uploader.modules.settings.domain.registry import settings_registry
-from wildintel_uploader.modules.settings.domain.rules import _blank_is_none, _in_range, _set, secret
+from wildintel_uploader.modules.settings.domain.rules import blank_is_none, in_range, tidy_field, secret
 
 
 @settings_registry.section("TRAPPER", "trapper", order=20)
@@ -18,10 +18,10 @@ class TrapperSettings:
     max_zip_mb: int = 500                                # the images of a deployment go in packages of at most this many megabytes
 
     def __post_init__(self) -> None:
-        _in_range("TRAPPER.max_zip_mb", self.max_zip_mb, 1, 5000)
+        in_range("TRAPPER.max_zip_mb", self.max_zip_mb, 1, 5000)
         # where to connect and as whom: blank is none
-        _set(self, "base_url", _blank_is_none(self.base_url))
-        _set(self, "user_name", _blank_is_none(self.user_name))
+        tidy_field(self, "base_url", blank_is_none(self.base_url))
+        tidy_field(self, "user_name", blank_is_none(self.user_name))
 
 
 @settings_registry.section("AGOUTI", "agouti", order=40)
@@ -34,5 +34,5 @@ class AgoutiSettings:
     project_id: str | None = None
 
     def __post_init__(self) -> None:
-        _set(self, "base_url", _blank_is_none(self.base_url))
-        _set(self, "project_id", _blank_is_none(self.project_id))
+        tidy_field(self, "base_url", blank_is_none(self.base_url))
+        tidy_field(self, "project_id", blank_is_none(self.project_id))

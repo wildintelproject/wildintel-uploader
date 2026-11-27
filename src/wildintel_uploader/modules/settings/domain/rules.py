@@ -18,23 +18,24 @@ class SettingsError(ValueError):
 
 # ── the rules shared by the sections ──
 
-def _set(obj: object, name: str, value: object) -> None:
-    """Tidies a field of a frozen dataclass while it is being made."""
+def tidy_field(obj: object, name: str, value: object) -> None:
+    """Tidies a field of a frozen dataclass while it is being made — what the sections of the settings of each module are made with, as the
+    others below."""
     object.__setattr__(obj, name, value)
 
 
-def _blank_is_none(value: str | None) -> str | None:
+def blank_is_none(value: str | None) -> str | None:
     return (value or "").strip() or None
 
 
-def _in_range(setting: str, value: float, low: float, high: float, *, low_open: bool = False) -> None:
+def in_range(setting: str, value: float, low: float, high: float, *, low_open: bool = False) -> None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise SettingsError(setting, "must be a number")
     if (value <= low if low_open else value < low) or value > high:
         raise SettingsError(setting, f"must be {'more than' if low_open else 'at least'} {low:g} and at most {high:g}")
 
 
-def _one_of(setting: str, value: object, choices: tuple[str, ...]) -> None:
+def one_of(setting: str, value: object, choices: tuple[str, ...]) -> None:
     if value not in choices:
         raise SettingsError(setting, f"must be one of {', '.join(choices)}")
 
@@ -43,7 +44,7 @@ def _one_of(setting: str, value: object, choices: tuple[str, ...]) -> None:
 _EXIF_FIELD = re.compile(r"[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)?")
 
 
-def _exif_name(setting: str, name: object) -> str:
+def exif_name(setting: str, name: object) -> str:
     name = str(name).strip()
     if not _EXIF_FIELD.fullmatch(name):
         raise SettingsError(setting, f"'{name}' is not the name of an EXIF field")
@@ -60,13 +61,13 @@ CHECK_LEVELS = ("required", "warn", "skip")
 CheckLevel = Literal["required", "warn", "skip"]
 
 
-def _check_levels(setting: str, given: Mapping[str, str], checks: tuple[str, ...], start: Mapping[str, str]) -> dict[str, str]:
+def check_levels(setting: str, given: Mapping[str, str], checks: tuple[str, ...], start: Mapping[str, str]) -> dict[str, str]:
     """The level each check starts at: the ones given, and the default of the rest. A name that is not a check, or a level that is not one, is refused."""
     unknown = sorted(set(given) - set(checks))
     if unknown:
         raise SettingsError(setting, f"not checks: {', '.join(unknown)}")
     for check, level in given.items():
-        _one_of(f"{setting}.{check}", level, CHECK_LEVELS)
+        one_of(f"{setting}.{check}", level, CHECK_LEVELS)
     return {**start, **given}
 
 
