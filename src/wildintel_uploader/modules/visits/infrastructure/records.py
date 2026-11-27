@@ -4,12 +4,14 @@ follows on its own (its actions, its status, what a full card or a camera taken 
 from __future__ import annotations
 
 from datetime import date as date_type, time as time_type
-from typing import Literal, Optional
+from typing import Literal, Optional, cast
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from wildintel_uploader.modules.visits.domain import integrity
+from wildintel_uploader.modules.visits.domain.shapes import Visit
 from wildintel_uploader.modules.visits.domain.wall_clock import is_utc
 from wildintel_uploader.modules.visits.domain.rules import CAMERA_STATUSES, battery_status_code, camera_status_code, card_status_code, split_card_batteries
 
@@ -120,42 +122,13 @@ class VisitRecord(BaseModel):
         return list(dict.fromkeys(actions))
 
     @model_validator(mode="after")
-    def _the_status_of_a_camera_found_stolen_is_stolen(self):
-        # a Stolen visit says it all with its action: the status of the camera is Stolen — and only there is the camera found stolen
-        if "Stolen" in self.actions:
-            if self.camera_status not in (None, "Stolen"):
-                raise ValueError("The camera of a Stolen visit is stolen: its status is Stolen.")
-            self.camera_status = "Stolen"
-        elif self.camera_status == "Stolen":
-            raise ValueError("The status Stolen is for the visit that finds the camera stolen: its action is Stolen.")
-        return self
-
-    @model_validator(mode="after")
-    def _no_card_left_where_the_camera_is_taken_away(self):
-        # the camera that is taken away goes with its card: nothing is left, unless another camera is put up
-        actions = set(self.actions)
-        if "Desinstallation" in actions and "Installation" not in actions and self.sd:
-            raise ValueError("No SD card is left where the camera is taken away: leave the card out.")
-        return self
-
-    @model_validator(mode="after")
-    def _no_photos_on_a_full_card(self):
-        # with the card full its photos are not counted: their number is not given
-        if self.card_status == "CardFull" and self.num_photos is not None:
-            raise ValueError("The images on a full card are not counted: leave their number out.")
-        return self
-
-    @model_validator(mode="after")
-    def _something_was_done(self):
-        # a visit that could not be made did nothing; any other did at least one thing
-        if not self.actions and str(self.camera_status or "").strip().lower() not in ("not revised", "no revisada", "no revisado"):
-            raise ValueError("A visit does at least one action — only a visit that could not be made (status Not revised) has none.")
-        return self
-
-    @model_validator(mode="after")
-    def _height_or_depth(self) -> "VisitRecord":
-        if self.camera_height is not None and self.camera_depth is not None:
-            raise ValueError("camera_height and camera_depth are mutually exclusive: only one should be set.")
+    def _keeps_the_rules_of_a_visit(self) -> "VisitRecord":
+        # the rules are the domain's (domain.integrity): here only the first that is broken is told, as Pydantic tells an error
+        visit = cast(Visit, self.model_dump())
+        found = integrity.problems(visit)
+        if found:
+            raise ValueError(found[0])
+        self.camera_status = integrity.camera_status_of(visit)
         return self
 
 
