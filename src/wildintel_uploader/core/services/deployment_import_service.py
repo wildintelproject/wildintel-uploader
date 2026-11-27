@@ -9,22 +9,25 @@ with everything else but don't contribute to the date range or camera model
 guess (no bundled exiftool — see the "Import deployment" doc page)."""
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 import shutil
 import tempfile
-from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 
 from PIL import Image
 
-from wildintel_uploader.core import config, parallel
+from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import camera_info, file_memo, local_folder_service, trapper_service
+from wildintel_uploader.core.services import camera_info, local_folder_service, trapper_service
+from wildintel_uploader.modules.fileinfo.domain import models as _fileinfo
+from wildintel_uploader.modules.postvalidation.domain import models as _post
+from wildintel_uploader.modules.postvalidation.infrastructure import validators as _deployment_validators
+from wildintel_uploader.modules.prevalidation.domain import models as _pre
+from wildintel_uploader.modules.prevalidation.infrastructure import validators as _image_validators
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +210,7 @@ def prefetch_metadata(source_dir: Path, exif_fields: list[str] | None = None) ->
     if not source_dir.is_dir():
         return
     _, images = _files_and_images(source_dir)
-    extra = [f for f in (exif_fields or []) if f.lower() not in _CAMERA_FIELDS and f.lower() != "datetimeoriginal"]
+    extra = [f for f in (exif_fields or []) if f.lower() not in _fileinfo.CAMERA_FIELDS and f.lower() != "datetimeoriginal"]
     camera_info.prefetch(images, extra)
 
 
@@ -353,216 +356,16 @@ def scan_session(session_dir: Path) -> dict:
     return {"deployments": deployments, "loose_files": loose, "warnings": warnings, "timestamp_log": timestamp_log}
 
 
-_TRAILING_DIGITS_RE = re.compile(r"(\d+)(?!.*\d)")  # a filename's last run of digits — how camera traps number shots
+# The checks of the images are the module `modules.prevalidation`, and those of a deployment `modules.postvalidation` (#248, #246): each a validator there. What is left here are the names of before, for those that call them.
+IMAGE_CHECK_ORDER = tuple(c.key for c in _image_validators.VALIDATORS)
+IMAGE_CHECKS = frozenset(IMAGE_CHECK_ORDER)
+DEFAULT_CAMERA_LEVELS = _fileinfo.DEFAULT_CAMERA_LEVELS
+_natural_key = _post.natural_key
 
 
-def _sequence_number(path: Path) -> int | None:
-    match = _TRAILING_DIGITS_RE.search(path.stem)
-    return int(match.group(1)) if match else None
-
-
-def _corruption_error(path: Path) -> str | None:
-    """None if the file opens and fully decodes; otherwise PIL's error. An image that decoded is remembered while it is the same one (see file_memo): the preprocessing decodes it
-    in full to resize it, and the seal asks again."""
-    key = file_memo.stamp(path)
-    if file_memo.DECODED.get(key):
-        return None
-    try:
-        with Image.open(path) as img:
-            img.load()
-        file_memo.DECODED.put(key, True)
-        return None
-    except Exception as exc:
-        return str(exc)
-
-
-# The image checks validate_images can run — see its own docstring. A
-# caller may ask for any subset; None (the default) means all of them.
-# How two images are told to be of the same camera when the settings do not say it (VALIDATION.camera_levels): by the serial number, else by the make and
-# the model, else by the model alone.
-DEFAULT_CAMERA_LEVELS = [["SerialNumber"], ["Make", "Model"], ["Model"]]
-
-
-def _camera_groups(images: list[Path], cameras: dict, levels: list[list[str]]) -> tuple[list[str], dict[tuple[str, ...], list[Path]], int]:
-    """The images grouped by the camera they were taken by, as `levels` tell it — the fields of each level, the most reliable first: the images are compared by
-    the first level every image has; when none, by the first that any has, and the ones that have not got it are without camera information. Returns the
-    fields compared by (none when no image has any level), the groups by their values, and how many images are without camera information."""
-    serials = {f for f in _CAMERA_FIELDS if f != "model"}
-    asked = list(dict.fromkeys(f for level in levels for f in level if f.lower() not in serials))
-    tags = camera_info.read_tags(images, asked) if asked else {}
-
-    def value(path: Path, field: str) -> str | None:
-        return cameras[path].camera_id if field.lower() in serials else tags.get(path, {}).get(field)
-
-    values = {tuple(level): {p: tuple(value(p, f) for f in level) for p in images} for level in levels}
-    complete = lambda level: [p for p in images if all(values[tuple(level)][p])]
-    chosen = next((level for level in levels if len(complete(level)) == len(images)), None) or next((level for level in levels if complete(level)), None)
-    if chosen is None:
-        return [], {}, len(images)
-    groups: dict[tuple[str, ...], list[Path]] = defaultdict(list)
-    for path in complete(chosen):
-        groups[values[tuple(chosen)][path]].append(path)   # type: ignore[index]
-    return list(chosen), dict(groups), len(images) - len(complete(chosen))
-
-
-def _dates_of_the_deployment(images: list[Path], source_dir: Path, deployment: DeploymentFields, tolerance_hours: float, visit: dict | None) -> dict:
-    """Whether the dates of the images fit the deployment, by their dates — not their names —, with `tolerance_hours` of leeway (#208):
-
-    - wrong, as only a camera clock that went wrong or images of another deployment explain it: an image **before the start** or **after the collection**,
-      and a **first image long after the start** — a photo is always taken right after the camera is set up (rule "before_start", "after_end", "first");
-    - normal, and only said (`stopped_early`): the **last image long before the collection** — the card was full or the batteries went flat, and the camera
-      stopped —, with why when the visit that collected the card says it (`reason`: "card_full", "no_batteries").
-    And `images_span`: the first and the last date the images say, and how many say one."""
-    start, end = _parse_iso(deployment.start_date), _parse_iso(deployment.end_date)
-    tolerance, label = timedelta(hours=tolerance_hours), f"{tolerance_hours:g}h"
-    if start is None or end is None:
-        return {"out_of_range": []}
-    read = camera_info.read_dates(images)
-    dated = sorted(((dt, p) for p in images if (dt := read[p]) is not None), key=lambda item: (item[0], _natural_key(item[1].relative_to(source_dir))))
-    out: list[dict] = []
-    window = f"{start.isoformat()} – {end.isoformat()} ± {label}"
-    for dt, path in dated:
-        if dt < start - tolerance:
-            out.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": "before_start", "expected": window})
-        elif dt > end + tolerance:
-            out.append({"path": str(path.relative_to(source_dir)), "date": dt.isoformat(), "rule": "after_end", "expected": window})
-    result: dict = {"out_of_range": out}
-    if dated:   # when the images say they were taken, all of them: for the dates of the deployment to be compared with at a glance
-        result["images_span"] = {"first": dated[0][0].isoformat(), "last": dated[-1][0].isoformat(), "dated": len(dated)}
-    if dated and start - tolerance <= dated[0][0] and dated[0][0] > start + tolerance:
-        first_dt, first = dated[0]
-        out.insert(0, {"path": str(first.relative_to(source_dir)), "date": first_dt.isoformat(), "rule": "first", "expected": f"{start.isoformat()} ± {label}"})
-    if dated and end - tolerance > dated[-1][0] >= start - tolerance:
-        last_dt, last = dated[-1]
-        visit = visit or {}
-        reason = ("card_full" if str(visit.get("collected_card_status") or "").lower() in ("cardfull", "carfull")
-                  else "no_batteries" if str(visit.get("collected_battery_status") or "").lower() == "nobatteries" else None)
-        result["stopped_early"] = {"path": str(last.relative_to(source_dir)), "date": last_dt.isoformat(), "collected": end.isoformat(),
-                                   "days": round((end - last_dt).total_seconds() / 86400, 1), "reason": reason}
-    return result
-
-
-def _same_text(a: str | None, b: str | None) -> bool:
-    """Two values of a camera are the same one whatever their case and their spaces: "Browning  BTC-8A" is "browning btc-8a"."""
-    norm = lambda v: " ".join(str(v or "").split()).casefold()
-    return norm(a) == norm(b)
-
-
-def _camera_consistency(images: list[Path], source_dir: Path, deployment: DeploymentFields, camera: dict | None, levels: list[list[str]]) -> dict:
-    """Whether the images are of the camera of the deployment, as its record in the settings says it is (`camera`: its serial number, make and model), by the
-    levels that tell a camera (VALIDATION.camera_levels): the first level the record has every field of — a level with a field a record cannot have is passed
-    over —, the images compared by it whatever their case and spaces. With no record, or one that says nothing of a level, the images are compared with the
-    model of the deployment, as it was. It says what the images say, for the record to take it: {"camera_mismatches", "camera_models_found", "camera_by",
-    "camera_expected", "camera_found", "camera_label", "camera_record"} — the last the make and the model the record has (None with no record), to say whether
-    what the images say would fill it in or change it."""
-    read = camera_info.read_tags(images, ["Make", "Model"])
-    serials = {f for f in _CAMERA_FIELDS if f != "model"}
-    record = {"make": (camera or {}).get("camera_make"), "model": (camera or {}).get("camera_model"), "serial": (camera or {}).get("camera_id")}
-
-    def of_record(field: str) -> str | None:
-        key = field.lower()
-        return record["serial"] if key in serials else record["make"] if key == "make" else record["model"] if key == "model" else None
-
-    chosen = next((level for level in levels if all(f.lower() in serials | {"make", "model"} for f in level) and all(of_record(f) for f in level)), None) if camera else None
-    serial_of = camera_info.read_cameras(images)[0] if chosen and any(f.lower() in serials for f in chosen) else {}
-
-    def of_image(path: Path, field: str) -> str | None:
-        return serial_of[path].camera_id if field.lower() in serials else read[path].get("Make" if field.lower() == "make" else "Model")
-
-    mismatches: list[dict] = []
-    for path in images:
-        if chosen:
-            found = [of_image(path, f) for f in chosen]
-            if not all(found):
-                continue   # it does not say: nothing to compare
-            if not all(_same_text(v, of_record(f)) for v, f in zip(found, chosen)):
-                mismatches.append({"path": str(path.relative_to(source_dir)), "detected": " ".join(str(v) for v in found)})
-        else:
-            model = camera_info._model(read[path].get("Make"), read[path].get("Model"))
-            if model and deployment.camera_model and not _same_text(model, deployment.camera_model):
-                mismatches.append({"path": str(path.relative_to(source_dir)), "detected": model})
-    pairs = Counter((read[p].get("Make"), read[p].get("Model")) for p in images if read[p].get("Model"))
-    make, model = pairs.most_common(1)[0][0] if pairs else (None, None)
-    return {
-        "camera_mismatches": mismatches,
-        "camera_models_found": sorted({m for m in (camera_info._model(read[p].get("Make"), read[p].get("Model")) for p in images) if m}),
-        "camera_by": list(chosen) if chosen else [],
-        "camera_expected": {f: of_record(f) for f in chosen} if chosen else ({"Model": deployment.camera_model} if deployment.camera_model else {}),
-        "camera_found": {"make": make, "model": model},
-        "camera_label": (camera or {}).get("label"),
-        "camera_record": {"make": record["make"], "model": record["model"]} if camera else None,
-    }
-
-
-# The EXIF fields the camera information already reads (camera_info): the model — the make with it — and the serial number, under any of its names.
-_CAMERA_FIELDS = {"model", "serialnumber", "internalserialnumber", "bodyserialnumber", "cameraserialnumber"}
-IMAGE_CHECKS = frozenset({"corrupted", "sequence", "structure", "camera", "exif", "duplicates"})
-# The order the image checks run in — the order the page lists them in —: what is read for one is there for the next (the camera, the dates), and
-# which images decode is known before the order of the shots, which leaves out the corrupted ones.
-IMAGE_CHECK_ORDER = ("corrupted", "sequence", "structure", "camera", "exif", "duplicates")
-
-
-def _content_hash(path: Path) -> str | None:
-    digest = hashlib.sha256()
-    try:
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except OSError as exc:
-        logger.debug("Could not read %s to look for duplicates: %s", path, exc)
-        return None
-    return digest.hexdigest()
-
-
-def _duplicate_groups(images: list[Path], source_dir: Path) -> list[dict]:
-    """Groups of images with exactly the same content. Files can only be
-    equal if they're the same size, so only those are hashed."""
-    by_size: dict[int, list[Path]] = defaultdict(list)
-    for path in sorted(images):
-        try:
-            by_size[path.stat().st_size].append(path)
-        except OSError:
-            continue
-    groups: list[dict] = []
-    candidates = {size: paths for size, paths in by_size.items() if len(paths) > 1}
-    hashes = dict(zip((p for paths in candidates.values() for p in paths), parallel.pmap(_content_hash, [p for paths in candidates.values() for p in paths])))
-    for size, paths in candidates.items():
-        by_hash: dict[str, list[Path]] = defaultdict(list)
-        for path in paths:
-            digest = hashes[path]
-            if digest is not None:
-                by_hash[digest].append(path)
-        groups += [{"size": size, "files": [str(p.relative_to(source_dir)) for p in same]} for same in by_hash.values() if len(same) > 1]
-    return sorted(groups, key=lambda g: g["files"][0])
-
-
-def _sha1_of(path: Path) -> str | None:
-    digest = hashlib.sha1()  # noqa: S324 — the identifier the preprocessing keeps of an original (its "source_hash"), not a security measure
-    try:
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except OSError as exc:
-        logger.debug("Could not read %s to look for images imported before: %s", path, exc)
-        return None
-    return digest.hexdigest()
-
-
-def _imported_before(images: list[Path], source_dir: Path, imported: dict[str, list[dict]]) -> list[dict]:
-    """The images of the folder that were already imported into the research project — by the SHA-1 of the file, as the preprocessing kept it —
-    each with where: {"file", "deployment_id", "collection", "original"}."""
-    if not imported:
-        return []
-    ordered = sorted(images)
-    found = []
-    for path, digest in zip(ordered, parallel.pmap(_sha1_of, ordered)):
-        for before in imported.get(digest or "", []):
-            found.append({"file": str(path.relative_to(source_dir)), **before})
-    return found
-
-
-def _reporting(progress: Callable[[str, int, int], None] | None, step: str, total: int) -> Callable[[int], None] | None:
-    return None if progress is None else (lambda done: progress(step, done, total))
+def _wiring():
+    from wildintel_uploader.entrypoints import wiring
+    return wiring
 
 
 def validate_images(
@@ -570,174 +373,17 @@ def validate_images(
     progress: Callable[[str, int, int], None] | None = None, exif_fields: list[str] | None = None, camera_levels: list[list[str]] | None = None,
     on_check: Callable[[str, str], None] | None = None,
 ) -> dict:
-    """Independent, opt-in checks over a scanned folder's images — only
-    "checked_count" plus whichever of these were asked for are present in
-    the result:
-      - corrupted: files that fail to fully decode.
-      - sequence_issues: camera traps number shots in the order they were
-        taken, so within one folder a higher-numbered file shouldn't have
-        an earlier EXIF date than a lower-numbered one — that disagreement
-        usually means a camera clock reset, a misnamed file, or images
-        from two different cards mixed together. Undated or unnumbered
-        images are skipped, and each folder is checked on its own since a
-        re-used card commonly restarts numbering per folder.
-      - subdirectories: folders other than source_dir itself holding
-        files — some deployments expect every image directly in one flat
-        folder.
-      - cameras: the distinct camera (model and id) among the images, with
-        how many each took and a few example files — a deployment is one
-        camera, so more than one means images from different cameras got
-        mixed together. "cameras_without_info" counts the images with no
-        camera information at all, and "exiftool" says whether ExifTool (which
-        reads the serial number of most camera traps) did the reading.
-      - exif_missing: the EXIF fields the rest of the wizard needs — the
-        capture date ("date", for the deployment's dates and the order and
-        range checks), the camera "camera_model" and the camera id
-        ("camera_id", its serial number) — each with how many images lack it
-        and a few example files.
-      - duplicates: groups of two or more files with exactly the same
-        content (a card copied twice, a file renamed and kept), each with
-        the size and the files. Only files of the same size are compared,
-        so a big folder isn't hashed in full.
-        With `imported` (what the research project already has — see
-        local_folder_service.imported_source_hashes) it also says, in
-        "duplicates_in_project", which images were imported before into
-        another deployment of the project, and where.
-    With detail, exif_missing also lists in "files" every image that lacks each field, not just examples.
-    `progress(step, done, total)` is told how far each long step is: "cameras" (done 0, then all at once: ExifTool reads them in one go),
-    "dates" and "corrupted" (image by image). `on_check(check, state)` is told when each check starts ("running") and ends ("done"), in the
-    order of IMAGE_CHECK_ORDER.
+    """The checks of the images of a folder (see modules.prevalidation): only "checked_count" and what the checks asked for found.
 
     Raises:
         DeploymentImportError: source_dir doesn't exist or isn't a folder.
     """
-    if not source_dir.is_dir():
-        raise DeploymentImportError(f"Not a folder: {source_dir}")
-    checks = IMAGE_CHECKS if checks is None else (checks & IMAGE_CHECKS)
-
-    files = [p for p in source_dir.rglob("*") if p.is_file()]
-    images = [p for p in files if p.suffix.lower() in IMAGE_EXTENSIONS]
-    result: dict = {"checked_count": len(images)}
-
-    # Each check is told when it starts and when it ends, in the order they run (IMAGE_CHECK_ORDER); what several share — the camera, the dates, which
-    # images decode — is read by the first that needs it, once (#140).
-    def begin(check: str) -> None:
-        if on_check:
-            on_check(check, "running")
-
-    def end(check: str) -> None:
-        if on_check:
-            on_check(check, "done")
-
-    cameras: dict[Path, camera_info.CameraInfo] = {}
-    taken: dict[Path, datetime | None] = {}
-    read: set[str] = set()
-
-    def the_cameras() -> dict[Path, camera_info.CameraInfo]:
-        nonlocal cameras
-        if "cameras" not in read:
-            read.add("cameras")
-            if progress:
-                progress("cameras", 0, len(images))
-            cameras, reader = camera_info.read_cameras(images)
-            if progress:
-                progress("cameras", len(images), len(images))
-            result["exiftool"] = reader == "exiftool"
-        return cameras
-
-    def the_dates() -> dict[Path, datetime | None]:
-        nonlocal taken
-        if "dates" not in read:
-            read.add("dates")
-            taken = camera_info.read_dates(images)
-            if progress:
-                progress("dates", len(images), len(images))
-        return taken
-
-    # which images do not decode: the corrupted ones are said, and they are left out of the order of the shots
-    errors: list[str | None] = [None] * len(images)
-    if "corrupted" in checks:
-        begin("corrupted")
-        errors = parallel.pmap(_corruption_error, images, progress=_reporting(progress, "corrupted", len(images)))
-        result["corrupted"] = [{"path": str(path.relative_to(source_dir)), "error": error} for path, error in zip(images, errors) if error is not None]
-        end("corrupted")
-
-    if "sequence" in checks:
-        begin("sequence")
-        the_dates()
-        dated: dict[Path, datetime] = {}
-        by_dir: dict[Path, list[Path]] = defaultdict(list)
-        for path, error in zip(images, errors):
-            if error is not None:
-                continue
-            by_dir[path.parent].append(path)
-            if taken[path] is not None:
-                dated[path] = taken[path]  # type: ignore[assignment]
-        sequence_issues: list[dict] = []
-        for group in by_dir.values():
-            numbered = [(path, _sequence_number(path)) for path in group if path in dated]
-            numbered = [(path, num) for path, num in numbered if num is not None]
-            numbered.sort(key=lambda pair: pair[1])
-            for (path_a, num_a), (path_b, num_b) in zip(numbered, numbered[1:]):
-                if num_a != num_b and dated[path_b] < dated[path_a]:
-                    sequence_issues.append({
-                        "path_a": str(path_a.relative_to(source_dir)), "index_a": num_a, "date_a": dated[path_a].isoformat(),
-                        "path_b": str(path_b.relative_to(source_dir)), "index_b": num_b, "date_b": dated[path_b].isoformat(),
-                    })
-        result["sequence_issues"] = sequence_issues
-        end("sequence")
-
-    if "structure" in checks:
-        begin("structure")
-        result["subdirectories"] = sorted({str(p.parent.relative_to(source_dir)) for p in files if p.parent != source_dir})
-        end("structure")
-
-    if "camera" in checks:
-        begin("camera")
-        the_cameras()
-        by, groups, without = _camera_groups(sorted(images), cameras, camera_levels if camera_levels is not None else DEFAULT_CAMERA_LEVELS)
-        result["cameras"] = [
-            {"model": cameras[paths[0]].model, "camera_id": cameras[paths[0]].camera_id, "values": dict(zip(by, key)),
-             "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]]}
-            for key, paths in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0]))
-        ]
-        result["camera_by"] = by
-        result["cameras_without_info"] = without
-        end("camera")
-
-    if "exif" in checks:
-        begin("exif")
-        # the capture date, always (the app needs it), and the fields the settings expect (VALIDATION.exif_fields): the model and the serial number as the
-        # camera information has them, any other as it is read
-        the_cameras(), the_dates()
-        fields = ["DateTimeOriginal", *(f for f in (exif_fields if exif_fields is not None else ["Model"]) if f.lower() != "datetimeoriginal")]
-        others = [f for f in fields[1:] if f.lower() not in _CAMERA_FIELDS]
-        tags = camera_info.read_tags(sorted(images), others) if others else {}
-        missing: dict[str, list[Path]] = {f: [] for f in fields}
-        for path in sorted(images):
-            for field in fields:
-                key = field.lower()
-                found = (taken[path] if key == "datetimeoriginal" else cameras[path].model if key == "model"
-                         else cameras[path].camera_id if key in _CAMERA_FIELDS else tags.get(path, {}).get(field))
-                if found is None:
-                    missing[field].append(path)
-        result["exif_missing"] = {
-            field: {
-                "label": "capture date" if field == "DateTimeOriginal" else field,
-                "count": len(paths), "examples": [str(p.relative_to(source_dir)) for p in paths[:3]],
-                **({"files": [str(p.relative_to(source_dir)) for p in paths]} if detail else {}),
-            }
-            for field, paths in missing.items()
-        }
-        end("exif")
-
-    if "duplicates" in checks:
-        begin("duplicates")
-        result["duplicates"] = _duplicate_groups(images, source_dir)
-        if imported is not None:
-            result["duplicates_in_project"] = _imported_before(images, source_dir, imported)
-        end("duplicates")
-    return result
+    try:
+        prevalidation = _wiring().build_prevalidation()
+        return prevalidation.validate(source_dir, prevalidation.validators(checks), detail=detail, imported=imported, progress=progress, exif_fields=exif_fields,
+                                             camera_levels=camera_levels, on_check=on_check)
+    except _pre.PrevalidationError as exc:
+        raise DeploymentImportError(str(exc)) from exc
 
 
 def with_timezone(local_iso: str | None, tz_name: str) -> str | None:
@@ -761,82 +407,12 @@ def with_timezone(local_iso: str | None, tz_name: str) -> str | None:
     return parsed.replace(tzinfo=zone).isoformat(timespec="seconds")
 
 
-def _parse_iso(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        # EXIF dates are the camera's local wall-clock time, so the
-        # designator is dropped to compare like with like.
-        return datetime.fromisoformat(value).replace(tzinfo=None)
-    except ValueError:
-        return None
-
-
-# The postvalidation checks validate_deployment_consistency can run — those
-# that need what the wizard knows of the deployment. None (the default) means
-# all of them.
-DEPLOYMENT_CHECKS = frozenset({"deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera"})
-# ...and those against the visit the deployment is of — they only make sense in the wizard, where that visit is known (a seal or a repair has none).
-VISIT_CHECKS = frozenset({"sd_card", "photo_count"})
-# The order they run in — the order the page lists them in; the statistical checks (statistics_service) come after them.
-DEPLOYMENT_CHECK_ORDER = ("deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera", "sd_card", "photo_count")
-
-
-def _tell(on_check: Callable[[str, str], None] | None, check: str, state: str) -> None:
-    if on_check:
-        on_check(check, state)
-
-# wildintel-tools' own naming rules (see its check_collections): a deployment
-# is "R0033-DONA_01[_suffix]" and lives in a collection "R0033[_suffix]".
-_DEPLOYMENT_ID_RE = re.compile(r"^R[0-9]{4}-([0-9A-Za-z_-]+)(_.+)?$")
-_COLLECTION_NAME_RE = re.compile(r"^R[0-9]{4}(_.+)?$")
-DEFAULT_TOLERANCE_HOURS = 1.0
-
-
-def _natural_key(path: Path) -> list:
-    """Sorts "IMG_2" before "IMG_10" — the order wildintel-tools walks a deployment's images in."""
-    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", str(path))]
-
-
-def _ok(message: str) -> dict:
-    return {"ok": True, "message": message}
-
-
-def _problem(message: str) -> dict:
-    return {"ok": False, "message": message}
-
-
-def _collection_of(deployment_id: str) -> str | None:
-    match = re.match(r"^(R[0-9]{4})-", deployment_id)
-    return match.group(1) if match else None
-
-
-def _sd_card_check(visit: dict | None) -> dict:
-    """The card the images are said to come from against the one the visit left in the camera."""
-    if not visit:
-        return _ok("No visit was chosen, so the card cannot be checked.")
-    said, left, session = (visit.get("sd_card") or "").strip(), (visit.get("left_sd") or "").strip(), visit.get("left_session") or "the visit"
-    if not said:
-        return _ok("No SD card was said for these images, so the card cannot be checked.")
-    if not left:
-        return _ok(f"The visit {session} does not say which card it left, so the card cannot be checked.")
-    if said.lower() == left.lower():
-        return _ok(f"The SD card is {said}, the one the visit {session} left in the camera.")
-    return _problem(f"You said the images come from the card {said}, but the visit {session} left {left} in the camera.")
-
-
-def _photo_count_check(visit: dict | None, found: int) -> dict:
-    """The photos in the folder against those the visit counted on the card when it collected it."""
-    if not visit:
-        return _ok("No visit was chosen, so the number of images cannot be checked.")
-    counted, session = visit.get("counted_photos"), visit.get("collected_session") or "the visit"
-    if counted is None:
-        return _ok(f"The visit {session} did not count the images on the card, so the number of images cannot be checked.")
-    photos = lambda n: f"{n:,} {'image' if n == 1 else 'images'}"  # noqa: E731
-    if counted == found:
-        return _ok(f"The folder has {photos(found)}, as the visit {session} counted.")
-    gap = abs(counted - found)
-    return _problem(f"The visit {session} counted {photos(counted)} on the card, and the folder has {photos(found)} — {photos(gap)} {'missing' if found < counted else 'more'}.")
+# The checks of a deployment (modules.postvalidation): those that need what the wizard knows of it, and those against the visit it
+# is of — only in the wizard, where that visit is known —, in the order they run.
+DEPLOYMENT_CHECK_ORDER = tuple(c.key for c in _deployment_validators.VALIDATORS)
+DEPLOYMENT_CHECKS = frozenset(c.key for c in _deployment_validators.VALIDATORS if not c.of_the_visit)
+VISIT_CHECKS = frozenset(c.key for c in _deployment_validators.VALIDATORS if c.of_the_visit)
+DEFAULT_TOLERANCE_HOURS = _post.DEFAULT_TOLERANCE_HOURS
 
 
 def validate_deployment_consistency(
@@ -845,117 +421,23 @@ def validate_deployment_consistency(
     tolerance_hours: float = DEFAULT_TOLERANCE_HOURS, visit: dict | None = None, camera: dict | None = None, camera_levels: list[list[str]] | None = None,
     on_check: Callable[[str, str], None] | None = None,
 ) -> dict:
-    """The postvalidation: checks a deployment — what the wizard now knows of
-    it — and its scanned images against wildintel-tools' own rules. Only
-    "checked_count" plus whichever of these were asked for are present in the
-    result. The naming checks each give {"ok", "message"}:
-      - deployment_id: the id looks like R0033-DONA_01 — R, four digits, a
-        hyphen, the location id and an optional _suffix.
-      - collection_prefix: its R0033 prefix is the collection it goes in.
-      - collection_name: the collection is named R0033 (optionally _suffix).
-        For a Trapper deployment the collection is the id's own prefix; for a
-        local one it's the collection folder's name (collection_name).
-      - location: the id's location (the part after the first hyphen, minus an
-        optional _suffix) is expected_location_id, the location chosen before.
-    The dates are checked, as wildintel-tools does, image by image, in natural
-    file-name order, on the camera's wall-clock time:
-      - out_of_range: the first image must be within tolerance_hours of
-        start_date, the last within tolerance_hours of end_date, and every
-        other one between start_date and end_date, each side widened by the
-        tolerance. Each item has the file, its date, which rule ("first",
-        "last", "between") and the range it should have fallen in.
-      - tolerance_hours: what was used.
-    Against the visit the deployment is of (`visit`: left_session, left_sd, collected_session, counted_photos and sd_card — the card
-    the images are said to come from), each giving {"ok", "message"}; what the visit or the user did not say can't be checked, and passes:
-      - sd_card: the card said is the one the visit left in the camera.
-      - photo_count: the folder has the photos the visit counted on the card.
-    And, unchanged:
-      - camera_mismatches: images whose EXIF camera model differs from the
-        deployment's declared camera_model (skipped if it isn't set).
-      - camera_models_found: every distinct EXIF camera model seen.
-
-    `on_check(check, state)` is told when each check starts ("running") and ends ("done"), in the order of DEPLOYMENT_CHECK_ORDER.
+    """The checks of a deployment — what the wizard knows of it — against its images, wildintel-tools' names and its visit (see
+    modules.postvalidation): only "checked_count" and what the checks asked for found.
 
     Raises:
-        DeploymentImportError: source_dir doesn't exist or isn't a folder, or
-            tolerance_hours is negative.
+        DeploymentImportError: source_dir doesn't exist or isn't a folder, or tolerance_hours is negative.
     """
-    if not source_dir.is_dir():
-        raise DeploymentImportError(f"Not a folder: {source_dir}")
-    if tolerance_hours < 0:
-        raise DeploymentImportError("The tolerance can't be negative.")
-    checks = (DEPLOYMENT_CHECKS | VISIT_CHECKS) if checks is None else (checks & (DEPLOYMENT_CHECKS | VISIT_CHECKS))
-
-    images = [p for p in source_dir.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS]
-    result: dict = {"checked_count": len(images)}
-    deployment_id = deployment.deployment_id
-    # A Trapper deployment has no collection folder of its own: it goes in the one its id names.
-    collection = collection_name if collection_name is not None else _collection_of(deployment_id)
-
-    if "deployment_id" in checks:
-        _tell(on_check, "deployment_id", "running")
-        result["deployment_id"] = (
-            _ok(f"'{deployment_id}' is a valid deployment id.") if _DEPLOYMENT_ID_RE.match(deployment_id)
-            else _problem(f"'{deployment_id}' must look like R0033-DONA_01: R, four digits, a hyphen, the location id and an optional _suffix.")
-        )
-        _tell(on_check, "deployment_id", "done")
-
-    if "collection_prefix" in checks:
-        _tell(on_check, "collection_prefix", "running")
-        prefix = _collection_of(deployment_id)
-        collection_code = collection[:5] if collection is not None and _COLLECTION_NAME_RE.match(collection) else None
-        if prefix is None:
-            result["collection_prefix"] = _problem(f"'{deployment_id}' doesn't start with a collection (R0033-…).")
-        elif collection_code is None:
-            result["collection_prefix"] = _problem("There is no valid collection to compare the deployment id's prefix with.")
-        elif prefix.lower() != collection_code.lower():
-            result["collection_prefix"] = _problem(f"The deployment id starts with {prefix}, but it goes in the collection {collection_code}.")
-        else:
-            result["collection_prefix"] = _ok(f"The deployment id starts with its collection, {collection_code}.")
-        _tell(on_check, "collection_prefix", "done")
-
-    if "collection_name" in checks:
-        _tell(on_check, "collection_name", "running")
-        if collection is None:
-            result["collection_name"] = _problem("There is no collection: the deployment id doesn't start with one (R0033-…).")
-        elif _COLLECTION_NAME_RE.match(collection):
-            result["collection_name"] = _ok(f"'{collection}' is a valid collection name.")
-        else:
-            result["collection_name"] = _problem(f"The collection '{collection}' must be named like R0033 (R and four digits, optionally _suffix).")
-        _tell(on_check, "collection_name", "done")
-
-    if "location" in checks:
-        _tell(on_check, "location", "running")
-        tail = deployment_id.split("-", 1)[1] if "-" in deployment_id else ""
-        if not expected_location_id:
-            result["location"] = _ok("No location was chosen to compare with.")
-        elif tail.lower() == expected_location_id.lower() or tail.lower().startswith(expected_location_id.lower() + "_"):
-            result["location"] = _ok(f"The deployment id's location is {expected_location_id}, the one chosen.")
-        else:
-            result["location"] = _problem(f"The deployment id's location is '{tail}', but the location chosen is {expected_location_id}.")
-        _tell(on_check, "location", "done")
-
-    if "time_range" in checks:
-        _tell(on_check, "time_range", "running")
-        result["tolerance_hours"] = tolerance_hours
-        result.update(_dates_of_the_deployment(images, source_dir, deployment, tolerance_hours, visit))
-        _tell(on_check, "time_range", "done")
-
-    if "camera" in checks:
-        _tell(on_check, "camera", "running")
-        result.update(_camera_consistency(images, source_dir, deployment, camera, camera_levels if camera_levels is not None else DEFAULT_CAMERA_LEVELS))
-        _tell(on_check, "camera", "done")
-
-    if "sd_card" in checks:
-        _tell(on_check, "sd_card", "running")
-        result["sd_card"] = _sd_card_check(visit)
-        _tell(on_check, "sd_card", "done")
-
-    if "photo_count" in checks:
-        _tell(on_check, "photo_count", "running")
-        result["photo_count"] = _photo_count_check(visit, len(images))
-        _tell(on_check, "photo_count", "done")
-    return result
+    context = _post.DeploymentContext(
+        deployment=_post.Deployment(deployment_id=deployment.deployment_id, start_date=deployment.start_date, end_date=deployment.end_date,
+                                                 camera_model=deployment.camera_model),
+        collection=collection_name, expected_location_id=expected_location_id, tolerance_hours=tolerance_hours, visit=visit, camera=camera,
+        **({"camera_levels": camera_levels} if camera_levels is not None else {}),
+    )
+    try:
+        postvalidation = _wiring().build_postvalidation()
+        return postvalidation.validate(source_dir, context, postvalidation.validators(checks), on_check=on_check)
+    except _post.PostvalidationError as exc:
+        raise DeploymentImportError(str(exc)) from exc
 
 
 def copy_folder(source_dir: Path, dest_dir: Path) -> Iterator[dict]:

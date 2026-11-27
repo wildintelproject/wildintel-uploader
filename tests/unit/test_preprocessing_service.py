@@ -11,8 +11,10 @@ import pytest
 from PIL import Image
 
 from wildintel_uploader.core.schemas.requests import DeploymentFields
-from wildintel_uploader.core.services import camera_info
 from wildintel_uploader.core.services import preprocessing_service as pre
+from wildintel_uploader.modules.preprocessing.infrastructure import folders as folders_adapter
+from wildintel_uploader.modules.preprocessing.infrastructure.steps import metadata as xmp_step
+from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 
 needs_exiftool = pytest.mark.skipif(shutil.which("exiftool") is None, reason="ExifTool isn't installed")
 
@@ -331,7 +333,7 @@ def test_a_deployments_folder_that_already_has_images_is_never_mixed_into(tmp_pa
 
 
 def test_adding_metadata_without_exiftool_is_refused_up_front_and_nothing_is_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
     source = _source(tmp_path, 1)
 
     with pytest.raises(pre.DeploymentImportError, match="needs ExifTool"):
@@ -347,7 +349,7 @@ def test_the_files_exiftool_leaves_when_it_is_interrupted_are_removed(tmp_path: 
         (tmp_path / "R0001-WICP_0001__20250612_1.JPEG_exiftool_tmp").write_bytes(b"half")
         return subprocess.CompletedProcess(args, 1, stdout="", stderr="Error: killed")
 
-    monkeypatch.setattr(pre.subprocess, "run", interrupted)
+    monkeypatch.setattr(xmp_step.subprocess, "run", interrupted)
 
     with pytest.raises(pre.DeploymentImportError, match="could not write"):
         pre.write_xmp("exiftool", [(image, {"XMP-dc:Creator": "x"})])
@@ -399,7 +401,7 @@ def test_disk_space_says_sizes_as_they_are_read_and_finds_the_disk_of_a_folder_n
 
 
 def test_without_metadata_exiftool_is_not_needed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
 
     events = _run(_source(tmp_path, 1), tmp_path / "out")
 
@@ -409,8 +411,8 @@ def test_without_metadata_exiftool_is_not_needed(tmp_path: Path, monkeypatch: py
 def test_the_xmp_is_written_in_batches_saying_how_many_files_are_written_after_each(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """For the progress of Add metadata and its time left: one ExifTool run per batch, and the files written so far after each one."""
     runs: list[int] = []
-    monkeypatch.setattr(pre, "_XMP_BATCH", 2)
-    monkeypatch.setattr(pre.subprocess, "run", lambda *a, **k: (runs.append(k["input"].count("-execute")), subprocess.CompletedProcess(a, 0, "", ""))[1])
+    monkeypatch.setattr(xmp_step, "_XMP_BATCH", 2)
+    monkeypatch.setattr(xmp_step.subprocess, "run", lambda *a, **k: (runs.append(k["input"].count("-execute")), subprocess.CompletedProcess(a, 0, "", ""))[1])
     items = [(tmp_path / f"IMG_{n}.JPG", {"XMP-dc:Creator": "x"}) for n in range(5)]
 
     assert list(pre.write_xmp_batches("exiftool", items)) == [2, 4, 5]
@@ -559,7 +561,7 @@ def test_moving_to_the_collection_is_tried_again_while_another_program_has_a_fil
     work, dest = tmp_path / ".staging" / "R0003-DONA_01", tmp_path / "R0003-DONA_01"
     work.mkdir(parents=True)
     (work / "a.txt").write_text("x", encoding="utf-8")
-    real, calls = pre.os.replace, []
+    real, calls = folders_adapter.os.replace, []
 
     def busy_twice(src, dst):
         calls.append(1)
@@ -567,8 +569,8 @@ def test_moving_to_the_collection_is_tried_again_while_another_program_has_a_fil
             raise PermissionError(13, "The process cannot access the file because it is being used by another process")   # what Windows says
         return real(src, dst)
 
-    monkeypatch.setattr(pre.os, "replace", busy_twice)
-    monkeypatch.setattr(pre.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(folders_adapter.os, "replace", busy_twice)
+    monkeypatch.setattr(folders_adapter.time, "sleep", lambda _s: None)
 
     pre.publish(work, dest)
 
@@ -582,8 +584,8 @@ def test_moving_to_the_collection_says_so_when_the_files_stay_in_use(tmp_path: P
     def always_busy(src, dst):
         raise PermissionError(13, "in use")
 
-    monkeypatch.setattr(pre.os, "replace", always_busy)
-    monkeypatch.setattr(pre.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(folders_adapter.os, "replace", always_busy)
+    monkeypatch.setattr(folders_adapter.time, "sleep", lambda _s: None)
 
     with pytest.raises(pre.DeploymentImportError, match="in use by another program"):
         pre.publish(work, dest)

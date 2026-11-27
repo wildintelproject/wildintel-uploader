@@ -669,7 +669,7 @@ def test_import_local_without_a_location_timezone_is_a_plain_400_before_touching
 
 
 def test_import_local_reports_metadata_without_exiftool_as_a_plain_400(tmp_path: Path):
-    with patch("wildintel_uploader.core.services.camera_info.exiftool_path", return_value=None):
+    with patch("wildintel_uploader.modules.fileinfo.infrastructure.exiftool.exiftool_path", return_value=None):
         response = _client().post("/api/deployment-import/import-local", json=_import_local_payload(tmp_path, metadata=True))
 
     assert response.status_code == 400

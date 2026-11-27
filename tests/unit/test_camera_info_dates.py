@@ -8,6 +8,7 @@ import pytest
 from PIL import Image
 
 from wildintel_uploader.core.services import camera_info
+from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 
 
 def _jpeg(path: Path, *, original: str | None = None, digitized: str | None = None, changed: str | None = None) -> Path:
@@ -31,8 +32,8 @@ def test_the_dates_are_read_with_exiftool_in_one_run_for_all_the_images(tmp_path
     rows = [{"SourceFile": str(paths[0]), "DateTimeOriginal": "2024:09:04 10:00:00", "CreateDate": "2024:09:04 09:00:00"},
             {"SourceFile": str(paths[1]), "CreateDate": "2024:09:05 11:00:00+02:00"},        # no DateTimeOriginal: when it was digitized
             {"SourceFile": str(paths[2]), "DateTimeOriginal": "0000:00:00 00:00:00"}]       # no date at all
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "exiftool")
-    monkeypatch.setattr(camera_info.subprocess, "run", lambda args, **k: (runs.append(args), subprocess.CompletedProcess(args, 0, json.dumps(rows), ""))[1])
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: "exiftool")
+    monkeypatch.setattr(exiftool_adapter.subprocess, "run", lambda args, **k: (runs.append(args), subprocess.CompletedProcess(args, 0, json.dumps(rows), ""))[1])
 
     dates = camera_info.read_dates(paths)
 
@@ -41,7 +42,7 @@ def test_the_dates_are_read_with_exiftool_in_one_run_for_all_the_images(tmp_path
 
 
 def test_without_exiftool_the_dates_are_read_with_pillow_in_the_same_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
     a = _jpeg(tmp_path / "a.jpg", original="2024:09:04 10:00:00", changed="2024:09:09 10:00:00")
     b = _jpeg(tmp_path / "b.jpg", digitized="2024:09:05 10:00:00", changed="2024:09:09 10:00:00")
     c = _jpeg(tmp_path / "c.jpg", changed="2024:09:09 10:00:00")
@@ -54,5 +55,5 @@ def test_without_exiftool_the_dates_are_read_with_pillow_in_the_same_order(tmp_p
 def test_exiftool_and_pillow_read_the_same_dates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     paths = [_jpeg(tmp_path / "a.jpg", original="2024:09:04 10:00:00"), _jpeg(tmp_path / "b.jpg", digitized="2024:09:05 10:00:00"), _jpeg(tmp_path / "c.jpg")]
     with_exiftool = camera_info.read_dates(paths)
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
     assert camera_info.read_dates(paths) == with_exiftool

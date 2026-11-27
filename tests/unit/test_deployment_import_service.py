@@ -12,6 +12,7 @@ from PIL import Image
 
 from wildintel_uploader.core.services import camera_info
 from wildintel_uploader.core.services import deployment_import_service as svc
+from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 
 needs_exiftool = pytest.mark.skipif(shutil.which("exiftool") is None, reason="ExifTool isn't installed")
 
@@ -664,7 +665,7 @@ def test_deployment_id_for_builds_the_wildintel_tools_name():
 
 @pytest.fixture
 def no_exiftool(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
 
 
 def _cameras_folder(tmp_path: Path, *cameras: tuple[str, str, str | None]) -> Path:
@@ -751,8 +752,8 @@ def test_camera_info_asks_exiftool_once_for_all_the_files_and_prefers_the_serial
         ]
         return SimpleNamespace(stdout=json.dumps(rows), returncode=1)  # non-zero: some file couldn't be read
 
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "/fake/exiftool")
-    monkeypatch.setattr(camera_info.subprocess, "run", fake_run)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: "/fake/exiftool")
+    monkeypatch.setattr(exiftool_adapter.subprocess, "run", fake_run)
 
     cameras, reader = camera_info.read_cameras([a, b])
 
@@ -770,8 +771,8 @@ def test_camera_info_falls_back_to_pillow_when_exiftool_fails(tmp_path: Path, mo
     def boom(*args, **kwargs):
         raise failure
 
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "/fake/exiftool")
-    monkeypatch.setattr(camera_info.subprocess, "run", boom)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: "/fake/exiftool")
+    monkeypatch.setattr(exiftool_adapter.subprocess, "run", boom)
 
     cameras, reader = camera_info.read_cameras([tmp_path / "a.jpg"])
 
@@ -913,9 +914,11 @@ def test_validate_images_exif_check_finds_nothing_missing_when_every_image_has_e
 
 def test_validate_images_exif_and_camera_checks_read_the_camera_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "A1"))
+    from wildintel_uploader.entrypoints import wiring
     calls = []
-    real = camera_info.read_cameras
-    monkeypatch.setattr(camera_info, "read_cameras", lambda paths: calls.append(paths) or real(paths))
+    info = wiring.file_info()
+    real = info.cameras
+    monkeypatch.setattr(info, "cameras", lambda paths: calls.append(paths) or real(paths))
 
     result = svc.validate_images(folder, frozenset({"exif", "camera"}))
 
@@ -1007,9 +1010,11 @@ def test_validate_images_duplicates_only_hashes_files_of_the_same_size(tmp_path:
     (tmp_path / "small.jpg").write_bytes(b"1")
     (tmp_path / "medium.jpg").write_bytes(b"22")
     (tmp_path / "big.jpg").write_bytes(b"333")
+    from wildintel_uploader.entrypoints import wiring
     hashed = []
-    real = svc._content_hash
-    monkeypatch.setattr(svc, "_content_hash", lambda path: hashed.append(path.name) or real(path))
+    info = wiring.file_info()
+    real = info.hash
+    monkeypatch.setattr(info, "hash", lambda path, algorithm: hashed.append(path.name) or real(path, algorithm))
 
     svc.validate_images(tmp_path, frozenset({"duplicates"}))
 
@@ -1185,7 +1190,7 @@ def test_exiftool_path_prefers_the_bundled_copy(tmp_path: Path, monkeypatch):
 def test_exiftool_path_falls_back_to_the_path_when_nothing_is_bundled(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
-    monkeypatch.setattr(camera_info.shutil, "which", lambda _name: "/usr/bin/exiftool")
+    monkeypatch.setattr(exiftool_adapter.shutil, "which", lambda _name: "/usr/bin/exiftool")
 
     assert camera_info.exiftool_path() == "/usr/bin/exiftool"
 

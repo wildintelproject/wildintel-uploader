@@ -11,6 +11,7 @@ from PIL import Image
 from wildintel_uploader.core.services import camera_info, exif_store, file_memo
 from wildintel_uploader.core.services import deployment_import_service as svc
 from wildintel_uploader.core.services import preprocessing_service as pre
+from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter, pillow as pillow_adapter
 
 
 def _jpeg(path: Path, size=(4, 4), make="Reconyx", model="HC600", color="red") -> Path:
@@ -63,13 +64,13 @@ def test_a_file_changed_in_size_or_in_time_has_another_stamp(tmp_path: Path):
 
 @pytest.fixture
 def no_exiftool(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
 
 
 def _count(monkeypatch: pytest.MonkeyPatch, name: str) -> list:
     calls: list = []
-    real = getattr(camera_info, name)
-    monkeypatch.setattr(camera_info, name, lambda *a, **k: calls.append(a) or real(*a, **k))
+    real = getattr(pillow_adapter, name)
+    monkeypatch.setattr(pillow_adapter, name, lambda *a, **k: calls.append(a) or real(*a, **k))
     return calls
 
 
@@ -100,13 +101,13 @@ def _fake_exiftool(monkeypatch: pytest.MonkeyPatch, tags_of: dict[Path, dict[str
     """ExifTool, as far as camera_info is concerned: each run is recorded (the images and the tags asked for), and gives what tags_of says of each image (a
     camera "Reconyx HC600", serial "S1", taken 2024-09-04 10:00 when it is not said); an image not in tags_of, when it is given, cannot be read."""
     runs: list[tuple[list[Path], list[str]]] = []
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "exiftool")
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: "exiftool")
 
     def read(tool, paths, tags):
         runs.append((list(paths), list(tags)))
         base = {"Make": "Reconyx", "Model": "HC600", "SerialNumber": "S1", "DateTimeOriginal": "2024:09:04 10:00:00"}
         return {p: {t: {**base, **(tags_of or {}).get(p, {})}.get(t) for t in tags} for p in paths if tags_of is None or p in tags_of}
-    monkeypatch.setattr(camera_info, "_tags_with_exiftool", read)
+    monkeypatch.setattr(exiftool_adapter, "_tags_with_exiftool", read)
     return runs
 
 
@@ -193,8 +194,8 @@ def test_the_store_on_disk_keeps_at_most_its_limit_the_oldest_forgotten_first(mo
 def test_the_exif_read_ahead_is_what_the_steps_find_even_when_they_ask_while_it_is_being_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     images = [_jpeg(tmp_path / f"IMG_{n}.jpg") for n in range(3)]
     runs = _fake_exiftool(monkeypatch, {p: {"ISO": "100"} for p in images})
-    reading, slow, real = threading.Event(), threading.Event(), camera_info._tags_with_exiftool
-    monkeypatch.setattr(camera_info, "_tags_with_exiftool", lambda *a: (reading.set(), slow.wait(5), real(*a))[2])
+    reading, slow, real = threading.Event(), threading.Event(), exiftool_adapter._tags_with_exiftool
+    monkeypatch.setattr(exiftool_adapter, "_tags_with_exiftool", lambda *a: (reading.set(), slow.wait(5), real(*a))[2])
     monkeypatch.setattr(camera_info, "PREFETCH", True)
 
     ahead = camera_info.prefetch(images, ["ISO"])
@@ -212,15 +213,15 @@ def test_the_exif_read_ahead_is_what_the_steps_find_even_when_they_ask_while_it_
 
 def test_nothing_is_read_ahead_without_exiftool_or_without_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(camera_info, "PREFETCH", True)
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
     assert camera_info.prefetch([_jpeg(tmp_path / "a.jpg")]) is None
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: "exiftool")
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: "exiftool")
     assert camera_info.prefetch([]) is None
 
 
 def test_a_reading_by_pillow_is_made_again_when_exiftool_is_there_now(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     images = [_jpeg(tmp_path / "a.jpg")]
-    monkeypatch.setattr(camera_info, "exiftool_path", lambda: None)
+    monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
     camera_info.read_cameras(images)
 
     runs = _fake_exiftool(monkeypatch)
@@ -235,7 +236,7 @@ def test_the_reader_is_pillow_when_exiftool_fails(tmp_path: Path, monkeypatch: p
     a, b = _jpeg(tmp_path / "a.jpg"), _jpeg(tmp_path / "b.jpg")
     _fake_exiftool(monkeypatch)
     assert camera_info.read_cameras([a])[1] == "exiftool"
-    monkeypatch.setattr(camera_info, "_tags_with_exiftool", lambda tool, paths, tags: (_ for _ in ()).throw(OSError("gone")))
+    monkeypatch.setattr(exiftool_adapter, "_tags_with_exiftool", lambda tool, paths, tags: (_ for _ in ()).throw(OSError("gone")))
     assert camera_info.read_cameras([a, b])[1] == "pillow"
 
 

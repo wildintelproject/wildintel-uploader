@@ -42,3 +42,11 @@ def test_the_use_cases_use_their_domain_only(path: Path):
 @pytest.mark.parametrize("path", sorted([*SRC.glob("modules/**/*.py"), *SRC.glob("entrypoints/**/*.py")]), ids=lambda p: str(p.relative_to(SRC)))
 def test_the_new_code_does_not_take_the_models_of_the_api_of_before(path: Path):
     assert not {i for i in _imports(path) if i.startswith("wildintel_uploader.core.schemas")}
+
+
+@pytest.mark.parametrize("path", sorted(SRC.glob("modules/*/**/*.py")), ids=lambda p: str(p.relative_to(SRC)))
+def test_a_module_uses_another_only_through_its_domain(path: Path):
+    own = path.relative_to(SRC / "modules").parts[0]
+    wrong = {i for i in _imports(path) if i.startswith("wildintel_uploader.modules.") and i.split(".")[2] != own
+             and (len(i.split(".")) < 4 or i.split(".")[3] != "domain")}
+    assert not wrong, f"{path.name} imports {sorted(wrong)}"
