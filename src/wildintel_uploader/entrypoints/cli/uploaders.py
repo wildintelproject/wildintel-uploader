@@ -95,7 +95,7 @@ def _optional_prompt(label: str, default: str | None = None) -> Optional[str]:
 def import_deployment(uploaders: FromDishka[UploadersService], deployments: FromDishka[DeploymentsService]) -> None:
     """Import a deployment: organize a folder of camera-trap images locally, then register the deployment in TRAPPER. Does not upload the images
     to TRAPPER yet — that's a separate step this app doesn't have."""
-    from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
+    from wildintel_uploader.modules.deployments.domain import imports
     account = Account()
     _checked(lambda: uploaders.research_projects(account) and None)   # the account, before anything is asked
 
@@ -125,7 +125,7 @@ def import_deployment(uploaders: FromDishka[UploadersService], deployments: From
         console.print(f"  [yellow]⚠ {warning}[/yellow]")
 
     revision = IntPrompt.ask("Revision number (1, 2, 3…)")
-    deployment_id = call(lambda: deployment_import_service.deployment_id_for(revision, location["location_id"]))
+    deployment_id = call(lambda: imports.deployment_id_for(revision, location["location_id"]))
     console.print(f"  Deployment id: [bold]{deployment_id}[/bold]")
     timezone = Prompt.ask("Timezone (IANA, e.g. Europe/Madrid)", default=location["timezone"] or "")
     latitude = FloatPrompt.ask("Latitude (decimal degrees, WGS84, -90..90)")
@@ -134,8 +134,8 @@ def import_deployment(uploaders: FromDishka[UploadersService], deployments: From
     end_date = Prompt.ask("End date (local time, YYYY-MM-DDThh:mm:ss)", default=guess["end_date"] or "")
     camera_model = _optional_prompt("Camera model", guess["camera_model"])
     # Camtrap DP wants the dates with a timezone designator (±hh:mm)
-    start_date = call(lambda: deployment_import_service.with_timezone(start_date, timezone))
-    end_date = call(lambda: deployment_import_service.with_timezone(end_date, timezone))
+    start_date = call(lambda: imports.with_timezone(start_date, timezone))
+    end_date = call(lambda: imports.with_timezone(end_date, timezone))
 
     fields: dict = {"deployment_id": deployment_id, "location_id": location["location_id"], "location_name": location["name"], "latitude": latitude,
                     "longitude": longitude, "start_date": start_date, "end_date": end_date, "camera_model": camera_model}

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
 from wildintel_uploader.modules.deployments.domain import statistics as rules
 from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
-from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis  # noqa: F401 — its DeploymentImportError
+from tests.support import deployment_import_service as dis  # noqa: F401 — its DeploymentImportError
 from wildintel_uploader.modules.deployments.infrastructure.revision_folders import STATS_FILE, RevisionFoldersOnDisk  # noqa: F401
 from wildintel_uploader.modules.postvalidation.domain import statistics as judging
 from wildintel_uploader.modules.postvalidation.domain.models import PostvalidationError

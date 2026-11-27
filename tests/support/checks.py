@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from wildintel_uploader.modules.deployments.infrastructure.deployment_import_service import DeploymentImportError
+from wildintel_uploader.modules.deployments.domain.models import DeploymentImportError
 from wildintel_uploader.modules.fileinfo.domain import models as _fileinfo
 from wildintel_uploader.modules.postvalidation.domain import models as _post
 from wildintel_uploader.modules.postvalidation.infrastructure import validators as _deployment_validators

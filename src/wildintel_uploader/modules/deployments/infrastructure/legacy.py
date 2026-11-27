@@ -1,6 +1,5 @@
-"""The ports of the deployments over the code of before: the folders and the collections
-(deployment_import_service, their collections, their seal), the photos (deployment_photos). What they
-refuse is the deployments', with their words."""
+"""The ports of the deployments over the code of before: the collections folder (its collections, the seal of what it keeps), how a collection
+holds its deployments, the photos (deployment_photos) and the import sessions. What they refuse is the deployments', with their words."""
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -8,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TypeVar
 
+from wildintel_uploader.modules.deployments.application.imports import Importing
 from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.ports import (
@@ -22,11 +22,10 @@ T = TypeVar("T")
 
 @contextmanager
 def _failed() -> Iterator[None]:
-    from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
     from wildintel_uploader.shared.storage import StorageError
     try:
         yield
-    except (dis.DeploymentImportError, StorageError) as exc:
+    except StorageError as exc:
         raise DeploymentsFailed(str(exc)) from exc
 
 
@@ -39,49 +38,18 @@ class CollectionFolders(Folders):
     def __init__(self, settings: StoredSettings, catalog_of: Callable[[Path], CatalogService], sealing: Callable[[], Sealing]) -> None:
         self._settings, self._catalog_of, self._sealing = settings, catalog_of, sealing   # the catalog of a collections folder, through its contract
 
-    @staticmethod
-    def _dis():
-        from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
-        return deployment_import_service
-
     def root(self) -> Path:
-        return _root()
-
-    def scan(self, folder: Path) -> dict:
-        with _failed():
-            return self._dis().scan_folder(folder)
-
-    def read_ahead(self, folder: Path) -> None:
-        self._dis().prefetch_metadata(folder, self._settings.load_settings().VALIDATION.exif_fields)
-
-    def guess(self, folder: Path) -> dict:
-        with _failed():
-            return self._dis().guess_details(folder)
-
-    def scan_session(self, folder: Path) -> dict:
-        with _failed():
-            return self._dis().scan_session(folder)
+        return self._settings.collections_dir()
 
     def check_collection(self, folder: Path) -> dict:
         return layout.check_collection(folder)
-
-    def default_collection(self, project: str, deployment_id: str) -> Path:
-        with _failed():
-            return self._dis().default_collection_dir(project, deployment_id)
-
-    def kept(self, project: str, deployment_id: str) -> Path | None:
-        return self._dis().existing_deployment_dir(project, deployment_id)
 
     def local_deployments(self, folder: Path) -> list[dict]:
         return layout.list_deployments(folder)
 
     def imported(self, project: str, exclude_deployment: str | None) -> dict[str, list[dict]]:
         with _failed():
-            return layout.imported_source_hashes(_root(), project, exclude_deployment)
-
-    def log_entry(self, project: str, deployment_id: str) -> dict:
-        with _failed():
-            return self._dis().log_entry(project, deployment_id)
+            return layout.imported_source_hashes(self.root(), project, exclude_deployment)
 
     def seal_status(self, folder: Path) -> dict:
         return self._sealing().verify(folder)
@@ -92,14 +60,6 @@ class CollectionFolders(Folders):
             return self._catalog_of(project_dir.parent).location_time(project_dir.name, location_id)
         except CatalogError as exc:
             raise DeploymentsFailed(exc.message) from exc
-
-    def copy_as_it_is(self, source_dir: str, collection_dir: str, collection_name: str | None, deployment: Deployment) -> Iterator[dict]:
-        with _failed():
-            return self._dis().import_local_stream(source_dir, collection_dir, collection_name, deployment)
-
-    def organize(self, research_project_id: str, source_dir: str, deployment: Deployment) -> tuple[Path, Iterator[dict]]:
-        with _failed():
-            return self._dis().organize_stream(research_project_id, source_dir, deployment)
 
 
 class DeploymentPhotos(Photos):
@@ -160,21 +120,20 @@ class StoredSessions(ImportSessions):
 
 
 class LayoutOfTheCollections(CollectionLayout):
-    """Over the code of before of the deployments: their collections, their seal, the room on the disk."""
+    """How a collection holds its deployments: the paths, what is kept and the seal as an import says (application.imports), the files as the
+    collections folder keeps them, the room on the disk."""
 
-    @staticmethod
-    def _dis():
-        from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
-        return deployment_import_service
+    def __init__(self, importing: Callable[[], Importing]) -> None:
+        self._importing = importing
 
     def check_paths(self, source: Path, dest: Path) -> None:
-        self._dis().check_paths(source, dest)
+        self._importing().check_paths(source, dest)
 
     def is_pending(self, dest: Path) -> bool:
-        return self._dis().is_pending(dest)
+        return self._importing().is_pending(dest)
 
     def check_not_kept(self, dest: Path) -> None:
-        self._dis().check_not_kept(dest)
+        self._importing().check_not_kept(dest)
 
     def is_synced(self, dest: Path) -> bool:
         return layout.is_synced(dest)
@@ -196,4 +155,4 @@ class LayoutOfTheCollections(CollectionLayout):
         layout.write_deployment_metadata(dest, deployment)
 
     def seal(self, source: Path, dest: Path, deployment: Deployment, **details) -> bool:
-        return self._dis().seal_deployment(source, dest, deployment, **details)
+        return self._importing().seal(source, dest, deployment, **details)

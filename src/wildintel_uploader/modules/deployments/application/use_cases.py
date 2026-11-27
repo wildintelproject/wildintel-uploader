@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from wildintel_uploader.modules.deployments.application.cards import CardCopying
+from wildintel_uploader.modules.deployments.application.imports import Importing
 from wildintel_uploader.modules.deployments.application.repair import Repairing
 from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
@@ -21,10 +22,10 @@ from wildintel_uploader.modules.visits.domain.ports import VisitsService
 class DeploymentsUseCases(DeploymentsService):
     def __init__(self, cards: CardCopying | None, folders: Folders, revisions: RevisionStatistics, photos: Photos, *, visits: VisitsService,
                  preprocessing: PreprocessingService, repairs: Repairing | None = None, statistics: RevisionStatistics | None = None,
-                 sessions: ImportSessions | None = None, layout: CollectionLayout | None = None) -> None:
+                 sessions: ImportSessions | None = None, layout: CollectionLayout | None = None, imports: Importing | None = None) -> None:
         self._cards, self._folders, self._revisions, self._photos = cards, folders, revisions, photos
         self._visits, self._preprocessing, self._repairs, self._statistics = visits, preprocessing, repairs, statistics
-        self._sessions, self._layout = sessions, layout
+        self._sessions, self._layout, self._imports = sessions, layout, imports
 
     def layout(self) -> CollectionLayout:
         return self._layout
@@ -43,16 +44,16 @@ class DeploymentsUseCases(DeploymentsService):
     # a folder of images
 
     def scan_folder(self, folder: Path) -> dict:
-        result = self._folders.scan(folder)
+        result = self._imports.scan_folder(folder)
         if result["image_count"]:
-            self._folders.read_ahead(folder)
+            self._imports.prefetch(folder)
         return result
 
     def guess_details(self, folder: Path) -> dict:
-        return self._folders.guess(folder)
+        return self._imports.guess_details(folder)
 
     def scan_session(self, folder: Path) -> dict:
-        return self._folders.scan_session(folder)
+        return self._imports.scan_session(folder)
 
     # the collections
 
@@ -60,11 +61,11 @@ class DeploymentsUseCases(DeploymentsService):
         return self._folders.check_collection(folder)
 
     def collection_path(self, project: str, deployment_id: str) -> dict:
-        path = self._folders.default_collection(project, deployment_id)
+        path = self._imports.default_collection(project, deployment_id)
         return {"path": str(path), "collection": path.name, **self._folders.check_collection(path)}
 
     def existing(self, project: str, deployment_ids: list[str]) -> dict[str, str | None]:
-        return {d: (str(found) if (found := self._folders.kept(project, d)) else None) for d in deployment_ids}
+        return {d: (str(found) if (found := self._imports.kept(project, d)) else None) for d in deployment_ids}
 
     def local_deployments(self, folder: Path) -> list[dict]:
         return self._folders.local_deployments(folder)
@@ -73,10 +74,10 @@ class DeploymentsUseCases(DeploymentsService):
         return self._folders.imported(project, exclude_deployment)
 
     def log_entry(self, project: str, deployment_id: str) -> dict:
-        return self._folders.log_entry(project, deployment_id)
+        return self._imports.log_entry(project, deployment_id)
 
     def seal_status(self, project: str, deployment_id: str) -> dict:
-        dest = self._folders.kept(project, deployment_id)
+        dest = self._imports.kept(project, deployment_id)
         if dest is None:
             raise DeploymentMissing(f"{deployment_id} isn't in the collections folder.")
         return self._folders.seal_status(dest)
@@ -110,7 +111,7 @@ class DeploymentsUseCases(DeploymentsService):
                      consolidate: bool = True) -> Iterator[dict]:
         self._require_visit(collection_dir, deployment.deployment_id)
         if preprocessing is None:
-            return self._folders.copy_as_it_is(source_dir, collection_dir, collection_name, deployment)
+            return self._imports.copy_as_it_is(source_dir, collection_dir, collection_name, deployment)
         # the collection sits in its research project's folder: the images are read in the timezone of the location kept there — the only place it is set
         time = self._folders.location_time(Path(collection_dir).expanduser().parent, deployment.location_id)
         if not time.get("timezone"):
@@ -128,7 +129,7 @@ class DeploymentsUseCases(DeploymentsService):
             raise DeploymentsFailed(str(exc)) from exc
 
     def organize(self, research_project_id: str, source_dir: str, deployment: Deployment) -> tuple[Path, Iterator[dict]]:
-        return self._folders.organize(research_project_id, source_dir, deployment)
+        return self._imports.organize(research_project_id, source_dir, deployment)
 
     # checking and repairing those kept, and the statistics of a revision
 

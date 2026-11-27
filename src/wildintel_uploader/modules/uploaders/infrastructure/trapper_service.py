@@ -9,7 +9,7 @@ the request left blank (the password is never sent back to the frontend).
 Registering a deployment goes through deployments.import_deployments() —
 the SDK's simulation of Trapper's classic geomap/deployment/import/ form
 (cookie/session auth, not the token-authenticated REST API, which is
-read-only for deployments). See services.deployment_import_service for the
+read-only for deployments). See modules.deployments (application.imports) for the
 CSV this builds from a DeploymentFields."""
 from __future__ import annotations
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.modules.deployments.infrastructure.deployment_import_service import DeploymentImportError
+from wildintel_uploader.modules.deployments.domain.models import DeploymentImportError
 from wildintel_uploader.modules.preprocessing.domain import models as _models
 from wildintel_uploader.modules.preprocessing.domain.models import (  # noqa: F401 — the names of before
     PREPROCESSING_LOG_FILE, STAGING_DIR, ImageWork, PreprocessOptions, localize, new_name, resize_summary, xmp_tags,

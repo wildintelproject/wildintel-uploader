@@ -138,7 +138,7 @@ def _read_json(path: Path):
         return None
 
 
-TIMESTAMP_LOG_SUFFIX = "_FileTimestampLog.csv"
+from wildintel_uploader.modules.deployments.domain.imports import TIMESTAMP_LOG_SUFFIX  # noqa: E402 — the domain's
 
 
 TIMESTAMP_LOG_FIELDS = ["Deployment", "StartDate", "StartTime", "EndDate", "EndTime"]

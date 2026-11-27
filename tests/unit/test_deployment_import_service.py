@@ -1,4 +1,4 @@
-"""services.deployment_import_service — folder scanning (EXIF dates, camera
+"""Importing a deployment (modules.deployments) — folder scanning (EXIF dates, camera
 model), path validation, and organizing a copy."""
 import json
 import shutil
@@ -12,7 +12,7 @@ from PIL import Image
 
 from tests.support import camera_info
 from wildintel_uploader.entrypoints import config as app_config
-from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as svc
+from tests.support import deployment_import_service as svc
 from tests.support import checks as old_checks
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 

@@ -49,7 +49,7 @@ class Deployment:
 
 def _deployments(tmp_path, known=(), time=None):
     folders, preprocessing = Folders(tmp_path, {"timezone": "Atlantic/Canary", "ignore_dst": False} if time is None else time), Preprocessing()
-    service = DeploymentsUseCases(None, folders, None, None, visits=Visits(set(known)), preprocessing=preprocessing)
+    service = DeploymentsUseCases(None, folders, None, None, visits=Visits(set(known)), preprocessing=preprocessing, imports=folders)
     return service, folders, preprocessing
 
 

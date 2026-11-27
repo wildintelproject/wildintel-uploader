@@ -36,6 +36,8 @@ from wildintel_uploader.modules.catalog.infrastructure.sql_repository import Sql
 from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
 from wildintel_uploader.modules.deployments.application.cards import CardCopying
+from wildintel_uploader.modules.deployments.application.imports import Importing
+from wildintel_uploader.modules.deployments.infrastructure.import_folder import ImportFolderOnDisk
 from wildintel_uploader.modules.deployments.application.repair import Repairing
 from wildintel_uploader.modules.deployments.infrastructure.memory_cards import CardOnDisk, CopiesInTemp
 from wildintel_uploader.modules.deployments.application.seal import Sealing
@@ -202,7 +204,13 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
     settings = settings or build_settings()
     return DeploymentsUseCases(CardCopying(CardOnDisk(), CopiesInTemp()), DeploymentFolders(config, catalog_of, sealing), revision_statistics(), DeploymentPhotos(), visits=build_visits(settings=settings),
                                preprocessing=build_preprocessing(), repairs=repairing(), statistics=revision_statistics(),
-                               sessions=StoredSessions(), layout=LayoutOfTheCollections())
+                               sessions=StoredSessions(), layout=LayoutOfTheCollections(importing), imports=importing())
+
+
+def importing() -> Importing:
+    """Bringing a folder of images into a collection of the collections folder of the settings: the images through modules.fileinfo, then sealed."""
+    return Importing(ImportFolderOnDisk(lambda: config.collections_dir()), file_info, sealing,
+                     exif_fields=lambda: config.load_settings().VALIDATION.exif_fields)
 
 
 def sealing() -> Sealing:

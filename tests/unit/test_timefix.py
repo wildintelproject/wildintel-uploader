@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
+from tests.support import deployment_import_service as dis
 from tests.support import local_folder_service as lfs
 from wildintel_uploader.entrypoints.wiring import build_timefix
 from wildintel_uploader.modules.timefix.domain import rules
