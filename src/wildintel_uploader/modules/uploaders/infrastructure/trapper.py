@@ -1,4 +1,4 @@
-"""TRAPPER for the uploaders — the account, as the settings keep it; what TRAPPER has, through its SDK (trapper_service); a deployment
+"""TRAPPER for the uploaders — the account, as the settings keep it; what TRAPPER has, through its API (TrapperSite); a deployment
 registered from the wizard — and its errors as the module's: what the client of TRAPPER says of an account or a resource,
 of the network, or the words of what the uploads refuse. And the research projects and the collections kept in the collections folder."""
 from __future__ import annotations
@@ -7,7 +7,7 @@ import logging
 import re
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from wildintel_uploader.modules.uploaders.domain.models import (
     Account, Credentials, Forbidden, NotAuthorized, NotThere, TimedOut, Unreachable, UploaderError,
@@ -18,17 +18,12 @@ from wildintel_uploader.modules.uploaders.infrastructure.failures import UploadF
 from wildintel_uploader.modules.uploaders.infrastructure.packages import UPLOAD_LOG_FILE, read_json, size_of
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
-from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, UploadPlaces, UploadReports
+from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, TrapperSite, UploadPlaces, UploadReports
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
-
-
-def _services():
-    from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
-    return (trapper_service,)
 
 
 def _own_words(exc: Exception) -> bool:
@@ -68,8 +63,8 @@ def _ours(call: Callable[[], T], what: str = "A TRAPPER call") -> T:
 
 
 class TrapperClient(Trapper):
-    def __init__(self, settings: StoredSettings) -> None:
-        self._settings = settings   # the settings as settings.toml keeps them
+    def __init__(self, settings: StoredSettings, site: TrapperSite) -> None:
+        self._settings, self._site = settings, site   # the settings as settings.toml keeps them; TRAPPER's API
 
     def credentials(self, account: Account) -> Credentials:
         """The account, completed from the settings — what is still missing named."""
@@ -89,15 +84,25 @@ class TrapperClient(Trapper):
         settings.TRAPPER.base_url, settings.TRAPPER.user_name, settings.TRAPPER.user_password = credentials
         self._settings.save_settings(settings)
 
-    def ask(self, what: str, credentials: Credentials, *args: Any) -> Any:
-        return _ours(lambda: getattr(_services()[0], what)(*credentials, *args), "Trapper call")
+    def test_connection(self, credentials: Credentials) -> dict:
+        return _ours(lambda: self._site.test_connection(credentials), "Trapper call")
+
+    def research_projects(self, credentials: Credentials) -> list[dict]:
+        return _ours(lambda: self._site.research_projects(credentials), "Trapper call")
+
+    def classification_projects(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
+        return _ours(lambda: self._site.classification_projects(credentials, research_project_pk), "Trapper call")
+
+    def locations(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
+        return _ours(lambda: self._site.locations(credentials, research_project_pk), "Trapper call")
+
+    def deployments(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
+        return _ours(lambda: self._site.deployments(credentials, research_project_pk), "Trapper call")
 
     def register(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, deployment: Deployment, timezone: str,
                  ignore_dst: bool) -> None:
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            _ours(lambda: _services()[0].import_deployment(*credentials, research_project_pk, classification_project_pk, deployment, timezone,
-                                                           Path(tmp) / "deployment.csv", ignore_dst=ignore_dst), "Registering the deployment")
+        _ours(lambda: self._site.register(credentials, research_project_pk, classification_project_pk, deployment, timezone, ignore_dst),
+              "Registering the deployment")
 
     def failure(self, exc: Exception) -> UploaderError:
         """An error of TRAPPER, of the network or of what is asked of it, as the module's — logged when it is not one of its own."""

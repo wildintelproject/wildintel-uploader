@@ -99,10 +99,21 @@ class Trapper(ABC):
     @abstractmethod
     def keep_account(self, credentials: Credentials) -> None: ...
 
+    # what TRAPPER has — its errors as the module's (see TrapperSite for what each says)
     @abstractmethod
-    def ask(self, what: str, credentials: Credentials, *args: Any) -> Any:
-        """One question to TRAPPER — test_connection, list_research_projects, list_classification_projects, list_locations, list_deployments —
-        its errors as the module's."""
+    def test_connection(self, credentials: Credentials) -> dict: ...
+
+    @abstractmethod
+    def research_projects(self, credentials: Credentials) -> list[dict]: ...
+
+    @abstractmethod
+    def classification_projects(self, credentials: Credentials, research_project_pk: int) -> list[dict]: ...
+
+    @abstractmethod
+    def locations(self, credentials: Credentials, research_project_pk: int) -> list[dict]: ...
+
+    @abstractmethod
+    def deployments(self, credentials: Credentials, research_project_pk: int) -> list[dict]: ...
 
     @abstractmethod
     def register(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, deployment: Deployment, timezone: str,
@@ -168,18 +179,29 @@ class TrapperSite(ABC):
     refusal of an account is an UploaderError saying who refused it and what it answered."""
 
     @abstractmethod
-    def research_projects(self, credentials: Credentials) -> list[dict]: ...
+    def test_connection(self, credentials: Credentials) -> dict:
+        """{"ok", "research_projects_count"}."""
 
     @abstractmethod
-    def classification_projects(self, credentials: Credentials, research_project_pk: int) -> list[dict]: ...
+    def research_projects(self, credentials: Credentials) -> list[dict]:
+        """pk, name and acronym, by name."""
+
+    @abstractmethod
+    def classification_projects(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
+        """pk, name and is_active, by name."""
 
     @abstractmethod
     def locations(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
-        """pk, location_id, timezone, ignore_dst, owner and can_manage (None when TRAPPER can't say)."""
+        """pk, location_id, name, timezone, ignore_dst, latitude, longitude, owner and can_manage (None when TRAPPER can't say), by location_id."""
 
     @abstractmethod
     def deployments(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
-        """pk and deployment_id."""
+        """pk and the deployment's own fields, by deployment_id."""
+
+    @abstractmethod
+    def register(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, deployment: Deployment,
+                 timezone: str, ignore_dst: bool) -> None:
+        """A deployment registered from its csv (domain.trapper.deployment_csv), its dates in that timezone."""
 
     @abstractmethod
     def create_location(self, credentials: Credentials, research_project_pk: int, deployment: Deployment, timezone: str, ignore_dst: bool) -> None:

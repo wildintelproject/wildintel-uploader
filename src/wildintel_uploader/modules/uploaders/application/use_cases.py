@@ -49,21 +49,21 @@ class UploadersUseCases(UploadersService):
 
     def test_connection(self, account: Account) -> dict:
         credentials = self._trapper.credentials(account)
-        result = self._trapper.ask("test_connection", credentials)
+        result = self._trapper.test_connection(credentials)
         self._trapper.keep_account(credentials)   # once it works, so that it needn't be typed again
         return result
 
     def research_projects(self, account: Account) -> list[dict]:
-        return self._trapper.ask("list_research_projects", self._trapper.credentials(account))
+        return self._trapper.research_projects(self._trapper.credentials(account))
 
     def classification_projects(self, account: Account, research_project_pk: int) -> list[dict]:
-        return self._trapper.ask("list_classification_projects", self._trapper.credentials(account), research_project_pk)
+        return self._trapper.classification_projects(self._trapper.credentials(account), research_project_pk)
 
     def locations(self, account: Account, research_project_pk: int) -> list[dict]:
-        return self._trapper.ask("list_locations", self._trapper.credentials(account), research_project_pk)
+        return self._trapper.locations(self._trapper.credentials(account), research_project_pk)
 
     def deployments(self, account: Account, research_project_pk: int) -> list[dict]:
-        return self._trapper.ask("list_deployments", self._trapper.credentials(account), research_project_pk)
+        return self._trapper.deployments(self._trapper.credentials(account), research_project_pk)
 
     # importing a deployment into TRAPPER from the wizard
 
@@ -106,7 +106,7 @@ class UploadersUseCases(UploadersService):
     def project_classification_projects(self, account: Account, project: str) -> list[dict]:
         credentials = self._trapper.credentials(account)
         record = self._record(project)
-        return self._trapper.ask("list_classification_projects", credentials, self._ours(lambda: self._sending.research_project_pk(credentials, record)))
+        return self._trapper.classification_projects(credentials, self._ours(lambda: self._sending.research_project_pk(credentials, record)))
 
     def check_selection(self, account: Account, project: str, collection: str | None) -> list[dict]:
         credentials = self._trapper.credentials(account)

@@ -42,9 +42,9 @@ RESOURCES = [
 
 
 def _run(root: Path, names=("R0003", "Other")):
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployment_resources", return_value=RESOURCES), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_locations", return_value=LOCATIONS), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.resources", return_value=RESOURCES), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=[n for n in names if n.startswith("R")]):
         return sync_service.sync(CREDS, root, PROJECT, 10)
 
@@ -103,9 +103,9 @@ def test_the_endpoint_syncs_the_collections_folder(tmp_path: Path):
     payload = {**dict(zip(("url", "username", "password"), CREDS)), "research_project_pk": 2, "research_project_name": "Doñana", "research_project_acronym": "DONA", "classification_project_pk": 10}
 
     with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployment_resources", return_value=RESOURCES), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_locations", return_value=LOCATIONS), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.resources", return_value=RESOURCES), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=["R0003"]):
         response = TestClient(app).post("/api/sync/collections", json=payload)
 
@@ -118,14 +118,14 @@ def test_the_endpoint_syncs_the_collections_folder(tmp_path: Path):
 def test_collection_names_keeps_those_starting_with_r_of_the_classification_project():
     client = MagicMock()
     client.classification_projects.where_project_collections.return_value = [SimpleNamespace(name=n) for n in ("R0002", "Pilot", "r0001", "R0002")]
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.client", return_value=client):
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.client", return_value=client):
         assert sync_service.collection_names(CREDS, 10) == ["r0001", "R0002"]
 
 
 def test_only_the_chosen_collections_are_synced(tmp_path: Path):
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployment_resources", return_value=RESOURCES), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_locations", return_value=LOCATIONS), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.resources", return_value=RESOURCES), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=["R0003", "R0004"]):
         result = sync_service.sync(CREDS, tmp_path, PROJECT, 10, ["r0004"])
 
@@ -134,9 +134,9 @@ def test_only_the_chosen_collections_are_synced(tmp_path: Path):
 
 
 def test_only_the_chosen_deployments_are_synced_and_the_others_are_not_called_unassigned(tmp_path: Path):
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployment_resources", return_value=RESOURCES), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_locations", return_value=LOCATIONS), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.resources", return_value=RESOURCES), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=["R0003"]):
         result = sync_service.sync(CREDS, tmp_path, PROJECT, 10, None, ["r0003-dona_02"])
 
@@ -148,7 +148,7 @@ def test_only_the_chosen_deployments_are_synced_and_the_others_are_not_called_un
 def test_the_endpoint_lists_the_collections_and_their_deployments():
     from wildintel_uploader.web.main import app
     payload = {**dict(zip(("url", "username", "password"), CREDS)), "research_project_pk": 2, "classification_project_pk": 10}
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=["R0003"]):
         response = TestClient(app).post("/api/sync/collection-names", json=payload)
 
@@ -173,11 +173,11 @@ def _fake_downloader(fail=()):
 
 
 def _run_downloading(root: Path, media=MEDIA, fail=(), only=("R0003-DONA_01",)):
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployment_resources", return_value=RESOURCES), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployment_media", return_value=media) as listed, \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.file_downloader", side_effect=_fake_downloader(fail)), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_locations", return_value=LOCATIONS), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.list_deployments", return_value=DEPLOYMENTS), \
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.resources", return_value=RESOURCES), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.media", return_value=media) as listed, \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.downloader", side_effect=_fake_downloader(fail)), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.locations", return_value=LOCATIONS), \
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.deployments", return_value=DEPLOYMENTS), \
          patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.collection_names", return_value=["R0003"]):
         return sync_service.sync(CREDS, root, PROJECT, 10, only_deployments=list(only), download_images=True), listed
 
@@ -195,7 +195,7 @@ def test_the_images_the_classification_project_holds_are_downloaded_into_the_dep
     folder = tmp_path / "DONA" / "R0003" / "R0003-DONA_01"
     assert (folder / "R0003-DONA_01__20240701_1.JPEG").read_bytes().startswith(b"\xff\xd8\xff")
     assert not list(folder.glob("*.part"))
-    listed.assert_called_once_with(*CREDS, 10, 1)  # the classification project, and the deployment's pk
+    listed.assert_called_once_with(CREDS, 10, 1)  # the classification project, and the deployment's pk
     assert result["downloaded"]["images"] == 1 and result["downloaded"]["deployments"] == {"R0003-DONA_01": 1}
     assert result["downloaded"]["bytes"] > 3 and result["downloaded"]["failed"] == []
     # Trapper lists two images for the deployment; the project holds one — the other is said, not hidden.

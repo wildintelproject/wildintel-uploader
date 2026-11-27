@@ -5,11 +5,15 @@ yaml and the deployments csv say, and the words of what is checked.
 An upload, as wildintel-tools did it in three commands, in one: the location and the deployment are created in TRAPPER's research project if they
 aren't there yet; the deployment's images are packed into a zip and the yaml that describes them, split in several parts if a zip would be bigger
 than a size; each zip and its yaml are uploaded, and TRAPPER is told to process them into a collection. Three modes: "upload" does all of it;
-"dry_run" only reads TRAPPER and says what it would do; "generate" only writes the files and leaves them."""
+"dry_run" only reads TRAPPER and says what it would do; "generate" only writes the files and leaves them.
+
+And a deployment as TRAPPER's import form takes it: its csv, with its dates as the camera's wall clock."""
 from __future__ import annotations
 
 import ast
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from datetime import timezone as dt_timezone
+from zoneinfo import ZoneInfo
 from typing import Any, TypeVar
 
 from wildintel_uploader.modules.uploaders.domain.models import UploaderError
@@ -236,3 +240,68 @@ def locations_message(known: set[str], location_ids: list[str] | None) -> str:
     if missing:
         message += f" Would be created: {', '.join(missing)}."
     return message
+
+
+# ── a deployment as TRAPPER's import form takes it ──
+
+# the deployment's own field -> the column TRAPPER's import form expects: the Camtrap DP names the deployment itself uses, one to one
+DEPLOYMENT_CSV_COLUMNS: list[tuple[str, str]] = [
+    ("deployment_id", "deploymentID"), ("location_id", "locationID"), ("location_name", "locationName"), ("latitude", "latitude"),
+    ("longitude", "longitude"), ("coordinate_uncertainty", "coordinateUncertainty"), ("start_date", "deploymentStart"),
+    ("end_date", "deploymentEnd"), ("setup_by", "setupBy"), ("camera_id", "cameraID"), ("camera_model", "cameraModel"),
+    ("camera_interval", "cameraDelay"), ("camera_height", "cameraHeight"), ("camera_depth", "cameraDepth"), ("camera_tilt", "cameraTilt"),
+    ("camera_heading", "cameraHeading"), ("detection_distance", "detectionDistance"), ("bait_use", "baitUse"),
+    ("timestamp_issues", "timestampIssues"), ("feature_type", "featureType"), ("habitat", "habitat"), ("deployment_groups", "deploymentGroups"),
+    ("comments", "deploymentComments"), ("tags", "tags"),
+]
+TRAPPER_DATETIME = "%Y-%m-%dT%H:%M:%S"
+
+
+def wall_clock(value: str | None, timezone_name: str | None, ignore_dst: bool = False) -> str | None:
+    """A date as TRAPPER's import form wants it: the camera's wall clock as YYYY-MM-DDThh:mm:ss, with no designator — the form is told the
+    timezone on its own, and reads the date in it. A date with an offset ("…+02:00", "…Z") is moved to the wall clock of timezone_name; with
+    ignore_dst, to the one its standard time has, which is the clock of a camera that never changed to summer time. A date with no offset is
+    already a wall clock: it is kept.
+
+    Raises:
+        ValueError: it isn't an ISO 8601 date, or timezone_name isn't a timezone."""
+    if not value:
+        return value
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or not timezone_name:
+        return parsed.replace(tzinfo=None).strftime(TRAPPER_DATETIME)
+    local = parsed.astimezone(ZoneInfo(timezone_name))
+    if ignore_dst:
+        standard = local.utcoffset() - (local.dst() or timedelta(0))
+        local = parsed.astimezone(dt_timezone(standard))
+    return local.replace(tzinfo=None).strftime(TRAPPER_DATETIME)
+
+
+def _csv_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return ",".join(value)
+    return str(value)
+
+
+def deployment_csv(deployment: dict, timezone_name: str | None = None, ignore_dst: bool = False) -> str:
+    """The one-row csv TRAPPER's import form takes, in its column order; the dates as the wall clock of the timezone (see wall_clock)."""
+    values = dict(deployment)
+    for field in ("start_date", "end_date"):
+        values[field] = wall_clock(values.get(field), timezone_name, ignore_dst)
+    header = ",".join(column for _, column in DEPLOYMENT_CSV_COLUMNS)
+    row = ",".join(f'"{_csv_value(values.get(field)).replace(chr(34), chr(34) * 2)}"' for field, _ in DEPLOYMENT_CSV_COLUMNS)
+    return f"{header}\n{row}\n"
+
+
+def plain(value: Any) -> Any:
+    """A date as its ISO string — everything else TRAPPER exports is already plain."""
+    return value.isoformat() if isinstance(value, datetime) else value
+
+
+def by_name(rows: list[dict], key: str) -> list[dict]:
+    """Rows in the order of one of their names, ignoring case."""
+    return sorted(rows, key=lambda r: (r[key] or "").lower())

@@ -13,7 +13,7 @@ from tests.unit.test_trapper_upload_service import (  # noqa: F401 — the fixtu
     DEPLOYMENT_ID, FakeTrapper, _deployment, _imported, fake_uploader, uploader_login,
 )
 from wildintel_uploader.entrypoints import config
-from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
+from wildintel_uploader.modules.uploaders.infrastructure import trapper_site
 from wildintel_uploader.modules.uploaders.domain import trapper as upload_rules
 from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
 from wildintel_uploader.web.main import app
@@ -65,7 +65,7 @@ def test_uploading_streams_the_steps_and_ends_with_done(tmp_path: Path, fake_upl
     fake = FakeTrapper()
 
     with _in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
-         patch.object(trapper_service, "_client", return_value=fake), patch.object(upload_rules, "WAIT_FOR_COLLECTION_SECONDS", 0.2):
+         patch.object(trapper_site, "_client", return_value=fake), patch.object(upload_rules, "WAIT_FOR_COLLECTION_SECONDS", 0.2):
         response = _client().post("/api/upload/deployment", json=PAYLOAD)
 
     assert response.status_code == 200
@@ -80,7 +80,7 @@ def test_checking_the_access_gives_one_result_per_check_and_changes_nothing(tmp_
     fake = FakeTrapper(locations=[])
     payload = {k: v for k, v in PAYLOAD.items() if k != "deployment_id"} | {"deployment_ids": [DEPLOYMENT_ID]}
 
-    with _in(tmp_path / "collections"), patch.object(trapper_service, "_client", return_value=fake), \
+    with _in(tmp_path / "collections"), patch.object(trapper_site, "_client", return_value=fake), \
          patch.object(TrapperSdk, "_log_in", return_value=None):
         response = _client().post("/api/upload/check-access", json=payload)
 
@@ -95,7 +95,7 @@ def test_the_classification_projects_of_a_research_project_are_listed_from_trapp
     _kept(tmp_path)
     payload = {"url": PAYLOAD["url"], "username": PAYLOAD["username"], "password": PAYLOAD["password"], "research_project_id": "DONA"}
 
-    with _in(tmp_path / "collections"), patch.object(trapper_service, "_client", return_value=FakeTrapper()):
+    with _in(tmp_path / "collections"), patch.object(trapper_site, "_client", return_value=FakeTrapper()):
         response = _client().post("/api/upload/classification-projects", json=payload)
         unknown = _client().post("/api/upload/classification-projects", json={**payload, "research_project_id": "NOPE"})
 
@@ -115,7 +115,7 @@ def test_a_failure_midway_is_an_error_line_not_a_crash(tmp_path: Path, fake_uplo
     fake = FakeTrapper(projects=[])
 
     with _in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
-         patch.object(trapper_service, "_client", return_value=fake):
+         patch.object(trapper_site, "_client", return_value=fake):
         response = _client().post("/api/upload/deployment", json=PAYLOAD)
 
     assert response.status_code == 200
@@ -139,7 +139,7 @@ def test_an_error_from_trapper_itself_is_reported_in_plain_words(tmp_path: Path,
             raise err.UnauthorizedError("401")
 
     with _in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
-         patch.object(trapper_service, "_client", return_value=Broken()):
+         patch.object(trapper_site, "_client", return_value=Broken()):
         events = _events(_client().post("/api/upload/deployment", json=PAYLOAD))
 
     assert events[-1] == {"type": "error", "detail": "Incorrect TRAPPER username or password."}
@@ -177,7 +177,7 @@ def test_the_zips_are_split_at_the_size_of_the_settings(tmp_path: Path, fake_upl
     fake = FakeTrapper()
 
     with _in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
-         patch.object(trapper_service, "_client", return_value=fake), patch.object(config, "max_zip_mb", return_value=1) as size:
+         patch.object(trapper_site, "_client", return_value=fake), patch.object(config, "max_zip_mb", return_value=1) as size:
         events = _events(_client().post("/api/upload/deployment", json=PAYLOAD))
 
     assert events[-1]["parts"] == 1  # 1 MB is far bigger than two tiny images
@@ -188,7 +188,7 @@ def test_when_the_collection_does_not_appear_the_error_says_how_long_it_waited(t
     _kept(tmp_path)
 
     with _in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
-         patch.object(trapper_service, "_client", return_value=FakeTrapper(collections_appear=False)), \
+         patch.object(trapper_site, "_client", return_value=FakeTrapper(collections_appear=False)), \
          patch.object(upload_rules, "WAIT_FOR_COLLECTION_SECONDS", 0.2), patch.object(upload_rules, "POLL_SECONDS", 0.05):
         events = _events(_client().post("/api/upload/deployment", json=PAYLOAD))
 
@@ -199,7 +199,7 @@ def test_when_the_collection_does_not_appear_the_error_says_how_long_it_waited(t
 
 def _post(tmp_path: Path, payload: dict, fake: FakeTrapper | None = None, settings=None):
     stack = [_in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path),
-             patch.object(trapper_service, "_client", return_value=fake or FakeTrapper())]
+             patch.object(trapper_site, "_client", return_value=fake or FakeTrapper())]
     if settings is not None:
         stack.append(patch.object(config, "load_settings", return_value=settings))
     from contextlib import ExitStack
@@ -300,7 +300,7 @@ def test_checking_the_selection_says_what_the_account_sees_of_the_project_and_th
     _kept(tmp_path)
     payload = {k: v for k, v in PAYLOAD.items() if k != "deployment_id"}
 
-    with _in(tmp_path / "collections"), patch.object(trapper_service, "_client", return_value=FakeTrapper()):
+    with _in(tmp_path / "collections"), patch.object(trapper_site, "_client", return_value=FakeTrapper()):
         response = _client().post("/api/upload/check-selection", json=payload)
         unknown = _client().post("/api/upload/check-selection", json={**payload, "research_project_id": "NOPE"})
         no_collection = _client().post("/api/upload/check-selection", json={k: v for k, v in payload.items() if k != "collection"})

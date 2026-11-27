@@ -1,5 +1,5 @@
-"""services.trapper_service — the deployment CSV Trapper's import form
-expects, and import_deployment's call into the SDK (faked, no network)."""
+"""TRAPPER's API over its SDK (uploaders.infrastructure.trapper_site, faked, no network), and the deployment csv TRAPPER's import form expects
+(uploaders.domain.trapper)."""
 from datetime import datetime
 from pathlib import Path
 
@@ -8,7 +8,15 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
+from wildintel_uploader.modules.uploaders.domain import trapper as rules
+from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
+
+CREDS = ("https://trapper.example.org", "alice", "s3cret")
+CLIENT = "wildintel_uploader.modules.uploaders.infrastructure.trapper_site._client"
+
+
+def _csv(fields: DeploymentFields, timezone: str | None = None) -> list[str]:
+    return rules.deployment_csv(fields.model_dump(), timezone).splitlines()
 
 
 def _fields(**overrides) -> DeploymentFields:
@@ -19,14 +27,12 @@ def _fields(**overrides) -> DeploymentFields:
     return DeploymentFields.model_validate({**base, **overrides})
 
 
-def test_write_deployment_csv_header_and_row(tmp_path: Path):
+def test_the_deployment_csv_header_and_row():
     fields = _fields(
         camera_model="Reconyx HC600", camera_height=1.5,
         bait_use=True, tags=["forest", "north"],
     )
-    csv_path = trapper_service.write_deployment_csv(fields, tmp_path / "deployment.csv")
-
-    lines = csv_path.read_text(encoding="utf-8").splitlines()
+    lines = _csv(fields)
     assert lines[0].split(",")[:3] == ["deploymentID", "locationID", "locationName"]
     assert "deploymentStart" in lines[0]
     row = lines[1]
@@ -37,9 +43,8 @@ def test_write_deployment_csv_header_and_row(tmp_path: Path):
     assert '"forest,north"' in row  # tags joined
 
 
-def test_write_deployment_csv_blank_for_unset_optional_fields(tmp_path: Path):
-    csv_path = trapper_service.write_deployment_csv(_fields(), tmp_path / "deployment.csv")
-    header, row = csv_path.read_text(encoding="utf-8").splitlines()
+def test_the_deployment_csv_is_blank_for_unset_optional_fields():
+    header, row = _csv(_fields())
     # cameraModel has no value for this deployment — its column is blank.
     camera_model_index = header.split(",").index("cameraModel")
     assert row.split(",")[camera_model_index] == '""'
@@ -63,8 +68,8 @@ def test_list_deployments_maps_the_export_shape_and_serializes_dates():
     client.deployments.export.return_value = [
         _export(), _export(pk=8, deployment_id="R0001-DONA_02", location_id="DONA_02"),
     ]
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
-        result = trapper_service.list_deployments("https://trapper.example.org", "alice", "s3cret", 2)
+    with patch(CLIENT, return_value=client):
+        result = TrapperSdk().deployments(CREDS, 2)
 
     client.deployments.export.assert_called_once_with(query={"research_project": 2})
     assert [d["deployment_id"] for d in result] == ["R0001-DONA_01", "R0001-DONA_02"]
@@ -77,23 +82,19 @@ def test_list_deployments_of_a_research_project_with_none_is_empty_not_an_error(
     from trapper_client.err import BadRequestError
     client = MagicMock()
     client.deployments.export.side_effect = BadRequestError('["Empty queryset or you have no permission to access the requested objects."]')
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
-        assert trapper_service.list_deployments("https://trapper.example.org", "alice", "s3cret", 17) == []
+    with patch(CLIENT, return_value=client):
+        assert TrapperSdk().deployments(CREDS, 17) == []
 
     client.deployments.export.side_effect = BadRequestError("something else is wrong")
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
+    with patch(CLIENT, return_value=client):
         with pytest.raises(BadRequestError):
-            trapper_service.list_deployments("https://trapper.example.org", "alice", "s3cret", 17)
+            TrapperSdk().deployments(CREDS, 17)
 
 
-def test_import_deployment_calls_the_sdk_with_the_csv(tmp_path: Path):
+def test_a_deployment_is_registered_through_the_sdk_with_its_csv():
     client = MagicMock()
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client) as factory:
-        trapper_service.import_deployment(
-            "https://trapper.example.org", "alice", "s3cret",
-            research_project_pk=2, classification_project_pk=10,
-            deployment=_fields(), timezone="Europe/Madrid", csv_path=tmp_path / "deployment.csv",
-        )
+    with patch(CLIENT, return_value=client) as factory:
+        TrapperSdk().register(CREDS, 2, 10, _fields(), "Europe/Madrid", False)
     factory.assert_called_once_with("https://trapper.example.org", "alice", "s3cret")
     client.deployments.import_deployments.assert_called_once()
     _, kwargs = client.deployments.import_deployments.call_args
@@ -113,8 +114,8 @@ def test_list_locations_carries_the_coordinates_from_the_export():
         SimpleNamespace(pk=5, latitude=37.0, longitude=-6.5), SimpleNamespace(pk=6, latitude=None, longitude=None),
     ]
 
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
-        result = trapper_service.list_locations("https://trapper.example.org", "alice", "s3cret", 2)
+    with patch(CLIENT, return_value=client):
+        result = TrapperSdk().locations(CREDS, 2)
 
     assert [(l["location_id"], l["latitude"], l["longitude"]) for l in result] == [("DONA_01", 37.0, -6.5), ("DONA_02", None, None)]
     client.locations.export.assert_called_once_with(query={"research_project": 2})
@@ -125,8 +126,8 @@ def test_list_locations_still_works_when_the_export_fails():
     client.locations.where.return_value = [_location(5, "DONA_01")]
     client.locations.export.side_effect = RuntimeError("boom")
 
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
-        [location] = trapper_service.list_locations("https://trapper.example.org", "alice", "s3cret", 2)
+    with patch(CLIENT, return_value=client):
+        [location] = TrapperSdk().locations(CREDS, 2)
 
     assert location["location_id"] == "DONA_01" and location["latitude"] is None and location["longitude"] is None
 
@@ -143,15 +144,13 @@ def test_list_locations_still_works_when_the_export_fails():
     (None, "Europe/Madrid", False, None),
 ])
 def test_trapper_wall_clock(value, timezone_name, ignore_dst, expected):
-    assert trapper_service.trapper_wall_clock(value, timezone_name, ignore_dst) == expected
+    assert rules.wall_clock(value, timezone_name, ignore_dst) == expected
 
 
-def test_the_deployment_csv_has_the_dates_trapper_accepts(tmp_path: Path):
+def test_the_deployment_csv_has_the_dates_trapper_accepts():
     fields = _fields(start_date="2025-05-01T09:07:45Z", end_date="2025-06-12T08:15:27Z")
 
-    csv_path = trapper_service.write_deployment_csv(fields, tmp_path / "d.csv", timezone="Europe/Madrid")
-
-    _, row = csv_path.read_text(encoding="utf-8").splitlines()
+    _, row = _csv(fields, "Europe/Madrid")
     assert '"2025-05-01T11:07:45"' in row and '"2025-06-12T10:15:27"' in row  # Madrid's wall clock, no Z
 
 
@@ -163,8 +162,8 @@ def test_list_locations_says_who_owns_a_location_and_whether_the_account_can_man
     ]
     client.locations.export.return_value = []
 
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=client):
-        mine, theirs = trapper_service.list_locations("https://trapper.example.org", "alice", "s3cret", 2)
+    with patch(CLIENT, return_value=client):
+        mine, theirs = TrapperSdk().locations(CREDS, 2)
 
     assert (mine["owner"], mine["can_manage"]) == ("alice", True)
     assert (theirs["owner"], theirs["can_manage"]) == ("bob", False)

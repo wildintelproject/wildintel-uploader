@@ -16,7 +16,7 @@ from PIL import Image
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from tests.support import preprocessing_service
-from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
+from wildintel_uploader.modules.uploaders.infrastructure import trapper_site
 from tests.support import trapper_upload as up
 from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
 from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
@@ -257,7 +257,7 @@ def fake_uploader(monkeypatch: pytest.MonkeyPatch, uploader_login):
 
 
 def _with(fake: FakeTrapper):
-    return patch.object(trapper_service, "_client", return_value=fake)
+    return patch.object(trapper_site, "_client", return_value=fake)
 
 
 def test_the_research_project_is_the_one_it_was_filled_in_from_or_else_the_one_with_its_acronym():
@@ -1046,7 +1046,7 @@ def test_a_location_of_someone_else_is_explained_not_refused():
 
 def _someone_elses_location(monkeypatch: pytest.MonkeyPatch):
     row = {"pk": 1, "location_id": "DONA_0006_B", "name": None, "timezone": "Europe/Madrid", "ignore_dst": True, "owner": "bob@x.org", "can_manage": False}
-    monkeypatch.setattr(up.trapper_service, "list_locations", lambda *a, **k: [row])
+    monkeypatch.setattr(up.trapper_site.TrapperSdk, "locations", lambda *a, **k: [row])
 
 
 def test_a_dry_run_warns_that_the_location_may_not_be_usable_but_goes_on(tmp_path: Path, fake_uploader, monkeypatch: pytest.MonkeyPatch):

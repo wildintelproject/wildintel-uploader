@@ -206,7 +206,7 @@ def test_import_deployment_skips_registration_for_an_existing_deployment(tmp_pat
         "register_deployment": False,
     }
 
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=fake_client), \
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site._client", return_value=fake_client), \
          patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/import", json=payload)
 
@@ -235,7 +235,7 @@ def test_import_deployment_streams_progress_then_registers(tmp_path: Path):
     }
     _keep_location(data_dir, timezone="Europe/Madrid")
 
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=fake_client), \
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site._client", return_value=fake_client), \
          patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir), \
          patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/import", json=payload)
@@ -264,7 +264,7 @@ def test_import_deployment_writes_the_collection_and_deployment_metadata_beside_
         "register_deployment": False,
     }
 
-    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service._client", return_value=MagicMock()), \
+    with patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site._client", return_value=MagicMock()), \
          patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=data_dir):
         assert _client().post("/api/deployment-import/import", json=payload).status_code == 200
 
@@ -866,13 +866,12 @@ def test_import_registers_the_deployment_in_the_kept_locations_timezone(tmp_path
 
     with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=root), \
          patch("wildintel_uploader.modules.deployments.application.use_cases.DeploymentsUseCases.organize", return_value=(root, iter([]))), \
-         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_service.import_deployment") as register:
+         patch("wildintel_uploader.modules.uploaders.infrastructure.trapper_site.TrapperSdk.register") as register:
         response = _client().post("/api/deployment-import/import", json=payload)
         assert [json.loads(line)["type"] for line in response.text.splitlines()] == ["registering", "done"]
 
     assert response.status_code == 200
-    assert register.call_args.args[6] == "Atlantic/Canary"
-    assert register.call_args.kwargs["ignore_dst"] is True
+    assert register.call_args.args[4:] == ("Atlantic/Canary", True)   # the timezone, and ignore_dst
 
 
 # ── images.json ─────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ from pathlib import Path
 from wildintel_uploader.entrypoints.wiring import trapper_uploads
 from wildintel_uploader.modules.uploaders.domain import trapper as rules
 from wildintel_uploader.modules.uploaders.domain.models import UploaderError as TrapperUploadError  # noqa: F401
-from wildintel_uploader.modules.uploaders.infrastructure import trapper_service  # noqa: F401
+from wildintel_uploader.modules.uploaders.infrastructure import trapper_site  # noqa: F401
 from wildintel_uploader.modules.uploaders.infrastructure.packages import PackagesOnDisk
 from wildintel_uploader.modules.uploaders.infrastructure.trapper import list_collections  # noqa: F401
 from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import uploader_class as _uploader_class  # noqa: F401

@@ -10,7 +10,7 @@ from wildintel_uploader.shared.camtrap import DeploymentFields
 
 class TrapperCredentials(BaseModel):
     # Any of these left blank falls back to settings.toml (see
-    # services.trapper_service.resolve_credentials).
+    # TrapperClient.credentials).
     url: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None

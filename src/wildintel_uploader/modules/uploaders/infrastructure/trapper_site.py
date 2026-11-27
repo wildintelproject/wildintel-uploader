@@ -1,6 +1,9 @@
-"""TRAPPER's API for an upload, over its SDK (trapper_client, through trapper_service): what a research project has, the location and the
-deployment created from csv files as TRAPPER's import forms take them, the uploader — a different door from the API's, with a login that copes
-with what TRAPPER really answers —, and the processing of a package."""
+"""TRAPPER's API, over its SDK (wildintel-trapper-sdk's trapper_client, the one wildintel-zooniverse and wildintel-publisher use): what a
+research project has, the location and the deployment created from csv files as TRAPPER's import forms take them — the SDK's simulation of the
+classic forms, since the REST API is read-only for deployments —, the uploader — a different door from the API's, with a login that copes with
+what TRAPPER really answers —, the processing of a package, and the images of a deployment downloaded.
+
+No session is kept: every call builds its own client from the account it is given."""
 from __future__ import annotations
 
 import asyncio
@@ -9,11 +12,28 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-import httpx
+import logging
 
+import httpx
+from trapper_client import TrapperClient
+from trapper_client.err import BadRequestError
+
+from wildintel_uploader.modules.uploaders.domain import trapper as rules
 from wildintel_uploader.modules.uploaders.domain.models import Credentials, UploaderError
 from wildintel_uploader.modules.uploaders.domain.ports import Deployment, TrapperSite
-from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
+
+logger = logging.getLogger(__name__)
+
+LIST_PAGE_SIZE = 200
+
+
+def _client(url: str, username: str, password: str) -> TrapperClient:
+    logger.debug("Trapper client for %s as %s", url, username)
+    return TrapperClient(base_url=url.rstrip("/"), user_name=username, user_password=password)
+
+
+def client(credentials: Credentials) -> TrapperClient:
+    return _client(*credentials)
 
 
 def refused(exc: httpx.HTTPStatusError) -> str:
@@ -73,40 +93,79 @@ def _write_location_csv(path: Path, deployment: Deployment) -> None:
 
 
 class TrapperSdk(TrapperSite):
+    def test_connection(self, credentials: Credentials) -> dict:
+        """The account checked with one page of one research project — its pagination still says how many there are."""
+        result = client(credentials).research_projects.get(page=1, page_size=1)
+        return {"ok": True, "research_projects_count": result.pagination.count}
+
     def research_projects(self, credentials: Credentials) -> list[dict]:
-        return trapper_service.list_research_projects(*credentials)
+        projects = client(credentials).research_projects.where(page_size=LIST_PAGE_SIZE)
+        return rules.by_name([{"pk": p.pk, "name": p.name or f"#{p.pk}", "acronym": p.acronym} for p in projects], "name")
 
     def classification_projects(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
-        return trapper_service.list_classification_projects(*credentials, research_project_pk)
+        projects = client(credentials).classification_projects.where(research_project=research_project_pk, page_size=LIST_PAGE_SIZE)
+        return rules.by_name([{"pk": p.pk, "name": p.name, "is_active": p.is_active} for p in projects], "name")
 
     def locations(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
-        return trapper_service.list_locations(*credentials, research_project_pk)
+        """The coordinates (WGS84) and whether it ignores summer time come from TRAPPER's export, since its plain list only has the coordinates
+        as a display string; whether this account can manage one, from whether TRAPPER offers it its deletion — only its owner and managers."""
+        trapper = client(credentials)
+        locations = trapper.locations.where(research_project=research_project_pk, page_size=LIST_PAGE_SIZE)
+        coordinates: dict[int, tuple[float | None, float | None]] = {}
+        ignore_dst: dict[int, bool | None] = {}
+        try:
+            for export in trapper.locations.export(query={"research_project": research_project_pk}):
+                coordinates[export.pk] = (export.latitude, export.longitude)
+                ignore_dst[export.pk] = getattr(export, "ignore_dst", None)
+        except Exception as exc:  # noqa: BLE001 — the locations are still usable, just without coordinates
+            logger.warning("Could not read the locations' coordinates from Trapper: %s", exc)
+        return rules.by_name([
+            {"pk": loc.pk, "location_id": loc.location_id or f"#{loc.pk}", "name": loc.name, "timezone": loc.timezone, "ignore_dst": ignore_dst.get(loc.pk),
+             "latitude": coordinates.get(loc.pk, (None, None))[0], "longitude": coordinates.get(loc.pk, (None, None))[1],
+             "owner": getattr(loc, "owner", None), "can_manage": bool(loc.delete_data) if hasattr(loc, "delete_data") else None}
+            for loc in locations
+        ], "location_id")
 
     def deployments(self, credentials: Credentials, research_project_pk: int) -> list[dict]:
-        return trapper_service.list_deployments(*credentials, research_project_pk)
+        """Shaped like the deployment's own fields, and its pk — from TRAPPER's export, since the plain list doesn't carry the camera or the
+        location."""
+        try:
+            exports = client(credentials).deployments.export(query={"research_project": research_project_pk})
+        except BadRequestError as exc:
+            # a research project with no deployments (or none this account can see) is answered with an error, not with an empty list
+            if "Empty queryset" not in str(exc):
+                raise
+            return []
+        return rules.by_name([{"pk": e.pk, **{field: rules.plain(getattr(e, field, None)) for field, _ in rules.DEPLOYMENT_CSV_COLUMNS}} for e in exports],
+                             "deployment_id")
+
+    def register(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, deployment: Deployment,
+                 timezone: str, ignore_dst: bool) -> None:
+        with tempfile.TemporaryDirectory() as tmp:   # the csv is only for the import
+            path = Path(tmp) / f"{deployment.deployment_id}_deployment.csv"
+            path.write_text(rules.deployment_csv(deployment.model_dump(), timezone, ignore_dst), encoding="utf-8")
+            client(credentials).deployments.import_deployments(file=path, timezone=timezone, research_project=research_project_pk,
+                                                                classification_project=classification_project_pk, ignore_dst=ignore_dst)
 
     def create_location(self, credentials: Credentials, research_project_pk: int, deployment: Deployment, timezone: str, ignore_dst: bool) -> None:
         with tempfile.TemporaryDirectory() as tmp:   # the csv is only for the import
             path = Path(tmp) / f"{deployment.location_id}_location.csv"
             _write_location_csv(path, deployment)
-            trapper_service.client(*credentials).locations.import_locations(file=path, research_project=research_project_pk, timezone=timezone,
-                                                                           ignore_dst=ignore_dst)
+            client(credentials).locations.import_locations(file=path, research_project=research_project_pk, timezone=timezone, ignore_dst=ignore_dst)
 
     def create_deployment(self, credentials: Credentials, research_project_pk: int, deployment: Deployment, timezone: str, ignore_dst: bool,
                           location_id: str) -> None:
         if location_id != deployment.location_id:
             deployment = deployment.model_copy(update={"location_id": location_id})
-        with tempfile.TemporaryDirectory() as tmp:
-            trapper_service.import_deployment(*credentials, research_project_pk, None, deployment, timezone, Path(tmp) / f"{deployment.deployment_id}_deployment.csv",
-                                              ignore_dst=ignore_dst)
+        self.register(credentials, research_project_pk, None, deployment, timezone, ignore_dst)
 
     def _log_in(self, credentials: Credentials) -> None:
         """Logs in to TRAPPER's uploader the way an upload does — and does nothing else. httpx.HTTPStatusError when it is refused."""
-        client = trapper_service.client(*credentials)
+        trapper = client(credentials)
 
         async def login() -> None:
-            async with httpx.AsyncClient(base_url=client.base_url.rstrip("/") + "/", verify=client.verify_ssl) as http:
-                await uploader_class()(client=client)._login(http)
+            async with httpx.AsyncClient(base_url=trapper.base_url.rstrip("/") + "/", verify=trapper.verify_ssl) as http:
+                await uploader_class()(client=trapper)._login(http)
         asyncio.run(login())
 
     def log_in_to_uploader(self, credentials: Credentials) -> None:
@@ -124,7 +183,7 @@ class TrapperSdk(TrapperSite):
                 sent["bytes"] += info["bytes"]
                 report({"type": "upload_progress", "file": path.name, "bytes": sent["bytes"], "total": total})
 
-        uploader = uploader_class()(client=trapper_service.client(*credentials), progress_callback=on_progress)
+        uploader = uploader_class()(client=client(credentials), progress_callback=on_progress)
         try:
             asyncio.run(uploader.upload_file(path, f"/collections/{path.name}"))
         except httpx.HTTPStatusError as exc:
@@ -132,22 +191,40 @@ class TrapperSdk(TrapperSite):
         Path(str(path) + ".uploadmeta.json").unlink(missing_ok=True)
 
     def process(self, credentials: Credentials, yaml_name: str, zip_name: str, remove_zip: bool) -> None:
-        trapper_service.client(*credentials).collections.trigger_collection(payload={"yaml_file": yaml_name, "zip_file": zip_name, "remove_zip": remove_zip},
+        client(credentials).collections.trigger_collection(payload={"yaml_file": yaml_name, "zip_file": zip_name, "remove_zip": remove_zip},
                                                                           raise_on_error=True)
 
     def collection(self, credentials: Credentials, research_project_pk: int, name: str) -> dict | None:
-        found = next((c for c in trapper_service.client(*credentials).collections.where(research_projects=research_project_pk, search=name) if c.name == name), None)
+        found = next((c for c in client(credentials).collections.where(research_projects=research_project_pk, search=name) if c.name == name), None)
         return {"pk": getattr(found, "pk", None), "name": found.name} if found is not None else None
 
     def collection_names(self, credentials: Credentials, classification_project_pk: int) -> list[str]:
-        client = trapper_service.client(*credentials)
-        return [c.name for c in client.classification_projects.where_project_collections(classification_project_pk, page_size=trapper_service.LIST_PAGE_SIZE)]
+        trapper = client(credentials)
+        return [c.name for c in trapper.classification_projects.where_project_collections(classification_project_pk, page_size=LIST_PAGE_SIZE)]
 
     def resources(self, credentials: Credentials, deployment_pk: int) -> list[dict]:
-        return trapper_service.list_deployment_resources(*credentials, deployment_pk)
+        resources = client(credentials).resources.where(deployments=deployment_pk, page_size=LIST_PAGE_SIZE)
+        return [{"pk": r.pk, "name": r.name, "date_recorded": r.date_recorded, "mime": r.mime, "date_recorded_correct": r.date_recorded_correct,
+                 "observation_type": list(r.observation_type), "species": list(r.species), "tags": list(r.tags)} for r in resources]
 
     def media(self, credentials: Credentials, classification_project_pk: int, deployment_pk: int) -> list[dict]:
-        return trapper_service.list_deployment_media(*credentials, classification_project_pk, deployment_pk)
+        """The url is the one TRAPPER serves the file from, with the access token it asks for in its query: without it the file is a 404, even
+        for the account that owns it. The token is made for the account asking, so private images have it too."""
+        media = client(credentials).classification_media.where_project_media(classification_project_pk, deployment=[deployment_pk], page_size=LIST_PAGE_SIZE)
+        return [{"pk": int(m.mediaID), "name": m.fileName, "url": str(m.filePath)} for m in media]
 
     def downloader(self, credentials: Credentials) -> Callable[[str, Path], int]:
-        return trapper_service.file_downloader(*credentials)
+        """Written under a temporary name and moved into place when it is whole, so a stop never leaves half an image. One client serves every
+        call, from as many threads as wanted."""
+        media = client(credentials).classification_media
+
+        def download(file_url: str, destination: Path) -> int:
+            partial = destination.with_name(destination.name + ".part")
+            try:
+                media.download_media_file(file_url, partial)
+                partial.replace(destination)
+            finally:
+                partial.unlink(missing_ok=True)
+            return destination.stat().st_size
+
+        return download
