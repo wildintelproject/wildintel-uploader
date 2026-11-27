@@ -5,23 +5,35 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator
+from typing import TypeVar
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, NotThere, UploaderError
-from wildintel_uploader.modules.uploaders.domain.ports import Deployment, DeploymentUploads, KeptCollections, Trapper, UploadersService, UploadReports
+from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
+from wildintel_uploader.modules.uploaders.domain.ports import (
+    Deployment, DeploymentUploads, KeptCollections, Trapper, UploadersService, UploadPlaces, UploadReports,
+)
 
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 
 class UploadersUseCases(UploadersService):
     """`deployments` gives the module of the deployments when it is needed: it is built with the uploaders among what it uses."""
 
     def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports, uploads: DeploymentUploads | None = None, *,
-                 deployments: Callable[[], DeploymentsService] | None = None) -> None:
+                 deployments: Callable[[], DeploymentsService] | None = None, sending: TrapperUploads | None = None,
+                 places: UploadPlaces | None = None) -> None:
         self._trapper, self._kept, self._reports, self._uploads = trapper, kept, reports, uploads
-        self._deployments = deployments
+        self._deployments, self._sending, self._places = deployments, sending, places
+
+    def _ours(self, call: Callable[[], T]) -> T:
+        try:
+            return call()
+        except Exception as exc:  # noqa: BLE001 — every error is one of the module's
+            raise self._trapper.failure(exc) from exc
 
     def _record(self, project: str) -> dict:
         record = self._kept.project(project)
@@ -93,11 +105,11 @@ class UploadersUseCases(UploadersService):
     def project_classification_projects(self, account: Account, project: str) -> list[dict]:
         credentials = self._trapper.credentials(account)
         record = self._record(project)
-        return self._trapper.ask("list_classification_projects", credentials, self._trapper.find_research_project(credentials, record))
+        return self._trapper.ask("list_classification_projects", credentials, self._ours(lambda: self._sending.research_project_pk(credentials, record)))
 
     def check_selection(self, account: Account, project: str, collection: str | None) -> list[dict]:
         credentials = self._trapper.credentials(account)
-        return self._trapper.check_selection(credentials, self._record(project), collection, self._trapper.describe)
+        return self._sending.check_selection(credentials, self._record(project), collection, describe=self._trapper.describe)
 
     def check_access(self, account: Account, project: str, collection: str | None, deployment_ids: list[str],
                      classification_project_pk: int | None) -> list[dict]:
@@ -107,7 +119,8 @@ class UploadersUseCases(UploadersService):
         if collection:
             collection_dir = self._kept.collection_dir(project, collection)
             location_ids = [loc for d in deployment_ids if (loc := self._kept.location_of(collection_dir, d))]
-        return self._trapper.check_access(credentials, record, location_ids, classification_project_pk, self._trapper.describe)
+        return self._sending.check_access(credentials, record, location_ids, classification_project_pk=classification_project_pk,
+                                          describe=self._trapper.describe)
 
     def upload(self, account: Account, project: str, collection: str, deployment_id: str, mode: str, classification_project_pk: int | None,
                delete_files: bool) -> Iterator[dict]:
@@ -123,7 +136,9 @@ class UploadersUseCases(UploadersService):
         collection_dir = self._kept.collection_dir(project, collection)
         if not (collection_dir / deployment_id).is_dir():
             raise NotThere(f"{deployment_id} isn't in the collection {collection}.")
-        events = self._trapper.upload(credentials, record, collection_dir, deployment_id, mode, classification_project_pk, delete_files)
+        events = self._sending.upload(credentials, record, collection_dir, deployment_id, self._places.packages_dir(record["acronym"]), mode=mode,
+                                      max_zip_bytes=self._places.max_zip_bytes(), classification_project_pk=classification_project_pk,
+                                      delete_after_upload=delete_files)
 
         def keep(note: str | None) -> None:
             if mode == "upload":

@@ -77,7 +77,10 @@ from wildintel_uploader.modules.timefix.infrastructure.images import ExifToolShi
 from wildintel_uploader.modules.timefix.infrastructure.outside import ToleranceInUse, VisitsThroughTheirContract
 from wildintel_uploader.modules.uploaders.application.use_cases import UploadersUseCases
 from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
-from wildintel_uploader.modules.uploaders.infrastructure.trapper import CollectionsFolder, SavedUploadReports, TrapperClient
+from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
+from wildintel_uploader.modules.uploaders.infrastructure.packages import DeploymentFolder, PackagesOnDisk
+from wildintel_uploader.modules.uploaders.infrastructure.trapper import CollectionsFolder, PlacesInUse, SavedUploadReports, TrapperClient
+from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
 from wildintel_uploader.modules.uploaders.infrastructure.uploads import FolderUploads
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
@@ -199,7 +202,13 @@ def build_timefix() -> TimeFixService:
 def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
     """The uploaders: TRAPPER through its client, the collections folder — the one of the settings by default — as the code of before keeps it."""
     return UploadersUseCases(TrapperClient(config), CollectionsFolder(config, catalog_of), SavedUploadReports(build_reports()),
-                             FolderUploads(collections_dir or catalog_collections_dir(), config), deployments=build_deployments)
+                             FolderUploads(collections_dir or catalog_collections_dir(), config), deployments=build_deployments,
+                             sending=trapper_uploads(), places=PlacesInUse(config))
+
+
+def trapper_uploads() -> TrapperUploads:
+    """Uploading to TRAPPER: its API through its SDK, the deployments kept and the packages on disk."""
+    return TrapperUploads(TrapperSdk(), DeploymentFolder(), PackagesOnDisk())
 
 
 def build_backup(collections_dir: Path | None = None, version: Callable[[], str] = current_version) -> BackupService:

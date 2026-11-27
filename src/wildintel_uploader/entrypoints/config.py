@@ -153,6 +153,6 @@ def reports_dir(settings: Settings | None = None) -> Path:
 
 
 def packages_dir(settings: Settings | None = None) -> Path:
-    """Where the packages made to upload to Trapper are written (see services.trapper_upload_service)."""
+    """Where the packages made to upload to Trapper are written (see modules.uploaders)."""
     settings = settings or load_settings()
     return folders.packages_dir(_data(settings), data_dir(settings))

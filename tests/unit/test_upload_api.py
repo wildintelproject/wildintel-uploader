@@ -14,7 +14,8 @@ from tests.unit.test_trapper_upload_service import (  # noqa: F401 — the fixtu
 )
 from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
-from wildintel_uploader.modules.uploaders.infrastructure import trapper_upload_service
+from wildintel_uploader.modules.uploaders.domain import trapper as upload_rules
+from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
 from wildintel_uploader.web.main import app
 
 PAYLOAD = {
@@ -64,7 +65,7 @@ def test_uploading_streams_the_steps_and_ends_with_done(tmp_path: Path, fake_upl
     fake = FakeTrapper()
 
     with _in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
-         patch.object(trapper_service, "_client", return_value=fake), patch.object(trapper_upload_service, "WAIT_FOR_COLLECTION_SECONDS", 0.2):
+         patch.object(trapper_service, "_client", return_value=fake), patch.object(upload_rules, "WAIT_FOR_COLLECTION_SECONDS", 0.2):
         response = _client().post("/api/upload/deployment", json=PAYLOAD)
 
     assert response.status_code == 200
@@ -80,7 +81,7 @@ def test_checking_the_access_gives_one_result_per_check_and_changes_nothing(tmp_
     payload = {k: v for k, v in PAYLOAD.items() if k != "deployment_id"} | {"deployment_ids": [DEPLOYMENT_ID]}
 
     with _in(tmp_path / "collections"), patch.object(trapper_service, "_client", return_value=fake), \
-         patch.object(trapper_upload_service, "_uploader_login", return_value=None):
+         patch.object(TrapperSdk, "_log_in", return_value=None):
         response = _client().post("/api/upload/check-access", json=payload)
 
     assert response.status_code == 200
@@ -188,7 +189,7 @@ def test_when_the_collection_does_not_appear_the_error_says_how_long_it_waited(t
 
     with _in(tmp_path / "collections"), patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
          patch.object(trapper_service, "_client", return_value=FakeTrapper(collections_appear=False)), \
-         patch.object(trapper_upload_service, "WAIT_FOR_COLLECTION_SECONDS", 0.2), patch.object(trapper_upload_service, "POLL_SECONDS", 0.05):
+         patch.object(upload_rules, "WAIT_FOR_COLLECTION_SECONDS", 0.2), patch.object(upload_rules, "POLL_SECONDS", 0.05):
         events = _events(_client().post("/api/upload/deployment", json=PAYLOAD))
 
     assert events[-1]["type"] == "error" and "didn't appear in TRAPPER within 0 seconds" in events[-1]["detail"]

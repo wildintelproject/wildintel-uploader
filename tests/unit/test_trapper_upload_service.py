@@ -1,4 +1,4 @@
-"""services.trapper_upload_service — creating what a deployment needs in Trapper, packing its
+"""Uploading to TRAPPER (modules.uploaders): creating what a deployment needs there, packing its
 images into a zip and a yaml, and uploading them. Trapper itself is faked (no network)."""
 import json
 import sys
@@ -17,7 +17,9 @@ from PIL import Image
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from tests.support import preprocessing_service
 from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
-from wildintel_uploader.modules.uploaders.infrastructure import trapper_upload_service as up
+from tests.support import trapper_upload as up
+from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
+from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
 
 CREDENTIALS = ("https://trapper.example.org", "alice@example.org", "s3cret")
 RECORD = {"name": "Doñana", "acronym": "DONA", "trapper_pk": 2}
@@ -220,7 +222,7 @@ class FakeTrapper:
 def uploader_login(monkeypatch: pytest.MonkeyPatch):
     """The uploader's login is a different door from the API's: stood in for by one that accepts every account (the tests of the refusal replace it)."""
     logins: list[tuple] = []
-    monkeypatch.setattr(up, "_uploader_login", lambda credentials: logins.append(credentials))
+    monkeypatch.setattr(TrapperSdk, "_log_in", lambda self, credentials: logins.append(credentials))
     return logins
 
 
@@ -409,8 +411,8 @@ def test_the_package_declares_the_timezone_and_summer_time_of_the_location_it_go
     fake = FakeTrapper(locations=["DONA_0006_B"], deployments=[DEPLOYMENT_ID.lower()])
     fake.location_settings["DONA_0006_B"] = ("Europe/Madrid", False)  # the import's options say Europe/Madrid, ignoring summer time
     seen = []
-    real = up.build_packages
-    with patch.object(up, "build_packages", side_effect=lambda *a, **kw: seen.append((kw["timezone_name"], kw["ignore_dst"])) or real(*a, **kw)):
+    real = TrapperUploads.build
+    with patch.object(TrapperUploads, "build", autospec=True, side_effect=lambda *a, **kw: seen.append((kw["timezone_name"], kw["ignore_dst"])) or real(*a, **kw)):
         events = _upload(tmp_path, collection, fake)
 
     assert seen == [("Europe/Madrid", False)]
@@ -444,8 +446,8 @@ def test_the_package_names_the_deployment_as_trapper_has_it_not_as_it_is_kept_he
     assert stored != DEPLOYMENT_ID
     fake = FakeTrapper(locations=["DONA_0006_B"], deployments=[stored])
     seen = []
-    real = up.build_packages
-    with patch.object(up, "build_packages", side_effect=lambda *a, **kw: seen.append(kw["trapper_deployment_id"]) or real(*a, **kw)):
+    real = TrapperUploads.build
+    with patch.object(TrapperUploads, "build", autospec=True, side_effect=lambda *a, **kw: seen.append(kw["trapper_deployment_id"]) or real(*a, **kw)):
         events = _upload(tmp_path, collection, fake)
 
     assert seen == [stored]
@@ -614,7 +616,7 @@ def test_the_uploader_refusing_the_account_stops_the_upload_before_anything_is_c
     def refuse(credentials):
         raise httpx.HTTPStatusError("403", request=request, response=response)
 
-    monkeypatch.setattr(up, "_uploader_login", refuse)
+    monkeypatch.setattr(TrapperSdk, "_log_in", lambda self, credentials: refuse(credentials))
     fake = FakeTrapper()
 
     for mode in ("upload", "dry_run"):
@@ -953,7 +955,7 @@ def _refusing_login(monkeypatch: pytest.MonkeyPatch, status: int | None) -> None
             request = httpx.Request("POST", "https://trapper.example.org/uploader/auth/login")
             raise httpx.HTTPStatusError(str(status), request=request, response=httpx.Response(status, request=request, text="nope"))
 
-    monkeypatch.setattr(up, "_uploader_login", login)
+    monkeypatch.setattr(TrapperSdk, "_log_in", lambda self, credentials: login(credentials))
 
 
 def test_checking_the_access_reports_the_project_the_locations_and_the_uploader(monkeypatch: pytest.MonkeyPatch):

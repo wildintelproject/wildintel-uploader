@@ -38,8 +38,8 @@ class FolderUploads(DeploymentUploads):
 
     @staticmethod
     def _upload(folder: Path):
-        from wildintel_uploader.modules.uploaders.infrastructure import trapper_upload_service
-        return _read_json(folder / trapper_upload_service.UPLOAD_LOG_FILE)
+        from wildintel_uploader.modules.uploaders.infrastructure.packages import UPLOAD_LOG_FILE
+        return _read_json(folder / UPLOAD_LOG_FILE)
 
     def trapper_state(self, project: str, deployment_id: str | None) -> tuple[str | None, bool]:
         """Whether the deployment a visit gave is on Trapper — uploaded from here, or synced from there — and when it was uploaded."""

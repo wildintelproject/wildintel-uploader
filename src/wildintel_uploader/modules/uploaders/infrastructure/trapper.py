@@ -1,8 +1,10 @@
-"""Trapper over the code of before — trapper_service, trapper_upload_service, sync_service — and its
-errors as the module's: what the client of TRAPPER says of an account or a resource, of the network, or the words of what the uploads refuse."""
+"""TRAPPER for the uploaders — the account, as the settings keep it; what TRAPPER has, through its SDK (trapper_service); a deployment
+registered from the wizard; the sync (sync_service) — and its errors as the module's: what the client of TRAPPER says of an account or a resource,
+of the network, or the words of what the uploads refuse. And the research projects and the collections kept in the collections folder."""
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, TypeVar
@@ -13,8 +15,10 @@ from wildintel_uploader.modules.uploaders.domain.models import (
 from wildintel_uploader.modules.deployments.domain.naming import DEPLOYMENT_METADATA_FILE
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.uploaders.infrastructure import failures
+from wildintel_uploader.modules.uploaders.infrastructure.packages import UPLOAD_LOG_FILE, read_json, size_of
+from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
-from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, UploadReports
+from wildintel_uploader.modules.uploaders.domain.ports import Deployment, KeptCollections, Trapper, UploadPlaces, UploadReports
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
 
@@ -25,16 +29,14 @@ T = TypeVar("T")
 def _services():
     from wildintel_uploader.modules.uploaders.infrastructure import sync_service
     from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
-    from wildintel_uploader.modules.uploaders.infrastructure import trapper_upload_service
-    return trapper_service, trapper_upload_service, sync_service
+    return trapper_service, None, sync_service
 
 
 def _own_words(exc: Exception) -> bool:
     """Whether an error says what it is in its own words: what the uploads, the collections or the imports refuse."""
     from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
-    from wildintel_uploader.modules.uploaders.infrastructure import trapper_upload_service
     from wildintel_uploader.shared.storage import StorageError
-    return isinstance(exc, (trapper_upload_service.TrapperUploadError, StorageError, DeploymentsError))
+    return isinstance(exc, (StorageError, DeploymentsError))
 
 
 def as_uploader_error(exc: Exception) -> UploaderError:
@@ -81,36 +83,25 @@ class TrapperClient(Trapper):
         self._settings = settings   # the settings as settings.toml keeps them
 
     def credentials(self, account: Account) -> Credentials:
-        try:
-            return _services()[0].resolve_credentials(account.url, account.username, account.password)
-        except ValueError as exc:
-            raise UploaderError(str(exc)) from exc
+        """The account, completed from the settings — what is still missing named."""
+        trapper = self._settings.load_settings().TRAPPER
+        resolved = (account.url or trapper.base_url, account.username or trapper.user_name, account.password or trapper.user_password)
+        missing = [name for name, value in zip(("URL", "username", "password"), resolved) if not value]
+        if missing:
+            raise UploaderError(f"Missing TRAPPER {', '.join(missing)} — provide it, or save it in the configuration first.")
+        return resolved  # type: ignore[return-value]
 
     def defaults(self) -> dict:
-        return _services()[0].get_connection_defaults()
+        trapper = self._settings.load_settings().TRAPPER
+        return {"base_url": trapper.base_url, "user_name": trapper.user_name, "has_password": bool(trapper.user_password)}
 
     def keep_account(self, credentials: Credentials) -> None:
-        _services()[0].save_credentials(*credentials)
+        settings = self._settings.load_settings()
+        settings.TRAPPER.base_url, settings.TRAPPER.user_name, settings.TRAPPER.user_password = credentials
+        self._settings.save_settings(settings)
 
     def ask(self, what: str, credentials: Credentials, *args: Any) -> Any:
         return _ours(lambda: getattr(_services()[0], what)(*credentials, *args), "Trapper call")
-
-    def find_research_project(self, credentials: Credentials, record: dict) -> int:
-        return _ours(lambda: _services()[1].find_research_project(credentials, record), "Reading the classification projects")
-
-    def check_selection(self, credentials: Credentials, record: dict, collection: str | None, describe: Callable[[Exception], str]) -> list[dict]:
-        return _services()[1].check_selection(credentials, record, collection, describe=describe)
-
-    def check_access(self, credentials: Credentials, record: dict, location_ids: list[str], classification_project_pk: int | None,
-                     describe: Callable[[Exception], str]) -> list[dict]:
-        return _services()[1].check_access(credentials, record, location_ids, classification_project_pk=classification_project_pk, describe=describe)
-
-    def upload(self, credentials: Credentials | None, record: dict, collection_dir: Path, deployment_id: str, mode: str, classification_project_pk: int | None,
-               delete_files: bool) -> Iterator[dict]:
-        config = self._settings
-        return _services()[1].upload_stream(credentials, record, collection_dir, deployment_id, config.packages_dir() / record["acronym"], mode=mode,
-                                            max_zip_bytes=config.max_zip_mb() * 1024 * 1024, classification_project_pk=classification_project_pk,
-                                            delete_after_upload=delete_files)
 
     def register(self, credentials: Credentials, research_project_pk: int, classification_project_pk: int | None, deployment: Deployment, timezone: str,
                  ignore_dst: bool) -> None:
@@ -127,6 +118,13 @@ class TrapperClient(Trapper):
              download_images: bool) -> Iterator[dict]:
         events = _services()[2].sync_stream(credentials, self._settings.collections_dir(), project, classification_project_pk, collections, deployments, download_images)
         return _told(events, "Syncing the local collections")
+
+    def failure(self, exc: Exception) -> UploaderError:
+        """An error of TRAPPER, of the network or of what is asked of it, as the module's — logged when it is not one of its own."""
+        if not isinstance(exc, UploaderError):
+            from wildintel_uploader.shared.logs import debugging
+            logger.warning("A TRAPPER call failed: %s", exc, exc_info=debugging())
+        return as_uploader_error(exc)
 
     def describe(self, exc: Exception) -> str:
         from wildintel_uploader.shared.logs import debugging
@@ -158,10 +156,10 @@ class CollectionsFolder(KeptCollections):
         return self._failed(lambda: (self._root() / valid_project_id(project)) / collection)
 
     def collections(self, project: str) -> list[dict]:
-        return self._failed(lambda: _services()[1].list_collections(self._root(), project))
+        return self._failed(lambda: list_collections(self._root(), project))
 
     def location_of(self, collection_dir: Path, deployment_id: str) -> str | None:
-        metadata = _services()[1]._read_json(collection_dir / deployment_id / DEPLOYMENT_METADATA_FILE)
+        metadata = read_json(collection_dir / deployment_id / DEPLOYMENT_METADATA_FILE)
         return metadata.get("location_id") if isinstance(metadata, dict) else None
 
     def location_time(self, project: str, location_id: str | None) -> dict:
@@ -185,3 +183,48 @@ class SavedUploadReports(UploadReports):
 
     def upload(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str | None:
         return self._reports.save_upload(collection, project, items, started_at, finished_at)
+
+
+_COLLECTION_RE = re.compile(r"^R\d{4}(_.+)?$")
+_DEPLOYMENT_RE = re.compile(r"^R\d{4}-.+$")
+
+
+def list_collections(collections_dir: Path, research_project_id: str) -> list[dict]:
+    """The collections kept for a research project, and the deployments in each: how many images, whether it was preprocessed (a requirement) and
+    whether it was uploaded."""
+    project = collections_dir / valid_project_id(research_project_id)
+    if not project.is_dir():
+        return []
+    collections = []
+    for collection in sorted(project.iterdir()):
+        if not (collection.is_dir() and _COLLECTION_RE.match(collection.name)):
+            continue
+        deployments = []
+        for folder in sorted(collection.iterdir()):
+            metadata = read_json(folder / DEPLOYMENT_METADATA_FILE) if folder.is_dir() and _DEPLOYMENT_RE.match(folder.name) else None
+            if not isinstance(metadata, dict):
+                continue
+            log = read_json(folder / PREPROCESSING_LOG_FILE)
+            upload = read_json(folder / UPLOAD_LOG_FILE)
+            images = log["images"] if isinstance(log, dict) and isinstance(log.get("images"), list) else []
+            deployments.append({
+                "deployment_id": folder.name, "location_id": metadata.get("location_id"), "start_date": metadata.get("start_date"),
+                "end_date": metadata.get("end_date"), "images": len(images),
+                "bytes": sum(size_of(folder / e["name"]) for e in images if isinstance(e, dict) and e.get("name")),
+                "preprocessed": isinstance(log, dict), "uploaded_at": upload.get("uploaded_at") if isinstance(upload, dict) else None,
+            })
+        collections.append({"name": collection.name, "path": str(collection), "deployments": deployments})
+    return collections
+
+
+class PlacesInUse(UploadPlaces):
+    """Where the packages are made and how big a zip may be, as the settings say."""
+
+    def __init__(self, settings: StoredSettings) -> None:
+        self._settings = settings
+
+    def packages_dir(self, project: str) -> Path:
+        return self._settings.packages_dir() / project
+
+    def max_zip_bytes(self) -> int:
+        return self._settings.max_zip_mb() * 1024 * 1024

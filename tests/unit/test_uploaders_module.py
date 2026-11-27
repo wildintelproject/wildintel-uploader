@@ -52,6 +52,28 @@ class Kept:
         self.notes.append(note)
 
 
+class Sending:
+    """The upload itself: what it tells."""
+
+    def __init__(self, events) -> None:
+        self.events = events
+
+    def upload(self, *args, **kwargs):
+        return iter(self.events)
+
+
+class Places:
+    def packages_dir(self, project):
+        return Path("/packages") / project
+
+    def max_zip_bytes(self):
+        return 1
+
+
+def _uploaders(events, kept):
+    return UploadersUseCases(Trapper(events), kept, None, sending=Sending(events), places=Places())
+
+
 def _failing():
     yield {"type": "start"}
     raise RuntimeError("the network went away")
@@ -60,14 +82,14 @@ def _failing():
 def test_an_upload_that_fails_is_written_down_and_one_that_works_clears_it(tmp_path: Path):
     (tmp_path / "R0001" / "R0001-DONA_01").mkdir(parents=True)
     kept = Kept(tmp_path)
-    done = UploadersUseCases(Trapper([{"type": "done"}]), kept, None).upload(Account(), "DONA", "R0001", "R0001-DONA_01", "upload", None, False)
+    done = _uploaders([{"type": "done"}], kept).upload(Account(), "DONA", "R0001", "R0001-DONA_01", "upload", None, False)
     assert list(done) == [{"type": "done"}] and kept.notes == [None]
-    failed = UploadersUseCases(Trapper(_failing()), kept, None).upload(Account(), "DONA", "R0001", "R0001-DONA_01", "upload", None, False)
+    failed = _uploaders(_failing(), kept).upload(Account(), "DONA", "R0001", "R0001-DONA_01", "upload", None, False)
     with pytest.raises(UploaderError, match="the network went away"):
         list(failed)
     assert kept.notes == [None, "the network went away"]
     with pytest.raises(NotThere, match="isn't in the collections folder"):
-        UploadersUseCases(Trapper([]), kept, None).upload(Account(), "NOPE", "R0001", "R0001-DONA_01", "upload", None, False)
+        _uploaders([], kept).upload(Account(), "NOPE", "R0001", "R0001-DONA_01", "upload", None, False)
 
 
 def test_its_settings_are_its_own():
@@ -106,3 +128,109 @@ def test_a_deployment_is_organized_by_the_deployments_and_then_registered():
     assert [e["type"] for e in events] == ["copy", "registering", "done"] and trapper.registered == [("Europe/Madrid", False)]
     with pytest.raises(UploaderError, match="A timezone is required"):
         service.import_deployment(Account(), 2, None, "src", Deployment(), "DONA", True)
+
+
+# ── an upload, over ports in memory: no SDK, no disk ─────────────────────────
+
+class Site:
+    def __init__(self) -> None:
+        self.made, self.sent, self.processed = [], [], []
+
+    def research_projects(self, c):
+        return [{"pk": 2, "acronym": "DONA", "name": "Doñana"}]
+
+    def classification_projects(self, c, pk):
+        return [{"pk": 7, "name": "Doñana classification"}]
+
+    def locations(self, c, pk):
+        return [{"pk": 1, "location_id": "dona_01", "timezone": "Europe/Madrid", "ignore_dst": False}] if "location" in self.made else []
+
+    def deployments(self, c, pk):
+        return [{"pk": 3, "deployment_id": "r0001-dona_01"}] if "deployment" in self.made else []
+
+    def create_location(self, c, pk, deployment, timezone, ignore_dst):
+        self.made.append("location")
+
+    def create_deployment(self, c, pk, deployment, timezone, ignore_dst, location_id):
+        self.made.append("deployment")
+        assert location_id == "dona_01"                     # named as TRAPPER has it
+
+    def log_in_to_uploader(self, c):
+        pass
+
+    def upload_file(self, c, path, report):
+        self.sent.append(path.name)
+
+    def process(self, c, yaml_name, zip_name, remove_zip):
+        self.processed.append((yaml_name, zip_name))
+
+    def collection(self, c, pk, name):
+        return {"pk": 26, "name": name}
+
+
+class KeptHere:
+    def __init__(self) -> None:
+        self.marked = None
+
+    def metadata(self, d):
+        return {"deployment_id": "R0001-DONA_01", "location_id": "DONA_01"}
+
+    def preprocessing(self, d):
+        return {"images": [{"name": "a.jpg", "date": "2026-01-01T10:00:00+00:00"}, {"name": "b.jpg", "date": "2026-01-01T11:00:00+00:00"}],
+                "options": {"timezone": "UTC", "ignore_dst": True}}
+
+    def as_deployment(self, metadata):
+        from types import SimpleNamespace
+        return SimpleNamespace(camera_model="X", longitude=1, latitude=2, start_date=None, end_date=None, **metadata)
+
+    def missing(self, d, names):
+        return []
+
+    def sizes(self, d, names):
+        return [10 for _ in names]
+
+    def mark_uploaded(self, d, record):
+        self.marked = record
+
+
+class PackagesHere:
+    def __init__(self) -> None:
+        self.parts, self.rows, self.removed = [], [], []
+
+    def build(self, output_dir, parts, progress):
+        from wildintel_uploader.modules.uploaders.domain.ports import Package
+        self.parts = parts
+        return [Package(output_dir / f"{p.base}.yaml", output_dir / f"{p.base}.zip", len(p.entries)) for p in parts]
+
+    def size(self, paths):
+        return 100
+
+    def file_sizes(self, paths):
+        return {}
+
+    def upsert_csv(self, path, row):
+        self.rows.append(row)
+        return {"path": str(path), "action": "added", "rows": 1}
+
+    def remove_from_csv(self, path, deployment_id):
+        pass
+
+    def remove(self, packages, output_dir):
+        self.removed += packages
+
+
+def test_an_upload_creates_what_trapper_lacks_declares_the_locations_time_and_marks_the_deployment_over_any_ports():
+    from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
+
+    site, kept, packages = Site(), KeptHere(), PackagesHere()
+    uploads = TrapperUploads(site, kept, packages, sleep=lambda s: None)
+    events = list(uploads.upload(("https://t.org", "ana", "pw"), {"acronym": "DONA"}, Path("/c/R0001"), "R0001-DONA_01", Path("/packages"),
+                                 max_zip_bytes=10))
+
+    assert site.made == ["location", "deployment"] and len(site.processed) == 2              # two parts: 10 bytes each, at most 10 a zip
+    assert [(p.timezone, p.ignore_dst, p.named, p.collection) for p in packages.parts][0] == ("Europe/Madrid", False, "r0001-dona_01", "DONA-R0001")
+    assert kept.marked["collection_url"] == "https://t.org/storage/collection/detail/26/" and events[-1]["files_deleted"] is True
+    dry = list(TrapperUploads(Site(), KeptHere(), PackagesHere()).upload(("https://t.org", "ana", "pw"), {"acronym": "DONA"}, Path("/c/R0001"),
+                                                                           "R0001-DONA_01", Path("/p"), mode="dry_run"))
+    assert dry[-1] == {"type": "done", "mode": "dry_run", "collection": "R0001", "deployment_id": "R0001-DONA_01", "would_create_location": True,
+                       "would_create_deployment": True, "parts": 1}

@@ -22,7 +22,6 @@ from zoneinfo import ZoneInfo
 from trapper_client import TrapperClient
 from trapper_client.err import BadRequestError
 
-from wildintel_uploader.modules.uploaders.infrastructure.plugs import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
 
 logger = logging.getLogger(__name__)
@@ -68,35 +67,6 @@ def _client(url: str, username: str, password: str) -> TrapperClient:
 def client(url: str, username: str, password: str) -> TrapperClient:
     """A Trapper client, for services doing more than listing."""
     return _client(url, username, password)
-
-
-def get_connection_defaults() -> dict:
-    settings = config.load_settings()
-    return {
-        "base_url": settings.TRAPPER.base_url,
-        "user_name": settings.TRAPPER.user_name,
-        "has_password": bool(settings.TRAPPER.user_password),
-    }
-
-
-def resolve_credentials(url: str | None, username: str | None, password: str | None) -> tuple[str, str, str]:
-    """Raises:
-        ValueError: naming whatever is still missing after the fallback.
-    """
-    trapper = config.load_settings().TRAPPER
-    resolved = (url or trapper.base_url, username or trapper.user_name, password or trapper.user_password)
-    missing = [name for name, value in zip(("URL", "username", "password"), resolved) if not value]
-    if missing:
-        raise ValueError(f"Missing TRAPPER {', '.join(missing)} — provide it, or save it in the configuration first.")
-    return resolved  # type: ignore[return-value]
-
-
-def save_credentials(url: str, username: str, password: str) -> None:
-    settings = config.load_settings()
-    settings.TRAPPER.base_url = url
-    settings.TRAPPER.user_name = username
-    settings.TRAPPER.user_password = password
-    config.save_settings(settings)
 
 
 def test_connection(url: str, username: str, password: str) -> dict:
