@@ -45,6 +45,12 @@ class SourcesUseCases(SourcesService):
         return {"ok": True, "project": parsed["project"]["name"], "slug": parsed["project"]["slug"],
                 "forms": len({i["form"] for i in parsed["inputs"]}), "inputs": len(parsed["inputs"])}
 
+    def location_entries(self, location_id: str, revision: int | None, settings: Epicollect5Settings | None = None) -> list[dict]:
+        wanted = location_id.strip().lower()
+        if not wanted:
+            raise SourceError("Choose the location first.")
+        return self.deployment_entries([wanted], revision, settings)[wanted]
+
     def deployment_entries(self, location_ids: list[str], revision: int | None, settings: Epicollect5Settings | None = None) -> dict[str, list[dict]]:
         cfg = self._epicollect5(settings)
         if not cfg.enabled:

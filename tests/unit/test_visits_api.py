@@ -825,13 +825,12 @@ EPI_ENTRIES = [
 
 
 def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_camera_at_the_site(tmp_path: Path):
-    import pytest  # noqa: PLC0415
     from unittest.mock import patch  # noqa: PLC0415
-    from tests.support import epicollect_service  # noqa: PLC0415
+    from tests.support import built
     from wildintel_uploader.modules.sources.infrastructure.epicollect5 import PyEpicollect5  # noqa: PLC0415
     from wildintel_uploader.modules.sources.infrastructure.sources import epicollect_api  # noqa: PLC0415
     with patch.object(epicollect_api, "project_form", return_value={"project": {}, "inputs": EPI_INPUTS}), patch.object(PyEpicollect5, "entries", return_value=EPI_ENTRIES):
-        text = epicollect_service.visits_csv()
+        text = built.sources().visits("epicollect-api").csv
         done = _import(tmp_path, "", save=True, fmt="epicollect-api", given_up="2000-01-01")
     rows = {r["date"]: r for r in __import__("csv").DictReader(__import__("io").StringIO(text))}
     assert rows["2026-10-02"]["actions"] == "Installation" and rows["2026-10-02"]["camera_height"] == "0.5" and rows["2026-10-02"]["calibration"] == "yes"
@@ -847,11 +846,12 @@ def test_the_entries_of_epicollect_become_visits_and_an_inspection_is_of_the_cam
 def test_a_form_that_is_not_the_one_of_a_visit_is_said_plainly():
     import pytest  # noqa: PLC0415
     from unittest.mock import patch  # noqa: PLC0415
-    from tests.support import epicollect_service  # noqa: PLC0415
+    from tests.support import built
+    from wildintel_uploader.modules.sources.domain.models import SourceError
     from wildintel_uploader.modules.sources.infrastructure.sources import epicollect_api  # noqa: PLC0415
     with patch.object(epicollect_api, "project_form", return_value={"project": {}, "inputs": [{"ref": "x", "label": "Other"}]}):
-        with pytest.raises(epicollect_service.EpicollectError, match="locationID"):
-            epicollect_service.visits_csv()
+        with pytest.raises(SourceError, match="locationID"):
+            built.sources().visits("epicollect-api").csv
 
 
 @pytest.mark.gps
@@ -1291,8 +1291,8 @@ def test_a_visit_of_a_revision_is_after_those_of_the_revisions_before_it_and_bef
 # ── the new form of Epicollect: its cut headers, the inactive site and the camera removed after a theft ─────────
 
 def test_an_inactive_site_has_a_camera_put_up_again_and_a_camera_removed_after_a_theft_is_a_theft_alone():
-    from tests.support import epicollect_service
-    actions = epicollect_service.visit_actions
+    from wildintel_uploader.modules.sources.domain.models import visit_actions
+    actions = visit_actions
     assert actions("New site", None, None) == actions("Inactive site", None, None) == "Installation"
     assert actions("Stolen", None, "Camera replacement") == "Stolen + Installation"
     assert actions("Stolen", None, "Site removal") == "Stolen + Archive"
@@ -1306,12 +1306,14 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
     import csv
     import io
 
-    from tests.support import epicollect_service
+
+
+    from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import visits_from_csv
     folder = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
 
     def read(name: str) -> tuple[str, list[dict]]:
         text = (folder / name).read_text(encoding="utf-8")
-        return text, list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+        return text, list(csv.DictReader(io.StringIO(visits_from_csv(text))))
 
     text, rows = read("revision_5_replacement_removal_and_site_given_up.csv")
     assert all(h in text for h in ("4_Status_of_the_came", "7_N_pictures_collect", "9_Action_after_inspe", "10_Action_after_thef"))   # as Epicollect5 cuts them
@@ -1880,10 +1882,12 @@ def test_the_question_action_after_inspection_of_the_form_is_found_whole_and_cut
     import csv
     import io
 
-    from tests.support import epicollect_service
+
+
+    from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import visits_from_csv
     for header in ("10_Action_after_insp", "10_Action_after_inspection"):
         text = f"ec5_uuid,created_at,4_locationID,5_Status_of_the_came,{header}\nr1,2026-09-14T08:30:00.000Z,DONA_01,OK,Camera removal\n"
-        [row] = list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+        [row] = list(csv.DictReader(io.StringIO(visits_from_csv(text))))
         assert row["actions"] == "Revision + Desinstallation"
 
 
@@ -1956,11 +1960,11 @@ def test_a_visit_that_says_new_site_makes_its_site_with_no_need_of_the_switch_an
 
 
 def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its_entry_was_created():
-    from tests.support import epicollect_service
+    from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import visits_from_csv
     text = "ec5_uuid,created_at,1_setupBy,4_locationID,5_Status_of_the_came,10_Action_after_the_\nr1,2026-09-14T08:30:00.000Z,Ana,DONA_01,OK,\n"
     import csv
     import io
-    [row] = list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+    [row] = list(csv.DictReader(io.StringIO(visits_from_csv(text))))
     assert row["location_id"] == "DONA_01" and row["created_at"] == "2026-09-14T08:30:00.000Z" and not row["date"] and not row["time"]
 
 

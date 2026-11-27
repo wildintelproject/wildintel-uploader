@@ -11,7 +11,10 @@ import pytest
 from PIL import Image
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from tests.support import preprocessing_service as pre
+from tests.support import built
+from wildintel_uploader.modules.preprocessing.domain import models
+from wildintel_uploader.modules.preprocessing.domain.models import PreprocessingError, PreprocessOptions
+from wildintel_uploader.modules.preprocessing.infrastructure.steps import metadata, resize
 from wildintel_uploader.modules.preprocessing.infrastructure import folders as folders_adapter
 from wildintel_uploader.modules.preprocessing.infrastructure.steps import metadata as xmp_step
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
@@ -22,7 +25,17 @@ DEPLOYMENT = DeploymentFields.model_validate({
     "deployment_id": "R0003-DONA_01", "location_id": "DONA_01", "location_name": "Doñana site 1", "latitude": 37.0, "longitude": -6.5,
     "start_date": "2024-07-01T00:00:00+02:00", "end_date": "2024-07-31T00:00:00+02:00",
 })
-NO_XMP = pre.PreprocessOptions(metadata=False, timezone="Europe/Madrid")
+NO_XMP = PreprocessOptions(metadata=False, timezone="Europe/Madrid")
+
+
+def _capture_datetime(path: Path, options: PreprocessOptions) -> tuple:
+    """The capture date the step of the preprocessing gives an image — in UTC if asked — and where it came from: "exif", or "file"."""
+    from wildintel_uploader.modules.preprocessing.domain.models import ImageWork, as_kept
+    from wildintel_uploader.modules.preprocessing.domain.steps import Job
+    from wildintel_uploader.modules.preprocessing.infrastructure.steps import capture_date
+    job = Job(options=options, deployment=None, info=built.file_info(), dates={})  # type: ignore[arg-type]
+    _, aware, source = capture_date.camera_time(ImageWork(0, path, path.parent, path.parent), job)
+    return as_kept(aware, options), source
 
 
 def _jpeg(path: Path, *, taken: str | None = "2024:07:01 10:00:00", size=(3000, 2000), make="RECONYX", model="HF2 PRO COVERT", color="red") -> Path:
@@ -40,26 +53,26 @@ def _jpeg(path: Path, *, taken: str | None = "2024:07:01 10:00:00", size=(3000, 
 
 
 def _run(source: Path, collection: Path, options=NO_XMP, deployment=DEPLOYMENT, name=None) -> list[dict]:
-    return list(pre.preprocess_stream(str(source), str(collection), name, deployment, options))
+    return list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), name, deployment, options))
 
 
 # ── dates ────────────────────────────────────────────────────────────────────
 
 def test_ignoring_summer_time_reads_the_clock_in_the_standard_offset_all_year():
-    zone = pre.zone_of("Europe/Madrid")
-    summer = pre.localize(datetime(2024, 7, 1, 10, 0), zone, ignore_dst=True)
-    winter = pre.localize(datetime(2024, 1, 1, 10, 0), zone, ignore_dst=True)
+    zone = models.zone_of("Europe/Madrid")
+    summer = models.localize(datetime(2024, 7, 1, 10, 0), zone, ignore_dst=True)
+    winter = models.localize(datetime(2024, 1, 1, 10, 0), zone, ignore_dst=True)
 
     assert summer.utcoffset().total_seconds() == 3600 and winter.utcoffset().total_seconds() == 3600  # +01:00 both
-    assert pre.localize(datetime(2024, 7, 1, 10, 0), zone, ignore_dst=False).utcoffset().total_seconds() == 7200  # +02:00 in summer
+    assert models.localize(datetime(2024, 7, 1, 10, 0), zone, ignore_dst=False).utcoffset().total_seconds() == 7200  # +02:00 in summer
 
 
 def test_the_capture_date_is_converted_to_utc(tmp_path: Path):
     image = _jpeg(tmp_path / "a.jpg", taken="2024:07:01 10:00:00")
 
-    utc, source = pre.capture_datetime(image, pre.PreprocessOptions(timezone="Europe/Madrid", ignore_dst=True, convert_to_utc=True))
-    dst, _ = pre.capture_datetime(image, pre.PreprocessOptions(timezone="Europe/Madrid", ignore_dst=False, convert_to_utc=True))
-    local, _ = pre.capture_datetime(image, pre.PreprocessOptions(timezone="Europe/Madrid", ignore_dst=False, convert_to_utc=False))
+    utc, source = _capture_datetime(image, PreprocessOptions(timezone="Europe/Madrid", ignore_dst=True, convert_to_utc=True))
+    dst, _ = _capture_datetime(image, PreprocessOptions(timezone="Europe/Madrid", ignore_dst=False, convert_to_utc=True))
+    local, _ = _capture_datetime(image, PreprocessOptions(timezone="Europe/Madrid", ignore_dst=False, convert_to_utc=False))
 
     assert source == "exif"
     assert utc == datetime(2024, 7, 1, 9, 0, tzinfo=timezone.utc)   # 10:00 at +01:00
@@ -79,17 +92,17 @@ def test_the_capture_date_falls_back_from_the_original_to_the_digitized_date_to_
     exif.get_ifd(0x8769)[36867] = "0000:00:00 00:00:00"  # what some cameras write when the clock is unset
     img.save(no_data, exif=exif)
     bare = _jpeg(tmp_path / "bare.jpg", taken=None)
-    options = pre.PreprocessOptions(timezone="UTC", convert_to_utc=False)
+    options = PreprocessOptions(timezone="UTC", convert_to_utc=False)
 
-    assert pre.capture_datetime(digitized, options) == (datetime(2024, 5, 5, 5, 5, 5, tzinfo=pre.zone_of("UTC")), "exif")
-    assert pre.capture_datetime(no_data, options)[1] == "file"
-    date, source = pre.capture_datetime(bare, options)
+    assert _capture_datetime(digitized, options) == (datetime(2024, 5, 5, 5, 5, 5, tzinfo=models.zone_of("UTC")), "exif")
+    assert _capture_datetime(no_data, options)[1] == "file"
+    date, source = _capture_datetime(bare, options)
     assert source == "file" and abs((date.replace(tzinfo=None) - datetime.fromtimestamp(bare.stat().st_mtime)).total_seconds()) < 2
 
 
 def test_an_unknown_timezone_is_refused():
-    with pytest.raises(pre.DeploymentImportError, match="Unknown timezone"):
-        pre.zone_of("Mars/Olympus")
+    with pytest.raises(PreprocessingError, match="Unknown timezone"):
+        models.zone_of("Mars/Olympus")
 
 
 # ── names ────────────────────────────────────────────────────────────────────
@@ -97,9 +110,9 @@ def test_an_unknown_timezone_is_refused():
 def test_the_new_name_is_deployment_date_and_position_in_upper_case():
     date = datetime(2024, 7, 1, 9, 0, tzinfo=timezone.utc)
 
-    assert pre.new_name("R0003-DONA_01", date, 7, ".jpg") == "R0003-DONA_01__20240701_7.JPEG"
-    assert pre.new_name("R0003-DONA_01", date, 12, ".JPEG") == "R0003-DONA_01__20240701_12.JPEG"
-    assert pre.new_name("R0003-DONA_01", date, 1, ".png") == "R0003-DONA_01__20240701_1.PNG"
+    assert models.new_name("R0003-DONA_01", date, 7, ".jpg") == "R0003-DONA_01__20240701_7.JPEG"
+    assert models.new_name("R0003-DONA_01", date, 12, ".JPEG") == "R0003-DONA_01__20240701_12.JPEG"
+    assert models.new_name("R0003-DONA_01", date, 1, ".png") == "R0003-DONA_01__20240701_1.PNG"
 
 
 # ── resizing ─────────────────────────────────────────────────────────────────
@@ -107,7 +120,7 @@ def test_the_new_name_is_deployment_date_and_position_in_upper_case():
 def test_a_wide_image_is_resized_to_the_width_keeping_its_proportions_exif_and_all(tmp_path: Path):
     source = _jpeg(tmp_path / "big.jpg", size=(4800, 3200))
 
-    resized = pre.resize_to_width(source, tmp_path / "out.jpg", 2400)
+    resized = resize.resize_to_width(source, tmp_path / "out.jpg", 2400, built.file_info().mark_decoded)
 
     assert resized is True
     with Image.open(tmp_path / "out.jpg") as img:
@@ -120,7 +133,7 @@ def test_the_resize_keeps_the_jpeg_quality_the_original_had(tmp_path: Path):
     source = tmp_path / "low.jpg"
     Image.effect_noise((4800, 3200), 40).convert("RGB").save(source, "JPEG", quality=60)
 
-    pre.resize_to_width(source, tmp_path / "out.jpg", 2400)
+    resize.resize_to_width(source, tmp_path / "out.jpg", 2400, built.file_info().mark_decoded)
 
     with Image.open(source) as before, Image.open(tmp_path / "out.jpg") as after:
         assert after.quantization == before.quantization   # not re-encoded at a fixed, higher quality
@@ -130,7 +143,7 @@ def test_the_resize_keeps_the_jpeg_quality_the_original_had(tmp_path: Path):
 def test_an_image_no_wider_than_the_width_is_left_exactly_as_it_is(tmp_path: Path):
     source = _jpeg(tmp_path / "small.jpg", size=(1200, 800))
 
-    assert pre.resize_to_width(source, tmp_path / "out.jpg", 2400) is False
+    assert resize.resize_to_width(source, tmp_path / "out.jpg", 2400, built.file_info().mark_decoded) is False
     assert (tmp_path / "out.jpg").read_bytes() == source.read_bytes()  # not even re-encoded
 
 
@@ -138,7 +151,7 @@ def test_the_resize_keeps_the_format(tmp_path: Path):
     png = tmp_path / "a.png"
     Image.new("RGB", (3000, 1000), "blue").save(png)
 
-    pre.resize_to_width(png, tmp_path / "out.png", 1500)
+    resize.resize_to_width(png, tmp_path / "out.png", 1500, built.file_info().mark_decoded)
 
     with Image.open(tmp_path / "out.png") as img:
         assert img.format == "PNG" and img.size == (1500, 500)
@@ -147,9 +160,8 @@ def test_the_resize_keeps_the_format(tmp_path: Path):
 # ── the XMP tags ─────────────────────────────────────────────────────────────
 
 def _tags(**overrides) -> dict:
-    options = pre.PreprocessOptions(owner="Universidad de Huelva", publisher="WildINTEL", coverage="Doñana National Park", research_project="Doñana", **overrides)
-    return pre.xmp_tags(options, DEPLOYMENT, camera="RECONYX HF2 PRO COVERT", date=datetime(2024, 7, 1, 9, 0, tzinfo=timezone.utc),
-                        mime="image/jpeg", source_hash="aaa", image_hash="bbb", year=2026)
+    options = PreprocessOptions(owner="Universidad de Huelva", publisher="WildINTEL", coverage="Doñana National Park", research_project="Doñana", **overrides)
+    return models.xmp_tags(options, DEPLOYMENT, camera="RECONYX HF2 PRO COVERT", date=datetime(2024, 7, 1, 9, 0, tzinfo=timezone.utc), mime="image/jpeg", source_hash="aaa", image_hash="bbb", year=2026)
 
 
 def test_the_xmp_tags_are_the_ones_wildintel_tools_wrote():
@@ -167,7 +179,7 @@ def test_the_xmp_tags_are_the_ones_wildintel_tools_wrote():
 
 
 def test_blank_authorship_is_unknown_and_a_blank_coverage_is_the_deployments_location():
-    tags = pre.xmp_tags(pre.PreprocessOptions(), DEPLOYMENT, camera=None, date=datetime(2024, 7, 1, tzinfo=timezone.utc), mime="image/jpeg", source_hash="a", image_hash="b", year=2026)
+    tags = models.xmp_tags(PreprocessOptions(), DEPLOYMENT, camera=None, date=datetime(2024, 7, 1, tzinfo=timezone.utc), mime="image/jpeg", source_hash="a", image_hash="b", year=2026)
 
     assert tags["XMP-dc:Rights"] == "© Unknown, 2026. All rights reserved."
     assert tags["XMP-dc:Publisher"] == "Unknown" and tags["XMP-xmpRights:Owner"] == "Unknown"
@@ -239,7 +251,7 @@ def test_without_renaming_the_names_and_subfolders_stay(tmp_path: Path):
     source = tmp_path / "source"
     _jpeg(source / "sub" / "IMG_0001.JPG")
 
-    _run(source, tmp_path / "out", pre.PreprocessOptions(rename=False, metadata=False, timezone="Europe/Madrid"))
+    _run(source, tmp_path / "out", PreprocessOptions(rename=False, metadata=False, timezone="Europe/Madrid"))
 
     assert (tmp_path / "out" / "R0003-DONA_01" / "sub" / "IMG_0001.JPG").is_file()
 
@@ -247,7 +259,7 @@ def test_without_renaming_the_names_and_subfolders_stay(tmp_path: Path):
 def test_without_resizing_the_images_keep_their_size(tmp_path: Path):
     source = _source(tmp_path, 1)
 
-    _run(source, tmp_path / "out", pre.PreprocessOptions(resize=False, metadata=False, timezone="Europe/Madrid"))
+    _run(source, tmp_path / "out", PreprocessOptions(resize=False, metadata=False, timezone="Europe/Madrid"))
 
     [image] = (tmp_path / "out" / "R0003-DONA_01").glob("*.JPEG")
     with Image.open(image) as img:
@@ -258,7 +270,7 @@ def test_without_resizing_the_images_keep_their_size(tmp_path: Path):
 def test_with_everything_off_the_images_are_just_copied(tmp_path: Path):
     source = _source(tmp_path, 2)
 
-    _run(source, tmp_path / "out", pre.PreprocessOptions(rename=False, resize=False, metadata=False, timezone="Europe/Madrid"))
+    _run(source, tmp_path / "out", PreprocessOptions(rename=False, resize=False, metadata=False, timezone="Europe/Madrid"))
 
     dest = tmp_path / "out" / "R0003-DONA_01"
     for original in source.glob("*.JPG"):
@@ -268,7 +280,7 @@ def test_with_everything_off_the_images_are_just_copied(tmp_path: Path):
 def test_the_width_is_the_one_asked_for(tmp_path: Path):
     source = _source(tmp_path, 1)
 
-    _run(source, tmp_path / "out", pre.PreprocessOptions(resize_width=1000, metadata=False, timezone="Europe/Madrid"))
+    _run(source, tmp_path / "out", PreprocessOptions(resize_width=1000, metadata=False, timezone="Europe/Madrid"))
 
     [image] = (tmp_path / "out" / "R0003-DONA_01").glob("*.JPEG")
     with Image.open(image) as img:
@@ -318,9 +330,9 @@ def test_files_that_are_not_images_go_across_as_they_are(tmp_path: Path):
 def test_an_import_needs_a_source_outside_the_destination_and_a_known_timezone(tmp_path: Path):
     source = _source(tmp_path, 1)
 
-    with pytest.raises(pre.DeploymentImportError, match="Unknown timezone"):
-        _run(source, tmp_path / "out", pre.PreprocessOptions(metadata=False, timezone="Mars/Olympus"))
-    with pytest.raises(pre.DeploymentImportError, match="cannot be"):
+    with pytest.raises(PreprocessingError, match="Unknown timezone"):
+        _run(source, tmp_path / "out", PreprocessOptions(metadata=False, timezone="Mars/Olympus"))
+    with pytest.raises(PreprocessingError, match="cannot be"):
         _run(source, source)  # into itself
 
 
@@ -328,7 +340,7 @@ def test_a_deployments_folder_that_already_has_images_is_never_mixed_into(tmp_pa
     source = _source(tmp_path, 1)
     _run(source, tmp_path / "out")
 
-    with pytest.raises(pre.DeploymentImportError, match="already exists"):
+    with pytest.raises(PreprocessingError, match="already exists"):
         _run(source, tmp_path / "out")
 
 
@@ -336,8 +348,8 @@ def test_adding_metadata_without_exiftool_is_refused_up_front_and_nothing_is_wri
     monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: None)
     source = _source(tmp_path, 1)
 
-    with pytest.raises(pre.DeploymentImportError, match="needs ExifTool"):
-        _run(source, tmp_path / "out", pre.PreprocessOptions(metadata=True, timezone="Europe/Madrid"))
+    with pytest.raises(PreprocessingError, match="needs ExifTool"):
+        _run(source, tmp_path / "out", PreprocessOptions(metadata=True, timezone="Europe/Madrid"))
     assert not (tmp_path / "out").exists()
 
 
@@ -351,8 +363,8 @@ def test_the_files_exiftool_leaves_when_it_is_interrupted_are_removed(tmp_path: 
 
     monkeypatch.setattr(xmp_step.subprocess, "run", interrupted)
 
-    with pytest.raises(pre.DeploymentImportError, match="could not write"):
-        pre.write_xmp("exiftool", [(image, {"XMP-dc:Creator": "x"})])
+    with pytest.raises(PreprocessingError, match="could not write"):
+        list(metadata.write_xmp_batches("exiftool", [(image, {"XMP-dc:Creator": "x"})]))
 
     assert sorted(p.name for p in tmp_path.iterdir()) == [image.name]
 
@@ -386,7 +398,7 @@ def test_the_images_are_not_prepared_when_the_disk_of_the_collection_has_no_room
     source = _source(tmp_path, 2)
     monkeypatch.setattr(disk_space, "free_bytes", lambda path: 100)
 
-    with pytest.raises(pre.DeploymentImportError) as refused:
+    with pytest.raises(PreprocessingError) as refused:
         _run(source, tmp_path / "out")
 
     assert "Preparing the images of R0003-DONA_01 needs" in str(refused.value) and "has 100 bytes free" in str(refused.value)
@@ -415,16 +427,14 @@ def test_the_xmp_is_written_in_batches_saying_how_many_files_are_written_after_e
     monkeypatch.setattr(xmp_step.subprocess, "run", lambda *a, **k: (runs.append(k["input"].count("-execute")), subprocess.CompletedProcess(a, 0, "", ""))[1])
     items = [(tmp_path / f"IMG_{n}.JPG", {"XMP-dc:Creator": "x"}) for n in range(5)]
 
-    assert list(pre.write_xmp_batches("exiftool", items)) == [2, 4, 5]
+    assert list(metadata.write_xmp_batches("exiftool", items)) == [2, 4, 5]
     assert runs == [2, 2, 1]
 
 
 @needs_exiftool
 def test_the_xmp_metadata_is_written_into_each_image(tmp_path: Path):
     source = _source(tmp_path, 2)
-    options = pre.PreprocessOptions(
-        owner="Universidad de Huelva", publisher="WildINTEL", coverage="Doñana National Park", research_project="Doñana", timezone="Europe/Madrid",
-    )
+    options = PreprocessOptions(owner="Universidad de Huelva", publisher="WildINTEL", coverage="Doñana National Park", research_project="Doñana", timezone="Europe/Madrid")
 
     events = _run(source, tmp_path / "out", options)
 
@@ -449,7 +459,7 @@ def test_the_metadata_survives_awkward_file_names_and_the_exif_survives_the_meta
     source = tmp_path / "source"
     _jpeg(source / "ñu (1) cámara.JPG", taken="2024:07:01 10:00:00")
 
-    _run(source, tmp_path / "out", pre.PreprocessOptions(rename=False, owner="Doñana", timezone="Europe/Madrid"))
+    _run(source, tmp_path / "out", PreprocessOptions(rename=False, owner="Doñana", timezone="Europe/Madrid"))
 
     image = tmp_path / "out" / "R0003-DONA_01" / "ñu (1) cámara.JPG"
     tags = json.loads(subprocess.run(["exiftool", "-json", "-charset", "utf8", "-Owner", "-Make", "-DateTimeOriginal", str(image)], capture_output=True, text=True, encoding="utf-8").stdout)[0]
@@ -459,7 +469,7 @@ def test_the_metadata_survives_awkward_file_names_and_the_exif_survives_the_meta
 @needs_exiftool
 def test_the_final_hash_is_the_one_of_the_file_with_its_metadata_and_the_identifier_is_left_as_it_was(tmp_path: Path):
     source = _source(tmp_path, 1)
-    options = pre.PreprocessOptions(owner="Universidad de Huelva", research_project="Doñana", timezone="Europe/Madrid")
+    options = PreprocessOptions(owner="Universidad de Huelva", research_project="Doñana", timezone="Europe/Madrid")
 
     _run(source, tmp_path / "out", options)
     dest = tmp_path / "out" / "R0003-DONA_01"
@@ -475,7 +485,7 @@ def test_a_deployment_synced_from_trapper_is_never_imported_into(tmp_path: Path)
     synced.mkdir(parents=True)
     (synced / "images.json").write_text('{"source": "trapper"}', encoding="utf-8")
 
-    with pytest.raises(pre.DeploymentImportError, match="synced from TRAPPER"):
+    with pytest.raises(PreprocessingError, match="synced from TRAPPER"):
         _run(source, tmp_path / "out")
     assert not (synced / "preprocessing.json").exists()
 
@@ -492,7 +502,7 @@ def _two_images(tmp_path: Path) -> Path:
 def test_without_consolidating_the_deployment_is_left_pending_in_the_staging_folder_and_the_collection_has_nothing_of_it(tmp_path: Path):
     source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
 
-    events = list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+    events = list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), None, DEPLOYMENT, NO_XMP, consolidate=False))
 
     work = collection / ".staging" / "R0003-DONA_01"
     assert [e["type"] for e in events][-1] == "done" and "sealing" not in [e["type"] for e in events]
@@ -504,10 +514,10 @@ def test_without_consolidating_the_deployment_is_left_pending_in_the_staging_fol
 
 def test_a_pending_deployment_is_preprocessed_again_instead_of_refused(tmp_path: Path):
     source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
-    list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+    list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), None, DEPLOYMENT, NO_XMP, consolidate=False))
     _jpeg(source / "c.jpg", taken="2024:07:01 12:00:00", color="green")
 
-    events = list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+    events = list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), None, DEPLOYMENT, NO_XMP, consolidate=False))
 
     assert events[-1]["processed"] == 3
     assert len(list((collection / ".staging" / "R0003-DONA_01").glob("*.JPEG"))) == 3
@@ -515,25 +525,25 @@ def test_a_pending_deployment_is_preprocessed_again_instead_of_refused(tmp_path:
 
 def test_consolidating_writes_the_deployment_and_seals_it_and_then_nothing_can_be_redone(tmp_path: Path):
     source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
-    list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+    list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), None, DEPLOYMENT, NO_XMP, consolidate=False))
 
-    events = list(pre.consolidate_stream(str(source), str(collection), DEPLOYMENT))
+    events = list(built.preprocessing().consolidate(Path(str(source)), Path(str(collection)), DEPLOYMENT))
 
     dest = collection / "R0003-DONA_01"
     assert [e["type"] for e in events] == ["sealing", "done"] and events[-1]["sealed"] is True and events[-1]["processed"] == 2
     assert events[-1]["dest_dir"] == str(dest)
     assert (dest / "deployment.json").is_file() and (dest / "seal.json").is_file()
     assert not (collection / ".staging").exists()              # moved to its place, and the staging folder is gone with nothing else in it
-    with pytest.raises(pre.DeploymentImportError, match="already consolidated"):
-        pre.consolidate_stream(str(source), str(collection), DEPLOYMENT)
-    with pytest.raises(pre.DeploymentImportError, match="already exists"):
-        list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+    with pytest.raises(PreprocessingError, match="already consolidated"):
+        built.preprocessing().consolidate(Path(str(source)), Path(str(collection)), DEPLOYMENT)
+    with pytest.raises(PreprocessingError, match="already exists"):
+        list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), None, DEPLOYMENT, NO_XMP, consolidate=False))
 
 
 def test_a_deployment_that_was_not_preprocessed_cannot_be_consolidated(tmp_path: Path):
     source = _two_images(tmp_path)
-    with pytest.raises(pre.DeploymentImportError, match="has not been preprocessed"):
-        pre.consolidate_stream(str(source), str(tmp_path / "collections" / "R0003"), DEPLOYMENT)
+    with pytest.raises(PreprocessingError, match="has not been preprocessed"):
+        built.preprocessing().consolidate(Path(str(source)), Path(str(tmp_path / "collections" / "R0003")), DEPLOYMENT)
 
 
 def test_importing_in_one_go_prepares_in_staging_and_leaves_the_deployment_sealed_in_its_place(tmp_path: Path):
@@ -552,7 +562,7 @@ def test_what_an_interrupted_run_left_in_staging_is_cleared_when_the_deployment_
     stale.mkdir(parents=True)
     (stale / "left-over.txt").write_text("from a run that did not finish", encoding="utf-8")
 
-    list(pre.preprocess_stream(str(source), str(collection), None, DEPLOYMENT, NO_XMP, consolidate=False))
+    list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), None, DEPLOYMENT, NO_XMP, consolidate=False))
 
     assert not (stale / "left-over.txt").exists() and (stale / "preprocessing.json").is_file()
 
@@ -572,7 +582,7 @@ def test_moving_to_the_collection_is_tried_again_while_another_program_has_a_fil
     monkeypatch.setattr(folders_adapter.os, "replace", busy_twice)
     monkeypatch.setattr(folders_adapter.time, "sleep", lambda _s: None)
 
-    pre.publish(work, dest)
+    folders_adapter.publish(work, dest)
 
     assert len(calls) == 3 and (dest / "a.txt").is_file() and not work.exists()
 
@@ -587,8 +597,8 @@ def test_moving_to_the_collection_says_so_when_the_files_stay_in_use(tmp_path: P
     monkeypatch.setattr(folders_adapter.os, "replace", always_busy)
     monkeypatch.setattr(folders_adapter.time, "sleep", lambda _s: None)
 
-    with pytest.raises(pre.DeploymentImportError, match="in use by another program"):
-        pre.publish(work, dest)
+    with pytest.raises(PreprocessingError, match="in use by another program"):
+        folders_adapter.publish(work, dest)
     assert work.is_dir() and not dest.exists()                       # nothing was lost: it can be saved again
 
 
@@ -598,6 +608,6 @@ def test_an_empty_folder_in_the_way_does_not_stop_the_move(tmp_path: Path):
     (work / "a.txt").write_text("x", encoding="utf-8")
     dest.mkdir()
 
-    pre.publish(work, dest)
+    folders_adapter.publish(work, dest)
 
     assert (dest / "a.txt").is_file()

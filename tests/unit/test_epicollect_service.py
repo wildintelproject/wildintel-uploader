@@ -6,7 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from wildintel_uploader.entrypoints import config
-from tests.support import epicollect_service
+from tests.support import built
+from wildintel_uploader.modules.sources.domain.models import SourceError, entry_fields, parse_project, visit_actions
+from wildintel_uploader.modules.sources.domain.settings import Epicollect5Settings
+from wildintel_uploader.modules.sources.infrastructure.epicollect5 import forget_tokens
+from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import visits_from_csv
 from wildintel_uploader.web.main import app
 
 PROJECT = {"data": {"project": {"name": "Doñana cameras", "slug": "donana-cameras", "forms": [{
@@ -23,16 +27,21 @@ PROJECT = {"data": {"project": {"name": "Doñana cameras", "slug": "donana-camer
 }]}}}
 
 
+def _e5(settings):
+    """The section of the settings — as the file has it — as the module of the sources takes it."""
+    return Epicollect5Settings(**settings.EPICOLLECT5.model_dump())
+
+
 @pytest.fixture(autouse=True)
 def fresh_settings_file():
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
-    epicollect_service.forget_tokens()
+    forget_tokens()
     yield
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
 
 
 def test_the_inputs_of_every_form_are_listed_flat_leaving_out_what_holds_no_data():
-    form = epicollect_service.parse_project(PROJECT)
+    form = parse_project(PROJECT)
 
     assert form["project"] == {"name": "Doñana cameras", "slug": "donana-cameras"}
     assert [i["ref"] for i in form["inputs"]] == ["f1_b", "f1_c", "f1_e", "f1_f", "f1_h"]
@@ -43,26 +52,26 @@ def test_the_inputs_of_every_form_are_listed_flat_leaving_out_what_holds_no_data
 
 
 def test_an_answer_without_a_project_says_what_epicollect_said():
-    with pytest.raises(epicollect_service.EpicollectError, match="not found"):
-        epicollect_service.parse_project({"errors": [{"title": "Project not found or private"}]})
+    with pytest.raises(SourceError, match="not found"):
+        parse_project({"errors": [{"title": "Project not found or private"}]})
 
 
 def test_there_must_be_a_project_in_the_settings():
-    with pytest.raises(epicollect_service.EpicollectError, match="no Epicollect5 project"):
-        epicollect_service.fetch_form(config.Settings())
+    with pytest.raises(SourceError, match="no Epicollect5 project"):
+        built.sources().project_form(_e5(config.Settings()))
 
 
 def test_a_public_project_is_read_without_a_token_and_a_private_one_with_it():
     settings = config.Settings()
     settings.EPICOLLECT5.project_slug = "donana-cameras"
     with patch("pyepicollect.api.get_project", return_value=PROJECT) as get_project:
-        epicollect_service.fetch_form(settings)
+        built.sources().project_form(_e5(settings))
         get_project.assert_called_once_with("donana-cameras", None)
 
     settings.EPICOLLECT5.client_id, settings.EPICOLLECT5.client_secret = "12", "secret"
     with patch("pyepicollect.api.get_project", return_value=PROJECT) as get_project, \
             patch("pyepicollect.auth.request_token", return_value={"access_token": "tok"}) as request_token:
-        epicollect_service.fetch_form(settings)
+        built.sources().project_form(_e5(settings))
         request_token.assert_called_once_with("12", "secret")
         get_project.assert_called_once_with("donana-cameras", "tok")
 
@@ -71,16 +80,16 @@ def test_a_refused_client_is_said():
     settings = config.Settings()
     settings.EPICOLLECT5.project_slug, settings.EPICOLLECT5.client_id, settings.EPICOLLECT5.client_secret = "p", "12", "bad"
     with patch("pyepicollect.auth.request_token", return_value={"error": "invalid_client"}):
-        with pytest.raises(epicollect_service.EpicollectError, match="refused the client"):
-            epicollect_service.fetch_form(settings)
+        with pytest.raises(SourceError, match="refused the client"):
+            built.sources().project_form(_e5(settings))
 
 
 def test_an_unreachable_server_is_said():
     settings = config.Settings()
     settings.EPICOLLECT5.project_slug = "p"
     with patch("pyepicollect.api.get_project", side_effect=OSError("no route")):
-        with pytest.raises(epicollect_service.EpicollectError, match="Could not reach Epicollect5: no route"):
-            epicollect_service.fetch_form(settings)
+        with pytest.raises(SourceError, match="Could not reach Epicollect5: no route"):
+            built.sources().project_form(_e5(settings))
 
 
 def test_the_endpoint_answers_the_form_or_a_400_with_the_reason():
@@ -107,7 +116,7 @@ def test_the_mapping_is_kept_in_the_settings_with_its_keys_as_they_are():
 
 def test_the_connection_is_tested_with_what_is_typed_and_says_what_it_found():
     with patch("pyepicollect.api.get_project", return_value=PROJECT) as get_project:
-        found = epicollect_service.test_connection("donana-cameras", None, None, config.Settings())
+        found = built.sources().test_connection("donana-cameras", None, None, _e5(config.Settings()))
     get_project.assert_called_once_with("donana-cameras", None)
     assert found == {"ok": True, "project": "Doñana cameras", "slug": "donana-cameras", "forms": 1, "inputs": 5}
 
@@ -117,16 +126,16 @@ def test_a_blank_secret_is_the_saved_one_of_the_same_client():
     settings.EPICOLLECT5.client_id, settings.EPICOLLECT5.client_secret = "12", "secret"
     with patch("pyepicollect.api.get_project", return_value=PROJECT), \
             patch("pyepicollect.auth.request_token", return_value={"access_token": "tok"}) as request_token:
-        epicollect_service.test_connection("p", "12", "", settings)
+        built.sources().test_connection("p", "12", "", _e5(settings))
     request_token.assert_called_once_with("12", "secret")
 
-    with pytest.raises(epicollect_service.EpicollectError, match="needs its secret"):
-        epicollect_service.test_connection("p", "99", "", settings)
+    with pytest.raises(SourceError, match="needs its secret"):
+        built.sources().test_connection("p", "99", "", _e5(settings))
 
 
 def test_testing_needs_a_slug_and_saves_nothing():
-    with pytest.raises(epicollect_service.EpicollectError, match="slug"):
-        epicollect_service.test_connection(" ", None, None, config.Settings())
+    with pytest.raises(SourceError, match="slug"):
+        built.sources().test_connection(" ", None, None, _e5(config.Settings()))
 
     client = TestClient(app)
     assert client.post("/api/epicollect/test-connection", json={}).status_code == 400
@@ -141,8 +150,8 @@ def test_a_rate_limit_is_not_reported_as_a_refused_client():
     settings.EPICOLLECT5.project_slug, settings.EPICOLLECT5.client_id, settings.EPICOLLECT5.client_secret = "p", "12", "secret"
     answer = {"errors": [{"code": "ec5_255", "title": "Too many requests. Try again later.", "source": "rate-limiter"}]}
     with patch("pyepicollect.auth.request_token", return_value=answer):
-        with pytest.raises(epicollect_service.EpicollectError, match="Too many requests.*may be fine"):
-            epicollect_service.fetch_form(settings)
+        with pytest.raises(SourceError, match="Too many requests.*may be fine"):
+            built.sources().project_form(_e5(settings))
 
 
 # ── The entries ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -162,7 +171,7 @@ def entry(uuid="u1", location="dona_0006", revision="3", created="2026-10-01T10:
 
 
 def test_an_entry_is_read_through_the_mapping_with_the_day_and_the_time_apart():
-    found = epicollect_service.entry_fields(entry(), MAPPING)
+    found = entry_fields(entry(), MAPPING)
 
     assert found == {
         "location_id": "dona_0006", "revision": 3, "start_date": "2024-09-04", "start_time": "13:10:00", "end_date": "2024-10-12", "end_time": "07:02:41",
@@ -172,14 +181,14 @@ def test_an_entry_is_read_through_the_mapping_with_the_day_and_the_time_apart():
 
 
 def test_dates_and_times_are_read_in_the_formats_epicollect5_uses():
-    read = lambda sd, st: epicollect_service.entry_fields({"sd": sd, "st": st}, {"start_date": "sd", "start_time": "st"})
+    read = lambda sd, st: entry_fields({"sd": sd, "st": st}, {"start_date": "sd", "start_time": "st"})
     assert read("2024-09-04T00:00:00.000Z", "13:10") == {"start_date": "2024-09-04", "start_time": "13:10:00"}
     assert read("04/09/2024", "1:10 PM") == {"start_date": "2024-09-04", "start_time": "13:10:00"}
     assert read("not a date", "later") == {}
 
 
 def test_a_feature_type_the_standard_does_not_have_is_left_out():
-    assert "feature_type" not in epicollect_service.entry_fields(entry(feature="dunes"), MAPPING)
+    assert "feature_type" not in entry_fields(entry(feature="dunes"), MAPPING)
 
 
 def test_the_entries_of_a_location_and_revision_are_found_newest_first():
@@ -190,10 +199,10 @@ def test_the_entries_of_a_location_and_revision_are_found_newest_first():
         entry("old", created="2026-09-01T10:00:00.000Z"), entry("new"), entry("rev2", revision="2"), entry("other", location="dona_0007"),
     ]}}
     with patch("pyepicollect.api.get_entries", return_value=answer):
-        found = epicollect_service.find_entries("DONA_0006", 3, settings)
+        found = built.sources().location_entries("DONA_0006", 3, _e5(settings))
         assert [e["uuid"] for e in found] == ["new", "old"]
         assert found[0]["fields"]["start_date"] == "2024-09-04"
-        assert [e["uuid"] for e in epicollect_service.find_entries("dona_0006", None, settings)] == ["new", "rev2", "old"]
+        assert [e["uuid"] for e in built.sources().location_entries("dona_0006", None, _e5(settings))] == ["new", "rev2", "old"]
 
 
 def test_without_a_revision_in_the_mapping_the_location_is_enough():
@@ -201,7 +210,7 @@ def test_without_a_revision_in_the_mapping_the_location_is_enough():
     settings.EPICOLLECT5.enabled = True
     settings.EPICOLLECT5.project_slug, settings.EPICOLLECT5.mapping = "p", {"location_id": "loc"}
     with patch("pyepicollect.api.get_entries", return_value={"data": {"entries": [entry("a", revision="7")]}}):
-        assert [e["uuid"] for e in epicollect_service.find_entries("dona_0006", 3, settings)] == ["a"]
+        assert [e["uuid"] for e in built.sources().location_entries("dona_0006", 3, _e5(settings))] == ["a"]
 
 
 def test_every_page_of_entries_is_read():
@@ -210,7 +219,7 @@ def test_every_page_of_entries_is_read():
     settings.EPICOLLECT5.project_slug, settings.EPICOLLECT5.mapping = "p", {"location_id": "loc"}
     pages = [{"meta": {"last_page": 2}, "data": {"entries": [entry("a")]}}, {"meta": {"last_page": 2}, "data": {"entries": [entry("b")]}}]
     with patch("pyepicollect.api.get_entries", side_effect=pages) as get_entries:
-        assert {e["uuid"] for e in epicollect_service.find_entries("dona_0006", None, settings)} == {"a", "b"}
+        assert {e["uuid"] for e in built.sources().location_entries("dona_0006", None, _e5(settings))} == {"a", "b"}
     assert [c.kwargs["page"] for c in get_entries.call_args_list] == [1, 2]
 
 
@@ -218,22 +227,22 @@ def test_the_location_must_be_mapped_and_chosen_and_what_epicollect5_says_is_sai
     settings = config.Settings()
     settings.EPICOLLECT5.enabled = True
     settings.EPICOLLECT5.project_slug = "p"
-    with pytest.raises(epicollect_service.EpicollectError, match="location id is not mapped"):
-        epicollect_service.find_entries("dona_0006", 3, settings)
+    with pytest.raises(SourceError, match="location id is not mapped"):
+        built.sources().location_entries("dona_0006", 3, _e5(settings))
     settings.EPICOLLECT5.mapping = {"location_id": "loc"}
-    with pytest.raises(epicollect_service.EpicollectError, match="Choose the location"):
-        epicollect_service.find_entries(" ", 3, settings)
+    with pytest.raises(SourceError, match="Choose the location"):
+        built.sources().location_entries(" ", 3, _e5(settings))
     with patch("pyepicollect.api.get_entries", return_value={"errors": [{"title": "Project not found or private"}]}):
-        with pytest.raises(epicollect_service.EpicollectError, match="not found or private"):
-            epicollect_service.find_entries("dona_0006", 3, settings)
+        with pytest.raises(SourceError, match="not found or private"):
+            built.sources().location_entries("dona_0006", 3, _e5(settings))
 
 
 def test_nothing_is_read_while_epicollect5_is_turned_off():
     settings = config.Settings()
     settings.EPICOLLECT5.project_slug, settings.EPICOLLECT5.mapping = "p", MAPPING
     with patch("pyepicollect.api.get_entries") as get_entries:
-        with pytest.raises(epicollect_service.EpicollectError, match="turned off"):
-            epicollect_service.find_entries("dona_0006", 3, settings)
+        with pytest.raises(SourceError, match="turned off"):
+            built.sources().location_entries("dona_0006", 3, _e5(settings))
     get_entries.assert_not_called()
 
 
@@ -252,9 +261,9 @@ def test_what_no_mapping_takes_goes_to_the_comments_when_asked():
     row = {"ec5_uuid": "u", "title": "t", "created_at": "", "loc": "dona_0006", "note": "Rain", "place": {"latitude": 37.1, "longitude": -6.4, "accuracy": 3},
            "shot": "a.jpg", "kinds": ["fox", "lynx"], "empty": " ", "comments": "Near the pond"}
     with patch("pyepicollect.api.get_entries", return_value={"data": {"entries": [row]}}), patch("pyepicollect.api.get_project", return_value=FORM):
-        assert "Rain" not in epicollect_service.find_entries("dona_0006", None, settings)[0]["fields"].get("comments", "")
+        assert "Rain" not in built.sources().location_entries("dona_0006", None, _e5(settings))[0]["fields"].get("comments", "")
         settings.EPICOLLECT5.unmapped_to_comments = True
-        comments = epicollect_service.find_entries("dona_0006", None, settings)[0]["fields"]["comments"]
+        comments = built.sources().location_entries("dona_0006", None, _e5(settings))[0]["fields"]["comments"]
     assert comments == "Near the pond\nWeather: Rain\nSpot: 37.1, -6.4\nSeen: fox, lynx"  # no photo, no blank answer
 
 
@@ -264,7 +273,7 @@ def test_the_entries_of_several_locations_are_found_reading_the_project_once():
     settings.EPICOLLECT5.project_slug, settings.EPICOLLECT5.mapping = "p", MAPPING
     rows = [entry("a"), entry("b", location="dona_0007"), entry("c", location="dona_0007", created="2026-09-01T10:00:00.000Z"), entry("d", location="dona_0008", revision="9")]
     with patch("pyepicollect.api.get_entries", return_value={"data": {"entries": rows}}) as get_entries:
-        found = epicollect_service.find_entries_of(["DONA_0006", "dona_0007", "dona_0008", "dona_0009"], 3, settings)
+        found = built.sources().deployment_entries(["DONA_0006", "dona_0007", "dona_0008", "dona_0009"], 3, _e5(settings))
     assert get_entries.call_count == 1
     assert {k: [e["uuid"] for e in v] for k, v in found.items()} == {"dona_0006": ["a"], "dona_0007": ["b", "c"], "dona_0008": [], "dona_0009": []}
 
@@ -298,13 +307,13 @@ def test_the_token_is_kept_while_it_is_valid_and_asked_for_again_when_it_expires
     settings.EPICOLLECT5.project_slug, settings.EPICOLLECT5.client_id, settings.EPICOLLECT5.client_secret = "p", "12", "secret"
     with patch("pyepicollect.api.get_project", return_value=PROJECT), \
             patch("pyepicollect.auth.request_token", return_value={"access_token": "tok", "expires_in": 7200}) as request_token:
-        epicollect_service.fetch_form(settings)
-        epicollect_service.fetch_form(settings)
-        epicollect_service.test_connection("p", "12", "", settings)
+        built.sources().project_form(_e5(settings))
+        built.sources().project_form(_e5(settings))
+        built.sources().test_connection("p", "12", "", _e5(settings))
         assert request_token.call_count == 1
 
         with patch("time.monotonic", return_value=time.monotonic() + 7200):
-            epicollect_service.fetch_form(settings)
+            built.sources().project_form(_e5(settings))
         assert request_token.call_count == 2
 
 
@@ -316,14 +325,14 @@ def test_a_kept_token_that_epicollect5_no_longer_takes_is_replaced_once():
     answers = iter([PROJECT, refused, PROJECT])  # "old" gets in, then is refused, then "new" gets in
     with patch("pyepicollect.auth.request_token", side_effect=lambda *_: next(tokens)) as request_token, \
             patch("pyepicollect.api.get_project", side_effect=lambda slug, token: next(answers)) as get_project:
-        epicollect_service.fetch_form(settings)
-        epicollect_service.fetch_form(settings)  # "old" is kept, but refused: "new" is asked for, once
+        built.sources().project_form(_e5(settings))
+        built.sources().project_form(_e5(settings))  # "old" is kept, but refused: "new" is asked for, once
         assert request_token.call_count == 2
         assert get_project.call_args.args[1] == "new"
 
 
 def test_what_a_visit_did_is_told_by_the_status_and_the_action_of_the_form_of_the_field_flow():
-    actions = epicollect_service.visit_actions
+    actions = visit_actions
     assert actions("New site", "Camera inspection", None) == "Installation"
     assert actions("No camera at the site", None, None) == "Installation"       # what the form says now of a new site and of one whose camera was removed
     assert actions("OK", "Camera inspection", None) == "Revision"
@@ -343,7 +352,7 @@ def test_the_csv_downloaded_from_the_new_project_becomes_the_visits_it_has():
         "lat_26_Coordinates,long_26_Coordinates,7_Time\n"
         "u1,2026-09-14T11:40:00.000Z,t,\"Ana, Luis\",R0042,14/09/2026,WICP_02_003,Stolen,,37.1,-6.2,11:40\n"
     )
-    row = next(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+    row = next(csv.DictReader(io.StringIO(visits_from_csv(text))))
     assert row["location_id"] == "WICP_02_003" and row["date"] == "2026-09-14" and row["time"] == "11:40:00"
     assert row["trappers"] == "Ana, Luis" and row["latitude"] == "37.1" and row["session"] == "R0042"
 
@@ -355,7 +364,7 @@ def test_the_form_that_asks_the_batteries_and_the_card_apart_and_calls_the_colle
         "ec5_uuid,created_at,title,1_setupBy,2_Revision,3_Date,4_locationID,5_Status_of_the_came,6_Battery_status,7_Card_Status,8_Time\n"
         "u1,2026-09-14T11:40:00.000Z,t,Ana,R0042,14/09/2026,WICP_02_003,OK,No batteries,Full Card,11:40\n"
     )
-    row = next(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+    row = next(csv.DictReader(io.StringIO(visits_from_csv(text))))
     assert row["session"] == "R0042" and row["battery_status"] == "No batteries" and row["card_status"] == "Full Card"
 
 
@@ -368,11 +377,11 @@ def test_the_headers_of_the_form_of_the_review_are_read_though_epicollect_cuts_t
         "u1,2026-10-19T11:40:00.000Z,t,Ana,R0043,19/10/2026,WICP_02_003,OK,OK,Full Card,,OK,Keep the camera,,11:40\n"
         "u2,2026-10-19T12:40:00.000Z,t,Ana,R0043,19/10/2026,WICP_02_004,Stolen,,,,,,Camera replacement,12:40\n"
     )
-    rows = list(csv.DictReader(io.StringIO(epicollect_service.visits_from_csv(text))))
+    rows = list(csv.DictReader(io.StringIO(visits_from_csv(text))))
     assert [r["actions"] for r in rows] == ["Revision", "Stolen + Installation"]
     assert rows[0]["card_status"] == "Full Card" and rows[0]["battery_status"] == "OK"
 
 
 def test_a_csv_that_is_not_the_form_of_a_visit_is_refused():
-    with pytest.raises(epicollect_service.EpicollectError):
-        epicollect_service.visits_from_csv("a,b\n1,2\n")
+    with pytest.raises(SourceError):
+        visits_from_csv("a,b\n1,2\n")

@@ -1183,8 +1183,8 @@ def test_validate_images_progress_counts_every_image_once(tmp_path: Path):
     told: list[tuple[str, int, int]] = []
 
 
-    from tests.support import checks as old_checks
-    old_checks.validate_images(tmp_path, frozenset({"corrupted"}), progress=lambda *args: told.append(args))
+    from tests.support import built
+    built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"corrupted"})), progress=lambda *args: told.append(args))
 
     assert told == [("corrupted", done, 7) for done in range(1, 8)]
 

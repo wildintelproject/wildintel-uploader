@@ -35,11 +35,8 @@ def test_connection(req: TestConnectionRequest, sources: Sources) -> dict:
 @router.post("/entries")
 def entries(req: EntriesRequest, sources: Sources) -> dict:
     """The entries of the project that are this location's (and this revision's), as the fields of a deployment."""
-    wanted = req.location_id.strip().lower()
     try:
-        if not wanted:
-            raise SourceError("Choose the location first.")
-        return {"results": sources.deployment_entries([wanted], req.revision)[wanted]}
+        return {"results": sources.location_entries(req.location_id, req.revision)}
     except SourceError as exc:
         raise HTTPException(400, str(exc)) from exc
 

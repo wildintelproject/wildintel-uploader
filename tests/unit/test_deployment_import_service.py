@@ -10,12 +10,15 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from tests.support import camera_info
-from wildintel_uploader.entrypoints import config as app_config
 from tests.support import built
+from wildintel_uploader.modules.fileinfo.domain.models import CameraInfo, common_value
+from wildintel_uploader.modules.fileinfo.infrastructure.exiftool import exiftool_path
+from wildintel_uploader.entrypoints import config as app_config
 from wildintel_uploader.modules.deployments.domain import imports
 from wildintel_uploader.modules.deployments.domain.models import DeploymentImportError
-from tests.support import checks as old_checks
+from wildintel_uploader.modules.postvalidation.domain.models import PostvalidationError
+from wildintel_uploader.modules.prevalidation.domain.models import PrevalidationError
+
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 
 needs_exiftool = pytest.mark.skipif(shutil.which("exiftool") is None, reason="ExifTool isn't installed")
@@ -284,7 +287,7 @@ def test_validate_images_reports_no_issues_for_a_clean_flat_folder(tmp_path: Pat
     _make_jpeg(tmp_path / "IMG_0001.jpg", taken="2024:09:04 13:10:00")
     _make_jpeg(tmp_path / "IMG_0002.jpg", taken="2024:09:04 13:10:05")
 
-    result = old_checks.validate_images(tmp_path)
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(None))
 
     assert result["checked_count"] == 2
     assert result["corrupted"] == []
@@ -296,7 +299,7 @@ def test_validate_images_flags_a_corrupted_file(tmp_path: Path):
     _make_jpeg(tmp_path / "IMG_0001.jpg", taken="2024:09:04 13:10:00")
     (tmp_path / "IMG_0002.jpg").write_bytes(b"not actually a jpeg")
 
-    result = old_checks.validate_images(tmp_path)
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(None))
 
     assert result["checked_count"] == 2
     assert [c["path"] for c in result["corrupted"]] == ["IMG_0002.jpg"]
@@ -306,7 +309,7 @@ def test_validate_images_flags_an_out_of_order_sequence(tmp_path: Path):
     _make_jpeg(tmp_path / "IMG_0001.jpg", taken="2024:06:02 10:00:00")
     _make_jpeg(tmp_path / "IMG_0002.jpg", taken="2024:05:01 10:00:00")  # earlier than 0001, despite a higher number
 
-    result = old_checks.validate_images(tmp_path)
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(None))
 
     assert len(result["sequence_issues"]) == 1
     issue = result["sequence_issues"][0]
@@ -318,7 +321,7 @@ def test_validate_images_ignores_undated_or_unnumbered_images_for_the_sequence_c
     _make_jpeg(tmp_path / "IMG_0002.jpg")  # no date — skipped
     _make_jpeg(tmp_path / "cover.jpg", taken="2024:01:01 00:00:00")  # no number — skipped
 
-    result = old_checks.validate_images(tmp_path)
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(None))
 
     assert result["sequence_issues"] == []
 
@@ -330,22 +333,22 @@ def test_validate_images_checks_each_subfolder_s_sequence_on_its_own(tmp_path: P
     _make_jpeg(tmp_path / "101RECNX" / "IMG_0001.jpg", taken="2024:01:01 09:00:00")
     _make_jpeg(tmp_path / "101RECNX" / "IMG_0002.jpg", taken="2024:01:01 09:00:05")
 
-    result = old_checks.validate_images(tmp_path)
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(None))
 
     assert result["sequence_issues"] == []
     assert result["subdirectories"] == ["100RECNX", "101RECNX"]
 
 
 def test_validate_images_rejects_missing_folder(tmp_path: Path):
-    with pytest.raises(DeploymentImportError):
-        old_checks.validate_images(tmp_path / "nope")
+    with pytest.raises(PrevalidationError):
+        built.prevalidation().validate(tmp_path / "nope", built.prevalidation().validators(None))
 
 
 def test_validate_images_only_runs_the_requested_checks(tmp_path: Path):
     _make_jpeg(tmp_path / "IMG_0001.jpg", taken="2024:06:02 10:00:00")
     (tmp_path / "IMG_0002.jpg").write_bytes(b"not actually a jpeg")
 
-    result = old_checks.validate_images(tmp_path, frozenset({"structure"}))
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"structure"})))
 
     assert result == {"checked_count": 2, "subdirectories": []}
 
@@ -354,7 +357,7 @@ def test_validate_images_sequence_check_alone_still_finds_corrupted_files_but_do
     _make_jpeg(tmp_path / "IMG_0001.jpg", taken="2024:06:02 10:00:00")
     (tmp_path / "IMG_0002.jpg").write_bytes(b"not actually a jpeg")
 
-    result = old_checks.validate_images(tmp_path, frozenset({"sequence"}))
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"sequence"})))
 
     assert "corrupted" not in result
     assert "subdirectories" not in result
@@ -383,7 +386,7 @@ RANGE = dict(start_date="2024-09-04T10:00:00+02:00", end_date="2024-09-10T10:00:
 
 
 def _out_of_range(folder: Path, **kwargs) -> list[dict]:
-    return old_checks.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}), **kwargs)["out_of_range"]
+    return built.postvalidation().validate(folder, built.deployment_context(_deployment(**RANGE), **kwargs), built.deployment_checks(frozenset({"time_range"})))["out_of_range"]
 
 
 def test_time_range_passes_when_the_first_last_and_middle_images_are_where_they_should_be(tmp_path: Path):
@@ -407,20 +410,20 @@ def test_time_range_a_last_image_long_before_the_collection_is_only_said(tmp_pat
     why, when the visit that collected the card says it — and nothing is offered to fix the clock."""
     folder = _shots(tmp_path, "2024:09:04 10:00:00", "2024:09:07 12:00:00", "2024:09:09 10:00:00")  # a day before the end
 
-    result = old_checks.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}), visit={"collected_card_status": "CardFull"})
+    result = built.postvalidation().validate(folder, built.deployment_context(_deployment(**RANGE), visit={"collected_card_status": "CardFull"}), built.deployment_checks(frozenset({"time_range"})))
 
     assert result["out_of_range"] == []
     assert result["stopped_early"] == {"path": "IMG_0003.jpg", "date": "2024-09-09T10:00:00", "collected": "2024-09-10T10:00:00", "days": 1.0, "reason": "card_full"}
-    flat = old_checks.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}), visit={"collected_battery_status": "NoBatteries"})
+    flat = built.postvalidation().validate(folder, built.deployment_context(_deployment(**RANGE), visit={"collected_battery_status": "NoBatteries"}), built.deployment_checks(frozenset({"time_range"})))
     assert flat["stopped_early"]["reason"] == "no_batteries"
-    assert old_checks.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))["stopped_early"]["reason"] is None
+    assert built.postvalidation().validate(folder, built.deployment_context(_deployment(**RANGE)), built.deployment_checks(frozenset({"time_range"})))["stopped_early"]["reason"] is None
 
 
 def test_time_range_says_the_first_and_the_last_date_of_the_images(tmp_path: Path):
     """What the dates of the deployment are compared with at a glance, in the fix of the dates: the span of all the images, and how many have a date."""
     folder = _shots(tmp_path, "2024:09:07 12:00:00", "2024:09:04 10:00:00", "2024:09:09 10:00:00")
 
-    result = old_checks.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))
+    result = built.postvalidation().validate(folder, built.deployment_context(_deployment(**RANGE)), built.deployment_checks(frozenset({"time_range"})))
 
     assert result["images_span"] == {"first": "2024-09-04T10:00:00", "last": "2024-09-09T10:00:00", "dated": 3}
 
@@ -430,7 +433,7 @@ def test_time_range_an_image_after_the_collection_is_wrong(tmp_path: Path):
 
     [issue] = _out_of_range(folder)
 
-    assert (issue["path"], issue["rule"]) == ("IMG_0002.jpg", "after_end") and "stopped_early" not in old_checks.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}))
+    assert (issue["path"], issue["rule"]) == ("IMG_0002.jpg", "after_end") and "stopped_early" not in built.postvalidation().validate(folder, built.deployment_context(_deployment(**RANGE)), built.deployment_checks(frozenset({"time_range"})))
 
 
 def test_time_range_the_images_in_between_only_have_to_be_inside_the_range_widened_by_the_tolerance(tmp_path: Path):
@@ -454,7 +457,7 @@ def test_time_range_the_tolerance_can_be_changed(tmp_path: Path):
     assert [i["path"] for i in _out_of_range(folder)] == ["IMG_0001.jpg"]  # 1 hour, the default
     assert _out_of_range(folder, tolerance_hours=3) == []
     assert [i["path"] for i in _out_of_range(folder, tolerance_hours=0)] == ["IMG_0001.jpg"]  # none at all
-    assert old_checks.validate_deployment_consistency(folder, _deployment(**RANGE), frozenset({"time_range"}), tolerance_hours=1.5)["tolerance_hours"] == 1.5
+    assert built.postvalidation().validate(folder, built.deployment_context(_deployment(**RANGE), tolerance_hours=1.5), built.deployment_checks(frozenset({"time_range"})))["tolerance_hours"] == 1.5
 
 
 def test_time_range_the_edge_of_the_tolerance_is_still_inside(tmp_path: Path):
@@ -464,7 +467,7 @@ def test_time_range_the_edge_of_the_tolerance_is_still_inside(tmp_path: Path):
 
 
 def test_time_range_a_negative_tolerance_is_refused(tmp_path: Path):
-    with pytest.raises(DeploymentImportError, match="negative"):
+    with pytest.raises(PostvalidationError, match="negative"):
         _out_of_range(_shots(tmp_path, "2024:09:04 10:00:00"), tolerance_hours=-1)
 
 
@@ -497,7 +500,7 @@ def test_validate_deployment_consistency_compares_wall_clock_time_ignoring_the_d
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 00:30:00")  # 00:30 local, right after start
     _make_jpeg(tmp_path / "b.jpg", taken="2025:01:01 10:00:00")  # long after end_date
 
-    result = old_checks.validate_deployment_consistency(tmp_path, _deployment(), frozenset({"time_range"}))
+    result = built.postvalidation().validate(tmp_path, built.deployment_context(_deployment()), built.deployment_checks(frozenset({"time_range"})))
 
     assert [o["path"] for o in result["out_of_range"]] == ["b.jpg"]
 
@@ -518,7 +521,7 @@ def test_validate_deployment_consistency_flags_camera_mismatches_and_lists_model
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 10:00:00", make="Reconyx", model="HC600")
     _make_jpeg(tmp_path / "b.jpg", taken="2024:09:04 10:00:05", make="Bushnell", model="Trophy Cam")
 
-    result = old_checks.validate_deployment_consistency(tmp_path, _deployment(camera_model="Reconyx HC600"))
+    result = built.postvalidation().validate(tmp_path, built.deployment_context(_deployment(camera_model="Reconyx HC600")), built.deployment_checks(None))
 
     assert [m["path"] for m in result["camera_mismatches"]] == ["b.jpg"]
     assert result["camera_models_found"] == ["Bushnell Trophy Cam", "Reconyx HC600"]
@@ -531,29 +534,29 @@ def test_camera_consistency_compares_the_images_with_the_record_of_the_camera_by
     _make_jpeg(tmp_path / "b.jpg", taken="2024:09:04 10:00:05", make="Browning", model="BTC-6DCL")
     deployment = _deployment(camera_model="Browning Strike Force HD PRO X")   # as the field form wrote it: it is not compared
 
-    by_make = old_checks.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_make": "browning", "camera_model": "btc-6dcl "})
+    by_make = built.postvalidation().validate(tmp_path, built.deployment_context(deployment, camera={"label": "4", "camera_make": "browning", "camera_model": "btc-6dcl "}), built.deployment_checks(frozenset({"camera"})))
     assert by_make["camera_mismatches"] == [] and by_make["camera_by"] == ["Make", "Model"]
 
     # a record kept before it had a make: by the model alone
-    by_model = old_checks.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_model": "BTC-6DCL"})
+    by_model = built.postvalidation().validate(tmp_path, built.deployment_context(deployment, camera={"label": "4", "camera_model": "BTC-6DCL"}), built.deployment_checks(frozenset({"camera"})))
     assert by_model["camera_by"] == ["Model"] and by_model["camera_mismatches"] == []
 
     # another camera: each image is said, and what the images say is offered for the record
-    other = old_checks.validate_deployment_consistency(tmp_path, deployment, frozenset({"camera"}), camera={"label": "4", "camera_make": "Reconyx", "camera_model": "HC600"})
+    other = built.postvalidation().validate(tmp_path, built.deployment_context(deployment, camera={"label": "4", "camera_make": "Reconyx", "camera_model": "HC600"}), built.deployment_checks(frozenset({"camera"})))
     assert [m["detected"] for m in other["camera_mismatches"]] == ["Browning BTC-6DCL", "Browning BTC-6DCL"]
     assert other["camera_found"] == {"make": "Browning", "model": "BTC-6DCL"} and other["camera_label"] == "4"
     assert other["camera_record"] == {"make": "Reconyx", "model": "HC600"}   # what the record has: the images would change it
     assert by_model["camera_record"] == {"make": None, "model": "BTC-6DCL"}  # or fill it in
 
     # with no record, the model of the deployment, as before — case and spaces aside
-    legacy = old_checks.validate_deployment_consistency(tmp_path, _deployment(camera_model="browning  btc-6dcl"), frozenset({"camera"}))
+    legacy = built.postvalidation().validate(tmp_path, built.deployment_context(_deployment(camera_model="browning  btc-6dcl")), built.deployment_checks(frozenset({"camera"})))
     assert legacy["camera_mismatches"] == [] and legacy["camera_by"] == [] and legacy["camera_record"] is None
 
 
 def test_validate_deployment_consistency_skips_camera_mismatch_when_undeclared(tmp_path: Path):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 10:00:00", make="Reconyx", model="HC600")
 
-    result = old_checks.validate_deployment_consistency(tmp_path, _deployment())  # no camera_model declared
+    result = built.postvalidation().validate(tmp_path, built.deployment_context(_deployment()), built.deployment_checks(None))  # no camera_model declared
 
     assert result["camera_mismatches"] == []
     assert result["camera_models_found"] == ["Reconyx HC600"]
@@ -562,14 +565,14 @@ def test_validate_deployment_consistency_skips_camera_mismatch_when_undeclared(t
 def test_validate_deployment_consistency_only_runs_the_requested_checks(tmp_path: Path):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 10:00:00")
 
-    result = old_checks.validate_deployment_consistency(tmp_path, _deployment(), frozenset({"time_range"}))
+    result = built.postvalidation().validate(tmp_path, built.deployment_context(_deployment()), built.deployment_checks(frozenset({"time_range"})))
 
     assert "out_of_range" in result and "camera_mismatches" not in result and "deployment_id" not in result
 
 
 def test_validate_deployment_consistency_rejects_missing_folder(tmp_path: Path):
-    with pytest.raises(DeploymentImportError):
-        old_checks.validate_deployment_consistency(tmp_path / "nope", _deployment())
+    with pytest.raises(PostvalidationError):
+        built.postvalidation().validate(tmp_path / "nope", built.deployment_context(_deployment()), built.deployment_checks(None))
 
 
 # ── organize_stream (what the uploaders register in TRAPPER) ──────────────
@@ -721,10 +724,10 @@ def test_guess_details_says_when_exiftool_is_missing(tmp_path: Path, no_exiftool
 def test_exiftool_reads_the_model_and_the_serial_number(tmp_path: Path):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG08"))
 
-    cameras, reader = camera_info.read_cameras(sorted(folder.glob("*.jpg")))
+    cameras, reader = built.file_info().cameras(sorted(folder.glob("*.jpg")))
 
     assert reader == "exiftool"
-    assert {c for c in cameras.values()} == {camera_info.CameraInfo(model="Reconyx HC600", camera_id="P800HG08")}
+    assert {c for c in cameras.values()} == {CameraInfo(model="Reconyx HC600", camera_id="P800HG08")}
     result = built.importing().guess_details(folder)
     assert (result["camera_model"], result["camera_id"]) == ("Reconyx HC600", "P800HG08")
     assert not any("ExifTool isn't installed" in w for w in result["warnings"])
@@ -734,10 +737,10 @@ def test_exiftool_reads_the_model_and_the_serial_number(tmp_path: Path):
 def test_exiftool_copes_with_names_that_are_awkward_for_a_command_line(tmp_path: Path):
     _make_jpeg(tmp_path / "ñu sub" / "IMG 1 (copia).jpg", taken="2024:09:01 10:00:00", make="Reconyx", model="HC600", serial="SN1")
 
-    cameras, reader = camera_info.read_cameras([tmp_path / "ñu sub" / "IMG 1 (copia).jpg"])
+    cameras, reader = built.file_info().cameras([tmp_path / "ñu sub" / "IMG 1 (copia).jpg"])
 
     assert reader == "exiftool"
-    assert list(cameras.values()) == [camera_info.CameraInfo(model="Reconyx HC600", camera_id="SN1")]
+    assert list(cameras.values()) == [CameraInfo(model="Reconyx HC600", camera_id="SN1")]
 
 
 def test_camera_info_asks_exiftool_once_for_all_the_files_and_prefers_the_serial_number_tags_in_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -755,13 +758,13 @@ def test_camera_info_asks_exiftool_once_for_all_the_files_and_prefers_the_serial
     monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: "/fake/exiftool")
     monkeypatch.setattr(exiftool_adapter.subprocess, "run", fake_run)
 
-    cameras, reader = camera_info.read_cameras([a, b])
+    cameras, reader = built.file_info().cameras([a, b])
 
     assert reader == "exiftool"
     assert len(calls) == 1 and calls[0][0][0] == "/fake/exiftool"
     assert calls[0][1]["input"] == f"{a}\n{b}"  # the names go in on stdin
-    assert cameras[a] == camera_info.CameraInfo(model="RECONYX HF2 PRO COVERT", camera_id="SER-1")  # SerialNumber before InternalSerialNumber
-    assert cameras[b] == camera_info.CameraInfo(model="Canon EOS 5D", camera_id=None)
+    assert cameras[a] == CameraInfo(model="RECONYX HF2 PRO COVERT", camera_id="SER-1")  # SerialNumber before InternalSerialNumber
+    assert cameras[b] == CameraInfo(model="Canon EOS 5D", camera_id=None)
 
 
 @pytest.mark.parametrize("failure", [OSError("no such file"), subprocess.TimeoutExpired("exiftool", 1), json.JSONDecodeError("bad", "x", 0)])
@@ -774,18 +777,18 @@ def test_camera_info_falls_back_to_pillow_when_exiftool_fails(tmp_path: Path, mo
     monkeypatch.setattr(exiftool_adapter, "exiftool_path", lambda: "/fake/exiftool")
     monkeypatch.setattr(exiftool_adapter.subprocess, "run", boom)
 
-    cameras, reader = camera_info.read_cameras([tmp_path / "a.jpg"])
+    cameras, reader = built.file_info().cameras([tmp_path / "a.jpg"])
 
     assert reader == "pillow"
-    assert cameras[tmp_path / "a.jpg"] == camera_info.CameraInfo(model="Reconyx HC600", camera_id="SN1")
+    assert cameras[tmp_path / "a.jpg"] == CameraInfo(model="Reconyx HC600", camera_id="SN1")
 
 
 def test_common_value_is_only_a_value_every_image_shares():
-    assert camera_info.common_value(["a", "a", "a"]) == "a"
-    assert camera_info.common_value(["a", "b"]) is None
-    assert camera_info.common_value(["a", None]) is None
-    assert camera_info.common_value([None, None]) is None
-    assert camera_info.common_value([]) is None
+    assert common_value(["a", "a", "a"]) == "a"
+    assert common_value(["a", "b"]) is None
+    assert common_value(["a", None]) is None
+    assert common_value([None, None]) is None
+    assert common_value([]) is None
 
 
 # ── validate_images: the same camera on every image ─────────────────────────
@@ -793,7 +796,7 @@ def test_common_value_is_only_a_value_every_image_shares():
 def test_validate_images_camera_check_passes_with_one_camera(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "P800HG08"), ("Reconyx", "HC600", "P800HG08"))
 
-    result = old_checks.validate_images(folder, frozenset({"camera"}))
+    result = built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"camera"})))
 
     assert result["cameras"] == [{"model": "Reconyx HC600", "camera_id": "P800HG08", "values": {"SerialNumber": "P800HG08"}, "count": 2,
                                   "examples": ["IMG_0000.jpg", "IMG_0001.jpg"]}]
@@ -807,7 +810,7 @@ def test_validate_images_camera_check_lists_each_camera_with_how_many_each_took(
         tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "B2"), ("Browning", "Recon Force", "C3"),
     )
 
-    result = old_checks.validate_images(folder, frozenset({"camera"}))
+    result = built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"camera"})))
 
     assert [(c["values"], c["count"]) for c in result["cameras"]] == [
         ({"SerialNumber": "A1"}, 2), ({"SerialNumber": "B2"}, 1), ({"SerialNumber": "C3"}, 1),  # the most common first, then by value
@@ -817,28 +820,28 @@ def test_validate_images_camera_check_lists_each_camera_with_how_many_each_took(
 def test_the_camera_is_told_by_the_first_level_every_image_has(tmp_path: Path, no_exiftool):
     """#208: by the serial number when every image has one; else by the make and the model; else by the model; and the order is the settings'."""
     serial = _cameras_folder(tmp_path / "s", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"))
-    assert old_checks.validate_images(serial, frozenset({"camera"}))["camera_by"] == ["SerialNumber"]
+    assert built.prevalidation().validate(serial, built.prevalidation().validators(frozenset({"camera"})))["camera_by"] == ["SerialNumber"]
 
     # one image without a serial number: the two are not two cameras, they are compared by the make and the model
     mixed = _cameras_folder(tmp_path / "m", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", None))
-    result = old_checks.validate_images(mixed, frozenset({"camera"}))
+    result = built.prevalidation().validate(mixed, built.prevalidation().validators(frozenset({"camera"})))
     assert result["camera_by"] == ["Make", "Model"] and [(c["values"], c["count"]) for c in result["cameras"]] == [({"Make": "Reconyx", "Model": "HC600"}, 2)]
 
     # without the make, by the model alone
     _make_jpeg(tmp_path / "o" / "a.jpg", model="BTC-8A")
     _make_jpeg(tmp_path / "o" / "b.jpg", model="BTC-8A")
-    assert old_checks.validate_images(tmp_path / "o", frozenset({"camera"}))["camera_by"] == ["Model"]
+    assert built.prevalidation().validate(tmp_path / "o", built.prevalidation().validators(frozenset({"camera"})))["camera_by"] == ["Model"]
 
     # the order of the settings: by the model first, two serial numbers are one camera
     two = _cameras_folder(tmp_path / "t", ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "B2"))
-    assert len(old_checks.validate_images(two, frozenset({"camera"}))["cameras"]) == 2
-    by_model = old_checks.validate_images(two, frozenset({"camera"}), camera_levels=[["Model"], ["SerialNumber"]])
+    assert len(built.prevalidation().validate(two, built.prevalidation().validators(frozenset({"camera"})))["cameras"]) == 2
+    by_model = built.prevalidation().validate(two, built.prevalidation().validators(frozenset({"camera"})), camera_levels=[["Model"], ["SerialNumber"]])
     assert by_model["camera_by"] == ["Model"] and len(by_model["cameras"]) == 1
 
     # no level every image has: the first any has, and the rest are without camera information
     _cameras_folder(tmp_path / "n", ("Reconyx", "HC600", "A1"))
     _make_jpeg(tmp_path / "n" / "bare.jpg")
-    some = old_checks.validate_images(tmp_path / "n", frozenset({"camera"}))
+    some = built.prevalidation().validate(tmp_path / "n", built.prevalidation().validators(frozenset({"camera"})))
     assert some["camera_by"] == ["SerialNumber"] and some["cameras_without_info"] == 1
 
 
@@ -847,7 +850,7 @@ def test_validate_images_camera_check_counts_the_images_with_no_camera_informati
     _make_jpeg(folder / "bare1.jpg")
     _make_jpeg(folder / "bare2.jpg")
 
-    result = old_checks.validate_images(folder, frozenset({"camera"}))
+    result = built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"camera"})))
 
     assert len(result["cameras"]) == 1
     assert result["cameras_without_info"] == 2
@@ -856,14 +859,14 @@ def test_validate_images_camera_check_counts_the_images_with_no_camera_informati
 def test_validate_images_runs_the_camera_check_with_the_others_by_default(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "A1"))
 
-    assert {"corrupted", "sequence_issues", "subdirectories", "cameras"} <= set(old_checks.validate_images(folder))
+    assert {"corrupted", "sequence_issues", "subdirectories", "cameras"} <= set(built.prevalidation().validate(folder, built.prevalidation().validators(None)))
 
 
 @needs_exiftool
 def test_validate_images_camera_check_with_exiftool(tmp_path: Path):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "B2"))
 
-    result = old_checks.validate_images(folder, frozenset({"camera"}))
+    result = built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"camera"})))
 
     assert result["exiftool"] is True
     assert sorted(c["camera_id"] for c in result["cameras"]) == ["A1", "B2"]
@@ -877,7 +880,7 @@ def test_validate_images_exif_check_counts_the_images_missing_each_field(tmp_pat
     _make_jpeg(tmp_path / "no_serial.jpg", taken="2024:09:01 11:00:00", make="Reconyx", model="HC600")
     _make_jpeg(tmp_path / "bare.jpg")
 
-    result = old_checks.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["Model", "SerialNumber"])
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"exif"})), exif_fields=["Model", "SerialNumber"])
 
     missing = result["exif_missing"]
     assert missing["DateTimeOriginal"] == {"label": "capture date", "count": 2, "examples": ["bare.jpg", "no_date.jpg"]}
@@ -891,9 +894,9 @@ def test_validate_images_exif_check_expects_the_capture_date_and_only_the_fields
     not write their serial number, so it is not expected unless asked. Any other field is read as it is (Pillow here: the standard EXIF tags)."""
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:01 10:00:00", make="Reconyx", model="HC600")
 
-    by_default = old_checks.validate_images(tmp_path, frozenset({"exif"}))["exif_missing"]
+    by_default = built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"exif"})))["exif_missing"]
     assert {f: i["count"] for f, i in by_default.items()} == {"DateTimeOriginal": 0, "Model": 0}
-    asked = old_checks.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["Make", "ISO"])["exif_missing"]
+    asked = built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"exif"})), exif_fields=["Make", "ISO"])["exif_missing"]
     assert {f: i["count"] for f, i in asked.items()} == {"DateTimeOriginal": 0, "Make": 0, "ISO": 1}
 
     # a field Pillow knows by another name than ExifTool (ISO, ISOSpeedRatings) is found too
@@ -901,13 +904,13 @@ def test_validate_images_exif_check_expects_the_capture_date_and_only_the_fields
     exif = img.getexif()
     exif.get_ifd(0x8769)[34855] = 400
     img.save(tmp_path / "a.jpg", exif=exif)
-    assert old_checks.validate_images(tmp_path, frozenset({"exif"}), exif_fields=["ISO"])["exif_missing"]["ISO"]["count"] == 0
+    assert built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"exif"})), exif_fields=["ISO"])["exif_missing"]["ISO"]["count"] == 0
 
 
 def test_validate_images_exif_check_finds_nothing_missing_when_every_image_has_everything(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"))
 
-    result = old_checks.validate_images(folder, frozenset({"exif"}), exif_fields=["Model", "SerialNumber"])
+    result = built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"exif"})), exif_fields=["Model", "SerialNumber"])
 
     assert {field: info["count"] for field, info in result["exif_missing"].items()} == {"DateTimeOriginal": 0, "Model": 0, "SerialNumber": 0}
 
@@ -920,7 +923,7 @@ def test_validate_images_exif_and_camera_checks_read_the_camera_once(tmp_path: P
     real = info.cameras
     monkeypatch.setattr(info, "cameras", lambda paths: calls.append(paths) or real(paths))
 
-    result = old_checks.validate_images(folder, frozenset({"exif", "camera"}))
+    result = built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"exif", "camera"})))
 
     assert len(calls) == 1
     assert "exif_missing" in result and "cameras" in result
@@ -937,7 +940,7 @@ def test_validate_images_duplicates_finds_files_with_exactly_the_same_content(tm
     (tmp_path / "IMG_0003.jpg").write_bytes(b"other CONTENT")  # the same size, but not the same
     (tmp_path / "IMG_0004.jpg").write_bytes(b"unique")
 
-    result = old_checks.validate_images(tmp_path, frozenset({"duplicates"}))
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"duplicates"})))
 
     assert result["duplicates"] == [{"size": len(b"same content"), "files": ["IMG_0001 (copy).jpg", "IMG_0001.jpg", "sub/IMG_0001.jpg"]}]
     assert set(result) == {"checked_count", "duplicates"}
@@ -947,7 +950,7 @@ def test_validate_images_duplicates_lists_each_group_separately(tmp_path: Path):
     for name, content in [("a1.jpg", b"AAAA"), ("a2.jpg", b"AAAA"), ("b1.jpg", b"BBBBB"), ("b2.jpg", b"BBBBB"), ("c.jpg", b"C")]:
         (tmp_path / name).write_bytes(content)
 
-    result = old_checks.validate_images(tmp_path, frozenset({"duplicates"}))
+    result = built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"duplicates"})))
 
     assert [g["files"] for g in result["duplicates"]] == [["a1.jpg", "a2.jpg"], ["b1.jpg", "b2.jpg"]]
 
@@ -955,7 +958,7 @@ def test_validate_images_duplicates_lists_each_group_separately(tmp_path: Path):
 def test_validate_images_duplicates_is_empty_when_every_image_is_different(tmp_path: Path):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "A1"), ("Reconyx", "HC600", "A1"))  # different dates, so different bytes
 
-    assert old_checks.validate_images(folder, frozenset({"duplicates"}))["duplicates"] == []
+    assert built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"duplicates"})))["duplicates"] == []
 
 
 def _kept_deployment(root: Path, project: str, collection: str, deployment: str, originals: dict[str, bytes]) -> None:
@@ -980,7 +983,7 @@ def test_validate_images_duplicates_finds_the_images_imported_before_into_the_re
     (folder / "c.jpg").write_bytes(b"new")
 
     imported = local_folder_service.imported_source_hashes(root, "DONA")
-    result = old_checks.validate_images(folder, frozenset({"duplicates"}), imported=imported)
+    result = built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"duplicates"})), imported=imported)
 
     assert result["duplicates_in_project"] == [{"file": "a.jpg", "deployment_id": "R0001-DONA_01", "collection": "R0001", "original": "IMG_0002.JPG"}]
     assert result["duplicates"] == []   # the folder itself has none
@@ -996,14 +999,14 @@ def test_validate_images_duplicates_leaves_out_the_deployment_that_is_imported_a
 
     again = local_folder_service.imported_source_hashes(root, "DONA", exclude_deployment="r0001-dona_01")
 
-    assert old_checks.validate_images(folder, frozenset({"duplicates"}), imported=again)["duplicates_in_project"] == []
+    assert built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"duplicates"})), imported=again)["duplicates_in_project"] == []
 
 
 def test_validate_images_duplicates_says_nothing_of_the_project_without_its_images(tmp_path: Path):
     (tmp_path / "a.jpg").write_bytes(b"x")
 
-    assert "duplicates_in_project" not in old_checks.validate_images(tmp_path, frozenset({"duplicates"}))
-    assert old_checks.validate_images(tmp_path, frozenset({"duplicates"}), imported={})["duplicates_in_project"] == []
+    assert "duplicates_in_project" not in built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"duplicates"})))
+    assert built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"duplicates"})), imported={})["duplicates_in_project"] == []
 
 
 def test_validate_images_duplicates_only_hashes_files_of_the_same_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1016,7 +1019,7 @@ def test_validate_images_duplicates_only_hashes_files_of_the_same_size(tmp_path:
     real = info.hash
     monkeypatch.setattr(info, "hash", lambda path, algorithm: hashed.append(path.name) or real(path, algorithm))
 
-    old_checks.validate_images(tmp_path, frozenset({"duplicates"}))
+    built.prevalidation().validate(tmp_path, built.prevalidation().validators(frozenset({"duplicates"})))
 
     assert hashed == []  # no two files share a size, so none can be equal
 
@@ -1024,7 +1027,7 @@ def test_validate_images_duplicates_only_hashes_files_of_the_same_size(tmp_path:
 def test_validate_images_runs_all_six_checks_by_default(tmp_path: Path, no_exiftool):
     folder = _cameras_folder(tmp_path, ("Reconyx", "HC600", "A1"))
 
-    assert {"corrupted", "sequence_issues", "subdirectories", "cameras", "exif_missing", "duplicates"} <= set(old_checks.validate_images(folder))
+    assert {"corrupted", "sequence_issues", "subdirectories", "cameras", "exif_missing", "duplicates"} <= set(built.prevalidation().validate(folder, built.prevalidation().validators(None)))
 
 
 # ── postvalidation: the names ────────────────────────────────────────────────
@@ -1032,7 +1035,7 @@ def test_validate_images_runs_all_six_checks_by_default(tmp_path: Path, no_exift
 def _names(deployment_id: str, **kwargs) -> dict:
     checks = frozenset({"deployment_id", "collection_prefix", "collection_name", "location"})
     folder = Path(kwargs.pop("folder"))
-    return old_checks.validate_deployment_consistency(folder, _deployment(deployment_id=deployment_id), checks, **kwargs)
+    return built.postvalidation().validate(folder, built.deployment_context(_deployment(deployment_id=deployment_id), **kwargs), built.deployment_checks(checks))
 
 
 @pytest.mark.parametrize("deployment_id", ["R0033-DONA_01", "R0003-DONA_0007_B", "R0001-x", "R1025-A-B", "R0003-DONA_01_winter"])
@@ -1126,7 +1129,7 @@ def test_a_deployment_id_with_no_location_fails_the_location_check(tmp_path: Pat
 def test_the_default_run_includes_every_postvalidation_check(tmp_path: Path):
     _make_jpeg(tmp_path / "a.jpg", taken="2024:09:04 10:00:00")
 
-    result = old_checks.validate_deployment_consistency(tmp_path, _deployment())
+    result = built.postvalidation().validate(tmp_path, built.deployment_context(_deployment()), built.deployment_checks(None))
 
     assert {"deployment_id", "collection_name", "collection_prefix", "location", "out_of_range", "tolerance_hours", "camera_mismatches"} <= set(result)
 
@@ -1144,7 +1147,7 @@ def test_the_image_checks_find_the_same_whatever_the_workers(tmp_path: Path, mon
     outcomes = []
     for workers in (1, 4):
         monkeypatch.setattr(app_config, "workers", lambda settings=None, w=workers: w)
-        outcomes.append(old_checks.validate_images(tmp_path, checks))
+        outcomes.append(built.prevalidation().validate(tmp_path, built.prevalidation().validators(checks)))
 
     assert outcomes[0] == outcomes[1]
     assert [c["path"] for c in outcomes[0]["corrupted"]] == ["IMG_0099.jpg"]
@@ -1184,7 +1187,7 @@ def test_exiftool_path_prefers_the_bundled_copy(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
 
-    assert camera_info.exiftool_path() == str(bundled)
+    assert exiftool_path() == str(bundled)
 
 
 def test_exiftool_path_falls_back_to_the_path_when_nothing_is_bundled(tmp_path: Path, monkeypatch):
@@ -1192,7 +1195,7 @@ def test_exiftool_path_falls_back_to_the_path_when_nothing_is_bundled(tmp_path: 
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
     monkeypatch.setattr(exiftool_adapter.shutil, "which", lambda _name: "/usr/bin/exiftool")
 
-    assert camera_info.exiftool_path() == "/usr/bin/exiftool"
+    assert exiftool_path() == "/usr/bin/exiftool"
 
 
 # ── the checks against the visit the deployment is of ────────────────────────
@@ -1200,7 +1203,7 @@ def test_exiftool_path_falls_back_to_the_path_when_nothing_is_bundled(tmp_path: 
 def _against(visit, tmp_path: Path, images: int = 2, checks=frozenset({"sd_card", "photo_count"})):
     for i in range(images):
         _make_jpeg(tmp_path / f"IMG_{i}.jpg", taken="2024:09:04 10:00:00")
-    return old_checks.validate_deployment_consistency(tmp_path, _deployment(), checks, visit=visit)
+    return built.postvalidation().validate(tmp_path, built.deployment_context(_deployment(), visit=visit), built.deployment_checks(checks))
 
 
 def test_the_card_and_the_photos_are_those_the_visit_says(tmp_path: Path):
@@ -1239,4 +1242,4 @@ def test_what_nobody_said_cannot_be_checked_and_passes(tmp_path: Path):
 
 
 def test_the_checks_of_the_seal_do_not_include_those_against_the_visit():
-    assert not old_checks.VISIT_CHECKS & old_checks.DEPLOYMENT_CHECKS
+    assert not frozenset(v.key for v in built.deployment_checks() if v.of_the_visit) & frozenset(v.key for v in built.deployment_checks() if not v.of_the_visit)

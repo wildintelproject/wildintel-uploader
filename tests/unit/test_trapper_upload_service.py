@@ -7,7 +7,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -15,7 +15,7 @@ import yaml
 from PIL import Image
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from tests.support import preprocessing_service
+from wildintel_uploader.modules.preprocessing.domain.models import PreprocessOptions
 from wildintel_uploader.modules.uploaders.infrastructure import trapper_site
 from tests.support import built
 from wildintel_uploader.modules.uploaders.domain import trapper as rules
@@ -53,9 +53,7 @@ def _imported(tmp_path: Path, images: int = 3, *, deployment=None) -> Path:
     for i in range(images):
         _jpeg(source / f"IMG_{i:04d}.JPG", f"2024:07:0{i + 1} 10:00:00")
     collection = tmp_path / "collections" / "DONA" / "R0003"
-    list(preprocessing_service.preprocess_stream(
-        str(source), str(collection), "R0003", deployment or _deployment(), preprocessing_service.PreprocessOptions(metadata=False, resize=False, timezone="Europe/Madrid"),
-    ))
+    list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), "R0003", deployment or _deployment(), PreprocessOptions(metadata=False, resize=False, timezone="Europe/Madrid")))
     return collection
 
 
@@ -700,9 +698,7 @@ def test_the_timezone_and_the_dst_rule_the_images_were_preprocessed_with_are_the
     source = tmp_path / "source"
     _jpeg(source / "a.JPG", "2024:07:01 10:00:00")
     collection = tmp_path / "collections" / "DONA" / "R0003"
-    list(preprocessing_service.preprocess_stream(
-        str(source), str(collection), "R0003", _deployment(), preprocessing_service.PreprocessOptions(metadata=False, timezone="Atlantic/Canary", ignore_dst=False),
-    ))
+    list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), "R0003", _deployment(), PreprocessOptions(metadata=False, timezone="Atlantic/Canary", ignore_dst=False)))
     fake = FakeTrapper()
 
     _upload(tmp_path, collection, fake)

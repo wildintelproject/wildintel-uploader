@@ -4,10 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tests.unit.test_preprocessing_service import DEPLOYMENT, NO_XMP, _run, _source
+from tests.unit.test_preprocessing_service import DEPLOYMENT, _run, _source
 from tests.support import built
-from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
-from tests.support import preprocessing_service as pre
 
 
 def _imported(tmp_path: Path, count: int = 2) -> Path:

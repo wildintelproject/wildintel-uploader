@@ -10,7 +10,7 @@ from PIL import Image
 from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
 
-from tests.support import checks as old_checks
+from tests.support import built
 from wildintel_uploader.entrypoints.wiring import build_reports
 from wildintel_uploader.modules.reports.domain import report as rules
 from wildintel_uploader.modules.reports.domain.ports import ReportMissing
@@ -47,7 +47,7 @@ def _entry(report: dict, identifier: str, check: str) -> dict:
 
 
 def test_a_validation_report_says_which_image_failed_which_check(source: Path):
-    found = old_checks.validate_images(source, None, detail=True)
+    found = built.prevalidation().validate(source, built.prevalidation().validators(None), detail=True)
 
     report = build_reports().validation_report(found, source)
 
@@ -62,7 +62,7 @@ def test_a_validation_report_says_which_image_failed_which_check(source: Path):
 
 
 def test_only_the_checks_that_ran_are_in_the_report(source: Path):
-    found = old_checks.validate_images(source, frozenset({"corrupted"}), detail=True)
+    found = built.prevalidation().validate(source, built.prevalidation().validators(frozenset({"corrupted"})), detail=True)
 
     report = build_reports().validation_report(found, source, ["corrupted"])
 
@@ -73,7 +73,7 @@ def test_only_the_checks_that_ran_are_in_the_report(source: Path):
 def test_a_postvalidation_report_has_the_deployment_checks_and_the_images_out_of_range(source: Path):
     deployment = DeploymentFields(deployment_id="R0003-DONA_01", location_id="DONA_01", latitude=37, longitude=-6,
                                   start_date="2024-09-04T10:00:00+02:00", end_date="2024-09-05T10:00:00+02:00", camera_model="X")
-    result = old_checks.validate_deployment_consistency(source, deployment, None, collection_name="R0003", expected_location_id="DONA_01")
+    result = built.postvalidation().validate(source, built.deployment_context(deployment, collection_name="R0003", expected_location_id="DONA_01"), built.deployment_checks(None))
 
     report = build_reports().postvalidation_report(result, "R0003-DONA_01", source)
 
@@ -111,7 +111,7 @@ def test_a_preprocessing_report_says_the_size_of_each_image_before_and_after_it_
 
 
 def test_a_report_is_kept_read_listed_and_deleted(source: Path, reports: Path):
-    report = build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source)
+    report = build_reports().validation_report(built.prevalidation().validate(source, built.prevalidation().validators(None), detail=True), source)
 
     report_id = build_reports().save(report)
 
@@ -126,7 +126,7 @@ def test_a_report_is_kept_read_listed_and_deleted(source: Path, reports: Path):
 
 
 def test_two_reports_in_the_same_second_do_not_overwrite_each_other(source: Path, reports: Path):
-    report = build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source)
+    report = build_reports().validation_report(built.prevalidation().validate(source, built.prevalidation().validators(None), detail=True), source)
     assert build_reports().save(dict(report)) != build_reports().save(dict(report))
 
 
@@ -137,7 +137,7 @@ def test_only_a_reports_id_is_taken_for_a_path(reports: Path):
 
 
 def test_the_csv_has_a_row_per_entry(source: Path):
-    report = build_reports().validation_report(old_checks.validate_images(source, frozenset({"corrupted"}), detail=True), source, ["corrupted"])
+    report = build_reports().validation_report(built.prevalidation().validate(source, built.prevalidation().validators(frozenset({"corrupted"})), detail=True), source, ["corrupted"])
 
     rows = list(csv.DictReader(io.StringIO(rules.to_csv(report))))
 
@@ -146,10 +146,10 @@ def test_the_csv_has_a_row_per_entry(source: Path):
 
 
 def test_reports_older_than_some_days_are_deleted(source: Path, reports: Path):
-    old = build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source)
+    old = build_reports().validation_report(built.prevalidation().validate(source, built.prevalidation().validators(None), detail=True), source)
     old["created_at"] = "2020-01-01T00:00:00+00:00"
     old_id = build_reports().save(old)
-    new_id = build_reports().save(build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source))
+    new_id = build_reports().save(build_reports().validation_report(built.prevalidation().validate(source, built.prevalidation().validators(None), detail=True), source))
 
     assert build_reports().delete_older_than(30) == 1
     assert [r["id"] for r in build_reports().list()] == [new_id] and old_id not in [r["id"] for r in build_reports().list()]
@@ -196,7 +196,7 @@ def test_postvalidating_answers_with_the_id_of_its_report(source: Path, reports:
 # ── what the dashboard shows of each failure ─────────────────────────────────
 
 def test_a_failed_image_has_a_short_tag_and_its_capture_date(source: Path):
-    report = build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source)
+    report = build_reports().validation_report(built.prevalidation().validate(source, built.prevalidation().validators(None), detail=True), source)
 
     out_of_order = _entry(report, "IMG_0002.JPG", "sequence")
     assert out_of_order["tag"] == "Out of order" and out_of_order["taken"] == "2024-09-04T09:00:00"
@@ -207,7 +207,7 @@ def test_a_failed_image_has_a_short_tag_and_its_capture_date(source: Path):
 
 def test_the_totals_count_the_images_with_issues(source: Path):
     checks = frozenset({"corrupted", "sequence", "duplicates", "structure"})
-    report = build_reports().validation_report(old_checks.validate_images(source, checks, detail=True), source, checks)
+    report = build_reports().validation_report(built.prevalidation().validate(source, built.prevalidation().validators(checks), detail=True), source, checks)
 
     # IMG_0002 is out of order and IMG_0004 is corrupted; a check of the whole folder has no image to count.
     assert report["totals"]["images_with_issues"] == 2
@@ -215,7 +215,7 @@ def test_the_totals_count_the_images_with_issues(source: Path):
 
 def test_the_images_of_a_report_are_served_as_thumbnails_and_only_those(source: Path, reports: Path):
     (source / "other.txt").write_text("secret")
-    report_id = build_reports().save(build_reports().validation_report(old_checks.validate_images(source, None, detail=True), source))
+    report_id = build_reports().save(build_reports().validation_report(built.prevalidation().validate(source, built.prevalidation().validators(None), detail=True), source))
 
     jpeg = build_reports().image(report_id, "IMG_0001.JPG")
 

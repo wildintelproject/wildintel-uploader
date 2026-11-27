@@ -74,6 +74,10 @@ class SourcesService(ABC):
         case: {"uuid", "title", "created_at", "fields"}."""
 
     @abstractmethod
+    def location_entries(self, location_id: str, revision: int | None, settings: Epicollect5Settings | None = None) -> list[dict]:
+        """The entries of one location (and revision), newest first. SourceError when no location is chosen."""
+
+    @abstractmethod
     def form_columns(self, text: str) -> dict[str, str]:
         """The columns of a CSV that answer the questions of the form of a visit — empty if it is not the form."""
 

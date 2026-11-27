@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from tests.unit.test_repair_service import DEPLOYMENT_ID, kept  # noqa: F401 — the fixture the service's own tests use
 from tests.support import local_folder_service as lfs
-from tests.support import preprocessing_service as pre
+from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.web.main import app
 
 PAYLOAD = {"research_project_id": "DONA", "collection": "R0003", "deployment_id": DEPLOYMENT_ID}
@@ -52,7 +52,7 @@ def test_inspecting_says_whether_the_deployment_is_valid(kept):
 def test_repairing_streams_the_steps_and_ends_with_the_deployment_valid(kept):
     root, dest = kept
     (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
-    (dest / pre.PREPROCESSING_LOG_FILE).unlink()
+    (dest / PREPROCESSING_LOG_FILE).unlink()
     with _in(root):
         response = _client().post("/api/repair/deployment", json=PAYLOAD)
         after = _client().post("/api/repair/inspect", json=PAYLOAD).json()

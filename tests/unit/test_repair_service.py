@@ -8,7 +8,7 @@ from PIL import Image
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from tests.support import local_folder_service as lfs
-from tests.support import preprocessing_service as pre
+from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE, PreprocessOptions
 from wildintel_uploader.entrypoints.wiring import build_reports
 from tests.support import built
 from wildintel_uploader.modules.deployments.domain.repair import RepairError
@@ -19,7 +19,7 @@ DEPLOYMENT = DeploymentFields.model_validate({
     "deployment_id": DEPLOYMENT_ID, "location_id": "DONA_01", "location_name": "Doñana site 1", "latitude": 37.0, "longitude": -6.5,
     "start_date": "2024-07-01T09:00:00+01:00", "end_date": "2024-07-01T12:00:00+01:00",
 })
-OPTIONS = pre.PreprocessOptions(metadata=False, timezone="Europe/Madrid")
+OPTIONS = PreprocessOptions(metadata=False, timezone="Europe/Madrid")
 
 
 def _jpeg(path: Path, taken: str, color="red") -> None:
@@ -45,7 +45,7 @@ def kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     for n, (taken, color) in enumerate([("2024:07:01 10:00:00", "red"), ("2024:07:01 11:00:00", "blue"), ("2024:07:01 11:30:00", "green")], 1):
         _jpeg(source / f"IMG_{n:04d}.jpg", taken, color)
     collection = project / "R0003"
-    list(pre.preprocess_stream(str(source), str(collection), "R0003", DEPLOYMENT, OPTIONS))
+    list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), "R0003", DEPLOYMENT, OPTIONS))
     _old_log(collection, DEPLOYMENT_ID, datetime(2024, 7, 1, 9, 0), datetime(2024, 7, 1, 12, 0))   # as an older folder has it: it is no longer written (#213)
     return root, collection / DEPLOYMENT_ID
 
@@ -83,19 +83,19 @@ def test_a_deployment_is_valid_or_not_as_its_seal_says(kept):
 def test_every_metadata_file_is_rebuilt_from_the_images_and_the_deployment_is_valid_again(kept):
     root, dest = kept
     before = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
-    for name in (lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, SEAL_FILE):
+    for name in (lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, PREPROCESSING_LOG_FILE, SEAL_FILE):
         (dest / name).unlink()
 
     events = _repair(root)
 
     assert events[-1]["type"] == "done" and events[-1]["status"] == "valid" and events[-1]["report_id"]
-    assert sorted(events[-1]["written"]) == sorted([lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, SEAL_FILE])
+    assert sorted(events[-1]["written"]) == sorted([lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, PREPROCESSING_LOG_FILE, SEAL_FILE])
     assert [e["step"] for e in events if e["type"] == "step" and e["status"] == "done"] == ["inspect", "dates", "deployment", "preprocessing", "images", "seal"]
     after = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
     assert after["deployment_id"] == DEPLOYMENT_ID and after["latitude"] == 37.0 and after["location_name"] == "Doñana site 1"
     assert (after["start_date"], after["end_date"]) == (before["start_date"], before["end_date"])  # the log said 09:00 → 12:00, as at the import
     assert "HF2" in after["camera_model"].upper()  # read from the images
-    log = json.loads((dest / pre.PREPROCESSING_LOG_FILE).read_text(encoding="utf-8"))
+    log = json.loads((dest / PREPROCESSING_LOG_FILE).read_text(encoding="utf-8"))
     assert [i["name"] for i in log["images"]] == sorted(p.name for p in dest.glob("*.JPEG")) and log["recovered"]
     assert all(i["date"] and i["final_hash"] for i in log["images"])
     assert json.loads((dest / lfs.IMAGES_FILE).read_text(encoding="utf-8"))["image_count"] == 3

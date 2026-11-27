@@ -84,3 +84,40 @@ def file_info():
 def trapper_uploads():
     from wildintel_uploader.entrypoints.wiring import trapper_uploads as built
     return built()
+
+
+def sources():
+    from wildintel_uploader.entrypoints.wiring import build_sources
+    return build_sources()
+
+
+def prevalidation():
+    from wildintel_uploader.entrypoints.wiring import build_prevalidation
+    return build_prevalidation()
+
+
+def postvalidation():
+    from wildintel_uploader.entrypoints.wiring import build_postvalidation
+    return build_postvalidation()
+
+
+def deployment_checks(checks: frozenset[str] | None = None) -> list:
+    """The checks of a deployment the postvalidation runs on what is known of it — the statistical ones, against the history kept, apart."""
+    return [v for v in postvalidation().validators(checks) if not v.statistical]
+
+
+def deployment_context(deployment, *, collection_name: str | None = None, expected_location_id: str | None = None, tolerance_hours: float | None = None,
+                       visit: dict | None = None, camera: dict | None = None, camera_levels: list[list[str]] | None = None):
+    """What the postvalidation knows of a deployment, from its fields as a test has them — as the API makes it of a request."""
+    from wildintel_uploader.modules.postvalidation.domain import models as post
+    return post.DeploymentContext(
+        deployment=post.Deployment(deployment_id=deployment.deployment_id, start_date=deployment.start_date, end_date=deployment.end_date,
+                                   camera_model=deployment.camera_model),
+        collection=collection_name, expected_location_id=expected_location_id,
+        tolerance_hours=post.DEFAULT_TOLERANCE_HOURS if tolerance_hours is None else tolerance_hours, visit=visit, camera=camera,
+        **({"camera_levels": camera_levels} if camera_levels is not None else {}))
+
+
+def preprocessing():
+    from wildintel_uploader.entrypoints.wiring import build_preprocessing
+    return build_preprocessing()
