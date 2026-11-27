@@ -48,9 +48,12 @@ def synced(events) -> dict:
 
 
 def status_history(root: Path):
-    from wildintel_uploader.entrypoints.wiring import build_settings, build_visits, catalog_repository
+    from wildintel_uploader.entrypoints.wiring import build_settings, catalog_repository
     from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
-    return KeptStatusHistory(root, lambda: catalog_repository(root, build_settings()), lambda: build_visits(root))
+    from wildintel_uploader.modules.catalog.infrastructure.visits import VisitsAsKept
+    from wildintel_uploader.shared import storage
+    kept = catalog_repository(root, build_settings())
+    return KeptStatusHistory(root, lambda: kept, lambda: VisitsAsKept(storage.open_store(root), lambda: kept))
 
 
 def backup(root: Path | None = None, version: str | None = None):

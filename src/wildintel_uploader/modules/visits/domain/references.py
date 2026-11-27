@@ -5,7 +5,7 @@ it has it."""
 from __future__ import annotations
 
 from wildintel_uploader.modules.visits.domain import rules as visit_rules, wall_clock as visit_time
-from wildintel_uploader.shared import identity
+from wildintel_uploader.shared import identity, ids
 
 
 class Refs:
@@ -227,3 +227,20 @@ def unknown_kept(unknown: list[dict], locations: list[dict]) -> list[dict]:
         place = where.get(str(u["location_id"]).lower())
         out.append({"location_ref": place["id"], "session": u["session"]} if place and place.get("id") else {"location_id": u["location_id"], "session": u["session"]})
     return out
+
+
+def read_kept(raw: list[dict], refs: Refs, project: str) -> tuple[list[dict], list[dict]]:
+    """The visits of a research project as they are kept, read: each moved to instants and to ids when it was kept otherwise (an earlier
+    version), with an id of its own when it was kept before there were ids — the same one whenever it is read —; and the same visits told with
+    the names of what they point to, the camera that is at each site said. (kept, told): what to write back when it changed, and what to show."""
+    kept = []
+    for visit in raw:
+        try:
+            one = as_kept(visit, refs)
+        except (KeyError, ValueError, TypeError):
+            one = visit   # not a visit it can read the time of: left as it is
+        if not one.get("id"):   # kept before the ids existed: the same one whenever it is read
+            one = {**one, "id": ids.legacy_id("visit", f"{site(one, refs)}|{one.get('when') or ''}", project)}
+        kept.append(one)
+    return kept, with_the_camera_there([as_told(v, refs) for v in kept])
+

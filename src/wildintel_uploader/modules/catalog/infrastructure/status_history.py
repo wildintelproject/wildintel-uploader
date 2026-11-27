@@ -14,7 +14,7 @@ from wildintel_uploader.modules.catalog.domain import history
 from wildintel_uploader.modules.catalog.domain.models import Location
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, StatusHistory
 from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record, location_to_record
-from wildintel_uploader.modules.visits.domain.ports import VisitsService
+from wildintel_uploader.modules.catalog.infrastructure.visits import VisitsAsKept
 from wildintel_uploader.shared import audit, storage
 
 _rebuilding = threading.Lock()
@@ -22,9 +22,9 @@ _rebuilding = threading.Lock()
 
 class KeptStatusHistory(StatusHistory):
     """The history of the research projects of a collections folder; `repository` is where their records are kept, `visits` the visits of that
-    folder, through their contract."""
+    folder as they are kept (infrastructure.visits.VisitsAsKept)."""
 
-    def __init__(self, collections_dir: Path, repository: Callable[[], CatalogRepository], visits: Callable[[], VisitsService]) -> None:
+    def __init__(self, collections_dir: Path, repository: Callable[[], CatalogRepository], visits: Callable[[], VisitsAsKept]) -> None:
         self._root, self._repository, self._visits = collections_dir, repository, visits
 
     def _store(self) -> storage.ProjectStore:

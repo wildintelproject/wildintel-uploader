@@ -95,3 +95,10 @@ def test_the_catalog_does_not_hand_out_its_records():
     from wildintel_uploader.modules.catalog.domain.ports import CatalogService
     assert not hasattr(CatalogService, "records")
 
+
+@pytest.mark.parametrize("path", sorted(SRC.glob("modules/catalog/**/*.py")), ids=lambda p: str(p.relative_to(SRC)))
+def test_the_catalog_does_not_need_the_module_of_the_visits(path: Path):
+    """The visits need the catalog; the catalog reads what it needs of the visits where they are kept, with its own records — never through the
+    contract of the visits (VisitsService), so that the two are not put together in a circle."""
+    assert "wildintel_uploader.modules.visits.domain.ports" not in _imports(path)
+

@@ -37,7 +37,7 @@ from wildintel_uploader.modules.catalog.infrastructure.clock import SystemClock
 from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
-from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
+from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits, VisitsAsKept
 from wildintel_uploader.modules.deployments.application.cards import CardCopying
 from wildintel_uploader.modules.deployments.application.imports import Importing
 from wildintel_uploader.modules.deployments.infrastructure.import_folder import ImportFolderOnDisk
@@ -166,8 +166,9 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
     settings through their module. Its records are kept in `repository`, or — none given — where the settings say (see catalog_repository)."""
     store = storage.open_store(collections_dir)
     kept = repository or catalog_repository(collections_dir, settings)
-    return CatalogUseCases(kept, legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store, lambda: build_visits(collections_dir)),
-                           status_history=KeptStatusHistory(collections_dir, lambda: kept, lambda: build_visits(collections_dir)), clock=clock or SystemClock(),
+    visits = VisitsAsKept(store, lambda: kept)   # the visits as they are kept, told with the catalog's own records: the catalog needs not the visits
+    return CatalogUseCases(kept, legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store, visits),
+                           status_history=KeptStatusHistory(collections_dir, lambda: kept, lambda: visits), clock=clock or SystemClock(),
                            legacy_fieldwork=FieldworkFromTheSettings(settings))
 
 

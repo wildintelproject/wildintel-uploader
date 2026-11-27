@@ -8,7 +8,7 @@ from pathlib import Path
 from wildintel_uploader.modules.catalog.domain.records import CatalogRecords
 from wildintel_uploader.modules.visits.domain import references as refs_of
 from wildintel_uploader.modules.visits.domain.references import Refs
-from wildintel_uploader.shared import audit, ids, storage
+from wildintel_uploader.shared import audit, storage
 
 
 class KeptVisits:
@@ -48,19 +48,9 @@ class KeptVisits:
         Raises:
             storage.StorageError: the research project id can't be a folder name."""
         raw = self._raw(project)
-        refs = self._refs(project, trappers)
-        kept = []
-        for visit in raw:
-            try:
-                one = refs_of.as_kept(visit, refs)
-            except (KeyError, ValueError, TypeError):
-                one = visit   # not a visit it can read the time of: left as it is
-            if not one.get("id"):   # kept before the ids existed: the same one whenever it is read
-                one = {**one, "id": ids.legacy_id("visit", f"{refs_of.site(one, refs)}|{one.get('when') or ''}", project)}
-            kept.append(one)
+        kept, visits = refs_of.read_kept(raw, self._refs(project, trappers), project)
         if kept != raw and raw:
             self._write_raw(project, kept)
-        visits = refs_of.with_the_camera_there([refs_of.as_told(v, refs) for v in kept])
         if location_id is None:
             return visits
         return [v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower()]
