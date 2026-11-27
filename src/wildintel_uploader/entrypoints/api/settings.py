@@ -3,7 +3,7 @@ the General section — its settings, the folders, what the system says, the log
 EPICOLLECT5, VALIDATION…), the welcome page and the data folder.
 
 It only translates: a request into a call to the contract of the module (`domain.ports.SettingsService`), and its answer or its error into HTTP. What the settings
-page reads and saves all at once (GET and PUT /api/settings) is still `web/api/routers/app_settings.py`: it also moves the cameras, the SD cards and the
+page reads and saves all at once (GET and PUT /api/settings) is `entrypoints/api/settings_page.py`: it also moves the cameras, the SD cards and the
 trappers to the research projects, and goes with them."""
 from __future__ import annotations
 

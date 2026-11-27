@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from wildintel_uploader.entrypoints import wiring
 from wildintel_uploader.entrypoints.api import backup as backup_entrypoint
+from wildintel_uploader.entrypoints.api import health
 from wildintel_uploader.entrypoints.api import catalog as catalog_entrypoint
 from wildintel_uploader.entrypoints.api import deployments as deployments_entrypoint
 from wildintel_uploader.entrypoints.api import desktop as desktop_entrypoint
@@ -20,11 +21,11 @@ from wildintel_uploader.entrypoints.api import postvalidation as postvalidation_
 from wildintel_uploader.entrypoints.api import prevalidation as prevalidation_entrypoint
 from wildintel_uploader.entrypoints.api import reports as reports_entrypoint
 from wildintel_uploader.entrypoints.api import settings as settings_entrypoint
+from wildintel_uploader.entrypoints.api import settings_page
 from wildintel_uploader.entrypoints.api import sources as sources_entrypoint
 from wildintel_uploader.entrypoints.api import timefix as timefix_entrypoint
 from wildintel_uploader.entrypoints.api import uploaders as uploaders_entrypoint
 from wildintel_uploader.entrypoints.api import visits as visits_entrypoint
-from wildintel_uploader.web.api.routers import app_settings, health
 from wildintel_uploader.web.settings import configure_logging, settings
 
 configure_logging()
@@ -40,7 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, catalog_entrypoint.settings_router, uploaders_entrypoint.trapper_router, prevalidation_entrypoint.router, postvalidation_entrypoint.router, deployments_entrypoint.router, deployments_entrypoint.repair_router, deployments_entrypoint.statistics_router, desktop_entrypoint.router, uploaders_entrypoint.import_router, app_settings.router, deployments_entrypoint.sessions_router, uploaders_entrypoint.upload_router, uploaders_entrypoint.sync_router, reports_entrypoint.router,  sources_entrypoint.router, visits_entrypoint.router, timefix_entrypoint.router, backup_entrypoint.router]:
+for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, catalog_entrypoint.settings_router, uploaders_entrypoint.trapper_router, prevalidation_entrypoint.router, postvalidation_entrypoint.router, deployments_entrypoint.router, deployments_entrypoint.repair_router, deployments_entrypoint.statistics_router, desktop_entrypoint.router, uploaders_entrypoint.import_router, settings_page.router, deployments_entrypoint.sessions_router, uploaders_entrypoint.upload_router, uploaders_entrypoint.sync_router, reports_entrypoint.router,  sources_entrypoint.router, visits_entrypoint.router, timefix_entrypoint.router, backup_entrypoint.router]:
     app.include_router(_router)
 
 

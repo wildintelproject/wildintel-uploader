@@ -28,7 +28,7 @@ def _releases(*tags, assets=(), prerelease=()):
 
 def _check(monkeypatch, *, current="0.1.0", payload=None, error=None, system="Linux"):
     import httpx
-    from wildintel_uploader.web.api.routers import health
+    from wildintel_uploader.entrypoints.api import health
 
     monkeypatch.setattr(health, "current_version", lambda: current)
     monkeypatch.setattr(health.platform, "system", lambda: system)
