@@ -33,7 +33,8 @@ from wildintel_uploader.modules.catalog.infrastructure.json_repository import St
 from wildintel_uploader.modules.catalog.infrastructure.records import RecordsOf
 from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, SystemClock, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
-from wildintel_uploader.modules.catalog.infrastructure.visits import StoredStatusHistory, StoredVisits
+from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
+from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.deployments.infrastructure.legacy import (
@@ -117,9 +118,13 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
     """The catalog of a collections folder — the one of the settings, or one a caller of before names —, taking what versions before left in the
     settings through their module. Its records are kept in `repository`, or — none given — where the settings say (see catalog_repository)."""
     store = storage.open_store(collections_dir)
-    return CatalogUseCases(repository or catalog_repository(collections_dir, settings), legacy_trappers=TrappersFromTheSettings(settings),
-                           visits=StoredVisits(store, lambda: build_visits(collections_dir)), status_history=StoredStatusHistory(collections_dir), clock=clock or SystemClock(),
-                           legacy_fieldwork=FieldworkFromTheSettings(settings), records=RecordsOf(collections_dir))
+    kept = repository or catalog_repository(collections_dir, settings)
+    catalog: list[CatalogService] = []     # the records are the catalog's own, as records: they are given it once it is made
+    made = CatalogUseCases(kept, legacy_trappers=TrappersFromTheSettings(settings), visits=StoredVisits(store, lambda: build_visits(collections_dir)),
+                           status_history=KeptStatusHistory(collections_dir, lambda: kept, lambda: build_visits(collections_dir)), clock=clock or SystemClock(),
+                           legacy_fieldwork=FieldworkFromTheSettings(settings), records=RecordsOf(lambda: catalog[0], lambda: kept))
+    catalog.append(made)
+    return made
 
 
 def catalog_repository(collections_dir: Path, settings: SettingsService, kind: str | None = None, database: Path | None = None) -> CatalogRepository:
@@ -210,7 +215,6 @@ def build_backup(collections_dir: Path | None = None, version: Callable[[], str]
 PLUGGED = {
     "config": config,     # the module itself: what it is asked for is looked up when asked, so a test may patch it
     "catalog_of": lambda root: catalog_of(root),
-    "catalog_repository_of": lambda root: catalog_repository(root, build_settings()),
     "visits_of": lambda root=None: build_visits(root),
     "file_info": lambda: file_info(),
     "deployments": lambda: build_deployments(),

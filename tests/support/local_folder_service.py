@@ -1,15 +1,13 @@
 """The names of before of what the collections folder holds, for the code that still calls them — each now of its module (#248): the catalog as
-records (modules.catalog.infrastructure.records), how a collection holds its deployments (modules.deployments.infrastructure.collections), the
+records (tests.support.catalog_records, over modules.catalog), how a collection holds its deployments (modules.deployments.infrastructure.collections), the
 visits kept (modules.visits.infrastructure.kept_visits), the upload failures (modules.uploaders.infrastructure.failures) and why a status can't be
 set by hand (modules.visits.domain.refusals). Nothing is decided here."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.infrastructure.records import *  # noqa: F401,F403
-from wildintel_uploader.modules.catalog.infrastructure.records import (  # noqa: F401 — the private names, which * leaves out
-    _as_local_folder_error, _catalog, _catalog_repository, _equipment, _project_status, _require_modifiable, _store, _trapper_records,
-)
+from tests.support.catalog_records import *  # noqa: F401,F403
+from tests.support.catalog_records import _require_modifiable, _trapper_records  # noqa: F401 — the private names, which * leaves out
 from wildintel_uploader.modules.deployments.infrastructure.collections import (  # noqa: F401
     COLLECTION_METADATA_FILE, DEPLOYMENT_METADATA_FILE, FIELDWORK_LOG_FIELDS, FIELDWORK_LOG_SUFFIX, IMAGES_FILE, TIMESTAMP_LOG_FIELDS, TIMESTAMP_LOG_SUFFIX,
     _read_json, check_collection, fieldwork_log_path, image_entry, imported_source_hashes, is_synced, list_deployments, project_dir, read_fieldwork_log,

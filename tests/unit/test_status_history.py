@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from tests.support import local_folder_service as svc
-from wildintel_uploader.modules.catalog.infrastructure import status_history
+from tests.support import status_history
 
 LOCATION = {"location_id": "DONA_01", "name": "Doñana 1", "timezone": "UTC", "ignore_dst": False, "latitude": 37.1, "longitude": -6.4, "status": "pending"}
 
