@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, UploaderError
 
 Deployment = Any   # the record of a deployment of Camtrap DP (shared.camtrap.DeploymentFields)
@@ -324,13 +325,18 @@ class UploadPlaces(ABC):
     def max_zip_bytes(self) -> int: ...
 
 
-class SyncedRecords(Protocol):
-    """The catalog of the collections folder as records — its contract —, as a sync reads and adds to it."""
+class SyncedCatalog(Protocol):
+    """The catalog of the collections folder as a sync reads and adds to it: research projects and their locations, as the catalog has them
+    (catalog.domain.models)."""
 
     def has_project(self, project: str) -> bool: ...
-    def add_project(self, record: dict) -> dict: ...
-    def locations(self, project: str, include_deleted: bool = False) -> list[dict]: ...
-    def add_location(self, project: str, location: dict, by_hand: bool = False) -> dict: ...
+
+    def add_project(self, project: ResearchProject) -> None: ...
+
+    def location_ids(self, project: str) -> set[str]:
+        """The ids of the locations of a research project, in lower case."""
+
+    def add_location(self, project: str, location: Location) -> None: ...
 
 
 class SyncedFolder(ABC):

@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject
 from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName
 from wildintel_uploader.modules.deployments.domain.naming import collection_code
 
@@ -49,17 +50,16 @@ def wall_clock(value: str, timezone_name: str | None, ignore_dst: bool) -> datet
     return local.replace(tzinfo=None) - (local.dst() or timedelta(0) if ignore_dst else timedelta(0))
 
 
-def new_project(research_project: dict, project_id: str) -> dict:
+def new_project(research_project: dict, project_id: str) -> ResearchProject:
     """A research project TRAPPER has, as one made by hand starts — the fields of TRAPPER's form at their first option —, with the pk it has there."""
-    return {"name": research_project.get("name") or project_id, "acronym": project_id, "sampling_design": 1, "sensor_method": 1, "animal_types": 1,
-            "bait_use": 1, "event_interval": 0, "status": "active", "keywords": "", "abstract": "", "methods": "", "description": "",
-            "trapper_pk": research_project["pk"]}
+    return ResearchProject(acronym=project_id, name=research_project.get("name") or project_id, status="active", trapper_pk=research_project["pk"])
 
 
-def new_location(location: dict) -> dict:
+def new_location(location: dict) -> Location:
     """A location TRAPPER has, as it is kept here: its id in upper case, pending until a visit is made to it."""
-    record = {k: location.get(k) for k in ("location_id", "name", "timezone", "ignore_dst", "latitude", "longitude")}
-    return {**record, "location_id": location["location_id"].upper(), "coordinate_uncertainty": None, "trapper_pk": location["pk"], "status": "pending"}
+    return Location(location_id=location["location_id"].upper(), name=location.get("name"), timezone=location.get("timezone"),
+                    ignore_dst=location.get("ignore_dst"), latitude=location.get("latitude"), longitude=location.get("longitude"),
+                    trapper_pk=location["pk"], status="pending")
 
 
 def deployment_record(deployment: dict, deployment_id: str) -> dict:

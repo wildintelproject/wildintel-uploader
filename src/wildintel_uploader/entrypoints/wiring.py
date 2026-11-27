@@ -96,7 +96,7 @@ from wildintel_uploader.modules.uploaders.application.use_cases import Uploaders
 from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
 from wildintel_uploader.modules.uploaders.application.sync import TrapperSync
 from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
-from wildintel_uploader.modules.uploaders.infrastructure.synced_folder import SyncedCollections
+from wildintel_uploader.modules.uploaders.infrastructure.synced_folder import CatalogOfTheSync, SyncedCollections
 from wildintel_uploader.modules.uploaders.infrastructure.failures import UploadFailures
 from wildintel_uploader.modules.uploaders.infrastructure.packages import DeploymentFolder, PackagesOnDisk
 from wildintel_uploader.modules.uploaders.infrastructure.trapper import CollectionsFolder, PlacesInUse, SavedUploadReports, TrapperClient
@@ -295,7 +295,7 @@ def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
                              SavedUploadReports(build_reports()), FolderUploads(root, section("TRAPPER"), section("AGOUTI"), lambda: build_deployments().layout(), failures),
                              deployments=build_deployments,
                              sending=trapper_uploads(), places=PlacesInUse(lambda: config.packages_dir(), lambda: config.max_zip_mb()),
-                             syncing=TrapperSync(TrapperSdk(), lambda: catalog_records(config.collections_dir()),
+                             syncing=TrapperSync(TrapperSdk(), lambda: CatalogOfTheSync(lambda: catalog_of(config.collections_dir())),
                                                  SyncedCollections(lambda: config.collections_dir(), lambda: build_deployments().layout())))
 
 

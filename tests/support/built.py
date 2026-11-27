@@ -30,12 +30,12 @@ def importing():
 
 
 def trapper_sync(root: Path | None = None):
-    from wildintel_uploader.entrypoints.wiring import build_deployments, catalog_records, config
+    from wildintel_uploader.entrypoints.wiring import build_deployments, catalog_of, config
     from wildintel_uploader.modules.uploaders.application.sync import TrapperSync
-    from wildintel_uploader.modules.uploaders.infrastructure.synced_folder import SyncedCollections
+    from wildintel_uploader.modules.uploaders.infrastructure.synced_folder import CatalogOfTheSync, SyncedCollections
     from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk
     where = (lambda: root) if root is not None else (lambda: config.collections_dir())
-    return TrapperSync(TrapperSdk(), lambda: catalog_records(where()), SyncedCollections(where, lambda: build_deployments().layout()))
+    return TrapperSync(TrapperSdk(), lambda: CatalogOfTheSync(lambda: catalog_of(where())), SyncedCollections(where, lambda: build_deployments().layout()))
 
 
 def synced(events) -> dict:

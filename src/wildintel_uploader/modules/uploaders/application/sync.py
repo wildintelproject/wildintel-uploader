@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from wildintel_uploader.modules.uploaders.domain import sync as rules
 from wildintel_uploader.modules.uploaders.domain.models import Credentials
-from wildintel_uploader.modules.uploaders.domain.ports import SyncedFolder, SyncedRecords, TrapperSite
+from wildintel_uploader.modules.uploaders.domain.ports import SyncedCatalog, SyncedFolder, TrapperSite
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def _say(message: str) -> dict:
 
 
 class TrapperSync:
-    def __init__(self, site: TrapperSite, records: Callable[[], SyncedRecords], folder: SyncedFolder) -> None:
+    def __init__(self, site: TrapperSite, records: Callable[[], SyncedCatalog], folder: SyncedFolder) -> None:
         self._site, self._records, self._folder = site, records, folder
 
     def collection_names(self, credentials: Credentials, classification_project_pk: int) -> list[str]:
@@ -55,7 +55,7 @@ class TrapperSync:
 
         yield _say("Reading the locations from TRAPPER…")
         locations = self._site.locations(credentials, research_project["pk"])
-        known = {loc.get("location_id", "").lower() for loc in records.locations(project_id)}
+        known = records.location_ids(project_id)
         by_id = {}
         for location in locations:
             by_id[location["location_id"].lower()] = location

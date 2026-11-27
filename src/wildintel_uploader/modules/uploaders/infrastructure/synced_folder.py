@@ -8,7 +8,9 @@ from pathlib import Path
 
 from wildintel_uploader.modules.deployments.domain.naming import COLLECTION_METADATA_FILE, DEPLOYMENT_METADATA_FILE, IMAGES_FILE
 from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
-from wildintel_uploader.modules.uploaders.domain.ports import SyncedFolder
+from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject, UnknownProject
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.uploaders.domain.ports import SyncedCatalog, SyncedFolder
 from wildintel_uploader.shared import storage
 
 
@@ -60,3 +62,27 @@ class SyncedCollections(SyncedFolder):
 
     def image_path(self, project: str, collection: str, deployment_id: str, name: str) -> Path:
         return self._deployment(project, collection, deployment_id) / name
+
+
+class CatalogOfTheSync(SyncedCatalog):
+    """The catalog of the collections folder as a sync reads and adds to it — through its contract, given when it is needed."""
+
+    def __init__(self, catalog: Callable[[], CatalogService]) -> None:
+        self._catalog = catalog
+
+    def has_project(self, project: str) -> bool:
+        try:
+            self._catalog().require_project(project)
+        except UnknownProject:
+            return False
+        return True
+
+    def add_project(self, project: ResearchProject) -> None:
+        self._catalog().add_project(project)
+
+    def location_ids(self, project: str) -> set[str]:
+        return {loc.location_id.lower() for loc in self._catalog().locations(project)}
+
+    def add_location(self, project: str, location: Location) -> None:
+        self._catalog().add_location(project, location)
+
