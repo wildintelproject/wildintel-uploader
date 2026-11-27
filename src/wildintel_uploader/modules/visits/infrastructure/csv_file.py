@@ -12,6 +12,7 @@ from pydantic_core import PydanticCustomError
 from wildintel_uploader.modules.visits.domain import rules as visit_rules
 from wildintel_uploader.modules.visits.domain import visit_file as rules
 from wildintel_uploader.modules.visits.domain.ports import Visit, VisitFile
+from wildintel_uploader.modules.visits.domain.shapes import Location
 from wildintel_uploader.modules.visits.domain.visit_file import ERROR_LABELS, RowError, VisitsCsvError
 from wildintel_uploader.modules.visits.infrastructure.records import NewLocationRecord as LocationRecord, VisitRecord
 
@@ -161,13 +162,13 @@ class CsvVisitFile(VisitFile):
         except ValidationError as exc:
             raise _problem_of(exc) from exc
 
-    def record(self, visit: dict) -> Visit:
+    def record(self, visit: Visit) -> Visit:
         try:
             return VisitRecord.model_validate(visit).model_dump(mode="json")
         except ValidationError as exc:
             raise _problem_of(exc) from exc
 
-    def location(self, fields: dict) -> dict:
+    def location(self, fields: Location) -> Location:
         try:
             return LocationRecord(**fields).model_dump(mode="json")
         except ValidationError as exc:

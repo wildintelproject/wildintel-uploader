@@ -3,8 +3,10 @@
 they refuse is VisitsFailed, with their words."""
 from __future__ import annotations
 
+import builtins
+
 from typing import Any
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
@@ -19,7 +21,7 @@ from wildintel_uploader.modules.visits.domain.ports import (
 )
 from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
-from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedVisit, Location, SdCard, Trapper
+from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedVisit, Location, SdCard, Trapper, UnknownVisit
 
 
 
@@ -41,7 +43,7 @@ class StoredVisits(VisitRepository):
     def __init__(self, kept: KeptVisits) -> None:
         self._kept = kept
 
-    def list(self, project: str, location_id: str | None = None) -> list[Visit]:
+    def list(self, project: str, location_id: str | None = None) -> builtins.list[Visit]:
         with _failed():
             return self._kept.list(project, location_id)
 
@@ -49,7 +51,7 @@ class StoredVisits(VisitRepository):
         with _failed():
             return self._kept.add(project, visit)
 
-    def add_many(self, project: str, visits: list[Visit]) -> int:
+    def add_many(self, project: str, visits: builtins.list[Visit]) -> int:
         with _failed():
             return self._kept.add_many(project, visits)
 
@@ -57,7 +59,7 @@ class StoredVisits(VisitRepository):
         with _failed():
             return self._kept.update(project, location_id, session, visit)
 
-    def unknown(self, project: str) -> list[Visit]:
+    def unknown(self, project: str) -> builtins.list[UnknownVisit]:
         with _failed():
             return self._kept.unknown(project)
 
@@ -65,15 +67,15 @@ class StoredVisits(VisitRepository):
         with _failed():
             return self._kept.kept_count(project)
 
-    def replace_all(self, project: str, visits: list[Visit]) -> None:
+    def replace_all(self, project: str, visits: builtins.list[Visit]) -> None:
         with _failed():
             self._kept.replace_all(project, visits)
 
-    def add_unknown(self, project: str, unknown: list[Visit]) -> int:
+    def add_unknown(self, project: str, unknown: builtins.list[UnknownVisit]) -> int:
         with _failed():
             return self._kept.add_unknown(project, unknown)
 
-    def planned_revisions(self, project: str) -> list[str]:
+    def planned_revisions(self, project: str) -> builtins.list[str]:
         with _failed():
             return self._kept.planned_revisions(project)
 
@@ -81,7 +83,7 @@ class StoredVisits(VisitRepository):
         with _failed():
             return self._kept.plan_revision(project, session)
 
-    def closed(self, project: str) -> list[ClosedVisit]:
+    def closed(self, project: str) -> builtins.list[ClosedVisit]:
         with _failed():
             return self._kept.closed(project)
 
@@ -89,7 +91,7 @@ class StoredVisits(VisitRepository):
         with _failed():
             return self._kept.link(project, location_id, date, time, deployment_id)
 
-    def write_states(self, project: str, states: dict) -> int:
+    def write_states(self, project: str, states: Mapping[tuple[str, str], str | None]) -> int:
         with _failed():
             return self._kept.write_states(project, states)
 
@@ -132,7 +134,7 @@ class CatalogOfTheVisits(VisitCatalog):
         with _failed():
             self._catalog().update_location(project, location_id, changes, by_visit=True)
 
-    def keep_equipment(self, project: str, kind: str, items: list[Camera | SdCard]) -> None:
+    def keep_equipment(self, project: str, kind: str, items: Sequence[Camera | SdCard]) -> None:
         with _failed():
             self._catalog().save_equipment(project, kind, [view.equipment(i, kind) for i in items])
 

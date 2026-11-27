@@ -6,6 +6,7 @@ from __future__ import annotations
 import csv
 import io
 import threading
+from typing import cast
 
 from wildintel_uploader.modules.sources.domain.models import SourceError
 from wildintel_uploader.modules.sources.domain.ports import SourcesService
@@ -16,7 +17,7 @@ from wildintel_uploader.modules.visits.domain.models import ImportOptions, Visit
 from wildintel_uploader.modules.visits.domain.ports import (
     Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitFile, VisitReports, VisitRepository, VisitSettings, VisitsService,
 )
-from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedVisit, Location, SdCard
+from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedDeployment, Location, SavedVisit, SdCard, UnknownVisit, ZonedVisit
 
 # One save of visits at a time for a research project: two saves of the same file, run together, would each keep what the other is keeping.
 _saving: dict[str, threading.Lock] = {}
@@ -63,6 +64,12 @@ class VisitsUseCases(VisitsService):
         self._uploads, self._reports, self._history, self._settings, self._clock = uploads, reports, history, settings, clock
 
     # ── what the visits kept do ──
+
+    def _cameras(self, project: str) -> list[Camera]:
+        return cast(list[Camera], self._catalog.equipment(project, "cameras"))
+
+    def _cards(self, project: str) -> list[SdCard]:
+        return cast(list[SdCard], self._catalog.equipment(project, "sd_cards"))
 
     def _refresh_states(self, project: str) -> None:
         """A visit that left a camera is collected once a later one took its card, and the one just added has its own."""
@@ -161,7 +168,7 @@ class VisitsUseCases(VisitsService):
     def visits(self, project: str, location_id: str | None = None) -> list[Visit]:
         return self._visits.list(project, location_id)
 
-    def unknown(self, project: str) -> list[Visit]:
+    def unknown(self, project: str) -> list[UnknownVisit]:
         return self._visits.unknown(project)
 
     def kept_count(self, project: str) -> int:
@@ -170,16 +177,16 @@ class VisitsUseCases(VisitsService):
     def replace_all(self, project: str, visits: list[Visit]) -> None:
         self._visits.replace_all(project, visits)
 
-    def save(self, project: str, visit: Visit) -> Visit:
+    def save(self, project: str, visit: Visit) -> SavedVisit:
         self._catalog.require_project(project, active=True)
-        visit = dict(visit)
+        visit = cast(Visit, dict(visit))
         locations = self._catalog.locations(project)
         # the rules compare instants: the day and the time are the wall clock of the location
         location = _location_of(locations, visit["location_id"])
         visit["when"] = wall_clock.to_when(visit["date"], visit["time"], location)
         kept_visits = self._visits.list(project)
         visit = rules.with_site_start(visit, kept_visits, location)
-        cards = self._catalog.equipment(project, "sd_cards")
+        cards = self._cards(project)
         unknown = self._visits.unknown(project)
         # a visit that takes the place of an unknown one is put where its instant says, among the visits that are kept
         fills = any(u["location_id"].lower() == visit["location_id"].lower() and u["session"].upper() == str(visit["session"]).upper() for u in unknown)
@@ -191,9 +198,9 @@ class VisitsUseCases(VisitsService):
         self._archive_locations(project, [kept])
         self._apply_to_entities(project, [kept], kept_visits)
         self._refresh_states(project)
-        return {**kept, "collection_folders": self._make_folders(project, [kept])}
+        return cast(SavedVisit, {**kept, "collection_folders": self._make_folders(project, [kept])})
 
-    def update(self, project: str, location_id: str, session: str, visit: Visit) -> Visit:
+    def update(self, project: str, location_id: str, session: str, visit: Visit) -> SavedVisit:
         self._catalog.require_project(project)
         kept_visits = self._visits.list(project)
         old = next((v for v in kept_visits if v["location_id"].lower() == location_id.lower() and str(v.get("session") or "").upper() == session.upper()), None)
@@ -201,7 +208,7 @@ class VisitsUseCases(VisitsService):
             raise VisitMissing(f"There is no visit to {location_id} in {session}.")
         if (str(old["location_id"]).lower(), str(old.get("when") or "")) in visit_deployments.locked(kept_visits, self._settings.keep_seconds()):
             raise VisitLocked(f"The visit to {old['location_id']} in {old['session']} starts or closes a deployment that is imported: it cannot be edited.")
-        visit = {**visit, "location_id": old["location_id"], "session": old["session"]}
+        visit = cast(Visit, {**visit, "location_id": old["location_id"], "session": old["session"]})
         if ("Archive" in (old.get("actions") or [])) != ("Archive" in visit["actions"]):
             raise VisitRefused("The action Archive cannot be added to a visit or taken from it by editing.")
         locations = self._catalog.locations(project)
@@ -210,13 +217,13 @@ class VisitsUseCases(VisitsService):
         others = [v for v in kept_visits if v is not old]
         if rules.camera_status_code(visit.get("camera_status")) == "New site":
             visit = rules.with_site_start(visit, others, location)
-        reasons = self._not_entities(project, old, visit) + rules.edit_errors(old, visit, others, locations, self._catalog.equipment(project, "sd_cards"),
+        reasons = self._not_entities(project, old, visit) + rules.edit_errors(old, visit, others, locations, self._cards(project),
                                                                               self._visits.unknown(project))
         if reasons:
             raise VisitRefused(" ".join(reasons))
         kept = self._visits.update(project, location_id, session, visit)
         self._refresh_states(project)
-        return {**kept, "collection_folders": self._make_folders(project, [kept])}
+        return cast(SavedVisit, {**kept, "collection_folders": self._make_folders(project, [kept])})
 
     # ── the revisions ──
 
@@ -289,7 +296,7 @@ class VisitsUseCases(VisitsService):
         if options.save:
             self._catalog.require_project(project, active=True)
         locations, kept = self._catalog.locations(project), self._visits.list(project)
-        cards, cameras = self._catalog.equipment(project, "sd_cards"), self._catalog.equipment(project, "cameras")
+        cards, cameras = self._cards(project), self._cameras(project)
         text, _, mapping, time_source = self._source_rows(options)
         # the form of Epicollect5 lets a site be made on the spot (New site): its timezone is the one asked for, UTC when none was
         from_epicollect = options.format in ("epicollect-csv", "epicollect-api")
@@ -358,13 +365,13 @@ class VisitsUseCases(VisitsService):
 
     # ── the deployments the visits say ──
 
-    def closed(self, project: str) -> list[ClosedVisit]:
+    def closed(self, project: str) -> list[ClosedDeployment]:
         closed = self._visits.closed(project)
         # each visit is told on the wall clock of its location: the timezone of the location goes with it
         zones = _zones(self._catalog.locations(project, include_deleted=True))
 
-        def zoned(visit: Visit) -> Visit:
-            return {**visit, "timezone": zones.get(str(visit.get("location_id", "")).lower())}
+        def zoned(visit: Visit) -> ZonedVisit:
+            return cast(ZonedVisit, {**visit, "timezone": zones.get(str(visit.get("location_id", "")).lower())})
         return [{"visit": zoned(c["visit"]), "end": zoned(c["end"]), "details": visit_deployments.merged_details(c["visit"], c["end"])} for c in closed]
 
     def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit:

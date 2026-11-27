@@ -32,7 +32,7 @@ def _zone(location: Location | None) -> tuple[ZoneInfo, bool]:
 
 def _standard_offset(zone: ZoneInfo, year: int) -> dt.timedelta:
     """The offset of the zone without summer time: the smaller of January's and July's."""
-    return min(dt.datetime(year, m, 1, tzinfo=zone).utcoffset() for m in (1, 7))
+    return min(dt.datetime(year, m, 1, tzinfo=zone).utcoffset() or dt.timedelta(0) for m in (1, 7))
 
 
 def utc_to_local(instant: dt.datetime, location: Location | None) -> dt.datetime:

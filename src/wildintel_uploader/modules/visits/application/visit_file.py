@@ -5,13 +5,14 @@ file (VisitFile) says."""
 from __future__ import annotations
 
 import re
+from typing import Any, cast
 
 from wildintel_uploader.modules.visits.domain import created
 from wildintel_uploader.modules.visits.domain import rules as visit_rules
 from wildintel_uploader.modules.visits.domain import visit_file as rules
 from wildintel_uploader.modules.visits.domain import wall_clock as visit_time
 from wildintel_uploader.modules.visits.domain.ports import Visit, VisitFile
-from wildintel_uploader.modules.visits.domain.shapes import Camera, Location
+from wildintel_uploader.modules.visits.domain.shapes import Camera, Location, UnknownVisit
 
 
 class VisitFiles:
@@ -36,7 +37,7 @@ class VisitFiles:
 
 
 def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: list[Visit], mapping: dict[str, str] | None = None,
-                 options: dict | None = None) -> dict:
+                 options: dict[str, Any] | None = None) -> dict:
     """The visits in the CSV `text` that can be kept, and what is wrong with the rest.
 
     `mapping` ({field: column}) says the column that gives each field of a visit — see domain.visit_file. `file` reads the text, the cells and the records.
@@ -69,7 +70,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
     # locations made from the first row that gave each site (the other rows of it are read in its timezone).
     cameras_known = {str(c.get(k) or "") for c in options.get("cameras") or [] if c.get("status") != "planned" for k in ("camera_id", "label")} - {""}   # as written: 7b and 7B are two
     # the record of each camera by what a row may call it — its label or its serial number (#231): a row is resolved to it once, and points to it by its id
-    camera_by: dict[str, dict] = {}
+    camera_by: dict[str, Camera] = {}
     for c in options.get("cameras") or []:
         if c.get("status") != "planned":
             for k in ("label", "camera_id"):
@@ -78,13 +79,13 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
     completed: dict[str, dict] = {}   # what the rows add to records that lacked it: {label: {field: value}}
     camera_warnings: list[tuple[int, str]] = []
     cards_known = {str(c.get("label") or "") for c in options.get("cards") or [] if c.get("status") != "planned"} - {""}
-    made_by_row: dict[int, dict[str, list[dict]]] = {}
-    new_locations: dict[str, dict] = {}
+    made_by_row: dict[int, dict[str, list[Any]]] = {}
+    new_locations: dict[str, Location] = {}
     already = {(str(v.get("location_id", "")).lower(), v.get("date"), v.get("time")) for v in kept}
     problems: list[dict] = []
-    parsed: list[tuple[int, dict]] = []
+    parsed: list[tuple[int, dict[str, Any]]] = []   # each visit, with whether the row said its revision (_given)
     skipped = 0
-    held: dict[str, list[dict]] = {}  # the visits to sites that are not locations of the research project, by site
+    held: dict[str, list[Visit]] = {}  # the visits to sites that are not locations of the research project, by site
     row_warnings: list[tuple[int, str]] = []  # what is odd in a row by itself: its row, and what
     took_location_coordinates: list[int] = []  # the rows that have no coordinates of the visit: they take those of their location
     from_location = options.get("coordinates_from_location", True)   # a row with none takes its location's — unless the import is asked not to
@@ -102,28 +103,28 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
         problems.append({"row": n, "message": message, **({"waits": True} if waits else {})})
         report[n] = {**report.get(n, {"row": n, "site": ""}), "result": "problem", "label": rules.error_label(code), "message": message}
 
-    by_new_site: list[dict] = []   # the locations that a visit that says New site made
+    by_new_site: list[Location] = []   # the locations that a visit that says New site made
     for n, row in enumerate(rows, start=2):
         found = re.search(r"\d+", row.get("session", ""))
         report[n] = {"row": n, "site": row.get("location_id", ""), "session": f"R{int(found.group(0)):04d}" if found else "", "actions": row.get("actions", ""), "result": "ok", "label": "", "message": "", "data": dict(row)}
         site = row.get("location_id", "")
         location = known.get(site.lower()) or new_locations.get(site.lower())
-        unknown = location is None
-        made: dict[str, list[dict]] = {"locations": [], "cameras": [], "sd_cards": []}
+        site_unknown = location is None
+        made: dict[str, list[Any]] = {"locations": [], "cameras": [], "sd_cards": []}
         try:
             # a visit that says New site makes its site — the form lets a site be made on the spot —, when the file is asked to (the one of Epicollect5 is), with no need of the switch
             says_new_site = bool(options.get("new_site_makes_location")) and str(row.get("camera_status") or "").strip().lower() == "new site"
-            if unknown and (create.get("locations") or says_new_site):
+            if site_unknown and (create.get("locations") or says_new_site):
                 location = file.location(rules.location_fields(site, row))
                 made["locations"].append(location)
-                unknown = False
+                site_unknown = False
                 if says_new_site and not create.get("locations"):
                     by_new_site.append(location)
         except rules.RowError as exc:
             problem(n, str(exc), exc.code)
             continue
-        if unknown:
-            location = {}  # held with its site apart: the time is read as UTC, as nothing says better
+        if location is None:   # held with its site apart: the time is read as UTC, as nothing says better
+            location = cast(Location, {})
         try:
             date, time = rules.when(row, location, time_source)
             report[n] |= {"date": date, "time": time[:5]}
@@ -135,7 +136,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
                     raise rules.RowError("coordinates_missing", "The row needs the coordinates of the visit: a latitude and a longitude.")
                 if location.get("latitude") is None or location.get("longitude") is None:
                     raise rules.RowError("coordinates_missing", "The row has no coordinates of the visit (a latitude and a longitude), and its location has none to take instead.")
-                cells["latitude"], cells["longitude"] = float(location["latitude"]), float(location["longitude"])
+                cells["latitude"], cells["longitude"] = float(location.get("latitude") or 0.0), float(location.get("longitude") or 0.0)   # both there: checked above
                 took_location_coordinates.append(n)
             elif cells.get("latitude") is None or cells.get("longitude") is None:
                 raise rules.RowError("coordinates_missing", "The row has only one of the coordinates of the visit: it needs a latitude and a longitude" + (", or none (then those of its location are used)." if from_location else "."))
@@ -167,10 +168,10 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
                 data.setdefault("card_status", card)
             # the GPS of the note is compared with the location's, to check that the site is the right one
             if data.get("latitude") is not None and data.get("longitude") is not None and location.get("latitude") is not None and location.get("longitude") is not None:
-                gap = visit_rules.distance_m(data["latitude"], data["longitude"], float(location["latitude"]), float(location["longitude"]))
+                gap = visit_rules.distance_m(data["latitude"], data["longitude"], float(location.get("latitude") or 0.0), float(location.get("longitude") or 0.0))
                 if gap > visit_rules.GPS_TOLERANCE_M:
                     row_warnings.append((n, f"Row {n} ({site}): the GPS of the note is {round(gap)} m from the location; check that the location is the right one."))
-            visit = {"location_id": location.get("location_id", site), "date": date, "time": time, "actions": actions, **data}
+            visit = cast(Visit, {"location_id": location.get("location_id", site), "date": date, "time": time, "actions": actions, **data})
             visit.setdefault("session", "R0000")  # worked out below, when the order of the visits is known
             record = file.record(visit)
             record["when"] = visit_time.to_when(record["date"], record["time"], location)
@@ -182,7 +183,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
         except ValueError as exc:
             problem(n, str(exc))
             continue
-        if unknown:
+        if site_unknown:
             held.setdefault(site, []).append(record)
             report[n] |= {"result": "new_site", "label": "Not a location of the research project", "message": f"{site} is not a location of the research project: the visit is held until the location is added or the file corrected."}
             continue
@@ -192,10 +193,10 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
         by_time = (record["location_id"].lower(), record["date"], record["time"]) in already
         if ("session" in row and again in same_visit) or ("session" not in row and by_time):
             skipped += 1
-            closed = visit_rules.is_closed_revision(record["session"], kept, locations)
+            is_closed = visit_rules.is_closed_revision(record["session"], kept, locations)
             report[n] |= {"result": "already_kept", "label": "Already kept", "message": (f"A visit to {record['location_id']} on {record['date']} at {record['time']} is already kept: it is not imported again." if "session" not in row
                                                               else f"The {record['session']} visit of {record['location_id']} is already kept: it is not imported again."
-                                                                 + (f" {record['session']} is closed — every location has its visit — so nothing new can be imported in it." if closed else ""))}
+                                                                 + (f" {record['session']} is closed — every location has its visit — so nothing new can be imported in it." if is_closed else ""))}
             continue
         if visit_rules.is_closed_revision(record["session"], kept, locations):
             problem(n, f"{record['session']} is closed: every location has its visit in it, so nothing new can be imported in it.", "revision_closed")
@@ -216,18 +217,18 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
     count: dict[str, int] = {}
     for loc in {r["location_id"].lower() for _, r in parsed}:
         count[loc] = sum(1 for v in kept if str(v.get("location_id", "")).lower() == loc)
-    visits = []
-    for _, record in sorted(parsed, key=lambda p: (p[1]["date"], p[1]["time"])):
-        given = record.pop("_given")
-        loc = record["location_id"].lower()
+    visits: list[Visit] = []
+    for _, pending in sorted(parsed, key=lambda p: (p[1]["date"], p[1]["time"])):
+        given = pending.pop("_given")
+        loc = pending["location_id"].lower()
         # a visit that does not put a camera up is of the one at the site: an inspection or a removal does not say which — and it is not told here: it is in the visit before
         if not given:
-            record["session"] = f"R{count[loc] + 1:04d}"
+            pending["session"] = f"R{count[loc] + 1:04d}"
         count[loc] += 1
-        visits.append(record)
+        visits.append(cast(Visit, pending))
     # The first camera put up at a pending site starts it.
     seen_sites = {str(v.get("location_id", "")).lower() for v in kept}
-    by_site = {str(l.get("location_id", "")).lower(): l for l in [*locations, *new_locations.values()]}
+    by_site: dict[str, Location] = {str(l.get("location_id", "")).lower(): l for l in [*locations, *new_locations.values()]}
     for record in sorted(visits, key=visit_rules._stamp):
         site = record["location_id"].lower()
         if site not in seen_sites:
@@ -246,12 +247,13 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
     # A revision is imported only when the one before it is known — it has a visit, kept or in the file — and closed: only R0001 has none before it. So an import
     # makes no unknown visit: what a revision lacks is a visit to be made, marked as not visited when the revision is closed.
     unknown_kept = options.get("unknown") or []
-    unknown: list[dict] = []
-    all_locations = [*locations, *new_locations.values()]
+    unknown: list[UnknownVisit] = []
+    all_locations: list[Location] = [*locations, *new_locations.values()]
     floor = 1
     close_after = options.get("close_after") or None
     close_notes: list[str] = []
-    accepted, gate, closing = visit_rules.History(kept), {}, []
+    accepted, closing = visit_rules.History(kept), []
+    gate: dict[int, str | None] = {}
     unknown_kept_keys = {(str(u["location_id"]).lower(), str(u["session"]).upper()) for u in unknown_kept}
 
     def fills_unknown(v: Visit) -> bool:
@@ -305,7 +307,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
             if number not in gate:
                 gate[number] = visit_rules.unfinished_revision(number, accepted, in_use, floor, day, [*unknown_kept, *unknown], visits)
         n = row_of[id(visit)]
-        reasons = [gate[number]] if number is not None and not fills and gate.get(number) else []
+        reasons: list[str] = [cast(str, gate[number])] if number is not None and not fills and gate.get(number) else []   # a Reason: its code says its kind
         # a visit that takes the place of an unknown one is put where its instant says, among the visits kept (as in the form)
         if fills:
             reasons += visit_rules.edit_errors(None, visit, accepted, all_locations, options.get("cards"), [*unknown_kept, *unknown])
@@ -350,9 +352,9 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
             notes.append(f"The location {location['location_id']} is made because its visit says New site: its place is the one of the visit and its timezone is {location['timezone']} — "
                          f"change it in the settings if it is not that one.")
     notes += close_notes
-    closed = [m for m in closing if any(visit_rules._session_number(v.get("session")) == visit_rules._session_number(m["session"]) + 1 for v in visits)]
-    for session in sorted({m["session"] for m in closed}):
-        notes.append(f"{session} is closed to start the revision after it: {', '.join(m['location_id'] for m in closed if m['session'] == session)} still planned in it, marked as not visited.")
+    closed_now = [m for m in closing if any(visit_rules._session_number(v.get("session")) == (visit_rules._session_number(m["session"]) or 0) + 1 for v in visits)]
+    for session in sorted({m["session"] for m in closed_now}):
+        notes.append(f"{session} is closed to start the revision after it: {', '.join(m['location_id'] for m in closed_now if m['session'] == session)} still planned in it, marked as not visited.")
     # a site that has no visit in a revision the file gives was not there: the revision after it has to put its camera up
     upwards = visit_rules.unknown_installation_warnings(visits, kept, [*unknown_kept, *unknown])
     warnings += [m for m in upwards if m not in warnings]
@@ -374,8 +376,8 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
                          f"they are created as unknown visits, and the visits after them cannot be checked against them.")
     # what is created is what the visits that are kept need: a location, a camera or an SD card that only a refused visit named is not
     kept_rows = {row_of[id(v)] for v in visits}
-    sites = {v["location_id"].lower() for v in visits}
-    create_out: dict[str, list[dict]] = {"locations": [l for site, l in new_locations.items() if site in sites], "cameras": [], "sd_cards": [], "trappers": [],
+    kept_sites = {v["location_id"].lower() for v in visits}
+    create_out: dict[str, list[Any]] = {"locations": [l for site, l in new_locations.items() if site in kept_sites], "cameras": [], "sd_cards": [], "trappers": [],
                                          "complete_cameras": [{"label": label, **fields} for label, fields in completed.items()]}
     # the people the visits that are kept say went, who are not trappers yet: made as they are called, when the import is asked to
     trapper_rows: dict[int, list[str]] = {}
@@ -419,12 +421,12 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
     # what stops the file from being added, said once (#206): the rows with an error of their own, and how many rows only wait for them — the revisions
     # after one a refused row left unfinished
     waiting = [p for p in problems if p.get("waits")]
-    sessions = sorted({report[p["row"]].get("session") for p in waiting if report.get(p["row"], {}).get("session")})
+    waiting_sessions = sorted({str(report[p["row"]].get("session")) for p in waiting if report.get(p["row"], {}).get("session")})
     blocking = {"errors": [{"row": p["row"], "site": report.get(p["row"], {}).get("site", ""), "session": report.get(p["row"], {}).get("session", ""), "message": p["message"]}
                            for p in problems if not p.get("waits")],
-                "waiting": {"rows": len(waiting), "from": sessions[0] if sessions else None, "to": sessions[-1] if sessions else None}}
+                "waiting": {"rows": len(waiting), "from": waiting_sessions[0] if waiting_sessions else None, "to": waiting_sessions[-1] if waiting_sessions else None}}
     return {"visits": visits, "problems": problems, "rows": [report[n] for n in sorted(report)], "skipped": skipped, "new_sites": new_sites,
-            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes, "unknown": unknown, "closed": closed,
+            "create": create_out, "warnings": warnings, "loose_warnings": list(dict.fromkeys(loose)), "notes": notes, "unknown": unknown, "closed": closed_now,
             "blocking": blocking}
 
 

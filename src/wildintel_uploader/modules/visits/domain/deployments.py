@@ -105,9 +105,9 @@ def _merged(start: Visit, end: Visit | None) -> tuple[dict, list[str]]:
             if value:
                 out[key] = value
         else:
-            value = setup if setup not in (None, "") else retrieval
-            if value not in (None, ""):
-                out[key] = value
+            given = setup if setup not in (None, "") else retrieval
+            if given not in (None, ""):
+                out[key] = given
             if setup not in (None, "") and retrieval not in (None, "") and str(setup).lower() != str(retrieval).lower():
                 retrieval_notes.append(f"{name} {_shown(retrieval)} (setup {_shown(setup)})")
     return out, retrieval_notes
@@ -191,7 +191,7 @@ def deployments(visits: list[Visit], keep_seconds: bool = True) -> list[dict]:
     last_session = max((n for n in (session_number(v.get("session")) for v in visits) if n is not None), default=0)
     out: list[dict] = []
     for group in by_site.values():
-        group.sort(key=lambda v: v["when"])
+        group.sort(key=lambda v: v["when"] or "")
         for earlier, later in zip(group, group[1:]):
             number = session_number(later.get("session"))
             if number is None or not _leaves_camera(earlier):

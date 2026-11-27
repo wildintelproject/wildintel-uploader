@@ -5,11 +5,14 @@ sources, the uploads, the reports, the history of the states, the settings and t
 The visits are dicts, as the rules (domain.rules) read them and as they are kept: their shape is the record of a visit (infrastructure.records)."""
 from __future__ import annotations
 
+import builtins
+
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager
 
 from wildintel_uploader.modules.visits.domain.models import ImportOptions
-from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedVisit, Location, SdCard, Trapper, UnknownVisit, Visit  # noqa: F401 — the shapes the visits work with
+from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedDeployment, ClosedVisit, Location, SavedVisit, SdCard, Trapper, UnknownVisit, Visit  # noqa: F401 — the shapes the visits work with
 
 
 
@@ -34,12 +37,12 @@ class VisitsService(ABC):
         """Keeps these visits, as `visits` tells them, as all of the research project's — a backup restored: each keeps its id and its dates."""
 
     @abstractmethod
-    def save(self, project: str, visit: Visit) -> Visit:
+    def save(self, project: str, visit: Visit) -> SavedVisit:
         """Registers a visit, if it follows the rules: what it does to the locations, the cameras and the SD cards is done, and the folders of the
         collections it changes are made — the visit kept, with "collection_folders"."""
 
     @abstractmethod
-    def update(self, project: str, location_id: str, session: str, visit: Visit) -> Visit:
+    def update(self, project: str, location_id: str, session: str, visit: Visit) -> SavedVisit:
         """Edits a visit kept — its site and its revision are its key."""
 
     @abstractmethod
@@ -67,7 +70,7 @@ class VisitsService(ABC):
         """The columns of a CSV, whether it is the form, a few rows, the fields of a visit and the column that most likely gives each."""
 
     @abstractmethod
-    def closed(self, project: str) -> list[ClosedVisit]:
+    def closed(self, project: str) -> list[ClosedDeployment]:
         """The visits that closed a deployment not imported yet, with the visit that started it and its details."""
 
     @abstractmethod
@@ -93,45 +96,45 @@ class VisitRepository(ABC):
     """Where the visits of the research projects are kept, told with the names of what they point to."""
 
     @abstractmethod
-    def list(self, project: str, location_id: str | None = None) -> list[Visit]: ...
+    def list(self, project: str, location_id: str | None = None) -> builtins.list[Visit]: ...
 
     @abstractmethod
     def add(self, project: str, visit: Visit) -> Visit: ...
 
     @abstractmethod
-    def add_many(self, project: str, visits: list[Visit]) -> int: ...
+    def add_many(self, project: str, visits: builtins.list[Visit]) -> int: ...
 
     @abstractmethod
     def update(self, project: str, location_id: str, session: str, visit: Visit) -> Visit: ...
 
     @abstractmethod
-    def unknown(self, project: str) -> list[UnknownVisit]:
+    def unknown(self, project: str) -> builtins.list[UnknownVisit]:
         """The visits known only to have been made (a revision before the ones kept)."""
 
     @abstractmethod
     def kept_count(self, project: str) -> int: ...
 
     @abstractmethod
-    def replace_all(self, project: str, visits: list[Visit]) -> None: ...
+    def replace_all(self, project: str, visits: builtins.list[Visit]) -> None: ...
 
     @abstractmethod
-    def add_unknown(self, project: str, unknown: list[UnknownVisit]) -> int: ...
+    def add_unknown(self, project: str, unknown: builtins.list[UnknownVisit]) -> int: ...
 
     @abstractmethod
-    def planned_revisions(self, project: str) -> list[str]: ...
+    def planned_revisions(self, project: str) -> builtins.list[str]: ...
 
     @abstractmethod
     def plan_revision(self, project: str, session: str) -> str: ...
 
     @abstractmethod
-    def closed(self, project: str) -> list[ClosedVisit]:
+    def closed(self, project: str) -> builtins.list[ClosedVisit]:
         """{"visit", "end"} of each deployment closed and not imported yet."""
 
     @abstractmethod
     def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit: ...
 
     @abstractmethod
-    def write_states(self, project: str, states: dict[tuple[str, str], str | None]) -> int:
+    def write_states(self, project: str, states: Mapping[tuple[str, str], str | None]) -> int:
         """Keeps the state of the visits — by their site (ignoring case) and their instant — where it changed; says how many."""
 
 
@@ -145,7 +148,8 @@ class VisitCatalog(ABC):
     def locations(self, project: str, include_deleted: bool = False) -> list[Location]: ...
 
     @abstractmethod
-    def equipment(self, project: str, kind: str) -> list[Camera | SdCard]: ...
+    def equipment(self, project: str, kind: str) -> list[Camera | SdCard]:
+        """The cameras or the SD cards of a research project, as `kind` says."""
 
     @abstractmethod
     def trappers(self) -> list[Trapper]: ...
@@ -165,7 +169,7 @@ class VisitCatalog(ABC):
         """What a visit does to a location — its status by the rules of a visit."""
 
     @abstractmethod
-    def keep_equipment(self, project: str, kind: str, items: list[Camera | SdCard]) -> None: ...
+    def keep_equipment(self, project: str, kind: str, items: Sequence[Camera | SdCard]) -> None: ...
 
 
 class StateHistory(ABC):

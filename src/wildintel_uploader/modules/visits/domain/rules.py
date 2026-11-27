@@ -15,6 +15,7 @@ import re
 from bisect import bisect_left
 from datetime import datetime
 from functools import lru_cache
+from typing import cast
 from math import asin, cos, radians, sin, sqrt
 
 from wildintel_uploader.modules.visits.domain.shapes import Location, SdCard, UnknownVisit, Visit, Whereabouts
@@ -191,7 +192,7 @@ class History(list):
         super().__init__()
         self._by_site: dict[str, list[Visit]] = {}       # the visits to each site (lower case), as they came
         self._by_time: dict[str, list[Visit]] = {}       # the same, by their instants — made when asked, and again after another visit to the site came
-        self._by_session: dict[str, list[Visit]] = {}    # the visits of each revision, as they came, by what their `session` says
+        self._by_session: dict[str | None, list[Visit]] = {}    # the visits of each revision, as they came, by what their `session` says
         self._latest: dict[int, tuple[tuple, Visit]] = {}   # of each revision number, its last visit by its instant (the first that came when two are at once)
         self._pos: dict[int, int] = {}                  # where each visit came: the order that ties between sites are told by
         self._memo: dict[str, dict[tuple, object]] = {}   # what was worked out of a site at an instant, until another visit to the site comes
@@ -220,10 +221,10 @@ class History(list):
 
     __setitem__ = __delitem__ = __iadd__ = __imul__ = insert = remove = pop = clear = sort = reverse = _frozen
 
-    def at_site(self, site) -> list[dict]:
+    def at_site(self, site) -> list[Visit]:
         return self._by_site.get(_site_key(str(site or "")), [])
 
-    def at_site_by_time(self, site) -> list[dict]:
+    def at_site_by_time(self, site) -> list[Visit]:
         key = _site_key(str(site or ""))
         if key not in self._by_time:
             self._by_time[key] = sorted(self._by_site.get(key, ()), key=_stamp)
@@ -240,10 +241,10 @@ class History(list):
             cache[(what, when)] = work_out()
         return cache[(what, when)]
 
-    def of_session(self, session) -> list[dict]:
+    def of_session(self, session) -> list[Visit]:
         return self._by_session.get(session, [])
 
-    def latest_before(self, number: int) -> dict | None:
+    def latest_before(self, number: int) -> Visit | None:
         """The last, by its instant, of the visits of the revisions before `number`."""
         best = max((entry for n, entry in self._latest.items() if n < number), key=lambda entry: entry[0], default=None)
         return best[1] if best else None
@@ -311,7 +312,7 @@ def asked(actions: list[str]) -> dict[str, str]:
 def required_errors(visit: Visit, photos_optional: bool = False) -> dict[str, str]:
     """What a visit lacks of what its actions ask of it, by field (camera, sd, photos, camera_status) — nothing when it is complete. With `photos_optional` the count of the photos is not asked:
     what an old datasheet never had — the deployment is then not checked against it."""
-    errors = {}
+    errors: dict[str, str] = {}
     if is_not_revised(visit):
         return errors  # nothing was done at it: nothing is asked
     actions = visit.get("actions") or []
@@ -351,7 +352,7 @@ def camera_at(visits: list[Visit], camera: str, when: str, unknown: list[Unknown
             key = (_stamp(first), visits._pos[id(first)])
             if best is None or key < best[0]:
                 best = (key, last)
-        at = {"site": best[1]["location_id"], "date": best[1]["date"], "session": best[1].get("session")} if best else None
+        at = cast(Whereabouts, {"site": best[1]["location_id"], "date": best[1]["date"], "session": best[1].get("session")}) if best else None
         return None if at is None or _stale(at, at["site"], unknown, number) else at
     here: dict[str, Whereabouts | None] = {}
     for v in sorted((v for v in visits if _stamp(v) < when), key=_stamp):
@@ -359,11 +360,11 @@ def camera_at(visits: list[Visit], camera: str, when: str, unknown: list[Unknown
         if _takes_away(v):
             here[site] = None
         if _leaves_camera(v) and v.get("camera_id"):
-            here[site] = {"camera": v["camera_id"], "site": v["location_id"], "date": v["date"], "session": v.get("session")}
+            here[site] = cast(Whereabouts, {"camera": v["camera_id"], "site": v["location_id"], "date": v["date"], "session": v.get("session")})
     for site, h in here.items():   # at the same instant, what is taken away is taken away first
         if h and _taken_away_at([v for v in visits if str(v["location_id"]).lower() == site], when, camera):
             here[site] = None
-    at = next(({"site": h["site"], "date": h["date"], "session": h["session"]} for h in here.values() if h and _same_gear(h["camera"], camera)), None)
+    at = next((cast(Whereabouts, {"site": h["site"], "date": h["date"], "session": h["session"]}) for h in here.values() if h and _same_gear(h["camera"], camera)), None)
     return None if at is None or _stale(at, at["site"], unknown, number) else at
 
 
@@ -378,7 +379,7 @@ def camera_at_site(visits: list[Visit], site: str, when: str, unknown: list[Unkn
             if _takes_away(v):
                 at = None
             if _leaves_camera(v) and v.get("camera_id"):
-                at = {"camera": v["camera_id"], "date": v["date"], "session": v.get("session")}
+                at = cast(Whereabouts, {"camera": v["camera_id"], "date": v["date"], "session": v.get("session")})
         return at
     at = visits.remembered("camera", site, when, work_out) if isinstance(visits, History) else work_out()
     return None if _stale(at, site, unknown, number) else at
@@ -418,7 +419,7 @@ def card_at(visits: list[Visit], label: str, when: str, unknown: list[UnknownVis
             key = (_stamp(first), visits._pos[id(first)])
             if best is None or key < best[0]:
                 best = (key, last)
-        found = {"site": best[1]["location_id"], "date": best[1]["date"], "session": best[1].get("session")} if best else None
+        found = cast(Whereabouts, {"site": best[1]["location_id"], "date": best[1]["date"], "session": best[1].get("session")}) if best else None
         return None if found and _stale(found, found["site"], unknown, number) else found
     in_site: dict[str, Whereabouts] = {}
     for v in sorted((v for v in visits if _stamp(v) < when), key=_stamp):
@@ -426,8 +427,8 @@ def card_at(visits: list[Visit], label: str, when: str, unknown: list[UnknownVis
         if _collects_card(v):
             in_site.pop(site, None)
         if v.get("sd") and _leaves_card(v):
-            in_site[site] = {"label": v["sd"], "date": v["date"], "site": v["location_id"], "session": v.get("session")}
-    found = next(({"site": c["site"], "date": c["date"], "session": c["session"]} for c in in_site.values() if _same_gear(c["label"], label)), None)
+            in_site[site] = cast(Whereabouts, {"label": v["sd"], "date": v["date"], "site": v["location_id"], "session": v.get("session")})
+    found = next((cast(Whereabouts, {"site": c["site"], "date": c["date"], "session": c["session"]}) for c in in_site.values() if _same_gear(c["label"], label)), None)
     return None if found and _stale(found, found["site"], unknown, number) else found
 
 
@@ -441,7 +442,7 @@ def card_at_site(visits: list[Visit], site: str, when: str, unknown: list[Unknow
             if _collects_card(v):
                 at = None
             if v.get("sd") and _leaves_card(v):
-                at = {"label": v["sd"], "date": v["date"], "session": v.get("session")}
+                at = cast(Whereabouts, {"label": v["sd"], "date": v["date"], "session": v.get("session")})
         return at
     at = visits.remembered("card", site, when, work_out) if isinstance(visits, History) else work_out()
     return None if _stale(at, site, unknown, number) else at
@@ -612,7 +613,7 @@ def history_warning_items(new: list[Visit], kept: list[Visit], cards: list[SdCar
         older = [e for e in here if str(e.get("session", "")) < str(v.get("session", "")) and _stamp(e) >= _stamp(v)]
         if older:
             say(f"{label(v)}: the visit time {v['date']} {v['time']} is not after the visit of {older[0].get('session')} ({older[0]['date']} {older[0]['time']}).", v)
-        if "Revision" in v["actions"] and v.get("num_photos") is not None and v["num_photos"] <= 0:
+        if "Revision" in v["actions"] and (photos := v.get("num_photos")) is not None and photos <= 0:
             say(f"{label(v)}: Revision with 0 images; no deployment will be produced for it.", v)
         for message in required_errors(v, photos_optional).values():
             say(f"{label(v)}: {message}", v)
@@ -677,7 +678,7 @@ def new_site(site: str, visits: list[Visit], known: list[Location]) -> dict:
     lat, lon = first.get("latitude"), first.get("longitude")
     nearest = None
     if lat is not None and lon is not None:
-        distances = [(distance_m(lat, lon, float(l["latitude"]), float(l["longitude"])), l["location_id"])
+        distances = [(distance_m(lat, lon, float(l.get("latitude") or 0.0), float(l.get("longitude") or 0.0)), l["location_id"])
                      for l in known if l.get("latitude") is not None and l.get("longitude") is not None]
         if distances:
             metres, location_id = min(distances)
@@ -694,7 +695,7 @@ def refusals(visit: Visit, kept: list[Visit], locations: list[Location], cards: 
     """Why a visit made by hand cannot be kept (the same rules apply to the visits of a file; `gate` off leaves the check of the revision before to the caller, and
     `first_may_be_any` lets the first visit to a site in a revision after R0001 be any: what came before is unknown, so it cannot be told that the camera was not put up): its site is not a location of the research project, it is already kept (the same site, day and time),
     it is the first to its site and not an Installation, it lacks what its actions ask, or its camera or card are not where it says. Empty when it can be kept."""
-    reasons = []
+    reasons: list[str] = []
     if not any(_same(l.get("location_id"), visit["location_id"]) for l in locations):
         reasons.append(_reason("site_not_a_location", f"'{visit['location_id']}' is not a location of the research project."))
     if any(v.get("date") == visit["date"] and v.get("time") == visit["time"] for v in _site_visits(kept, visit["location_id"])):
@@ -833,7 +834,7 @@ def not_visited_records(previous: int, visits: list[Visit], locations: list[Loca
     start, last = (min(str(v["date"]) for v in of), max(str(v["date"]) for v in of)) if of else (str(on), str(on))
     # a site that is unknown in the revision is not marked: nothing is known of it, and it counts as visited
     visited = {str(v["location_id"]).lower() for v in of} | {site for n, site in _unknown_keys(unknown) if n == previous}
-    records = []
+    records: list[Visit] = []
     starts = site_starts(visits)
     for l in locations:
         site = str(l.get("location_id") or "")

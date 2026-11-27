@@ -4,7 +4,7 @@ the time of the wall clock of its location. A visit that points to what the rese
 it has it."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from wildintel_uploader.modules.visits.domain import rules as visit_rules, wall_clock as visit_time
 from wildintel_uploader.shared import identity, ids
@@ -16,14 +16,14 @@ class Refs:
 
     def __init__(self, locations: list[Location], cameras: list[Camera], sd_cards: list[SdCard], trappers: list[Trapper]):
         self.locations = locations
-        self.by_label: dict[str, dict[str, dict]] = {"location": {}, "camera": {}, "sd": {}, "trapper": {}}
-        self.by_id: dict[str, dict[str, dict]] = {"location": {}, "camera": {}, "sd": {}, "trapper": {}}
+        self.by_label: dict[str, dict[str, Any]] = {"location": {}, "camera": {}, "sd": {}, "trapper": {}}
+        self.by_id: dict[str, dict[str, Any]] = {"location": {}, "camera": {}, "sd": {}, "trapper": {}}
         for l in locations:
             self._add("location", l, [l.get("location_id")])
         for c in cameras:
             self._add("camera", c, [c.get("camera_id"), c.get("label")])
-        for c in sd_cards:
-            self._add("sd", c, [c.get("label")])
+        for card in sd_cards:
+            self._add("sd", card, [card.get("label")])
         for t in trappers:
             self._add("trapper", t, [t.get("name"), t.get("username")])
 
@@ -67,17 +67,17 @@ def location_of(locations: list[Location], location_id) -> Location | None:
 
 def site(visit: Visit, refs: Refs) -> str:
     """The site of a visit, as it is called — whether the visit is kept (by the id of its location) or told."""
-    return str((refs.by_id["location"].get(visit.get("location_ref")) or {}).get("location_id") or visit.get("location_id") or "")
+    return str((refs.by_id["location"].get(visit.get("location_ref") or "") or {}).get("location_id") or visit.get("location_id") or "")
 
 
 def linked(visit: Visit, refs: Refs) -> Visit:
     """A visit with what it points to said by id: the location, the camera, the SD card and who went and set it up are the ones the research project has — if it has them —, so the
     visit says *which* — their ids — and not what they are called, which can be corrected. What it points to that the research project has not is kept as it was said, and is
     linked when it has it."""
-    out = dict(visit)
+    out: dict[str, Any] = dict(visit)   # the keys it points by come from _POINTS_TO
     for told, kept, kind in _POINTS_TO:
         if kind == "camera":
-            _link_camera(out, refs)
+            _link_camera(cast(Visit, out), refs)
             continue
         text = out.get(told)
         record = refs.by_label[kind].get(identity.key(kind, text)) if text not in (None, "") else None
@@ -95,14 +95,14 @@ def linked(visit: Visit, refs: Refs) -> Visit:
             out["trappers"] = ", ".join(rest)
         else:
             out.pop("trappers", None)
-    return out
+    return cast(Visit, out)
 
 
 def _link_camera(out: Visit, refs: Refs) -> None:
     """The camera of a visit kept by the id of its record (#231): the one it already points to (camera_ref), else the one it names — by its label, or by its
     serial number when it says only that. Then what the camera is (its model, its serial number) is the record's, and is not kept in the visit — unless the
     record says no model, when the one the visit wrote is kept. A camera with no record is kept as it was said, and is linked when it has one."""
-    record = refs.by_id["camera"].get(out.get("camera_ref"))
+    record = refs.by_id["camera"].get(out.get("camera_ref") or "")
     if record is None:
         text = out.get("camera_id") or out.get("camera_serial")
         record = refs.by_label["camera"].get(identity.key("camera", text)) if text not in (None, "") else None
@@ -119,9 +119,10 @@ def _link_camera(out: Visit, refs: Refs) -> None:
 def unlinked(visit: Visit, refs: Refs) -> Visit:
     """A visit as it is told: what it points to said by what it is called now — and its camera with the id of its record beside (camera_ref) and what the record
     says it is (#231)."""
-    out = dict(visit)
+    out: dict[str, Any] = dict(visit)   # the keys it points by come from _POINTS_TO
     for told, kept, kind in _POINTS_TO:
-        record = refs.by_id[kind].get(out.get(kept) if kind == "camera" else out.pop(kept, None))
+        ref = out.get(kept) if kind == "camera" else out.pop(kept, None)
+        record = refs.by_id[kind].get(ref) if ref else None
         if record is not None:
             out[told] = _CALLED[kind](record)
             if kind == "camera":
@@ -132,19 +133,19 @@ def unlinked(visit: Visit, refs: Refs) -> Visit:
     rest = [n.strip() for n in str(out.get("trappers") or "").split(",") if n.strip()]
     if named or "trappers" in out:
         out["trappers"] = ", ".join([*named, *rest]) or None
-    return out
+    return cast(Visit, out)
 
 
 def as_kept(visit: Visit, refs: Refs) -> Visit:
     """A visit as it is kept: the instant, ISO 8601 in UTC with a Z (`when`), and not the day and the time of the wall clock of its location; and what it points to said by id."""
     visit = two_fields(visit)
     if "status" in visit:   # kept before it was called camera_status
-        visit = {("camera_status" if k == "status" else k): v for k, v in visit.items() if not (k == "status" and "camera_status" in visit)}
+        visit = cast(Visit, {("camera_status" if k == "status" else k): v for k, v in visit.items() if not (k == "status" and "camera_status" in visit)})
     if visit.get("when"):
-        return linked({k: v for k, v in visit.items() if k not in ("date", "time")}, refs)
+        return linked(cast(Visit, {k: v for k, v in visit.items() if k not in ("date", "time")}), refs)
     if not (visit.get("date") and visit.get("time")):
-        return linked(dict(visit), refs)  # no time to keep
-    out = {k: v for k, v in visit.items() if k not in ("date", "time")}
+        return linked(cast(Visit, dict(visit)), refs)  # no time to keep
+    out = cast(Visit, {k: v for k, v in visit.items() if k not in ("date", "time")})
     out["when"] = visit_time.to_when(visit["date"], visit["time"], location_of(refs.locations, site(visit, refs)))
     return linked(out, refs)
 
@@ -154,7 +155,7 @@ def two_fields(visit: Visit) -> Visit:
     if "card_batteries_ok" not in visit:
         return visit
     battery, card = visit_rules.split_card_batteries(visit["card_batteries_ok"])
-    out = {k: v for k, v in visit.items() if k != "card_batteries_ok"}
+    out = cast(Visit, {k: v for k, v in visit.items() if k != "card_batteries_ok"})
     if battery and not out.get("battery_status"):
         out["battery_status"] = battery
     if card and not out.get("card_status"):
@@ -166,16 +167,17 @@ def as_told(visit: Visit, refs: Refs) -> Visit:
     """A visit as it is told: with the day and the time of the wall clock of its location, from its instant, beside it, and what it points to by what it is called. The card and
     the batteries are told as they are written now: a visit kept with SinPilas or CarFullSinPilas says NoBatteries or CarFullNoBatteries."""
     told = unlinked(visit, refs)
-    if not told.get("when"):
+    when = told.get("when")
+    if not when:
         return told
-    date, time = visit_time.to_wall(told["when"], location_of(refs.locations, told.get("location_id")))
-    return {**told, "date": date, "time": time}
+    date, time = visit_time.to_wall(when, location_of(refs.locations, told.get("location_id")))
+    return cast(Visit, {**told, "date": date, "time": time})
 
 
 def with_the_camera_there(visits: list[Visit]) -> list[Visit]:
     """The visits told with the camera they are of: a Revision, a Desinstallation or a Stolen visit does not say which camera — it is the one at its site, which the visit before says —,
     so it is told as that one (it is not kept: it would say twice what the visit that put it up says)."""
-    out = [dict(v) for v in visits]
+    out = [cast(Visit, dict(v)) for v in visits]
     there: dict[str, tuple[str, str | None]] = {}
     for v in sorted(out, key=visit_rules._stamp):
         site = str(v.get("location_id") or "").lower()
@@ -189,7 +191,7 @@ def with_the_camera_there(visits: list[Visit]) -> list[Visit]:
         if visit_rules._takes_away(v):
             there.pop(site, None)
         if visit_rules._leaves_camera(v) and v.get("camera_id"):
-            there[site] = (v["camera_id"], v.get("camera_model"))
+            there[site] = (str(v["camera_id"]), v.get("camera_model"))
     return out
 
 
@@ -200,7 +202,7 @@ def closed(visits: list[Visit]) -> list[ClosedVisit]:
     by_location: dict[str, list[Visit]] = {}
     for visit in visits:
         by_location.setdefault(str(visit.get("location_id", "")).lower(), []).append(visit)
-    out = []
+    out: list[ClosedVisit] = []
     for group in by_location.values():
         group.sort(key=lambda v: (str(v.get("date")), str(v.get("time"))))
         for start, end in zip(group, group[1:]):
@@ -214,9 +216,9 @@ def closed(visits: list[Visit]) -> list[ClosedVisit]:
 def unknown_told(stored: list[UnknownVisit], locations: list[Location]) -> list[UnknownVisit]:
     """The unknown visits as they are told — {"location_id", "session"} —, from how they are kept (pointing to their location by id)."""
     where = {loc["id"]: loc for loc in locations if loc.get("id")}
-    out = []
+    out: list[UnknownVisit] = []
     for u in stored:
-        site_of = (where.get(u.get("location_ref")) or {}).get("location_id") or u.get("location_id")
+        site_of = (where.get(u.get("location_ref") or "") or {}).get("location_id") or u.get("location_id")
         if site_of and u.get("session"):
             out.append({"location_id": site_of, "session": u["session"]})
     return out
@@ -225,7 +227,7 @@ def unknown_told(stored: list[UnknownVisit], locations: list[Location]) -> list[
 def unknown_kept(unknown: list[UnknownVisit], locations: list[Location]) -> list[UnknownVisit]:
     """The unknown visits as they are kept — each pointing to its location by id, when the research project has it."""
     where = {str(loc.get("location_id", "")).lower(): loc for loc in locations}
-    out = []
+    out: list[UnknownVisit] = []
     for u in unknown:
         place = where.get(str(u["location_id"]).lower())
         out.append({"location_ref": place["id"], "session": u["session"]} if place and place.get("id") else {"location_id": u["location_id"], "session": u["session"]})

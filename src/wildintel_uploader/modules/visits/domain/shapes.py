@@ -58,10 +58,28 @@ class Visit(TypedDict, total=False):
     card_batteries_ok: str | None     # kept by an earlier version: the batteries and the card in one field (see references.two_fields)
 
 
+class SavedVisit(Visit, total=False):
+    """A visit as it is saved: and the folders of the collections it made (a revision new to the collections folder)."""
+    collection_folders: list[str]
+
+
+class ZonedVisit(Visit, total=False):
+    """A visit with the timezone of its location — its wall clock is that one's."""
+    timezone: str | None
+
+
 class ClosedVisit(TypedDict):
     """A visit that left a camera whose card a later visit collected — that later one, `end` —, with no deployment linked yet."""
     visit: Visit
     end: Visit
+
+
+class ClosedDeployment(TypedDict):
+    """A deployment the visits closed, as it is offered to be imported: the visit that left the camera and the one that collected its card, each
+    with its timezone, and the details of the deployment they say together."""
+    visit: ZonedVisit
+    end: ZonedVisit
+    details: dict
 
 
 class Whereabouts(TypedDict, total=False):

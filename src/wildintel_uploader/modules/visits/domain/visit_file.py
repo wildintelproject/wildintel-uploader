@@ -10,9 +10,11 @@ from __future__ import annotations
 import datetime as dt
 import re
 import unicodedata
+from typing import Any, cast
 
 from wildintel_uploader.modules.visits.domain import wall_clock
 from wildintel_uploader.modules.visits.domain.models import VisitsFailed
+from wildintel_uploader.modules.visits.domain.shapes import Location, Visit
 
 # What each column of a CSV may be called, to suggest a mapping — compared without case, spaces, dashes, underscores or a number in front.
 COLUMN_NAMES: dict[str, tuple[str, ...]] = {
@@ -170,7 +172,7 @@ CELL_ERRORS: dict[str, str] = {
 def actions_of(value) -> list[str] | None:
     """The actions a cell says, several joined with + ; / | & or a comma — None when one of them is not an action."""
     names = [ACTIONS.get(a.strip().lower()) for a in re.split(r"[+;/|&,]", str(value)) if a.strip()]
-    return None if None in names else names
+    return None if None in names else [n for n in names if n is not None]
 
 
 def session_of(value) -> str | None:
@@ -321,7 +323,7 @@ def real(date: str, time: str) -> tuple[str, str]:
     return date, time
 
 
-def when(row: dict[str, str], location: dict, time_source: str = "created_at") -> tuple[str, str]:
+def when(row: dict[str, str], location: Location, time_source: str = "created_at") -> tuple[str, str]:
     """The day and the time of a visit: when its entry was created (created_at, UTC, as Epicollect writes it), else its date and time — or, when `time_source`
     is "hour", the date and the hour typed in the form (the wall clock of its location) when the row has them, else the time its entry was created."""
     if "created_at" in row and not (time_source == "hour" and "date" in row and "time" in row):
@@ -330,7 +332,7 @@ def when(row: dict[str, str], location: dict, time_source: str = "created_at") -
         except ValueError as exc:
             raise RowError("date_invalid", f"'{row['created_at']}' is not a created_at (2026-09-04T10:16:31.000Z).") from exc
         if created.tzinfo is not None:
-            created = (created - created.utcoffset()).replace(tzinfo=None)
+            created = (created - (created.utcoffset() or dt.timedelta(0))).replace(tzinfo=None)
         local = wall_clock.utc_to_local(created.replace(microsecond=0), location)
         return local.date().isoformat(), local.time().isoformat()
     if "when" in row:
@@ -347,7 +349,7 @@ def when(row: dict[str, str], location: dict, time_source: str = "created_at") -
     return real(date, row["time"] if row["time"].count(":") == 2 else f"{row['time']}:00")
 
 
-def archived_by(locations: list[dict], visits: list[dict]) -> list[dict]:
+def archived_by(locations: list[Location], visits: list[Visit]) -> list[Location]:
     """The locations as the visits leave them: one that a visit archives (its actions have Archive) is archived on the day of that visit, unless it already was before."""
     archived_on: dict[str, str] = {}
     for v in visits:
@@ -357,9 +359,9 @@ def archived_by(locations: list[dict], visits: list[dict]) -> list[dict]:
                 archived_on[site] = day
     out = []
     for l in locations:
-        day = archived_on.get(str(l.get("location_id") or "").lower())
-        already = l.get("status") == "archived" and (not l.get("status_date") or (day and str(l["status_date"]) <= day))
-        out.append({**l, "status": "archived", "status_date": day} if day and not already else l)
+        on = archived_on.get(str(l.get("location_id") or "").lower())
+        already = l.get("status") == "archived" and (not l.get("status_date") or (on and str(l["status_date"]) <= on))
+        out.append({**l, "status": "archived", "status_date": on} if on and not already else l)
     return out
 
 
@@ -384,7 +386,7 @@ def username_of(name: str, taken: set[str]) -> str:
     return username
 
 
-def location_fields(site: str, row: dict[str, str]) -> dict:
+def location_fields(site: str, row: dict[str, str]) -> Location:
     """What a row says of the location it creates: its id, its coordinates (the location's, not the visit's) and its timezone.
 
     Raises:
@@ -408,11 +410,11 @@ def location_fields(site: str, row: dict[str, str]) -> dict:
 
 # ── a file of visits written by the app ──
 
-def export_rows(visits: list[dict]) -> list[list[str]]:
+def export_rows(visits: list[Visit]) -> list[list[str]]:
     """The visits as rows the import reads back as they are: a header of EXPORT_FIELDS, then a row for each visit from the oldest — the actions
     joined with +, the tags with |, the yes/no fields as yes or no."""
-    def cell(visit: dict, field: str) -> str:
-        value = visit.get(field)
+    def cell(visit: Visit, field: str) -> str:
+        value: Any = cast(dict, visit).get(field)   # a field named as the export names it
         if value is None:
             return ""
         if field == "actions":
