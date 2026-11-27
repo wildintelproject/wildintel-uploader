@@ -373,19 +373,6 @@ def with_timezone(local_iso: str | None, tz_name: str) -> str | None:
 _natural_key = _naming.natural_key
 
 
-# The validations of before — validate_images, validate_deployment_consistency and their lists of checks — are core.services.checks: the modules of
-# the validations are not the deployments'. They are still given here, by name, for those that ask them here.
-_CHECKS = ("IMAGE_CHECK_ORDER", "IMAGE_CHECKS", "DEFAULT_CAMERA_LEVELS", "validate_images", "DEPLOYMENT_CHECK_ORDER", "DEPLOYMENT_CHECKS", "VISIT_CHECKS",
-           "DEFAULT_TOLERANCE_HOURS", "validate_deployment_consistency")
-
-
-def __getattr__(name: str):
-    if name in _CHECKS:
-        from wildintel_uploader.core.services import checks
-        return getattr(checks, name)
-    raise AttributeError(name)
-
-
 def copy_folder(source_dir: Path, dest_dir: Path) -> Iterator[dict]:
     """Copies source_dir's files into dest_dir, preserving its subfolder
     structure — never touches the source (shutil.copy2, a copy, not a

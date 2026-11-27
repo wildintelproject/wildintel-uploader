@@ -25,7 +25,8 @@ from pathlib import Path
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.core.services import deployment_import_service as dis
-from wildintel_uploader.core.services import local_folder_service, statistics_service
+from wildintel_uploader.modules.deployments.infrastructure import statistics_service
+from wildintel_uploader.modules.postvalidation.domain.models import Deployment, DeploymentContext
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
 logger = logging.getLogger(__name__)
@@ -81,31 +82,51 @@ def _checks(settings_section, names: frozenset[str] | tuple[str, ...]) -> frozen
     return frozenset(name for name in names if getattr(settings_section, name))
 
 
+def _contracts():
+    """The prevalidation, the postvalidation and the catalog — through their contracts —, from where the app is put together."""
+    from wildintel_uploader.entrypoints import wiring
+    settings = wiring.build_settings()
+    return wiring.build_prevalidation(), wiring.build_postvalidation(), wiring.build_catalog(config.collections_dir(), settings)
+
+
+def _camera_record(catalog, research_project_id: str, label: str | None) -> dict | None:
+    """The record of the camera of the deployment in the catalog, as the checks of the camera read it."""
+    camera = catalog.camera(research_project_id, label) if label else None
+    if camera is None:
+        return None
+    return {"label": camera.label, "camera_id": camera.camera_id, "camera_make": camera.camera_make, "camera_model": camera.camera_model}
+
+
 def run_checks(source: Path, dest: Path, deployment: DeploymentFields) -> dict:
     """Runs the checks the settings turn on over the source images: {"validated": [...], "postvalidated": [...],
     "images": {source name: {"validations": {...}, "postvalidations": {...}}}, "deployment": {...}} — an image's check
-    holds "ok" or what is wrong, the deployment's holds {"ok", "message"}."""
+    holds "ok" or what is wrong, the deployment's holds {"ok", "message"}. The checks are the prevalidation's and the postvalidation's, asked
+    through their contracts; the statistical ones against the previous revisions of the location kept here."""
     settings = config.load_settings()
     post = settings.POSTVALIDATION
-    image_checks = _checks(settings.VALIDATION, dis.IMAGE_CHECKS)
-    deployment_checks = _checks(post, dis.DEPLOYMENT_CHECKS)
-    stat_checks = _checks(post, statistics_service.STATISTIC_CHECKS)
+    prevalidation, postvalidation, catalog = _contracts()
+    deployment_validators = postvalidation.validators()
+    image_checks = _checks(settings.VALIDATION, tuple(v.key for v in prevalidation.validators()))
+    # those of the deployment alone: the ones of the visit need the wizard, and the statistical ones are said apart
+    deployment_checks = _checks(post, tuple(v.key for v in deployment_validators if not v.of_the_visit and not v.statistical))
+    stat_checks = _checks(post, tuple(v.key for v in deployment_validators if v.statistical))
     collections_dir, research_project_id = dest.parent.parent.parent, dest.parent.parent.name
 
-    found = dis.validate_images(source, image_checks, detail=True, exif_fields=settings.VALIDATION.exif_fields, camera_levels=settings.VALIDATION.camera_levels)
-    consistency = dis.validate_deployment_consistency(
-        source, deployment, deployment_checks, collection_name=dest.parent.name, expected_location_id=deployment.location_id,
-        tolerance_hours=post.tolerance_hours, camera=local_folder_service.camera_record(collections_dir, research_project_id, deployment.camera_id),
-        camera_levels=settings.VALIDATION.camera_levels,
+    found = prevalidation.validate(source, prevalidation.validators(image_checks), detail=True, exif_fields=settings.VALIDATION.exif_fields,
+                                   camera_levels=settings.VALIDATION.camera_levels)
+    context = DeploymentContext(
+        deployment=Deployment(deployment_id=deployment.deployment_id, start_date=deployment.start_date, end_date=deployment.end_date,
+                              camera_model=deployment.camera_model, camera_id=deployment.camera_id),
+        collection=dest.parent.name, expected_location_id=deployment.location_id, tolerance_hours=post.tolerance_hours,
+        camera=_camera_record(catalog, research_project_id, deployment.camera_id), camera_levels=settings.VALIDATION.camera_levels,
+        research_project_id=research_project_id,
+        statistics={"sequence_gap_seconds": post.sequence_gap_seconds, "min_revisions": post.min_revisions, "method": post.similarity_method,
+                    "image_count_tolerance": post.image_count_tolerance, "sequence_count_tolerance": post.sequence_count_tolerance,
+                    "sequence_length_tolerance": post.sequence_length_tolerance},
+        previous=tuple(statistics_service.revisions_before(collections_dir, research_project_id, deployment.deployment_id)) if stat_checks else (),
     )
-    stats = statistics_service.statistical_checks(
-        statistics_service.times_of_folder(source), collections_dir, research_project_id, deployment.deployment_id, stat_checks,
-        sequence_gap_seconds=post.sequence_gap_seconds, min_revisions=post.min_revisions, method=post.similarity_method,
-        tolerances={
-            "image_count": post.image_count_tolerance, "sequence_count": post.sequence_count_tolerance,
-            "sequence_length": post.sequence_length_tolerance,
-        },
-    ) if stat_checks else {}
+    consistency = postvalidation.validate(source, context, postvalidation.validators(deployment_checks | stat_checks))
+    stats = {check: consistency[check] for check in stat_checks if check in consistency}
 
     image_problems = _per_image_validations(found)
     out_of_range = {item["path"]: f"{item['date']} is out of the range for the {item['rule']} image ({item['expected']})" for item in consistency.get("out_of_range", [])}
@@ -129,7 +150,7 @@ def run_checks(source: Path, dest: Path, deployment: DeploymentFields) -> dict:
     if "camera" in image_checks:
         cameras = found.get("cameras", [])
         on_deployment["validations"]["camera"] = {"ok": len(cameras) <= 1, "message": f"{len(cameras)} camera(s), {found.get('cameras_without_info', 0)} image(s) without camera information"}
-    for check in dis.DEPLOYMENT_CHECKS & deployment_checks:
+    for check in deployment_checks:
         if isinstance(consistency.get(check), dict):
             on_deployment["postvalidations"][check] = consistency[check]
     for check, result in stats.items():

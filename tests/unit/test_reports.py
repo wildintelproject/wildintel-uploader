@@ -10,6 +10,7 @@ from PIL import Image
 from wildintel_uploader.core import config
 from wildintel_uploader.core.schemas.requests import DeploymentFields
 from wildintel_uploader.core.services import deployment_import_service as dis
+from wildintel_uploader.core.services import checks as old_checks
 from wildintel_uploader.core.services import report_service as rs
 
 
@@ -44,7 +45,7 @@ def _entry(report: dict, identifier: str, check: str) -> dict:
 
 
 def test_a_validation_report_says_which_image_failed_which_check(source: Path):
-    found = dis.validate_images(source, None, detail=True)
+    found = old_checks.validate_images(source, None, detail=True)
 
     report = rs.validation_report(found, source)
 
@@ -59,7 +60,7 @@ def test_a_validation_report_says_which_image_failed_which_check(source: Path):
 
 
 def test_only_the_checks_that_ran_are_in_the_report(source: Path):
-    found = dis.validate_images(source, frozenset({"corrupted"}), detail=True)
+    found = old_checks.validate_images(source, frozenset({"corrupted"}), detail=True)
 
     report = rs.validation_report(found, source, ["corrupted"])
 
@@ -70,7 +71,7 @@ def test_only_the_checks_that_ran_are_in_the_report(source: Path):
 def test_a_postvalidation_report_has_the_deployment_checks_and_the_images_out_of_range(source: Path):
     deployment = DeploymentFields(deployment_id="R0003-DONA_01", location_id="DONA_01", latitude=37, longitude=-6,
                                   start_date="2024-09-04T10:00:00+02:00", end_date="2024-09-05T10:00:00+02:00", camera_model="X")
-    result = dis.validate_deployment_consistency(source, deployment, None, collection_name="R0003", expected_location_id="DONA_01")
+    result = old_checks.validate_deployment_consistency(source, deployment, None, collection_name="R0003", expected_location_id="DONA_01")
 
     report = rs.postvalidation_report(result, "R0003-DONA_01", source)
 
@@ -108,7 +109,7 @@ def test_a_preprocessing_report_says_the_size_of_each_image_before_and_after_it_
 
 
 def test_a_report_is_kept_read_listed_and_deleted(source: Path, reports: Path):
-    report = rs.validation_report(dis.validate_images(source, None, detail=True), source)
+    report = rs.validation_report(old_checks.validate_images(source, None, detail=True), source)
 
     report_id = rs.save(report)
 
@@ -123,7 +124,7 @@ def test_a_report_is_kept_read_listed_and_deleted(source: Path, reports: Path):
 
 
 def test_two_reports_in_the_same_second_do_not_overwrite_each_other(source: Path, reports: Path):
-    report = rs.validation_report(dis.validate_images(source, None, detail=True), source)
+    report = rs.validation_report(old_checks.validate_images(source, None, detail=True), source)
     assert rs.save(dict(report)) != rs.save(dict(report))
 
 
@@ -134,7 +135,7 @@ def test_only_a_reports_id_is_taken_for_a_path(reports: Path):
 
 
 def test_the_csv_has_a_row_per_entry(source: Path):
-    report = rs.validation_report(dis.validate_images(source, frozenset({"corrupted"}), detail=True), source, ["corrupted"])
+    report = rs.validation_report(old_checks.validate_images(source, frozenset({"corrupted"}), detail=True), source, ["corrupted"])
 
     rows = list(csv.DictReader(io.StringIO(rs.to_csv(report))))
 
@@ -143,10 +144,10 @@ def test_the_csv_has_a_row_per_entry(source: Path):
 
 
 def test_reports_older_than_some_days_are_deleted(source: Path, reports: Path):
-    old = rs.validation_report(dis.validate_images(source, None, detail=True), source)
+    old = rs.validation_report(old_checks.validate_images(source, None, detail=True), source)
     old["created_at"] = "2020-01-01T00:00:00+00:00"
     old_id = rs.save(old)
-    new_id = rs.save(rs.validation_report(dis.validate_images(source, None, detail=True), source))
+    new_id = rs.save(rs.validation_report(old_checks.validate_images(source, None, detail=True), source))
 
     assert rs.delete_older_than(30) == 1
     assert [r["id"] for r in rs.list_reports()] == [new_id] and old_id not in [r["id"] for r in rs.list_reports()]
@@ -193,7 +194,7 @@ def test_postvalidating_answers_with_the_id_of_its_report(source: Path, reports:
 # ── what the dashboard shows of each failure ─────────────────────────────────
 
 def test_a_failed_image_has_a_short_tag_and_its_capture_date(source: Path):
-    report = rs.validation_report(dis.validate_images(source, None, detail=True), source)
+    report = rs.validation_report(old_checks.validate_images(source, None, detail=True), source)
 
     out_of_order = _entry(report, "IMG_0002.JPG", "sequence")
     assert out_of_order["tag"] == "Out of order" and out_of_order["taken"] == "2024-09-04T09:00:00"
@@ -204,7 +205,7 @@ def test_a_failed_image_has_a_short_tag_and_its_capture_date(source: Path):
 
 def test_the_totals_count_the_images_with_issues(source: Path):
     checks = frozenset({"corrupted", "sequence", "duplicates", "structure"})
-    report = rs.validation_report(dis.validate_images(source, checks, detail=True), source, checks)
+    report = rs.validation_report(old_checks.validate_images(source, checks, detail=True), source, checks)
 
     # IMG_0002 is out of order and IMG_0004 is corrupted; a check of the whole folder has no image to count.
     assert report["totals"]["images_with_issues"] == 2
@@ -212,7 +213,7 @@ def test_the_totals_count_the_images_with_issues(source: Path):
 
 def test_the_images_of_a_report_are_served_as_thumbnails_and_only_those(source: Path, reports: Path):
     (source / "other.txt").write_text("secret")
-    report_id = rs.save(rs.validation_report(dis.validate_images(source, None, detail=True), source))
+    report_id = rs.save(rs.validation_report(old_checks.validate_images(source, None, detail=True), source))
 
     jpeg = rs.image_jpeg(report_id, "IMG_0001.JPG")
 

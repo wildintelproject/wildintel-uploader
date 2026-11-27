@@ -10,6 +10,7 @@ from PIL import Image
 
 from wildintel_uploader.core.services import camera_info, exif_store, file_memo
 from wildintel_uploader.core.services import deployment_import_service as svc
+from wildintel_uploader.core.services import checks as old_checks
 from wildintel_uploader.core.services import preprocessing_service as pre
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter, pillow as pillow_adapter
 
@@ -254,10 +255,10 @@ def test_an_image_that_decoded_is_not_decoded_again_while_it_is_the_same(tmp_pat
     _jpeg(tmp_path / "b.jpg")
     opened = _opens(monkeypatch)
 
-    assert svc.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"] == []
+    assert old_checks.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"] == []
     assert sorted(opened) == ["a.jpg", "b.jpg"]
     opened.clear()
-    assert svc.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"] == []
+    assert old_checks.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"] == []
     assert opened == []
 
 
@@ -268,17 +269,17 @@ def test_a_corrupted_image_is_looked_at_every_time(tmp_path: Path, monkeypatch: 
     opened = _opens(monkeypatch)
 
     for _ in range(2):
-        assert [c["path"] for c in svc.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"]] == ["bad.jpg"]
+        assert [c["path"] for c in old_checks.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"]] == ["bad.jpg"]
     assert opened.count("bad.jpg") == 2 and opened.count("good.jpg") == 1
 
 
 def test_an_image_that_decoded_and_was_then_cut_short_is_found_corrupted(tmp_path: Path):
     path = _jpeg(tmp_path / "a.jpg", size=(64, 64))
-    assert svc.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"] == []
+    assert old_checks.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"] == []
 
     path.write_bytes(path.read_bytes()[:-40])
 
-    assert [c["path"] for c in svc.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"]] == ["a.jpg"]
+    assert [c["path"] for c in old_checks.validate_images(tmp_path, frozenset({"corrupted"}))["corrupted"]] == ["a.jpg"]
 
 
 def test_resizing_an_image_says_it_decoded_and_the_check_does_not_decode_it_again(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -286,7 +287,7 @@ def test_resizing_an_image_says_it_decoded_and_the_check_does_not_decode_it_agai
     pre.resize_to_width(big, tmp_path / "out.jpg", 2400)
     opened = _opens(monkeypatch)
 
-    assert svc.validate_images(big.parent, frozenset({"corrupted"}))["corrupted"] == []
+    assert old_checks.validate_images(big.parent, frozenset({"corrupted"}))["corrupted"] == []
     assert opened == []
 
 
@@ -295,7 +296,7 @@ def test_an_image_that_is_only_copied_is_not_said_to_have_decoded(tmp_path: Path
     assert pre.resize_to_width(small, tmp_path / "out.jpg", 2400) is False
     opened = _opens(monkeypatch)
 
-    svc.validate_images(small.parent, frozenset({"corrupted"}))
+    old_checks.validate_images(small.parent, frozenset({"corrupted"}))
 
     assert opened == ["small.jpg"]
 
@@ -306,4 +307,4 @@ def test_an_image_that_failed_to_resize_is_not_said_to_have_decoded(tmp_path: Pa
     with pytest.raises(Exception):
         pre.resize_to_width(bad, tmp_path / "out.jpg", 2400)
 
-    assert [c["path"] for c in svc.validate_images(bad.parent, frozenset({"corrupted"}))["corrupted"]] == ["bad.jpg"]
+    assert [c["path"] for c in old_checks.validate_images(bad.parent, frozenset({"corrupted"}))["corrupted"]] == ["bad.jpg"]
