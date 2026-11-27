@@ -83,6 +83,11 @@ class DeploymentsService(ABC):
     @abstractmethod
     def revision_statistics(self, project: str, collection: str) -> list[dict]: ...
 
+    # the sessions of the wizard
+    @abstractmethod
+    def sessions(self) -> "ImportSessions":
+        """The unfinished runs of the wizard, kept step by step."""
+
     # its photos
     @abstractmethod
     def photos(self, project: str, collection: str, deployment_id: str) -> list[dict]: ...
@@ -92,6 +97,27 @@ class DeploymentsService(ABC):
 
 
 # ── out ──
+
+class ImportSessions(ABC):
+    """The runs of the wizard that imports a deployment, kept step by step so that an unfinished one can be resumed."""
+
+    @abstractmethod
+    def list(self) -> list[dict]: ...
+
+    @abstractmethod
+    def save_scan(self, task_id: str | None, source_dir: str, scan: dict) -> dict:
+        """DeploymentsFailed: not a task id."""
+
+    @abstractmethod
+    def save_selection(self, task_id: str, selection: dict) -> dict:
+        """DeploymentMissing: no such session."""
+
+    @abstractmethod
+    def save_details(self, task_id: str, deployment: dict) -> dict:
+        """DeploymentMissing: no such session."""
+
+    @abstractmethod
+    def discard(self, task_id: str) -> None: ...
 
 class Repairs(ABC):
     """Checking and repairing the deployments kept: their metadata files written again from what their folders hold."""

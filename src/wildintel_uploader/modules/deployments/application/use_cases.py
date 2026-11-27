@@ -6,7 +6,9 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
-from wildintel_uploader.modules.deployments.domain.ports import Cards, CollectionStatistics, Deployment, DeploymentsService, Folders, Photos, Repairs, Revisions
+from wildintel_uploader.modules.deployments.domain.ports import (
+    Cards, CollectionStatistics, Deployment, DeploymentsService, Folders, ImportSessions, Photos, Repairs, Revisions,
+)
 from wildintel_uploader.modules.preprocessing.domain.models import PreprocessingError, PreprocessOptions
 from wildintel_uploader.modules.preprocessing.domain.ports import PreprocessingService
 from wildintel_uploader.modules.visits.domain.models import VisitsError
@@ -15,9 +17,11 @@ from wildintel_uploader.modules.visits.domain.ports import VisitsService
 
 class DeploymentsUseCases(DeploymentsService):
     def __init__(self, cards: Cards, folders: Folders, revisions: Revisions, photos: Photos, *, visits: VisitsService,
-                 preprocessing: PreprocessingService, repairs: Repairs | None = None, statistics: CollectionStatistics | None = None) -> None:
+                 preprocessing: PreprocessingService, repairs: Repairs | None = None, statistics: CollectionStatistics | None = None,
+                 sessions: ImportSessions | None = None) -> None:
         self._cards, self._folders, self._revisions, self._photos = cards, folders, revisions, photos
         self._visits, self._preprocessing, self._repairs, self._statistics = visits, preprocessing, repairs, statistics
+        self._sessions = sessions
 
     # the memory card
 
@@ -124,6 +128,11 @@ class DeploymentsUseCases(DeploymentsService):
 
     def revision_statistics(self, project: str, collection: str) -> list[dict]:
         return self._statistics.revision(project, collection)
+
+    # the sessions of the wizard
+
+    def sessions(self) -> ImportSessions:
+        return self._sessions
 
     # its photos
 

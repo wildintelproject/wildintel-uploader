@@ -30,7 +30,7 @@ from wildintel_uploader.modules.catalog.infrastructure.visits import StoredStatu
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.deployments.infrastructure.legacy import (
-    CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRepairs, KeptRevisions, KeptStatistics, MemoryCards,
+    CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRepairs, KeptRevisions, KeptStatistics, MemoryCards, StoredSessions,
 )
 from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
@@ -52,6 +52,9 @@ from wildintel_uploader.modules.prevalidation.application.use_cases import Preva
 from wildintel_uploader.modules.prevalidation.domain.ports import PrevalidationService
 from wildintel_uploader.modules.prevalidation.infrastructure import validators as image_validators
 from wildintel_uploader.modules.prevalidation.infrastructure.legacy import PreprocessedImages, SavedValidationReports, ValidationInUse
+from wildintel_uploader.modules.reports.application.use_cases import ReportsUseCases
+from wildintel_uploader.modules.reports.domain.ports import ReportsService
+from wildintel_uploader.modules.reports.infrastructure.report_files import ReportFiles
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.sources.application.use_cases import SourcesUseCases
 from wildintel_uploader.modules.sources.domain.ports import SourcesService
@@ -151,7 +154,8 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
     preprocessing through their contracts."""
     settings = settings or build_settings()
     return DeploymentsUseCases(MemoryCards(), DeploymentFolders(), KeptRevisions(), DeploymentPhotos(), visits=build_visits(settings=settings),
-                               preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=KeptStatistics())
+                               preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=KeptStatistics(),
+                               sessions=StoredSessions())
 
 
 def build_timefix() -> TimeFixService:
@@ -283,6 +287,12 @@ class BackupProvider(Provider):
         return build_backup()
 
 
+class ReportsProvider(Provider):
+    @provide(scope=Scope.APP)
+    def service(self) -> ReportsService:
+        return ReportsUseCases(ReportFiles())
+
+
 def make_app_container() -> Container:
     """The container of the app: every module's provider."""
-    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider(), TimeFixProvider(), UploadersProvider(), BackupProvider())
+    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider(), TimeFixProvider(), UploadersProvider(), BackupProvider(), ReportsProvider())

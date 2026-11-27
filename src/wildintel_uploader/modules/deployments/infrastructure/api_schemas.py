@@ -2,7 +2,7 @@
 as they were."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -104,3 +104,77 @@ class RepairRequest(BaseModel):
     research_project_id: str = Field(min_length=1)
     collection: str = Field(pattern=r"^R\d{4}(_.+)?$")
     deployment_id: str = Field(pattern=r"^R\d{4}-.+$")
+
+
+# ── the sessions of the wizard ──
+
+class SelectedResearchProject(BaseModel):
+    pk: int
+    name: str
+    acronym: Optional[str] = None
+
+
+class SelectedClassificationProject(BaseModel):
+    pk: int
+    name: str
+
+
+class SelectedLocation(BaseModel):
+    pk: int
+    location_id: str
+    name: Optional[str] = None
+    timezone: Optional[str] = None
+
+
+class DeploymentSelection(BaseModel):
+    """How the deployment is identified for this run — kept in its session
+    so the resume screen can show it without reconnecting to Trapper.
+    Two independent choices:
+
+    destination — "trapper": registered in (or found in) a Trapper
+    instance. "local": organized into a local collection folder instead,
+    with no Trapper account involved at all.
+
+    mode — "existing": the deployment already exists (in Trapper, or
+    already organized in the chosen local collection) and was found rather
+    than filled in — its own fields (including location) come from there
+    (see SaveDetailsRequest), so classification_project/location aren't
+    collected here. "new": it's being created for the first time, so they
+    are.
+
+    research_project/classification_project/location only apply to
+    destination "trapper"; collection_dir/collection_name only to "local"."""
+
+    destination: Literal["trapper", "local"]
+    mode: Literal["new", "existing"]
+    research_project: Optional[SelectedResearchProject] = None
+    classification_project: Optional[SelectedClassificationProject] = None
+    location: Optional[SelectedLocation] = None
+    collection_dir: Optional[str] = None
+    collection_name: Optional[str] = None
+
+
+class SaveSelectionRequest(BaseModel):
+    task_id: str
+    selection: DeploymentSelection
+
+
+class ScanResultFields(BaseModel):
+    file_count: int
+    image_count: int
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    camera_model: Optional[str] = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class SaveScanRequest(BaseModel):
+    # None starts a new session — the wizard's first step.
+    task_id: Optional[str] = None
+    source_dir: str = Field(min_length=1)
+    scan: ScanResultFields
+
+
+class SaveDetailsRequest(BaseModel):
+    task_id: str
+    deployment: DeploymentFields

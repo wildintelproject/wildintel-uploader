@@ -15,12 +15,14 @@ from wildintel_uploader.modules.deployments.domain.models import DeploymentMissi
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.deployments.infrastructure.api_schemas import (
     CardRequest, CheckCollectionRequest, CollectionPathRequest, ExistingDeploymentsRequest, ImportLocalRequest, NextRevisionRequest,
-    PreviousDeploymentsRequest, RepairRequest, ScanFolderRequest, StatisticsRequest, UploadCollectionsRequest,
+    PreviousDeploymentsRequest, RepairRequest, SaveDetailsRequest, SaveScanRequest, SaveSelectionRequest, ScanFolderRequest, StatisticsRequest,
+    UploadCollectionsRequest,
 )
 
 router = APIRouter(prefix="/api/deployment-import", tags=["deployments"], route_class=DishkaSyncRoute)
 repair_router = APIRouter(prefix="/api/repair", tags=["deployments"], route_class=DishkaSyncRoute)
 statistics_router = APIRouter(prefix="/api/statistics", tags=["deployments"], route_class=DishkaSyncRoute)
+sessions_router = APIRouter(prefix="/api/sessions", tags=["deployments"], route_class=DishkaSyncRoute)
 Deployments = FromDishka[DeploymentsService]
 T = TypeVar("T")
 
@@ -197,3 +199,35 @@ def revision(req: StatisticsRequest, deployments: Deployments) -> dict:
     """One row per deployment of the revision: its metrics, what each check of POSTVALIDATION says of it, its status and the metrics of the
     previous revisions of its location."""
     return {"results": _http(lambda: deployments.revision_statistics(req.research_project_id, req.collection))}
+
+
+# ── the sessions of the wizard (/api/sessions) ──
+
+@sessions_router.get("")
+def list_sessions(deployments: Deployments) -> list[dict]:
+    """Unfinished runs, newest first — offered on startup to resume."""
+    return deployments.sessions().list()
+
+
+@sessions_router.post("/scan")
+def save_scan(req: SaveScanRequest, deployments: Deployments) -> dict:
+    """Saves the source folder and its scan result — the wizard's first step, so this creates the session on the first call."""
+    return _http(lambda: deployments.sessions().save_scan(req.task_id, req.source_dir, req.scan.model_dump()))
+
+
+@sessions_router.post("/selection")
+def save_selection(req: SaveSelectionRequest, deployments: Deployments) -> dict:
+    """Saves the chosen research project/classification project/location into an existing session."""
+    return _http(lambda: deployments.sessions().save_selection(req.task_id, req.selection.model_dump()))
+
+
+@sessions_router.post("/details")
+def save_details(req: SaveDetailsRequest, deployments: Deployments) -> dict:
+    """Saves the deployment's own fields into an existing session — the run is then ready to import."""
+    return _http(lambda: deployments.sessions().save_details(req.task_id, req.deployment.model_dump()))
+
+
+@sessions_router.delete("/{task_id}")
+def discard(task_id: str, deployments: Deployments) -> dict:
+    _http(lambda: deployments.sessions().discard(task_id))
+    return {"status": "discarded"}

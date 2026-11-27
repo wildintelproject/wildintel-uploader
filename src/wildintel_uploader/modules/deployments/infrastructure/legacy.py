@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
-from wildintel_uploader.modules.deployments.domain.ports import Cards, CollectionStatistics, Deployment, Folders, Photos, Repairs, Revisions
+from wildintel_uploader.modules.deployments.domain.ports import Cards, CollectionStatistics, Deployment, Folders, ImportSessions, Photos, Repairs, Revisions
 
 T = TypeVar("T")
 
@@ -186,3 +186,41 @@ class KeptStatistics(CollectionStatistics):
                                                            "sequence_length": post.sequence_length_tolerance})
         except deployment_import_service.DeploymentImportError as exc:
             raise DeploymentMissing(str(exc)) from exc
+
+
+class StoredSessions(ImportSessions):
+    """Over session_store: a file a session, in the app's data."""
+
+    @staticmethod
+    def _store():
+        from wildintel_uploader.core.services import session_store
+        return session_store
+
+    def list(self) -> list[dict]:
+        return self._store().list_sessions()
+
+    def save_scan(self, task_id: str | None, source_dir: str, scan: dict) -> dict:
+        store = self._store()
+        try:
+            return store.write_scan_phase(task_id, source_dir=source_dir, scan=scan)
+        except store.InvalidTaskId as exc:
+            raise DeploymentsFailed(str(exc)) from exc
+
+    def save_selection(self, task_id: str, selection: dict) -> dict:
+        try:
+            return self._store().write_selection_phase(task_id, selection=selection)
+        except LookupError as exc:
+            raise DeploymentMissing(str(exc)) from exc
+
+    def save_details(self, task_id: str, deployment: dict) -> dict:
+        try:
+            return self._store().write_details_phase(task_id, deployment=deployment)
+        except LookupError as exc:
+            raise DeploymentMissing(str(exc)) from exc
+
+    def discard(self, task_id: str) -> None:
+        store = self._store()
+        try:
+            store.discard_session(task_id)
+        except store.InvalidTaskId as exc:
+            raise DeploymentsFailed(str(exc)) from exc
