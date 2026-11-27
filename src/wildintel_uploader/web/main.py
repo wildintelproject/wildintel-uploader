@@ -26,7 +26,7 @@ from wildintel_uploader.entrypoints.api import sources as sources_entrypoint
 from wildintel_uploader.entrypoints.api import timefix as timefix_entrypoint
 from wildintel_uploader.entrypoints.api import uploaders as uploaders_entrypoint
 from wildintel_uploader.entrypoints.api import visits as visits_entrypoint
-from wildintel_uploader.web.settings import configure_logging, settings
+from wildintel_uploader.web.server_settings import configure_logging, settings
 
 configure_logging()
 

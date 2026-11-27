@@ -111,10 +111,10 @@ development one:
 The backend port is `WILDINTEL_UPLOADER_WEB_PORT` (8769 — one above wildintel-zooniverse's, so
 every WildINTEL app runs side by side); the log level `WILDINTEL_UPLOADER_WEB_LOG_LEVEL`, which
 wins over the settings page's. Both can also go in `src/wildintel_uploader/web/.env` or
-`~/.config/wildintel_uploader_web/.env` (see `web/settings.py`).
+`~/.config/wildintel_uploader_web/.env` (see `web/server_settings.py`).
 
 !!! note "Two kinds of settings"
-    `web/settings.py` is the **server's** (port, log level, CORS — environment variables).
+    `web/server_settings.py` is the **server's** (port, log level, CORS — environment variables).
     `entrypoints/config.py` reads the **app's** own `settings.toml` (TRAPPER account, the data folder,
     checks, preprocessing — the ⚙️ page, and `wildintel-uploader config`).
 

@@ -33,7 +33,7 @@ def _serve() -> None:
     # Imported here: the web app sets up the log for itself — the
     # command-line app, its own way.
     from wildintel_uploader.web.main import app
-    from wildintel_uploader.web.settings import settings
+    from wildintel_uploader.web.server_settings import settings
 
     port = _find_free_port(settings.port, settings.port + PORT_SCAN_SPAN - 1)
     print(f"Server on http://127.0.0.1:{port}", flush=True)
