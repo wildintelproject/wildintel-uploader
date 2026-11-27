@@ -17,7 +17,6 @@ from pydantic import BaseModel, Field, ValidationInfo, create_model, field_valid
 
 from wildintel_uploader.modules.settings.domain import models as _domain  # noqa: F401 — the domain registers its sections first
 from wildintel_uploader.modules.settings.domain.registry import discover, settings_registry
-from wildintel_uploader.modules.settings.domain.rules import CheckLevel  # noqa: F401 — where entrypoints.config finds it
 from wildintel_uploader.shared import ids
 
 LogLevel = Literal["ERROR", "WARNING", "INFO", "DEBUG"]

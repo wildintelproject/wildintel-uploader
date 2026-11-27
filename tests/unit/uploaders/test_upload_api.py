@@ -269,10 +269,19 @@ def test_an_unknown_mode_is_a_422(tmp_path: Path):
         assert _client().post("/api/upload/deployment", json={**PAYLOAD, "mode": "send_it"}).status_code == 422
 
 
+def _places(data):
+    """The folders the settings say, with the data folder of the test and the others inside it."""
+    from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
+    from wildintel_uploader.modules.settings.domain.ports import Places
+    places = Places(settings_file=data / "settings.toml", data=data, collections=data / "collections", reports=data / "reports",
+                    packages=data / "packages", catalog_storage="json", catalog_database=data / "catalog.sqlite3")
+    return patch.object(SettingsUseCases, "places", lambda self: places)
+
+
 def test_open_folder_opens_a_folder_inside_the_data_folder(tmp_path):
     inside = tmp_path / "collections" / "DONA"
     inside.mkdir(parents=True)
-    with patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
+    with _places(tmp_path), \
             patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager") as opener:
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(inside)})
     assert response.status_code == 200
@@ -282,7 +291,7 @@ def test_open_folder_opens_a_folder_inside_the_data_folder(tmp_path):
 def test_open_folder_refuses_folders_outside_the_data_folder(tmp_path):
     data = tmp_path / "data"
     data.mkdir()
-    with patch("wildintel_uploader.entrypoints.config.data_dir", return_value=data), \
+    with _places(data), \
             patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager") as opener:
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(tmp_path)})
     assert response.status_code == 400
@@ -290,7 +299,7 @@ def test_open_folder_refuses_folders_outside_the_data_folder(tmp_path):
 
 
 def test_open_folder_404_when_missing(tmp_path):
-    with patch("wildintel_uploader.entrypoints.config.data_dir", return_value=tmp_path), \
+    with _places(tmp_path), \
             patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager"):
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(tmp_path / "nope")})
     assert response.status_code == 404

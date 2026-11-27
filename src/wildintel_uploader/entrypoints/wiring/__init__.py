@@ -23,10 +23,12 @@ What is resolved when
 from __future__ import annotations
 
 from wildintel_uploader.entrypoints import config
-from wildintel_uploader.shared import parallel
+from wildintel_uploader.shared import parallel, storage
 
 # how many images are worked on at once: the setting GENERAL.workers, asked each time
 parallel.use_workers(lambda: config.workers())
+# where the records are kept unless one is chosen: the setting DATA.storage, asked when it is first needed
+storage.use_settings(lambda: config.load_settings().DATA.storage)
 
 from wildintel_uploader.entrypoints.wiring.common import section, keep_trapper_account, app_log, error_words, catalog_collections_dir  # noqa: E402,F401
 from wildintel_uploader.entrypoints.wiring.settings import build_settings, SettingsProvider  # noqa: E402,F401

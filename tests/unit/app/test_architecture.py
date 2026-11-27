@@ -165,3 +165,10 @@ def test_the_domain_and_the_use_cases_do_not_lean_on_pydantic(path: Path):
              if re.search(r"\.model_(dump|dump_json|copy|validate|fields)\b", line)]
     assert not found, "\n".join(found)
 
+
+@pytest.mark.parametrize("path", sorted(SRC.glob("shared/**/*.py")), ids=lambda p: str(p.relative_to(SRC)))
+def test_the_shared_kernel_needs_no_module_and_no_entry_point(path: Path):
+    """The shared kernel is under every module: it never reaches up for one of them, nor for the entry points — what it needs of them is given."""
+    wrong = {i for i in _imports(path) if i.startswith(("wildintel_uploader.modules", "wildintel_uploader.entrypoints", "wildintel_uploader.web"))}
+    assert not wrong, f"{path.name} imports {sorted(wrong)}"
+

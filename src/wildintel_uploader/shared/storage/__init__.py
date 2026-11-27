@@ -36,6 +36,16 @@ def available() -> list[str]:
     return sorted(_FACTORIES)
 
 
+_in_use: Callable[[], str | None] = lambda: None   # noqa: E731 — what the settings say, once the app is put together
+
+
+def use_settings(in_use: Callable[[], str | None]) -> None:
+    """Where the backend the settings say is asked, when none is chosen — given where the app is put together (entrypoints.wiring), so that the
+    shared kernel never reaches for the settings itself."""
+    global _in_use
+    _in_use = in_use
+
+
 def configure(name: str | None = None) -> str:
     """Chooses the backend: `name`, or — with none — the one the settings say (`DATA.storage`). Returns it.
 
@@ -43,8 +53,7 @@ def configure(name: str | None = None) -> str:
         StorageError: there is no backend with that name."""
     global _selected
     if name is None:
-        from wildintel_uploader.entrypoints import config  # here: config does not need the storage
-        name = config.load_settings().DATA.storage
+        name = _in_use()
     name = (name or DEFAULT_BACKEND).strip().lower()
     if name not in _FACTORIES:
         raise StorageError(f"There is no storage called '{name}': {', '.join(available())}.")

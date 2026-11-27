@@ -7,11 +7,11 @@ from pathlib import Path
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 
-from wildintel_uploader.entrypoints import config
 from wildintel_uploader.shared.desktop import file_manager
 from wildintel_uploader.shared.desktop import folder_picker
 from wildintel_uploader.modules.deployments.infrastructure.api_schemas import BrowseFolderRequest, OpenFolderRequest
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
+from wildintel_uploader.modules.settings.domain.ports import SettingsService
 
 router = APIRouter(prefix="/api/deployment-import", tags=["desktop"], route_class=DishkaSyncRoute)
 
@@ -40,10 +40,11 @@ def _open_in_file_manager(path: Path) -> None:
 
 
 @router.post("/open-folder")
-def open_folder(req: OpenFolderRequest) -> dict:
+def open_folder(req: OpenFolderRequest, settings: FromDishka[SettingsService]) -> dict:
     """Opens a folder kept by the app (inside its data folder, or its collections, reports or packages folder — nothing else) in the file explorer."""
     target = Path(req.path).expanduser().resolve()
-    roots = [d.resolve() for d in (config.data_dir(), config.collections_dir(), config.reports_dir(), config.packages_dir())]
+    places = settings.places()
+    roots = [d.resolve() for d in (places.data, places.collections, places.reports, places.packages)]
     if not any(root == target or root in target.parents for root in roots):
         raise HTTPException(400, "Only folders inside the app's data folder, or its collections, reports or packages folder, can be opened.")
     if not target.is_dir():

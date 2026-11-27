@@ -1,10 +1,10 @@
-"""The settings of the app, as the rest of the code has always asked for them — `config.load_settings()`, `config.collections_dir()`, `config.Settings`…
+"""The settings file of the app, for where the app is put together (entrypoints.wiring) and the settings page — `config.load_settings()`,
+`config.collections_dir()`, `config.Settings`… —, over the module `modules.settings`: the settings as the app understands them are the dataclasses
+of its `domain.models`, the folders follow the rules of its `domain.folders`, and they are kept through the port `domain.ports.SettingsStore`,
+whose adapter is the TOML files of `infrastructure.toml_files`; `Settings` is the Pydantic model of the files (`infrastructure.schema`).
 
-A facade while the backend moves to ports and adapters (#248), over the module `modules.settings`: the settings as the app understands them are the
-dataclasses of its `domain.models`, the folders follow the rules of its `domain.folders`, and they are kept through the port
-`domain.ports.SettingsStore`, whose adapter is the TOML files of `infrastructure.toml_files`. Each function here gives the same answer it gave
-before — `Settings` is still the Pydantic model of the files (`infrastructure.schema`), as the modules that use this one expect it —; those modules
-move to the module, one by one, and then it goes.
+No module asks for it: the wiring gives each adapter the section or the folder it reads (see entrypoints.wiring), and the routers ask the
+contract of the settings (SettingsService). The tests use it to point the files elsewhere.
 
 The files are where they always were: settings.toml in the user's config folder, the other configs in configs/, the one in use named by active-config.
 The adapter is made from DEFAULT_CONFIG_FILE, CONFIGS_DIR and ACTIVE_CONFIG_POINTER each time it is asked for, so that a test can point them elsewhere."""
@@ -17,20 +17,13 @@ from wildintel_uploader.modules.settings.domain.ports import ConfigInfo  # noqa:
 from wildintel_uploader.modules.settings.domain import folders
 from wildintel_uploader.modules.settings.domain import models as domain
 from wildintel_uploader.modules.settings.infrastructure import app_dirs
-from wildintel_uploader.modules.postvalidation.domain.settings import DEPLOYMENT_CHECK_DEFAULTS  # noqa: F401
 from wildintel_uploader.modules.postvalidation.infrastructure.settings import PostvalidationSettings  # noqa: F401
 from wildintel_uploader.modules.preprocessing.infrastructure.settings import PreprocessingSettings  # noqa: F401
-from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECK_DEFAULTS  # noqa: F401
 from wildintel_uploader.modules.prevalidation.infrastructure.settings import ValidationSettings  # noqa: F401
-from wildintel_uploader.modules.sources.infrastructure.settings import Epicollect5Settings, EpicollectCsvSettings  # noqa: F401
-from wildintel_uploader.modules.visits.infrastructure.settings import FieldlogSettings  # noqa: F401
-from wildintel_uploader.modules.uploaders.infrastructure.settings import AgoutiSettings, TrapperSettings  # noqa: F401
 from wildintel_uploader.modules.settings.infrastructure.schema import (  # noqa: F401
-    MAX_WORKERS, TRAPPER_ROLES, Camera, CheckLevel, DataSettings,
-    FieldworkSettings, GeneralSettings, LogLevel, SdCard, Settings,
-    Trapper, TrapperRole, default_workers, migrate_gear, secret_fields, username_from,
+    DataSettings, FieldworkSettings, GeneralSettings, Settings, Trapper, default_workers, secret_fields,
 )
-from wildintel_uploader.modules.settings.infrastructure.toml_files import DEFAULT_CONFIG_ID, TomlSettingsStore, read_settings_file, write_settings_file  # noqa: F401
+from wildintel_uploader.modules.settings.infrastructure.toml_files import TomlSettingsStore, read_settings_file, write_settings_file  # noqa: F401
 
 APP_NAME = app_dirs.APP_NAME
 DEFAULT_CONFIG_FILE = app_dirs.config_dir() / "settings.toml"

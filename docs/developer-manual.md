@@ -131,7 +131,7 @@ wildintel-uploader/
 │   ├── shared/                  # the shared kernel: ids, identity, audit, storage, camtrap (Camtrap DP), desktop, parallel, logs, version
 │   ├── entrypoints/
 │   │   ├── wiring/              # where the modules are put together (Dishka): the one place that chooses each adapter — a factory per context
-│   │   ├── config.py            # the settings as the code of before reads them (settings.toml), for the adapters
+│   │   ├── config.py            # the settings file (settings.toml), for the wiring and the settings page — no module asks for it
 │   │   ├── api/                 # FastAPI routers, one per module — thin: a request into a call to the contract, and its answer or error back
 │   │   └── cli/                 # the Typer app (app.py) and the commands of each module
 │   ├── web/
