@@ -47,9 +47,12 @@ from wildintel_uploader.modules.deployments.infrastructure.sealed_folder import 
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
 from wildintel_uploader.modules.deployments.infrastructure.revision_folders import RevisionFoldersOnDisk, StatisticsInUse
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
-from wildintel_uploader.modules.deployments.infrastructure.legacy import (
-    CollectionFolders as DeploymentFolders, DeploymentPhotos, LayoutOfTheCollections, StoredSessions,
-)
+from wildintel_uploader.modules.deployments.application.photos import DeploymentPhotos
+from wildintel_uploader.modules.deployments.application.sessions import WizardSessions
+from wildintel_uploader.modules.deployments.infrastructure.collection_layout import LayoutOfTheCollections
+from wildintel_uploader.modules.deployments.infrastructure.collections_folder import CollectionFolders as DeploymentFolders
+from wildintel_uploader.modules.deployments.infrastructure.photo_folder import PhotosOnDisk
+from wildintel_uploader.modules.deployments.infrastructure.session_folder import SessionsOnDisk
 from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
@@ -199,12 +202,13 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
 
 
 def build_deployments(settings: SettingsService | None = None) -> DeploymentsService:
-    """The deployments: the cards, the folders, the revisions and the photos as the code of before keeps them, with the visits and the
-    preprocessing through their contracts."""
+    """The deployments: the memory cards, the collections folder, the import, the revisions, the photos and the wizard's sessions over their
+    adapters, with the visits and the preprocessing through their contracts."""
     settings = settings or build_settings()
-    return DeploymentsUseCases(CardCopying(CardOnDisk(), CopiesInTemp()), DeploymentFolders(config, catalog_of, sealing), revision_statistics(), DeploymentPhotos(), visits=build_visits(settings=settings),
+    return DeploymentsUseCases(CardCopying(CardOnDisk(), CopiesInTemp()), DeploymentFolders(lambda: config.collections_dir(), catalog_of, sealing), revision_statistics(),
+                               DeploymentPhotos(PhotosOnDisk(lambda: config.collections_dir())), visits=build_visits(settings=settings),
                                preprocessing=build_preprocessing(), repairs=repairing(), statistics=revision_statistics(),
-                               sessions=StoredSessions(), layout=LayoutOfTheCollections(importing), imports=importing())
+                               sessions=WizardSessions(SessionsOnDisk(lambda: config.get_sessions_dir(), lambda: config.legacy_sessions_dir())), layout=LayoutOfTheCollections(importing), imports=importing())
 
 
 def importing() -> Importing:

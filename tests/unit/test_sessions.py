@@ -137,13 +137,12 @@ def test_sessions_left_where_they_used_to_be_are_moved_to_where_they_are_kept_no
     import json
 
     from wildintel_uploader.entrypoints import config
-    from wildintel_uploader.modules.deployments.infrastructure import session_store
 
     old = config.legacy_sessions_dir() / "11111111-1111-1111-1111-111111111111"
     old.mkdir(parents=True)
     (old / "session.json").write_text(json.dumps({"task_id": old.name, "phase": "scanned", "task": "deployment", "created_at": "2026-01-01T00:00:00+00:00"}), encoding="utf-8")
 
-    listed = session_store.list_sessions()
+    listed = _client().get("/api/sessions").json()
 
     assert old.name in [s["task_id"] for s in listed]
     assert not old.exists() and (config.get_sessions_dir() / old.name / "session.json").is_file()

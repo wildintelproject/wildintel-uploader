@@ -65,7 +65,7 @@ def legacy_sessions_dir() -> Path:
 
 
 def get_sessions_dir() -> Path:
-    """Where in-progress and interrupted wizard runs persist. Not configurable — see services.session_store."""
+    """Where in-progress and interrupted wizard runs persist. Not configurable — see modules.deployments (domain.sessions)."""
     return app_dirs.sessions_dir()
 
 

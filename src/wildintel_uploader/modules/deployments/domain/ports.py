@@ -292,11 +292,29 @@ class Folders(ABC):
 
 
 class Photos(ABC):
+    """The photos of a deployment kept, to look at them. DeploymentMissing when the deployment, or the photo, is not there."""
+
     @abstractmethod
     def list(self, project: str, collection: str, deployment_id: str) -> list[dict]: ...
 
     @abstractmethod
     def jpeg(self, project: str, collection: str, deployment_id: str, name: str, large: bool) -> bytes: ...
+
+
+class PhotoFolder(ABC):
+    """The folder of a deployment in the collections folder, as its photos are looked at. DeploymentMissing when it is not there."""
+
+    @abstractmethod
+    def names(self, project: str, collection: str, deployment_id: str) -> list[str]:
+        """The names of the files in it."""
+
+    @abstractmethod
+    def taken(self, project: str, collection: str, deployment_id: str) -> dict[str, str | None]:
+        """When each image was taken, as images.json says — nothing when it can't."""
+
+    @abstractmethod
+    def jpeg(self, project: str, collection: str, deployment_id: str, name: str, size: int) -> bytes:
+        """A file of the folder as a JPEG that fits in size × size; DeploymentMissing when it is not one of its files, or can't be shown."""
 
 
 class SealedFolder(ABC):
@@ -468,3 +486,25 @@ class ImportFolder(ABC):
     @abstractmethod
     def write_images(self, folder: Path, deployment_id: str, images: list[tuple[str, str | None, dict]]) -> None:
         """images.json: (name, the camera's wall clock, extras) of each."""
+
+
+class SessionFolder(ABC):
+    """Where the sessions of the import wizard are kept, by task id — one the app makes (domain.sessions)."""
+
+    @abstractmethod
+    def read(self, task_id: str) -> dict | None:
+        """Its manifest, or None when there is none or it can't be read."""
+
+    @abstractmethod
+    def write(self, task_id: str, manifest: dict) -> None: ...
+
+    @abstractmethod
+    def remove(self, task_id: str) -> None: ...
+
+    @abstractmethod
+    def names(self) -> list[str]:
+        """The names of what is kept — sessions or not."""
+
+    @abstractmethod
+    def move_old(self) -> None:
+        """Moves the sessions kept where they used to be to where they are kept now — those not there already."""

@@ -31,7 +31,7 @@ def logs_dir() -> Path:
 
 def sessions_dir() -> Path:
     """Where in-progress and interrupted wizard runs persist — they are state: ~/.local/state/wildintel-uploader/sessions on Linux (the XDG state
-    folder), the app's folder in Windows and macOS (see services.session_store)."""
+    folder), the app's folder in Windows and macOS (see modules.deployments, domain.sessions)."""
     return Path(platformdirs.user_state_dir(APP_NAME)) / "sessions"
 
 
