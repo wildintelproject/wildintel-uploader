@@ -12,6 +12,7 @@ from wildintel_uploader.modules.visits.domain.models import VisitsFailed
 from wildintel_uploader.modules.visits.domain.ports import (
     Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitFile, VisitReports, VisitRepository, VisitSettings,
 )
+from wildintel_uploader.modules.visits.infrastructure import kept_visits
 from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
 
 
@@ -37,43 +38,43 @@ class StoredVisits(VisitRepository):
 
     def list(self, project: str, location_id: str | None = None) -> list[Visit]:
         with _failed():
-            return _old().list_visits(self.root, project, location_id)
+            return kept_visits.list_visits(self.root, project, location_id)
 
     def add(self, project: str, visit: Visit) -> Visit:
         with _failed():
-            return _old().write_visit(self.root, project, visit)
+            return kept_visits.write_visit(self.root, project, visit)
 
     def add_many(self, project: str, visits: list[Visit]) -> int:
         with _failed():
-            return _old().write_visits(self.root, project, visits)
+            return kept_visits.write_visits(self.root, project, visits)
 
     def update(self, project: str, location_id: str, session: str, visit: Visit) -> Visit:
         with _failed():
-            return _old().update_visit(self.root, project, location_id, session, visit)
+            return kept_visits.update_visit(self.root, project, location_id, session, visit)
 
     def unknown(self, project: str) -> list[Visit]:
         with _failed():
-            return _old().list_unknown(self.root, project)
+            return kept_visits.list_unknown(self.root, project)
 
     def add_unknown(self, project: str, unknown: list[Visit]) -> int:
         with _failed():
-            return _old().write_unknown(self.root, project, unknown)
+            return kept_visits.write_unknown(self.root, project, unknown)
 
     def planned_revisions(self, project: str) -> list[str]:
         with _failed():
-            return _old().list_planned_revisions(self.root, project)
+            return kept_visits.list_planned_revisions(self.root, project)
 
     def plan_revision(self, project: str, session: str) -> str:
         with _failed():
-            return _old().plan_revision(self.root, project, session)
+            return kept_visits.plan_revision(self.root, project, session)
 
     def closed(self, project: str) -> list[dict]:
         with _failed():
-            return _old().closed_visits(self.root, project)
+            return kept_visits.closed_visits(self.root, project)
 
     def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit:
         with _failed():
-            return _old().link_visit(self.root, project, location_id, date, time, deployment_id)
+            return kept_visits.link_visit(self.root, project, location_id, date, time, deployment_id)
 
 
 class CatalogOfTheVisits(VisitCatalog):
@@ -228,7 +229,7 @@ class FolderUploads(Uploads):
         from wildintel_uploader.core import config
         settings = config.load_settings()
         done = {u["destination"]: u for u in (self.uploads_of(project, imported) if imported else [])}
-        failed = {f["destination"]: f for f in _old().list_upload_failures(self.root, project) if f.get("deployment_id") == deployment_id}
+        failed = {f["destination"]: f for f in kept_visits.list_upload_failures(self.root, project) if f.get("deployment_id") == deployment_id}
         out = []
         for destination, used in UPLOADERS.items():
             if not used(settings) and destination not in done:
