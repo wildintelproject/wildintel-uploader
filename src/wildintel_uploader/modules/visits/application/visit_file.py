@@ -11,6 +11,7 @@ from wildintel_uploader.modules.visits.domain import rules as visit_rules
 from wildintel_uploader.modules.visits.domain import visit_file as rules
 from wildintel_uploader.modules.visits.domain import wall_clock as visit_time
 from wildintel_uploader.modules.visits.domain.ports import Visit, VisitFile
+from wildintel_uploader.modules.visits.domain.shapes import Camera, Location
 
 
 class VisitFiles:
@@ -19,7 +20,7 @@ class VisitFiles:
     def __init__(self, file: VisitFile) -> None:
         self._file = file
 
-    def parse(self, text: str, locations: list[dict], kept: list[Visit], mapping: dict | None = None, options: dict | None = None) -> dict:
+    def parse(self, text: str, locations: list[Location], kept: list[Visit], mapping: dict | None = None, options: dict | None = None) -> dict:
         return parse_visits(self._file, text, locations, kept, mapping, options)
 
     def export(self, visits: list[Visit]) -> str:
@@ -34,7 +35,8 @@ class VisitFiles:
         return self._file.normalized(visit)
 
 
-def parse_visits(file: VisitFile, text: str, locations: list[dict], kept: list[dict], mapping: dict[str, str] | None = None, options: dict | None = None) -> dict:
+def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: list[Visit], mapping: dict[str, str] | None = None,
+                 options: dict | None = None) -> dict:
     """The visits in the CSV `text` that can be kept, and what is wrong with the rest.
 
     `mapping` ({field: column}) says the column that gives each field of a visit — see domain.visit_file. `file` reads the text, the cells and the records.
@@ -252,7 +254,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[dict], kept: list[d
     accepted, gate, closing = visit_rules.History(kept), {}, []
     unknown_kept_keys = {(str(u["location_id"]).lower(), str(u["session"]).upper()) for u in unknown_kept}
 
-    def fills_unknown(v: dict) -> bool:
+    def fills_unknown(v: Visit) -> bool:
         """Whether the visit takes the place of an unknown one of the visits kept: its site has none in its revision, that is unknown."""
         return (v["location_id"].lower(), str(v["session"]).upper()) in unknown_kept_keys
 
@@ -426,13 +428,13 @@ def parse_visits(file: VisitFile, text: str, locations: list[dict], kept: list[d
             "blocking": blocking}
 
 
-def create_out_locations(new_locations: dict[str, dict], visits: list[dict]) -> list[dict]:
+def create_out_locations(new_locations: dict[str, Location], visits: list[Visit]) -> list[Location]:
     """The locations a file makes that a visit kept needs."""
     sites = {v["location_id"].lower() for v in visits}
     return [l for site, l in new_locations.items() if site in sites]
 
 
-def _complete_camera(record: dict, cells: dict, completed: dict[str, dict], warnings: list[tuple[int, str]], n: int) -> None:
+def _complete_camera(record: Camera, cells: dict, completed: dict[str, dict], warnings: list[tuple[int, str]], n: int) -> None:
     """What a row says of a camera that has a record (#231): it completes what the record lacks — its serial number, make and model — and never overwrites it;
     when it says otherwise, a warning says so."""
     label = str(record.get("label") or record.get("camera_id"))

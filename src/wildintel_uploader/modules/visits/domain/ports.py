@@ -7,11 +7,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
-from typing import Any
 
 from wildintel_uploader.modules.visits.domain.models import ImportOptions
+from wildintel_uploader.modules.visits.domain.shapes import Camera, Location, SdCard, Trapper, UnknownVisit, Visit  # noqa: F401 — the shapes the visits work with
 
-Visit = dict[str, Any]
 
 
 # ── in: the contract ──
@@ -23,7 +22,7 @@ class VisitsService(ABC):
         """The visits kept for a research project, those to one location when it is given."""
 
     @abstractmethod
-    def unknown(self, project: str) -> list[Visit]:
+    def unknown(self, project: str) -> list[UnknownVisit]:
         """The visits known only to have been made — a revision before the ones kept."""
 
     @abstractmethod
@@ -68,7 +67,7 @@ class VisitsService(ABC):
         """The columns of a CSV, whether it is the form, a few rows, the fields of a visit and the column that most likely gives each."""
 
     @abstractmethod
-    def closed(self, project: str) -> list[dict]:
+    def closed(self, project: str) -> list[Visit]:
         """The visits that closed a deployment not imported yet, with the visit that started it and its details."""
 
     @abstractmethod
@@ -106,7 +105,7 @@ class VisitRepository(ABC):
     def update(self, project: str, location_id: str, session: str, visit: Visit) -> Visit: ...
 
     @abstractmethod
-    def unknown(self, project: str) -> list[Visit]:
+    def unknown(self, project: str) -> list[UnknownVisit]:
         """The visits known only to have been made (a revision before the ones kept)."""
 
     @abstractmethod
@@ -116,7 +115,7 @@ class VisitRepository(ABC):
     def replace_all(self, project: str, visits: list[Visit]) -> None: ...
 
     @abstractmethod
-    def add_unknown(self, project: str, unknown: list[Visit]) -> int: ...
+    def add_unknown(self, project: str, unknown: list[UnknownVisit]) -> int: ...
 
     @abstractmethod
     def planned_revisions(self, project: str) -> list[str]: ...
@@ -125,7 +124,7 @@ class VisitRepository(ABC):
     def plan_revision(self, project: str, session: str) -> str: ...
 
     @abstractmethod
-    def closed(self, project: str) -> list[dict]:
+    def closed(self, project: str) -> list[Visit]:
         """{"visit", "end"} of each deployment closed and not imported yet."""
 
     @abstractmethod
@@ -143,30 +142,30 @@ class VisitCatalog(ABC):
     def require_project(self, project: str, *, active: bool = False) -> None: ...
 
     @abstractmethod
-    def locations(self, project: str, include_deleted: bool = False) -> list[dict]: ...
+    def locations(self, project: str, include_deleted: bool = False) -> list[Location]: ...
 
     @abstractmethod
-    def equipment(self, project: str, kind: str) -> list[dict]: ...
+    def equipment(self, project: str, kind: str) -> list[Camera | SdCard]: ...
 
     @abstractmethod
-    def trappers(self) -> list[dict]: ...
+    def trappers(self) -> list[Trapper]: ...
 
     @abstractmethod
     def trapper_names(self) -> list[str]:
         """The names of the people, as a visit says who went."""
 
     @abstractmethod
-    def add_trappers(self, trappers: list[dict]) -> None: ...
+    def add_trappers(self, trappers: list[Trapper]) -> None: ...
 
     @abstractmethod
-    def add_location(self, project: str, location: dict) -> None: ...
+    def add_location(self, project: str, location: Location) -> None: ...
 
     @abstractmethod
     def change_location(self, project: str, location_id: str, changes: dict) -> None:
         """What a visit does to a location — its status by the rules of a visit."""
 
     @abstractmethod
-    def keep_equipment(self, project: str, kind: str, items: list[dict]) -> None: ...
+    def keep_equipment(self, project: str, kind: str, items: list[Camera | SdCard]) -> None: ...
 
 
 class StateHistory(ABC):
@@ -200,11 +199,11 @@ class VisitFile(ABC):
         """What the cells of a row (keyed by the fields they give) say of a visit, each read as its field takes it — only what the row says."""
 
     @abstractmethod
-    def record(self, visit: dict) -> Visit:
+    def record(self, visit: Visit) -> Visit:
         """A visit as a record of a visit has it."""
 
     @abstractmethod
-    def location(self, fields: dict) -> dict:
+    def location(self, fields: Location) -> Location:
         """A location a row creates (domain.visit_file.location_fields), as the catalog takes one."""
 
     @abstractmethod

@@ -19,6 +19,7 @@ from wildintel_uploader.modules.visits.domain.ports import (
 )
 from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
+from wildintel_uploader.modules.visits.domain.shapes import Camera, Location, SdCard, Trapper
 
 
 
@@ -80,7 +81,7 @@ class StoredVisits(VisitRepository):
         with _failed():
             return self._kept.plan_revision(project, session)
 
-    def closed(self, project: str) -> list[dict]:
+    def closed(self, project: str) -> list[Visit]:
         with _failed():
             return self._kept.closed(project)
 
@@ -103,27 +104,27 @@ class CatalogOfTheVisits(VisitCatalog):
         with _failed():
             self._catalog().require_project(project, active=active)
 
-    def locations(self, project: str, include_deleted: bool = False) -> list[dict]:
+    def locations(self, project: str, include_deleted: bool = False) -> list[Location]:
         with _failed():
             return [view.seen(loc) for loc in self._catalog().locations(project, include_deleted)]
 
-    def equipment(self, project: str, kind: str) -> list[dict]:
+    def equipment(self, project: str, kind: str) -> list[Camera | SdCard]:
         with _failed():
             return [{**view.seen(i), "research_project": project} for i in self._catalog().equipment(project, kind)]
 
-    def trappers(self) -> list[dict]:
+    def trappers(self) -> list[Trapper]:
         with _failed():
             return [view.seen(t) for t in self._catalog().trappers()]
 
     def trapper_names(self) -> list[str]:
         return [t["name"] for t in self.trappers()]
 
-    def add_trappers(self, trappers: list[dict]) -> None:
+    def add_trappers(self, trappers: list[Trapper]) -> None:
         with _failed():
             catalog = self._catalog()
             catalog.save_trappers([*catalog.trappers(), *(view.trapper(t) for t in trappers)])
 
-    def add_location(self, project: str, location: dict) -> None:
+    def add_location(self, project: str, location: Location) -> None:
         with _failed():
             self._catalog().add_location(project, view.new_location(location))
 
@@ -131,7 +132,7 @@ class CatalogOfTheVisits(VisitCatalog):
         with _failed():
             self._catalog().update_location(project, location_id, changes, by_visit=True)
 
-    def keep_equipment(self, project: str, kind: str, items: list[dict]) -> None:
+    def keep_equipment(self, project: str, kind: str, items: list[Camera | SdCard]) -> None:
         with _failed():
             self._catalog().save_equipment(project, kind, [view.equipment(i, kind) for i in items])
 

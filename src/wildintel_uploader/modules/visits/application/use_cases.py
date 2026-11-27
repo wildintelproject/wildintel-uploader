@@ -16,6 +16,7 @@ from wildintel_uploader.modules.visits.domain.models import ImportOptions, Visit
 from wildintel_uploader.modules.visits.domain.ports import (
     Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitFile, VisitReports, VisitRepository, VisitSettings, VisitsService,
 )
+from wildintel_uploader.modules.visits.domain.shapes import Camera, Location, SdCard
 
 # One save of visits at a time for a research project: two saves of the same file, run together, would each keep what the other is keeping.
 _saving: dict[str, threading.Lock] = {}
@@ -27,11 +28,11 @@ def save_lock(project: str) -> threading.Lock:
         return _saving.setdefault(project.lower(), threading.Lock())
 
 
-def _location_of(locations: list[dict], location_id) -> dict | None:
+def _location_of(locations: list[Location], location_id) -> Location | None:
     return next((loc for loc in locations if str(loc.get("location_id", "")).lower() == str(location_id or "").lower()), None)
 
 
-def _zones(locations: list[dict]) -> dict[str, str | None]:
+def _zones(locations: list[Location]) -> dict[str, str | None]:
     return {str(loc.get("location_id", "")).lower(): loc.get("timezone") for loc in locations}
 
 
@@ -312,7 +313,7 @@ class VisitsUseCases(VisitsService):
         visits = [{**v, "timezone": zones.get(str(v.get("location_id", "")).lower())} for v in result["visits"]]
         return {**result, "visits": visits, "saved": saved, "collection_folders": collection_folders, "report": report}
 
-    def _keep(self, project: str, result: dict, kept: list[Visit], cameras: list[dict], cards: list[dict]) -> tuple[int, dict, str | None]:
+    def _keep(self, project: str, result: dict, kept: list[Visit], cameras: list[Camera], cards: list[SdCard]) -> tuple[int, dict, str | None]:
         """What the visits need is created first — the trappers who went, their locations, cameras and SD cards —, then the visits."""
         if result["create"]["trappers"]:
             self._catalog.add_trappers(result["create"]["trappers"])
@@ -357,7 +358,7 @@ class VisitsUseCases(VisitsService):
 
     # ── the deployments the visits say ──
 
-    def closed(self, project: str) -> list[dict]:
+    def closed(self, project: str) -> list[Visit]:
         closed = self._visits.closed(project)
         # each visit is told on the wall clock of its location: the timezone of the location goes with it
         zones = _zones(self._catalog.locations(project, include_deleted=True))

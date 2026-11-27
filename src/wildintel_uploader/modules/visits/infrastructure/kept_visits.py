@@ -11,6 +11,7 @@ from wildintel_uploader.modules.visits.infrastructure import catalog_view as vie
 from wildintel_uploader.modules.visits.domain import references as refs_of
 from wildintel_uploader.modules.visits.domain.references import Refs
 from wildintel_uploader.shared import audit, storage
+from wildintel_uploader.modules.visits.domain.shapes import Location, UnknownVisit, Visit
 
 
 class KeptVisits:
@@ -22,10 +23,10 @@ class KeptVisits:
     def _store(self) -> storage.ProjectStore:
         return storage.open_store(self.root)
 
-    def _raw(self, project: str) -> list[dict]:
+    def _raw(self, project: str) -> list[Visit]:
         return self._store().read_records(project, "visits")
 
-    def _write_raw(self, project: str, visits: list[dict]) -> None:
+    def _write_raw(self, project: str, visits: list[Visit]) -> None:
         self._store().write_records(project, "visits", visits)
 
     def _refs(self, project: str, trappers=None) -> Refs:
@@ -35,7 +36,7 @@ class KeptVisits:
                     [view.seen(t) for t in catalog.trappers(include_deleted=True)] if trappers is None
                     else [t if isinstance(t, dict) else t.model_dump(mode="json") for t in trappers])
 
-    def _locations(self, project: str) -> list[dict]:
+    def _locations(self, project: str) -> list[Location]:
         """The locations of a research project — those removed too: a visit to one still says where it was."""
         return [view.seen(loc) for loc in self._catalog().locations(project, include_deleted=True)]
 
@@ -45,7 +46,7 @@ class KeptVisits:
     def kept_count(self, project: str) -> int:
         return len(self._raw(project))
 
-    def list(self, project: str, location_id: str | None = None, trappers=None) -> list[dict]:
+    def list(self, project: str, location_id: str | None = None, trappers=None) -> list[Visit]:
         """The visits kept for a research project, in the order they were registered — those to one location (found ignoring case) when it is
         given. A file kept with a day and a time only, or with the names (an earlier version), is moved to instants and to ids when it is read — in
         the timezone its locations say —, and written back so.
@@ -60,11 +61,11 @@ class KeptVisits:
             return visits
         return [v for v in visits if str(v.get("location_id", "")).lower() == location_id.lower()]
 
-    def add(self, project: str, visit: dict) -> dict:
+    def add(self, project: str, visit: Visit) -> Visit:
         self.add_many(project, [visit])
         return refs_of.as_told(self._raw(project)[-1], self._refs(project))
 
-    def add_many(self, project: str, new: list[dict]) -> int:
+    def add_many(self, project: str, new: list[Visit]) -> int:
         """Registers visits to a research project that's already kept here; a visit that is known takes the place of the unknown one of its site in
         its revision. Says how many."""
         self._modifiable(project)
@@ -80,7 +81,7 @@ class KeptVisits:
                 self._write_unknown(project, left)
         return len(new)
 
-    def update(self, project: str, location_id: str, session: str, visit: dict) -> dict:
+    def update(self, project: str, location_id: str, session: str, visit: Visit) -> Visit:
         """Replaces a visit kept — found by its site (ignoring case) and its revision, which is its key and does not change —; the deployment it
         closed stays.
 
@@ -101,7 +102,7 @@ class KeptVisits:
         self._write_raw(project, raw)
         return refs_of.as_told(raw[index], refs)
 
-    def replace_all(self, project: str, visits: list[dict]) -> None:
+    def replace_all(self, project: str, visits: list[Visit]) -> None:
         """Keeps these visits — told — as all the research project's (a backup restored): each keeps its own id and its dates."""
         self._modifiable(project)
         refs = self._refs(project)
@@ -123,10 +124,10 @@ class KeptVisits:
             self._write_raw(project, raw)
         return changed
 
-    def closed(self, project: str) -> list[dict]:
+    def closed(self, project: str) -> list[Visit]:
         return refs_of.closed(self.list(project))
 
-    def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> dict:
+    def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit:
         """Records on a visit (found by its location, ignoring case, day and time) the deployment it closed.
 
         Raises:
@@ -146,16 +147,16 @@ class KeptVisits:
 
     # the unknown visits and the revisions planned
 
-    def unknown(self, project: str) -> list[dict]:
+    def unknown(self, project: str) -> list[UnknownVisit]:
         return refs_of.unknown_told(self._store().read_records(project, "unknown_visits"), self._locations(project))
 
-    def _write_unknown(self, project: str, unknown: list[dict]) -> None:
+    def _write_unknown(self, project: str, unknown: list[UnknownVisit]) -> None:
         if not unknown:
             self._store().delete_records(project, "unknown_visits")
             return
         self._store().write_records(project, "unknown_visits", refs_of.unknown_kept(unknown, self._locations(project)))
 
-    def add_unknown(self, project: str, new: list[dict]) -> int:
+    def add_unknown(self, project: str, new: list[UnknownVisit]) -> int:
         """Keeps more unknown visits — those already kept are not repeated —; says how many were added."""
         self._modifiable(project)
         have = self.unknown(project)
