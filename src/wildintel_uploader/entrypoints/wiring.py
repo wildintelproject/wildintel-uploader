@@ -18,6 +18,9 @@ from pathlib import Path
 from dishka import Container, Provider, Scope, make_container, provide
 
 from wildintel_uploader.core import config, parallel
+from wildintel_uploader.modules.backup.application.use_cases import BackupUseCases
+from wildintel_uploader.modules.backup.domain.ports import BackupService
+from wildintel_uploader.modules.backup.infrastructure.zip_files import ZipBackups
 from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseCases
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
@@ -161,6 +164,11 @@ def build_uploaders() -> UploadersService:
     return UploadersUseCases(TrapperClient(), CollectionsFolder(), SavedUploadReports())
 
 
+def build_backup() -> BackupService:
+    """The backups, as zip files, over the code of before."""
+    return BackupUseCases(ZipBackups())
+
+
 # ── the providers of the container ──
 
 
@@ -269,6 +277,12 @@ class UploadersProvider(Provider):
         return build_uploaders()
 
 
+class BackupProvider(Provider):
+    @provide(scope=Scope.APP)
+    def service(self) -> BackupService:
+        return build_backup()
+
+
 def make_app_container() -> Container:
     """The container of the app: every module's provider."""
-    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider(), TimeFixProvider(), UploadersProvider())
+    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider(), TimeFixProvider(), UploadersProvider(), BackupProvider())
