@@ -1,18 +1,17 @@
 """How a collection holds its deployments — the contract the other modules bring images into a collection through: the paths, what is kept
-and the seal as an import says (application.imports), the files as the collections folder keeps them, and the room on the disk."""
+and the seal as an import says (CollectionImporter), the files as the collections folder keeps them, and the room on the disk."""
 from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
 
-from wildintel_uploader.modules.deployments.application.imports import Importing
-from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout, Deployment
+from wildintel_uploader.modules.deployments.domain.ports import CollectionImporter, CollectionLayout, Deployment
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.modules.deployments.infrastructure import disk_space
 
 
 class LayoutOfTheCollections(CollectionLayout):
-    def __init__(self, importing: Callable[[], Importing]) -> None:
+    def __init__(self, importing: Callable[[], CollectionImporter]) -> None:
         self._importing = importing
 
     def check_paths(self, source: Path, dest: Path) -> None:

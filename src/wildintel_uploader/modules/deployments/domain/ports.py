@@ -8,7 +8,7 @@ from pathlib import Path
 
 from wildintel_uploader.modules.deployments.domain.statistics import KeptDeployment
 from wildintel_uploader.modules.postvalidation.domain.statistics import DeploymentTimes
-from typing import Any
+from typing import Any, Protocol
 
 Deployment = Any   # the record of a deployment of Camtrap DP (shared.camtrap.DeploymentFields)
 
@@ -516,3 +516,24 @@ class SessionFolder(ABC):
     @abstractmethod
     def move_old(self) -> None:
         """Moves the sessions kept where they used to be to where they are kept now — those not there already."""
+
+
+class DeploymentSealer(Protocol):
+    """What the adapters of the deployments ask of the seal (application.seal.Sealing): whether a deployment kept is still what it says."""
+
+    def verify(self, dest: Path) -> dict:
+        """{"status": "none" | "valid" | "broken", "changed", "missing", "added", "deployment_changed", "seal_changed"}."""
+
+
+class CollectionImporter(Protocol):
+    """What the adapters of the deployments ask of an import (application.imports.Importing): the paths a folder of images can be brought
+    through, what is kept already, and the seal of what was brought."""
+
+    def check_paths(self, source: Path, dest: Path) -> None: ...
+
+    def is_pending(self, dest: Path) -> bool: ...
+
+    def check_not_kept(self, dest: Path) -> None: ...
+
+    def seal(self, source: Path, dest: Path, deployment: Deployment, **details) -> bool: ...
+

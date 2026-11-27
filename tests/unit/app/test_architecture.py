@@ -148,3 +148,10 @@ def test_the_domain_and_the_use_cases_touch_no_file_process_or_network(path: Pat
              if _IO.search(line) and not line.lstrip().startswith(("#", '"""'))]
     assert not found, "\n".join(found)
 
+
+@pytest.mark.parametrize("path", _files("infrastructure"), ids=lambda p: f"{p.parts[-3]}/infrastructure/{p.name}")
+def test_an_adapter_asks_the_ports_not_the_use_cases(path: Path):
+    """An adapter depends on the ports of the domain — never on the use cases (application), which it would then be built around."""
+    wrong = {i for i in _imports(path) if ".application" in i or "entrypoints" in i}
+    assert not wrong, f"{path.name} imports {sorted(wrong)}"
+

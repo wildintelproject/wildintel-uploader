@@ -1,5 +1,5 @@
 """The collections folder as the rest of the app keeps it: where it is, whether a folder is a collection, the deployments in one, the images
-already imported into a research project, the seal of a deployment kept (application.seal) and the time settings of a location, from the
+already imported into a research project, the seal of a deployment kept (DeploymentSealer) and the time settings of a location, from the
 catalog of that collections folder through its contract. What can't be read is DeploymentsFailed."""
 from __future__ import annotations
 
@@ -8,9 +8,8 @@ from pathlib import Path
 
 from wildintel_uploader.modules.catalog.domain.models import CatalogError
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
-from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.domain.models import DeploymentsFailed
-from wildintel_uploader.modules.deployments.domain.ports import Folders
+from wildintel_uploader.modules.deployments.domain.ports import DeploymentSealer, Folders
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.shared.storage import StorageError
 
@@ -18,7 +17,7 @@ from wildintel_uploader.shared.storage import StorageError
 class CollectionFolders(Folders):
     """`root` says the collections folder, asked each time; `catalog_of` the catalog of a collections folder."""
 
-    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogService], sealing: Callable[[], Sealing]) -> None:
+    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogService], sealing: Callable[[], DeploymentSealer]) -> None:
         self._root, self._catalog_of, self._sealing = root, catalog_of, sealing
 
     def root(self) -> Path:
