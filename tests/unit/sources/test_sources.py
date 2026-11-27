@@ -2,7 +2,8 @@
 EPICOLLECT5 and EPICOLLECTCSV, its own and registered with the module of the settings."""
 import pytest
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
+from wildintel_uploader.modules.settings.domain import models as _settings_models
+from wildintel_uploader.modules.settings.infrastructure import schema
 from wildintel_uploader.modules.sources.application.use_cases import SourcesUseCases
 from wildintel_uploader.modules.sources.domain.models import SourceError
 from wildintel_uploader.modules.sources.domain.settings import Epicollect5Settings
@@ -72,5 +73,9 @@ def test_the_entries_of_a_deployment_need_the_location_mapped():
 
 
 def test_its_settings_are_its_own():
-    assert settings_registry.get("EPICOLLECT5").domain is Epicollect5Settings
-    assert settings_registry.get("EPICOLLECTCSV").schema.__module__ == "wildintel_uploader.modules.sources.infrastructure.settings"
+    assert _section("EPICOLLECT5").domain is Epicollect5Settings
+    assert schema.SCHEMAS["EPICOLLECTCSV"].__module__ == "wildintel_uploader.modules.sources.infrastructure.settings"
+
+
+def _section(name: str):
+    return next(x for x in _settings_models.SECTIONS if x.name == name)

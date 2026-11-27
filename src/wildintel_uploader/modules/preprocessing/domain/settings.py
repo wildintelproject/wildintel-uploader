@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
+from wildintel_uploader.modules.settings.domain.registry import Section
 from wildintel_uploader.modules.settings.domain.rules import in_range, tidy_field
 
 
-@settings_registry.section("PREPROCESSING", "preprocessing", order=90)
 @dataclass(frozen=True)
 class PreprocessingSettings:
     """What is done to the images as they go into their collection: the steps a new import starts with, and their values."""
@@ -27,3 +26,9 @@ class PreprocessingSettings:
         in_range("PREPROCESSING.resize_width", self.resize_width, 100, 20000)
         for name in ("owner", "publisher", "coverage", "license_url"):
             tidy_field(self, name, (getattr(self, name) or "").strip())
+
+
+# The sections of settings.toml this module owns — put together with the others by the module of the settings (domain.models).
+SECTIONS = (
+    Section("PREPROCESSING", "preprocessing", 90, PreprocessingSettings),
+)

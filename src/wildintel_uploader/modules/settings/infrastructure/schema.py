@@ -15,8 +15,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationInfo, create_model, field_validator, model_validator
 
-from wildintel_uploader.modules.settings.domain import models as _domain  # noqa: F401 — the domain registers its sections first
-from wildintel_uploader.modules.settings.domain.registry import discover, settings_registry
+from wildintel_uploader.modules.settings.domain import models as _domain
 from wildintel_uploader.shared import ids
 
 LogLevel = Literal["ERROR", "WARNING", "INFO", "DEBUG"]
@@ -29,7 +28,6 @@ def default_workers() -> int:
     return _domain.workers_for(os.cpu_count())
 
 
-@settings_registry.schema("GENERAL")
 class GeneralSettings(BaseModel):
     log_level: LogLevel = Field(
         default="INFO",
@@ -55,7 +53,6 @@ class GeneralSettings(BaseModel):
         return (value or "").strip() or None
 
 
-@settings_registry.schema("DATA")
 class DataSettings(BaseModel):
     # None until first read/saved — resolved against default_data_dir() so
     # moving the app's documents dir (a platformdirs choice) doesn't strand
@@ -307,7 +304,6 @@ def _unique(items: list, key: str, scope: str | None = None) -> list:
     return list(kept.values())
 
 
-@settings_registry.schema("FIELDWORK")
 class FieldworkSettings(BaseModel):
     trappers: list[Trapper] = Field(
         default_factory=list,
@@ -372,13 +368,29 @@ class FieldworkSettings(BaseModel):
         return _unique(cameras, "label", "research_project")
 
 
-# The sections of the other modules register their format when their infrastructure/settings.py is imported.
-discover("infrastructure")
-# The domain registers them first: what the file has is a section of the settings.
-_SECTIONS = [x for x in settings_registry.sections() if x.schema is not None]
+# The format of each section: this module's own, and those each module with settings says (its infrastructure/settings.py) — by name, as the
+# domain lists them.
+from wildintel_uploader.modules.uploaders.infrastructure import settings as _uploaders
+from wildintel_uploader.modules.sources.infrastructure import settings as _sources
+from wildintel_uploader.modules.prevalidation.infrastructure import settings as _prevalidation
+from wildintel_uploader.modules.postvalidation.infrastructure import settings as _postvalidation
+from wildintel_uploader.modules.preprocessing.infrastructure import settings as _preprocessing
+from wildintel_uploader.modules.visits.infrastructure import settings as _visits
 
-# The whole file: this module's sections and those the other modules registered, in the order they are written in.
-Settings = create_model("Settings", **{x.name: (x.schema, Field(default_factory=x.schema)) for x in _SECTIONS})  # type: ignore[call-overload]
+SCHEMAS: dict[str, type[BaseModel]] = {
+    "GENERAL": GeneralSettings,
+    "DATA": DataSettings,
+    "FIELDWORK": FieldworkSettings,
+    **_uploaders.SCHEMAS,
+    **_sources.SCHEMAS,
+    **_prevalidation.SCHEMAS,
+    **_postvalidation.SCHEMAS,
+    **_preprocessing.SCHEMAS,
+    **_visits.SCHEMAS,
+}
+
+# The whole file: every section of the settings, in the order they are written in.
+Settings = create_model("Settings", **{x.name: (SCHEMAS[x.name], Field(default_factory=SCHEMAS[x.name])) for x in _domain.sorted_sections()})  # type: ignore[call-overload]
 
 
 def secret_fields() -> tuple[tuple[str, str], ...]:

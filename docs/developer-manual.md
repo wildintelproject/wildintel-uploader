@@ -219,9 +219,11 @@ imports the entry points**: what it needs comes in. An adapter that is a class i
 `shared.plugs.Plug` typed with a contract, and `wiring.plug_the_modules()` plugs into each what it is when the app is put together. A test patches
 what is plugged in (`entrypoints.config`), never the plug, which refuses it.
 
-**Settings by module.** A module with settings registers its section: the dataclass of `domain/settings.py` with
-`@settings_registry.section("VALIDATION", "validation", order=70)`, its format in `infrastructure/settings.py` with
-`@settings_registry.schema("VALIDATION")`. The module `settings` finds them by itself and puts them together, in the order the file has always had.
+**Settings by module.** A module with settings says which sections it owns, as data: `domain/settings.py` ends with
+`SECTIONS = (Section("VALIDATION", "validation", 70, ValidationSettings),)` (the dataclass, with its rules) and `infrastructure/settings.py` with
+`SCHEMAS = {"VALIDATION": ValidationSettings}` (its format in `settings.toml`). The module `settings` imports each by name — `domain/models.py`
+and `infrastructure/schema.py` — and puts them together (`registry.put_together`), in the order the file has always had. There is no registry
+to fill and nothing is found by looking at the packages: a new module with settings is added to those two lists, and a test fails until it is.
 
 **Checks and steps as classes** (#246). A check of the images is a class of `prevalidation/infrastructure/validators/` with its `key`, `label`
 and `description`, run over a `MediaFolder` that asks what is known of the files once, whatever check asks; the registry in the package's

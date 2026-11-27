@@ -3,10 +3,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
 
 
-@settings_registry.schema("PREPROCESSING")
 class PreprocessingSettings(BaseModel):
     """What is done to the images as they are imported into their collection —
     which preprocessing steps a new run starts with, and the values they use.
@@ -37,3 +35,9 @@ class PreprocessingSettings(BaseModel):
     @classmethod
     def _stripped(cls, value: str) -> str:
         return value.strip()
+
+
+# The format in settings.toml of the sections this module owns — put together with the others by infrastructure.schema.
+SCHEMAS = {
+    "PREPROCESSING": PreprocessingSettings,
+}

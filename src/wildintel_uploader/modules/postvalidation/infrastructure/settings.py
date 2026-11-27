@@ -6,11 +6,9 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from wildintel_uploader.modules.postvalidation.domain.settings import DEPLOYMENT_CHECK_DEFAULTS, DEPLOYMENT_CHECKS
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
 from wildintel_uploader.modules.settings.domain.rules import CheckLevel, check_defaults
 
 
-@settings_registry.schema("POSTVALIDATION")
 class PostvalidationSettings(BaseModel):
     """Which of the postvalidation checks the wizard shows — and so runs — and
     the parameters those that take one start from. They need what the wizard
@@ -55,3 +53,9 @@ class PostvalidationSettings(BaseModel):
         default=1.0, ge=0, le=8760,
         description="Hours of leeway around the deployment's start and end when checking the image dates — the default of the tolerance the wizard asks for. (POSTVALIDATION.tolerance_hours)",
     )
+
+
+# The format in settings.toml of the sections this module owns — put together with the others by infrastructure.schema.
+SCHEMAS = {
+    "POSTVALIDATION": PostvalidationSettings,
+}

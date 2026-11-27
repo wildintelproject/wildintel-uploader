@@ -5,10 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
 
 
-@settings_registry.schema("FIELDLOG")
 class FieldlogSettings(BaseModel):
     """Field records: how the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them
     (see domain.visit_file and domain.deployments)."""
@@ -20,3 +18,9 @@ class FieldlogSettings(BaseModel):
     keep_seconds: bool = Field(
         default=False, description="Keep the seconds of the visits in the deployments' start and end written in the logs; off, they are cut to the minute. (FIELDLOG.keep_seconds)",
     )
+
+
+# The format in settings.toml of the sections this module owns — put together with the others by infrastructure.schema.
+SCHEMAS = {
+    "FIELDLOG": FieldlogSettings,
+}

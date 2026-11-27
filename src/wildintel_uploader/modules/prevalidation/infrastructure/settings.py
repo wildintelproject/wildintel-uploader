@@ -7,11 +7,9 @@ import re
 from pydantic import BaseModel, Field, field_validator
 
 from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECK_DEFAULTS, IMAGE_CHECKS
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
 from wildintel_uploader.modules.settings.domain.rules import CheckLevel, check_defaults
 
 
-@settings_registry.schema("VALIDATION")
 class ValidationSettings(BaseModel):
     """Which of the "Validate folder contents" checks the wizard shows — and
     so runs. Each looks at the folder alone, without knowing the deployment."""
@@ -71,3 +69,9 @@ class ValidationSettings(BaseModel):
     @classmethod
     def _defaults(cls, value):
         return check_defaults(value, IMAGE_CHECKS, IMAGE_CHECK_DEFAULTS)
+
+
+# The format in settings.toml of the sections this module owns — put together with the others by infrastructure.schema.
+SCHEMAS = {
+    "VALIDATION": ValidationSettings,
+}

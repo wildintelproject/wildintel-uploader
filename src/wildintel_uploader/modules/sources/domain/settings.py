@@ -4,11 +4,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
+from wildintel_uploader.modules.settings.domain.registry import Section
 from wildintel_uploader.modules.settings.domain.rules import blank_is_none, tidy_field, secret
 
 
-@settings_registry.section("EPICOLLECT5", "epicollect5", order=30)
 @dataclass(frozen=True)
 class Epicollect5Settings:
     enabled: bool = False                                # a source of visits and of the details of a deployment
@@ -23,7 +22,13 @@ class Epicollect5Settings:
         tidy_field(self, "client_id", blank_is_none(self.client_id))
 
 
-@settings_registry.section("EPICOLLECTCSV", "epicollect_csv", order=50)
 @dataclass(frozen=True)
 class EpicollectCsvSettings:
     enabled: bool = True                                 # whether the CSV of the WildINTEL Epicollect project can be read for visits
+
+
+# The sections of settings.toml this module owns — put together with the others by the module of the settings (domain.models).
+SECTIONS = (
+    Section("EPICOLLECT5", "epicollect5", 30, Epicollect5Settings),
+    Section("EPICOLLECTCSV", "epicollect_csv", 50, EpicollectCsvSettings),
+)

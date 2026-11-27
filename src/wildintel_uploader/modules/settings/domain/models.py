@@ -8,12 +8,12 @@ Where they are kept, and in what format, is the infrastructure's business: setti
 are attributes (`settings.general`, `settings.data`), and `infrastructure.mapping` turns one into the other."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields, make_dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any, Mapping
 
 
-from wildintel_uploader.modules.settings.domain.registry import discover, settings_registry
+from wildintel_uploader.modules.settings.domain.registry import Section, in_order, put_together
 from wildintel_uploader.modules.settings.domain.rules import (  # noqa: F401 — SettingsError: where the entry points find it
     SettingsError, blank_is_none, in_range, one_of, tidy_field,
 )
@@ -34,7 +34,6 @@ def workers_for(cpus: int | None) -> int:
     return max(1, min(WORKERS_AT_MOST, cpus or 1))
 
 
-@settings_registry.section("GENERAL", "general", order=10)
 @dataclass(frozen=True)
 class GeneralSettings:
     log_level: str = "INFO"                              # how much the app logs, to the console and its log file
@@ -52,7 +51,6 @@ class GeneralSettings:
 CATALOG_STORAGES = ("json", "sqlite")
 
 
-@settings_registry.section("DATA", "data", order=60)
 @dataclass(frozen=True)
 class DataSettings:
     """Where the app keeps what it makes. A folder left as None is the default one — see domain.folders."""
@@ -73,7 +71,6 @@ class DataSettings:
             tidy_field(self, name, value)
 
 
-@settings_registry.section("FIELDWORK", "legacy_fieldwork", order=100)
 @dataclass(frozen=True)
 class LegacyFieldwork:
     """What settings.toml still holds of the field work — cameras, SD cards, trappers and their roles —, as versions before kept it there. It is not a
@@ -84,21 +81,34 @@ class LegacyFieldwork:
     roles: tuple[Mapping[str, Any], ...] = ()
 
 
-# The sections of the other modules register themselves when their domain/settings.py is imported.
-discover("domain")
+# Every section of settings.toml: this module's own, and those each module with settings says it owns (its domain/settings.py) — by name, not found
+# by looking: a module with settings is listed here, and an architecture test holds the list to the modules there are.
+from wildintel_uploader.modules.uploaders.domain import settings as _uploaders
+from wildintel_uploader.modules.sources.domain import settings as _sources
+from wildintel_uploader.modules.prevalidation.domain import settings as _prevalidation
+from wildintel_uploader.modules.postvalidation.domain import settings as _postvalidation
+from wildintel_uploader.modules.preprocessing.domain import settings as _preprocessing
+from wildintel_uploader.modules.visits.domain import settings as _visits
+
+SECTIONS: tuple[Section, ...] = (
+    Section("GENERAL", "general", 10, GeneralSettings),
+    Section("DATA", "data", 60, DataSettings),
+    Section("FIELDWORK", "legacy_fieldwork", 100, LegacyFieldwork),
+    *_uploaders.SECTIONS,
+    *_sources.SECTIONS,
+    *_prevalidation.SECTIONS,
+    *_postvalidation.SECTIONS,
+    *_preprocessing.SECTIONS,
+    *_visits.SECTIONS,
+)
 
 
-def _put_together() -> type:
-    sections = [x for x in settings_registry.sections() if x.domain is not None]
-    cls = make_dataclass("Settings", [(x.attribute, x.domain, field(default_factory=x.domain)) for x in sections], frozen=True,
-                         namespace={"__module__": __name__})
-    cls.__doc__ = """All the settings of one config: the sections of this module and those the other modules registered (see registry)."""
-    # The name of each section in settings.toml, and in what the settings page sends and receives.
-    cls.SECTIONS = {x.attribute: x.name for x in sections}  # type: ignore[attr-defined]
-    return cls
+Settings = put_together(SECTIONS, __name__)
 
 
-Settings = _put_together()
+def sorted_sections() -> list[Section]:
+    """Every section, in the order settings.toml has them."""
+    return in_order(SECTIONS)
 
 
 def secret_fields() -> tuple[tuple[str, str], ...]:

@@ -5,10 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
 
 
-@settings_registry.schema("EPICOLLECT5")
 class Epicollect5Settings(BaseModel):
     enabled: bool = Field(default=False, description="Whether Epicollect5 is used as a source: of visits (its entries are downloaded as a CSV), and of the details of a deployment when it is imported. (EPICOLLECT5.enabled)")
     unmapped_to_comments: bool = Field(
@@ -26,6 +24,12 @@ class Epicollect5Settings(BaseModel):
     )
 
 
-@settings_registry.schema("EPICOLLECTCSV")
 class EpicollectCsvSettings(BaseModel):
     enabled: bool = Field(default=True, description="Whether the CSV downloaded from the new WildINTEL Epicollect project can be read for visits. (EPICOLLECTCSV.enabled)")
+
+
+# The format in settings.toml of the sections this module owns — put together with the others by infrastructure.schema.
+SCHEMAS = {
+    "EPICOLLECT5": Epicollect5Settings,
+    "EPICOLLECTCSV": EpicollectCsvSettings,
+}

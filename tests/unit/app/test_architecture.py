@@ -57,11 +57,18 @@ def test_the_use_cases_use_their_domain_only(path: Path):
     assert not wrong, f"{path.name} imports {sorted(wrong)}"
 
 
+def _the_format_of_a_section(path: Path, name: str) -> bool:
+    """The one way into another module's adapters: the format of the file of the settings puts together the format of every section, which each
+    module owns in its infrastructure/settings.py (SCHEMAS) — that file only, and only there."""
+    # `from <module>.infrastructure import settings` is read as both the package and its settings.py
+    return path == SRC / "modules" / "settings" / "infrastructure" / "schema.py" and name.endswith((".infrastructure.settings", ".infrastructure"))
+
+
 @pytest.mark.parametrize("path", sorted(SRC.glob("modules/*/**/*.py")), ids=lambda p: str(p.relative_to(SRC)))
 def test_a_module_uses_another_only_through_its_domain(path: Path):
     own = path.relative_to(SRC / "modules").parts[0]
     wrong = {i for i in _imports(path) if i.startswith("wildintel_uploader.modules.") and i.split(".")[2] != own
-             and (len(i.split(".")) < 4 or i.split(".")[3] != "domain")}
+             and (len(i.split(".")) < 4 or i.split(".")[3] != "domain") and not _the_format_of_a_section(path, i)}
     assert not wrong, f"{path.name} imports {sorted(wrong)}"
 
 

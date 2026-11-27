@@ -4,7 +4,7 @@ from contextlib import nullcontext
 
 import pytest
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
+from wildintel_uploader.modules.settings.domain import models as _settings_models
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases, save_lock
 from wildintel_uploader.modules.visits.domain.models import ImportOptions, VisitLocked, VisitRefused
 from wildintel_uploader.modules.visits.domain.settings import FieldlogSettings
@@ -97,4 +97,8 @@ def test_one_save_at_a_time_for_a_research_project():
 
 
 def test_its_settings_are_its_own():
-    assert settings_registry.get("FIELDLOG").domain is FieldlogSettings
+    assert _section("FIELDLOG").domain is FieldlogSettings
+
+
+def _section(name: str):
+    return next(x for x in _settings_models.SECTIONS if x.name == name)

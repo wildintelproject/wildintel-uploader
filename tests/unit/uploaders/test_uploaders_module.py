@@ -6,7 +6,7 @@ import httpx
 import pytest
 from trapper_client import err
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
+from wildintel_uploader.modules.settings.domain import models as _settings_models
 from wildintel_uploader.modules.uploaders.application.use_cases import UploadersUseCases
 from wildintel_uploader.modules.uploaders.domain.models import Account, NotThere, UploaderError
 from wildintel_uploader.modules.uploaders.domain.settings import TrapperSettings
@@ -97,8 +97,8 @@ def test_an_upload_that_fails_is_written_down_and_one_that_works_clears_it(tmp_p
 
 def test_its_settings_are_its_own():
     from wildintel_uploader.modules.settings.infrastructure import schema  # noqa: F401 — the format of the sections is registered when the file is read
-    assert settings_registry.get("TRAPPER").domain is TrapperSettings
-    assert settings_registry.get("AGOUTI").schema.__module__ == "wildintel_uploader.modules.uploaders.infrastructure.settings"
+    assert _section("TRAPPER").domain is TrapperSettings
+    assert schema.SCHEMAS["AGOUTI"].__module__ == "wildintel_uploader.modules.uploaders.infrastructure.settings"
 
 
 class Organizer:
@@ -255,3 +255,7 @@ def test_the_uploaders_made_once_follow_the_collections_folder_when_it_changes(t
 
     [upload] = uploaders.uploads_of("DONA", "R0001-DONA_01")
     assert upload["kind"] == "uploaded" and upload["uploaded_at"] == "2026-11-27T10:00:00Z"
+
+
+def _section(name: str):
+    return next(x for x in _settings_models.SECTIONS if x.name == name)

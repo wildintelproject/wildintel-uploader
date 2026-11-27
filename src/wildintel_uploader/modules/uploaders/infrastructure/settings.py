@@ -5,10 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
 
 
-@settings_registry.schema("TRAPPER")
 class TrapperSettings(BaseModel):
     enabled: bool = Field(default=True, description="Whether TRAPPER is used as a place to upload deployments to. (TRAPPER.enabled)")
     base_url: Optional[str] = Field(default=None, description="TRAPPER server URL. (TRAPPER.base_url)")
@@ -22,7 +20,6 @@ class TrapperSettings(BaseModel):
     )
 
 
-@settings_registry.schema("AGOUTI")
 class AgoutiSettings(BaseModel):
     """What an upload to Agouti needs (its public API: https://docs.agouti.eu/api/endpoints.html) — kept here; nothing is uploaded to Agouti yet."""
 
@@ -37,3 +34,10 @@ class AgoutiSettings(BaseModel):
     @classmethod
     def _stripped(cls, value: Optional[str]) -> Optional[str]:
         return (value.strip() or None) if isinstance(value, str) else value
+
+
+# The format in settings.toml of the sections this module owns — put together with the others by infrastructure.schema.
+SCHEMAS = {
+    "TRAPPER": TrapperSettings,
+    "AGOUTI": AgoutiSettings,
+}

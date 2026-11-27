@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
+from wildintel_uploader.modules.settings.domain.registry import Section
 from wildintel_uploader.modules.settings.domain.rules import check_levels, exif_name, tidy_field
 
 
@@ -14,7 +14,6 @@ IMAGE_CHECKS = ("corrupted", "sequence", "structure", "camera", "exif", "duplica
 IMAGE_CHECK_DEFAULTS: Mapping[str, str] = {c: "warn" for c in IMAGE_CHECKS}
 
 
-@settings_registry.section("VALIDATION", "validation", order=70)
 @dataclass(frozen=True)
 class ValidationSettings:
     """Which checks of the images an import offers — each looks at the folder alone —, and how they start."""
@@ -50,3 +49,9 @@ class ValidationSettings:
                 exif.append(name)
         tidy_field(self, "exif_fields", tuple(exif))
         tidy_field(self, "defaults", check_levels("VALIDATION.defaults", self.defaults, IMAGE_CHECKS, IMAGE_CHECK_DEFAULTS))
+
+
+# The sections of settings.toml this module owns — put together with the others by the module of the settings (domain.models).
+SECTIONS = (
+    Section("VALIDATION", "validation", 70, ValidationSettings),
+)

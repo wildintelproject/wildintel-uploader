@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
+from wildintel_uploader.modules.settings.domain.registry import Section
 from wildintel_uploader.modules.settings.domain.rules import blank_is_none, in_range, tidy_field, secret
 
 
-@settings_registry.section("TRAPPER", "trapper", order=20)
 @dataclass(frozen=True)
 class TrapperSettings:
     enabled: bool = True                                 # whether TRAPPER is a place to upload deployments to
@@ -24,7 +23,6 @@ class TrapperSettings:
         tidy_field(self, "user_name", blank_is_none(self.user_name))
 
 
-@settings_registry.section("AGOUTI", "agouti", order=40)
 @dataclass(frozen=True)
 class AgoutiSettings:
     """What an upload to Agouti needs (https://docs.agouti.eu/api/endpoints.html) — kept; nothing is uploaded to Agouti yet."""
@@ -36,3 +34,10 @@ class AgoutiSettings:
     def __post_init__(self) -> None:
         tidy_field(self, "base_url", blank_is_none(self.base_url))
         tidy_field(self, "project_id", blank_is_none(self.project_id))
+
+
+# The sections of settings.toml this module owns — put together with the others by the module of the settings (domain.models).
+SECTIONS = (
+    Section("TRAPPER", "trapper", 20, TrapperSettings),
+    Section("AGOUTI", "agouti", 40, AgoutiSettings),
+)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from wildintel_uploader.modules.settings.domain.registry import settings_registry
+from wildintel_uploader.modules.settings.domain.registry import Section
 from wildintel_uploader.modules.settings.domain.rules import check_levels, in_range, one_of, tidy_field
 
 
@@ -18,7 +18,6 @@ DEPLOYMENT_CHECK_DEFAULTS: Mapping[str, str] = {c: ("required" if c in ("time_ra
 SIMILARITY_METHODS = ("median", "mean", "last", "range")
 
 
-@settings_registry.section("POSTVALIDATION", "postvalidation", order=80)
 @dataclass(frozen=True)
 class PostvalidationSettings:
     """Which checks of a deployment an import offers, how they start, and the parameters those that take one start from."""
@@ -50,3 +49,9 @@ class PostvalidationSettings:
         for name in ("image_count_tolerance", "sequence_count_tolerance", "sequence_length_tolerance"):
             in_range(f"POSTVALIDATION.{name}", getattr(self, name), 0, 1000)
         in_range("POSTVALIDATION.tolerance_hours", self.tolerance_hours, 0, 8760)
+
+
+# The sections of settings.toml this module owns — put together with the others by the module of the settings (domain.models).
+SECTIONS = (
+    Section("POSTVALIDATION", "postvalidation", 80, PostvalidationSettings),
+)
