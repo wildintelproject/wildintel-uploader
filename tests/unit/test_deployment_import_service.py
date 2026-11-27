@@ -972,7 +972,8 @@ def _kept_deployment(root: Path, project: str, collection: str, deployment: str,
 
 
 def test_validate_images_duplicates_finds_the_images_imported_before_into_the_research_project(tmp_path: Path):
-    from tests.support import local_folder_service
+    from tests.support import built
+    from wildintel_uploader.modules.deployments.infrastructure import collections as layout
     root = tmp_path / "collections"
     _kept_deployment(root, "DONA", "R0001", "R0001-DONA_01", {"IMG_0001.JPG": b"first", "IMG_0002.JPG": b"second"})
     _kept_deployment(root, "OTHER", "R0001", "R0001-OTHER_01", {"IMG_0009.JPG": b"third"})   # another research project: not looked at
@@ -982,7 +983,7 @@ def test_validate_images_duplicates_finds_the_images_imported_before_into_the_re
     (folder / "b.jpg").write_bytes(b"third")    # only the other research project has it
     (folder / "c.jpg").write_bytes(b"new")
 
-    imported = local_folder_service.imported_source_hashes(root, "DONA")
+    imported = layout.imported_source_hashes(root, "DONA")
     result = built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"duplicates"})), imported=imported)
 
     assert result["duplicates_in_project"] == [{"file": "a.jpg", "deployment_id": "R0001-DONA_01", "collection": "R0001", "original": "IMG_0002.JPG"}]
@@ -990,14 +991,15 @@ def test_validate_images_duplicates_finds_the_images_imported_before_into_the_re
 
 
 def test_validate_images_duplicates_leaves_out_the_deployment_that_is_imported_again(tmp_path: Path):
-    from tests.support import local_folder_service
+    from tests.support import built
+    from wildintel_uploader.modules.deployments.infrastructure import collections as layout
     root = tmp_path / "collections"
     _kept_deployment(root, "DONA", "R0001", "R0001-DONA_01", {"IMG_0001.JPG": b"first"})
     folder = tmp_path / "card"
     folder.mkdir()
     (folder / "a.jpg").write_bytes(b"first")
 
-    again = local_folder_service.imported_source_hashes(root, "DONA", exclude_deployment="r0001-dona_01")
+    again = layout.imported_source_hashes(root, "DONA", exclude_deployment="r0001-dona_01")
 
     assert built.prevalidation().validate(folder, built.prevalidation().validators(frozenset({"duplicates"})), imported=again)["duplicates_in_project"] == []
 

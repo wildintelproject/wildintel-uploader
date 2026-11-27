@@ -1,15 +1,18 @@
 """The history of the status of the locations, the cameras and the SD cards: a line for each change, with why."""
 from pathlib import Path
 
-from tests.support import local_folder_service as svc
 from tests.support import built
+
+
+
+
 from wildintel_uploader.modules.catalog.domain.history import BY_HAND, because
 
 LOCATION = {"location_id": "DONA_01", "name": "Doñana 1", "timezone": "UTC", "ignore_dst": False, "latitude": 37.1, "longitude": -6.4, "status": "pending"}
 
 
 def _project(root: Path) -> None:
-    svc.write_research_project(root, {"name": "Doñana", "acronym": "DONA"})
+    built.records(root).add_project({"name": "Doñana", "acronym": "DONA"})
 
 
 def _lines(root: Path, kind: str | None = None, name: str | None = None) -> list[tuple]:
@@ -18,11 +21,11 @@ def _lines(root: Path, kind: str | None = None, name: str | None = None) -> list
 
 def test_a_location_says_how_it_was_made_and_each_change_of_its_status_with_why_and_the_day_it_is_of(tmp_path: Path):
     _project(tmp_path)
-    svc.write_location(tmp_path, "DONA", LOCATION)
+    built.records(tmp_path).add_location("DONA", LOCATION)
 
     with because("The visit R0001 to DONA_01.", "2026-10-19"):
-        svc.update_location(tmp_path, "DONA", "dona_01", {"status": "active"}, by_visit=True)
-    svc.update_location(tmp_path, "DONA", "DONA_01", {"name": "Doñana uno"})   # not the status: nothing is written
+        built.records(tmp_path).change_location("DONA", "dona_01", {"status": "active"}, by_visit=True)
+    built.records(tmp_path).change_location("DONA", "DONA_01", {"name": "Doñana uno"})   # not the status: nothing is written
 
     assert _lines(tmp_path, "locations", "DONA_01") == [
         ("locations", "DONA_01", None, "pending", "Created.", _lines(tmp_path)[0][5]),
@@ -32,10 +35,10 @@ def test_a_location_says_how_it_was_made_and_each_change_of_its_status_with_why_
 
 def test_what_is_changed_with_no_reason_said_is_a_change_by_hand_and_the_cameras_and_the_cards_are_followed_by_their_label(tmp_path: Path):
     _project(tmp_path)
-    svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM1", "camera_id": "12", "status": "ready"}])
-    kept = svc.list_field_items(tmp_path, "DONA", "cameras")
-    svc.write_field_items(tmp_path, "DONA", "cameras", [{**kept[0], "status": "planned"}], by_hand=True)
-    svc.write_field_items(tmp_path, "DONA", "cameras", [{**svc.list_field_items(tmp_path, "DONA", "cameras")[0], "model": "Reconyx"}], by_hand=True)   # nothing of the status
+    built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "CAM1", "camera_id": "12", "status": "ready"}])
+    kept = built.records(tmp_path).equipment("DONA", "cameras")
+    built.records(tmp_path).keep_equipment("DONA", "cameras", [{**kept[0], "status": "planned"}], by_hand=True)
+    built.records(tmp_path).keep_equipment("DONA", "cameras", [{**built.records(tmp_path).equipment("DONA", "cameras")[0], "model": "Reconyx"}], by_hand=True)   # nothing of the status
 
     lines = _lines(tmp_path, "cameras", "cam1")
     assert [(l[2], l[3], l[4]) for l in lines] == [(None, "ready", "Created."), ("ready", "planned", BY_HAND)]
@@ -43,11 +46,11 @@ def test_what_is_changed_with_no_reason_said_is_a_change_by_hand_and_the_cameras
 
 def test_each_change_made_at_once_has_the_reason_of_its_own(tmp_path: Path):
     _project(tmp_path)
-    svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "7b", "status": "active"}, {"label": "8", "status": "active"}])
-    items = svc.list_field_items(tmp_path, "DONA", "sd_cards")
+    built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "7b", "status": "active"}, {"label": "8", "status": "active"}])
+    items = built.records(tmp_path).equipment("DONA", "sd_cards")
 
     with because("The visits.", None, {("sd_cards", "7b"): ("The visit R0002 to DONA_01.", "2026-11-02"), ("sd_cards", "8"): ("The visit R0002 to DONA_02.", "2026-11-03")}):
-        svc.write_field_items(tmp_path, "DONA", "sd_cards", [{**i, "status": "ready"} for i in items])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{**i, "status": "ready"} for i in items])
 
     changed = [l for l in _lines(tmp_path, "sd_cards") if l[2] == "active"]
     assert sorted((l[1], l[4], l[5]) for l in changed) == [("7b", "The visit R0002 to DONA_01.", "2026-11-02"), ("8", "The visit R0002 to DONA_02.", "2026-11-03")]
@@ -60,8 +63,8 @@ def test_the_history_is_read_with_an_endpoint_by_kind_and_by_name(tmp_path: Path
 
     from wildintel_uploader.web.main import app
     _project(tmp_path)
-    svc.write_location(tmp_path, "DONA", LOCATION)
-    svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM1", "status": "ready"}])
+    built.records(tmp_path).add_location("DONA", LOCATION)
+    built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "CAM1", "status": "ready"}])
     client = TestClient(app)
     with patch("wildintel_uploader.entrypoints.api.settings_page._root", return_value=tmp_path), \
             patch("wildintel_uploader.entrypoints.wiring.catalog_collections_dir", return_value=tmp_path):
@@ -82,19 +85,19 @@ def _kept_before_the_history(root: Path, location_status: str = "active", status
     from wildintel_uploader.shared import storage
     from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
     _project(root)
-    svc.write_location(root, "DONA", {**LOCATION, "status": "pending"})
-    svc.write_field_items(root, "DONA", "cameras", [{"label": "CAM1", "camera_id": "12", "status": "ready"}])
-    svc.write_field_items(root, "DONA", "sd_cards", [{"label": "S1", "status": "ready"}, {"label": "S2", "status": "ready"}])
+    built.records(root).add_location("DONA", {**LOCATION, "status": "pending"})
+    built.records(root).keep_equipment("DONA", "cameras", [{"label": "CAM1", "camera_id": "12", "status": "ready"}])
+    built.records(root).keep_equipment("DONA", "sd_cards", [{"label": "S1", "status": "ready"}, {"label": "S2", "status": "ready"}])
     visit = {"location_id": "DONA_01", "time": "09:00:00", "camera_id": "12", "num_photos": None}
-    svc.write_visits(root, "DONA", [VisitRecord.model_validate(v).model_dump(mode="json") for v in [
+    built.kept_visits(root).add_many("DONA", [VisitRecord.model_validate(v).model_dump(mode="json") for v in [
         {**visit, "session": "R0001", "date": "2026-01-10", "actions": ["Installation"], "sd": "S1"},
         {**visit, "session": "R0002", "date": "2026-02-10", "actions": ["Revision"], "sd": "S2", "num_photos": 100},
         {**visit, "session": "R0003", "date": "2026-03-10", "actions": ["Desinstallation"], "num_photos": 50},
     ]])
     # what the records say now — the location as it was changed by hand, if it was
-    svc.update_location(root, "DONA", "DONA_01", {"status": location_status, "status_date": status_date}, by_visit=True)
-    svc.write_field_items(root, "DONA", "cameras", [{**c, "status": "ready"} for c in svc.list_field_items(root, "DONA", "cameras")])
-    svc.write_field_items(root, "DONA", "sd_cards", [{**c, "status": "ready"} for c in svc.list_field_items(root, "DONA", "sd_cards")])
+    built.records(root).change_location("DONA", "DONA_01", {"status": location_status, "status_date": status_date}, by_visit=True)
+    built.records(root).keep_equipment("DONA", "cameras", [{**c, "status": "ready"} for c in built.records(root).equipment("DONA", "cameras")])
+    built.records(root).keep_equipment("DONA", "sd_cards", [{**c, "status": "ready"} for c in built.records(root).equipment("DONA", "sd_cards")])
     storage.open_store(root).delete_records("DONA", "status_history")
 
 
@@ -124,7 +127,7 @@ def test_when_the_visits_do_not_end_in_the_status_of_today_a_last_line_says_so_o
 def test_it_is_rebuilt_once_and_again_on_request_without_writing_a_line_twice_nor_losing_one(tmp_path: Path):
     _kept_before_the_history(tmp_path, "ready")
     first = built.status_history(tmp_path).lines("DONA")
-    svc.write_field_items(tmp_path, "DONA", "cameras", [{**c, "status": "planned"} for c in svc.list_field_items(tmp_path, "DONA", "cameras")], by_hand=True)
+    built.records(tmp_path).keep_equipment("DONA", "cameras", [{**c, "status": "planned"} for c in built.records(tmp_path).equipment("DONA", "cameras")], by_hand=True)
 
     again = built.status_history(tmp_path).lines("DONA")                         # there is one: it is not made again
     added = built.status_history(tmp_path).rebuild("DONA")                             # nothing is lacking: nothing is added, the change by hand stays

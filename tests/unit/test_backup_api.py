@@ -5,7 +5,11 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from tests.support import local_folder_service
+from tests.support import built
+
+
+
+
 
 
 def _client() -> TestClient:
@@ -18,7 +22,7 @@ def _events(response) -> list[dict]:
 
 
 def _project(root: Path) -> None:
-    local_folder_service.write_research_project(root, {"name": "Doñana", "acronym": "DONA"})
+    built.records(root).add_project({"name": "Doñana", "acronym": "DONA"})
     pdir = root / "DONA"
     (pdir / "visits.json").write_text(json.dumps([{"location_id": "DONA_01", "session": "R0001", "date": "2026-06-10", "time": "09:00:00", "when": "2026-06-10T09:00:00Z", "actions": ["Installation"]}]), encoding="utf-8")
     folder = pdir / "R0001" / "R0001-DONA_01"

@@ -72,8 +72,8 @@ def _in(tmp_path: Path):
             stack.enter_context(patch("wildintel_uploader.entrypoints.config.load_settings", side_effect=_settings))
         # the trappers Ana and Luis, in the catalog — which takes those versions before left in the settings from the settings files, not from a
         # load_settings that is patched (#248)
-        from tests.support import local_folder_service
-        local_folder_service.write_trappers(tmp_path, [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}])
+        from tests.support import built
+        built.records(tmp_path).keep_trappers([{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}])
         yield
 
 
@@ -330,9 +330,9 @@ def _save_all(visits: list[dict]) -> None:
     """Keeps visits as they are, without the rules of a visit made by hand: these tests are about which of them are closed."""
     from wildintel_uploader.entrypoints import config
     from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
-    from tests.support import local_folder_service
+    from tests.support import built
     _project()
-    local_folder_service.write_visits(config.collections_dir(), "DONA", [VisitRecord.model_validate(v).model_dump(mode="json") for v in visits])
+    built.kept_visits(config.collections_dir()).add_many("DONA", [VisitRecord.model_validate(v).model_dump(mode="json") for v in visits])
 
 
 def _closed() -> list[dict]:
@@ -510,7 +510,7 @@ def test_a_csv_refuses_the_visits_that_break_the_rules_of_a_visit_as_the_form_do
 
 def test_a_file_with_rows_that_cannot_be_added_is_not_kept_in_part(tmp_path: Path):
     """#206: all or nothing — a file with a row that cannot be added keeps nothing, not even its good rows: the rows are corrected and the file read again."""
-    from tests.support import local_folder_service
+    from tests.support import built
     text = (
         "location_id,date,time,actions,num_photos,sd,camera_id\n"
         "DONA_01,2026-10-02,08:00,Installation,,A13,P800\n"
@@ -520,7 +520,7 @@ def test_a_file_with_rows_that_cannot_be_added_is_not_kept_in_part(tmp_path: Pat
 
     assert refused.status_code == 400 and "nothing is kept" in refused.json()["detail"]
     with _in(tmp_path):
-        assert local_folder_service.list_visits(tmp_path, "DONA") == []
+        assert built.kept_visits(tmp_path).list("DONA") == []
 
 
 def test_a_site_that_is_not_a_location_comes_back_as_new_or_misnamed(tmp_path: Path):
@@ -1017,7 +1017,7 @@ def test_a_visit_has_no_actions_only_when_it_could_not_be_made(tmp_path: Path):
 
 def test_an_upload_is_planned_for_each_deployment_and_each_uploader_in_use_and_a_failed_one_is_tried_again(tmp_path: Path):
     from wildintel_uploader.entrypoints import config
-    from tests.support import local_folder_service
+    from tests.support import built
 
     def states():
         shown = _client().post("/api/visits/deployments", json={"research_project_id": "DONA"}).json()["results"]
@@ -1032,9 +1032,9 @@ def test_an_upload_is_planned_for_each_deployment_and_each_uploader_in_use_and_a
         settings.AGOUTI.enabled = True
         config.save_settings(settings)
         both = states()
-        local_folder_service.set_upload_failure(tmp_path, "DONA", "R0001-DONA_01", "trapper", "Trapper refused it")
+        built.upload_failures(tmp_path).note("DONA", "R0001-DONA_01", "trapper", "Trapper refused it")
         failed = states()
-        local_folder_service.set_upload_failure(tmp_path, "DONA", "R0001-DONA_01", "trapper", None)     # it worked on the second try
+        built.upload_failures(tmp_path).note("DONA", "R0001-DONA_01", "trapper", None)     # it worked on the second try
         retried = states()
 
     assert planned["R0001-DONA_01"] == [("trapper", "planned")]
@@ -1128,7 +1128,7 @@ def test_a_revision_starts_after_the_last_visit_of_the_one_before(tmp_path: Path
 
 
 def test_a_file_that_starts_after_the_first_revision_is_not_imported_when_the_revision_before_it_has_no_visit(tmp_path: Path):
-    from tests.support import local_folder_service
+    from tests.support import built
     with _in(tmp_path):
         _project(archived=(3,))
         text = ("location_id,actions,date,time,session,camera_id,sd\n"
@@ -1137,7 +1137,7 @@ def test_a_file_that_starts_after_the_first_revision_is_not_imported_when_the_re
         mapping = {"location_id": "location_id", "actions": "actions", "date": "date", "time": "time", "session": "session", "camera_id": "camera_id", "sd": "sd"}
         shown = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping}).json()
         saving = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "save": True})
-        kept = local_folder_service.list_visits(tmp_path, "DONA")
+        kept = built.kept_visits(tmp_path).list("DONA")
 
     assert shown["unknown"] == [] and kept == [] and saving.status_code == 400
     assert [p["row"] for p in shown["problems"]] == [2, 3] and "R0003 cannot start: R0002 has no visit" in shown["problems"][0]["message"]
@@ -1214,30 +1214,30 @@ def test_a_visit_linked_to_its_deployment_where_it_starts_it_locks_the_two_visit
 
 
 def test_an_unknown_visit_is_filled_by_a_known_one_where_its_day_puts_it(tmp_path: Path):
-    from tests.support import local_folder_service
+    from tests.support import built
     with _in(tmp_path):
         _project(archived=(2, 3))
         later = {**VISIT, "session": "R0002", "date": "2026-03-01", "time": "10:00:00", "when": "2026-03-01T10:00:00Z", "actions": ["Revision"], "camera_id": "C1", "sd": "S1", "num_photos": 5}
-        local_folder_service.write_field_items(tmp_path, "DONA", "cameras", [{"label": "C1", "camera_id": "C1", "camera_model": None, "research_project": "DONA"}])
-        local_folder_service.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": label, "research_project": "DONA"} for label in ("S0", "S1")])
-        local_folder_service.write_visits(tmp_path, "DONA", [later])
-        local_folder_service.write_unknown(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0001"}])
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "C1", "camera_id": "C1", "camera_model": None, "research_project": "DONA"}])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": label, "research_project": "DONA"} for label in ("S0", "S1")])
+        built.kept_visits(tmp_path).add_many("DONA", [later])
+        built.kept_visits(tmp_path).add_unknown("DONA", [{"location_id": "DONA_01", "session": "R0001"}])
         book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
         assert any(v.get("unknown") and v["session"] == "R0001" and v["state"] == "unknown" for v in book)
         # a camera put up in R0001 is the one the revision of R0002 finds: the unknown one is filled
         first = {**VISIT, "session": "R0001", "date": "2026-01-10", "actions": ["Installation"], "camera_id": "C1", "num_photos": None, "sd": "S0"}
         saved = _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": first})
         assert saved.status_code == 200, saved.text
-        assert local_folder_service.list_unknown(tmp_path, "DONA") == []
+        assert built.kept_visits(tmp_path).unknown("DONA") == []
 
 
 @pytest.mark.entities
 def test_an_edit_cannot_put_a_camera_an_sd_card_or_a_trapper_that_does_not_exist(tmp_path: Path):
-    from tests.support import local_folder_service
+    from tests.support import built
     with _in(tmp_path):
         _project()
-        local_folder_service.write_field_items(tmp_path, "DONA", "cameras", [{"label": c, "camera_id": c, "camera_model": None, "research_project": "DONA"} for c in ("12", "C2", "C3")])
-        local_folder_service.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": c, "research_project": "DONA"} for c in ("S1", "S2", "S3", "N1")])
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": c, "camera_id": c, "camera_model": None, "research_project": "DONA"} for c in ("12", "C2", "C3")])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": c, "research_project": "DONA"} for c in ("S1", "S2", "S3", "N1")])
         _installed()
         _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": _revision()})
         for change, said in (({"camera_id": "NOPE"}, "camera NOPE"), ({"sd": "NOPE"}, "SD card NOPE"), ({"trappers": "Nobody"}, "Nobody is not one of the trappers")):
@@ -1258,7 +1258,6 @@ def test_an_edit_cannot_take_a_visit_past_those_of_another_revision_nor_leave_a_
         assert refused.status_code == 422 and "R0012 has to be before R0013" in refused.text
         # and past the revision of its own site, which would lose the camera it needed
         assert "DONA_01" in refused.text
-
 
 
 _COLUMNS = ("location_id", "actions", "date", "time", "session", "camera_id", "sd", "num_photos")
@@ -1305,7 +1304,6 @@ def test_an_inactive_site_has_a_camera_put_up_again_and_a_camera_removed_after_a
 def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_characters():
     import csv
     import io
-
 
 
     from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import visits_from_csv
@@ -1406,82 +1404,6 @@ def test_a_revision_lasts_so_many_days_weeks_or_months_and_a_month_is_one_of_the
     assert visit_rules.shifted("2026-01-31", 1, "months") == "2026-02-28"       # its last day
     assert visit_rules.shifted("2026-11-15", 3, "months") == "2027-02-15"
     assert visit_rules.shifted("2026-03-31", -1, "months") == "2026-02-28" and visit_rules.shifted("2026-01-15", -2, "months") == "2025-11-15"   # and before
-
-
-def test_a_site_whose_camera_was_stolen_and_given_up_is_out_of_use_in_the_revisions_after_it_in_the_file(tmp_path: Path):
-    rows = ["DONA_01,R0013,2026-02-01,08:00,Revision,5", "DONA_02,R0013,2026-02-01,09:00,Stolen + Archive,",
-            "DONA_01,R0014,2026-03-01,08:00,Revision,5", "DONA_01,R0015,2026-04-01,08:00,Revision,5"]
-    with _in(tmp_path):
-        _project(archived=(3,))
-        _installed((1, 2))
-        answer = _read_file(rows)
-
-    assert answer["problems"] == [] and answer["closed"] == []
-
-
-def test_a_site_not_visited_before_it_is_given_up_late_in_the_file_is_marked_as_not_visited_then(tmp_path: Path):
-    """The site is out of use *from* the revision that gives it up. Before it the file has no visit of it, but a visit of it comes later, so what the revision before has of it is unknown — not a false
-    "not visited" — as it is without this fix; and after it nothing is waited for."""
-    rows = ["DONA_01,R0013,2026-02-01,08:00,Revision,5",
-            "DONA_01,R0014,2026-03-01,08:00,Revision,5", "DONA_02,R0014,2026-03-01,09:00,Revision + Desinstallation + Archive,5",
-            "DONA_01,R0015,2026-04-01,08:00,Revision,5"]
-    with _in(tmp_path):
-        _project(archived=(3,))
-        _installed((1, 2))
-        answer = _read_file(rows)
-
-    assert answer["problems"] == [] and answer["unknown"] == []
-    assert [(m["location_id"], m["session"]) for m in answer["closed"]] == [("DONA_02", "R0013")]       # not visited in R0013; nothing is waited for it after it gave it up in R0014
-
-
-def test_a_site_given_up_in_the_file_does_not_stop_the_revisions_after_it_from_starting_when_the_revision_is_not_closed_by_the_file(tmp_path: Path):
-    rows = ["DONA_01,R0013,2026-02-01,08:00,Revision,5", "DONA_02,R0013,2026-02-01,09:00,Revision + Desinstallation + Archive,5",
-            "DONA_01,R0014,2026-03-01,08:00,Revision,5"]
-    with _in(tmp_path):
-        _project(archived=(3,))
-        _installed((1, 2))
-        answer = _read_file(rows, close=False)
-
-    assert answer["problems"] == []                        # R0013 is finished — DONA_02 is given up, not waited for — so R0014 can start
-
-
-def test_what_is_kept_of_a_site_given_up_in_the_file_is_the_visits_and_no_false_not_visited_ones(tmp_path: Path):
-    rows = ["DONA_01,R0013,2026-02-01,08:00,Revision,5", "DONA_02,R0013,2026-02-01,09:00,Revision + Desinstallation + Archive,5",
-            "DONA_01,R0014,2026-03-01,08:00,Revision,5", "DONA_01,R0015,2026-04-01,08:00,Revision,5"]
-    with _in(tmp_path):
-        _project(archived=(3,))
-        _installed((1, 2))
-        saved = _read_file(rows, save=True)
-        kept = _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]
-
-    assert saved["problems"] == []
-    assert not [v for v in kept if v.get("camera_status") == "Not revised"]
-    assert sorted((v["location_id"], v["session"]) for v in kept if v["session"] in ("R0013", "R0014", "R0015")) == [
-        ("DONA_01", "R0013"), ("DONA_01", "R0014"), ("DONA_01", "R0015"), ("DONA_02", "R0013")]
-
-
-def test_the_locations_as_the_visits_of_a_file_leave_them():
-    from wildintel_uploader.modules.visits.domain.visit_file import archived_by as _archived_by
-
-    sites = [{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "active"}, {"location_id": "DONA_03", "status": "archived", "status_date": "2026-01-01"},
-             {"location_id": "DONA_04", "status": "archived", "status_date": "2026-05-01"}]
-    visits = [{"location_id": "dona_02", "date": "2026-03-01", "actions": ["Archive"]}, {"location_id": "DONA_02", "date": "2026-02-01", "actions": ["Revision", "Archive"]},
-              {"location_id": "DONA_01", "date": "2026-02-01", "actions": ["Revision"]}, {"location_id": "DONA_03", "date": "2026-06-01", "actions": ["Archive"]},
-              {"location_id": "DONA_04", "date": "2026-03-01", "actions": ["Archive"]}]
-
-    left = {l["location_id"]: l for l in _archived_by(sites, visits)}
-
-    assert left["DONA_01"] is sites[0]                                                         # a visit that does not archive changes nothing
-    assert (left["DONA_02"]["status"], left["DONA_02"]["status_date"]) == ("archived", "2026-02-01")   # the earliest of its visits, whatever the case of the id
-    assert left["DONA_03"] is sites[2]                                                         # archived before: as it was
-    assert left["DONA_04"]["status_date"] == "2026-03-01"                                      # archived later than the file says it was given up: the earlier day is the one
-    assert sites[1]["status"] == "active"                                                      # the locations that were given are not changed
-
-
-def _read_file(rows: list[str], save: bool = False, close: bool = True) -> dict:
-    text = "location_id,session,date,time,actions,num_photos\n" + "\n".join(rows) + "\n"
-    mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos")}
-    return _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "close_revisions": close, "save": save}).json()
 
 
 def test_a_site_whose_camera_was_stolen_and_given_up_is_out_of_use_in_the_revisions_after_it_in_the_file(tmp_path: Path):
@@ -1709,17 +1631,17 @@ def test_a_pending_site_starts_with_its_first_camera_and_is_ready_or_active_by_w
 
 @pytest.mark.parametrize("status", [None, "ready", "active", "pending"])
 def test_new_site_in_a_manual_visit_starts_the_site_regardless_of_status(tmp_path: Path, status: str | None):
-    from tests.support import local_folder_service
+    from tests.support import built
 
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         location = {"location_id": "DONA_04", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}
         if status is not None:
             location["status"] = status
-        local_folder_service.write_location(tmp_path, "DONA", location)
+        built.records(tmp_path).add_location("DONA", location)
         result = _save({**VISIT, "location_id": "DONA_04", "session": "R0004", "date": "2026-04-10",
                         "actions": ["Installation"], "camera_status": "New site", "num_photos": None, "sd": "S4", "camera_id": "C4"})
-        site = local_folder_service.list_locations(tmp_path, "DONA")[0]
+        site = built.records(tmp_path).locations("DONA")[0]
 
     assert result.status_code == 200, result.text
     assert result.json()["actions"] == ["SiteStart", "Installation"]
@@ -1727,18 +1649,18 @@ def test_new_site_in_a_manual_visit_starts_the_site_regardless_of_status(tmp_pat
 
 
 def test_new_site_in_an_import_is_saved_for_a_trapper_location_without_a_status(tmp_path: Path):
-    from tests.support import local_folder_service
+    from tests.support import built
 
     text = "location_id,session,date,time,actions,camera_status,camera_id,sd\nDONA_04,R0001,2026-04-10,09:00,Installation,New site,C4,S4\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "camera_status", "camera_id", "sd")}
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
-        local_folder_service.write_location(tmp_path, "DONA", {"location_id": "DONA_04", "timezone": "UTC", "ignore_dst": False,
+        built.records(tmp_path).add_location("DONA", {"location_id": "DONA_04", "timezone": "UTC", "ignore_dst": False,
                                                                "latitude": 37.0, "longitude": -6.5, "trapper_pk": 4})
         response = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "save": True})
-        visits = local_folder_service.list_visits(tmp_path, "DONA")
-        unknown = local_folder_service.list_unknown(tmp_path, "DONA")
-        site = local_folder_service.list_locations(tmp_path, "DONA")[0]
+        visits = built.kept_visits(tmp_path).list("DONA")
+        unknown = built.kept_visits(tmp_path).unknown("DONA")
+        site = built.records(tmp_path).locations("DONA")[0]
 
     assert response.status_code == 200 and response.json()["saved"] == 1, response.text
     assert visits[0]["actions"] == ["SiteStart", "Installation"]
@@ -1767,10 +1689,10 @@ def test_knocked_down_and_damaged_are_not_accepted_as_the_status_of_a_camera_but
         refused = [_save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2026-02-10", "session": "R0002", "camera_status": s}) for s in ("Knocked down", "Damaged")]
         accepted = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2026-02-10", "session": "R0002", "camera_status": "Altered"})
         # a visit kept before, with a status that is no longer accepted, is read as it was kept
-        from tests.support import local_folder_service as lfs
-        raw = lfs._raw_visits(tmp_path, "DONA")
+        from tests.support import built
+        raw = built.kept_visits(tmp_path)._raw("DONA")
         raw[-1]["camera_status"] = "Damaged"
-        lfs._write_raw_visits(tmp_path, "DONA", raw)
+        built.kept_visits(tmp_path)._write_raw("DONA", raw)
         book = _client().post("/api/visits/book", json={"research_project_id": "DONA"}).json()["results"]
 
     assert [r.status_code for r in refused] == [422, 422] and all("OK, Altered, Stolen, Not revised, New site or Inactive site" in str(r.json()["detail"]) for r in refused)
@@ -1791,7 +1713,7 @@ def test_a_file_with_knocked_down_or_damaged_says_the_status_is_not_one_of_the_o
 
 
 def test_an_sd_card_id_with_spaces_or_signs_is_said_not_refused_and_one_that_is_kept_already_is_not_said(tmp_path: Path):
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
     from wildintel_uploader.modules.visits.domain.rules import unusual_card_id
 
     assert [unusual_card_id(x) for x in ("A13", "47b", "693", "32J", "84 (10)", "85(78)", "38_B", " 7 ", "A-1")] == [False, False, False, False, True, True, True, False, True]
@@ -1802,7 +1724,7 @@ def test_an_sd_card_id_with_spaces_or_signs_is_said_not_refused_and_one_that_is_
     with _in(tmp_path):
         _project(archived=(3,))
         _installed((1, 2))
-        lfs.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "85(78)"}])          # a card that is kept already was accepted as it is
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "85(78)"}])          # a card that is kept already was accepted as it is
         answer = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "create": {"sd_cards": True}, "defaults": {"sd_brand": "SanDisk"}}).json()
 
     said = [w for w in answer["warnings"] if "unusual id" in w]
@@ -1812,13 +1734,13 @@ def test_an_sd_card_id_with_spaces_or_signs_is_said_not_refused_and_one_that_is_
 
 
 def test_the_id_of_an_sd_card_is_kept_as_written_in_the_cards_and_the_visits(tmp_path: Path):
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
     text = "location_id,session,date,time,actions,num_photos,camera_id,sd,sd_brand\nDONA_01,R0001,2026-01-10,08:00,Installation,,P1,47b,SanDisk\nDONA_01,R0002,2026-02-10,08:00,Revision,10,P1,52c,SanDisk\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos", "camera_id", "sd", "sd_brand")}
     with _in(tmp_path):
         _project(archived=(2, 3))
         saved = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "save": True, "create": {"sd_cards": True, "cameras": True}, "defaults": {"camera_model": "X"}}).json()
-        cards = [c["label"] for c in lfs.list_field_items(tmp_path, "DONA", "sd_cards")]
+        cards = [c["label"] for c in built.records(tmp_path).equipment("DONA", "sd_cards")]
         kept = [v["sd"] for v in _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"] if v["session"] in ("R0001", "R0002")]
 
     assert saved["problems"] == [] and saved["saved"] == 2
@@ -1842,19 +1764,19 @@ def test_a_row_with_no_coordinates_takes_those_of_its_location_unless_the_import
 
 @pytest.mark.entities
 def test_the_trappers_a_file_says_are_created_when_asked_and_the_visits_are_kept_with_them(tmp_path: Path):
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
     text = "location_id,session,date,time,actions,num_photos,who\nDONA_01,R0013,2026-02-01,08:00,Revision,5,\"Luis Gómez, Ana Pérez\"\n"
     mapping = {"location_id": "location_id", "session": "session", "date": "date", "time": "time", "actions": "actions", "num_photos": "num_photos", "trappers": "who"}
     body = {"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping}
     with _in(tmp_path):
         _project(archived=(3,))
-        lfs.write_trappers(tmp_path, [{"username": "ana", "name": "Ana", "status": "active"}, {"username": "luis", "name": "Luis", "status": "active"}, {"username": "ana.perez", "name": "Ana Pérez", "status": "active"}])
-        lfs.write_field_items(tmp_path, "DONA", "cameras", [{"label": "12"}, {"label": "C2"}])
-        lfs.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "S1"}, {"label": "S2"}])
+        built.records(tmp_path).keep_trappers([{"username": "ana", "name": "Ana", "status": "active"}, {"username": "luis", "name": "Luis", "status": "active"}, {"username": "ana.perez", "name": "Ana Pérez", "status": "active"}])
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "12"}, {"label": "C2"}])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "S1"}, {"label": "S2"}])
         _installed((1, 2))
         refused = _client().post("/api/visits/import-csv", json=body).json()
         saved = _client().post("/api/visits/import-csv", json={**body, "create": {"trappers": True}, "save": True}).json()
-        people = {t["username"]: t["name"] for t in lfs.list_trappers(tmp_path)}
+        people = {t["username"]: t["name"] for t in built.records(tmp_path).trappers()}
         kept = [v["trappers"] for v in _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"] if v["session"] == "R0013"]
 
     assert refused["visits"] == [] and "Luis Gómez is not one of the trappers" in refused["problems"][0]["message"]
@@ -1883,7 +1805,6 @@ def test_the_question_action_after_inspection_of_the_form_is_found_whole_and_cut
     import io
 
 
-
     from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import visits_from_csv
     for header in ("10_Action_after_insp", "10_Action_after_inspection"):
         text = f"ec5_uuid,created_at,4_locationID,5_Status_of_the_came,{header}\nr1,2026-09-14T08:30:00.000Z,DONA_01,OK,Camera removal\n"
@@ -1895,7 +1816,9 @@ def test_the_examples_of_the_new_form_for_wicp_02_are_imported_in_order_with_no_
     """The six downloads of examples/visits_example/wildintel_csv/wicp_02, one after the other on the entities of examples/entities_example/wicp_02: the last makes a new site."""
     import csv
 
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
+
+
     examples = Path(__file__).parents[2] / "examples"
     rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
     order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up", "revision_6_new_site"]
@@ -1906,8 +1829,8 @@ def test_the_examples_of_the_new_form_for_wicp_02_are_imported_in_order_with_no_
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "WICP_02", "location": {
                 "location_id": l["location_id"], "name": l["name"], "timezone": l["timezone"], "ignore_dst": l["ignore_dst"] == "true", "latitude": float(l["latitude"]),
                 "longitude": float(l["longitude"]), "coordinate_uncertainty": int(l["coordinate_uncertainty"]), "status": l["status"]}})
-        lfs.write_field_items(tmp_path, "WICP_02", "cameras", [{"label": r["label"], "camera_id": r["camera_id"], "camera_model": r["camera_model"], "status": r["status"]} for r in rows("cameras.csv")])
-        lfs.write_field_items(tmp_path, "WICP_02", "sd_cards", [{"label": r["label"], "brand": r["brand"], "capacity": r["capacity"], "status": r["status"]} for r in rows("sd_cards.csv")])
+        built.records(tmp_path).keep_equipment("WICP_02", "cameras", [{"label": r["label"], "camera_id": r["camera_id"], "camera_model": r["camera_model"], "status": r["status"]} for r in rows("cameras.csv")])
+        built.records(tmp_path).keep_equipment("WICP_02", "sd_cards", [{"label": r["label"], "brand": r["brand"], "capacity": r["capacity"], "status": r["status"]} for r in rows("sd_cards.csv")])
         for name in order:
             text = (examples / "visits_example" / "wildintel_csv" / "wicp_02" / f"{name}.csv").read_text(encoding="utf-8")
             extra = {"create": {"locations": True, "cameras": True, "sd_cards": True}, "defaults": {"timezone": "UTC", "daylight_saving": "no"}} if name == order[-1] else {}
@@ -1927,7 +1850,9 @@ def _wicp_02_until(root: Path, last: int) -> None:
     """The research project WICP_02 with the entities of examples/entities_example/wicp_02, and the downloads of examples/visits_example/wildintel_csv/wicp_02 kept up to revision `last`."""
     import csv
 
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
+
+
     examples = Path(__file__).parents[2] / "examples"
     rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
     order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up"][:last]
@@ -1936,8 +1861,8 @@ def _wicp_02_until(root: Path, last: int) -> None:
         _client().post("/api/deployment-import/locations/save", json={"research_project_id": "WICP_02", "location": {
             "location_id": l["location_id"], "name": l["name"], "timezone": l["timezone"], "ignore_dst": l["ignore_dst"] == "true", "latitude": float(l["latitude"]),
             "longitude": float(l["longitude"]), "coordinate_uncertainty": int(l["coordinate_uncertainty"]), "status": l["status"]}})
-    lfs.write_field_items(root, "WICP_02", "cameras", [{"label": r["label"], "camera_id": r["camera_id"], "camera_model": r["camera_model"], "status": r["status"]} for r in rows("cameras.csv")])
-    lfs.write_field_items(root, "WICP_02", "sd_cards", [{"label": r["label"], "brand": r["brand"], "capacity": r["capacity"], "status": r["status"]} for r in rows("sd_cards.csv")])
+    built.records(root).keep_equipment("WICP_02", "cameras", [{"label": r["label"], "camera_id": r["camera_id"], "camera_model": r["camera_model"], "status": r["status"]} for r in rows("cameras.csv")])
+    built.records(root).keep_equipment("WICP_02", "sd_cards", [{"label": r["label"], "brand": r["brand"], "capacity": r["capacity"], "status": r["status"]} for r in rows("sd_cards.csv")])
     for name in order:
         text = (examples / "visits_example" / "wildintel_csv" / "wicp_02" / f"{name}.csv").read_text(encoding="utf-8")
         answer = _client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": text, "format": "epicollect-csv", "save": True}).json()
@@ -2018,23 +1943,23 @@ def test_a_visit_that_left_no_camera_whether_it_took_it_away_found_it_stolen_or_
 
 
 def test_the_cameras_and_the_cards_are_in_the_field_back_to_ready_or_archived_when_stolen(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
 
     def status(kind: str) -> dict:
-        return {i["label"]: (i["status"], i.get("archive_reason")) for i in svc.list_field_items(tmp_path, "DONA", kind)}
+        return {i["label"]: (i["status"], i.get("archive_reason")) for i in built.records(tmp_path).equipment("DONA", kind)}
 
     with _in(tmp_path):
         _project(archived=(2, 3))
-        svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": l, "camera_id": l, "status": "ready"} for l in ("P800", "P900")])
-        svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": l, "status": "ready"} for l in ("A13", "B2", "C3")])
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": l, "camera_id": l, "status": "ready"} for l in ("P800", "P900")])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": l, "status": "ready"} for l in ("A13", "B2", "C3")])
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
         installed = (status("cameras"), status("sd_cards"))
-        site_installed = svc.list_locations(tmp_path, "DONA")[0]["status"]
+        site_installed = built.records(tmp_path).locations("DONA")[0]["status"]
         _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 10, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
         revised = status("sd_cards")
         _save({**VISIT, "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 10, "sd": None, "date": "2024-11-12", "session": "R0003"})
         removed = (status("cameras"), status("sd_cards"))
-        site_removed = svc.list_locations(tmp_path, "DONA")[0]["status"]
+        site_removed = built.records(tmp_path).locations("DONA")[0]["status"]
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "C3", "camera_id": "P900", "date": "2024-12-12", "session": "R0004"})
         _save({**VISIT, "actions": ["Stolen"], "camera_id": "P900", "num_photos": None, "sd": None, "date": "2025-01-12", "session": "R0005"})
         stolen = (status("cameras"), status("sd_cards"))
@@ -2047,14 +1972,14 @@ def test_the_cameras_and_the_cards_are_in_the_field_back_to_ready_or_archived_wh
 
 
 def test_new_visits_are_only_kept_to_an_active_research_project(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
 
     with _in(tmp_path):
         _project(archived=(2, 3))
         visit = {**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"}
         results = {}
         for status in ("planned", "finished", "active"):
-            _client().post("/api/deployment-import/research-projects/update", json={"acronym": "DONA", "changes": {"status": status}}) if False else svc.update_research_project(tmp_path, "DONA", {"status": status})
+            _client().post("/api/deployment-import/research-projects/update", json={"acronym": "DONA", "changes": {"status": status}}) if False else built.records(tmp_path).update_project("DONA", {"status": status})
             results[status] = _save(visit)
         refused = results["planned"].json()["detail"]
 
@@ -2064,31 +1989,32 @@ def test_new_visits_are_only_kept_to_an_active_research_project(tmp_path: Path):
 
 
 def test_a_research_project_goes_back_to_planned_only_without_visits_and_an_archived_one_is_never_modified(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
+    from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 
     with _in(tmp_path):
         _project(archived=(2, 3))
-        svc.update_research_project(tmp_path, "DONA", {"status": "planned"})               # nothing was done in it: it can go back
-        svc.update_research_project(tmp_path, "DONA", {"status": "active"})
+        built.records(tmp_path).update_project("DONA", {"status": "planned"})               # nothing was done in it: it can go back
+        built.records(tmp_path).update_project("DONA", {"status": "active"})
         _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
-        svc.update_research_project(tmp_path, "DONA", {"status": "finished"})
-        svc.update_research_project(tmp_path, "DONA", {"status": "active"})               # a finished one is reopened
+        built.records(tmp_path).update_project("DONA", {"status": "finished"})
+        built.records(tmp_path).update_project("DONA", {"status": "active"})               # a finished one is reopened
         try:
-            svc.update_research_project(tmp_path, "DONA", {"status": "planned"})
+            built.records(tmp_path).update_project("DONA", {"status": "planned"})
             back = None
-        except svc.LocalFolderError as exc:
+        except catalog_files.LocalFolderError as exc:
             back = str(exc)
-        svc.update_research_project(tmp_path, "DONA", {"status": "archived"})
+        built.records(tmp_path).update_project("DONA", {"status": "archived"})
         refused = []
-        for change in (lambda: svc.update_research_project(tmp_path, "DONA", {"status": "active"}),
-                       lambda: svc.update_research_project(tmp_path, "DONA", {"name": "Other"}),
-                       lambda: svc.update_location(tmp_path, "DONA", "DONA_01", {"name": "Other"}),
-                       lambda: svc.write_field_items(tmp_path, "DONA", "cameras", []),
-                       lambda: svc.delete_research_project(tmp_path, "DONA")):
+        for change in (lambda: built.records(tmp_path).update_project("DONA", {"status": "active"}),
+                       lambda: built.records(tmp_path).update_project("DONA", {"name": "Other"}),
+                       lambda: built.records(tmp_path).change_location("DONA", "DONA_01", {"name": "Other"}),
+                       lambda: built.records(tmp_path).keep_equipment("DONA", "cameras", []),
+                       lambda: built.records(tmp_path).delete_project("DONA")):
             try:
                 change()
                 refused.append(None)
-            except svc.LocalFolderError as exc:
+            except catalog_files.LocalFolderError as exc:
                 refused.append(str(exc))
         shown = _save({**VISIT, "actions": ["Revision"], "camera_id": "P800", "num_photos": 1, "sd": "B2", "date": "2024-10-12", "session": "R0002"})
 
@@ -2098,13 +2024,13 @@ def test_a_research_project_goes_back_to_planned_only_without_visits_and_an_arch
 
 
 def test_a_planned_site_is_not_in_the_app_and_a_pending_one_is(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
 
     with _in(tmp_path):
         _project(archived=(2, 3))
-        svc.update_location(tmp_path, "DONA", "DONA_01", {"status": "planned"})
+        built.records(tmp_path).change_location("DONA", "DONA_01", {"status": "planned"})
         planned = _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
-        svc.update_location(tmp_path, "DONA", "DONA_01", {"status": "pending"})
+        built.records(tmp_path).change_location("DONA", "DONA_01", {"status": "pending"})
         ready = _save({**VISIT, "actions": ["Installation"], "num_photos": None, "sd": "A13", "camera_id": "P800", "date": "2024-09-04", "session": "R0001"})
 
     assert planned.status_code == 422 and "is planned" in planned.json()["detail"]
@@ -2112,12 +2038,13 @@ def test_a_planned_site_is_not_in_the_app_and_a_pending_one_is(tmp_path: Path):
 
 
 def test_the_status_of_a_site_by_hand_follows_what_the_visits_say(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
+    from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 
     def change(status: str):
         try:
-            return svc.update_location(tmp_path, "DONA", "DONA_01", {"status": status})["status"]
-        except svc.LocalFolderError as exc:
+            return built.records(tmp_path).change_location("DONA", "DONA_01", {"status": status})["status"]
+        except catalog_files.LocalFolderError as exc:
             return str(exc)
 
     with _in(tmp_path):
@@ -2136,7 +2063,8 @@ def test_the_status_of_a_site_by_hand_follows_what_the_visits_say(tmp_path: Path
 
 
 def test_a_site_with_a_visit_still_to_be_made_in_a_revision_that_has_begun_does_not_leave_the_app(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
+    from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 
     with _in(tmp_path):
         _project(archived=(3,))
@@ -2146,9 +2074,9 @@ def test_a_site_with_a_visit_still_to_be_made_in_a_revision_that_has_begun_does_
         assert _save({**VISIT, "location_id": "DONA_02", "actions": ["Revision"], "camera_id": "C2", "num_photos": 5, "sd": "S9", "date": "2024-10-13", "session": "R0002"}).status_code == 200
         assert _save({**VISIT, "location_id": "DONA_02", "actions": ["Revision"], "camera_id": "C2", "num_photos": 5, "sd": "S8", "date": "2024-11-13", "session": "R0003"}).status_code == 200
         try:
-            svc.update_location(tmp_path, "DONA", "DONA_01", {"status": "planned"})
+            built.records(tmp_path).change_location("DONA", "DONA_01", {"status": "planned"})
             refused = None
-        except svc.LocalFolderError as exc:
+        except catalog_files.LocalFolderError as exc:
             refused = str(exc)
 
     assert refused is not None and "still has a visit to be made in R0003" in refused
@@ -2218,17 +2146,17 @@ def test_a_planned_revision_with_no_visit_is_closed_by_marking_every_location_as
 
 @pytest.mark.entities
 def test_two_sd_cards_that_differ_only_in_case_are_two_cards_each_kept_as_written_and_what_says_another_case_is_refused(tmp_path: Path):
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
     rows = ["DONA_01,R0001,2026-01-10,08:00,Installation,,P1,7b", "DONA_02,R0001,2026-01-10,09:00,Installation,,P2,7B"]
     text = "location_id,session,date,time,actions,num_photos,camera_id,sd\n" + "\n".join(rows) + "\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos", "camera_id", "sd")}
     with _in(tmp_path):
         _project(archived=(3,))
-        lfs.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "7b"}, {"label": "7B"}])           # the two cards of the two sites, as the datasheet has them
-        lfs.write_field_items(tmp_path, "DONA", "cameras", [{"label": "P1", "camera_id": "P1"}, {"label": "P2", "camera_id": "P2"}])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "7b"}, {"label": "7B"}])           # the two cards of the two sites, as the datasheet has them
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "P1", "camera_id": "P1"}, {"label": "P2", "camera_id": "P2"}])
         ok = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "save": True}).json()
         kept = {v["location_id"]: v["sd"] for v in _client().post("/api/visits/list", json={"research_project_id": "DONA"}).json()["results"]}
-        cards = [c["label"] for c in lfs.list_field_items(tmp_path, "DONA", "sd_cards")]
+        cards = [c["label"] for c in built.records(tmp_path).equipment("DONA", "sd_cards")]
         other = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text.replace(",7B", ",7C").replace("R0001", "R0002").replace("2026-01-10", "2026-02-10").replace(",7b", ",7B"), "format": "mapped", "mapping": mapping}).json()
 
     assert ok["problems"] == [] and ok["saved"] == 2
@@ -2238,13 +2166,13 @@ def test_two_sd_cards_that_differ_only_in_case_are_two_cards_each_kept_as_writte
 
 @pytest.mark.entities
 def test_the_case_of_an_sd_card_counts_where_a_visit_names_it_a_card_that_exists_with_another_case_is_not_it(tmp_path: Path):
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
     text = "location_id,session,date,time,actions,num_photos,camera_id,sd\nDONA_01,R0001,2026-01-10,08:00,Installation,,P1,7b\n"
     mapping = {c: c for c in ("location_id", "session", "date", "time", "actions", "num_photos", "camera_id", "sd")}
     with _in(tmp_path):
         _project(archived=(3,))
-        lfs.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "7B"}])
-        lfs.write_field_items(tmp_path, "DONA", "cameras", [{"label": "P1", "camera_id": "P1"}])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "7B"}])
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "P1", "camera_id": "P1"}])
         refused = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping}).json()
         created = _client().post("/api/visits/import-csv", json={"research_project_id": "DONA", "csv": text, "format": "mapped", "mapping": mapping, "create": {"sd_cards": True}, "defaults": {"sd_brand": "SanDisk"}}).json()
 
@@ -2257,7 +2185,9 @@ def test_the_template_of_the_custom_csv_is_the_valid_example_and_is_read_by_itse
     help and its twenty visits — five revisions, with a theft, a camera replaced, one taken away and a site given up —, on the entities of examples/entities_example/wicp_02, are kept with no problem and no warning."""
     import csv
 
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
+
+
     root = Path(__file__).parents[2]
     template = (root / "frontend" / "src" / "visitsTemplate.csv").read_text(encoding="utf-8")
     assert template == (root / "examples" / "visits_example" / "custom_csv" / "wicp_02" / "template.csv").read_text(encoding="utf-8")
@@ -2268,8 +2198,8 @@ def test_the_template_of_the_custom_csv_is_the_valid_example_and_is_read_by_itse
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "WICP_02", "location": {
                 "location_id": l["location_id"], "name": l["name"], "timezone": l["timezone"], "ignore_dst": l["ignore_dst"] == "true", "latitude": float(l["latitude"]),
                 "longitude": float(l["longitude"]), "coordinate_uncertainty": int(l["coordinate_uncertainty"]), "status": l["status"]}})
-        lfs.write_field_items(tmp_path, "WICP_02", "cameras", [{"label": r["label"], "camera_id": r["camera_id"], "camera_model": r["camera_model"], "status": r["status"]} for r in rows("cameras.csv")])
-        lfs.write_field_items(tmp_path, "WICP_02", "sd_cards", [{"label": r["label"], "brand": r["brand"], "capacity": r["capacity"], "status": r["status"]} for r in rows("sd_cards.csv")])
+        built.records(tmp_path).keep_equipment("WICP_02", "cameras", [{"label": r["label"], "camera_id": r["camera_id"], "camera_model": r["camera_model"], "status": r["status"]} for r in rows("cameras.csv")])
+        built.records(tmp_path).keep_equipment("WICP_02", "sd_cards", [{"label": r["label"], "brand": r["brand"], "capacity": r["capacity"], "status": r["status"]} for r in rows("sd_cards.csv")])
         columns = _client().post("/api/visits/csv-columns", json={"csv": template}).json()
         answer = _client().post("/api/visits/import-csv", json={"research_project_id": "WICP_02", "csv": template, "format": "mapped", "mapping": columns["mapping"], "save": True}).json()
         kept = _client().post("/api/visits/list", json={"research_project_id": "WICP_02"}).json()["results"]

@@ -121,3 +121,9 @@ def deployment_context(deployment, *, collection_name: str | None = None, expect
 def preprocessing():
     from wildintel_uploader.entrypoints.wiring import build_preprocessing
     return build_preprocessing()
+
+
+def records(root: Path):
+    """The catalog of the collections folder as records — what the other modules ask of it."""
+    from wildintel_uploader.entrypoints.wiring import catalog_of
+    return catalog_of(root).records()

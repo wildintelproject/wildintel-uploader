@@ -7,14 +7,13 @@ from unittest.mock import patch
 import pytest
 
 from wildintel_uploader.entrypoints import config
-from tests.support import local_folder_service
 from tests.support import built
 from wildintel_uploader.modules.backup.domain.archive import FORMAT
 from wildintel_uploader.modules.backup.domain.ports import BackupError, Choice
 
 
 def _project(root: Path, acronym: str = "DONA") -> Path:
-    local_folder_service.write_research_project(root, {"name": "Doñana", "acronym": acronym})
+    built.records(root).add_project({"name": "Doñana", "acronym": acronym})
     pdir = root / acronym
     (pdir / "locations.json").write_text(json.dumps([{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "archived"}]), encoding="utf-8")
     (pdir / "cameras.json").write_text(json.dumps([{"label": "CAM-1", "camera_id": "BR1", "status": "active"}]), encoding="utf-8")

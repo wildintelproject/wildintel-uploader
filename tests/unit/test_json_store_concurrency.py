@@ -8,20 +8,24 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.support import local_folder_service as svc
+from tests.support import built
+
+
+
+
 from wildintel_uploader.shared.storage import json_files
 
 
 def test_reading_records_kept_before_the_ids_existed_gives_them_ids_but_writes_nothing(tmp_path: Path):
-    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    built.records(tmp_path).add_project({"name": "Doñana", "acronym": "DONA"})
     locations = tmp_path / "DONA" / "locations.json"
     locations.write_text(json.dumps([{"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1, "longitude": 1}]), encoding="utf-8")
     (tmp_path / "trappers.json").write_text(json.dumps([{"username": "ana", "name": "Ana Pérez"}]), encoding="utf-8")
     before = {p: (p.read_text(encoding="utf-8"), p.stat().st_mtime_ns) for p in (locations, tmp_path / "trappers.json")}
 
-    first = svc.list_locations(tmp_path, "DONA")
-    again = svc.list_locations(tmp_path, "DONA")
-    people = svc.list_trappers(tmp_path)
+    first = built.records(tmp_path).locations("DONA")
+    again = built.records(tmp_path).locations("DONA")
+    people = built.records(tmp_path).trappers()
 
     assert first[0]["id"] and first == again and people[0]["id"]                       # the same ids whenever they are read
     assert {p: (p.read_text(encoding="utf-8"), p.stat().st_mtime_ns) for p in before} == before   # and the files are as they were

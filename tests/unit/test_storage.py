@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from wildintel_uploader.shared import storage
-from tests.support import local_folder_service as svc
+from tests.support import built
+from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 from wildintel_uploader.shared.storage import ProjectStore, StorageError
 
 
@@ -111,23 +112,23 @@ def _on_memory(tmp_path: Path):
     assert "memory" in storage.available()
 
     # the same functions the app uses, now on the other backend: projects, locations, visits, cameras
-    svc.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
-    svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "latitude": 37.0, "longitude": -6.4, "timezone": "Europe/Madrid", "ignore_dst": False})
-    svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM-1", "camera_id": "BR1", "research_project": "DONA"}])
-    told = svc.write_visit(tmp_path, "DONA", {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"]})
+    built.records(tmp_path).add_project({"name": "Doñana", "acronym": "DONA"})
+    built.records(tmp_path).add_location("DONA", {"location_id": "DONA_01", "latitude": 37.0, "longitude": -6.4, "timezone": "Europe/Madrid", "ignore_dst": False})
+    built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "CAM-1", "camera_id": "BR1", "research_project": "DONA"}])
+    told = built.kept_visits(tmp_path).add("DONA", {"location_id": "DONA_01", "session": "R0001", "date": "2024-09-04", "time": "13:10:00", "actions": ["Installation"]})
 
     assert not (tmp_path / "DONA" / "visits.json").exists()                           # none of it went to the JSON files
-    assert [p["acronym"] for p in svc.list_research_projects(tmp_path)] == ["DONA"]
-    assert svc.list_visits(tmp_path, "DONA")[0]["when"] == "2024-09-04T11:10:00Z"      # the rules are the services', whatever keeps the records
+    assert [p["acronym"] for p in built.records(tmp_path).research_projects()] == ["DONA"]
+    assert built.kept_visits(tmp_path).list("DONA")[0]["when"] == "2024-09-04T11:10:00Z"      # the rules are the services', whatever keeps the records
     assert told["created_at"] and told["created_at"] == told["updated_at"]
-    assert svc.list_field_items(tmp_path, "DONA", "cameras")[0]["created_at"]
+    assert built.records(tmp_path).equipment("DONA", "cameras")[0]["created_at"]
 
     # the rules of the services hold: a location with visits is not deleted, and the dates follow the changes
-    with pytest.raises(svc.LocalFolderError):
-        svc.delete_location(tmp_path, "DONA", "DONA_01")
-    edited = svc.update_visit(tmp_path, "DONA", "DONA_01", "R0001", {**told, "comments": "x"})
+    with pytest.raises(catalog_files.LocalFolderError):
+        built.records(tmp_path).delete_location("DONA", "DONA_01")
+    edited = built.kept_visits(tmp_path).update("DONA", "DONA_01", "R0001", {**told, "comments": "x"})
     assert edited["created_at"] == told["created_at"]
-    svc.write_trappers(tmp_path, [{"username": "ana", "name": "Ana"}])                                 # the people too: beside the projects, whatever keeps them
-    assert [t["username"] for t in svc.list_trappers(tmp_path)] == ["ana"] and not (tmp_path / "trappers.json").exists()
-    assert svc.delete_research_project(tmp_path, "DONA") == {"deleted": "DONA"}
-    assert svc.list_research_projects(tmp_path) == []
+    built.records(tmp_path).keep_trappers([{"username": "ana", "name": "Ana"}])                                 # the people too: beside the projects, whatever keeps them
+    assert [t["username"] for t in built.records(tmp_path).trappers()] == ["ana"] and not (tmp_path / "trappers.json").exists()
+    assert built.records(tmp_path).delete_project("DONA") == {"deleted": "DONA"}
+    assert built.records(tmp_path).research_projects() == []

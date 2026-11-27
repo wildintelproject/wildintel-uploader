@@ -7,10 +7,11 @@ import pytest
 from PIL import Image
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from tests.support import local_folder_service as lfs
+from tests.support import built
+from wildintel_uploader.modules.deployments.infrastructure import collections as layout
+from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE, PreprocessOptions
 from wildintel_uploader.entrypoints.wiring import build_reports
-from tests.support import built
 from wildintel_uploader.modules.deployments.domain.repair import RepairError
 from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
 
@@ -37,8 +38,8 @@ def kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     root = tmp_path / "collections"
     project = root / "DONA"
     project.mkdir(parents=True)
-    (project / lfs.RESEARCH_PROJECT_METADATA_FILE).write_text(json.dumps({"name": "Doñana", "acronym": "DONA"}), encoding="utf-8")
-    (project / lfs.LOCATIONS_FILE).write_text(json.dumps([
+    (project / catalog_files.RESEARCH_PROJECT_METADATA_FILE).write_text(json.dumps({"name": "Doñana", "acronym": "DONA"}), encoding="utf-8")
+    (project / catalog_files.LOCATIONS_FILE).write_text(json.dumps([
         {"location_id": "DONA_01", "name": "Doñana site 1", "timezone": "Europe/Madrid", "ignore_dst": True, "latitude": 37.0, "longitude": -6.5},
     ]), encoding="utf-8")
     source = tmp_path / "card"
@@ -52,7 +53,7 @@ def kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def _old_log(collection: Path, deployment_id: str, start: datetime, end: datetime) -> None:
     """The FileTimestampLog of the collection with the row of a deployment, as wildintel-tools — and this app before #213 — wrote it."""
-    lfs.timestamp_log_path(collection).write_text(
+    layout.timestamp_log_path(collection).write_text(
         f"Deployment,StartDate,StartTime,EndDate,EndTime\n{deployment_id.lower()},{start:%Y:%m:%d},{start:%H:%M:%S},{end:%Y:%m:%d},{end:%H:%M:%S}\n",
         encoding="utf-8-sig")
 
@@ -71,7 +72,7 @@ def test_a_deployment_that_was_just_imported_is_valid(kept):
 
 def test_a_deployment_is_valid_or_not_as_its_seal_says(kept):
     root, dest = kept
-    (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
+    (dest / layout.DEPLOYMENT_METADATA_FILE).unlink()
     assert built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)["status"] == "broken"
 
     (dest / SEAL_FILE).unlink()
@@ -82,23 +83,23 @@ def test_a_deployment_is_valid_or_not_as_its_seal_says(kept):
 
 def test_every_metadata_file_is_rebuilt_from_the_images_and_the_deployment_is_valid_again(kept):
     root, dest = kept
-    before = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
-    for name in (lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, PREPROCESSING_LOG_FILE, SEAL_FILE):
+    before = json.loads((dest / layout.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
+    for name in (layout.DEPLOYMENT_METADATA_FILE, layout.IMAGES_FILE, PREPROCESSING_LOG_FILE, SEAL_FILE):
         (dest / name).unlink()
 
     events = _repair(root)
 
     assert events[-1]["type"] == "done" and events[-1]["status"] == "valid" and events[-1]["report_id"]
-    assert sorted(events[-1]["written"]) == sorted([lfs.DEPLOYMENT_METADATA_FILE, lfs.IMAGES_FILE, PREPROCESSING_LOG_FILE, SEAL_FILE])
+    assert sorted(events[-1]["written"]) == sorted([layout.DEPLOYMENT_METADATA_FILE, layout.IMAGES_FILE, PREPROCESSING_LOG_FILE, SEAL_FILE])
     assert [e["step"] for e in events if e["type"] == "step" and e["status"] == "done"] == ["inspect", "dates", "deployment", "preprocessing", "images", "seal"]
-    after = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
+    after = json.loads((dest / layout.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
     assert after["deployment_id"] == DEPLOYMENT_ID and after["latitude"] == 37.0 and after["location_name"] == "Doñana site 1"
     assert (after["start_date"], after["end_date"]) == (before["start_date"], before["end_date"])  # the log said 09:00 → 12:00, as at the import
     assert "HF2" in after["camera_model"].upper()  # read from the images
     log = json.loads((dest / PREPROCESSING_LOG_FILE).read_text(encoding="utf-8"))
     assert [i["name"] for i in log["images"]] == sorted(p.name for p in dest.glob("*.JPEG")) and log["recovered"]
     assert all(i["date"] and i["final_hash"] for i in log["images"])
-    assert json.loads((dest / lfs.IMAGES_FILE).read_text(encoding="utf-8"))["image_count"] == 3
+    assert json.loads((dest / layout.IMAGES_FILE).read_text(encoding="utf-8"))["image_count"] == 3
     assert json.loads((dest / SEAL_FILE).read_text(encoding="utf-8"))["recovered"]
     assert built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)["status"] == "valid"
 
@@ -107,40 +108,40 @@ def test_the_timestamp_log_prevails_over_what_the_images_say(kept):
     root, dest = kept
     collection = dest.parent
     _old_log(collection, DEPLOYMENT_ID, datetime(2024, 6, 30, 8, 0), datetime(2024, 7, 2, 18, 0))
-    (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
+    (dest / layout.DEPLOYMENT_METADATA_FILE).unlink()
 
     events = _repair(root)
 
-    deployment = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
+    deployment = json.loads((dest / layout.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
     assert deployment["start_date"].startswith("2024-06-30T08:00:00") and deployment["end_date"].startswith("2024-07-02T18:00:00")
     assert "the timestamp log says so" in next(e["message"] for e in events if e["type"] == "step" and e["step"] == "dates" and e["status"] == "done")
-    assert lfs.TIMESTAMP_LOG_SUFFIX not in "".join(events[-1]["written"])  # the log was not touched
+    assert layout.TIMESTAMP_LOG_SUFFIX not in "".join(events[-1]["written"])  # the log was not touched
 
 
 def test_without_a_log_the_period_is_the_one_left_in_deployment_json_or_the_images_and_no_log_is_written(kept):
     root, dest = kept
     collection = dest.parent
-    lfs.timestamp_log_path(collection).unlink()
+    layout.timestamp_log_path(collection).unlink()
     assert built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)["problems"] == []   # having no log is not a problem (#213)
-    (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
+    (dest / layout.DEPLOYMENT_METADATA_FILE).unlink()
 
     events = _repair(root)
 
-    deployment = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
+    deployment = json.loads((dest / layout.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
     assert deployment["start_date"].startswith("2024-07-01T10:00:00") and deployment["end_date"].startswith("2024-07-01T11:30:00")   # from the images
-    assert not lfs.timestamp_log_path(collection).exists() and lfs.timestamp_log_path(collection).name not in events[-1]["written"]
+    assert not layout.timestamp_log_path(collection).exists() and layout.timestamp_log_path(collection).name not in events[-1]["written"]
 
 
 def test_what_is_left_of_deployment_json_is_kept(kept):
     root, dest = kept
-    metadata = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
+    metadata = json.loads((dest / layout.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
     metadata.update({"setup_by": "Ana", "comments": "Near the pond", "camera_height": 1.2})
-    (dest / lfs.DEPLOYMENT_METADATA_FILE).write_text(json.dumps(metadata), encoding="utf-8")
+    (dest / layout.DEPLOYMENT_METADATA_FILE).write_text(json.dumps(metadata), encoding="utf-8")
     (dest / SEAL_FILE).unlink()
 
     _repair(root)
 
-    after = json.loads((dest / lfs.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
+    after = json.loads((dest / layout.DEPLOYMENT_METADATA_FILE).read_text(encoding="utf-8"))
     assert (after["setup_by"], after["comments"], after["camera_height"]) == ("Ana", "Near the pond", 1.2)
 
 
@@ -175,14 +176,14 @@ def test_a_deployment_with_no_images_gets_its_deployment_json_and_nothing_to_sea
     events = _repair(root)
 
     assert [e["step"] for e in events if e["type"] == "step" and e["status"] == "skipped"] == ["preprocessing", "images", "seal"]
-    assert (dest / lfs.DEPLOYMENT_METADATA_FILE).is_file() and not (dest / SEAL_FILE).exists()
+    assert (dest / layout.DEPLOYMENT_METADATA_FILE).is_file() and not (dest / SEAL_FILE).exists()
     assert events[-1]["status"] == "unsealed"
 
 
 def test_it_says_what_is_missing_when_the_deployment_cannot_be_rebuilt(kept):
     root, dest = kept
-    (dest.parent.parent / lfs.LOCATIONS_FILE).write_text("[]", encoding="utf-8")
-    (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
+    (dest.parent.parent / catalog_files.LOCATIONS_FILE).write_text("[]", encoding="utf-8")
+    (dest / layout.DEPLOYMENT_METADATA_FILE).unlink()
 
     with pytest.raises(RepairError, match="deployment.json can't be rebuilt"):
         _repair(root)
@@ -190,7 +191,7 @@ def test_it_says_what_is_missing_when_the_deployment_cannot_be_rebuilt(kept):
 
 def test_a_deployment_synced_from_trapper_is_never_repaired(kept):
     root, dest = kept
-    lfs.write_images_file(dest, DEPLOYMENT_ID, [], source="trapper")
+    layout.write_images_file(dest, DEPLOYMENT_ID, [], source="trapper")
 
     assert built.repairing(root).inspection("DONA", "R0003", DEPLOYMENT_ID)["status"] == "synced"
     with pytest.raises(RepairError, match="synced from TRAPPER"):
@@ -200,14 +201,14 @@ def test_a_deployment_synced_from_trapper_is_never_repaired(kept):
 def test_the_collections_list_every_deployment_folder_whatever_state_it_is_in(kept):
     root, dest = kept
     (dest.parent / "R0003-DONA_02").mkdir()
-    (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
+    (dest / layout.DEPLOYMENT_METADATA_FILE).unlink()
 
     found = built.repairing(root).list_collections("DONA")
 
     assert [c["name"] for c in found] == ["R0003"]
     by_id = {d["deployment_id"]: d for d in found[0]["deployments"]}
     assert set(by_id) == {DEPLOYMENT_ID, "R0003-DONA_02"} and by_id[DEPLOYMENT_ID]["images"] == 3
-    assert by_id[DEPLOYMENT_ID]["files"][lfs.DEPLOYMENT_METADATA_FILE] is False and by_id["R0003-DONA_02"]["images"] == 0
+    assert by_id[DEPLOYMENT_ID]["files"][layout.DEPLOYMENT_METADATA_FILE] is False and by_id["R0003-DONA_02"]["images"] == 0
 
 
 @pytest.mark.parametrize("collection, deployment", [("Doñana", DEPLOYMENT_ID), ("R0003", "DONA-01"), ("R0009", DEPLOYMENT_ID), ("R0003", "R0003-OTHER_01")])

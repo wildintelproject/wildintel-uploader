@@ -6,7 +6,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from tests.unit.test_repair_service import DEPLOYMENT_ID, kept  # noqa: F401 — the fixture the service's own tests use
-from tests.support import local_folder_service as lfs
+from wildintel_uploader.modules.deployments.infrastructure import collections as layout
+from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.web.main import app
 
@@ -39,19 +40,19 @@ def test_inspecting_says_whether_the_deployment_is_valid(kept):
     root, dest = kept
     with _in(root):
         valid = _client().post("/api/repair/inspect", json=PAYLOAD).json()
-        (dest / lfs.IMAGES_FILE).unlink()
+        (dest / layout.IMAGES_FILE).unlink()
         (dest / "seal.json").unlink()
         unsealed = _client().post("/api/repair/inspect", json=PAYLOAD).json()
         missing = _client().post("/api/repair/inspect", json={**PAYLOAD, "deployment_id": "R0003-OTHER_01"})
 
     assert valid["status"] == "valid"
-    assert unsealed["status"] == "unsealed" and unsealed["files"][lfs.IMAGES_FILE] == "missing"
+    assert unsealed["status"] == "unsealed" and unsealed["files"][layout.IMAGES_FILE] == "missing"
     assert missing.status_code == 404
 
 
 def test_repairing_streams_the_steps_and_ends_with_the_deployment_valid(kept):
     root, dest = kept
-    (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
+    (dest / layout.DEPLOYMENT_METADATA_FILE).unlink()
     (dest / PREPROCESSING_LOG_FILE).unlink()
     with _in(root):
         response = _client().post("/api/repair/deployment", json=PAYLOAD)
@@ -65,8 +66,8 @@ def test_repairing_streams_the_steps_and_ends_with_the_deployment_valid(kept):
 
 def test_a_repair_that_cannot_go_on_says_why_in_the_stream_and_a_deployment_that_is_not_there_is_a_400(kept):
     root, dest = kept
-    (dest.parent.parent / lfs.LOCATIONS_FILE).write_text("[]", encoding="utf-8")
-    (dest / lfs.DEPLOYMENT_METADATA_FILE).unlink()
+    (dest.parent.parent / catalog_files.LOCATIONS_FILE).write_text("[]", encoding="utf-8")
+    (dest / layout.DEPLOYMENT_METADATA_FILE).unlink()
     with _in(root):
         failing = _client().post("/api/repair/deployment", json=PAYLOAD)
         absent = _client().post("/api/repair/deployment", json={**PAYLOAD, "deployment_id": "R0003-OTHER_01"})

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from tests.support import built
-from tests.support import local_folder_service as lfs
+from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 from wildintel_uploader.entrypoints.wiring import build_timefix
 from wildintel_uploader.modules.timefix.domain import rules
 from wildintel_uploader.modules.timefix.domain.ports import TimeFixError, VisitOfTheImages
@@ -48,8 +48,8 @@ def visits(tmp_path):
     root = tmp_path / "collections"
     project = root / "TATRA"
     project.mkdir(parents=True)
-    (project / lfs.RESEARCH_PROJECT_METADATA_FILE).write_text(json.dumps({"name": "Tatra", "acronym": "TATRA"}), encoding="utf-8")
-    lfs.write_visits(root, "TATRA", [
+    (project / catalog_files.RESEARCH_PROJECT_METADATA_FILE).write_text(json.dumps({"name": "Tatra", "acronym": "TATRA"}), encoding="utf-8")
+    built.kept_visits(root).add_many("TATRA", [
         {"location_id": LOCATION, "session": "R0001", "date": VISIT[0], "time": VISIT[1], "actions": ["Installation"]},
         {"location_id": LOCATION, "session": "R0002", "date": "2026-03-30", "time": "08:15:00", "actions": ["Revision"], "num_photos": 4},
     ])

@@ -6,8 +6,11 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from tests.support import local_folder_service
 from tests.support import built
+
+
+
+
 from wildintel_uploader.modules.uploaders.domain.sync import wall_clock
 
 CREDS = ("https://trapper.example.org", "alice", "s3cret")
@@ -86,7 +89,7 @@ def test_creates_the_expected_structure(tmp_path: Path):
 
 def test_leaves_what_is_already_there_as_it_is(tmp_path: Path):
     _run(tmp_path)
-    local_folder_service.update_location(tmp_path, "DONA", "DONA_01", {"status": "ready"}, by_visit=True)
+    built.records(tmp_path).change_location("DONA", "DONA_01", {"status": "ready"}, by_visit=True)
     deployment = tmp_path / "DONA" / "R0003" / "R0003-DONA_01" / "deployment.json"
     deployment.write_text('{"edited": true}', encoding="utf-8")
 
@@ -96,7 +99,7 @@ def test_leaves_what_is_already_there_as_it_is(tmp_path: Path):
     assert again["created"] == {key: [] for key in again["created"]}
     assert again["kept"]["images"] == ["R0003-DONA_01", "R0003-DONA_02", "R0003-DONA_03"]
     assert again["kept"]["deployments"] == ["R0003-DONA_01", "R0003-DONA_02", "R0003-DONA_03"] and again["kept"]["locations"] == ["DONA_01", "DONA_02"]
-    assert [l["status"] for l in local_folder_service.list_locations(tmp_path, "DONA")] == ["ready", "pending"]
+    assert [l["status"] for l in built.records(tmp_path).locations("DONA")] == ["ready", "pending"]
 
 
 def test_the_endpoint_syncs_the_collections_folder(tmp_path: Path):

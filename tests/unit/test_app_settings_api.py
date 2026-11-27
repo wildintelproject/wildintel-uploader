@@ -16,10 +16,10 @@ from wildintel_uploader.web.main import app
 @pytest.fixture(autouse=True)
 def fresh_settings_file(tmp_path: Path):
     """Every test starts from defaults, whatever an earlier one saved — with a collections folder of its own that has two research projects."""
-    from tests.support import local_folder_service
+    from tests.support import built
     config.DEFAULT_CONFIG_FILE.unlink(missing_ok=True)
     for acronym in ("DONA", "TATR"):
-        local_folder_service.write_research_project(tmp_path, {"name": acronym, "acronym": acronym})
+        built.records(tmp_path).add_project({"name": acronym, "acronym": acronym})
     with patch("wildintel_uploader.entrypoints.api.settings_page._root", return_value=tmp_path), \
             patch("wildintel_uploader.entrypoints.wiring.catalog_collections_dir", return_value=tmp_path):
         yield
@@ -620,7 +620,7 @@ def test_the_page_that_does_not_send_where_the_records_are_kept_does_not_lose_it
 
 
 def test_nothing_is_deleted_for_good_what_the_page_no_longer_lists_is_kept_with_its_deleted_at_and_comes_back_when_it_is_listed_again(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
     from wildintel_uploader.shared import audit
     with patch.object(audit, "now", return_value="2026-11-01T10:00:00Z"):
         _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}], "sd_cards": [{"label": "A1", "research_project": "DONA"}, {"label": "A2", "research_project": "DONA"}],
@@ -630,25 +630,25 @@ def test_nothing_is_deleted_for_good_what_the_page_no_longer_lists_is_kept_with_
     # the page sees what is left…
     assert [t["name"] for t in shown["trappers"]] == ["Ana"] and [c["label"] for c in shown["sd_cards"]] == ["A1"] and shown["cameras"] == [] and shown["roles"] == []
     # …and what was removed is kept, with when
-    assert {t["name"]: t.get("deleted_at") for t in svc.list_trappers(tmp_path, include_deleted=True)} == {"Ana": None, "Luis": "2026-11-02T10:00:00Z"}
-    cards = {c["label"]: c for c in svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)}
+    assert {t["name"]: t.get("deleted_at") for t in built.records(tmp_path).trappers(include_deleted=True)} == {"Ana": None, "Luis": "2026-11-02T10:00:00Z"}
+    cards = {c["label"]: c for c in built.records(tmp_path).equipment("DONA", "sd_cards", include_deleted=True)}
     assert cards["A2"]["deleted_at"] == "2026-11-02T10:00:00Z" and cards["A2"]["created_at"] == "2026-11-01T10:00:00Z" and "deleted_at" not in cards["A1"]
-    assert [r["role"] for r in svc.list_roles(tmp_path, "DONA", include_deleted=True)] == ["contact"] and svc.list_roles(tmp_path, "DONA") == []
+    assert [r["role"] for r in built.records(tmp_path).roles("DONA", include_deleted=True)] == ["contact"] and built.records(tmp_path).roles("DONA") == []
 
     # listed again: they come back, as they were created
     with patch.object(audit, "now", return_value="2026-11-03T10:00:00Z"):
         back = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}], "sd_cards": [{"label": "A2", "research_project": "DONA"}], "cameras": [], "roles": []})["FIELDWORK"]
     luis = next(t for t in back["trappers"] if t["name"] == "Luis")
     assert luis.get("deleted_at") is None and luis["created_at"] == "2026-11-01T10:00:00Z" and luis["updated_at"] == "2026-11-03T10:00:00Z"
-    cards = {c["label"]: c for c in svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)}
+    cards = {c["label"]: c for c in built.records(tmp_path).equipment("DONA", "sd_cards", include_deleted=True)}
     assert cards["A2"].get("deleted_at") is None and cards["A1"]["deleted_at"] == "2026-11-03T10:00:00Z"
 
 
 def test_the_roles_are_the_projects_and_not_the_settings(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
     saved = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}], "roles": [{"research_project": "DONA", "trapper": "Ana", "role": "contact"}, {"research_project": "NOWHERE", "trapper": "Ana", "role": "publisher"}]})
     assert sorted((r["research_project"], r["role"]) for r in saved["FIELDWORK"]["roles"]) == [("DONA", "contact"), ("NOWHERE", "publisher")]
-    assert [r["role"] for r in svc.list_roles(tmp_path, "DONA")] == ["contact"]                                   # kept in the research project
+    assert [r["role"] for r in built.records(tmp_path).roles("DONA")] == ["contact"]                                   # kept in the research project
     assert [(r.research_project, r.role) for r in config.load_settings().FIELDWORK.roles] == [("NOWHERE", "publisher")]   # only what has no project here stays in the settings
 
 
@@ -662,16 +662,16 @@ def test_a_trapper_without_a_username_or_with_one_that_another_has_is_refused_an
     body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana", "email": "ana@uhu.es"}]
     assert _client().put("/api/settings", json=body).status_code == 200
     # changing the name of a username is a change of that trapper, not another one: it keeps when it was created
-    from tests.support import local_folder_service as svc
-    first = svc.list_trappers(tmp_path)[0]
+    from tests.support import built
+    first = built.records(tmp_path).trappers()[0]
     body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana Pérez López"}]
     _client().put("/api/settings", json=body)
-    now = svc.list_trappers(tmp_path)
+    now = built.records(tmp_path).trappers()
     assert [(t["username"], t["name"], t.get("email")) for t in now] == [("ana", "Ana Pérez López", None)] and now[0]["created_at"] == first["created_at"]
 
 
 def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_is_renamed(tmp_path: Path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
     first = _put(FIELDWORK={"trappers": [{"username": "ana", "name": "Ana"}], "sd_cards": [{"label": "A1", "research_project": "DONA"}]})["FIELDWORK"]
     ana, card = first["trappers"][0], first["sd_cards"][0]
     assert len(ana["id"]) == 36 and len(card["id"]) == 36                                          # the ids the app generated
@@ -680,9 +680,9 @@ def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_
     renamed = _put(FIELDWORK={"trappers": [{**ana, "username": "ana.perez"}], "sd_cards": [{**card, "label": "A-1"}]})["FIELDWORK"]
     assert (renamed["trappers"][0]["id"], renamed["trappers"][0]["username"]) == (ana["id"], "ana.perez")
     assert (renamed["sd_cards"][0]["id"], renamed["sd_cards"][0]["label"]) == (card["id"], "A-1")
-    assert len(svc.list_trappers(tmp_path, include_deleted=True)) == 1                            # not a trapper deleted and another one added
+    assert len(built.records(tmp_path).trappers(include_deleted=True)) == 1                            # not a trapper deleted and another one added
     assert config.load_settings().FIELDWORK.trappers == []                                        # the people are not kept in the settings
-    assert len(svc.list_field_items(tmp_path, "DONA", "sd_cards", include_deleted=True)) == 1
+    assert len(built.records(tmp_path).equipment("DONA", "sd_cards", include_deleted=True)) == 1
 
     # and an id the page makes up is not taken: a new one is kept with an id of the app's
     forged = _put(FIELDWORK={"trappers": [{"username": "luis", "name": "Luis", "id": "mine"}]})["FIELDWORK"]["trappers"][0]
@@ -690,24 +690,25 @@ def test_what_the_page_says_with_the_id_it_was_given_is_the_same_one_even_if_it_
 
 
 def test_the_status_of_a_camera_by_hand_follows_what_the_visits_say(tmp_path, monkeypatch):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
+    from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
     from wildintel_uploader.entrypoints.config import FieldworkSettings  # noqa: F401
 
-    svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0})
-    svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM-1", "camera_id": "P800", "status": "ready"}])
+    built.records(tmp_path).add_location("DONA", {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0})
+    built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "CAM-1", "camera_id": "P800", "status": "ready"}])
 
     def by_hand(status: str) -> str:
-        items = svc.list_field_items(tmp_path, "DONA", "cameras")
+        items = built.records(tmp_path).equipment("DONA", "cameras")
         try:
-            svc.write_field_items(tmp_path, "DONA", "cameras", [{**items[0], "status": status}], by_hand=True)
-            return svc.list_field_items(tmp_path, "DONA", "cameras")[0]["status"]
-        except svc.LocalFolderError as exc:
+            built.records(tmp_path).keep_equipment("DONA", "cameras", [{**items[0], "status": status}], by_hand=True)
+            return built.records(tmp_path).equipment("DONA", "cameras")[0]["status"]
+        except catalog_files.LocalFolderError as exc:
             return str(exc)
 
     free = (by_hand("planned"), by_hand("ready"), by_hand("active"))
-    svc.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0001", "when": "2026-01-01T09:00:00Z", "actions": ["Installation"], "camera_id": "P800", "sd": "A1"}])
+    built.kept_visits(tmp_path).add_many("DONA", [{"location_id": "DONA_01", "session": "R0001", "when": "2026-01-01T09:00:00Z", "actions": ["Installation"], "camera_id": "P800", "sd": "A1"}])
     out = (by_hand("planned"), by_hand("archived"))
-    svc.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0002", "when": "2026-02-01T09:00:00Z", "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 1}])
+    built.kept_visits(tmp_path).add_many("DONA", [{"location_id": "DONA_01", "session": "R0002", "when": "2026-02-01T09:00:00Z", "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 1}])
     back = (by_hand("planned"), by_hand("ready"), by_hand("archived"))
 
     assert free[0] == "planned" and free[1] == "ready" and "a visit does it" in free[2]
@@ -716,23 +717,24 @@ def test_the_status_of_a_camera_by_hand_follows_what_the_visits_say(tmp_path, mo
 
 
 def test_the_status_of_an_sd_card_by_hand_follows_what_the_visits_say(tmp_path):
-    from tests.support import local_folder_service as svc
+    from tests.support import built
+    from wildintel_uploader.modules.catalog.infrastructure import records as catalog_files
 
-    svc.write_location(tmp_path, "DONA", {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0})
-    svc.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "A1", "status": "ready"}])
+    built.records(tmp_path).add_location("DONA", {"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 1.0, "longitude": 1.0})
+    built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "A1", "status": "ready"}])
 
     def by_hand(status: str) -> str:
-        items = svc.list_field_items(tmp_path, "DONA", "sd_cards")
+        items = built.records(tmp_path).equipment("DONA", "sd_cards")
         try:
-            svc.write_field_items(tmp_path, "DONA", "sd_cards", [{**items[0], "status": status}], by_hand=True)
-            return svc.list_field_items(tmp_path, "DONA", "sd_cards")[0]["status"]
-        except svc.LocalFolderError as exc:
+            built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{**items[0], "status": status}], by_hand=True)
+            return built.records(tmp_path).equipment("DONA", "sd_cards")[0]["status"]
+        except catalog_files.LocalFolderError as exc:
             return str(exc)
 
     free = (by_hand("planned"), by_hand("ready"), by_hand("active"))
-    svc.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0001", "when": "2026-01-01T09:00:00Z", "actions": ["Installation"], "camera_id": "P800", "sd": "A1"}])
+    built.kept_visits(tmp_path).add_many("DONA", [{"location_id": "DONA_01", "session": "R0001", "when": "2026-01-01T09:00:00Z", "actions": ["Installation"], "camera_id": "P800", "sd": "A1"}])
     inside = (by_hand("planned"), by_hand("archived"))
-    svc.write_visits(tmp_path, "DONA", [{"location_id": "DONA_01", "session": "R0002", "when": "2026-02-01T09:00:00Z", "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 1}])
+    built.kept_visits(tmp_path).add_many("DONA", [{"location_id": "DONA_01", "session": "R0002", "when": "2026-02-01T09:00:00Z", "actions": ["Revision", "Desinstallation"], "camera_id": "P800", "num_photos": 1}])
     back = (by_hand("planned"), by_hand("ready"), by_hand("archived"))
 
     assert free[0] == "planned" and free[1] == "ready" and "a visit leaves it there" in free[2]

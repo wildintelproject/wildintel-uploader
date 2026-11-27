@@ -18,6 +18,7 @@ from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.preprocessing.domain.models import PreprocessOptions
 from wildintel_uploader.modules.uploaders.infrastructure import trapper_site
 from tests.support import built
+from wildintel_uploader.modules.catalog.infrastructure.records import LocalFolderError
 from wildintel_uploader.modules.uploaders.domain import trapper as rules
 from wildintel_uploader.modules.uploaders.domain.models import UploaderError
 from wildintel_uploader.modules.uploaders.infrastructure.packages import PackagesOnDisk
@@ -87,13 +88,8 @@ def test_a_research_project_with_nothing_kept_has_no_collections(tmp_path: Path)
 
 
 def test_a_research_project_id_that_is_not_a_folder_name_is_refused(tmp_path: Path):
-    with pytest.raises(local_folder_service_error()):
+    with pytest.raises(LocalFolderError):
         list_collections(tmp_path, "../x")
-
-
-def local_folder_service_error():
-    from tests.support.local_folder_service import LocalFolderError
-    return LocalFolderError
 
 
 # ── the package ──────────────────────────────────────────────────────────────

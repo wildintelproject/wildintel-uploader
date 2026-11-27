@@ -48,10 +48,8 @@ def test_check_collection(tmp_path: Path):
 
 
 def test_list_local_deployments(tmp_path: Path):
-    from tests.support import local_folder_service
-    local_folder_service.write_deployment_metadata(
-        tmp_path / "R0001-DONA_01", {"deployment_id": "R0001-DONA_01", "location_id": "DONA_01", "start_date": "2024-09-04T13:10:00"},
-    )
+    from wildintel_uploader.modules.deployments.infrastructure import collections as layout
+    layout.write_deployment_metadata(tmp_path / "R0001-DONA_01", {"deployment_id": "R0001-DONA_01", "location_id": "DONA_01", "start_date": "2024-09-04T13:10:00"})
 
     response = _client().post("/api/deployment-import/list-local-deployments", json={"path": str(tmp_path)})
 
@@ -425,9 +423,9 @@ def test_a_location_is_deleted_unless_it_has_visits_or_comes_from_trapper(tmp_pa
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
         for location in ({"location_id": "DONA_01", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_02", "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}, {"location_id": "DONA_03", "trapper_pk": 7, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.5}):
             _client().post("/api/deployment-import/locations/save", json={"research_project_id": "DONA", "location": location})
-        from tests.support import local_folder_service
-        local_folder_service.write_field_items(tmp_path, "DONA", "cameras", [{"label": "12", "camera_id": "12", "camera_model": None, "research_project": "DONA"}])
-        local_folder_service.write_field_items(tmp_path, "DONA", "sd_cards", [{"label": "A13", "research_project": "DONA"}])
+        from tests.support import built
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "12", "camera_id": "12", "camera_model": None, "research_project": "DONA"}])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "A13", "research_project": "DONA"}])
         _client().post("/api/visits/save", json={"research_project_id": "DONA", "visit": visit})
         free = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "dona_01"})
         visited = _client().post("/api/deployment-import/locations/delete", json={"research_project_id": "DONA", "location_id": "DONA_02"})
@@ -610,11 +608,11 @@ def _keep_location(root: Path, **fields) -> None:
 
 def _visits_of_r0003(tmp_path: Path, visits: bool = True) -> None:
     """The research project, and the visits that make R0003-DONA_01 a deployment: the one that left the camera and the one that collected its card."""
-    from tests.support import local_folder_service
-    local_folder_service.write_research_project(tmp_path / "collections", {"name": "Doñana", "acronym": "DONA"})
+    from tests.support import built
+    built.records(tmp_path / "collections").add_project({"name": "Doñana", "acronym": "DONA"})
     if not visits:
         return
-    local_folder_service.write_visits(tmp_path / "collections", "DONA", [
+    built.kept_visits(tmp_path / "collections").add_many("DONA", [
         {"location_id": "DONA_01", "session": "R0003", "date": "2024-07-01", "time": "09:00:00", "when": "2024-07-01T07:00:00Z", "actions": ["Installation"], "sd": "A13"},
         {"location_id": "DONA_01", "session": "R0004", "date": "2024-07-31", "time": "09:00:00", "when": "2024-07-31T07:00:00Z", "actions": ["Revision"], "num_photos": 1},
     ])
@@ -1190,14 +1188,14 @@ def test_validate_images_progress_counts_every_image_once(tmp_path: Path):
 
 
 def test_the_make_and_the_model_the_images_say_are_kept_in_the_record_of_the_camera(tmp_path: Path):
-    from tests.support import local_folder_service as lfs
+    from tests.support import built
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json={"name": "Doñana", "acronym": "DONA"})
-        lfs.write_field_items(tmp_path, "DONA", "cameras", [{"label": "4", "camera_model": "Browning Strike Force HD PRO X"}])
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "4", "camera_model": "Browning Strike Force HD PRO X"}])
 
         kept = _client().post("/api/deployment-import/camera-identity", json={"research_project_id": "DONA", "label": "4", "make": "Browning", "model": "BTC-6DCL"})
         missing = _client().post("/api/deployment-import/camera-identity", json={"research_project_id": "DONA", "label": "9", "make": "X", "model": "Y"})
-        record = lfs.camera_record(tmp_path, "DONA", "4")
+        record = built.records(tmp_path).camera("DONA", "4")
 
     assert kept.status_code == 200 and (record["camera_make"], record["camera_model"]) == ("Browning", "BTC-6DCL")
     assert missing.status_code == 400 and "not one of the cameras" in missing.json()["detail"]

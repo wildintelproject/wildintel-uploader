@@ -5,13 +5,17 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.support import local_folder_service
+from tests.support import built
+
+
+
+
 from wildintel_uploader.web.main import app
 
 
 @pytest.fixture(autouse=True)
 def collections(tmp_path: Path):
-    local_folder_service.write_research_project(tmp_path, {"name": "Doñana", "acronym": "DONA"})
+    built.records(tmp_path).add_project({"name": "Doñana", "acronym": "DONA"})
     with patch("wildintel_uploader.entrypoints.config.collections_dir", return_value=tmp_path):
         yield tmp_path
 
@@ -26,7 +30,7 @@ def test_trappers_are_added_and_one_with_the_username_of_another_is_left_out(col
 
     assert first.json() == {"added": ["ana", "luis"], "skipped": []}
     assert again.json() == {"added": ["marta"], "skipped": ["ANA"]}
-    assert [t["name"] for t in local_folder_service.list_trappers(collections)] == ["Ana Pérez", "Luis", "Marta"]
+    assert [t["name"] for t in built.records(collections).trappers()] == ["Ana Pérez", "Luis", "Marta"]
 
 
 def test_a_trapper_needs_a_username_and_a_name():
@@ -41,7 +45,7 @@ def test_roles_are_given_to_trappers_that_are_kept_and_the_ones_it_has_are_left_
 
     assert first.json() == {"added": [["Ana Pérez", "principalInvestigator"]]}
     assert again.json() == {"added": [["Ana Pérez", "contact"]]}
-    assert sorted(r["role"] for r in local_folder_service.list_roles(collections, "DONA")) == ["contact", "principalInvestigator"]
+    assert sorted(r["role"] for r in built.records(collections).roles("DONA")) == ["contact", "principalInvestigator"]
 
 
 def test_a_role_of_a_trapper_that_is_not_kept_is_refused():
@@ -59,9 +63,9 @@ def test_cameras_and_sd_cards_are_added_to_the_research_project_and_a_label_is_n
     again = _post("field-items", {"research_project_id": "DONA", "kind": "cameras", "items": [{"label": "CAM-001"}]})
     assert again.json() == {"added": [], "skipped": ["CAM-001"]}                               # the same label is not added twice
     assert cards.json() == {"added": ["1"], "skipped": []}
-    kept = local_folder_service.list_field_items(collections, "DONA", "cameras")
+    kept = built.records(collections).equipment("DONA", "cameras")
     assert [(c["label"], c.get("camera_id"), c["status"]) for c in kept] == [("CAM-001", "P800", "active"), ("cam-001", None, "active")]
-    assert local_folder_service.list_field_items(collections, "DONA", "sd_cards")[0]["capacity"] == "64 GB"
+    assert built.records(collections).equipment("DONA", "sd_cards")[0]["capacity"] == "64 GB"
 
 
 def test_cameras_of_a_research_project_that_is_not_kept_are_refused():
