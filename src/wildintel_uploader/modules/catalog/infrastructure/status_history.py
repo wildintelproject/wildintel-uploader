@@ -30,6 +30,9 @@ class KeptStatusHistory(StatusHistory):
     def _store(self) -> storage.ProjectStore:
         return storage.open_store(self._root)
 
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        return storage.checkpoint(self._store, project, ["status_history"])
+
     def record_changes(self, project: str, kind: str, before: list[dict], after: list[dict], name_of: Callable[[dict], str],
                        match: Callable[[dict, list[dict]], dict | None]) -> int:
         """Writes a line for each of `after` whose status is not the one it had in `before`; says how many."""

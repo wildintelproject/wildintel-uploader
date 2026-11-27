@@ -26,6 +26,9 @@ class KeptVisits:
     def _store(self) -> storage.ProjectStore:
         return storage.open_store(self.root)
 
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        return storage.checkpoint(self._store, project, ["visits", "unknown_visits", "planned_revisions"])
+
     def _raw(self, project: str) -> builtins.list[Visit]:
         return cast(builtins.list[Visit], self._store().read_records(project, "visits"))   # the store keeps records: these are visits
 

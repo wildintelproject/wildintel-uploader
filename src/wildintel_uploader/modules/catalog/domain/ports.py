@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 from wildintel_uploader.modules.catalog.domain.models import Camera, Location, ResearchProject, Role, SdCard, Trapper
@@ -142,6 +142,10 @@ class CatalogService(Protocol):
     def rebuild_status_history(self, project: str) -> int:
         """Adds the lines the visits say and the history lacks — nothing of it is changed nor removed —, and says how many. UnknownProject."""
 
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """What the catalog keeps of a research project now — its locations, cameras, SD cards, roles and history, and the people —, and how to put
+        it back: a save made of several writes (an import of visits) calls it when one of them fails, so nothing is left half written."""
+
     # the field work of the settings page
     def fieldwork(self) -> Fieldwork:
         """The people, and the cameras, SD cards and roles of every research project — and those versions before left in the settings, which are
@@ -226,6 +230,9 @@ class VisitHistory(Protocol):
 
 class StatusHistory(Protocol):
     """Where each change of the status of a location, a camera or an SD card is written down."""
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """The history of a research project now, and how to put it back (see CatalogService.checkpoint)."""
 
     def record_location(self, project: str, before: Location | None, after: Location) -> None:
         """A line when `after` has another status than `before` had — or when it is new, with the status it starts with."""

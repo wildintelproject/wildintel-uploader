@@ -88,6 +88,9 @@ def save_settings(new: config.Settings, service: FromDishka[SettingsService]) ->
     _follow_data_dir(current, new)   # where the research projects are, for their field work
     catalog = wiring.build_catalog(_root(new), service)
     fieldwork = new.FIELDWORK
+    # Two writes — the catalog, then the settings — and nothing to undo between them: the settings were checked above, before either; and the catalog
+    # takes the lists of the page as they are (save_fieldwork replaces them), so if writing the settings fails after it the settings still hold all
+    # of the field work, and saving the page again ends the same as one save that did not fail.
     try:
         catalog.save_fieldwork(*fieldwork_saved(fieldwork))
     except (CatalogError, StorageError) as exc:

@@ -321,6 +321,20 @@ class VisitsUseCases(VisitsService):
         return {**result, "visits": visits, "saved": saved, "collection_folders": collection_folders, "report": report}
 
     def _keep(self, project: str, result: dict, kept: list[Visit], cameras: list[Camera], cards: list[SdCard]) -> tuple[int, dict, str | None]:
+        """All or nothing, as the file is (#206): a save is many writes — the catalog's, then the visits' —, and if one fails what the others wrote is
+        put back as it was, so the research project is never left half imported; the error is told as it came."""
+        put_back = [self._catalog.checkpoint(project), self._visits.checkpoint(project)]
+        try:
+            return self._write(project, result, kept, cameras, cards)
+        except Exception as exc:
+            for undo in reversed(put_back):
+                try:
+                    undo()
+                except Exception as failed:  # noqa: BLE001 — the first error is the one told; that it could not be undone is said with it
+                    exc.add_note(f"What was written could not all be put back: {failed}")
+            raise
+
+    def _write(self, project: str, result: dict, kept: list[Visit], cameras: list[Camera], cards: list[SdCard]) -> tuple[int, dict, str | None]:
         """What the visits need is created first — the trappers who went, their locations, cameras and SD cards —, then the visits."""
         if result["create"]["trappers"]:
             self._catalog.add_trappers(result["create"]["trappers"])

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable
 
 from wildintel_uploader.shared.errors import StorageError  # noqa: F401 — told by the kernel, so the use cases catch it without the storage
 
@@ -123,3 +124,20 @@ class ProjectStore(ABC):
 
         Raises:
             StorageError: the kind is not one of GLOBAL_KINDS."""
+
+
+def checkpoint(store: Callable[[], ProjectStore], project: str, kinds: Iterable[str]) -> Callable[[], None]:
+    """What a research project keeps of these kinds now, and how to put it back: the function returned writes each kind as it was — or removes it,
+    if there was none —, undoing what was written since (a save that failed half way)."""
+    kept = store()
+    then = {kind: kept.read_records(project, kind) if kept.has_records(project, kind) else None for kind in kinds}
+
+    def put_back() -> None:
+        now = store()
+        for kind, records in then.items():
+            if records is None:
+                if now.has_records(project, kind):
+                    now.delete_records(project, kind)
+            else:
+                now.write_records(project, kind, records)
+    return put_back

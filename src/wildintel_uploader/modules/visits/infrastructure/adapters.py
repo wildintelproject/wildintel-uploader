@@ -43,6 +43,10 @@ class StoredVisits(VisitRepository):
     def __init__(self, kept: KeptVisits) -> None:
         self._kept = kept
 
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        with _failed():
+            return self._kept.checkpoint(project)
+
     def list(self, project: str, location_id: str | None = None) -> builtins.list[Visit]:
         with _failed():
             return self._kept.list(project, location_id)
@@ -101,6 +105,10 @@ class CatalogOfTheVisits(VisitCatalog):
 
     def __init__(self, catalog: Callable[[], CatalogService]) -> None:
         self._catalog = catalog
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        with _failed():
+            return self._catalog().checkpoint(project)
 
     def require_project(self, project: str, *, active: bool = False) -> None:
         with _failed():

@@ -1,4 +1,5 @@
 """/api/visits — the visits to the camera traps of a research project, kept in the collections folder (a temp folder)."""
+import json
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
@@ -1091,6 +1092,36 @@ def test_importing_a_csv_creates_the_locations_cameras_and_sd_cards_it_is_asked_
     assert sd_brand["entity"] == "sd_cards" and sd_brand["required_with"] == []
     assert next(f for f in columns["fields"] if f["field"] == "location_latitude")["required_with"] == ["locations"]
     assert next(f for f in columns["fields"] if f["field"] == "latitude")["required_with"] == []
+
+
+def test_an_import_that_fails_half_way_leaves_the_research_project_as_it_was(tmp_path: Path, monkeypatch):
+    """#248: the location, the camera and the SD card are written before the visits — when writing the visits fails, they are put back as they
+    were: nothing of the file is kept, as with a row that cannot be added (#206)."""
+    from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
+    from wildintel_uploader.shared.storage import StorageError
+
+    def the_disk_is_full(self, project, new):
+        raise StorageError("The disk is full.")
+    csv = ("site,what,day,hour,lat,lon,llat,llon,tz,cam,model,sd,brand\n"
+           "DONA_09,Installation,2026-09-14,11:40,37.1002,-6.4001,37.1,-6.4,Europe/Madrid,CAM9,Browning,S9,SanDisk\n")
+    body = {"research_project_id": "DONA", "csv": csv, "format": "mapped", "create": {"locations": True, "cameras": True, "sd_cards": True},
+            "defaults": {"daylight_saving": "yes"}, "save": True,
+            "mapping": {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "latitude": "lat", "longitude": "lon",
+                        "location_latitude": "llat", "location_longitude": "llon", "timezone": "tz", "camera_id": "cam", "camera_model": "model", "sd": "sd",
+                        "sd_brand": "brand"}}
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        monkeypatch.setattr(KeptVisits, "add_many", the_disk_is_full)
+        failed = _client().post("/api/visits/import-csv", json=body)
+        locations = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
+        records = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in (tmp_path / "DONA").glob("*.json") if p.stem != "research_project"}
+        monkeypatch.undo()
+        saved = _client().post("/api/visits/import-csv", json=body).json()   # with room again, the same file is imported whole
+
+    assert failed.status_code >= 400 and "The disk is full." in failed.text
+    assert locations == [] and all(kept == [] for kept in records.values())   # no location, no camera, no SD card, no visit: as it was
+    assert "visits" not in records and "status_history" not in records
+    assert saved["saved"] == 1
 
 
 def test_the_entries_of_epicollect_are_downloaded_as_a_csv(monkeypatch):

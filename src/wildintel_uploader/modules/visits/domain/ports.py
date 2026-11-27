@@ -8,7 +8,7 @@ from __future__ import annotations
 import builtins
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager
 
 from wildintel_uploader.modules.visits.domain.models import ImportOptions
@@ -96,6 +96,10 @@ class VisitRepository(ABC):
     """Where the visits of the research projects are kept, told with the names of what they point to."""
 
     @abstractmethod
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """The visits of a research project now — and the unknown ones and the revisions planned —, and how to put them back (see VisitsService.import_file)."""
+
+    @abstractmethod
     def list(self, project: str, location_id: str | None = None) -> builtins.list[Visit]: ...
 
     @abstractmethod
@@ -140,6 +144,10 @@ class VisitRepository(ABC):
 
 class VisitCatalog(ABC):
     """The catalog as the visits see it: its records as dicts."""
+
+    @abstractmethod
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """What the catalog keeps of a research project now, and how to put it back: an import that fails half way undoes what it wrote."""
 
     @abstractmethod
     def require_project(self, project: str, *, active: bool = False) -> None: ...

@@ -352,6 +352,21 @@ class CatalogUseCases(CatalogService):
         self.require_project(project)
         return self._history.rebuild(project)
 
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        trappers, roles = self.repository.read_trappers(), self.repository.read_roles(project)
+        locations = self.repository.read_locations(project)
+        equipment = {kind: self.repository.read_equipment(project, kind) for kind in EQUIPMENT_KINDS}
+        history = self._history.checkpoint(project)
+
+        def put_back() -> None:
+            self.repository.write_trappers(trappers)
+            self.repository.write_roles(project, roles)
+            self.repository.write_locations(project, locations)
+            for kind, items in equipment.items():
+                self.repository.write_equipment(project, kind, items)
+            history()
+        return put_back
+
     # ── the field work of the settings page ──
 
     def _adopt_legacy_fieldwork(self) -> None:
