@@ -18,3 +18,7 @@ class DeploymentMissing(DeploymentsError):
 
 class PickerUnavailable(DeploymentsError):
     """The computer has no folder picker to open."""
+
+
+class BadDeploymentName(DeploymentsFailed, ValueError):
+    """A deployment id, or a revision, that doesn't follow wildintel-tools' rules."""

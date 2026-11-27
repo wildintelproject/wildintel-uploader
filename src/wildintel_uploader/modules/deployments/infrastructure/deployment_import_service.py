@@ -21,6 +21,8 @@ from PIL import Image
 
 from wildintel_uploader.core import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
+from wildintel_uploader.modules.deployments.domain import naming as _naming
+from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName, DeploymentsFailed
 from wildintel_uploader.modules.fileinfo.domain import models as _fileinfo
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.modules.fileinfo.domain.models import common_value
@@ -33,42 +35,31 @@ def _files():
 
 logger = logging.getLogger(__name__)
 
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff"}
+IMAGE_EXTENSIONS = set(_fileinfo.IMAGE_EXTENSIONS)
 
 
-class DeploymentImportError(ValueError):
-    """A problem with the source/destination paths — reported to the user,
-    not a bug."""
+class DeploymentImportError(DeploymentsFailed, ValueError):
+    """A problem with the source/destination paths — reported to the user, not a bug. One of what the deployments refuse (their domain's
+    DeploymentsFailed), so that the other modules tell it by that."""
 
 
-_COLLECTION_PREFIX = re.compile(r"^(R\d{4})-")
 _PATH_SEGMENT = re.compile(r"^[0-9A-Za-z_.-]+$")
 
 
 def deployment_id_for(revision: int, location_id: str) -> str:
-    """The deployment id wildintel-tools expects: R + the revision as four
-    digits, a hyphen and the location id — "R0003-DONA_01".
-
-    Raises:
-        DeploymentImportError: the revision isn't 1..9999 or the location is empty.
-    """
-    if not 1 <= revision <= 9999 or not location_id.strip():
-        raise DeploymentImportError("A deployment id needs a revision from 1 to 9999 and a location id.")
-    return f"R{revision:04d}-{location_id.strip()}"
+    """See modules.deployments.domain.naming — what it refuses is a DeploymentImportError here, as it was."""
+    try:
+        return _naming.deployment_id_for(revision, location_id)
+    except BadDeploymentName as exc:
+        raise DeploymentImportError(exc.message) from exc
 
 
 def collection_code(deployment_id: str) -> str:
-    """The collection a deployment belongs to — its id's "R0003" prefix.
-
-    Raises:
-        DeploymentImportError: the id doesn't start with R + four digits + a hyphen.
-    """
-    match = _COLLECTION_PREFIX.match(deployment_id)
-    if not match:
-        raise DeploymentImportError(
-            f"The deployment id '{deployment_id}' must start with its collection, R + four digits + a hyphen (e.g. R0003-DONA_01)."
-        )
-    return match.group(1)
+    """See modules.deployments.domain.naming — what it refuses is a DeploymentImportError here, as it was."""
+    try:
+        return _naming.collection_code(deployment_id)
+    except BadDeploymentName as exc:
+        raise DeploymentImportError(exc.message) from exc
 
 
 _FROM_FIELDWORK_LOG: dict[str, tuple[str, type]] = {
@@ -379,9 +370,7 @@ def with_timezone(local_iso: str | None, tz_name: str) -> str | None:
     return parsed.replace(tzinfo=zone).isoformat(timespec="seconds")
 
 
-def _natural_key(path: Path) -> list:
-    """Sorts "IMG_2" before "IMG_10" — the order wildintel-tools walks a deployment's images in."""
-    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", str(path))]
+_natural_key = _naming.natural_key
 
 
 # The validations of before — validate_images, validate_deployment_consistency and their lists of checks — are core.services.checks: the modules of

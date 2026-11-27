@@ -30,7 +30,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ValidationError
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import deployment_import_service, local_folder_service, trapper_service
+from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName
+from wildintel_uploader.modules.deployments.domain.naming import collection_code
+from wildintel_uploader.core.services import local_folder_service, trapper_service
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +64,8 @@ def _deployments_of(deployments: list[dict], collection: str) -> list[tuple[str,
     for deployment in deployments:
         deployment_id = (deployment["deployment_id"] or "").upper()  # Trapper has it in lower case
         try:
-            code = deployment_import_service.collection_code(deployment_id)
-        except deployment_import_service.DeploymentImportError:
+            code = collection_code(deployment_id)
+        except BadDeploymentName:
             continue
         if code.lower() == collection.lower():
             found.append((deployment_id, deployment))

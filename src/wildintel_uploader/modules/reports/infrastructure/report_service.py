@@ -24,7 +24,9 @@ from pathlib import Path
 from typing import Iterable
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.services import deployment_import_service as dis
+from wildintel_uploader.modules.deployments.domain.naming import natural_key
+from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
+from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECKS
 
 
 def _files():
@@ -115,13 +117,13 @@ class _Builder:
 def images_of(folder: Path) -> list[str]:
     """The images of a folder, as their paths in it, in natural file-name order."""
     return [str(p.relative_to(folder)) for p in sorted(
-        (p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in dis.IMAGE_EXTENSIONS), key=lambda p: dis._natural_key(p.relative_to(folder)),
+        (p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: natural_key(p.relative_to(folder)),
     )]
 
 
 def validation_report(found: dict, source: Path, checks: Iterable[str] | None = None) -> dict:
     """The report of validate_images(source, checks, detail=True)'s result."""
-    ran = set(checks) if checks is not None else set(dis.IMAGE_CHECKS)
+    ran = set(checks) if checks is not None else set(IMAGE_CHECKS)
     images = images_of(source)
     b = _Builder("validation", f"Validation of {source.name}", source_dir=str(source), deployment_id=None, parameters={"checks": sorted(ran)})
     b.checked = found.get("checked_count", len(images))
@@ -224,7 +226,7 @@ def preprocessing_report(records: list[dict], skipped: list[dict], deployment_id
         b.add(r["original"], "preprocessing", True, "; ".join(steps))
     for item in skipped:
         b.add(item["name"], "preprocessing", False, item["detail"])
-    b.entries.sort(key=lambda e: dis._natural_key(Path(e["identifier"])))
+    b.entries.sort(key=lambda e: natural_key(Path(e["identifier"])))
     return b.build()
 
 

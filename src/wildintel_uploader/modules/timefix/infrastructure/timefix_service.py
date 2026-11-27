@@ -32,7 +32,8 @@ from pathlib import Path
 
 from wildintel_uploader.core import config
 from wildintel_uploader.core.services import local_folder_service
-from wildintel_uploader.core.services import deployment_import_service as dis
+from wildintel_uploader.modules.deployments.domain.naming import natural_key
+from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
 
 
 def _files():
@@ -57,7 +58,7 @@ def _dir(folder: str) -> Path:
 
 
 def _images(folder: Path) -> list[Path]:
-    return sorted((p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in dis.IMAGE_EXTENSIONS), key=lambda p: dis._natural_key(Path(p.name)))
+    return sorted((p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS), key=lambda p: natural_key(Path(p.name)))
 
 
 def read_corrections(folder: Path) -> list[dict]:

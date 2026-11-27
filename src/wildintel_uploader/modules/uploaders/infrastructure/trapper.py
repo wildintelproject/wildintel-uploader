@@ -1,4 +1,4 @@
-"""Trapper over the code of before — trapper_service, trapper_upload_service, sync_service, deployment_import_service.import_stream — and its
+"""Trapper over the code of before — trapper_service, trapper_upload_service, sync_service — and its
 errors as the module's: what the client of TRAPPER says of an account or a resource, of the network, or the words of what the uploads refuse."""
 from __future__ import annotations
 
@@ -24,9 +24,10 @@ def _services():
 
 def _own_words(exc: Exception) -> bool:
     """Whether an error says what it is in its own words: what the uploads, the collections or the imports refuse."""
-    from wildintel_uploader.core.services import deployment_import_service, trapper_upload_service
+    from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
+    from wildintel_uploader.modules.uploaders.infrastructure import trapper_upload_service
     from wildintel_uploader.shared.storage import StorageError
-    return isinstance(exc, (trapper_upload_service.TrapperUploadError, StorageError, deployment_import_service.DeploymentImportError))
+    return isinstance(exc, (trapper_upload_service.TrapperUploadError, StorageError, DeploymentsError))
 
 
 def as_uploader_error(exc: Exception) -> UploaderError:
