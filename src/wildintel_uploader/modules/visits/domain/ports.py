@@ -131,6 +131,10 @@ class VisitRepository(ABC):
     @abstractmethod
     def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit: ...
 
+    @abstractmethod
+    def write_states(self, project: str, states: dict[tuple[str, str], str | None]) -> int:
+        """Keeps the state of the visits — by their site (ignoring case) and their instant — where it changed; says how many."""
+
 
 class VisitCatalog(ABC):
     """The catalog as the visits see it: its records as dicts."""
@@ -172,25 +176,11 @@ class StateHistory(ABC):
 
 
 class VisitDeployments(ABC):
-    """The deployments the visits say, and the folders of their collections."""
+    """The folders of the collections the visits give deployments to — what the deployments say a collection is."""
 
     @abstractmethod
-    def refresh_states(self, project: str, keep_seconds: bool) -> None: ...
-
-    @abstractmethod
-    def locked(self, visits: list[Visit], keep_seconds: bool) -> set: ...
-
-    @abstractmethod
-    def make_collection_folders(self, project: str, visits: list[Visit], new: list[Visit], keep_seconds: bool) -> dict: ...
-
-    @abstractmethod
-    def deployments(self, visits: list[Visit], keep_seconds: bool) -> list[dict]: ...
-
-    @abstractmethod
-    def book(self, visits: list[Visit], keep_seconds: bool, locations: list[dict] | None, unknown: list[Visit], planned: list[str]) -> list[dict]: ...
-
-    @abstractmethod
-    def merged_details(self, visit: Visit, end: Visit) -> dict: ...
+    def make_collection(self, project: str, collection: str) -> None:
+        """Its folder, with its collection.json."""
 
 
 class VisitFile(ABC):

@@ -1,6 +1,6 @@
 """The start of a site (#36): the action SiteStart says it, once, in the first visit of the site. What came before is not expected — the revisions before it do not wait for a visit to the
 site and nothing of them is unknown — and a site with no such visit keeps what it had: what came before it is unknown."""
-from wildintel_uploader.modules.visits.infrastructure import deployments as visit_deployments
+from wildintel_uploader.modules.visits.domain import deployments as visit_deployments
 from wildintel_uploader.modules.visits.domain import rules as visit_rules
 
 LOCATIONS = [{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "active"}]

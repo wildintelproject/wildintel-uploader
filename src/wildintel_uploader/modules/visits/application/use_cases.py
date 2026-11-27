@@ -10,7 +10,7 @@ import threading
 from wildintel_uploader.modules.sources.domain.models import SourceError
 from wildintel_uploader.modules.sources.domain.ports import SourcesService
 from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS
-from wildintel_uploader.modules.visits.domain import rules, wall_clock
+from wildintel_uploader.modules.visits.domain import deployments as visit_deployments, rules, wall_clock
 from wildintel_uploader.modules.visits.domain.models import ImportOptions, VisitLocked, VisitMissing, VisitRefused, VisitsError, VisitsFailed
 from wildintel_uploader.modules.visits.domain.ports import (
     Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitFile, VisitReports, VisitRepository, VisitSettings, VisitsService,
@@ -64,13 +64,24 @@ class VisitsUseCases(VisitsService):
 
     def _refresh_states(self, project: str) -> None:
         """A visit that left a camera is collected once a later one took its card, and the one just added has its own."""
-        self._deployments.refresh_states(project, self._settings.keep_seconds())
+        self._visits.write_states(project, visit_deployments.visit_states(self._visits.list(project), self._settings.keep_seconds()))
 
     def _make_folders(self, project: str, new: list[Visit]) -> dict:
         """The folders of the collections the new visits change — made when a visit is registered, not when its deployment is imported."""
         if not new:
             return {"collections": []}
-        return self._deployments.make_collection_folders(project, self._visits.list(project), new, self._settings.keep_seconds())
+        self._catalog.require_project(project)
+        visits, keep_seconds = self._visits.list(project), self._settings.keep_seconds()
+        wanted = set(visit_deployments.collections_of(visits, new, keep_seconds))
+        by_collection: dict[str, list[dict]] = {}
+        for d in visit_deployments.deployments(visits, keep_seconds):
+            if d["collection"] in wanted:
+                by_collection.setdefault(d["collection"], []).append(d)
+        made = []
+        for collection, items in sorted(by_collection.items()):
+            self._deployments.make_collection(project, collection)
+            made.append({"collection": collection, "closed": sum(d["status"] == "closed" for d in items), "open": sum(d["status"] == "open" for d in items)})
+        return {"collections": made}
 
     def _archive_locations(self, project: str, new: list[Visit]) -> list[str]:
         """The locations that the visits with an Archive action give up: archived from the day of the visit, with a note that says which visit did it."""
@@ -186,7 +197,7 @@ class VisitsUseCases(VisitsService):
         old = next((v for v in kept_visits if v["location_id"].lower() == location_id.lower() and str(v.get("session") or "").upper() == session.upper()), None)
         if old is None:
             raise VisitMissing(f"There is no visit to {location_id} in {session}.")
-        if (str(old["location_id"]).lower(), str(old.get("when") or "")) in self._deployments.locked(kept_visits, self._settings.keep_seconds()):
+        if (str(old["location_id"]).lower(), str(old.get("when") or "")) in visit_deployments.locked(kept_visits, self._settings.keep_seconds()):
             raise VisitLocked(f"The visit to {old['location_id']} in {old['session']} starts or closes a deployment that is imported: it cannot be edited.")
         visit = {**visit, "location_id": old["location_id"], "session": old["session"]}
         if ("Archive" in (old.get("actions") or [])) != ("Archive" in visit["actions"]):
@@ -352,7 +363,7 @@ class VisitsUseCases(VisitsService):
 
         def zoned(visit: Visit) -> Visit:
             return {**visit, "timezone": zones.get(str(visit.get("location_id", "")).lower())}
-        return [{"visit": zoned(c["visit"]), "end": zoned(c["end"]), "details": self._deployments.merged_details(c["visit"], c["end"])} for c in closed]
+        return [{"visit": zoned(c["visit"]), "end": zoned(c["end"]), "details": visit_deployments.merged_details(c["visit"], c["end"])} for c in closed]
 
     def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit:
         linked = self._visits.link(project, location_id, date, time, deployment_id)
@@ -361,7 +372,7 @@ class VisitsUseCases(VisitsService):
 
     def deployments(self, project: str, location_id: str | None = None) -> list[dict]:
         self._catalog.require_project(project)
-        found = self._deployments.deployments(self._visits.list(project, location_id), self._settings.keep_seconds())
+        found = visit_deployments.deployments(self._visits.list(project, location_id), self._settings.keep_seconds())
         zones = _zones(self._catalog.locations(project, include_deleted=True))
         results = []
         for d in found:
@@ -385,7 +396,7 @@ class VisitsUseCases(VisitsService):
         visits = self._visits.list(project, location_id)
         locations = self._catalog.locations(project) if location_id is None else None
         unknown = [u for u in self._visits.unknown(project) if location_id is None or u["location_id"].lower() == location_id.lower()]
-        book = self._deployments.book(visits, self._settings.keep_seconds(), locations, unknown, self._visits.planned_revisions(project))
+        book = visit_deployments.visit_book(visits, self._settings.keep_seconds(), locations, unknown, self._visits.planned_revisions(project))
         zones = _zones(self._catalog.locations(project, include_deleted=True))
         for visit in book:
             visit["uploaded_at"], visit["on_trapper"] = self._uploads.trapper_state(project, visit.get("deployment_id"))
@@ -396,7 +407,7 @@ class VisitsUseCases(VisitsService):
         visits = self._visits.list(project)
         if any(v.get("deployment_id") == deployment_id for v in visits):
             return True
-        return any(d["deployment_id"] == deployment_id for d in self._deployments.deployments(visits, True))
+        return any(d["deployment_id"] == deployment_id for d in visit_deployments.deployments(visits, True))
 
 
 __all__ = ["VisitsError", "VisitsUseCases", "save_lock", "with_location_coordinates"]

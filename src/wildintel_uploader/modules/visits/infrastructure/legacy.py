@@ -1,7 +1,6 @@
-"""The ports of the visits over the code of before, as the rest of the app still keeps them: the visits in the folders of the research projects
-(local_folder_service), the catalog as dicts, the deployments the visits say (deployments), the history of the states (the catalog's), the
-file of visits (csv_file), where the deployments were uploaded (their folders, the settings of TRAPPER and Agouti), the reports. What they refuse
-is VisitsFailed, with their words. Each is moved into the module as the module that keeps it comes to be."""
+"""The adapters of the visits: the visits kept (KeptVisits), the catalog as records, the folders of the collections, the history of the states
+(the catalog's), the file of visits (csv_file), where the deployments were uploaded (the uploaders), the reports, the settings of FIELDLOG. What
+they refuse is VisitsFailed, with their words."""
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -14,7 +13,8 @@ from wildintel_uploader.modules.visits.domain.models import VisitsFailed
 from wildintel_uploader.modules.visits.domain.ports import (
     Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitFile, VisitReports, VisitRepository, VisitSettings,
 )
-from wildintel_uploader.modules.visits.infrastructure import kept_visits
+from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
+from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
 from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
@@ -32,56 +32,62 @@ def _failed() -> Iterator[None]:
 
 
 class StoredVisits(VisitRepository):
-    def __init__(self, root: Path) -> None:
-        self.root = root
+    """The visits kept (KeptVisits), what they refuse told as VisitsFailed."""
+
+    def __init__(self, kept: KeptVisits) -> None:
+        self._kept = kept
 
     def list(self, project: str, location_id: str | None = None) -> list[Visit]:
         with _failed():
-            return kept_visits.list_visits(self.root, project, location_id)
+            return self._kept.list(project, location_id)
 
     def add(self, project: str, visit: Visit) -> Visit:
         with _failed():
-            return kept_visits.write_visit(self.root, project, visit)
+            return self._kept.add(project, visit)
 
     def add_many(self, project: str, visits: list[Visit]) -> int:
         with _failed():
-            return kept_visits.write_visits(self.root, project, visits)
+            return self._kept.add_many(project, visits)
 
     def update(self, project: str, location_id: str, session: str, visit: Visit) -> Visit:
         with _failed():
-            return kept_visits.update_visit(self.root, project, location_id, session, visit)
+            return self._kept.update(project, location_id, session, visit)
 
     def unknown(self, project: str) -> list[Visit]:
         with _failed():
-            return kept_visits.list_unknown(self.root, project)
+            return self._kept.unknown(project)
 
     def kept_count(self, project: str) -> int:
         with _failed():
-            return len(kept_visits._raw_visits(self.root, project))
+            return self._kept.kept_count(project)
 
     def replace_all(self, project: str, visits: list[Visit]) -> None:
         with _failed():
-            kept_visits.replace_visits(self.root, project, visits)
+            self._kept.replace_all(project, visits)
 
     def add_unknown(self, project: str, unknown: list[Visit]) -> int:
         with _failed():
-            return kept_visits.write_unknown(self.root, project, unknown)
+            return self._kept.add_unknown(project, unknown)
 
     def planned_revisions(self, project: str) -> list[str]:
         with _failed():
-            return kept_visits.list_planned_revisions(self.root, project)
+            return self._kept.planned_revisions(project)
 
     def plan_revision(self, project: str, session: str) -> str:
         with _failed():
-            return kept_visits.plan_revision(self.root, project, session)
+            return self._kept.plan_revision(project, session)
 
     def closed(self, project: str) -> list[dict]:
         with _failed():
-            return kept_visits.closed_visits(self.root, project)
+            return self._kept.closed(project)
 
     def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit:
         with _failed():
-            return kept_visits.link_visit(self.root, project, location_id, date, time, deployment_id)
+            return self._kept.link(project, location_id, date, time, deployment_id)
+
+    def write_states(self, project: str, states: dict) -> int:
+        with _failed():
+            return self._kept.write_states(project, states)
 
 
 class CatalogOfTheVisits(VisitCatalog):
@@ -133,35 +139,15 @@ class StoredStateHistory(StateHistory):
         return because(reason, day, why)
 
 
-class DeploymentsOfTheVisits(VisitDeployments):
-    def __init__(self, root: Path) -> None:
-        self.root = root
+class CollectionFolders(VisitDeployments):
+    """The folders of the collections, as the deployments make them — their contract: the layout of the collections."""
 
-    @staticmethod
-    def _vd():
-        from wildintel_uploader.modules.visits.infrastructure import deployments
-        return deployments
+    def __init__(self, root: Path, layout: Callable[[], CollectionLayout]) -> None:
+        self.root, self._layout = root, layout
 
-    def refresh_states(self, project: str, keep_seconds: bool) -> None:
+    def make_collection(self, project: str, collection: str) -> None:
         with _failed():
-            self._vd().refresh_states(self.root, project, keep_seconds)
-
-    def locked(self, visits: list[Visit], keep_seconds: bool) -> set:
-        return self._vd().locked(visits, keep_seconds)
-
-    def make_collection_folders(self, project: str, visits: list[Visit], new: list[Visit], keep_seconds: bool) -> dict:
-        with _failed():
-            vd = self._vd()
-            return vd.make_collection_folders(self.root, project, vd.collections_of(visits, new, keep_seconds), keep_seconds)
-
-    def deployments(self, visits: list[Visit], keep_seconds: bool) -> list[dict]:
-        return self._vd().deployments(visits, keep_seconds)
-
-    def book(self, visits: list[Visit], keep_seconds: bool, locations: list[dict] | None, unknown: list[Visit], planned: list[str]) -> list[dict]:
-        return self._vd().visit_book(visits, keep_seconds, locations, unknown, planned)
-
-    def merged_details(self, visit: Visit, end: Visit) -> dict:
-        return self._vd().merged_details(visit, end)
+            self._layout().write_collection_metadata(self.root / project / collection, collection)
 
 
 class CsvVisitFile(VisitFile):

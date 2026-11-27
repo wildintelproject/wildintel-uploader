@@ -229,7 +229,7 @@ def test_the_batteries_and_the_card_are_two_fields_and_a_visit_kept_with_one_is_
 def test_a_visit_points_to_its_camera_by_id_and_what_the_camera_is_is_the_records(tmp_path: Path, people):
     """#231: the visit says only which camera it was — kept as the id of its record, told by its label —; its make, model and serial number are the record's,
     not kept in the visit, and the deployment gets them copied: the serial number as cameraID, make-model as cameraModel."""
-    from wildintel_uploader.modules.visits.infrastructure import deployments as visit_deployments
+    from wildintel_uploader.modules.visits.domain import deployments as visit_deployments
     _project(tmp_path)
     svc.write_field_items(tmp_path, "DONA", "cameras", [{"label": "CAM-1", "camera_id": "BR1", "camera_make": "Browning", "camera_model": "BTC-6DCL"}])
     # named by its serial number, with the model the field wrote: the record is found, and neither is kept

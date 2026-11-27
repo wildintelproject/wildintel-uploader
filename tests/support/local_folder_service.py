@@ -1,6 +1,6 @@
 """The names of before of what the collections folder holds, for the code that still calls them — each now of its module (#248): the catalog as
 records (tests.support.catalog_records, over modules.catalog), how a collection holds its deployments (modules.deployments.infrastructure.collections), the
-visits kept (modules.visits.infrastructure.kept_visits), the upload failures (modules.uploaders.infrastructure.failures) and why a status can't be
+visits kept (modules.visits.infrastructure.kept_visits.KeptVisits), the upload failures (modules.uploaders.infrastructure.failures) and why a status can't be
 set by hand (modules.visits.domain.refusals). Nothing is decided here."""
 from __future__ import annotations
 
@@ -16,11 +16,71 @@ from wildintel_uploader.modules.deployments.infrastructure.collections import ( 
 from wildintel_uploader.modules.visits.domain.refusals import camera_status_refusal as _camera_status_refusal  # noqa: F401
 from wildintel_uploader.modules.visits.domain.refusals import card_status_refusal as _card_status_refusal  # noqa: F401
 from wildintel_uploader.modules.visits.domain.refusals import site_status_refusal
-from wildintel_uploader.modules.visits.infrastructure.kept_visits import (  # noqa: F401
-    _CALLED, _POINTS_TO, _kept, _linked, _raw_visits, _refs, _Refs, _site, _told, _unlinked, _write_raw_visits, _write_unknown, camera_model_of,
-    closed_visits, closes_collection, link_visit, list_planned_revisions, list_unknown, list_visits, plan_revision, replace_visits, update_visit,
-    write_states, write_unknown, write_visit, write_visits,
-)
+from wildintel_uploader.modules.visits.domain.references import camera_model_of  # noqa: F401
+from wildintel_uploader.modules.visits.domain.rules import closes_collection  # noqa: F401
+
+
+def _kept_visits(root: Path):
+    """The visits kept in this collections folder, as the app keeps them (modules.visits.infrastructure.kept_visits.KeptVisits)."""
+    from wildintel_uploader.entrypoints.wiring import catalog_of
+    from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
+    return KeptVisits(root, lambda: catalog_of(root).records())
+
+
+def _raw_visits(root: Path, research_project_id: str) -> list[dict]:
+    return _kept_visits(root)._raw(research_project_id)
+
+
+def _write_raw_visits(root: Path, research_project_id: str, visits: list[dict]) -> None:
+    _kept_visits(root)._write_raw(research_project_id, visits)
+
+
+def list_visits(root: Path, research_project_id: str, location_id: str | None = None, trappers=None) -> list[dict]:
+    return _kept_visits(root).list(research_project_id, location_id, trappers)
+
+
+def write_visit(root: Path, research_project_id: str, visit: dict) -> dict:
+    return _kept_visits(root).add(research_project_id, visit)
+
+
+def write_visits(root: Path, research_project_id: str, new: list[dict]) -> int:
+    return _kept_visits(root).add_many(research_project_id, new)
+
+
+def update_visit(root: Path, research_project_id: str, location_id: str, session: str, visit: dict) -> dict:
+    return _kept_visits(root).update(research_project_id, location_id, session, visit)
+
+
+def replace_visits(root: Path, research_project_id: str, visits: list[dict]) -> None:
+    _kept_visits(root).replace_all(research_project_id, visits)
+
+
+def write_states(root: Path, research_project_id: str, states: dict) -> int:
+    return _kept_visits(root).write_states(research_project_id, states)
+
+
+def closed_visits(root: Path, research_project_id: str) -> list[dict]:
+    return _kept_visits(root).closed(research_project_id)
+
+
+def link_visit(root: Path, research_project_id: str, location_id: str, date: str, time: str, deployment_id: str) -> dict:
+    return _kept_visits(root).link(research_project_id, location_id, date, time, deployment_id)
+
+
+def list_unknown(root: Path, research_project_id: str) -> list[dict]:
+    return _kept_visits(root).unknown(research_project_id)
+
+
+def write_unknown(root: Path, research_project_id: str, new: list[dict]) -> int:
+    return _kept_visits(root).add_unknown(research_project_id, new)
+
+
+def list_planned_revisions(root: Path, research_project_id: str) -> list[str]:
+    return _kept_visits(root).planned_revisions(research_project_id)
+
+
+def plan_revision(root: Path, research_project_id: str, session: str) -> str:
+    return _kept_visits(root).plan_revision(research_project_id, session)
 
 
 def _site_status_refusal(root: Path, research_project_id: str, locations: list[dict], location: dict, wanted: str) -> str | None:

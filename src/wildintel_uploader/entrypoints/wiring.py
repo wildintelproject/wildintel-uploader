@@ -88,9 +88,10 @@ from wildintel_uploader.modules.uploaders.infrastructure.uploads import FolderUp
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
 from wildintel_uploader.modules.visits.infrastructure.legacy import (
-    AuditClock, CatalogOfTheVisits, CsvVisitFile, DeploymentsOfTheVisits, FieldlogInUse, SavedVisitReports, StoredStateHistory, UploadsOfTheUploaders,
+    AuditClock, CatalogOfTheVisits, CollectionFolders as VisitCollectionFolders, CsvVisitFile, FieldlogInUse, SavedVisitReports, StoredStateHistory, UploadsOfTheUploaders,
 )
-from wildintel_uploader.modules.visits.infrastructure.legacy import StoredVisits as KeptVisits
+from wildintel_uploader.modules.visits.infrastructure.legacy import StoredVisits as VisitsKept
+from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
 from wildintel_uploader.shared import storage
@@ -180,7 +181,9 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     """The visits of the research projects of a collections folder — the one of the settings by default —, over the code of before that keeps them."""
     root = collections_dir or catalog_collections_dir()
     settings = settings or build_settings()
-    return VisitsUseCases(KeptVisits(root), CatalogOfTheVisits(lambda: build_catalog(root, settings).records()), deployments=DeploymentsOfTheVisits(root), file=CsvVisitFile(),
+    records = lambda: build_catalog(root, settings).records()   # noqa: E731
+    return VisitsUseCases(VisitsKept(KeptVisits(root, records)), CatalogOfTheVisits(records),
+                          deployments=VisitCollectionFolders(root, lambda: build_deployments().layout()), file=CsvVisitFile(),
                           sources=build_sources(settings), uploads=UploadsOfTheUploaders(build_uploaders(root)), reports=SavedVisitReports(build_reports()), history=StoredStateHistory(),
                           settings=FieldlogInUse(config), clock=AuditClock())
 

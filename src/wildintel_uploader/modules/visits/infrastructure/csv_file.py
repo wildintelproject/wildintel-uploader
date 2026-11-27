@@ -12,7 +12,7 @@ import unicodedata
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from wildintel_uploader.modules.visits.infrastructure.plugs import config
+from wildintel_uploader.modules.visits.domain import created
 from wildintel_uploader.modules.visits.domain import rules as visit_rules, wall_clock as visit_time
 from wildintel_uploader.modules.visits.infrastructure.records import NewLocationRecord as LocationRecord, VisitRecord
 
@@ -935,8 +935,7 @@ def _new_camera(name: str, row: dict[str, str], cells: "CsvVisit | None" = None)
     """The camera a row creates (#231): called as the row calls it — its label, or its serial number when it gives only that —, with the serial number, the
     make and the model the row gives."""
     serial = (cells.camera_serial if cells is not None else None) or None
-    return config.Camera(label=name, camera_id=serial, camera_make=(cells.camera_make if cells is not None else None) or None,
-                         camera_model=row.get("camera_model") or None).model_dump(mode="json")
+    return created.new_camera(name, serial, (cells.camera_make if cells is not None else None) or None, row.get("camera_model") or None)
 
 
 def _complete_camera(record: dict, cells: "CsvVisit", completed: dict[str, dict], warnings: list[tuple[int, str]], n: int) -> None:
@@ -956,7 +955,7 @@ def _complete_camera(record: dict, cells: "CsvVisit", completed: dict[str, dict]
 
 def _new_card(label: str, row: dict[str, str]) -> dict:
     """The SD card a row creates: its id is its label, with the brand and the capacity of the row, when it has them."""
-    return config.SdCard(label=label, brand=row.get("sd_brand") or None, capacity=row.get("sd_capacity") or None).model_dump(mode="json")
+    return created.new_card(label, row.get("sd_brand") or None, row.get("sd_capacity") or None)
 
 
 def _first(exc: ValidationError) -> str:

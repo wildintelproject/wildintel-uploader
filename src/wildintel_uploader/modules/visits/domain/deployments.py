@@ -11,32 +11,14 @@ when it was collected, and the details of the camera and the site. When the visi
 a field, both are kept: a text as "Setup: … | Retrieval: …", the tags and groups of both together, and a number, a yes/no or a feature type as the setup says
 it with the retrieval's value noted in the comments.
 
-make_collection_folders() makes the folder of each collection the visits give deployments to, with its collection.json. No FileTimestampLog nor FieldworkLog
-is written any more (#213): the visits keep what they said.
-"""
+Plain Python. No FileTimestampLog nor FieldworkLog is written any more (#213): the visits keep what they said."""
 from __future__ import annotations
 
-import logging
 import re
-from pathlib import Path
 
-from wildintel_uploader.modules.visits.domain.rules import closes_collection
-from wildintel_uploader.modules.visits.infrastructure import kept_visits
 from wildintel_uploader.modules.visits.domain import rules as visit_rules
+from wildintel_uploader.modules.visits.domain.rules import closes_collection
 
-
-def _records(root: Path):
-    """The catalog of this collections folder as records — through its contract —, from where the app is put together."""
-    from wildintel_uploader.modules.visits.infrastructure import plugs
-    return plugs.catalog_of(root).records()
-
-
-def _layout():
-    """How a collection holds its deployments — the contract of the deployments —, from where the app is put together."""
-    from wildintel_uploader.modules.visits.infrastructure import plugs
-    return plugs.deployments().layout()
-
-logger = logging.getLogger(__name__)
 
 # The details of a visit that are Camtrap DP's: the field of the visit, how Camtrap DP names it, and what kind of value it is.
 _EXTRAS: list[tuple[str, str, str]] = [
@@ -47,17 +29,21 @@ _EXTRAS: list[tuple[str, str, str]] = [
 ]
 
 
+
 def session_number(session: str | None) -> int | None:
     m = re.search(r"\d+", session or "")
     return int(m.group(0)) if m else None
+
 
 
 def collection_name(number: int) -> str:
     return f"R{number:04d}"
 
 
+
 def _leaves_camera(v: dict) -> bool:
     return bool({"Installation", "Revision"} & set(v.get("actions") or []))
+
 
 
 def _camera_stays(v: dict) -> bool:
@@ -67,13 +53,16 @@ def _camera_stays(v: dict) -> bool:
     return "Installation" in actions or ("Revision" in actions and not {"Desinstallation", "Stolen"} & actions)
 
 
+
 def _not_revised(v: dict) -> bool:
     return str(v.get("camera_status") or "").lower() in visit_rules.NOT_REVISED
+
 
 
 def _text(value) -> str | None:
     text = str(value).strip() if value not in (None, "") else None
     return text or None
+
 
 
 def _both(setup, retrieval) -> str | None:
@@ -84,16 +73,19 @@ def _both(setup, retrieval) -> str | None:
     return f"Setup: {setup} | Retrieval: {retrieval}"
 
 
+
 def _list(value) -> list[str]:
     if isinstance(value, (list, tuple)):
         return [str(t).strip() for t in value if str(t).strip()]
     return [t.strip() for t in re.split(r"[|;,]", str(value or "")) if t.strip()]
 
 
+
 def _shown(value) -> str:
     if isinstance(value, bool):
         return "yes" if value else "no"
     return str(value)
+
 
 
 def _merged(start: dict, end: dict | None) -> tuple[dict, list[str]]:
@@ -120,6 +112,7 @@ def _merged(start: dict, end: dict | None) -> tuple[dict, list[str]]:
     return out, retrieval_notes
 
 
+
 def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
     """The Camtrap DP fields of a deployment from its visits — {Camtrap DP's name: value}, a list as its values apart by " | " — and the retrieval's notes."""
     merged, notes = _merged(start, end)
@@ -127,10 +120,12 @@ def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
     return {names[k]: (" | ".join(v) if isinstance(v, list) else v) for k, v in merged.items()}, notes
 
 
+
 def _camera_id(visit: dict) -> str | None:
     """The cameraID of the deployment a visit left (#231): the serial number of its camera, as its record says it, else what the visit calls it (its label).
     The deployment keeps it as it is then: it points to nothing."""
     return _text(visit.get("camera_serial")) or _text(visit.get("camera_id"))
+
 
 
 def merged_details(start: dict, end: dict | None) -> dict:
@@ -146,6 +141,7 @@ def merged_details(start: dict, end: dict | None) -> dict:
     return details
 
 
+
 def _comments(start: dict, end: dict | None, retrieval_notes: list[str]) -> str:
     """What both visits noted: "Setup: …" and "Retrieval: …", each only when it says something — the retrieval's with the values of its fields that could not
     be kept beside the setup's."""
@@ -158,12 +154,14 @@ def _comments(start: dict, end: dict | None, retrieval_notes: list[str]) -> str:
     return " | ".join(parts)
 
 
+
 def _utc(when: str | None, keep_seconds: bool = True) -> str:
     """An instant as ISO 8601 UTC with a Z — cut to the minute unless the seconds are kept."""
     if not when:
         return ""
     when = when if when.endswith("Z") else when.replace("+00:00", "Z")
     return when if keep_seconds else re.sub(r":\d{2}Z$", ":00Z", when)
+
 
 
 def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bool = True, no_images: str | None = None) -> dict:
@@ -180,6 +178,7 @@ def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bo
         "card_full": bool(end and end.get("card_status") == "CardFull"), "comments": _comments(start, end, notes), "fields": fields,
         "start_visit": start, "end_visit": end, "no_images": no_images,
     }
+
 
 
 def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
@@ -209,6 +208,7 @@ def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
     return sorted(out, key=lambda d: (d["collection"], d["site"].lower()))
 
 
+
 def visit_states(visits: list[dict], keep_seconds: bool = True) -> dict[tuple[str, str], str]:
     """The state of each visit, by its site (ignoring case) and its instant: not_visited (it could not be made); deployed, collected or stolen for the visit that left
     a camera — out there still, its card collected by a later visit, or the camera found stolen —; a visit that left none (it took the camera away, found it stolen or
@@ -227,11 +227,6 @@ def visit_states(visits: list[dict], keep_seconds: bool = True) -> dict[tuple[st
     return states
 
 
-def refresh_states(root: Path, research_project_id: str, keep_seconds: bool = True) -> int:
-    """Keeps the state of the visits of a research project — worked out from all of them: a visit that left a camera is deployed until a later visit collects its
-    card, and then it is collected (or stolen). Called when a visit is added and when one is given its deployment. Returns how many visits changed."""
-    return kept_visits.write_states(root, research_project_id, visit_states(kept_visits.list_visits(root, research_project_id), keep_seconds))
-
 
 def locked(visits: list[dict], keep_seconds: bool = True) -> set[tuple[str, str]]:
     """The visits that cannot be edited, found by their site (ignoring case) and their instant: those that start or close a deployment that is imported. The deployment is
@@ -242,6 +237,7 @@ def locked(visits: list[dict], keep_seconds: bool = True) -> set[tuple[str, str]
         if end and (start.get("deployment_id") or end.get("deployment_id")):
             out |= {(str(v["location_id"]).lower(), str(v.get("when") or "")) for v in (start, end)}
     return out
+
 
 
 def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[dict] | None = None, unknown: list[dict] | None = None, planned: list[str] | None = None) -> list[dict]:
@@ -283,6 +279,7 @@ def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[di
     return out
 
 
+
 def collections_of(visits: list[dict], new: list[dict], keep_seconds: bool = True) -> list[str]:
     """The collections whose deployments have one of the visits `new` (found by their instant and site) among their two — the ones a new visit changes."""
     keys = {(str(v.get("location_id", "")).lower(), v.get("when")) for v in new if v.get("when")}
@@ -292,27 +289,4 @@ def collections_of(visits: list[dict], new: list[dict], keep_seconds: bool = Tru
             if visit and (str(visit.get("location_id", "")).lower(), visit.get("when")) in keys:
                 found.add(d["collection"])
     return sorted(found)
-
-
-def make_collection_folders(root: Path, research_project_id: str, collections: list[str] | None = None, keep_seconds: bool = True) -> dict:
-    """Makes the folder of each collection the visits give deployments to (only the ones named, when `collections` is given), with its collection.json.
-
-    Returns {"collections": [{"collection", "closed", "open"}]}.
-
-    Raises:
-        LocalFolderError: the research project isn't kept in the collections folder.
-    """
-    _records(root).require_project(research_project_id)
-    visits = kept_visits.list_visits(root, research_project_id)
-    project = root / research_project_id
-    wanted = {c.upper() for c in collections} if collections is not None else None
-    by_collection: dict[str, list[dict]] = {}
-    for d in deployments(visits, keep_seconds):
-        if wanted is None or d["collection"] in wanted:
-            by_collection.setdefault(d["collection"], []).append(d)
-    result = []
-    for collection, items in sorted(by_collection.items()):
-        _layout().write_collection_metadata(project / collection, collection)   # the collection's folder, with its collection.json
-        result.append({"collection": collection, "closed": sum(d["status"] == "closed" for d in items), "open": sum(d["status"] == "open" for d in items)})
-    return {"collections": result}
 

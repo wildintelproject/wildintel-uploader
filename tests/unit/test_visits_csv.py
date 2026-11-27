@@ -104,7 +104,7 @@ def test_new_site_starts_existing_locations_and_does_not_create_unknown_visits_b
 
 
 def test_new_site_in_a_history_is_not_expected_in_earlier_revisions():
-    from wildintel_uploader.modules.visits.infrastructure import deployments as visit_deployments
+    from wildintel_uploader.modules.visits.domain import deployments as visit_deployments
     from wildintel_uploader.modules.visits.domain import rules as visit_rules
 
     locations = [{"location_id": "WICP_0001", "timezone": "UTC", "status": "active"},
