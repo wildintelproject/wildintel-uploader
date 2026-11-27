@@ -16,11 +16,11 @@ T = TypeVar("T")
 
 def describe(exc: BaseException) -> str:
     """What went wrong, for a person — the words the web API shows."""
-    from wildintel_uploader.modules.uploaders.infrastructure.trapper import as_uploader_error
+    from wildintel_uploader.entrypoints.wiring import error_words
     message = getattr(exc, "message", None)
     if isinstance(message, str) and message:
         return message
-    return as_uploader_error(exc).message if isinstance(exc, Exception) else (str(exc) or type(exc).__name__)
+    return error_words(exc) if isinstance(exc, Exception) else (str(exc) or type(exc).__name__)
 
 
 def fail(message: str, code: int = 1) -> typer.Exit:

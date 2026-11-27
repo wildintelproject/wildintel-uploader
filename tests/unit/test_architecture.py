@@ -62,3 +62,13 @@ def test_no_module_imports_the_entry_points(path: Path):
 def test_no_module_has_plugs():
     """No module's adapters are functions waiting to be given what they need: they are classes, given it when they are made."""
     assert sorted(SRC.glob("modules/*/infrastructure/plugs.py")) == [] and not (SRC / "shared" / "plugs.py").exists()
+
+
+@pytest.mark.parametrize("path", sorted(p for p in [*SRC.glob("entrypoints/**/*.py"), *SRC.glob("web/*.py")] if p.name not in ("wiring.py", "config.py")),
+                         ids=lambda p: str(p.relative_to(SRC)))
+def test_the_entry_points_take_of_a_module_its_contract_and_its_api_schemas_only(path: Path):
+    """What an entry point asks of a module is its contract (domain) and the models of its web API (infrastructure.api_schemas): the adapters
+    are chosen where the app is put together (entrypoints.wiring, and entrypoints.config for the settings), never by the entry points themselves."""
+    wrong = {i for i in _imports(path) if i.startswith("wildintel_uploader.modules.") and ".infrastructure" in i and not i.endswith(".infrastructure.api_schemas")}
+    assert not wrong, f"{path.name} imports {sorted(wrong)}"
+

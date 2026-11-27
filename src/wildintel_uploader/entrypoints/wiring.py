@@ -128,11 +128,22 @@ def build_reports(reports_dir: Path | None = None) -> ReportsService:
     return ReportsUseCases(ReportFiles(lambda: reports_dir or config.reports_dir()), ImagesOnDisk(), file_info())
 
 
+def app_log() -> AppActivityLog:
+    """The log of the app, in the log folder and at the level the settings say — what the entry points set up when they start."""
+    return AppActivityLog(config)
+
+
+def error_words(exc: Exception) -> str:
+    """What an error says to a person, as the web API tells it: TRAPPER's, the network's, or the words of what the modules refuse."""
+    from wildintel_uploader.modules.uploaders.infrastructure.trapper import as_uploader_error
+    return as_uploader_error(exc).message
+
+
 def build_settings(store: SettingsStore | None = None, *, activity_log: ActivityLog | None = None, machine: Machine | None = None,
                    record_storage: RecordStorage | None = None) -> SettingsService:
     """The settings: their use cases over the TOML files of the user's config folder, the log of the app, this computer and the backends of the
     records."""
-    return SettingsUseCases(store or config.settings_store(), config.default_data_dir(), activity_log=activity_log or AppActivityLog(config),
+    return SettingsUseCases(store or config.settings_store(), config.default_data_dir(), activity_log=activity_log or app_log(),
                             machine=machine or ThisMachine(), record_storage=record_storage or AppRecordStorage())
 
 
@@ -281,7 +292,7 @@ class SettingsProvider(Provider):
 
     @provide(scope=Scope.APP)
     def activity_log(self) -> ActivityLog:
-        return AppActivityLog(config)
+        return app_log()
 
     @provide(scope=Scope.APP)
     def machine(self) -> Machine:

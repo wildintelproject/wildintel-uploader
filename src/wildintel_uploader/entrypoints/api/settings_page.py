@@ -7,8 +7,6 @@ and roles of the research projects — it leaves to the module `modules.catalog`
 page has them. The rest of the settings is `entrypoints/api/settings.py`, and the rest of the catalog `entrypoints/api/catalog.py`."""
 from __future__ import annotations
 
-from dataclasses import replace
-
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 
@@ -18,12 +16,10 @@ from wildintel_uploader.modules.settings.domain import folders
 from wildintel_uploader.modules.settings.domain import models as domain
 from wildintel_uploader.modules.settings.domain.ports import SettingsService
 from wildintel_uploader.entrypoints import wiring
-from wildintel_uploader.modules.catalog.domain.models import Audit, CatalogError, Role
+from wildintel_uploader.modules.catalog.domain.models import CatalogError
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService, Fieldwork
-from wildintel_uploader.modules.catalog.infrastructure.mapping import (
-    equipment_from_record, equipment_to_record, role_to_record, trapper_from_record, trapper_to_record,
-)
-from wildintel_uploader.modules.settings.infrastructure.mapping import to_domain
+from wildintel_uploader.modules.catalog.infrastructure.api_schemas import fieldwork_saved, fieldwork_shown
+from wildintel_uploader.modules.settings.infrastructure.api_schemas import settings_of
 from wildintel_uploader.shared.storage import StorageError
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], route_class=DishkaSyncRoute)
@@ -58,19 +54,8 @@ def _shown(settings: config.Settings, service: SettingsService, fieldwork: Field
     """The settings as the page has them, and the field work of the catalog: the people, and the cameras, SD cards and roles of the research projects
     — with those versions before left in the settings, which wait there for their research project."""
     data = _public(settings, service)
-    data["FIELDWORK"]["trappers"] = [trapper_to_record(t) for t in fieldwork.trappers]
-    for kind in ("cameras", "sd_cards"):
-        data["FIELDWORK"][kind] = [{**equipment_to_record(i, kind), "research_project": p} for p, i in getattr(fieldwork, kind)]
-    data["FIELDWORK"]["roles"] = [{**{k: v for k, v in role_to_record(r).items() if k != "trapper_ref"}, "trapper": r.trapper, "research_project": p}
-                                  for p, r in fieldwork.roles if not r.deleted]
+    data["FIELDWORK"].update(fieldwork_shown(fieldwork))
     return data
-
-
-def _page_equipment(item, kind: str):
-    """A camera or an SD card as the page sends it: with the id it says — none for a new one, which the catalog gives."""
-    record = item.model_dump(mode="json")
-    found = equipment_from_record(record, kind, item.research_project or "")
-    return found if record.get("id") else replace(found, audit=Audit())
 
 
 def _follow_data_dir(old: config.Settings, new: config.Settings) -> None:
@@ -97,19 +82,14 @@ def save_settings(new: config.Settings, service: FromDishka[SettingsService]) ->
         if name not in new.DATA.model_fields_set:
             setattr(new.DATA, name, getattr(current.DATA, name))
     try:
-        service.check_settings(to_domain(new))      # before anything is written to the research projects
+        service.check_settings(settings_of(new))      # before anything is written to the research projects
     except domain.SettingsError as exc:
         raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
     _follow_data_dir(current, new)   # where the research projects are, for their field work
     catalog = wiring.build_catalog(_root(new), service)
     fieldwork = new.FIELDWORK
     try:
-        catalog.save_fieldwork(
-            [trapper_from_record({**t.model_dump(mode="json"), "id": t.id or None}) for t in fieldwork.trappers],
-            [(i.research_project, _page_equipment(i, "cameras")) for i in fieldwork.cameras],
-            [(i.research_project, _page_equipment(i, "sd_cards")) for i in fieldwork.sd_cards],
-            [(r.research_project, Role(trapper=r.trapper, role=r.role, audit=Audit(id=r.id))) for r in fieldwork.roles],
-        )
+        catalog.save_fieldwork(*fieldwork_saved(fieldwork))
     except (CatalogError, StorageError) as exc:
         raise HTTPException(422, getattr(exc, "message", str(exc))) from exc
     # what is of a research project that is not kept stays in the settings, to wait for it
@@ -119,7 +99,7 @@ def save_settings(new: config.Settings, service: FromDishka[SettingsService]) ->
     fieldwork.sd_cards = [i for i in fieldwork.sd_cards if i.research_project not in known]
     fieldwork.roles = [r for r in fieldwork.roles if r.research_project not in known]
     try:
-        service.save_settings(to_domain(new))
+        service.save_settings(settings_of(new))
     except domain.SettingsError as exc:
         raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
     return _shown(config.load_settings(), service, catalog.fieldwork())

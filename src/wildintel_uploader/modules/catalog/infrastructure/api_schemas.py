@@ -3,7 +3,7 @@
 there, a number in its range, a timezone that is one —; the rules of the records are the domain's.
 
 The models of the research projects and the locations are those the pages of before send, with their fields and their checks as they were, so that
-the API did not change."""
+the API did not change. And the field work as the settings page shows it and sends it (`entrypoints/api/settings_page.py`)."""
 from __future__ import annotations
 
 from typing import Literal, Optional
@@ -11,7 +11,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from wildintel_uploader.modules.catalog.domain.models import Audit, Trapper, is_utc
+from dataclasses import replace
+
+from wildintel_uploader.modules.catalog.domain.models import Audit, Role, Trapper, is_utc
+from wildintel_uploader.modules.catalog.domain.ports import Fieldwork
+from wildintel_uploader.modules.catalog.infrastructure.mapping import (
+    equipment_from_record, equipment_to_record, role_to_record, trapper_from_record, trapper_to_record,
+)
 
 
 # ── the research projects and the locations, as the pages of before send them ──
@@ -235,3 +241,31 @@ class RebuildStatusHistoryRequest(BaseModel):
 
 class DefaultResearchProjectRequest(BaseModel):
     acronym: str
+
+
+# ── the field work as the settings page has it: the people, and the cameras, SD cards and roles of the research projects ──
+
+def fieldwork_shown(fieldwork: Fieldwork) -> dict:
+    """The field work of the catalog as the page shows it, each item with its research project."""
+    return {
+        "trappers": [trapper_to_record(t) for t in fieldwork.trappers],
+        **{kind: [{**equipment_to_record(i, kind), "research_project": p} for p, i in getattr(fieldwork, kind)] for kind in ("cameras", "sd_cards")},
+        "roles": [{**{k: v for k, v in role_to_record(r).items() if k != "trapper_ref"}, "trapper": r.trapper, "research_project": p}
+                  for p, r in fieldwork.roles if not r.deleted],
+    }
+
+
+def _page_equipment(item, kind: str):
+    """A camera or an SD card as the page sends it: with the id it says — none for a new one, which the catalog gives."""
+    record = item.model_dump(mode="json")
+    found = equipment_from_record(record, kind, item.research_project or "")
+    return found if record.get("id") else replace(found, audit=Audit())
+
+
+def fieldwork_saved(page) -> tuple[list, list, list, list]:
+    """The field work the page sends (the FIELDWORK section of the settings), as the catalog saves it: the people, and the cameras, SD cards and
+    roles each with its research project."""
+    return ([trapper_from_record({**t.model_dump(mode="json"), "id": t.id or None}) for t in page.trappers],
+            [(i.research_project, _page_equipment(i, "cameras")) for i in page.cameras],
+            [(i.research_project, _page_equipment(i, "sd_cards")) for i in page.sd_cards],
+            [(r.research_project, Role(trapper=r.trapper, role=r.role, audit=Audit(id=r.id))) for r in page.roles])
