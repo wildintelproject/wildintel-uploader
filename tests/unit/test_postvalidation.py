@@ -19,13 +19,14 @@ def _postvalidation(info) -> PostvalidationUseCases:
 
 def test_the_registry_has_each_validator_once_and_says_those_of_the_visit():
     keys = [v.key for v in validators.VALIDATORS]
-    assert len(set(keys)) == 8 and [v.key for v in validators.VALIDATORS if v.of_the_visit] == ["sd_card", "photo_count"]
+    assert len(set(keys)) == 11 and [v.key for v in validators.VALIDATORS if v.of_the_visit] == ["sd_card", "photo_count"]
+    assert keys[-3:] == ["image_count", "sequence_count", "sequence_length"] and all(v.statistical for v in validators.VALIDATORS[-3:])
     assert all(v.label and v.description for v in validators.VALIDATORS)
 
 
 def test_the_settings_know_the_checks_of_the_validators():
     from wildintel_uploader.modules.postvalidation.domain import settings
-    assert {v.key for v in validators.VALIDATORS} <= set(settings.DEPLOYMENT_CHECKS)
+    assert {v.key for v in validators.VALIDATORS} == set(settings.DEPLOYMENT_CHECKS)
 
 
 def test_the_checks_asked_for_run_in_their_order(tmp_path: Path):

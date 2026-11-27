@@ -13,6 +13,8 @@ from fastapi.staticfiles import StaticFiles
 
 from wildintel_uploader.entrypoints import wiring
 from wildintel_uploader.entrypoints.api import catalog as catalog_entrypoint
+from wildintel_uploader.entrypoints.api import postvalidation as postvalidation_entrypoint
+from wildintel_uploader.entrypoints.api import prevalidation as prevalidation_entrypoint
 from wildintel_uploader.entrypoints.api import settings as settings_entrypoint
 from wildintel_uploader.entrypoints.api import sources as sources_entrypoint
 from wildintel_uploader.entrypoints.api import visits as visits_entrypoint
@@ -32,7 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, catalog_entrypoint.settings_router, trapper.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, statistics.router, sources_entrypoint.router, visits_entrypoint.router, timefix.router, backup.router]:
+for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, catalog_entrypoint.settings_router, trapper.router, prevalidation_entrypoint.router, postvalidation_entrypoint.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, statistics.router, sources_entrypoint.router, visits_entrypoint.router, timefix.router, backup.router]:
     app.include_router(_router)
 
 

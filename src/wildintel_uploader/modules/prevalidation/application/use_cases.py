@@ -8,15 +8,17 @@ from pathlib import Path
 from wildintel_uploader.modules.fileinfo.domain.folder import MediaFolder, ParallelMap, Progress
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 from wildintel_uploader.modules.prevalidation.domain.models import ImageOptions, PrevalidationError
-from wildintel_uploader.modules.prevalidation.domain.ports import OnCheck, PrevalidationService
+from wildintel_uploader.modules.prevalidation.domain.ports import ImportedImages, OnCheck, PrevalidationReports, PrevalidationService, PrevalidationSettings
 from wildintel_uploader.modules.prevalidation.domain.validators import ImageValidator
 
 
 class PrevalidationUseCases(PrevalidationService):
     """Over the validators it is given (infrastructure/validators, put together in wiring), in their order."""
 
-    def __init__(self, info: FileInfoService, pmap: ParallelMap, validators: tuple[type[ImageValidator], ...]) -> None:
+    def __init__(self, info: FileInfoService, pmap: ParallelMap, validators: tuple[type[ImageValidator], ...], *, imported: ImportedImages | None = None,
+                 settings: PrevalidationSettings | None = None, reports: PrevalidationReports | None = None) -> None:
         self._info, self._pmap, self._validators = info, pmap, validators
+        self._imported, self._settings, self._reports = imported, settings, reports
 
     def validators(self, keys: frozenset[str] | None = None) -> list[ImageValidator]:
         return [v() for v in self._validators if keys is None or v.key in keys]
@@ -39,3 +41,14 @@ class PrevalidationUseCases(PrevalidationService):
             if on_check:
                 on_check(validator.key, "done")
         return result
+
+    def check_folder(self, folder: Path, checks: frozenset[str] | None = None, *, research_project_id: str | None = None,
+                     deployment_id: str | None = None, progress: Progress | None = None, on_check: OnCheck | None = None) -> dict:
+        imported = None
+        if research_project_id and self._imported is not None and (checks is None or "duplicates" in checks):
+            imported = self._imported.source_hashes(research_project_id, deployment_id)
+        settings = self._settings.current() if self._settings is not None else None
+        result = self.validate(folder, self.validators(checks), detail=True, imported=imported, progress=progress,
+                               exif_fields=list(settings.exif_fields) if settings else None,
+                               camera_levels=[list(level) for level in settings.camera_levels] if settings else None, on_check=on_check)
+        return {**result, "report_id": self._reports.validation(result, folder, checks) if self._reports is not None else None}

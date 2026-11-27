@@ -10,8 +10,10 @@ from wildintel_uploader.modules.postvalidation.infrastructure.validators.deploym
 from wildintel_uploader.modules.postvalidation.infrastructure.validators.location import LocationOfTheId
 from wildintel_uploader.modules.postvalidation.infrastructure.validators.photo_count import PhotoCount
 from wildintel_uploader.modules.postvalidation.infrastructure.validators.sd_card import SdCardOfTheVisit
+from wildintel_uploader.modules.postvalidation.infrastructure.validators.statistics import ImageCount, SequenceCount, SequenceLength
 from wildintel_uploader.modules.postvalidation.infrastructure.validators.time_range import TimeRange
 
 VALIDATORS: tuple[type[DeploymentValidator], ...] = (
     DeploymentId, CollectionPrefix, CollectionName, LocationOfTheId, TimeRange, CameraOfTheDeployment, SdCardOfTheVisit, PhotoCount,
+    ImageCount, SequenceCount, SequenceLength,
 )

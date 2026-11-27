@@ -27,6 +27,7 @@ class Deployment:
     start_date: str | None = None
     end_date: str | None = None
     camera_model: str | None = None
+    camera_id: str | None = None             # the label of its camera in the catalog
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,10 @@ class DeploymentContext:
     visit: dict | None = None
     camera: dict | None = None
     camera_levels: list[list[str]] = field(default_factory=lambda: [list(level) for level in DEFAULT_CAMERA_LEVELS])
+    # the research project whose collections hold the previous revisions of the location, and what the statistical checks mean by a sequence and
+    # by similar: {"sequence_gap_seconds", "min_revisions", "method", "<check>_tolerance": percent}
+    research_project_id: str | None = None
+    statistics: dict | None = None
 
 
 def ok(message: str) -> dict:

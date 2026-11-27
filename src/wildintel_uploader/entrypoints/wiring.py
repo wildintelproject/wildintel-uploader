@@ -35,6 +35,7 @@ from wildintel_uploader.modules.fileinfo.infrastructure.store import SqliteStore
 from wildintel_uploader.modules.postvalidation.application.use_cases import PostvalidationUseCases
 from wildintel_uploader.modules.postvalidation.domain.ports import PostvalidationService
 from wildintel_uploader.modules.postvalidation.infrastructure import validators as deployment_validators
+from wildintel_uploader.modules.postvalidation.infrastructure.legacy import CatalogCameras, LevelsInUse, SavedPostvalidationReports
 from wildintel_uploader.modules.preprocessing.application.use_cases import PreprocessingUseCases
 from wildintel_uploader.modules.preprocessing.domain.ports import PreprocessingService
 from wildintel_uploader.modules.preprocessing.infrastructure import steps as preprocessing_steps
@@ -42,6 +43,7 @@ from wildintel_uploader.modules.preprocessing.infrastructure.folders import Coll
 from wildintel_uploader.modules.prevalidation.application.use_cases import PrevalidationUseCases
 from wildintel_uploader.modules.prevalidation.domain.ports import PrevalidationService
 from wildintel_uploader.modules.prevalidation.infrastructure import validators as image_validators
+from wildintel_uploader.modules.prevalidation.infrastructure.legacy import PreprocessedImages, SavedValidationReports, ValidationInUse
 from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
 from wildintel_uploader.modules.sources.application.use_cases import SourcesUseCases
 from wildintel_uploader.modules.sources.domain.ports import SourcesService
@@ -98,12 +100,14 @@ def file_info() -> FileInfoService:
 
 def build_prevalidation(info: FileInfoService | None = None) -> PrevalidationService:
     """The prevalidation: the validators of the images over what is known of the files, the images gone through in parallel."""
-    return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS)
+    return PrevalidationUseCases(info or file_info(), parallel.pmap, image_validators.VALIDATORS, imported=PreprocessedImages(), settings=ValidationInUse(),
+                                 reports=SavedValidationReports())
 
 
 def build_postvalidation(info: FileInfoService | None = None) -> PostvalidationService:
     """The postvalidation: the validators of a deployment over its images and what is known of them."""
-    return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS)
+    return PostvalidationUseCases(info or file_info(), parallel.pmap, deployment_validators.VALIDATORS, cameras=CatalogCameras(), levels=LevelsInUse(),
+                                  reports=SavedPostvalidationReports())
 
 
 def build_preprocessing(info: FileInfoService | None = None) -> PreprocessingService:

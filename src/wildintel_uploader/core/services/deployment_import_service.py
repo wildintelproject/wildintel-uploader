@@ -409,8 +409,8 @@ def with_timezone(local_iso: str | None, tz_name: str) -> str | None:
 
 # The checks of a deployment (modules.postvalidation): those that need what the wizard knows of it, and those against the visit it
 # is of — only in the wizard, where that visit is known —, in the order they run.
-DEPLOYMENT_CHECK_ORDER = tuple(c.key for c in _deployment_validators.VALIDATORS)
-DEPLOYMENT_CHECKS = frozenset(c.key for c in _deployment_validators.VALIDATORS if not c.of_the_visit)
+DEPLOYMENT_CHECK_ORDER = tuple(c.key for c in _deployment_validators.VALIDATORS if not c.statistical)
+DEPLOYMENT_CHECKS = frozenset(c.key for c in _deployment_validators.VALIDATORS if not c.of_the_visit and not c.statistical)
 VISIT_CHECKS = frozenset(c.key for c in _deployment_validators.VALIDATORS if c.of_the_visit)
 DEFAULT_TOLERANCE_HOURS = _post.DEFAULT_TOLERANCE_HOURS
 
@@ -435,7 +435,9 @@ def validate_deployment_consistency(
     )
     try:
         postvalidation = _wiring().build_postvalidation()
-        return postvalidation.validate(source_dir, context, postvalidation.validators(checks), on_check=on_check)
+        # the statistical checks are run apart, by statistics_service, as they always were here
+        wanted = [v for v in postvalidation.validators(checks) if not v.statistical]
+        return postvalidation.validate(source_dir, context, wanted, on_check=on_check)
     except _post.PostvalidationError as exc:
         raise DeploymentImportError(str(exc)) from exc
 
