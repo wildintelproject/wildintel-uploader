@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
 
 from wildintel_uploader.modules.visits.domain.models import ImportOptions
-from wildintel_uploader.modules.visits.domain.shapes import Camera, Location, SdCard, Trapper, UnknownVisit, Visit  # noqa: F401 — the shapes the visits work with
+from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedVisit, Location, SdCard, Trapper, UnknownVisit, Visit  # noqa: F401 — the shapes the visits work with
 
 
 
@@ -67,7 +67,7 @@ class VisitsService(ABC):
         """The columns of a CSV, whether it is the form, a few rows, the fields of a visit and the column that most likely gives each."""
 
     @abstractmethod
-    def closed(self, project: str) -> list[Visit]:
+    def closed(self, project: str) -> list[ClosedVisit]:
         """The visits that closed a deployment not imported yet, with the visit that started it and its details."""
 
     @abstractmethod
@@ -124,7 +124,7 @@ class VisitRepository(ABC):
     def plan_revision(self, project: str, session: str) -> str: ...
 
     @abstractmethod
-    def closed(self, project: str) -> list[Visit]:
+    def closed(self, project: str) -> list[ClosedVisit]:
         """{"visit", "end"} of each deployment closed and not imported yet."""
 
     @abstractmethod

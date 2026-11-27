@@ -11,7 +11,7 @@ from wildintel_uploader.modules.visits.infrastructure import catalog_view as vie
 from wildintel_uploader.modules.visits.domain import references as refs_of
 from wildintel_uploader.modules.visits.domain.references import Refs
 from wildintel_uploader.shared import audit, storage
-from wildintel_uploader.modules.visits.domain.shapes import Location, UnknownVisit, Visit
+from wildintel_uploader.modules.visits.domain.shapes import ClosedVisit, Location, UnknownVisit, Visit
 
 
 class KeptVisits:
@@ -124,7 +124,7 @@ class KeptVisits:
             self._write_raw(project, raw)
         return changed
 
-    def closed(self, project: str) -> list[Visit]:
+    def closed(self, project: str) -> list[ClosedVisit]:
         return refs_of.closed(self.list(project))
 
     def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit:

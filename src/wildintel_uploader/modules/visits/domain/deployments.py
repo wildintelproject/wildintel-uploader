@@ -18,6 +18,7 @@ import re
 
 from wildintel_uploader.modules.visits.domain import rules as visit_rules
 from wildintel_uploader.modules.visits.domain.rules import closes_collection
+from wildintel_uploader.modules.visits.domain.shapes import Location, UnknownVisit, Visit
 
 
 # The details of a visit that are Camtrap DP's: the field of the visit, how Camtrap DP names it, and what kind of value it is.
@@ -41,12 +42,12 @@ def collection_name(number: int) -> str:
 
 
 
-def _leaves_camera(v: dict) -> bool:
+def _leaves_camera(v: Visit) -> bool:
     return bool({"Installation", "Revision"} & set(v.get("actions") or []))
 
 
 
-def _camera_stays(v: dict) -> bool:
+def _camera_stays(v: Visit) -> bool:
     """Whether a camera is left out after the visit: one put up (an Installation — also when the visit found the other stolen, or took it away), or the one that
     was there and stays (a Revision that does not take it away nor finds it stolen)."""
     actions = set(v.get("actions") or [])
@@ -54,7 +55,7 @@ def _camera_stays(v: dict) -> bool:
 
 
 
-def _not_revised(v: dict) -> bool:
+def _not_revised(v: Visit) -> bool:
     return str(v.get("camera_status") or "").lower() in visit_rules.NOT_REVISED
 
 
@@ -88,7 +89,7 @@ def _shown(value) -> str:
 
 
 
-def _merged(start: dict, end: dict | None) -> tuple[dict, list[str]]:
+def _merged(start: Visit, end: Visit | None) -> tuple[dict, list[str]]:
     """The details of a deployment from its visits, by the name the visit gives them (camera_model, tags…): the ones both visits say are put together,
     and the retrieval's values that could not be kept beside the setup's come back as notes for the comments."""
     out: dict[str, object] = {}
@@ -113,7 +114,7 @@ def _merged(start: dict, end: dict | None) -> tuple[dict, list[str]]:
 
 
 
-def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
+def _fields(start: Visit, end: Visit | None) -> tuple[dict, list[str]]:
     """The Camtrap DP fields of a deployment from its visits — {Camtrap DP's name: value}, a list as its values apart by " | " — and the retrieval's notes."""
     merged, notes = _merged(start, end)
     names = {key: name for key, name, _ in _EXTRAS}
@@ -121,14 +122,14 @@ def _fields(start: dict, end: dict | None) -> tuple[dict, list[str]]:
 
 
 
-def _camera_id(visit: dict) -> str | None:
+def _camera_id(visit: Visit) -> str | None:
     """The cameraID of the deployment a visit left (#231): the serial number of its camera, as its record says it, else what the visit calls it (its label).
     The deployment keeps it as it is then: it points to nothing."""
     return _text(visit.get("camera_serial")) or _text(visit.get("camera_id"))
 
 
 
-def merged_details(start: dict, end: dict | None) -> dict:
+def merged_details(start: Visit, end: Visit | None) -> dict:
     """What the two visits of a deployment say of it, as the fields of the form of a deployment have them — the same mix the FieldworkLog gets: who set it up
     (the setup's, with the retrieval's beside when it differs), the camera, the details of the camera and the site, the tags of both, and the comments of
     both as "Setup: … | Retrieval: …". Only the fields they say something of."""
@@ -142,7 +143,7 @@ def merged_details(start: dict, end: dict | None) -> dict:
 
 
 
-def _comments(start: dict, end: dict | None, retrieval_notes: list[str]) -> str:
+def _comments(start: Visit, end: Visit | None, retrieval_notes: list[str]) -> str:
     """What both visits noted: "Setup: …" and "Retrieval: …", each only when it says something — the retrieval's with the values of its fields that could not
     be kept beside the setup's."""
     parts = []
@@ -164,7 +165,7 @@ def _utc(when: str | None, keep_seconds: bool = True) -> str:
 
 
 
-def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bool = True, no_images: str | None = None) -> dict:
+def _deployment(collection: int, start: Visit, end: Visit | None, keep_seconds: bool = True, no_images: str | None = None) -> dict:
     """A deployment from the visit that left the camera and, once it is collected, the one that collected it. When the camera was stolen the visit that found it
     so closes the deployment, but nothing was collected: `no_images` says why there are none ("stolen"), and there never will be."""
     fields, notes = _fields(start, end)
@@ -181,9 +182,9 @@ def _deployment(collection: int, start: dict, end: dict | None, keep_seconds: bo
 
 
 
-def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
+def deployments(visits: list[Visit], keep_seconds: bool = True) -> list[dict]:
     """Every deployment the visits say, closed and open, by collection and site — their start and end cut to the minute unless the seconds are kept."""
-    by_site: dict[str, list[dict]] = {}
+    by_site: dict[str, list[Visit]] = {}
     for v in visits:
         if v.get("when") and not _not_revised(v):
             by_site.setdefault(str(v["location_id"]).lower(), []).append(v)
@@ -209,7 +210,7 @@ def deployments(visits: list[dict], keep_seconds: bool = True) -> list[dict]:
 
 
 
-def visit_states(visits: list[dict], keep_seconds: bool = True) -> dict[tuple[str, str], str]:
+def visit_states(visits: list[Visit], keep_seconds: bool = True) -> dict[tuple[str, str], str]:
     """The state of each visit, by its site (ignoring case) and its instant: not_visited (it could not be made); deployed, collected or stolen for the visit that left
     a camera — out there still, its card collected by a later visit, or the camera found stolen —; a visit that left none (it took the camera away, found it stolen or
     only archived the location) is no_camera: it leaves nothing to wait for."""
@@ -228,7 +229,7 @@ def visit_states(visits: list[dict], keep_seconds: bool = True) -> dict[tuple[st
 
 
 
-def locked(visits: list[dict], keep_seconds: bool = True) -> set[tuple[str, str]]:
+def locked(visits: list[Visit], keep_seconds: bool = True) -> set[tuple[str, str]]:
     """The visits that cannot be edited, found by their site (ignoring case) and their instant: those that start or close a deployment that is imported. The deployment is
     linked on the visit that left the camera — the one it belongs to — (or, as it was linked before, on the one that collected the card): either says it."""
     out = set()
@@ -240,7 +241,7 @@ def locked(visits: list[dict], keep_seconds: bool = True) -> set[tuple[str, str]
 
 
 
-def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[dict] | None = None, unknown: list[dict] | None = None, planned: list[str] | None = None) -> list[dict]:
+def visit_book(visits: list[Visit], keep_seconds: bool = True, locations: list[Location] | None = None, unknown: list[UnknownVisit] | None = None, planned: list[str] | None = None) -> list[dict]:
     """The visits as the visit book shows them, each with the deployment it started — `deployment` (its id) and `deployment_status` ("closed" once a later visit collected
     its card, "open" while the camera it left is still out) — and neither for a visit that left no camera.
 
@@ -280,7 +281,7 @@ def visit_book(visits: list[dict], keep_seconds: bool = True, locations: list[di
 
 
 
-def collections_of(visits: list[dict], new: list[dict], keep_seconds: bool = True) -> list[str]:
+def collections_of(visits: list[Visit], new: list[Visit], keep_seconds: bool = True) -> list[str]:
     """The collections whose deployments have one of the visits `new` (found by their instant and site) among their two — the ones a new visit changes."""
     keys = {(str(v.get("location_id", "")).lower(), v.get("when")) for v in new if v.get("when")}
     found = set()

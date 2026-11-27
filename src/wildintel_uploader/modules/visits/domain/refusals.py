@@ -3,9 +3,10 @@ a card in a camera, a visit still to be made. Plain Python, over the visits as t
 from __future__ import annotations
 
 from wildintel_uploader.modules.visits.domain import rules
+from wildintel_uploader.modules.visits.domain.shapes import Camera, Location, SdCard, UnknownVisit, Visit
 
 
-def site_status_refusal(visits: list[dict], unknown: list[dict], locations: list[dict], location: dict, wanted: str) -> str | None:
+def site_status_refusal(visits: list[Visit], unknown: list[UnknownVisit], locations: list[Location], location: Location, wanted: str) -> str | None:
     """Why the status of a site cannot be set by hand to `wanted` — None when it can. The visits say what is there: a camera that is out, and the visits still to be made."""
     site = str(location.get("location_id", ""))
     camera = rules.camera_at_site(visits, site, "9999-12-31T23:59:59Z")
@@ -23,7 +24,7 @@ def site_status_refusal(visits: list[dict], unknown: list[dict], locations: list
     return None
 
 
-def camera_status_refusal(camera: dict, wanted: str, visits: list[dict]) -> str | None:
+def camera_status_refusal(camera: Camera, wanted: str, visits: list[Visit]) -> str | None:
     """Why the status of a camera cannot be set by hand to `wanted` — None when it can. A camera is active when a visit puts it up at a site (an Installation): it cannot be made so by
     hand, and it cannot leave the field — back to ready, to planned, or archived — while it is put up: a visit takes it away (a Desinstallation) or finds it stolen first."""
     name = str(camera.get("label") or camera.get("camera_id") or "")
@@ -37,7 +38,7 @@ def camera_status_refusal(camera: dict, wanted: str, visits: list[dict]) -> str 
     return None
 
 
-def card_status_refusal(card: dict, wanted: str, visits: list[dict]) -> str | None:
+def card_status_refusal(card: SdCard, wanted: str, visits: list[Visit]) -> str | None:
     """Why the status of an SD card cannot be set by hand to `wanted` — None when it can. A card is active when a visit leaves it in a camera (an Installation, or a Revision that
     changes it): it cannot be made so by hand, and it cannot leave the field — back to ready, to planned, or archived — while it is in a camera: a visit collects it first."""
     name = str(card.get("label") or "")

@@ -4,14 +4,17 @@ the time of the wall clock of its location. A visit that points to what the rese
 it has it."""
 from __future__ import annotations
 
+from typing import Any
+
 from wildintel_uploader.modules.visits.domain import rules as visit_rules, wall_clock as visit_time
 from wildintel_uploader.shared import identity, ids
+from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedVisit, Location, SdCard, Trapper, UnknownVisit, Visit
 
 
 class Refs:
     """What the visits of a research project point to, by id and by what it is called: its locations, cameras and SD cards, and the trappers — those that were deleted too."""
 
-    def __init__(self, locations: list[dict], cameras: list[dict], sd_cards: list[dict], trappers: list[dict]):
+    def __init__(self, locations: list[Location], cameras: list[Camera], sd_cards: list[SdCard], trappers: list[Trapper]):
         self.locations = locations
         self.by_label: dict[str, dict[str, dict]] = {"location": {}, "camera": {}, "sd": {}, "trapper": {}}
         self.by_id: dict[str, dict[str, dict]] = {"location": {}, "camera": {}, "sd": {}, "trapper": {}}
@@ -24,7 +27,7 @@ class Refs:
         for t in trappers:
             self._add("trapper", t, [t.get("name"), t.get("username")])
 
-    def _add(self, kind: str, record: dict, labels: list) -> None:
+    def _add(self, kind: str, record: Any, labels: list) -> None:
         if record.get("id"):
             self.by_id[kind][record["id"]] = record
         for label in labels:
@@ -41,13 +44,13 @@ _CALLED = {
 }
 
 
-def camera_model_of(record: dict) -> str | None:
+def camera_model_of(record: Camera) -> str | None:
     """The model of a camera as Camtrap DP's cameraModel says it — the make and the model, make-model — from its record: the model alone when it has no make."""
     make, model = str(record.get("camera_make") or "").strip(), str(record.get("camera_model") or "").strip()
     return f"{make}-{model}" if make and model and not model.lower().startswith(make.lower()) else (model or None)
 
 
-def _what_the_camera_is(record: dict) -> dict:
+def _what_the_camera_is(record: Camera) -> dict:
     """What a visit tells of its camera from its record (#231): it only points to it (camera_ref), and what the camera is — its model as Camtrap DP says it and
     its serial number — is the record's, copied for whoever needs it (the deployment), never kept in the visit."""
     out: dict = {}
@@ -58,16 +61,16 @@ def _what_the_camera_is(record: dict) -> dict:
     return out
 
 
-def location_of(locations: list[dict], location_id) -> dict | None:
+def location_of(locations: list[Location], location_id) -> Location | None:
     return next((l for l in locations if str(l.get("location_id", "")).lower() == str(location_id or "").lower()), None)
 
 
-def site(visit: dict, refs: Refs) -> str:
+def site(visit: Visit, refs: Refs) -> str:
     """The site of a visit, as it is called — whether the visit is kept (by the id of its location) or told."""
     return str((refs.by_id["location"].get(visit.get("location_ref")) or {}).get("location_id") or visit.get("location_id") or "")
 
 
-def linked(visit: dict, refs: Refs) -> dict:
+def linked(visit: Visit, refs: Refs) -> Visit:
     """A visit with what it points to said by id: the location, the camera, the SD card and who went and set it up are the ones the research project has — if it has them —, so the
     visit says *which* — their ids — and not what they are called, which can be corrected. What it points to that the research project has not is kept as it was said, and is
     linked when it has it."""
@@ -95,7 +98,7 @@ def linked(visit: dict, refs: Refs) -> dict:
     return out
 
 
-def _link_camera(out: dict, refs: Refs) -> None:
+def _link_camera(out: Visit, refs: Refs) -> None:
     """The camera of a visit kept by the id of its record (#231): the one it already points to (camera_ref), else the one it names — by its label, or by its
     serial number when it says only that. Then what the camera is (its model, its serial number) is the record's, and is not kept in the visit — unless the
     record says no model, when the one the visit wrote is kept. A camera with no record is kept as it was said, and is linked when it has one."""
@@ -113,7 +116,7 @@ def _link_camera(out: dict, refs: Refs) -> None:
         out.pop("camera_model", None)
 
 
-def unlinked(visit: dict, refs: Refs) -> dict:
+def unlinked(visit: Visit, refs: Refs) -> Visit:
     """A visit as it is told: what it points to said by what it is called now — and its camera with the id of its record beside (camera_ref) and what the record
     says it is (#231)."""
     out = dict(visit)
@@ -132,7 +135,7 @@ def unlinked(visit: dict, refs: Refs) -> dict:
     return out
 
 
-def as_kept(visit: dict, refs: Refs) -> dict:
+def as_kept(visit: Visit, refs: Refs) -> Visit:
     """A visit as it is kept: the instant, ISO 8601 in UTC with a Z (`when`), and not the day and the time of the wall clock of its location; and what it points to said by id."""
     visit = two_fields(visit)
     if "status" in visit:   # kept before it was called camera_status
@@ -146,7 +149,7 @@ def as_kept(visit: dict, refs: Refs) -> dict:
     return linked(out, refs)
 
 
-def two_fields(visit: dict) -> dict:
+def two_fields(visit: Visit) -> Visit:
     """A visit kept with card_batteries_ok — one field for the batteries and the card — says each in a field of its own."""
     if "card_batteries_ok" not in visit:
         return visit
@@ -159,7 +162,7 @@ def two_fields(visit: dict) -> dict:
     return out
 
 
-def as_told(visit: dict, refs: Refs) -> dict:
+def as_told(visit: Visit, refs: Refs) -> Visit:
     """A visit as it is told: with the day and the time of the wall clock of its location, from its instant, beside it, and what it points to by what it is called. The card and
     the batteries are told as they are written now: a visit kept with SinPilas or CarFullSinPilas says NoBatteries or CarFullNoBatteries."""
     told = unlinked(visit, refs)
@@ -169,7 +172,7 @@ def as_told(visit: dict, refs: Refs) -> dict:
     return {**told, "date": date, "time": time}
 
 
-def with_the_camera_there(visits: list[dict]) -> list[dict]:
+def with_the_camera_there(visits: list[Visit]) -> list[Visit]:
     """The visits told with the camera they are of: a Revision, a Desinstallation or a Stolen visit does not say which camera — it is the one at its site, which the visit before says —,
     so it is told as that one (it is not kept: it would say twice what the visit that put it up says)."""
     out = [dict(v) for v in visits]
@@ -190,11 +193,11 @@ def with_the_camera_there(visits: list[dict]) -> list[dict]:
     return out
 
 
-def closed(visits: list[dict]) -> list[dict]:
+def closed(visits: list[Visit]) -> list[ClosedVisit]:
     """The visits that left a camera (an Installation or a Revision) whose card a later visit collected, and that have no deployment linked yet,
     newest first: {"visit", "end"} — the visit that left the camera and the next one at the same location, which collected the card. `visits` are
     told."""
-    by_location: dict[str, list[dict]] = {}
+    by_location: dict[str, list[Visit]] = {}
     for visit in visits:
         by_location.setdefault(str(visit.get("location_id", "")).lower(), []).append(visit)
     out = []
@@ -208,7 +211,7 @@ def closed(visits: list[dict]) -> list[dict]:
     return sorted(out, key=lambda c: (str(c["visit"].get("date")), str(c["visit"].get("time"))), reverse=True)
 
 
-def unknown_told(stored: list[dict], locations: list[dict]) -> list[dict]:
+def unknown_told(stored: list[UnknownVisit], locations: list[Location]) -> list[UnknownVisit]:
     """The unknown visits as they are told — {"location_id", "session"} —, from how they are kept (pointing to their location by id)."""
     where = {loc["id"]: loc for loc in locations if loc.get("id")}
     out = []
@@ -219,7 +222,7 @@ def unknown_told(stored: list[dict], locations: list[dict]) -> list[dict]:
     return out
 
 
-def unknown_kept(unknown: list[dict], locations: list[dict]) -> list[dict]:
+def unknown_kept(unknown: list[UnknownVisit], locations: list[Location]) -> list[UnknownVisit]:
     """The unknown visits as they are kept — each pointing to its location by id, when the research project has it."""
     where = {str(loc.get("location_id", "")).lower(): loc for loc in locations}
     out = []
@@ -229,7 +232,7 @@ def unknown_kept(unknown: list[dict], locations: list[dict]) -> list[dict]:
     return out
 
 
-def read_kept(raw: list[dict], refs: Refs, project: str) -> tuple[list[dict], list[dict]]:
+def read_kept(raw: list[Visit], refs: Refs, project: str) -> tuple[list[Visit], list[Visit]]:
     """The visits of a research project as they are kept, read: each moved to instants and to ids when it was kept otherwise (an earlier
     version), with an id of its own when it was kept before there were ids — the same one whenever it is read —; and the same visits told with
     the names of what they point to, the camera that is at each site said. (kept, told): what to write back when it changed, and what to show."""

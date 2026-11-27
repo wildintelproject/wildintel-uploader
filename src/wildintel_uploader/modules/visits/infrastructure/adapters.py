@@ -19,7 +19,7 @@ from wildintel_uploader.modules.visits.domain.ports import (
 )
 from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
-from wildintel_uploader.modules.visits.domain.shapes import Camera, Location, SdCard, Trapper
+from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedVisit, Location, SdCard, Trapper
 
 
 
@@ -81,7 +81,7 @@ class StoredVisits(VisitRepository):
         with _failed():
             return self._kept.plan_revision(project, session)
 
-    def closed(self, project: str) -> list[Visit]:
+    def closed(self, project: str) -> list[ClosedVisit]:
         with _failed():
             return self._kept.closed(project)
 

@@ -55,6 +55,23 @@ class Visit(TypedDict, total=False):
     deployment_groups: str | None
     comments: str | None
     tags: list[str]
+    card_batteries_ok: str | None     # kept by an earlier version: the batteries and the card in one field (see references.two_fields)
+
+
+class ClosedVisit(TypedDict):
+    """A visit that left a camera whose card a later visit collected — that later one, `end` —, with no deployment linked yet."""
+    visit: Visit
+    end: Visit
+
+
+class Whereabouts(TypedDict, total=False):
+    """Where a camera or an SD card is at a moment, as the visits before it say: the site, and the day and the revision of the visit that left it —
+    with what was left (`camera`, or the card's `label`) while it is being worked out."""
+    site: str
+    date: str
+    session: str | None
+    camera: str
+    label: str
 
 
 class UnknownVisit(TypedDict, total=False):
@@ -92,6 +109,9 @@ class Camera(TypedDict, total=False):
     camera_make: str | None
     camera_model: str | None
     status: str
+    status_date: str | None
+    status_note: str | None
+    archive_reason: str | None
     research_project: str
     deleted_at: str | None
 
@@ -103,6 +123,9 @@ class SdCard(TypedDict, total=False):
     brand: str | None
     capacity: str | None
     status: str
+    status_date: str | None
+    status_note: str | None
+    archive_reason: str | None
     research_project: str
     deleted_at: str | None
 
