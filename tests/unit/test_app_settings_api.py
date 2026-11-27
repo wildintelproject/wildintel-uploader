@@ -295,7 +295,7 @@ def test_the_collections_folder_can_be_opened_even_outside_the_data_folder(tmp_p
     elsewhere = tmp_path / "elsewhere"
     (elsewhere / "DONA").mkdir(parents=True)
     _put(DATA={"dir": str(tmp_path / "images"), "collections_dir": str(elsewhere)})
-    with patch("wildintel_uploader.web.api.routers.deployment_import._open_in_file_manager") as opened:
+    with patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager") as opened:
         assert _client().post("/api/deployment-import/open-folder", json={"path": str(elsewhere / "DONA")}).status_code == 200
         assert _client().post("/api/deployment-import/open-folder", json={"path": str(tmp_path)}).status_code == 400
     opened.assert_called_once()

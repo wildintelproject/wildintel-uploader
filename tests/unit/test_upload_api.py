@@ -271,7 +271,7 @@ def test_open_folder_opens_a_folder_inside_the_data_folder(tmp_path):
     inside = tmp_path / "collections" / "DONA"
     inside.mkdir(parents=True)
     with patch("wildintel_uploader.web.api.routers.deployment_import.config.data_dir", return_value=tmp_path), \
-            patch("wildintel_uploader.web.api.routers.deployment_import._open_in_file_manager") as opener:
+            patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager") as opener:
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(inside)})
     assert response.status_code == 200
     opener.assert_called_once_with(inside.resolve())
@@ -281,7 +281,7 @@ def test_open_folder_refuses_folders_outside_the_data_folder(tmp_path):
     data = tmp_path / "data"
     data.mkdir()
     with patch("wildintel_uploader.web.api.routers.deployment_import.config.data_dir", return_value=data), \
-            patch("wildintel_uploader.web.api.routers.deployment_import._open_in_file_manager") as opener:
+            patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager") as opener:
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(tmp_path)})
     assert response.status_code == 400
     opener.assert_not_called()
@@ -289,7 +289,7 @@ def test_open_folder_refuses_folders_outside_the_data_folder(tmp_path):
 
 def test_open_folder_404_when_missing(tmp_path):
     with patch("wildintel_uploader.web.api.routers.deployment_import.config.data_dir", return_value=tmp_path), \
-            patch("wildintel_uploader.web.api.routers.deployment_import._open_in_file_manager"):
+            patch("wildintel_uploader.entrypoints.api.desktop._open_in_file_manager"):
         response = _client().post("/api/deployment-import/open-folder", json={"path": str(tmp_path / "nope")})
     assert response.status_code == 404
 

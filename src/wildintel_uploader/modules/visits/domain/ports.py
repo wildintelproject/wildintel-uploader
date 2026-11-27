@@ -71,6 +71,10 @@ class VisitsService(ABC):
     def book(self, project: str, location_id: str | None = None) -> list[dict]:
         """The visit book: the visits, each with its deployment, and the locations not visited in a session."""
 
+    @abstractmethod
+    def has_deployment(self, project: str, deployment_id: str) -> bool:
+        """Whether a deployment is of a visit of the research project: linked to one already, or one the visits say."""
+
 
 # ── out: what the use cases are given ──
 

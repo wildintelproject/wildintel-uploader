@@ -383,5 +383,11 @@ class VisitsUseCases(VisitsService):
             visit["timezone"] = zones.get(str(visit.get("location_id", "")).lower())
         return book
 
+    def has_deployment(self, project: str, deployment_id: str) -> bool:
+        visits = self._visits.list(project)
+        if any(v.get("deployment_id") == deployment_id for v in visits):
+            return True
+        return any(d["deployment_id"] == deployment_id for d in self._deployments.deployments(visits, True))
+
 
 __all__ = ["VisitsError", "VisitsUseCases", "save_lock", "with_location_coordinates"]

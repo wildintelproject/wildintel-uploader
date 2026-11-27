@@ -236,7 +236,7 @@ def test_import_deployment_streams_progress_then_registers(tmp_path: Path):
     _keep_location(data_dir, timezone="Europe/Madrid")
 
     with patch("wildintel_uploader.core.services.trapper_service._client", return_value=fake_client), \
-         patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=data_dir), \
+         patch("wildintel_uploader.core.config.collections_dir", return_value=data_dir), \
          patch("wildintel_uploader.core.services.deployment_import_service.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/import", json=payload)
 
@@ -558,7 +558,7 @@ def test_validate_images_looks_for_the_images_imported_before_into_the_research_
     (folder / "b.jpg").write_bytes(b"new")
     payload = {"path": str(folder), "checks": ["duplicates"], "research_project_id": "DONA"}
 
-    with patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=data_dir):
+    with patch("wildintel_uploader.core.config.collections_dir", return_value=data_dir):
         response = _client().post("/api/deployment-import/validate-images", json=payload)
         elsewhere = _client().post("/api/deployment-import/validate-images", json={**payload, "deployment_id": "R0001-DONA_01"})
         alone = _client().post("/api/deployment-import/validate-images", json={"path": str(folder), "checks": ["duplicates"]})
@@ -795,7 +795,7 @@ def test_previous_deployments_gives_each_ones_earlier_revision(tmp_path: Path):
     old.mkdir(parents=True)
     (old / "deployment.json").write_text(json.dumps({"deployment_id": "R0001-DONA_01", "habitat": "pine"}), encoding="utf-8")
 
-    with patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=tmp_path):
+    with patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path):
         response = _client().post("/api/deployment-import/previous-deployments", json={
             "research_project_id": "DONA", "deployment_ids": ["R0002-DONA_01", "R0002-DONA_02"],
         })
@@ -835,7 +835,7 @@ def test_existing_deployments_needs_some_ids():
 def test_import_local_reads_the_images_in_the_kept_locations_timezone(tmp_path: Path):
     payload = _import_local_payload(tmp_path, location_time={"timezone": "Atlantic/Canary", "ignore_dst": False})
 
-    with patch("wildintel_uploader.web.api.routers.deployment_import.preprocessing_service.preprocess_stream", return_value=iter([])) as stream:
+    with patch("wildintel_uploader.modules.preprocessing.application.use_cases.PreprocessingUseCases.preprocess", return_value=iter([])) as stream:
         response = _client().post("/api/deployment-import/import-local", json=payload)
 
     assert response.status_code == 200
@@ -846,7 +846,7 @@ def test_import_local_reads_the_images_in_the_kept_locations_timezone(tmp_path: 
 def test_a_request_cannot_carry_a_timezone_of_its_own_into_the_import(tmp_path: Path):
     payload = _import_local_payload(tmp_path, location_time={"timezone": "Atlantic/Canary"}, timezone="Europe/Madrid", ignore_dst=False)
 
-    with patch("wildintel_uploader.web.api.routers.deployment_import.preprocessing_service.preprocess_stream", return_value=iter([])) as stream:
+    with patch("wildintel_uploader.modules.preprocessing.application.use_cases.PreprocessingUseCases.preprocess", return_value=iter([])) as stream:
         _client().post("/api/deployment-import/import-local", json=payload)
 
     assert stream.call_args.args[4].timezone == "Atlantic/Canary"  # the extra fields are ignored
@@ -864,7 +864,7 @@ def test_import_registers_the_deployment_in_the_kept_locations_timezone(tmp_path
         },
     }
 
-    with patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=root), \
+    with patch("wildintel_uploader.core.config.collections_dir", return_value=root), \
          patch("wildintel_uploader.web.api.routers.deployment_import.deployment_import_service.import_stream", return_value=iter([])) as stream:
         response = _client().post("/api/deployment-import/import", json=payload)
 

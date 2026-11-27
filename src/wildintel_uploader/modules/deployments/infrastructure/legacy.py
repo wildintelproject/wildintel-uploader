@@ -1,0 +1,134 @@
+"""The ports of the deployments over the code of before: the memory cards (card_copy_service), the folders and the collections
+(deployment_import_service, local_folder_service, seal_service), the revisions (statistics_service), the photos (deployment_photos). What they
+refuse is the deployments', with their words."""
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from pathlib import Path
+from typing import TypeVar
+
+from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
+from wildintel_uploader.modules.deployments.domain.ports import Cards, Deployment, Folders, Photos, Revisions
+
+T = TypeVar("T")
+
+
+@contextmanager
+def _failed() -> Iterator[None]:
+    from wildintel_uploader.core.services import deployment_import_service as dis
+    from wildintel_uploader.shared.storage import StorageError
+    try:
+        yield
+    except (dis.DeploymentImportError, StorageError) as exc:
+        raise DeploymentsFailed(str(exc)) from exc
+
+
+def _root() -> Path:
+    from wildintel_uploader.core import config
+    return config.collections_dir()
+
+
+class MemoryCards(Cards):
+    @staticmethod
+    def _cards():
+        from wildintel_uploader.core.services import card_copy_service
+        return card_copy_service
+
+    def copy(self, path: str) -> Iterator[dict]:
+        return self._cards().copy_card(path)
+
+    def eject(self, path: str) -> dict:
+        return self._cards().eject(path)
+
+    def discard(self, path: str) -> bool:
+        return self._cards().discard(path)
+
+
+class CollectionFolders(Folders):
+    @staticmethod
+    def _dis():
+        from wildintel_uploader.core.services import deployment_import_service
+        return deployment_import_service
+
+    @staticmethod
+    def _lfs():
+        from wildintel_uploader.core.services import local_folder_service
+        return local_folder_service
+
+    def root(self) -> Path:
+        return _root()
+
+    def scan(self, folder: Path) -> dict:
+        with _failed():
+            return self._dis().scan_folder(folder)
+
+    def read_ahead(self, folder: Path) -> None:
+        from wildintel_uploader.core import config
+        self._dis().prefetch_metadata(folder, config.load_settings().VALIDATION.exif_fields)
+
+    def guess(self, folder: Path) -> dict:
+        with _failed():
+            return self._dis().guess_details(folder)
+
+    def scan_session(self, folder: Path) -> dict:
+        with _failed():
+            return self._dis().scan_session(folder)
+
+    def check_collection(self, folder: Path) -> dict:
+        return self._lfs().check_collection(folder)
+
+    def default_collection(self, project: str, deployment_id: str) -> Path:
+        with _failed():
+            return self._dis().default_collection_dir(project, deployment_id)
+
+    def kept(self, project: str, deployment_id: str) -> Path | None:
+        return self._dis().existing_deployment_dir(project, deployment_id)
+
+    def local_deployments(self, folder: Path) -> list[dict]:
+        return self._lfs().list_deployments(folder)
+
+    def log_entry(self, project: str, deployment_id: str) -> dict:
+        with _failed():
+            return self._dis().log_entry(project, deployment_id)
+
+    def seal_status(self, folder: Path) -> dict:
+        from wildintel_uploader.core.services import seal_service
+        return seal_service.verify(folder)
+
+    def location_time(self, project_dir: Path, location_id: str | None) -> dict:
+        with _failed():
+            return self._lfs().location_time_in(project_dir, location_id)
+
+    def copy_as_it_is(self, source_dir: str, collection_dir: str, collection_name: str | None, deployment: Deployment) -> Iterator[dict]:
+        with _failed():
+            return self._dis().import_local_stream(source_dir, collection_dir, collection_name, deployment)
+
+
+class KeptRevisions(Revisions):
+    def previous(self, project: str, deployment_id: str) -> dict | None:
+        from wildintel_uploader.core.services import statistics_service
+        return statistics_service.previous_deployment(_root(), project, deployment_id)
+
+    def next(self, project: str, location_id: str) -> dict:
+        from wildintel_uploader.core.services import statistics_service
+        return statistics_service.next_revision(_root(), project, location_id)
+
+
+class DeploymentPhotos(Photos):
+    @staticmethod
+    def _missing(call: Callable[[], T]) -> T:
+        from wildintel_uploader.core.services import deployment_photos
+        try:
+            return call()
+        except deployment_photos.DeploymentPhotosError as exc:
+            raise DeploymentMissing(str(exc)) from exc
+
+    def list(self, project: str, collection: str, deployment_id: str) -> list[dict]:
+        from wildintel_uploader.core.services import deployment_photos
+        return self._missing(lambda: deployment_photos.list_photos(_root(), project, collection, deployment_id))
+
+    def jpeg(self, project: str, collection: str, deployment_id: str, name: str, large: bool) -> bytes:
+        from wildintel_uploader.core.services import deployment_photos
+        size = deployment_photos.LARGE if large else deployment_photos.THUMBNAIL
+        return self._missing(lambda: deployment_photos.photo_jpeg(_root(), project, collection, deployment_id, name, size))

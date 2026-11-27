@@ -24,6 +24,9 @@ from wildintel_uploader.modules.catalog.infrastructure.json_repository import St
 from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, SystemClock, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredStatusHistory, StoredVisits
+from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
+from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
+from wildintel_uploader.modules.deployments.infrastructure.legacy import CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRevisions, MemoryCards
 from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
@@ -132,6 +135,14 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
                           settings=FieldlogInUse(), clock=AuditClock())
 
 
+def build_deployments(settings: SettingsService | None = None) -> DeploymentsService:
+    """The deployments: the cards, the folders, the revisions and the photos as the code of before keeps them, with the visits and the
+    preprocessing through their contracts."""
+    settings = settings or build_settings()
+    return DeploymentsUseCases(MemoryCards(), DeploymentFolders(), KeptRevisions(), DeploymentPhotos(), visits=build_visits(settings=settings),
+                               preprocessing=build_preprocessing())
+
+
 # ── the providers of the container ──
 
 
@@ -220,6 +231,14 @@ class VisitsProvider(Provider):
         return build_visits(catalog_collections_dir(), settings)
 
 
+class DeploymentsProvider(Provider):
+    """The deployments."""
+
+    @provide(scope=Scope.REQUEST)
+    def service(self, settings: SettingsService) -> DeploymentsService:
+        return build_deployments(settings)
+
+
 def make_app_container() -> Container:
     """The container of the app: every module's provider."""
-    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider())
+    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider())

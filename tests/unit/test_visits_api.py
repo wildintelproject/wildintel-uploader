@@ -65,7 +65,7 @@ def _in(tmp_path: Path):
 
     from wildintel_uploader.core import config
     with ExitStack() as stack:
-        stack.enter_context(patch("wildintel_uploader.web.api.routers.deployment_import.config.collections_dir", return_value=tmp_path))
+        stack.enter_context(patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path))
         stack.enter_context(patch("wildintel_uploader.core.config.collections_dir", return_value=tmp_path))
         if not isinstance(config.load_settings, Mock):   # a test that gives its own settings keeps them
             stack.enter_context(patch("wildintel_uploader.core.config.load_settings", side_effect=_settings))
