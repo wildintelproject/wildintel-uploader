@@ -1,10 +1,12 @@
-"""The contract of the fixes of the dates (TimeFixService), what it refuses, and what its use cases are given: the period a visit gives, and the
-images of a folder — read, shifted, taken out — with the fixes written down."""
+"""The contract of the fixes of the dates (TimeFixService), what it refuses, and what its use cases are given: the visits of a location, the
+images of a folder and their dates, a way to shift their dates, the fixes written down beside them, and the tolerance of the settings."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Protocol
 
 Period = tuple[datetime, datetime]
 
@@ -37,17 +39,49 @@ class TimeFixService(ABC):
         """Takes images whose time can't be made right out of the folder; the timeline after it."""
 
 
-class VisitPeriods(ABC):
+class VisitsOfTheLocation(ABC):
     @abstractmethod
-    def period(self, visit: VisitOfTheImages) -> Period: ...
+    def visits(self, research_project_id: str, location_id: str) -> list[dict]:
+        """The visits kept to a location. Raises TimeFixError when they can't be read."""
 
 
-class TimedImages(ABC):
+class ImageFolder(ABC):
     @abstractmethod
-    def timeline(self, folder: str, period: Period | None) -> dict: ...
+    def open(self, folder: str) -> Path:
+        """The folder. Raises TimeFixError when it is not one."""
 
     @abstractmethod
-    def shift(self, folder: str, period: Period | None, first: str, last: str | None, offset_seconds: int, reason: str) -> dict: ...
+    def images(self, folder: Path) -> list[Path]:
+        """Its images, in the order the camera numbered them."""
 
     @abstractmethod
-    def remove(self, folder: str, period: Period | None, names: list[str], reason: str) -> dict: ...
+    def delete(self, images: list[Path]) -> None:
+        ...
+
+
+class ImageDates(Protocol):
+    def dates(self, paths: list[Path]) -> dict[Path, datetime | None]:
+        """When each image says it was taken (what the images say: modules.fileinfo)."""
+        ...
+
+
+class DateShifter(ABC):
+    @abstractmethod
+    def shift(self, folder: Path, images: list[Path], offset_seconds: int) -> None:
+        """Moves every date of the images by the offset. Raises TimeFixError when it can't."""
+
+
+class Corrections(ABC):
+    @abstractmethod
+    def read(self, folder: Path) -> list[dict]:
+        ...
+
+    @abstractmethod
+    def write(self, folder: Path, entry: dict) -> None:
+        """Writes a fix down beside the images — what, to which, by how much, why —, with when and by whom."""
+
+
+class Tolerance(ABC):
+    @abstractmethod
+    def hours(self) -> float:
+        """How far from the deployment's period an image may be and still be in it (POSTVALIDATION.tolerance_hours)."""

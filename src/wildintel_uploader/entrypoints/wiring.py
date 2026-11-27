@@ -66,7 +66,9 @@ from wildintel_uploader.modules.sources.infrastructure.settings_in_use import Se
 from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import form_columns, form_error
 from wildintel_uploader.modules.timefix.application.use_cases import TimeFixUseCases
 from wildintel_uploader.modules.timefix.domain.ports import TimeFixService
-from wildintel_uploader.modules.timefix.infrastructure.legacy import ImagesWithExifTool, PeriodsOfTheVisits
+from wildintel_uploader.modules.timefix.infrastructure.corrections import CorrectionsFile
+from wildintel_uploader.modules.timefix.infrastructure.images import ExifToolShifter, FolderOfImages
+from wildintel_uploader.modules.timefix.infrastructure.outside import ToleranceInUse, VisitsThroughTheirContract
 from wildintel_uploader.modules.uploaders.application.use_cases import UploadersUseCases
 from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
 from wildintel_uploader.modules.uploaders.infrastructure.trapper import CollectionsFolder, SavedUploadReports, TrapperClient
@@ -176,8 +178,11 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
 
 
 def build_timefix() -> TimeFixService:
-    """The fixes of the dates of the images, over the code of before."""
-    return TimeFixUseCases(PeriodsOfTheVisits(), ImagesWithExifTool())
+    """The fixes of the dates of the images: the visits of the collections folder of the settings, the images on disk and their dates as
+    modules.fileinfo reads them, ExifTool to shift them, the fixes written down beside them."""
+    files = file_info()
+    return TimeFixUseCases(VisitsThroughTheirContract(lambda: build_visits()), FolderOfImages(), files, ExifToolShifter(files.exiftool_path),
+                           CorrectionsFile(), ToleranceInUse(config))
 
 
 def build_uploaders(collections_dir: Path | None = None) -> UploadersService:
