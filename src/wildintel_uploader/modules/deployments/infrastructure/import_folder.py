@@ -75,8 +75,8 @@ class ImportFolderOnDisk(ImportFolder):
     def write_collection(self, collection: Path, name: str | None) -> None:
         layout.write_collection_metadata(collection, name)
 
-    def write_deployment(self, folder: Path, record: dict) -> None:
-        layout.write_deployment_metadata(folder, record)
+    def write_deployment(self, folder: Path, deployment) -> None:
+        layout.write_deployment_metadata(folder, deployment.model_dump())
 
     def write_images(self, folder: Path, deployment_id: str, images: list[tuple[str, str | None, dict]]) -> None:
         layout.write_images_file(folder, deployment_id, [layout.image_entry(name, local, "local", extra) for name, local, extra in images])

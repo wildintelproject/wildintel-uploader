@@ -147,7 +147,7 @@ class Importing:
         def events() -> Iterator[dict]:
             self._folder.write_collection(collection, collection.name)
             yield from self.copy_folder(source, dest)
-            self._folder.write_deployment(dest, deployment.model_dump())
+            self._folder.write_deployment(dest, deployment)
 
         return dest, events()
 
@@ -191,7 +191,7 @@ class Importing:
         def events() -> Iterator[dict]:
             self._folder.write_collection(collection, collection_name)
             yield from self.copy_folder(source, dest)
-            self._folder.write_deployment(dest, deployment.model_dump())
+            self._folder.write_deployment(dest, deployment)
             self._folder.write_images(dest, deployment.deployment_id, self.images_info(dest))
             yield {"type": "sealing"}
             sealed = self.seal(source, dest, deployment)

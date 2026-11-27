@@ -166,7 +166,7 @@ class Repairing:
         except ValueError as exc:
             file_results.append((DEPLOYMENT_METADATA_FILE, False, f"could not be rebuilt — {exc}"))
             raise rules.RepairError(f"deployment.json can't be rebuilt: {exc}. Add what is missing (the location's coordinates, for one) and repair it again.") from exc
-        body = deployment.model_dump()
+        body = folder.record_of(deployment)
         if old_deployment != body:
             folder.write_deployment(dest, body)
             written.append(DEPLOYMENT_METADATA_FILE)

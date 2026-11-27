@@ -132,6 +132,9 @@ class RepairFolderOnDisk(RepairFolder):
         except ValidationError as exc:
             raise ValueError("; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())) from exc
 
+    def record_of(self, deployment: Deployment) -> dict:
+        return deployment.model_dump()
+
     def write_deployment(self, folder: Path, record: dict) -> None:
         layout.write_deployment_metadata(folder, record)
 

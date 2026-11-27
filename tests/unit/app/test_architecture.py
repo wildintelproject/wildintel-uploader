@@ -155,3 +155,12 @@ def test_an_adapter_asks_the_ports_not_the_use_cases(path: Path):
     wrong = {i for i in _imports(path) if ".application" in i or "entrypoints" in i}
     assert not wrong, f"{path.name} imports {sorted(wrong)}"
 
+
+@pytest.mark.parametrize("path", [*_files("domain"), *_files("application")], ids=lambda p: f"{p.parts[-3]}/{p.parts[-2]}/{p.name}")
+def test_the_domain_and_the_use_cases_do_not_lean_on_pydantic(path: Path):
+    """A record validated by Pydantic (shared.camtrap) may pass through the domain and the use cases, but what it is made into — a dict, a copy —
+    is asked of the adapters: neither calls Pydantic's own API."""
+    found = [f"{n}: {line.strip()}" for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+             if re.search(r"\.model_(dump|dump_json|copy|validate|fields)\b", line)]
+    assert not found, "\n".join(found)
+

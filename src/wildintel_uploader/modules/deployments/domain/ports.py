@@ -420,6 +420,10 @@ class RepairFolder(ABC):
         """Raises ValueError, saying what is wrong, when it is not a valid deployment."""
 
     @abstractmethod
+    def record_of(self, deployment: Deployment) -> dict:
+        """A valid deployment as deployment.json keeps it."""
+
+    @abstractmethod
     def write_deployment(self, folder: Path, record: dict) -> None: ...
 
     @abstractmethod
@@ -489,7 +493,8 @@ class ImportFolder(ABC):
     def write_collection(self, collection: Path, name: str | None) -> None: ...
 
     @abstractmethod
-    def write_deployment(self, folder: Path, record: dict) -> None: ...
+    def write_deployment(self, folder: Path, deployment: Deployment) -> None:
+        """deployment.json, as a deployment is kept."""
 
     @abstractmethod
     def write_images(self, folder: Path, deployment_id: str, images: list[tuple[str, str | None, dict]]) -> None:
