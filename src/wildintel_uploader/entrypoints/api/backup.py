@@ -10,7 +10,7 @@ from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
-from wildintel_uploader.core.services import folder_picker
+from wildintel_uploader.shared.desktop import folder_picker
 from wildintel_uploader.entrypoints.api import streaming
 from wildintel_uploader.modules.backup.domain.ports import BackupError, BackupGone, BackupService, Choice
 from wildintel_uploader.modules.backup.infrastructure.api_schemas import CreateBackupRequest, ProjectInfoRequest, ReadBackupRequest, RestoreRequest

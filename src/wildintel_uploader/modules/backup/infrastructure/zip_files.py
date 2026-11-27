@@ -19,7 +19,7 @@ _KEPT_FOR = 24 * 3600   # a backup made to be downloaded is kept a day: it can b
 
 
 def _old():
-    from wildintel_uploader.core.services import backup_service
+    from wildintel_uploader.modules.backup.infrastructure import backup_service
     return backup_service
 
 

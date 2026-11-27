@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from wildintel_uploader.core.services import deployment_import_service as dis
+from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
 from wildintel_uploader.modules.postvalidation.domain import statistics as _stats
 from wildintel_uploader.modules.postvalidation.domain.models import PostvalidationError
 from wildintel_uploader.modules.postvalidation.domain.statistics import (  # noqa: F401 — the names of before

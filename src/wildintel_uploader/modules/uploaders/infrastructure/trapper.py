@@ -21,7 +21,9 @@ T = TypeVar("T")
 
 
 def _services():
-    from wildintel_uploader.core.services import sync_service, trapper_service, trapper_upload_service
+    from wildintel_uploader.modules.uploaders.infrastructure import sync_service
+    from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
+    from wildintel_uploader.modules.uploaders.infrastructure import trapper_upload_service
     return trapper_service, trapper_upload_service, sync_service
 
 

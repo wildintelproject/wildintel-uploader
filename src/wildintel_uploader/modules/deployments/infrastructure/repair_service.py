@@ -34,8 +34,8 @@ from pydantic import ValidationError
 
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import seal_service
-from wildintel_uploader.core.services.deployment_import_service import DeploymentImportError
+from wildintel_uploader.modules.deployments.infrastructure import seal_service
+from wildintel_uploader.modules.deployments.infrastructure.deployment_import_service import DeploymentImportError
 from wildintel_uploader.modules.preprocessing.domain import models as pre
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 

@@ -16,7 +16,7 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
-from wildintel_uploader.core.services import disk_space
+from wildintel_uploader.modules.deployments.infrastructure import disk_space
 
 logger = logging.getLogger(__name__)
 

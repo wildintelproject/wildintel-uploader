@@ -433,7 +433,7 @@ def copied_images_info(dest: Path) -> list[dict]:
 def seal_deployment(source: Path, dest: Path, deployment: DeploymentFields, **details) -> bool:
     """Checks the source images and seals the deployment kept in dest (see seal_service). A failure is logged and the
     deployment is left without a seal — it was imported all the same — and False says so."""
-    from wildintel_uploader.core.services import seal_service  # imported here: the seal runs this module's own checks
+    from wildintel_uploader.modules.deployments.infrastructure import seal_service  # imported here: the seal runs this module's own checks
     try:
         seal_service.seal(source, dest, deployment, **details)
         return True

@@ -684,7 +684,7 @@ def test_import_local_refuses_preprocessing_values_out_of_range(tmp_path: Path, 
 @pytest.mark.parametrize("installed", [True, False])
 def test_the_exiftool_endpoint_says_whether_it_is_installed(installed: bool):
     path = "/usr/bin/exiftool" if installed else None
-    with patch("wildintel_uploader.core.services.camera_info.exiftool_path", return_value=path):
+    with patch("wildintel_uploader.modules.fileinfo.infrastructure.exiftool.exiftool_path", return_value=path):
         body = _client().get("/api/deployment-import/exiftool").json()
 
     assert body == {"available": installed, "path": path}

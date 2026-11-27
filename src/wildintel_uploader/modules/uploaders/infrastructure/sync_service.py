@@ -32,7 +32,7 @@ from pydantic import ValidationError
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName
 from wildintel_uploader.modules.deployments.domain.naming import collection_code
-from wildintel_uploader.core.services import trapper_service
+from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
 from wildintel_uploader.modules.deployments.domain.naming import COLLECTION_METADATA_FILE, DEPLOYMENT_METADATA_FILE, IMAGES_FILE
 from wildintel_uploader.shared import storage
 

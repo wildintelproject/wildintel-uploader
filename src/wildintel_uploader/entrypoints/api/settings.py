@@ -14,7 +14,7 @@ from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from wildintel_uploader.core.services import file_manager
+from wildintel_uploader.shared.desktop import file_manager
 from wildintel_uploader.modules.settings.domain.models import DataSettings, GeneralSettings, SettingsError
 from wildintel_uploader.modules.settings.infrastructure.api_schemas import DataDirRequest, FoldersRequest, GeneralRequest, NewConfigRequest, ShowWelcomeRequest
 from wildintel_uploader.modules.settings.domain.ports import GeneralView, NoLogFile, NoSettingsFile, SettingsService, UnknownConfig, UnknownSetting

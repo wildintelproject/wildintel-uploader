@@ -11,7 +11,7 @@ T = TypeVar("T")
 
 
 def _old():
-    from wildintel_uploader.core.services import timefix_service
+    from wildintel_uploader.modules.timefix.infrastructure import timefix_service
     return timefix_service
 
 

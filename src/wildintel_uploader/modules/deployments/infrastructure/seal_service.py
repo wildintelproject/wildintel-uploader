@@ -24,7 +24,7 @@ from pathlib import Path
 
 from wildintel_uploader.core import config, parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import deployment_import_service as dis
+from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
 from wildintel_uploader.modules.deployments.infrastructure import statistics_service
 from wildintel_uploader.modules.postvalidation.domain.models import Deployment, DeploymentContext
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout

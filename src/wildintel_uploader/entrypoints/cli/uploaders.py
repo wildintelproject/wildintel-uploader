@@ -95,7 +95,7 @@ def _optional_prompt(label: str, default: str | None = None) -> Optional[str]:
 def import_deployment(uploaders: FromDishka[UploadersService], deployments: FromDishka[DeploymentsService]) -> None:
     """Import a deployment: organize a folder of camera-trap images locally, then register the deployment in TRAPPER. Does not upload the images
     to TRAPPER yet — that's a separate step this app doesn't have."""
-    from wildintel_uploader.core.services import deployment_import_service
+    from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
     account = Account()
     _checked(lambda: uploaders.research_projects(account) and None)   # the account, before anything is asked
 

@@ -38,7 +38,7 @@ import httpx
 from PIL import Image
 
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.core.services import trapper_service
+from wildintel_uploader.modules.uploaders.infrastructure import trapper_service
 from wildintel_uploader.modules.deployments.domain.naming import DEPLOYMENT_METADATA_FILE
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.shared import storage

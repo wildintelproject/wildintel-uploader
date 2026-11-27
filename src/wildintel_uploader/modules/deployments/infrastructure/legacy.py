@@ -19,7 +19,7 @@ T = TypeVar("T")
 
 @contextmanager
 def _failed() -> Iterator[None]:
-    from wildintel_uploader.core.services import deployment_import_service as dis
+    from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service as dis
     from wildintel_uploader.shared.storage import StorageError
     try:
         yield
@@ -35,7 +35,7 @@ def _root() -> Path:
 class MemoryCards(Cards):
     @staticmethod
     def _cards():
-        from wildintel_uploader.core.services import card_copy_service
+        from wildintel_uploader.modules.deployments.infrastructure import card_copy_service
         return card_copy_service
 
     def copy(self, path: str) -> Iterator[dict]:
@@ -51,7 +51,7 @@ class MemoryCards(Cards):
 class CollectionFolders(Folders):
     @staticmethod
     def _dis():
-        from wildintel_uploader.core.services import deployment_import_service
+        from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
         return deployment_import_service
 
     def root(self) -> Path:
@@ -95,7 +95,7 @@ class CollectionFolders(Folders):
             return self._dis().log_entry(project, deployment_id)
 
     def seal_status(self, folder: Path) -> dict:
-        from wildintel_uploader.core.services import seal_service
+        from wildintel_uploader.modules.deployments.infrastructure import seal_service
         return seal_service.verify(folder)
 
     def location_time(self, project_dir: Path, location_id: str | None) -> dict:
@@ -117,15 +117,15 @@ class CollectionFolders(Folders):
 
 class KeptRevisions(Revisions):
     def previous(self, project: str, deployment_id: str) -> dict | None:
-        from wildintel_uploader.core.services import statistics_service
+        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         return statistics_service.previous_deployment(_root(), project, deployment_id)
 
     def next(self, project: str, location_id: str) -> dict:
-        from wildintel_uploader.core.services import statistics_service
+        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         return statistics_service.next_revision(_root(), project, location_id)
 
     def before(self, project: str, deployment_id: str) -> list[dict]:
-        from wildintel_uploader.core.services import statistics_service
+        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         return [{"revision": r.revision, "deployment_id": r.deployment_id, "image_count": r.times.image_count, "times": list(r.times.times)}
                 for r in statistics_service.revisions_before(_root(), project, deployment_id)]
 
@@ -133,18 +133,18 @@ class KeptRevisions(Revisions):
 class DeploymentPhotos(Photos):
     @staticmethod
     def _missing(call: Callable[[], T]) -> T:
-        from wildintel_uploader.core.services import deployment_photos
+        from wildintel_uploader.modules.deployments.infrastructure import deployment_photos
         try:
             return call()
         except deployment_photos.DeploymentPhotosError as exc:
             raise DeploymentMissing(str(exc)) from exc
 
     def list(self, project: str, collection: str, deployment_id: str) -> list[dict]:
-        from wildintel_uploader.core.services import deployment_photos
+        from wildintel_uploader.modules.deployments.infrastructure import deployment_photos
         return self._missing(lambda: deployment_photos.list_photos(_root(), project, collection, deployment_id))
 
     def jpeg(self, project: str, collection: str, deployment_id: str, name: str, large: bool) -> bytes:
-        from wildintel_uploader.core.services import deployment_photos
+        from wildintel_uploader.modules.deployments.infrastructure import deployment_photos
         size = deployment_photos.LARGE if large else deployment_photos.THUMBNAIL
         return self._missing(lambda: deployment_photos.photo_jpeg(_root(), project, collection, deployment_id, name, size))
 
@@ -152,7 +152,7 @@ class DeploymentPhotos(Photos):
 class KeptRepairs(Repairs):
     @staticmethod
     def _repair():
-        from wildintel_uploader.core.services import repair_service
+        from wildintel_uploader.modules.deployments.infrastructure import repair_service
         return repair_service
 
     def collections(self, project: str) -> list[dict]:
@@ -171,7 +171,7 @@ class KeptRepairs(Repairs):
 
     def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]:
         """What fails mid-way says so with its words — what the repair itself refuses as it was, anything else as "The repair failed: …"."""
-        from wildintel_uploader.core.services import deployment_import_service
+        from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
         rs = self._repair()
         try:
             events = rs.repair_stream(_root(), project, collection, deployment_id)
@@ -191,7 +191,8 @@ class KeptRepairs(Repairs):
 class KeptStatistics(CollectionStatistics):
     def revision(self, project: str, collection: str) -> list[dict]:
         from wildintel_uploader.core import config
-        from wildintel_uploader.core.services import deployment_import_service, statistics_service
+        from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
+        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         settings = config.load_settings()
         post = settings.POSTVALIDATION
         try:
@@ -204,7 +205,7 @@ class KeptStatistics(CollectionStatistics):
 
     def compare(self, project: str, first: str, second: str) -> dict:
         from wildintel_uploader.core import config
-        from wildintel_uploader.core.services import statistics_service
+        from wildintel_uploader.modules.deployments.infrastructure import statistics_service
         settings = config.load_settings()
         with _failed():
             return statistics_service.compare_deployments(config.collections_dir(settings), project, first, second,
@@ -216,7 +217,7 @@ class StoredSessions(ImportSessions):
 
     @staticmethod
     def _store():
-        from wildintel_uploader.core.services import session_store
+        from wildintel_uploader.modules.deployments.infrastructure import session_store
         return session_store
 
     def list(self) -> list[dict]:

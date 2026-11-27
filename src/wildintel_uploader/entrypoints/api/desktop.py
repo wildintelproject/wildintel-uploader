@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.core import config
-from wildintel_uploader.core.services import camera_info, file_manager, folder_picker
+from wildintel_uploader.shared.desktop import file_manager
+from wildintel_uploader.shared.desktop import folder_picker
 from wildintel_uploader.modules.deployments.infrastructure.api_schemas import BrowseFolderRequest, OpenFolderRequest
+from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 
-router = APIRouter(prefix="/api/deployment-import", tags=["desktop"])
+router = APIRouter(prefix="/api/deployment-import", tags=["desktop"], route_class=DishkaSyncRoute)
 
 
 @router.post("/browse-folder")
@@ -25,9 +28,9 @@ def browse_folder(req: BrowseFolderRequest = BrowseFolderRequest()) -> dict:
 
 
 @router.get("/exiftool")
-def exiftool() -> dict:
-    """Whether ExifTool is installed — the preprocessing's metadata needs it."""
-    path = camera_info.exiftool_path()
+def exiftool(files: FromDishka[FileInfoService]) -> dict:
+    """Whether ExifTool is installed — the preprocessing's metadata needs it (what is known of the files says where it is)."""
+    path = files.exiftool_path()
     return {"available": path is not None, "path": path}
 
 
