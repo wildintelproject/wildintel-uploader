@@ -1,4 +1,4 @@
-"""The ports of the deployments over the code of before: the memory cards (card_copy_service), the folders and the collections
+"""The ports of the deployments over the code of before: the folders and the collections
 (deployment_import_service, their collections, their seal), the photos (deployment_photos). What they
 refuse is the deployments', with their words."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import TypeVar
 from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.ports import (
-    Cards, CollectionLayout, Deployment, Folders, ImportSessions, Photos,
+    CollectionLayout, Deployment, Folders, ImportSessions, Photos,
 )
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
@@ -33,22 +33,6 @@ def _failed() -> Iterator[None]:
 def _root() -> Path:
     from wildintel_uploader.modules.deployments.infrastructure.plugs import config
     return config.collections_dir()
-
-
-class MemoryCards(Cards):
-    @staticmethod
-    def _cards():
-        from wildintel_uploader.modules.deployments.infrastructure import card_copy_service
-        return card_copy_service
-
-    def copy(self, path: str) -> Iterator[dict]:
-        return self._cards().copy_card(path)
-
-    def eject(self, path: str) -> dict:
-        return self._cards().eject(path)
-
-    def discard(self, path: str) -> bool:
-        return self._cards().discard(path)
 
 
 class CollectionFolders(Folders):

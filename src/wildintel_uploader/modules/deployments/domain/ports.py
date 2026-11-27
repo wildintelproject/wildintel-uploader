@@ -227,15 +227,45 @@ class StatisticsSettings(ABC):
     def tolerances(self) -> dict[str, float]: ...
 
 
-class Cards(ABC):
-    @abstractmethod
-    def copy(self, path: str) -> Iterator[dict]: ...
+class MemoryCard(ABC):
+    """A camera's memory card, as it is copied — only read — and ejected."""
 
     @abstractmethod
-    def eject(self, path: str) -> dict: ...
+    def files(self, card: str) -> tuple[Path, list[tuple[Path, int]]]:
+        """The card's folder and each of its files, by its path inside the card, with its size. A CardCopyError (domain.cards) when the card
+        is not a folder or can't be read."""
 
     @abstractmethod
-    def discard(self, path: str) -> bool: ...
+    def eject(self, card: str) -> dict:
+        """Ejects the removable drive the card is on, so it can be taken out: {"ejected", "message"} — never a folder of a fixed disk. It never
+        raises: when it cannot, it says why."""
+
+
+class CardCopies(ABC):
+    """The folder the copies of the cards are made in, each in a folder of its own (its holder)."""
+
+    @abstractmethod
+    def base(self) -> Path:
+        """The folder of the copies, resolved."""
+
+    @abstractmethod
+    def holders(self) -> list[tuple[Path, float]]:
+        """The holders kept, with when each was last modified."""
+
+    @abstractmethod
+    def shortfall(self, needed: int) -> str | None:
+        """Why `needed` bytes do not fit in the folder of the copies — None when they do, or when it can't be told."""
+
+    @abstractmethod
+    def new_holder(self) -> Path: ...
+
+    @abstractmethod
+    def copy(self, card: Path, file: Path, to: Path) -> None:
+        """The card's file `file` copied to `to`/`file`. A CardCopyError when it can't be."""
+
+    @abstractmethod
+    def remove(self, holder: Path) -> bool:
+        """Removes a holder; whether it was there. What can't be removed is left, and said in the log."""
 
 
 class Folders(ABC):

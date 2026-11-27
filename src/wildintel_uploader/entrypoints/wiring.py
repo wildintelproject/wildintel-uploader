@@ -35,7 +35,9 @@ from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFr
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
+from wildintel_uploader.modules.deployments.application.cards import CardCopying
 from wildintel_uploader.modules.deployments.application.repair import Repairing
+from wildintel_uploader.modules.deployments.infrastructure.memory_cards import CardOnDisk, CopiesInTemp
 from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.infrastructure.repair_folder import RepairFolderOnDisk
 from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
@@ -44,7 +46,7 @@ from wildintel_uploader.modules.deployments.application.use_cases import Deploym
 from wildintel_uploader.modules.deployments.infrastructure.revision_folders import RevisionFoldersOnDisk, StatisticsInUse
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.deployments.infrastructure.legacy import (
-    CollectionFolders as DeploymentFolders, DeploymentPhotos, LayoutOfTheCollections, MemoryCards, StoredSessions,
+    CollectionFolders as DeploymentFolders, DeploymentPhotos, LayoutOfTheCollections, StoredSessions,
 )
 from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
@@ -198,7 +200,7 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
     """The deployments: the cards, the folders, the revisions and the photos as the code of before keeps them, with the visits and the
     preprocessing through their contracts."""
     settings = settings or build_settings()
-    return DeploymentsUseCases(MemoryCards(), DeploymentFolders(config, catalog_of, sealing), revision_statistics(), DeploymentPhotos(), visits=build_visits(settings=settings),
+    return DeploymentsUseCases(CardCopying(CardOnDisk(), CopiesInTemp()), DeploymentFolders(config, catalog_of, sealing), revision_statistics(), DeploymentPhotos(), visits=build_visits(settings=settings),
                                preprocessing=build_preprocessing(), repairs=repairing(), statistics=revision_statistics(),
                                sessions=StoredSessions(), layout=LayoutOfTheCollections())
 

@@ -7,13 +7,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from wildintel_uploader.modules.deployments.infrastructure import card_copy_service
+from tests.support import card_copy_service
+from wildintel_uploader.modules.deployments.infrastructure import memory_cards
 from wildintel_uploader.web.main import app
 
 
 @pytest.fixture(autouse=True)
 def _temp(tmp_path, monkeypatch):
-    monkeypatch.setattr(card_copy_service.tempfile, "gettempdir", lambda: str(tmp_path / "temp"))
+    monkeypatch.setattr(memory_cards.tempfile, "gettempdir", lambda: str(tmp_path / "temp"))
     (tmp_path / "temp").mkdir()
 
 
@@ -103,8 +104,8 @@ class _Done:
 def _fake_linux(monkeypatch, answers: list, calls: list):
     """The system commands answer in order: findmnt, lsblk (parent disk), lsblk (flags), then udisksctl."""
     queue = iter(answers)
-    monkeypatch.setattr(card_copy_service.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(card_copy_service, "_run", lambda command: (calls.append(command), next(queue, _Done()))[1])
+    monkeypatch.setattr(memory_cards.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(memory_cards, "_run", lambda command: (calls.append(command), next(queue, _Done()))[1])
 
 
 def test_eject_unmounts_and_powers_off_a_removable_drive(tmp_path, monkeypatch):
@@ -119,8 +120,8 @@ def test_eject_leaves_a_fixed_disk_alone(tmp_path, monkeypatch):
     calls: list = []
     # lsblk answers PKNAME with a disk, then the flags "0 0" (not removable, not hotplug)
     answers = iter([_Done("/dev/nvme0n1p2 /\n"), _Done("nvme0n1\n"), _Done("0 0\n"), _Done("  HintSystem:  true\n")])
-    monkeypatch.setattr(card_copy_service.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(card_copy_service, "_run", lambda command: (calls.append(command), next(answers))[1])
+    monkeypatch.setattr(memory_cards.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(memory_cards, "_run", lambda command: (calls.append(command), next(answers))[1])
     result = card_copy_service.eject(str(tmp_path))
     assert result["ejected"] is False
     assert not any(c[:2] in (["udisksctl", "unmount"], ["udisksctl", "power-off"]) for c in calls)
@@ -128,14 +129,14 @@ def test_eject_leaves_a_fixed_disk_alone(tmp_path, monkeypatch):
 
 def test_eject_says_why_it_could_not(tmp_path, monkeypatch):
     answers = iter([_Done("/dev/sdb1 /run/media/me/CARD_A\n"), _Done("sdb\n"), _Done("1 1\n"), _Done(returncode=1, stderr="target is busy")])
-    monkeypatch.setattr(card_copy_service.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(card_copy_service, "_run", lambda command: next(answers))
+    monkeypatch.setattr(memory_cards.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(memory_cards, "_run", lambda command: next(answers))
     result = card_copy_service.eject(str(tmp_path))
     assert result["ejected"] is False and "busy" in result["message"]
 
 
 def test_eject_endpoint(tmp_path, monkeypatch):
-    monkeypatch.setattr(card_copy_service, "eject", lambda path: {"ejected": True, "message": f"{path} ejected"})
+    monkeypatch.setattr(memory_cards.CardOnDisk, "eject", lambda self, path: {"ejected": True, "message": f"{path} ejected"})
     response = TestClient(app).post("/api/deployment-import/eject-card", json={"path": "/run/media/me/CARD_A"})
     assert response.status_code == 200 and response.json() == {"ejected": True, "message": "/run/media/me/CARD_A ejected"}
 
@@ -147,3 +148,68 @@ def test_eject_takes_the_reader_of_a_laptop_that_udisks_says_is_not_a_system_dri
     result = card_copy_service.eject(str(tmp_path))
     assert result["ejected"] is True
     assert ["udisksctl", "unmount", "-b", "/dev/mmcblk0p1"] in calls
+
+
+# ── the use case over ports in memory ───────────────────────────────────────
+
+class _Card:
+    def files(self, card):
+        return Path("/media/CARD_C"), [(Path("DCIM/1.JPG"), 10), (Path("DCIM/2.JPG"), 5)]
+
+    def eject(self, card):
+        return {"ejected": True, "message": card}
+
+
+class _Copies:
+    def __init__(self, fail_at=None, room=None):
+        self.kept, self.copied, self.removed, self._fail_at, self._room = {}, [], [], fail_at, room
+
+    def base(self):
+        return Path("/tmp/wildintel-sd")
+
+    def holders(self):
+        return list(self.kept.items())
+
+    def shortfall(self, needed):
+        return None if self._room is None or self._room >= needed else "no room"
+
+    def new_holder(self):
+        holder = Path("/tmp/wildintel-sd/card-new")
+        self.kept[holder] = 1e9
+        return holder
+
+    def copy(self, card, file, to):
+        from wildintel_uploader.modules.deployments.domain.cards import not_copied
+        if file.name == self._fail_at:
+            raise not_copied("disk gone")
+        self.copied.append(to / file)
+
+    def remove(self, holder):
+        self.removed.append(holder)
+        return self.kept.pop(holder, None) is not None
+
+
+def test_the_use_case_copies_cleans_the_leftovers_and_removes_a_failed_copy():
+    from wildintel_uploader.modules.deployments.application.cards import CardCopying
+    copies = _Copies()
+    copies.kept[Path("/tmp/wildintel-sd/card-old")] = 0.0
+    events = list(CardCopying(_Card(), copies, now=lambda: 1e9).copy("/media/CARD_C"))
+    assert events[-1] == {"type": "done", "path": "/tmp/wildintel-sd/card-new/CARD_C", "files": 2, "bytes": 15}
+    assert Path("/tmp/wildintel-sd/card-old") in copies.removed and len(copies.copied) == 2
+
+    failing = _Copies(fail_at="2.JPG")
+    with pytest.raises(card_copy_service.CardCopyError, match="disk gone"):
+        list(CardCopying(_Card(), failing).copy("/media/CARD_C"))
+    assert failing.removed == [Path("/tmp/wildintel-sd/card-new")] and not failing.kept
+
+    with pytest.raises(card_copy_service.CardCopyError, match="no room"):
+        list(CardCopying(_Card(), _Copies(room=3)).copy("/media/CARD_C"))
+
+
+def test_the_use_case_discards_only_inside_the_folder_of_the_copies():
+    from wildintel_uploader.modules.deployments.application.cards import CardCopying
+    copies = _Copies()
+    holder = copies.new_holder()
+    cards = CardCopying(_Card(), copies)
+    assert cards.discard("/home/me/photos") is False and cards.discard("/tmp/wildintel-sd") is False
+    assert cards.discard(str(holder / "CARD_C" / "DCIM")) is True and copies.removed == [holder]
