@@ -5,7 +5,7 @@ they are written again from what the folder itself holds.
         <images>, deployment.json, images.json, preprocessing.json, seal.json
     <collections folder>/<research project id>/<R0003>/<R0003>_FileTimestampLog.csv
 
-A deployment is **valid** when its seal.json still matches it (seal_service.verify); anything else is not. Repairing it:
+A deployment is **valid** when its seal.json still matches it (the seal's verify); anything else is not. Repairing it:
 
   - reads the capture date of every image (the camera's wall clock, from its EXIF) and its camera;
   - takes the deployment's period from the collection's FileTimestampLog.csv if an old one has a row of it — the log
@@ -35,7 +35,8 @@ from pydantic import ValidationError
 from wildintel_uploader.modules.deployments.infrastructure.plugs import config
 from wildintel_uploader.shared import parallel
 from wildintel_uploader.shared.camtrap import DeploymentFields
-from wildintel_uploader.modules.deployments.infrastructure import seal_service
+from wildintel_uploader.modules.deployments.domain.seal import SEAL_FILE
+from wildintel_uploader.modules.deployments.infrastructure.sealed_folder import images_of
 from wildintel_uploader.modules.deployments.infrastructure.deployment_import_service import DeploymentImportError
 from wildintel_uploader.modules.preprocessing.domain import models as pre
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
@@ -45,6 +46,12 @@ def _catalog(collections_dir: Path):
     """The catalog of the collections folder being repaired — through its contract —, from where the app is put together."""
     from wildintel_uploader.modules.deployments.infrastructure import plugs
     return plugs.catalog_of(collections_dir)
+
+
+def _sealing():
+    """The seal of the deployments (application.seal), from where the app is put together."""
+    from wildintel_uploader.modules.deployments.infrastructure import plugs
+    return plugs.sealing()
 
 
 def _reports():
@@ -93,7 +100,7 @@ logger = logging.getLogger(__name__)
 
 _COLLECTION = re.compile(r"^R\d{4}(_.+)?$")
 _DEPLOYMENT = re.compile(r"^R\d{4}-.+$")
-_METADATA_FILES = (layout.DEPLOYMENT_METADATA_FILE, layout.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, seal_service.SEAL_FILE)
+_METADATA_FILES = (layout.DEPLOYMENT_METADATA_FILE, layout.IMAGES_FILE, pre.PREPROCESSING_LOG_FILE, SEAL_FILE)
 _XMP_BATCH = 200
 
 
@@ -111,7 +118,7 @@ def _read_json(path: Path):
 
 
 def _images_in(folder: Path) -> list[Path]:
-    return seal_service._images_of(folder)
+    return images_of(folder)
 
 
 def _collection_dir(collections_dir: Path, research_project_id: str, collection: str) -> Path:
@@ -189,9 +196,9 @@ def inspect(collections_dir: Path, research_project_id: str, collection: str, de
     if layout.is_synced(dest):
         return {"deployment_id": deployment_id, "status": "synced", "seal": None, "files": files, "images": len(images), "log": log,
                 "problems": ["It was synced from TRAPPER: what TRAPPER holds is not modified here."]}
-    seal = seal_service.verify(dest)
+    seal = _sealing().verify(dest)
     status = {"valid": "valid", "broken": "broken", "none": "unsealed"}[seal["status"]]
-    problems = [f"{name} is {state}" for name, state in files.items() if state != "ok" and not (name == seal_service.SEAL_FILE and state == "missing")]
+    problems = [f"{name} is {state}" for name, state in files.items() if state != "ok" and not (name == SEAL_FILE and state == "missing")]
     if seal["status"] == "none":
         problems.append("It has no seal: its images were never sealed.")
     if seal["status"] == "broken":
@@ -394,7 +401,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         sealed = None
         xmp: dict[Path, dict] = {}
         if not images:
-            for name in (pre.PREPROCESSING_LOG_FILE, layout.IMAGES_FILE, seal_service.SEAL_FILE):
+            for name in (pre.PREPROCESSING_LOG_FILE, layout.IMAGES_FILE, SEAL_FILE):
                 yield step({"preprocessing.json": "preprocessing", "images.json": "images", "seal.json": "seal"}[name], "skipped", "There are no images.")
         else:
             yield step("preprocessing", "running", "Rebuilding preprocessing.json from the images…")
@@ -438,11 +445,11 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
 
             # ── validate, postvalidate, seal ──
             yield step("seal", "running", "Validating and postvalidating the images, and sealing…")
-            sealed = seal_service.seal(
+            sealed = _sealing().seal(
                 dest, dest, deployment, source_hashes={r["name"]: r["source_hash"] for r in records if r["source_hash"]}, preprocessing=options_body, recovered=True,
             )
-            written.append(seal_service.SEAL_FILE)
-            file_results.append((seal_service.SEAL_FILE, True, "written again"))
+            written.append(SEAL_FILE)
+            file_results.append((SEAL_FILE, True, "written again"))
             failed = sum(1 for e in sealed["images"] for v in (*e["validations"].values(), *e["postvalidations"].values()) if v != "ok")
             yield step("seal", "done", "Sealed. " + (f"{failed} problem(s) found in the images." if failed else "The images passed every check."))
 
@@ -453,7 +460,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
             report_id = _reports().save_repair(deployment_id, dest, file_results, sealed, preprocessing)
         except Exception as exc:  # the repair is done: not having its report is no reason to fail it
             logger.warning("Could not write the report of the repair of %s: %s", deployment_id, exc)
-        status = seal_service.verify(dest)["status"] if sealed else "unsealed"
+        status = _sealing().verify(dest)["status"] if sealed else "unsealed"
         problems = (_reports().read(report_id)["totals"]["failed"] if report_id else 0)
         logger.info("Deployment %s repaired: wrote %s", deployment_id, ", ".join(written))
         yield {"type": "done", "deployment_id": deployment_id, "images": len(images), "written": written, "problems": problems, "status": {"valid": "valid", "broken": "broken", "none": "unsealed"}.get(status, status), "report_id": report_id}

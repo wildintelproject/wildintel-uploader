@@ -310,3 +310,36 @@ class Photos(ABC):
 
     @abstractmethod
     def jpeg(self, project: str, collection: str, deployment_id: str, name: str, large: bool) -> bytes: ...
+
+
+class SealedFolder(ABC):
+    """A deployment's folder as its seal reads it: its images, their hashes, its deployment.json and its seal.json."""
+
+    @abstractmethod
+    def images(self, folder: Path) -> list[str]:
+        """Its images, by their paths in it, in natural file-name order."""
+
+    @abstractmethod
+    def hashes(self, folder: Path, names: list[str]) -> list[str]:
+        """The SHA-256 of each, in that order."""
+
+    @abstractmethod
+    def metadata_hash(self, folder: Path) -> str | None:
+        """The SHA-256 of its deployment.json, or None when it has none."""
+
+    @abstractmethod
+    def read_seal(self, folder: Path) -> dict | None:
+        """Its seal.json, or None when it has none. ValueError when it can't be read."""
+
+    @abstractmethod
+    def write_seal(self, folder: Path, seal: dict) -> None: ...
+
+
+class CheckSettings(ABC):
+    """The sections of the settings that say which checks run, and how: VALIDATION and POSTVALIDATION, as settings.toml keeps them."""
+
+    @abstractmethod
+    def validation(self) -> Any: ...
+
+    @abstractmethod
+    def postvalidation(self) -> Any: ...

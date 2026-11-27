@@ -11,7 +11,7 @@ from tests.support import local_folder_service as lfs
 from tests.support import preprocessing_service as pre
 from wildintel_uploader.entrypoints.wiring import build_reports
 from wildintel_uploader.modules.deployments.infrastructure import repair_service as rep
-from wildintel_uploader.modules.deployments.infrastructure import seal_service
+from tests.support import seal_service
 
 DEPLOYMENT_ID = "R0003-DONA_01"
 DEPLOYMENT = DeploymentFields.model_validate({

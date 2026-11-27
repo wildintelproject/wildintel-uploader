@@ -1,5 +1,5 @@
 """The ports of the deployments over the code of before: the memory cards (card_copy_service), the folders and the collections
-(deployment_import_service, their collections, seal_service), the photos (deployment_photos). What they
+(deployment_import_service, their collections, their seal), the photos (deployment_photos). What they
 refuse is the deployments', with their words."""
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TypeVar
 
+from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.ports import (
     Cards, CollectionLayout, Deployment, Folders, ImportSessions, Photos, Repairs,
@@ -51,8 +52,8 @@ class MemoryCards(Cards):
 
 
 class CollectionFolders(Folders):
-    def __init__(self, settings: StoredSettings, catalog_of: Callable[[Path], CatalogService]) -> None:
-        self._settings, self._catalog_of = settings, catalog_of   # the settings; the catalog of a collections folder, through its contract
+    def __init__(self, settings: StoredSettings, catalog_of: Callable[[Path], CatalogService], sealing: Callable[[], Sealing]) -> None:
+        self._settings, self._catalog_of, self._sealing = settings, catalog_of, sealing   # the catalog of a collections folder, through its contract
 
     @staticmethod
     def _dis():
@@ -99,8 +100,7 @@ class CollectionFolders(Folders):
             return self._dis().log_entry(project, deployment_id)
 
     def seal_status(self, folder: Path) -> dict:
-        from wildintel_uploader.modules.deployments.infrastructure import seal_service
-        return seal_service.verify(folder)
+        return self._sealing().verify(folder)
 
     def location_time(self, project_dir: Path, location_id: str | None) -> dict:
         from wildintel_uploader.modules.catalog.domain.models import CatalogError

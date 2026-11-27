@@ -35,7 +35,9 @@ from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFr
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits
+from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
+from wildintel_uploader.modules.deployments.infrastructure.sealed_folder import ChecksInUse, DeploymentSealFolder
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
 from wildintel_uploader.modules.deployments.infrastructure.revision_folders import RevisionFoldersOnDisk, StatisticsInUse
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
@@ -194,9 +196,15 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
     """The deployments: the cards, the folders, the revisions and the photos as the code of before keeps them, with the visits and the
     preprocessing through their contracts."""
     settings = settings or build_settings()
-    return DeploymentsUseCases(MemoryCards(), DeploymentFolders(config, catalog_of), revision_statistics(), DeploymentPhotos(), visits=build_visits(settings=settings),
+    return DeploymentsUseCases(MemoryCards(), DeploymentFolders(config, catalog_of, sealing), revision_statistics(), DeploymentPhotos(), visits=build_visits(settings=settings),
                                preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=revision_statistics(),
                                sessions=StoredSessions(), layout=LayoutOfTheCollections())
+
+
+def sealing() -> Sealing:
+    """The seal of the deployments: the checks the settings turn on, the prevalidation's and the postvalidation's through their contracts."""
+    return Sealing(DeploymentSealFolder(), ChecksInUse(config), prevalidation=build_prevalidation, postvalidation=build_postvalidation,
+                   catalog_of=catalog_of, revisions_of=lambda root: RevisionStatistics(RevisionFoldersOnDisk(lambda: root, file_info), StatisticsInUse(config)))
 
 
 def revision_statistics() -> RevisionStatistics:
@@ -248,6 +256,7 @@ PLUGGED = {
     "reports": lambda: build_reports(),
     "prevalidation": lambda: build_prevalidation(),
     "postvalidation": lambda: build_postvalidation(),
+    "sealing": lambda: sealing(),
 }
 
 

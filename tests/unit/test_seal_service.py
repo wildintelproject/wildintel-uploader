@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from tests.unit.test_preprocessing_service import DEPLOYMENT, NO_XMP, _run, _source
-from wildintel_uploader.modules.deployments.infrastructure import seal_service
+from tests.support import seal_service
 from tests.support import preprocessing_service as pre
 
 
@@ -55,3 +55,18 @@ def test_a_changed_deployment_file_an_added_image_or_an_edited_seal_break_it(tmp
 
 def test_a_deployment_never_sealed_says_so(tmp_path: Path):
     assert seal_service.verify(tmp_path)["status"] == "none"
+
+
+# ── what a seal says, plain Python ───────────────────────────────────────────
+
+def test_a_seal_says_each_image_with_the_checks_of_its_original_and_knows_what_changed():
+    from wildintel_uploader.modules.deployments.domain import seal as rules
+
+    checks = rules.checked(["a.jpg", "b.jpg"], {"corrupted": [{"path": "b.jpg", "error": "broken"}]}, {}, frozenset({"corrupted"}), frozenset(), frozenset())
+    body = rules.body("R0001-DONA_01", "T", "m", checks, [("A.JPEG", "h1"), ("B.JPEG", "h2")], originals={"A.JPEG": "a.jpg", "B.JPEG": "b.jpg"},
+                      source_hashes=None, preprocessing=None, recovered=False)
+    assert [(e["name"], e["validations"]) for e in body["images"]] == [("A.JPEG", {"corrupted": "ok"}), ("B.JPEG", {"corrupted": "broken"})]
+    images, metadata, changed = rules.recorded(body)
+    assert (metadata, changed) == ("m", False) and rules.recorded({**body, "deployment_id": "X"})[2] is True
+    verdict = rules.verdict(images, {"A.JPEG": "h1", "B.JPEG": "other"}, ["A.JPEG", "B.JPEG", "C.JPEG"], False, False)
+    assert (verdict["status"], verdict["changed"], verdict["added"]) == ("broken", ["B.JPEG"], ["C.JPEG"])
