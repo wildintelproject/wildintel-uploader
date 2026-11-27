@@ -63,7 +63,6 @@ STILL_COUPLED = {
     "deployments/infrastructure/repair_service.py": {"local_folder_service", "preprocessing_service", "report_service"},
     "deployments/infrastructure/seal_service.py": {"local_folder_service"},
     "postvalidation/infrastructure/legacy.py": {"local_folder_service"},
-    "preprocessing/infrastructure/folders.py": {"deployment_import_service", "disk_space", "local_folder_service"},
     "prevalidation/infrastructure/legacy.py": {"local_folder_service"},
     "timefix/infrastructure/timefix_service.py": {"local_folder_service"},
     "uploaders/infrastructure/sync_service.py": {"local_folder_service"},

@@ -30,7 +30,7 @@ from wildintel_uploader.modules.catalog.infrastructure.visits import StoredStatu
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.deployments.infrastructure.legacy import (
-    CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRepairs, KeptRevisions, KeptStatistics, MemoryCards, StoredSessions,
+    CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRepairs, KeptRevisions, KeptStatistics, LayoutOfTheCollections, MemoryCards, StoredSessions,
 )
 from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
@@ -137,7 +137,7 @@ def build_postvalidation(info: FileInfoService | None = None) -> PostvalidationS
 def build_preprocessing(info: FileInfoService | None = None) -> PreprocessingService:
     """The preprocessing: its steps over what is known of the files, in the collections folder as the rest of the app keeps it, with as many
     images at once as the settings say."""
-    return PreprocessingUseCases(info or file_info(), CollectionFolders(), SavedReports(build_reports()), image_steps=preprocessing_steps.IMAGE_STEPS,
+    return PreprocessingUseCases(info or file_info(), CollectionFolders(lambda: build_deployments().layout()), SavedReports(build_reports()), image_steps=preprocessing_steps.IMAGE_STEPS,
                                  folder_steps=preprocessing_steps.FOLDER_STEPS, workers=config.workers, exiftool=lambda: exiftool_adapter.exiftool_path())
 
 
@@ -162,7 +162,7 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
     settings = settings or build_settings()
     return DeploymentsUseCases(MemoryCards(), DeploymentFolders(), KeptRevisions(), DeploymentPhotos(), visits=build_visits(settings=settings),
                                preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=KeptStatistics(),
-                               sessions=StoredSessions())
+                               sessions=StoredSessions(), layout=LayoutOfTheCollections())
 
 
 def build_timefix() -> TimeFixService:

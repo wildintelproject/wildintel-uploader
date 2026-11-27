@@ -10,7 +10,51 @@ from typing import Any
 Deployment = Any   # the record of a deployment of Camtrap DP (shared.camtrap.DeploymentFields)
 
 
+class CollectionLayout(ABC):
+    """How a collection holds its deployments, for what brings images into one (the preprocessing): what it refuses is DeploymentsFailed."""
+
+    @abstractmethod
+    def check_paths(self, source: Path, dest: Path) -> None:
+        """The images can go from source to dest."""
+
+    @abstractmethod
+    def is_pending(self, dest: Path) -> bool:
+        """Whether dest holds a deployment preprocessed and not consolidated yet — one that may be done again."""
+
+    @abstractmethod
+    def check_not_kept(self, dest: Path) -> None:
+        """No deployment is kept there already."""
+
+    @abstractmethod
+    def is_synced(self, dest: Path) -> bool:
+        """Whether it came from TRAPPER: then it can't be changed here."""
+
+    @abstractmethod
+    def shortfall(self, folder: Path, needed: int, what: str, where: str) -> str | None:
+        """Why `needed` bytes don't fit in `folder`, or None."""
+
+    @abstractmethod
+    def write_collection_metadata(self, collection: Path, name: str | None) -> None: ...
+
+    @abstractmethod
+    def image_entry(self, name: str, local_time: str | None, source: str, extra: dict) -> dict: ...
+
+    @abstractmethod
+    def write_images_file(self, folder: Path, deployment_id: str, images: list[dict]) -> None: ...
+
+    @abstractmethod
+    def write_deployment_metadata(self, dest: Path, deployment: dict) -> None: ...
+
+    @abstractmethod
+    def seal(self, source: Path, dest: Path, deployment: Deployment, **details) -> bool:
+        """Checks the source images and seals the deployment kept in dest; whether it was sealed."""
+
+
 class DeploymentsService(ABC):
+
+    @abstractmethod
+    def layout(self) -> CollectionLayout:
+        """How a collection holds its deployments."""
 
     # the memory card
     @abstractmethod

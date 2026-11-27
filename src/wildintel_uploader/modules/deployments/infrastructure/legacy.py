@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import TypeVar
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
-from wildintel_uploader.modules.deployments.domain.ports import Cards, CollectionStatistics, Deployment, Folders, ImportSessions, Photos, Repairs, Revisions
+from wildintel_uploader.modules.deployments.domain.ports import (
+    Cards, CollectionLayout, CollectionStatistics, Deployment, Folders, ImportSessions, Photos, Repairs, Revisions,
+)
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
 T = TypeVar("T")
@@ -242,3 +244,43 @@ class StoredSessions(ImportSessions):
             store.discard_session(task_id)
         except store.InvalidTaskId as exc:
             raise DeploymentsFailed(str(exc)) from exc
+
+
+class LayoutOfTheCollections(CollectionLayout):
+    """Over the code of before of the deployments: their collections, their seal, the room on the disk."""
+
+    @staticmethod
+    def _dis():
+        from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
+        return deployment_import_service
+
+    def check_paths(self, source: Path, dest: Path) -> None:
+        self._dis().check_paths(source, dest)
+
+    def is_pending(self, dest: Path) -> bool:
+        return self._dis().is_pending(dest)
+
+    def check_not_kept(self, dest: Path) -> None:
+        self._dis().check_not_kept(dest)
+
+    def is_synced(self, dest: Path) -> bool:
+        return layout.is_synced(dest)
+
+    def shortfall(self, folder: Path, needed: int, what: str, where: str) -> str | None:
+        from wildintel_uploader.modules.deployments.infrastructure import disk_space
+        return disk_space.shortfall(folder, needed, what, where)
+
+    def write_collection_metadata(self, collection: Path, name: str | None) -> None:
+        layout.write_collection_metadata(collection, name)
+
+    def image_entry(self, name: str, local_time: str | None, source: str, extra: dict) -> dict:
+        return layout.image_entry(name, local_time, source, extra)
+
+    def write_images_file(self, folder: Path, deployment_id: str, images: list[dict]) -> None:
+        layout.write_images_file(folder, deployment_id, images)
+
+    def write_deployment_metadata(self, dest: Path, deployment: dict) -> None:
+        layout.write_deployment_metadata(dest, deployment)
+
+    def seal(self, source: Path, dest: Path, deployment: Deployment, **details) -> bool:
+        return self._dis().seal_deployment(source, dest, deployment, **details)
