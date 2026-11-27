@@ -22,7 +22,9 @@ atexit.register(shutil.rmtree, _FAKE_HOME, True)
 
 import pytest  # noqa: E402
 
-from wildintel_uploader.entrypoints import wiring  # noqa: E402,F401 — the app put together, as the app does
+from wildintel_uploader.entrypoints import wiring  # noqa: E402 — the app put together, as the app does
+
+wiring.configure_runtime()
 
 
 @pytest.fixture(autouse=True)

@@ -6,7 +6,8 @@ from pathlib import Path
 
 
 def repairing(root: Path):
-    from wildintel_uploader.entrypoints.wiring import build_reports, catalog_of, config, file_info, sealing
+    from wildintel_uploader.entrypoints import config
+    from wildintel_uploader.entrypoints.wiring import build_reports, catalog_of, file_info, sealing
     from wildintel_uploader.modules.deployments.application.repair import Repairing
     from wildintel_uploader.modules.deployments.infrastructure.repair_folder import RepairFolderOnDisk
     return Repairing(RepairFolderOnDisk(lambda: root, file_info), sealing, build_reports, lambda: catalog_of(root),
@@ -30,7 +31,8 @@ def importing():
 
 
 def trapper_sync(root: Path | None = None):
-    from wildintel_uploader.entrypoints.wiring import build_deployments, catalog_of, config
+    from wildintel_uploader.entrypoints import config
+    from wildintel_uploader.entrypoints.wiring import build_deployments, catalog_of
     from wildintel_uploader.modules.uploaders.application.sync import TrapperSync
     from wildintel_uploader.modules.uploaders.infrastructure.synced_folder import CatalogOfTheSync, SyncedCollections
     from wildintel_uploader.modules.uploaders.infrastructure.trapper_site import TrapperSdk

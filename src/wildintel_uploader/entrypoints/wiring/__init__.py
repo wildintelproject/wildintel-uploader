@@ -22,15 +22,7 @@ What is resolved when
 - What is known of the files (file_info) is one for the whole process, on purpose — see it."""
 from __future__ import annotations
 
-from wildintel_uploader.entrypoints import config
-from wildintel_uploader.shared import parallel, storage
-
-# how many images are worked on at once: the setting GENERAL.workers, asked each time
-parallel.use_workers(lambda: config.workers())
-# where the records are kept unless one is chosen: the setting DATA.storage, asked when it is first needed
-storage.use_settings(lambda: config.load_settings().DATA.storage)
-
-from wildintel_uploader.entrypoints.wiring.common import section, keep_trapper_account, app_log, error_words, catalog_collections_dir  # noqa: E402,F401
+from wildintel_uploader.entrypoints.wiring.common import section, keep_trapper_account, app_log, error_words, catalog_collections_dir, configure_runtime  # noqa: E402,F401
 from wildintel_uploader.entrypoints.wiring.settings import build_settings, SettingsProvider  # noqa: E402,F401
 from wildintel_uploader.entrypoints.wiring.catalog import catalog_of, build_catalog, catalog_records, catalog_record_store, catalog_repository, CatalogProvider  # noqa: E402,F401
 from wildintel_uploader.entrypoints.wiring.files import file_info, build_reports, build_prevalidation, build_postvalidation, build_preprocessing, FileInfoProvider, ValidationProvider, PreprocessingProvider, ReportsProvider  # noqa: E402,F401
@@ -41,6 +33,7 @@ from wildintel_uploader.entrypoints.wiring.backup import build_backup, BackupPro
 from wildintel_uploader.entrypoints.wiring.container import make_app_container  # noqa: E402,F401
 
 __all__ = [
+    "configure_runtime",
     "section",
     "keep_trapper_account",
     "app_log",

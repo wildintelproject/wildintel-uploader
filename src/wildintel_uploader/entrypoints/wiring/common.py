@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from wildintel_uploader.entrypoints import config
+from wildintel_uploader.shared import parallel, storage
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog
 
 
@@ -35,3 +36,12 @@ def error_words(exc: Exception) -> str:
 def catalog_collections_dir() -> Path:
     """The collections folder the catalog of a request or a command is kept in: the one the settings say."""
     return config.collections_dir()
+
+
+def configure_runtime() -> None:
+    """What the shared kernel is told of the settings — called once where the app starts (make_app_container: the web app and the command line)
+    and by the tests; importing the wiring does nothing of itself. Each is asked when needed, so a change to the settings is heeded:
+    how many images are worked on at once (GENERAL.workers), and where the records are kept unless one is chosen (DATA.storage)."""
+    parallel.use_workers(lambda: config.workers())
+    storage.use_settings(lambda: config.load_settings().DATA.storage)
+
