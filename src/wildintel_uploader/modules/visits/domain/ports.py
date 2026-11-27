@@ -184,21 +184,32 @@ class VisitDeployments(ABC):
 
 
 class VisitFile(ABC):
-    """A file of visits: any CSV, with the column of each field said."""
+    """A file of visits as text — any CSV —, and its cells and records as the app checks them. What a row can't be is a RowError
+    (domain.visit_file), with the code of what is wrong."""
 
     @abstractmethod
-    def parse(self, text: str, locations: list[dict], kept: list[Visit], mapping: dict | None, options: dict) -> dict: ...
+    def table(self, text: str) -> list[list[str]]:
+        """Its rows, the first its header. VisitsCsvError when it is empty."""
 
     @abstractmethod
-    def export(self, visits: list[Visit]) -> str: ...
+    def write(self, rows: list[list[str]]) -> str:
+        """Rows as the text of a file a spreadsheet reads with its accents."""
 
     @abstractmethod
-    def columns(self, text: str) -> dict:
-        """What suggest_mapping says of a CSV, and the fields of a visit: {"columns", "rows", "mapping"…, "fields"}."""
+    def cells(self, row: dict[str, str]) -> dict:
+        """What the cells of a row (keyed by the fields they give) say of a visit, each read as its field takes it — only what the row says."""
+
+    @abstractmethod
+    def record(self, visit: dict) -> Visit:
+        """A visit as a record of a visit has it."""
+
+    @abstractmethod
+    def location(self, fields: dict) -> dict:
+        """A location a row creates (domain.visit_file.location_fields), as the catalog takes one."""
 
     @abstractmethod
     def normalized(self, visit: Visit) -> Visit:
-        """A visit as a record of a visit has it."""
+        """A visit as a record of a visit has it — what it refuses raised as it is."""
 
 
 class Uploads(ABC):

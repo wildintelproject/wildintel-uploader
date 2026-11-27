@@ -102,10 +102,11 @@ from wildintel_uploader.modules.uploaders.infrastructure.uploads import FolderUp
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
 from wildintel_uploader.modules.visits.infrastructure.adapters import (
-    AuditClock, CatalogOfTheVisits, CollectionFolders as VisitCollectionFolders, CsvVisitFile, FieldlogInUse, SavedVisitReports, StoredStateHistory, UploadsOfTheUploaders,
+    AuditClock, CatalogOfTheVisits, CollectionFolders as VisitCollectionFolders, FieldlogInUse, SavedVisitReports, StoredStateHistory, UploadsOfTheUploaders,
 )
 from wildintel_uploader.modules.visits.infrastructure.adapters import StoredVisits as VisitsKept
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
+from wildintel_uploader.modules.visits.infrastructure.csv_file import CsvVisitFile
 from wildintel_uploader.modules.settings.domain.ports import ActivityLog, Machine, RecordStorage, SettingsService, SettingsStore
 from wildintel_uploader.modules.settings.infrastructure.system import AppActivityLog, AppRecordStorage, ThisMachine
 from wildintel_uploader.shared import storage

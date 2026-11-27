@@ -1,5 +1,5 @@
 """The adapters of the visits: the visits kept (KeptVisits), the catalog as records, the folders of the collections, the history of the states
-(the catalog's), the file of visits (csv_file), where the deployments were uploaded (the uploaders), the reports, the settings of FIELDLOG. What
+(the catalog's), where the deployments were uploaded (the uploaders), the reports, the settings of FIELDLOG. What
 they refuse is VisitsFailed, with their words."""
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ from pathlib import Path
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRecords
 from wildintel_uploader.modules.reports.domain.ports import ReportsService
 from wildintel_uploader.modules.visits.domain.models import VisitsFailed
+from wildintel_uploader.modules.visits.domain.visit_file import VisitsCsvError
 from wildintel_uploader.modules.visits.domain.ports import (
-    Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitFile, VisitReports, VisitRepository, VisitSettings,
+    Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitReports, VisitRepository, VisitSettings,
 )
 from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
-from wildintel_uploader.modules.visits.infrastructure.records import VisitRecord
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 
 
@@ -23,11 +23,10 @@ from wildintel_uploader.modules.settings.domain.ports import StoredSettings
 @contextmanager
 def _failed() -> Iterator[None]:
     """What the files and the records refuse, as VisitsFailed."""
-    from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
     from wildintel_uploader.shared.storage import StorageError
     try:
         yield
-    except (StorageError, visits_csv.VisitsCsvError) as exc:
+    except (StorageError, VisitsCsvError) as exc:
         raise VisitsFailed(str(exc)) from exc
 
 
@@ -148,31 +147,6 @@ class CollectionFolders(VisitDeployments):
     def make_collection(self, project: str, collection: str) -> None:
         with _failed():
             self._layout().write_collection_metadata(self.root / project / collection, collection)
-
-
-class CsvVisitFile(VisitFile):
-    @staticmethod
-    def _csv():
-        from wildintel_uploader.modules.visits.infrastructure import csv_file
-        return csv_file
-
-    def parse(self, text: str, locations: list[dict], kept: list[Visit], mapping: dict | None, options: dict) -> dict:
-        with _failed():
-            return self._csv().parse_visits(text, locations, kept, mapping, options)
-
-    def export(self, visits: list[Visit]) -> str:
-        return self._csv().export_visits(visits)
-
-    def columns(self, text: str) -> dict:
-        vc = self._csv()
-        with _failed():
-            needed_by = {f: [e for e, spec in vc.CREATABLE.items() if f in spec["required"]] for f, _, _ in vc.FIELDS}
-            return {**vc.suggest_mapping(text), "fields": [
-                {"field": f, "label": label, "required": required, "entity": vc.ENTITY_ONLY.get(f), "required_with": needed_by[f]}
-                for f, label, required in vc.FIELDS]}
-
-    def normalized(self, visit: Visit) -> Visit:
-        return VisitRecord.model_validate(visit).model_dump(mode="json")
 
 
 class UploadsOfTheUploaders(Uploads):

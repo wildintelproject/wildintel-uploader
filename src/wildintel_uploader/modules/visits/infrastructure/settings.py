@@ -11,7 +11,7 @@ from wildintel_uploader.modules.settings.domain.registry import settings_registr
 @settings_registry.schema("FIELDLOG")
 class FieldlogSettings(BaseModel):
     """Field records: how the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them
-    (see services.visits_csv and services.visit_deployments)."""
+    (see domain.visit_file and domain.deployments)."""
 
     time_source: Literal["created_at", "hour"] = Field(
         default="created_at",

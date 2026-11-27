@@ -229,7 +229,7 @@ def upload_report(collection: str, research_project: str, items: list[dict], *, 
 
 def visits_import_report(research_project_id: str, result: dict, saved: int) -> ReportBuilder:
     """The report of an import of visits: an entry for each row of the file — what became of it, and why — then what was odd about the visits, what was worth knowing,
-    what the import created and the sites that are not locations. `result` is what visits_csv.parse_visits gave (with the folder's changes told by `saved`)."""
+    what the import created and the sites that are not locations. `result` is what the reading of a file of visits gave (visits.application.visit_file) (with the folder's changes told by `saved`)."""
     b = ReportBuilder("visits", f"Visits imported to {research_project_id}", source_dir=None, deployment_id=None,
                  parameters={"research_project": research_project_id, "saved": saved, "skipped": result.get("skipped", 0)})
     rows = result.get("rows", [])

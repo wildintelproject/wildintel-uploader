@@ -10,6 +10,7 @@ import threading
 from wildintel_uploader.modules.sources.domain.models import SourceError
 from wildintel_uploader.modules.sources.domain.ports import SourcesService
 from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS
+from wildintel_uploader.modules.visits.application.visit_file import VisitFiles
 from wildintel_uploader.modules.visits.domain import deployments as visit_deployments, rules, wall_clock
 from wildintel_uploader.modules.visits.domain.models import ImportOptions, VisitLocked, VisitMissing, VisitRefused, VisitsError, VisitsFailed
 from wildintel_uploader.modules.visits.domain.ports import (
@@ -57,7 +58,7 @@ def with_location_coordinates(text: str) -> str:
 class VisitsUseCases(VisitsService):
     def __init__(self, repository: VisitRepository, catalog: VisitCatalog, *, deployments: VisitDeployments, file: VisitFile, sources: SourcesService,
                  uploads: Uploads, reports: VisitReports, history: StateHistory, settings: VisitSettings, clock: Clock) -> None:
-        self._visits, self._catalog, self._deployments, self._file, self._sources = repository, catalog, deployments, file, sources
+        self._visits, self._catalog, self._deployments, self._file, self._sources = repository, catalog, deployments, VisitFiles(file), sources
         self._uploads, self._reports, self._history, self._settings, self._clock = uploads, reports, history, settings, clock
 
     # ── what the visits kept do ──

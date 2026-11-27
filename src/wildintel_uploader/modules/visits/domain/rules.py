@@ -57,7 +57,7 @@ def camera_status_code(value) -> str | None:
 
 
 class Reason(str):
-    """Why a visit is refused — the text, and `code`: which rule it is, for the label of the error (see visits_csv.ERROR_LABELS)."""
+    """Why a visit is refused — the text, and `code`: which rule it is, for the label of the error (see domain.visit_file.ERROR_LABELS)."""
     code: str = "visit_refused"
 
 

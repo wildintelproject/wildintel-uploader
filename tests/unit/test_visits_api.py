@@ -26,24 +26,24 @@ def entities_unchecked(request, monkeypatch):
     """Most tests save visits of cameras, cards and trappers that nobody registered: the check that they exist is off, except in the tests marked `entities`.
     Every visit of a file needs its coordinates, so the rows of the samples that do not give them get these, as a default."""
     from wildintel_uploader.modules.visits.domain import rules as visit_rules
-    from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
+    from wildintel_uploader.modules.visits.application import visit_file
     from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
-    real = visits_csv.parse_visits
+    real = visit_file.parse_visits
     entities = request.node.get_closest_marker("entities")
     if not request.node.get_closest_marker("gps"):
         monkeypatch.setattr(visit_rules, "GPS_TOLERANCE_M", 10**9)      # the default coordinates are not those of the sites: only the tests marked `gps` check the distance
 
-    def parse(*a, **k):
+    def parse(file, *a, **k):
         options = dict(a[4] if len(a) > 4 and a[4] else {})
         if not request.node.get_closest_marker("no_default_coordinates"):
             options["defaults"] = {"latitude": "37.0", "longitude": "-6.4", **(options.get("defaults") or {})}
         if not entities:
             options["check_entities"] = False
-        return real(*a[:4], options)
+        return real(file, *a[:4], options)
 
     if not entities:
         monkeypatch.setattr(VisitsUseCases, "_not_entities", lambda *a, **k: [])
-    monkeypatch.setattr(visits_csv, "parse_visits", parse)
+    monkeypatch.setattr(visit_file, "parse_visits", parse)
 
 
 def _client() -> TestClient:
@@ -637,7 +637,7 @@ def test_a_closed_visit_comes_with_what_its_two_visits_say_of_the_deployment_mix
 # ── the settings of the field records, and what the engine of the field records also says ───────────────────────
 
 def _parse(text: str, kept=None, options=None, sites=("DONA_01", "DONA_02", "DONA_03")):
-    from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
+    from tests.support import visits_csv
     locations = [{"location_id": s, "timezone": "UTC", "ignore_dst": False, "latitude": 37.0, "longitude": -6.4} for s in sites]
     return visits_csv.parse_visits(text, locations, kept or [], visits_csv.suggest_mapping(text)["mapping"], options)
 
@@ -1459,7 +1459,7 @@ def test_what_is_kept_of_a_site_given_up_in_the_file_is_the_visits_and_no_false_
 
 
 def test_the_locations_as_the_visits_of_a_file_leave_them():
-    from wildintel_uploader.modules.visits.infrastructure.csv_file import _archived_by
+    from tests.support.visits_csv import _archived_by
 
     sites = [{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "active"}, {"location_id": "DONA_03", "status": "archived", "status_date": "2026-01-01"},
              {"location_id": "DONA_04", "status": "archived", "status_date": "2026-05-01"}]
@@ -1535,7 +1535,7 @@ def test_what_is_kept_of_a_site_given_up_in_the_file_is_the_visits_and_no_false_
 
 
 def test_the_locations_as_the_visits_of_a_file_leave_them():
-    from wildintel_uploader.modules.visits.infrastructure.csv_file import _archived_by
+    from tests.support.visits_csv import _archived_by
 
     sites = [{"location_id": "DONA_01", "status": "active"}, {"location_id": "DONA_02", "status": "active"}, {"location_id": "DONA_03", "status": "archived", "status_date": "2026-01-01"},
              {"location_id": "DONA_04", "status": "archived", "status_date": "2026-05-01"}]
@@ -1650,7 +1650,7 @@ def test_a_site_that_says_site_start_is_not_waited_for_before_it_and_one_that_do
 
 
 def test_the_words_site_start_are_an_action_of_a_file():
-    from wildintel_uploader.modules.visits.infrastructure import csv_file as visits_csv
+    from tests.support import visits_csv
 
     assert [visits_csv.ACTIONS[w] for w in ("site start", "sitestart", "site_start", "site setup")] == ["SiteStart"] * 4
 
