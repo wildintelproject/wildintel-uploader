@@ -40,16 +40,22 @@ from wildintel_uploader.modules.preprocessing.domain import models as pre
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 
 
-def _contracts():
-    """The catalog and the reports — through their contracts —, from where the app is put together."""
+def _catalog(collections_dir: Path):
+    """The catalog of the collections folder being repaired — through its contract —, from where the app is put together."""
     from wildintel_uploader.entrypoints import wiring
-    return wiring.build_catalog(config.collections_dir(), wiring.build_settings()), wiring.build_reports()
+    return wiring.build_catalog(collections_dir, wiring.build_settings())
 
 
-def _locations(research_project_id: str) -> list[dict]:
+def _reports():
+    """The reports, through their contract."""
+    from wildintel_uploader.entrypoints import wiring
+    return wiring.build_reports()
+
+
+def _locations(collections_dir: Path, research_project_id: str) -> list[dict]:
     """The locations of the research project, as the catalog keeps them — as dicts, what the repair reads of them."""
     return [{"location_id": loc.location_id, "name": loc.name, "latitude": loc.latitude, "longitude": loc.longitude,
-             "coordinate_uncertainty": loc.coordinate_uncertainty} for loc in _contracts()[0].locations(research_project_id)]
+             "coordinate_uncertainty": loc.coordinate_uncertainty} for loc in _catalog(collections_dir).locations(research_project_id)]
 
 
 def _zone_of(name: str):
@@ -244,7 +250,7 @@ def _location_of(root: Path, research_project_id: str, deployment_id: str, old: 
     """The id of the deployment's location — the one deployment.json says, else the end of the deployment's id — and the record
     kept for it in the research project (found ignoring case)."""
     wanted = (old or {}).get("location_id") or (deployment_id.split("-", 1)[1] if "-" in deployment_id else None)
-    record = next((l for l in _locations(research_project_id) if wanted and str(l.get("location_id", "")).lower() == wanted.lower()), {})
+    record = next((l for l in _locations(root, research_project_id) if wanted and str(l.get("location_id", "")).lower() == wanted.lower()), {})
     return (record.get("location_id") or wanted), record
 
 
@@ -315,7 +321,7 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         yield step("inspect", "done", f"{len(images)} image(s), {sum((dest / n).is_file() for n in _METADATA_FILES)} of {len(_METADATA_FILES)} metadata files.")
 
         location_id, location = _location_of(collections_dir, research_project_id, deployment_id, old_deployment)
-        location_time = _contracts()[0].location_time(research_project_id, location_id)
+        location_time = _catalog(collections_dir).location_time(research_project_id, location_id)
         zone_name = location_time.get("timezone") or ((old_log or {}).get("options") or {}).get("timezone")
         options = _options_of(old_log, location_time, zone_name)
         zone = _zone_of(zone_name or options.timezone)
@@ -443,11 +449,11 @@ def repair_stream(collections_dir: Path, research_project_id: str, collection: s
         preprocessing = _preprocessing_problems(dest, deployment_id, records, options, old_by_name, xmp) if records else {}
         report_id = None
         try:
-            report_id = _contracts()[1].save_repair(deployment_id, dest, file_results, sealed, preprocessing)
+            report_id = _reports().save_repair(deployment_id, dest, file_results, sealed, preprocessing)
         except Exception as exc:  # the repair is done: not having its report is no reason to fail it
             logger.warning("Could not write the report of the repair of %s: %s", deployment_id, exc)
         status = seal_service.verify(dest)["status"] if sealed else "unsealed"
-        problems = (_contracts()[1].read(report_id)["totals"]["failed"] if report_id else 0)
+        problems = (_reports().read(report_id)["totals"]["failed"] if report_id else 0)
         logger.info("Deployment %s repaired: wrote %s", deployment_id, ", ".join(written))
         yield {"type": "done", "deployment_id": deployment_id, "images": len(images), "written": written, "problems": problems, "status": {"valid": "valid", "broken": "broken", "none": "unsealed"}.get(status, status), "report_id": report_id}
 
