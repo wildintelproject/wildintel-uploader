@@ -26,7 +26,9 @@ from wildintel_uploader.modules.catalog.infrastructure.sql_repository import Sql
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredStatusHistory, StoredVisits
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
-from wildintel_uploader.modules.deployments.infrastructure.legacy import CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRevisions, MemoryCards
+from wildintel_uploader.modules.deployments.infrastructure.legacy import (
+    CollectionFolders as DeploymentFolders, DeploymentPhotos, KeptRepairs, KeptRevisions, KeptStatistics, MemoryCards,
+)
 from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
@@ -54,6 +56,9 @@ from wildintel_uploader.modules.sources.infrastructure import sources as visit_s
 from wildintel_uploader.modules.sources.infrastructure.epicollect5 import PyEpicollect5
 from wildintel_uploader.modules.sources.infrastructure.settings_in_use import SettingsOfTheSources
 from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import form_columns, form_error
+from wildintel_uploader.modules.timefix.application.use_cases import TimeFixUseCases
+from wildintel_uploader.modules.timefix.domain.ports import TimeFixService
+from wildintel_uploader.modules.timefix.infrastructure.legacy import ImagesWithExifTool, PeriodsOfTheVisits
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
 from wildintel_uploader.modules.visits.domain.ports import VisitsService
 from wildintel_uploader.modules.visits.infrastructure.legacy import (
@@ -140,7 +145,12 @@ def build_deployments(settings: SettingsService | None = None) -> DeploymentsSer
     preprocessing through their contracts."""
     settings = settings or build_settings()
     return DeploymentsUseCases(MemoryCards(), DeploymentFolders(), KeptRevisions(), DeploymentPhotos(), visits=build_visits(settings=settings),
-                               preprocessing=build_preprocessing())
+                               preprocessing=build_preprocessing(), repairs=KeptRepairs(), statistics=KeptStatistics())
+
+
+def build_timefix() -> TimeFixService:
+    """The fixes of the dates of the images, over the code of before."""
+    return TimeFixUseCases(PeriodsOfTheVisits(), ImagesWithExifTool())
 
 
 # ── the providers of the container ──
@@ -239,6 +249,12 @@ class DeploymentsProvider(Provider):
         return build_deployments(settings)
 
 
+class TimeFixProvider(Provider):
+    @provide(scope=Scope.APP)
+    def service(self) -> TimeFixService:
+        return build_timefix()
+
+
 def make_app_container() -> Container:
     """The container of the app: every module's provider."""
-    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider())
+    return make_container(SettingsProvider(), CatalogProvider(), FileInfoProvider(), ValidationProvider(), PreprocessingProvider(), SourcesProvider(), VisitsProvider(), DeploymentsProvider(), TimeFixProvider())

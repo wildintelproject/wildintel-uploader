@@ -15,10 +15,12 @@ from wildintel_uploader.modules.deployments.domain.models import DeploymentMissi
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
 from wildintel_uploader.modules.deployments.infrastructure.api_schemas import (
     CardRequest, CheckCollectionRequest, CollectionPathRequest, ExistingDeploymentsRequest, ImportLocalRequest, NextRevisionRequest,
-    PreviousDeploymentsRequest, ScanFolderRequest,
+    PreviousDeploymentsRequest, RepairRequest, ScanFolderRequest, StatisticsRequest, UploadCollectionsRequest,
 )
 
 router = APIRouter(prefix="/api/deployment-import", tags=["deployments"], route_class=DishkaSyncRoute)
+repair_router = APIRouter(prefix="/api/repair", tags=["deployments"], route_class=DishkaSyncRoute)
+statistics_router = APIRouter(prefix="/api/statistics", tags=["deployments"], route_class=DishkaSyncRoute)
 Deployments = FromDishka[DeploymentsService]
 T = TypeVar("T")
 
@@ -166,3 +168,32 @@ def deployment_photo(research_project_id: str, collection: str, deployment_id: s
     """A photo of a created deployment, as a JPEG: a thumbnail, or (size=large) one to look at closely."""
     body = _http(lambda: deployments.photo(research_project_id, collection, deployment_id, name, size == "large"))
     return Response(body, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+
+
+# ── checking and repairing those kept (/api/repair), and the statistics of a revision (/api/statistics) ──
+
+@repair_router.post("/collections")
+def repair_collections(req: UploadCollectionsRequest, deployments: Deployments) -> dict:
+    """The collections kept for a research project and the deployment folders in each, whatever state they are in."""
+    return {"results": _http(lambda: deployments.repair_collections(req.research_project_id))}
+
+
+@repair_router.post("/inspect")
+def inspect(req: RepairRequest, deployments: Deployments) -> dict:
+    """The state of a deployment — valid, or not, as its seal.json says — and what is wrong with it."""
+    return _http(lambda: deployments.inspect(req.research_project_id, req.collection, req.deployment_id))
+
+
+@repair_router.post("/deployment")
+def repair(req: RepairRequest, deployments: Deployments) -> StreamingResponse:
+    """Repairs a deployment: its metadata files are written again from what its folder holds. NDJSON: a {"type": "step"} per step and, last,
+    {"type": "done", ...}; a failure midway is an {"type": "error", "detail"} line. One that isn't there or was synced from Trapper is a plain 4xx."""
+    events = _http(lambda: deployments.repair(req.research_project_id, req.collection, req.deployment_id))
+    return streaming.from_events(events, f"Repairing {req.deployment_id} failed")
+
+
+@statistics_router.post("/revision")
+def revision(req: StatisticsRequest, deployments: Deployments) -> dict:
+    """One row per deployment of the revision: its metrics, what each check of POSTVALIDATION says of it, its status and the metrics of the
+    previous revisions of its location."""
+    return {"results": _http(lambda: deployments.revision_statistics(req.research_project_id, req.collection))}

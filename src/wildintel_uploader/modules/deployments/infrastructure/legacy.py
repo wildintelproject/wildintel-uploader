@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
-from wildintel_uploader.modules.deployments.domain.ports import Cards, Deployment, Folders, Photos, Revisions
+from wildintel_uploader.modules.deployments.domain.ports import Cards, CollectionStatistics, Deployment, Folders, Photos, Repairs, Revisions
 
 T = TypeVar("T")
 
@@ -132,3 +132,57 @@ class DeploymentPhotos(Photos):
         from wildintel_uploader.core.services import deployment_photos
         size = deployment_photos.LARGE if large else deployment_photos.THUMBNAIL
         return self._missing(lambda: deployment_photos.photo_jpeg(_root(), project, collection, deployment_id, name, size))
+
+
+class KeptRepairs(Repairs):
+    @staticmethod
+    def _repair():
+        from wildintel_uploader.core.services import repair_service
+        return repair_service
+
+    def collections(self, project: str) -> list[dict]:
+        rs = self._repair()
+        try:
+            return rs.list_collections(_root(), project)
+        except rs.RepairError as exc:
+            raise DeploymentsFailed(str(exc)) from exc
+
+    def inspect(self, project: str, collection: str, deployment_id: str) -> dict:
+        rs = self._repair()
+        try:
+            return rs.inspect(_root(), project, collection, deployment_id)
+        except rs.RepairError as exc:
+            raise DeploymentMissing(str(exc)) from exc
+
+    def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]:
+        """What fails mid-way says so with its words — what the repair itself refuses as it was, anything else as "The repair failed: …"."""
+        from wildintel_uploader.core.services import deployment_import_service, local_folder_service
+        rs = self._repair()
+        try:
+            events = rs.repair_stream(_root(), project, collection, deployment_id)
+        except rs.RepairError as exc:
+            raise DeploymentsFailed(str(exc)) from exc
+
+        def told() -> Iterator[dict]:
+            try:
+                yield from events
+            except (rs.RepairError, local_folder_service.LocalFolderError, deployment_import_service.DeploymentImportError) as exc:
+                raise DeploymentsFailed(str(exc)) from exc
+            except Exception as exc:  # noqa: BLE001
+                raise DeploymentsFailed(f"The repair failed: {exc}") from exc
+        return told()
+
+
+class KeptStatistics(CollectionStatistics):
+    def revision(self, project: str, collection: str) -> list[dict]:
+        from wildintel_uploader.core import config
+        from wildintel_uploader.core.services import deployment_import_service, statistics_service
+        settings = config.load_settings()
+        post = settings.POSTVALIDATION
+        try:
+            return statistics_service.collection_statistics(
+                config.collections_dir(settings), project, collection, sequence_gap_seconds=post.sequence_gap_seconds, min_revisions=post.min_revisions,
+                method=post.similarity_method, tolerances={"image_count": post.image_count_tolerance, "sequence_count": post.sequence_count_tolerance,
+                                                           "sequence_length": post.sequence_length_tolerance})
+        except deployment_import_service.DeploymentImportError as exc:
+            raise DeploymentMissing(str(exc)) from exc

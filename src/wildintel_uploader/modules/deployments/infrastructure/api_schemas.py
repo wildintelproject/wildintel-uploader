@@ -83,3 +83,24 @@ class ImportLocalRequest(BaseModel):
 
 class OpenFolderRequest(BaseModel):
     path: str
+
+
+class UploadCollectionsRequest(BaseModel):
+    """The collections kept for a research project."""
+
+    research_project_id: str = Field(min_length=1)
+
+
+class StatisticsRequest(BaseModel):
+    """A revision (collection) kept in the collections folder, to compare its deployments with the previous revisions of their locations."""
+
+    research_project_id: str = Field(min_length=1)
+    collection: str = Field(pattern=r"^R\d{4}(_.+)?$")
+
+
+class RepairRequest(BaseModel):
+    """One deployment kept in the collections folder, to look at or to repair."""
+
+    research_project_id: str = Field(min_length=1)
+    collection: str = Field(pattern=r"^R\d{4}(_.+)?$")
+    deployment_id: str = Field(pattern=r"^R\d{4}-.+$")

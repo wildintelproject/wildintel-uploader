@@ -19,8 +19,9 @@ from wildintel_uploader.entrypoints.api import postvalidation as postvalidation_
 from wildintel_uploader.entrypoints.api import prevalidation as prevalidation_entrypoint
 from wildintel_uploader.entrypoints.api import settings as settings_entrypoint
 from wildintel_uploader.entrypoints.api import sources as sources_entrypoint
+from wildintel_uploader.entrypoints.api import timefix as timefix_entrypoint
 from wildintel_uploader.entrypoints.api import visits as visits_entrypoint
-from wildintel_uploader.web.api.routers import app_settings, backup, deployment_import, health, repair, reports, sessions, statistics, sync, timefix, trapper, upload
+from wildintel_uploader.web.api.routers import app_settings, backup, deployment_import, health, reports, sessions, sync, trapper, upload
 from wildintel_uploader.web.settings import configure_logging, settings
 
 configure_logging()
@@ -36,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, catalog_entrypoint.settings_router, trapper.router, prevalidation_entrypoint.router, postvalidation_entrypoint.router, deployments_entrypoint.router, desktop_entrypoint.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router, repair.router, statistics.router, sources_entrypoint.router, visits_entrypoint.router, timefix.router, backup.router]:
+for _router in [health.router, settings_entrypoint.router, catalog_entrypoint.router, catalog_entrypoint.setup_router, catalog_entrypoint.import_router, catalog_entrypoint.settings_router, trapper.router, prevalidation_entrypoint.router, postvalidation_entrypoint.router, deployments_entrypoint.router, deployments_entrypoint.repair_router, deployments_entrypoint.statistics_router, desktop_entrypoint.router, deployment_import.router, app_settings.router, sessions.router, upload.router, sync.router, reports.router,  sources_entrypoint.router, visits_entrypoint.router, timefix_entrypoint.router, backup.router]:
     app.include_router(_router)
 
 

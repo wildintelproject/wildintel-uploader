@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
-from wildintel_uploader.modules.deployments.domain.ports import Cards, Deployment, DeploymentsService, Folders, Photos, Revisions
+from wildintel_uploader.modules.deployments.domain.ports import Cards, CollectionStatistics, Deployment, DeploymentsService, Folders, Photos, Repairs, Revisions
 from wildintel_uploader.modules.preprocessing.domain.models import PreprocessingError, PreprocessOptions
 from wildintel_uploader.modules.preprocessing.domain.ports import PreprocessingService
 from wildintel_uploader.modules.visits.domain.models import VisitsError
@@ -15,9 +15,9 @@ from wildintel_uploader.modules.visits.domain.ports import VisitsService
 
 class DeploymentsUseCases(DeploymentsService):
     def __init__(self, cards: Cards, folders: Folders, revisions: Revisions, photos: Photos, *, visits: VisitsService,
-                 preprocessing: PreprocessingService) -> None:
+                 preprocessing: PreprocessingService, repairs: Repairs | None = None, statistics: CollectionStatistics | None = None) -> None:
         self._cards, self._folders, self._revisions, self._photos = cards, folders, revisions, photos
-        self._visits, self._preprocessing = visits, preprocessing
+        self._visits, self._preprocessing, self._repairs, self._statistics = visits, preprocessing, repairs, statistics
 
     # the memory card
 
@@ -110,6 +110,20 @@ class DeploymentsUseCases(DeploymentsService):
             return self._preprocessing.consolidate(Path(source_dir), Path(collection_dir), deployment)
         except PreprocessingError as exc:
             raise DeploymentsFailed(str(exc)) from exc
+
+    # checking and repairing those kept, and the statistics of a revision
+
+    def repair_collections(self, project: str) -> list[dict]:
+        return self._repairs.collections(project)
+
+    def inspect(self, project: str, collection: str, deployment_id: str) -> dict:
+        return self._repairs.inspect(project, collection, deployment_id)
+
+    def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]:
+        return self._repairs.repair(project, collection, deployment_id)
+
+    def revision_statistics(self, project: str, collection: str) -> list[dict]:
+        return self._statistics.revision(project, collection)
 
     # its photos
 

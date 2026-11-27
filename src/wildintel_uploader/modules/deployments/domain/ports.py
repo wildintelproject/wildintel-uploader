@@ -70,6 +70,19 @@ class DeploymentsService(ABC):
     @abstractmethod
     def consolidate(self, source_dir: str, collection_dir: str, deployment: Deployment) -> Iterator[dict]: ...
 
+    # checking and repairing those kept, and the statistics of a revision
+    @abstractmethod
+    def repair_collections(self, project: str) -> list[dict]: ...
+
+    @abstractmethod
+    def inspect(self, project: str, collection: str, deployment_id: str) -> dict: ...
+
+    @abstractmethod
+    def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]: ...
+
+    @abstractmethod
+    def revision_statistics(self, project: str, collection: str) -> list[dict]: ...
+
     # its photos
     @abstractmethod
     def photos(self, project: str, collection: str, deployment_id: str) -> list[dict]: ...
@@ -79,6 +92,27 @@ class DeploymentsService(ABC):
 
 
 # ── out ──
+
+class Repairs(ABC):
+    """Checking and repairing the deployments kept: their metadata files written again from what their folders hold."""
+
+    @abstractmethod
+    def collections(self, project: str) -> list[dict]: ...
+
+    @abstractmethod
+    def inspect(self, project: str, collection: str, deployment_id: str) -> dict:
+        """DeploymentMissing when it isn't there."""
+
+    @abstractmethod
+    def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]:
+        """DeploymentsFailed, before anything is touched, when it isn't there or was synced from TRAPPER."""
+
+
+class CollectionStatistics(ABC):
+    @abstractmethod
+    def revision(self, project: str, collection: str) -> list[dict]:
+        """One row per deployment of the revision against the previous revisions of its location, as the settings of the postvalidation say.
+        DeploymentMissing when the collection isn't there."""
 
 class Cards(ABC):
     @abstractmethod
