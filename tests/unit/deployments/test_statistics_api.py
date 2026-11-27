@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from tests.unit.test_statistics_service import _revision, _stamps
+from tests.unit.deployments.test_statistics_service import _revision, _stamps
 from wildintel_uploader.web.main import app
 
 

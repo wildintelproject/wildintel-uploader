@@ -5,7 +5,7 @@ from pathlib import Path
 
 from wildintel_uploader.web.main import app
 
-FRONTEND_API = Path(__file__).resolve().parents[2] / "frontend" / "src" / "api.ts"
+FRONTEND_API = Path(__file__).resolve().parents[3] / "frontend" / "src" / "api.ts"
 
 
 def test_the_api_describes_itself():

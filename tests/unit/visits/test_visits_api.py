@@ -310,7 +310,7 @@ def test_the_columns_of_a_csv_are_offered_with_the_fields_and_the_column_that_mo
 
 
 def test_a_csv_is_detected_as_the_download_of_the_wildintel_form_or_as_another(tmp_path: Path):
-    form = (Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "dona" / "revision_1.csv").read_text(encoding="utf-8")
+    form = (Path(__file__).parents[3] / "examples" / "visits_example" / "wildintel_csv" / "dona" / "revision_1.csv").read_text(encoding="utf-8")
     other = "Site,Date,Time,Action\nA,2026-10-02,08:00,Revision\n"
 
     assert _client().post("/api/visits/csv-columns", json={"csv": form}).json()["kind"] == "form"
@@ -1307,7 +1307,7 @@ def test_the_download_of_the_new_form_is_read_by_its_headers_cut_at_20_character
 
 
     from wildintel_uploader.modules.sources.infrastructure.sources.epicollect_csv import visits_from_csv
-    folder = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
+    folder = Path(__file__).parents[3] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
 
     def read(name: str) -> tuple[str, list[dict]]:
         text = (folder / name).read_text(encoding="utf-8")
@@ -1819,7 +1819,7 @@ def test_the_examples_of_the_new_form_for_wicp_02_are_imported_in_order_with_no_
     from tests.support import built
 
 
-    examples = Path(__file__).parents[2] / "examples"
+    examples = Path(__file__).parents[3] / "examples"
     rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
     order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up", "revision_6_new_site"]
     answers = []
@@ -1853,7 +1853,7 @@ def _wicp_02_until(root: Path, last: int) -> None:
     from tests.support import built
 
 
-    examples = Path(__file__).parents[2] / "examples"
+    examples = Path(__file__).parents[3] / "examples"
     rows = lambda name: list(csv.DictReader((examples / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))
     order = ["revision_1_installation", "revision_2_all_revised", "revision_3_theft_replaced", "revision_4_theft_not_replaced", "revision_5_replacement_removal_and_site_given_up"][:last]
     _client().post("/api/deployment-import/research-projects/save", json={**PROJECT, "name": "WICP_02", "acronym": "WICP_02"})
@@ -1870,7 +1870,7 @@ def _wicp_02_until(root: Path, last: int) -> None:
 
 
 def test_a_visit_that_says_new_site_makes_its_site_with_no_need_of_the_switch_and_says_which_timezone_it_has(tmp_path: Path):
-    examples = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
+    examples = Path(__file__).parents[3] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
     text = (examples / "revision_6_new_site.csv").read_text(encoding="utf-8")
     with _in(tmp_path), patch("wildintel_uploader.modules.visits.infrastructure.adapters.CatalogOfTheVisits.trapper_names", return_value=["Ana Pérez", "Luis Gómez"]):
         _wicp_02_until(tmp_path, 5)                      # R0006 needs the revisions before it
@@ -1894,7 +1894,7 @@ def test_the_download_of_the_new_form_needs_no_date_nor_time_a_visit_is_when_its
 
 
 def test_the_download_of_the_new_form_can_create_what_does_not_exist_with_the_place_of_the_visit_as_the_one_of_a_new_location(tmp_path: Path):
-    folder = Path(__file__).parents[2] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
+    folder = Path(__file__).parents[3] / "examples" / "visits_example" / "wildintel_csv" / "wicp_02"
     text = (folder / "revision_1_installation.csv").read_text(encoding="utf-8")
     with _in(tmp_path):
         _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
@@ -2188,7 +2188,7 @@ def test_the_template_of_the_custom_csv_is_the_valid_example_and_is_read_by_itse
     from tests.support import built
 
 
-    root = Path(__file__).parents[2]
+    root = Path(__file__).parents[3]
     template = (root / "frontend" / "src" / "visitsTemplate.csv").read_text(encoding="utf-8")
     assert template == (root / "examples" / "visits_example" / "custom_csv" / "wicp_02" / "template.csv").read_text(encoding="utf-8")
     rows = lambda name: list(csv.DictReader((root / "examples" / "entities_example" / "wicp_02" / name).open(encoding="utf-8")))

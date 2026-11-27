@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.unit._media_fakes import Info
+from tests.support.media_fakes import Info
 from wildintel_uploader.entrypoints import wiring
 from wildintel_uploader.modules.preprocessing.domain.models import ImageWork, PreprocessingError, PreprocessOptions, public_record
 from wildintel_uploader.modules.preprocessing.domain.steps import Job

@@ -139,7 +139,9 @@ wildintel-uploader/
 │   │   ├── app_entry.py         # executable entry point: the web app — or, with arguments, the CLI
 │   │   └── settings.py          # the server's settings (env vars / .env)
 │   └── wucli.py                 # the development CLI (uv run wucli …)
-├── tests/unit/                  # pytest — TRAPPER always faked
+├── tests/
+│   ├── unit/<module>/           # pytest, a folder for each module (and app/, shared/) — TRAPPER always faked
+│   └── support/built.py         # the use cases and adapters put together for a test's own collections folder
 ├── frontend/
 │   └── src/
 │       ├── api.ts               # every backend call, and the NDJSON stream reader
@@ -224,7 +226,7 @@ what is plugged in (`entrypoints.config`), never the plug, which refuses it.
 and `description`, run over a `MediaFolder` that asks what is known of the files once, whatever check asks; the registry in the package's
 `__init__.py` gives their order. The same for the checks of a deployment and the steps of the preprocessing.
 
-**Tests of the architecture** (`tests/unit/test_architecture.py`): a domain is plain Python, a use case uses its domain only, the new code
+**Tests of the architecture** (`tests/unit/app/test_architecture.py`): a domain is plain Python, a use case uses its domain only, the new code
 takes no models of the code before, a module uses another only through its domain, no module imports the entry points, every plug is plugged,
 and nothing of the app imports what was `core`.
 
@@ -270,7 +272,7 @@ class SqliteStore(storage.ProjectStore):
 storage.register("sqlite", SqliteStore)                 # then: DATA.storage = "sqlite"
 ```
 
-`tests/unit/test_storage.py` does exactly that with a backend in memory, and runs the projects, locations, visits and cameras of the app on it. A backup (`modules.backup`) goes through
+`tests/unit/shared/test_storage.py` does exactly that with a backend in memory, and runs the projects, locations, visits and cameras of the app on it. A backup (`modules.backup`) goes through
 the store too, and its `.zip` holds JSON whatever the records are kept in, so a backup made on one backend is restored on another.
 
 ### Threads
@@ -566,7 +568,7 @@ A check is a class, and has a setting. To add, say, an image check `x`:
 5. **The UI.** Add it to `IMAGE_CHECK_OPTIONS` (or `DEPLOYMENT_CHECK_OPTIONS`), its type in `types.ts`, and render its findings in
    `ValidationReport` (or `DeploymentCheckReport`).
 6. **The report.** Add its entries to the report of its phase in `report_service`, and its label to `LABELS`.
-7. **Tests** — the validator on its own, over a fake `FileInfoService` (see `tests/unit/test_prevalidation.py`) — and a line in the user
+7. **Tests** — the validator on its own, over a fake `FileInfoService` (see `tests/unit/prevalidation/test_prevalidation.py`) — and a line in the user
    manual's table of checks.
 
 ## 8. Testing
@@ -577,7 +579,9 @@ uv run wucli frontend test             # vitest (frontend/)
 uv run wucli frontend lint
 ```
 
-- **Backend** — `tests/unit/`: services directly and the routers through FastAPI's `TestClient`.
+- **Backend** — `tests/unit/<module>/`, a folder for each module, `app/` for the whole app (the architecture, the routes) and `shared/` for
+  the shared kernel: the use cases over ports in memory, or built for the test's collections folder by `tests/support/built.py`, and the
+  routers through FastAPI's `TestClient`.
   **TRAPPER is always faked** — nothing needs a server or an account. Tests that need ExifTool are
   skipped without it (CI installs it). Image fixtures are generated into `tmp_path`; the folders
   in `examples/` are for trying the wizard by hand.

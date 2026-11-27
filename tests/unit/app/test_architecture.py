@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "wildintel_uploader"
+SRC = Path(__file__).resolve().parents[3] / "src" / "wildintel_uploader"
 FRAMEWORKS = ("pydantic", "sqlmodel", "sqlalchemy", "fastapi", "typer", "rich", "dynaconf", "dishka", "starlette")
 
 

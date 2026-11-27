@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.unit._media_fakes import Info, folder_with, pmap
+from tests.support.media_fakes import Info, folder_with, pmap
 from wildintel_uploader.entrypoints import wiring
 from wildintel_uploader.modules.fileinfo.domain.folder import MediaFolder
 from wildintel_uploader.modules.postvalidation.application.use_cases import PostvalidationUseCases
