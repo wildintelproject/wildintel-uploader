@@ -22,3 +22,8 @@ class PickerUnavailable(DeploymentsError):
 
 class BadDeploymentName(DeploymentsFailed, ValueError):
     """A deployment id, or a revision, that doesn't follow wildintel-tools' rules."""
+
+
+class DeploymentImportError(DeploymentsFailed, ValueError):
+    """A problem with the source/destination paths — reported to the user, not a bug. One of what the deployments refuse (their domain's
+    DeploymentsFailed), so that the other modules tell it by that."""

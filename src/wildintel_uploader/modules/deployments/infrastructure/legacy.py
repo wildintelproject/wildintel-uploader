@@ -11,7 +11,7 @@ from typing import TypeVar
 from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.ports import (
-    Cards, CollectionLayout, Deployment, Folders, ImportSessions, Photos, Repairs,
+    Cards, CollectionLayout, Deployment, Folders, ImportSessions, Photos,
 )
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
@@ -135,45 +135,6 @@ class DeploymentPhotos(Photos):
         from wildintel_uploader.modules.deployments.infrastructure import deployment_photos
         size = deployment_photos.LARGE if large else deployment_photos.THUMBNAIL
         return self._missing(lambda: deployment_photos.photo_jpeg(_root(), project, collection, deployment_id, name, size))
-
-
-class KeptRepairs(Repairs):
-    @staticmethod
-    def _repair():
-        from wildintel_uploader.modules.deployments.infrastructure import repair_service
-        return repair_service
-
-    def collections(self, project: str) -> list[dict]:
-        rs = self._repair()
-        try:
-            return rs.list_collections(_root(), project)
-        except rs.RepairError as exc:
-            raise DeploymentsFailed(str(exc)) from exc
-
-    def inspect(self, project: str, collection: str, deployment_id: str) -> dict:
-        rs = self._repair()
-        try:
-            return rs.inspect(_root(), project, collection, deployment_id)
-        except rs.RepairError as exc:
-            raise DeploymentMissing(str(exc)) from exc
-
-    def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]:
-        """What fails mid-way says so with its words — what the repair itself refuses as it was, anything else as "The repair failed: …"."""
-        from wildintel_uploader.modules.deployments.infrastructure import deployment_import_service
-        rs = self._repair()
-        try:
-            events = rs.repair_stream(_root(), project, collection, deployment_id)
-        except rs.RepairError as exc:
-            raise DeploymentsFailed(str(exc)) from exc
-
-        def told() -> Iterator[dict]:
-            try:
-                yield from events
-            except (rs.RepairError, layout.LocalFolderError, deployment_import_service.DeploymentImportError) as exc:
-                raise DeploymentsFailed(str(exc)) from exc
-            except Exception as exc:  # noqa: BLE001
-                raise DeploymentsFailed(f"The repair failed: {exc}") from exc
-        return told()
 
 
 class StoredSessions(ImportSessions):

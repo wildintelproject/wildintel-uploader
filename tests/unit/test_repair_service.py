@@ -1,4 +1,4 @@
-"""services.repair_service — a deployment's metadata rebuilt from the contents of its own folder."""
+"""Repairing a deployment (modules.deployments) — its metadata rebuilt from the contents of its own folder."""
 import json
 from datetime import datetime
 from pathlib import Path
@@ -10,7 +10,7 @@ from wildintel_uploader.shared.camtrap import DeploymentFields
 from tests.support import local_folder_service as lfs
 from tests.support import preprocessing_service as pre
 from wildintel_uploader.entrypoints.wiring import build_reports
-from wildintel_uploader.modules.deployments.infrastructure import repair_service as rep
+from tests.support import repair_service as rep
 from tests.support import seal_service
 
 DEPLOYMENT_ID = "R0003-DONA_01"

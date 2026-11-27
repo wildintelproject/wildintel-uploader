@@ -22,7 +22,7 @@ from PIL import Image
 from wildintel_uploader.modules.deployments.infrastructure.plugs import config
 from wildintel_uploader.shared.camtrap import DeploymentFields
 from wildintel_uploader.modules.deployments.domain import naming as _naming
-from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName, DeploymentsFailed
+from wildintel_uploader.modules.deployments.domain.models import BadDeploymentName
 from wildintel_uploader.modules.fileinfo.domain import models as _fileinfo
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.modules.fileinfo.domain.models import common_value
@@ -38,9 +38,7 @@ logger = logging.getLogger(__name__)
 IMAGE_EXTENSIONS = set(_fileinfo.IMAGE_EXTENSIONS)
 
 
-class DeploymentImportError(DeploymentsFailed, ValueError):
-    """A problem with the source/destination paths — reported to the user, not a bug. One of what the deployments refuse (their domain's
-    DeploymentsFailed), so that the other modules tell it by that."""
+from wildintel_uploader.modules.deployments.domain.models import DeploymentImportError  # noqa: E402,F401 — the deployments' own
 
 
 _PATH_SEGMENT = re.compile(r"^[0-9A-Za-z_.-]+$")

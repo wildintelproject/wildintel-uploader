@@ -184,21 +184,6 @@ class ImportSessions(ABC):
     @abstractmethod
     def discard(self, task_id: str) -> None: ...
 
-class Repairs(ABC):
-    """Checking and repairing the deployments kept: their metadata files written again from what their folders hold."""
-
-    @abstractmethod
-    def collections(self, project: str) -> list[dict]: ...
-
-    @abstractmethod
-    def inspect(self, project: str, collection: str, deployment_id: str) -> dict:
-        """DeploymentMissing when it isn't there."""
-
-    @abstractmethod
-    def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]:
-        """DeploymentsFailed, before anything is touched, when it isn't there or was synced from TRAPPER."""
-
-
 class RevisionFolders(ABC):
     """The deployments kept in the collections of the research projects, as their statistics read them."""
 
@@ -343,3 +328,75 @@ class CheckSettings(ABC):
 
     @abstractmethod
     def postvalidation(self) -> Any: ...
+
+
+class RepairFolder(ABC):
+    """The collections folder as a repair reads and writes it. What the research project, a collection or a deployment can't be is a RepairError
+    (domain.repair)."""
+
+    @abstractmethod
+    def collections(self, project: str) -> list[tuple[str, Path]]: ...
+
+    @abstractmethod
+    def collection(self, project: str, collection: str) -> Path: ...
+
+    @abstractmethod
+    def folders(self, collection_dir: Path) -> list[Path]: ...
+
+    @abstractmethod
+    def images(self, folder: Path) -> list[Path]: ...
+
+    @abstractmethod
+    def file_state(self, folder: Path, name: str) -> str:
+        """"ok", "missing" or "unreadable"."""
+
+    @abstractmethod
+    def read_json(self, folder: Path, name: str) -> object: ...
+
+    @abstractmethod
+    def synced(self, folder: Path) -> bool: ...
+
+    @abstractmethod
+    def log_row(self, collection_dir: Path, deployment_id: str) -> tuple[dict | None, str | None]:
+        """The deployment's row in the collection's timestamp log, and what is wrong with the log if it can't be read."""
+
+    @abstractmethod
+    def has_log(self, collection_dir: Path) -> bool: ...
+
+    @abstractmethod
+    def taken(self, images: list[Path]) -> dict[Path, Any]:
+        """When each image was taken, as its EXIF says (None when it doesn't)."""
+
+    @abstractmethod
+    def cameras(self, images: list[Path]) -> dict[Path, Any]:
+        """The camera of each image that says it: its model and its id."""
+
+    @abstractmethod
+    def modified(self, path: Path) -> Any: ...
+
+    @abstractmethod
+    def size(self, path: Path) -> int: ...
+
+    @abstractmethod
+    def dimensions(self, path: Path) -> tuple[int | None, int | None]: ...
+
+    @abstractmethod
+    def sha1s(self, images: list[Path]) -> list[str]: ...
+
+    @abstractmethod
+    def xmp(self, images: list[Path]) -> dict[Path, dict]:
+        """What the XMP of each image says — {"identifier": bool, "source_hash"} — when ExifTool is there; empty when it isn't."""
+
+    @abstractmethod
+    def as_deployment(self, record: dict) -> Deployment:
+        """Raises ValueError, saying what is wrong, when it is not a valid deployment."""
+
+    @abstractmethod
+    def write_deployment(self, folder: Path, record: dict) -> None: ...
+
+    @abstractmethod
+    def write_preprocessing(self, folder: Path, log: dict) -> None: ...
+
+    @abstractmethod
+    def write_images(self, folder: Path, deployment_id: str, images: list[tuple[str, str, dict]]) -> None:
+        """images.json: (name, the camera's wall clock, extras) of each."""
