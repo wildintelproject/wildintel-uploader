@@ -13,8 +13,11 @@ from datetime import date
 from pathlib import Path
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, create_model, field_validator, model_validator
 
+from wildintel_uploader.modules.settings.domain import models as _domain  # noqa: F401 — the domain registers its sections first
+from wildintel_uploader.modules.settings.domain.registry import discover, settings_registry
+from wildintel_uploader.modules.settings.domain.rules import CheckLevel  # noqa: F401 — where the code of before finds it
 from wildintel_uploader.shared import ids
 
 LogLevel = Literal["ERROR", "WARNING", "INFO", "DEBUG"]
@@ -27,6 +30,7 @@ def default_workers() -> int:
     return max(1, min(4, os.cpu_count() or 1))
 
 
+@settings_registry.schema("GENERAL")
 class GeneralSettings(BaseModel):
     log_level: LogLevel = Field(
         default="INFO",
@@ -52,6 +56,7 @@ class GeneralSettings(BaseModel):
         return (value or "").strip() or None
 
 
+@settings_registry.schema("TRAPPER")
 class TrapperSettings(BaseModel):
     enabled: bool = Field(default=True, description="Whether TRAPPER is used as a place to upload deployments to. (TRAPPER.enabled)")
     base_url: Optional[str] = Field(default=None, description="TRAPPER server URL. (TRAPPER.base_url)")
@@ -65,6 +70,7 @@ class TrapperSettings(BaseModel):
     )
 
 
+@settings_registry.schema("AGOUTI")
 class AgoutiSettings(BaseModel):
     """What an upload to Agouti needs (its public API: https://docs.agouti.eu/api/endpoints.html) — kept here; nothing is uploaded to Agouti yet."""
 
@@ -81,10 +87,12 @@ class AgoutiSettings(BaseModel):
         return (value.strip() or None) if isinstance(value, str) else value
 
 
+@settings_registry.schema("EPICOLLECTCSV")
 class EpicollectCsvSettings(BaseModel):
     enabled: bool = Field(default=True, description="Whether the CSV downloaded from the new WildINTEL Epicollect project can be read for visits. (EPICOLLECTCSV.enabled)")
 
 
+@settings_registry.schema("EPICOLLECT5")
 class Epicollect5Settings(BaseModel):
     enabled: bool = Field(default=False, description="Whether Epicollect5 is used as a source: of visits (its entries are downloaded as a CSV), and of the details of a deployment when it is imported. (EPICOLLECT5.enabled)")
     unmapped_to_comments: bool = Field(
@@ -102,6 +110,7 @@ class Epicollect5Settings(BaseModel):
     )
 
 
+@settings_registry.schema("DATA")
 class DataSettings(BaseModel):
     # None until first read/saved — resolved against default_data_dir() so
     # moving the app's documents dir (a platformdirs choice) doesn't strand
@@ -142,166 +151,6 @@ class DataSettings(BaseModel):
             return None
         if not Path(value.strip()).expanduser().is_absolute():
             raise ValueError("must be an absolute path (or start with ~)")
-        return value.strip()
-
-
-# How a check starts in each import, when it is on: it has to pass to go on (required), it only warns (warn), or it is offered unticked (skip). Each import can still change it.
-CheckLevel = Literal["required", "warn", "skip"]
-
-
-def _check_defaults(value: object, checks: tuple[str, ...], start: dict[str, str]) -> dict[str, str]:
-    """The level each check starts at: the ones given, and the default of the rest. A name that is not a check is refused."""
-    given = dict(value or {}) if isinstance(value, dict) else {}
-    unknown = sorted(set(given) - set(checks))
-    if unknown:
-        raise ValueError(f"not checks: {', '.join(unknown)}")
-    return {**start, **given}
-
-
-_IMAGE_CHECKS = ("corrupted", "sequence", "structure", "camera", "exif", "duplicates")
-_DEPLOYMENT_CHECKS = ("deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera", "image_count", "sequence_count",
-                      "sequence_length", "sd_card", "photo_count")
-# As they started before they could be set: the dates of the images and the SD card have to pass, the rest warn.
-IMAGE_CHECK_DEFAULTS: dict[str, str] = {c: "warn" for c in _IMAGE_CHECKS}
-DEPLOYMENT_CHECK_DEFAULTS: dict[str, str] = {c: ("required" if c in ("time_range", "sd_card") else "warn") for c in _DEPLOYMENT_CHECKS}
-
-
-class ValidationSettings(BaseModel):
-    """Which of the "Validate folder contents" checks the wizard shows — and
-    so runs. Each looks at the folder alone, without knowing the deployment."""
-
-    corrupted: bool = Field(default=True, description="Corrupted images. (VALIDATION.corrupted)")
-    sequence: bool = Field(default=True, description="Shooting order vs. filename sequence. (VALIDATION.sequence)")
-    structure: bool = Field(default=True, description="Folder structure (subdirectories). (VALIDATION.structure)")
-    camera: bool = Field(default=True, description="Same camera on every image, as camera_levels tells it. (VALIDATION.camera)")
-    camera_levels: list[list[str]] = Field(
-        default_factory=lambda: [["SerialNumber"], ["Make", "Model"], ["Model"]],
-        description="How two images are told to be of the same camera: levels of EXIF fields, by the names ExifTool gives them, the most reliable first — "
-                    "the first level every image has is the one the images are compared by. (VALIDATION.camera_levels)",
-    )
-
-    @field_validator("camera_levels", mode="before")
-    @classmethod
-    def _camera_levels(cls, value):
-        """Each level its fields once, as written, and each level once; a level with no field is left out, and a name that cannot be a field is refused."""
-        out: list[list[str]] = []
-        for level in value or []:
-            fields: list[str] = []
-            for name in ([level] if isinstance(level, str) else level or []):
-                name = str(name).strip()
-                if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)?", name):
-                    raise ValueError(f"'{name}' is not the name of an EXIF field")
-                if name.lower() not in (f.lower() for f in fields):
-                    fields.append(name)
-            if fields and [f.lower() for f in fields] not in ([f.lower() for f in o] for o in out):
-                out.append(fields)
-        return out
-    exif: bool = Field(default=True, description="Required EXIF fields: the capture date and the ones of exif_fields. (VALIDATION.exif)")
-    exif_fields: list[str] = Field(
-        default_factory=lambda: ["Model"],
-        description="The EXIF fields expected on every image, by the names ExifTool gives them (Make, Model, SerialNumber, ISO…), besides the capture date "
-                    "(DateTimeOriginal), which is always expected: WildINTEL Uploader needs it. (VALIDATION.exif_fields)",
-    )
-
-    @field_validator("exif_fields", mode="before")
-    @classmethod
-    def _exif_fields(cls, value):
-        """Each field once, as written; the capture date is always expected, so it is not one of them. A name ExifTool could not have is refused."""
-        out: list[str] = []
-        for name in value or []:
-            name = str(name).strip()
-            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)?", name):
-                raise ValueError(f"'{name}' is not the name of an EXIF field")
-            if name.lower() != "datetimeoriginal" and name.lower() not in (n.lower() for n in out):
-                out.append(name)
-        return out
-    duplicates: bool = Field(default=True, description="Duplicate images (same content). (VALIDATION.duplicates)")
-    defaults: dict[str, CheckLevel] = Field(
-        default_factory=lambda: dict(IMAGE_CHECK_DEFAULTS),
-        description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (VALIDATION.defaults)",
-    )
-
-    @field_validator("defaults", mode="before")
-    @classmethod
-    def _defaults(cls, value):
-        return _check_defaults(value, _IMAGE_CHECKS, IMAGE_CHECK_DEFAULTS)
-
-
-class PostvalidationSettings(BaseModel):
-    """Which of the postvalidation checks the wizard shows — and so runs — and
-    the parameters those that take one start from. They need what the wizard
-    knows of the deployment: its id, collection, location and dates."""
-
-    deployment_id: bool = Field(default=True, description="Deployment id format. (POSTVALIDATION.deployment_id)")
-    collection_prefix: bool = Field(default=True, description="Deployment id starts with its collection. (POSTVALIDATION.collection_prefix)")
-    collection_name: bool = Field(default=True, description="Collection name. (POSTVALIDATION.collection_name)")
-    location: bool = Field(default=True, description="The id's location is the one chosen. (POSTVALIDATION.location)")
-    time_range: bool = Field(default=True, description="Image dates fit the deployment. (POSTVALIDATION.time_range)")
-    camera: bool = Field(default=True, description="Camera consistency. (POSTVALIDATION.camera)")
-    image_count: bool = Field(default=True, description="The number of images is like the previous revisions'. (POSTVALIDATION.image_count)")
-    sequence_count: bool = Field(default=True, description="The number of sequences is like the previous revisions'. (POSTVALIDATION.sequence_count)")
-    sequence_length: bool = Field(default=True, description="The length of the sequences is like the previous revisions'. (POSTVALIDATION.sequence_length)")
-    sd_card: bool = Field(default=True, description="The SD card is the one the visit left in the camera. (POSTVALIDATION.sd_card)")
-    photo_count: bool = Field(default=True, description="The folder has the number of images the visit counted on the card. (POSTVALIDATION.photo_count)")
-    defaults: dict[str, CheckLevel] = Field(
-        default_factory=lambda: dict(DEPLOYMENT_CHECK_DEFAULTS),
-        description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (POSTVALIDATION.defaults)",
-    )
-
-    @field_validator("defaults", mode="before")
-    @classmethod
-    def _defaults(cls, value):
-        return _check_defaults(value, _DEPLOYMENT_CHECKS, DEPLOYMENT_CHECK_DEFAULTS)
-    sequence_gap_seconds: float = Field(
-        default=60.0, gt=0, le=86400,
-        description="What a sequence is: a new one starts when the gap to the previous image is at least this many seconds. (POSTVALIDATION.sequence_gap_seconds)",
-    )
-    min_revisions: int = Field(
-        default=2, ge=1, le=50,
-        description="How many previous revisions of the location the statistical checks need to have to judge — with fewer they are skipped. (POSTVALIDATION.min_revisions)",
-    )
-    similarity_method: Literal["median", "mean", "last", "range"] = Field(
-        default="median",
-        description="What this revision is compared to: the median or mean of the previous ones, the last one, or the range they span. (POSTVALIDATION.similarity_method)",
-    )
-    image_count_tolerance: float = Field(default=50.0, ge=0, le=1000, description="What is similar for the number of images, in percent. (POSTVALIDATION.image_count_tolerance)")
-    sequence_count_tolerance: float = Field(default=50.0, ge=0, le=1000, description="What is similar for the number of sequences, in percent. (POSTVALIDATION.sequence_count_tolerance)")
-    sequence_length_tolerance: float = Field(default=50.0, ge=0, le=1000, description="What is similar for the length of the sequences, in percent. (POSTVALIDATION.sequence_length_tolerance)")
-    tolerance_hours: float = Field(
-        default=1.0, ge=0, le=8760,
-        description="Hours of leeway around the deployment's start and end when checking the image dates — the default of the tolerance the wizard asks for. (POSTVALIDATION.tolerance_hours)",
-    )
-
-
-class PreprocessingSettings(BaseModel):
-    """What is done to the images as they are imported into their collection —
-    which preprocessing steps a new run starts with, and the values they use.
-    The wizard lists them before the import, and a run can still switch each off."""
-
-    rename: bool = Field(default=True, description="Rename the images <DEPLOYMENT>__<YYYYMMDD>_<n>.<EXT>. (PREPROCESSING.rename)")
-    resize: bool = Field(default=True, description="Resize the images to a width, keeping their proportions. (PREPROCESSING.resize)")
-    resize_width: int = Field(
-        default=2400, ge=100, le=20000,
-        description="The width, in pixels, images wider than it are resized to. Smaller ones are left as they are. (PREPROCESSING.resize_width)",
-    )
-    metadata: bool = Field(default=True, description="Add authorship, rights and license metadata (XMP, with ExifTool). (PREPROCESSING.metadata)")
-    owner: str = Field(default="", description="Who owns the images — the rights holder. (PREPROCESSING.owner)")
-    publisher: str = Field(default="", description="Who publishes the images. (PREPROCESSING.publisher)")
-    coverage: str = Field(
-        default="", description="Where the images were taken, in the coverage text (e.g. Doñana National Park). Blank: the deployment's location. (PREPROCESSING.coverage)",
-    )
-    license_url: str = Field(
-        default="https://creativecommons.org/licenses/by-nc/4.0/", description="The license the images are shared under. (PREPROCESSING.license_url)",
-    )
-    ignore_dst: bool = Field(
-        default=True,
-        description="Read the camera's clock as if it never changed to summer time, using the timezone's standard offset. (PREPROCESSING.ignore_dst)",
-    )
-    convert_to_utc: bool = Field(default=True, description="Give the capture dates (in names and metadata) in UTC. (PREPROCESSING.convert_to_utc)")
-
-    @field_validator("owner", "publisher", "coverage", "license_url")
-    @classmethod
-    def _stripped(cls, value: str) -> str:
         return value.strip()
 
 
@@ -513,6 +362,7 @@ def _unique(items: list, key: str, scope: str | None = None) -> list:
     return list(kept.values())
 
 
+@settings_registry.schema("FIELDWORK")
 class FieldworkSettings(BaseModel):
     trappers: list[Trapper] = Field(
         default_factory=list,
@@ -577,6 +427,7 @@ class FieldworkSettings(BaseModel):
         return _unique(cameras, "label", "research_project")
 
 
+@settings_registry.schema("FIELDLOG")
 class FieldlogSettings(BaseModel):
     """Field records: how the visits of a field trip are read from the file of the field app (an Epicollect download) and what is made of them
     (see services.visits_csv and services.visit_deployments)."""
@@ -590,18 +441,13 @@ class FieldlogSettings(BaseModel):
     )
 
 
-class Settings(BaseModel):
-    GENERAL: GeneralSettings = Field(default_factory=GeneralSettings)
-    TRAPPER: TrapperSettings = Field(default_factory=TrapperSettings)
-    EPICOLLECT5: Epicollect5Settings = Field(default_factory=Epicollect5Settings)
-    AGOUTI: AgoutiSettings = Field(default_factory=AgoutiSettings)
-    EPICOLLECTCSV: EpicollectCsvSettings = Field(default_factory=EpicollectCsvSettings)
-    DATA: DataSettings = Field(default_factory=DataSettings)
-    VALIDATION: ValidationSettings = Field(default_factory=ValidationSettings)
-    POSTVALIDATION: PostvalidationSettings = Field(default_factory=PostvalidationSettings)
-    PREPROCESSING: PreprocessingSettings = Field(default_factory=PreprocessingSettings)
-    FIELDWORK: FieldworkSettings = Field(default_factory=FieldworkSettings)
-    FIELDLOG: FieldlogSettings = Field(default_factory=FieldlogSettings)
+# The sections of the other modules register their format when their infrastructure/settings.py is imported.
+discover("infrastructure")
+# The domain registers them first: what the file has is a section of the settings.
+_SECTIONS = [x for x in settings_registry.sections() if x.schema is not None]
+
+# The whole file: this module's sections and those the other modules registered, in the order they are written in.
+Settings = create_model("Settings", **{x.name: (x.schema, Field(default_factory=x.schema)) for x in _SECTIONS})  # type: ignore[call-overload]
 
 
 def secret_fields() -> tuple[tuple[str, str], ...]:

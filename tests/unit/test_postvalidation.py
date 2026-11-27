@@ -24,7 +24,7 @@ def test_the_registry_has_each_validator_once_and_says_those_of_the_visit():
 
 
 def test_the_settings_know_the_checks_of_the_validators():
-    from wildintel_uploader.modules.settings.domain import models as settings
+    from wildintel_uploader.modules.postvalidation.domain import settings
     assert {v.key for v in validators.VALIDATORS} <= set(settings.DEPLOYMENT_CHECKS)
 
 

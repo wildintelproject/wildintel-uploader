@@ -9,57 +9,15 @@ are attributes (`settings.general`, `settings.data`), and `infrastructure.mappin
 from __future__ import annotations
 
 import os
-import re
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, field, fields, make_dataclass, replace
 from pathlib import Path
-from typing import Any, ClassVar, Mapping
+from typing import Any, Mapping
 
 
-class SettingsError(ValueError):
-    """A setting that cannot be: `setting` names it as settings.toml does — GENERAL.workers —, and the message says why."""
-
-    def __init__(self, setting: str, message: str) -> None:
-        super().__init__(f"{setting}: {message}")
-        self.setting, self.message = setting, message
-
-
-# ── the rules shared by the sections ──
-
-def _set(obj: object, name: str, value: object) -> None:
-    """Tidies a field of a frozen dataclass while it is being made."""
-    object.__setattr__(obj, name, value)
-
-
-def _blank_is_none(value: str | None) -> str | None:
-    return (value or "").strip() or None
-
-
-def _in_range(setting: str, value: float, low: float, high: float, *, low_open: bool = False) -> None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise SettingsError(setting, "must be a number")
-    if (value <= low if low_open else value < low) or value > high:
-        raise SettingsError(setting, f"must be {'more than' if low_open else 'at least'} {low:g} and at most {high:g}")
-
-
-def _one_of(setting: str, value: object, choices: tuple[str, ...]) -> None:
-    if value not in choices:
-        raise SettingsError(setting, f"must be one of {', '.join(choices)}")
-
-
-# The name of an EXIF field, as ExifTool gives it: Model, SerialNumber, GPS:GPSLatitude…
-_EXIF_FIELD = re.compile(r"[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)?")
-
-
-def _exif_name(setting: str, name: object) -> str:
-    name = str(name).strip()
-    if not _EXIF_FIELD.fullmatch(name):
-        raise SettingsError(setting, f"'{name}' is not the name of an EXIF field")
-    return name
-
-
-def secret(**kwargs: Any):
-    """A setting that is a secret: never shown, never sent to the frontend, never put in a backup (see secret_fields)."""
-    return field(metadata={"secret": True}, **kwargs)
+from wildintel_uploader.modules.settings.domain.registry import discover, settings_registry
+from wildintel_uploader.modules.settings.domain.rules import (  # noqa: F401 — where the sections of the other modules, and the code of before, find them
+    CHECK_LEVELS, SettingsError, _blank_is_none, _check_levels, _exif_name, _in_range, _one_of, _set, secret,
+)
 
 
 # ── the sections ──
@@ -73,6 +31,7 @@ def default_workers() -> int:
     return max(1, min(4, os.cpu_count() or 1))
 
 
+@settings_registry.section("GENERAL", "general", order=10)
 @dataclass(frozen=True)
 class GeneralSettings:
     log_level: str = "INFO"                              # how much the app logs, to the console and its log file
@@ -86,6 +45,7 @@ class GeneralSettings:
         _set(self, "default_research_project", _blank_is_none(self.default_research_project))
 
 
+@settings_registry.section("TRAPPER", "trapper", order=20)
 @dataclass(frozen=True)
 class TrapperSettings:
     enabled: bool = True                                 # whether TRAPPER is a place to upload deployments to
@@ -101,6 +61,7 @@ class TrapperSettings:
         _set(self, "user_name", _blank_is_none(self.user_name))
 
 
+@settings_registry.section("AGOUTI", "agouti", order=40)
 @dataclass(frozen=True)
 class AgoutiSettings:
     """What an upload to Agouti needs (https://docs.agouti.eu/api/endpoints.html) — kept; nothing is uploaded to Agouti yet."""
@@ -114,11 +75,13 @@ class AgoutiSettings:
         _set(self, "project_id", _blank_is_none(self.project_id))
 
 
+@settings_registry.section("EPICOLLECTCSV", "epicollect_csv", order=50)
 @dataclass(frozen=True)
 class EpicollectCsvSettings:
     enabled: bool = True                                 # whether the CSV of the WildINTEL Epicollect project can be read for visits
 
 
+@settings_registry.section("EPICOLLECT5", "epicollect5", order=30)
 @dataclass(frozen=True)
 class Epicollect5Settings:
     enabled: bool = False                                # a source of visits and of the details of a deployment
@@ -137,6 +100,7 @@ class Epicollect5Settings:
 CATALOG_STORAGES = ("json", "sqlite")
 
 
+@settings_registry.section("DATA", "data", order=60)
 @dataclass(frozen=True)
 class DataSettings:
     """Where the app keeps what it makes. A folder left as None is the default one — see domain.folders."""
@@ -157,122 +121,10 @@ class DataSettings:
             _set(self, name, value)
 
 
-# How a check starts in an import, when it is on: it has to pass (required), it only warns (warn), or it is offered unticked (skip).
-CHECK_LEVELS = ("required", "warn", "skip")
-IMAGE_CHECKS = ("corrupted", "sequence", "structure", "camera", "exif", "duplicates")
-DEPLOYMENT_CHECKS = ("deployment_id", "collection_prefix", "collection_name", "location", "time_range", "camera", "image_count", "sequence_count",
-                     "sequence_length", "sd_card", "photo_count")
-# As they started before they could be set: the dates of the images and the SD card have to pass, the rest warn.
-IMAGE_CHECK_DEFAULTS: Mapping[str, str] = {c: "warn" for c in IMAGE_CHECKS}
-DEPLOYMENT_CHECK_DEFAULTS: Mapping[str, str] = {c: ("required" if c in ("time_range", "sd_card") else "warn") for c in DEPLOYMENT_CHECKS}
-
-
-def _check_levels(setting: str, given: Mapping[str, str], checks: tuple[str, ...], start: Mapping[str, str]) -> dict[str, str]:
-    """The level each check starts at: the ones given, and the default of the rest. A name that is not a check, or a level that is not one, is refused."""
-    unknown = sorted(set(given) - set(checks))
-    if unknown:
-        raise SettingsError(setting, f"not checks: {', '.join(unknown)}")
-    for check, level in given.items():
-        _one_of(f"{setting}.{check}", level, CHECK_LEVELS)
-    return {**start, **given}
-
-
-@dataclass(frozen=True)
-class ValidationSettings:
-    """Which checks of the images an import offers — each looks at the folder alone —, and how they start."""
-    corrupted: bool = True
-    sequence: bool = True
-    structure: bool = True
-    camera: bool = True
-    # How two images are told to be of the same camera: levels of EXIF fields, the most reliable first — the first level every image has is used.
-    camera_levels: tuple[tuple[str, ...], ...] = (("SerialNumber",), ("Make", "Model"), ("Model",))
-    exif: bool = True
-    # The EXIF fields expected on every image besides the capture date (DateTimeOriginal), which is always expected.
-    exif_fields: tuple[str, ...] = ("Model",)
-    duplicates: bool = True
-    defaults: Mapping[str, str] = field(default_factory=lambda: dict(IMAGE_CHECK_DEFAULTS))
-
-    def __post_init__(self) -> None:
-        # each level its fields once, as written, and each level once; a level with no field is left out
-        levels: list[tuple[str, ...]] = []
-        for level in self.camera_levels:
-            names: list[str] = []
-            for name in ((level,) if isinstance(level, str) else level):
-                name = _exif_name("VALIDATION.camera_levels", name)
-                if name.lower() not in (n.lower() for n in names):
-                    names.append(name)
-            if names and [n.lower() for n in names] not in ([n.lower() for n in kept] for kept in levels):
-                levels.append(tuple(names))
-        _set(self, "camera_levels", tuple(levels))
-        # each field once, as written; the capture date is always expected, so it is not one of them
-        exif: list[str] = []
-        for name in self.exif_fields:
-            name = _exif_name("VALIDATION.exif_fields", name)
-            if name.lower() != "datetimeoriginal" and name.lower() not in (n.lower() for n in exif):
-                exif.append(name)
-        _set(self, "exif_fields", tuple(exif))
-        _set(self, "defaults", _check_levels("VALIDATION.defaults", self.defaults, IMAGE_CHECKS, IMAGE_CHECK_DEFAULTS))
-
-
-SIMILARITY_METHODS = ("median", "mean", "last", "range")
-
-
-@dataclass(frozen=True)
-class PostvalidationSettings:
-    """Which checks of a deployment an import offers, how they start, and the parameters those that take one start from."""
-    deployment_id: bool = True
-    collection_prefix: bool = True
-    collection_name: bool = True
-    location: bool = True
-    time_range: bool = True
-    camera: bool = True
-    image_count: bool = True
-    sequence_count: bool = True
-    sequence_length: bool = True
-    sd_card: bool = True
-    photo_count: bool = True
-    defaults: Mapping[str, str] = field(default_factory=lambda: dict(DEPLOYMENT_CHECK_DEFAULTS))
-    sequence_gap_seconds: float = 60.0      # a new sequence starts when the gap to the image before is at least this
-    min_revisions: int = 2                  # how many previous revisions the statistical checks need to judge
-    similarity_method: str = "median"       # what this revision is compared to: the median, the mean, the last one or the range of the previous ones
-    image_count_tolerance: float = 50.0     # percent
-    sequence_count_tolerance: float = 50.0
-    sequence_length_tolerance: float = 50.0
-    tolerance_hours: float = 1.0            # leeway around the start and the end when the dates of the images are checked
-
-    def __post_init__(self) -> None:
-        _set(self, "defaults", _check_levels("POSTVALIDATION.defaults", self.defaults, DEPLOYMENT_CHECKS, DEPLOYMENT_CHECK_DEFAULTS))
-        _in_range("POSTVALIDATION.sequence_gap_seconds", self.sequence_gap_seconds, 0, 86400, low_open=True)
-        _in_range("POSTVALIDATION.min_revisions", self.min_revisions, 1, 50)
-        _one_of("POSTVALIDATION.similarity_method", self.similarity_method, SIMILARITY_METHODS)
-        for name in ("image_count_tolerance", "sequence_count_tolerance", "sequence_length_tolerance"):
-            _in_range(f"POSTVALIDATION.{name}", getattr(self, name), 0, 1000)
-        _in_range("POSTVALIDATION.tolerance_hours", self.tolerance_hours, 0, 8760)
-
-
-@dataclass(frozen=True)
-class PreprocessingSettings:
-    """What is done to the images as they go into their collection: the steps a new import starts with, and their values."""
-    rename: bool = True                     # <DEPLOYMENT>__<YYYYMMDD>_<n>.<EXT>
-    resize: bool = True
-    resize_width: int = 2400                # images wider than this are resized to it
-    metadata: bool = True                   # authorship, rights and license as XMP
-    owner: str = ""
-    publisher: str = ""
-    coverage: str = ""                      # where the images were taken; blank, the location of the deployment
-    license_url: str = "https://creativecommons.org/licenses/by-nc/4.0/"
-    ignore_dst: bool = True                 # the camera's clock read as if it never changed to summer time
-    convert_to_utc: bool = True             # the capture dates, in names and metadata, in UTC
-
-    def __post_init__(self) -> None:
-        _in_range("PREPROCESSING.resize_width", self.resize_width, 100, 20000)
-        for name in ("owner", "publisher", "coverage", "license_url"):
-            _set(self, name, (getattr(self, name) or "").strip())
-
-
 TIME_SOURCES = ("created_at", "hour")
 
 
+@settings_registry.section("FIELDLOG", "fieldlog", order=110)
 @dataclass(frozen=True)
 class FieldlogSettings:
     """How the visits of a field trip are read from the file of the field app, and what is made of them."""
@@ -283,6 +135,7 @@ class FieldlogSettings:
         _one_of("FIELDLOG.time_source", self.time_source, TIME_SOURCES)
 
 
+@settings_registry.section("FIELDWORK", "legacy_fieldwork", order=100)
 @dataclass(frozen=True)
 class LegacyFieldwork:
     """What settings.toml still holds of the field work — cameras, SD cards, trappers and their roles —, as versions before kept it there. It is not a
@@ -293,27 +146,21 @@ class LegacyFieldwork:
     roles: tuple[Mapping[str, Any], ...] = ()
 
 
-@dataclass(frozen=True)
-class Settings:
-    """All the settings of one config."""
-    general: GeneralSettings = field(default_factory=GeneralSettings)
-    trapper: TrapperSettings = field(default_factory=TrapperSettings)
-    epicollect5: Epicollect5Settings = field(default_factory=Epicollect5Settings)
-    agouti: AgoutiSettings = field(default_factory=AgoutiSettings)
-    epicollect_csv: EpicollectCsvSettings = field(default_factory=EpicollectCsvSettings)
-    data: DataSettings = field(default_factory=DataSettings)
-    validation: ValidationSettings = field(default_factory=ValidationSettings)
-    postvalidation: PostvalidationSettings = field(default_factory=PostvalidationSettings)
-    preprocessing: PreprocessingSettings = field(default_factory=PreprocessingSettings)
-    fieldlog: FieldlogSettings = field(default_factory=FieldlogSettings)
-    legacy_fieldwork: LegacyFieldwork = field(default_factory=LegacyFieldwork)
+# The sections of the other modules register themselves when their domain/settings.py is imported.
+discover("domain")
 
+
+def _put_together() -> type:
+    sections = [x for x in settings_registry.sections() if x.domain is not None]
+    cls = make_dataclass("Settings", [(x.attribute, x.domain, field(default_factory=x.domain)) for x in sections], frozen=True,
+                         namespace={"__module__": __name__})
+    cls.__doc__ = """All the settings of one config: the sections of this module and those the other modules registered (see registry)."""
     # The name of each section in settings.toml, and in what the settings page sends and receives.
-    SECTIONS: ClassVar[Mapping[str, str]] = {
-        "general": "GENERAL", "trapper": "TRAPPER", "epicollect5": "EPICOLLECT5", "agouti": "AGOUTI", "epicollect_csv": "EPICOLLECTCSV", "data": "DATA",
-        "validation": "VALIDATION", "postvalidation": "POSTVALIDATION", "preprocessing": "PREPROCESSING", "fieldlog": "FIELDLOG",
-        "legacy_fieldwork": "FIELDWORK",
-    }
+    cls.SECTIONS = {x.attribute: x.name for x in sections}  # type: ignore[attr-defined]
+    return cls
+
+
+Settings = _put_together()
 
 
 def secret_fields() -> tuple[tuple[str, str], ...]:

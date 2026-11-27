@@ -7,6 +7,9 @@ import pytest
 
 from wildintel_uploader.modules.settings.domain.ports import ConfigInfo, SettingsStore
 from wildintel_uploader.modules.settings.domain import folders
+from wildintel_uploader.modules.postvalidation.domain import settings as postvalidation_settings
+from wildintel_uploader.modules.preprocessing.domain import settings as preprocessing_settings
+from wildintel_uploader.modules.prevalidation.domain import settings as prevalidation_settings
 from wildintel_uploader.modules.settings.domain import models as domain
 from wildintel_uploader.modules.settings.infrastructure import schema
 from wildintel_uploader.modules.settings.infrastructure.mapping import to_domain, to_schema
@@ -25,12 +28,12 @@ def test_the_defaults_of_the_domain_are_those_of_the_files():
     (lambda: domain.GeneralSettings(log_level="LOUD"), "GENERAL.log_level"),
     (lambda: domain.TrapperSettings(max_zip_mb=5001), "TRAPPER.max_zip_mb"),
     (lambda: domain.DataSettings(dir="relative/folder"), "DATA.dir"),
-    (lambda: domain.ValidationSettings(exif_fields=("Bad Name",)), "VALIDATION.exif_fields"),
-    (lambda: domain.ValidationSettings(defaults={"nope": "warn"}), "VALIDATION.defaults"),
-    (lambda: domain.ValidationSettings(defaults={"corrupted": "maybe"}), "VALIDATION.defaults.corrupted"),
-    (lambda: domain.PostvalidationSettings(sequence_gap_seconds=0), "POSTVALIDATION.sequence_gap_seconds"),
-    (lambda: domain.PostvalidationSettings(similarity_method="mode"), "POSTVALIDATION.similarity_method"),
-    (lambda: domain.PreprocessingSettings(resize_width=50), "PREPROCESSING.resize_width"),
+    (lambda: prevalidation_settings.ValidationSettings(exif_fields=("Bad Name",)), "VALIDATION.exif_fields"),
+    (lambda: prevalidation_settings.ValidationSettings(defaults={"nope": "warn"}), "VALIDATION.defaults"),
+    (lambda: prevalidation_settings.ValidationSettings(defaults={"corrupted": "maybe"}), "VALIDATION.defaults.corrupted"),
+    (lambda: postvalidation_settings.PostvalidationSettings(sequence_gap_seconds=0), "POSTVALIDATION.sequence_gap_seconds"),
+    (lambda: postvalidation_settings.PostvalidationSettings(similarity_method="mode"), "POSTVALIDATION.similarity_method"),
+    (lambda: preprocessing_settings.PreprocessingSettings(resize_width=50), "PREPROCESSING.resize_width"),
     (lambda: domain.FieldlogSettings(time_source="sundial"), "FIELDLOG.time_source"),
 ])
 def test_a_setting_that_cannot_be_is_refused_naming_it(make, setting):
@@ -42,12 +45,12 @@ def test_a_setting_that_cannot_be_is_refused_naming_it(make, setting):
 def test_the_domain_tidies_what_it_only_has_to_tidy():
     assert domain.GeneralSettings(default_research_project="  ").default_research_project is None
     assert domain.DataSettings(dir="  ~/data ", reports_dir="").dir == "~/data" and domain.DataSettings(reports_dir="").reports_dir is None
-    validation = domain.ValidationSettings(camera_levels=(("Model", "model", "Make"), ("MODEL", "make"), (), "SerialNumber"),
+    validation = prevalidation_settings.ValidationSettings(camera_levels=(("Model", "model", "Make"), ("MODEL", "make"), (), "SerialNumber"),
                                            exif_fields=(" ISO ", "iso", "DateTimeOriginal"), defaults={"exif": "required"})
     assert validation.camera_levels == (("Model", "Make"), ("SerialNumber",))   # each field once, each level once, the empty one left out
     assert validation.exif_fields == ("ISO",)                                   # the capture date is always expected
-    assert validation.defaults == {**domain.IMAGE_CHECK_DEFAULTS, "exif": "required"}
-    assert domain.PreprocessingSettings(owner="  Doñana  ").owner == "Doñana"
+    assert validation.defaults == {**prevalidation_settings.IMAGE_CHECK_DEFAULTS, "exif": "required"}
+    assert preprocessing_settings.PreprocessingSettings(owner="  Doñana  ").owner == "Doñana"
 
 
 def test_a_change_is_a_new_value():

@@ -17,10 +17,15 @@ from wildintel_uploader.modules.settings.domain.ports import ConfigInfo  # noqa:
 from wildintel_uploader.modules.settings.domain import folders
 from wildintel_uploader.modules.settings.domain import models as domain
 from wildintel_uploader.modules.settings.infrastructure import app_dirs
+from wildintel_uploader.modules.postvalidation.domain.settings import DEPLOYMENT_CHECK_DEFAULTS  # noqa: F401
+from wildintel_uploader.modules.postvalidation.infrastructure.settings import PostvalidationSettings  # noqa: F401
+from wildintel_uploader.modules.preprocessing.infrastructure.settings import PreprocessingSettings  # noqa: F401
+from wildintel_uploader.modules.prevalidation.domain.settings import IMAGE_CHECK_DEFAULTS  # noqa: F401
+from wildintel_uploader.modules.prevalidation.infrastructure.settings import ValidationSettings  # noqa: F401
 from wildintel_uploader.modules.settings.infrastructure.schema import (  # noqa: F401
-    DEPLOYMENT_CHECK_DEFAULTS, IMAGE_CHECK_DEFAULTS, MAX_WORKERS, TRAPPER_ROLES, AgoutiSettings, Camera, CheckLevel, DataSettings, Epicollect5Settings,
-    EpicollectCsvSettings, FieldlogSettings, FieldworkSettings, GeneralSettings, LogLevel, PostvalidationSettings, PreprocessingSettings, SdCard, Settings,
-    Trapper, TrapperRole, TrapperSettings, ValidationSettings, default_workers, migrate_gear, secret_fields, username_from,
+    MAX_WORKERS, TRAPPER_ROLES, AgoutiSettings, Camera, CheckLevel, DataSettings, Epicollect5Settings,
+    EpicollectCsvSettings, FieldlogSettings, FieldworkSettings, GeneralSettings, LogLevel, SdCard, Settings,
+    Trapper, TrapperRole, TrapperSettings, default_workers, migrate_gear, secret_fields, username_from,
 )
 from wildintel_uploader.modules.settings.infrastructure.toml_files import DEFAULT_CONFIG_ID, TomlSettingsStore, read_settings_file, write_settings_file  # noqa: F401
 

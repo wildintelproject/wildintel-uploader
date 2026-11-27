@@ -24,7 +24,7 @@ def test_the_registry_has_each_validator_once_with_its_key_label_and_description
 
 
 def test_the_settings_know_the_same_checks_as_the_validators():
-    from wildintel_uploader.modules.settings.domain import models as settings
+    from wildintel_uploader.modules.prevalidation.domain import settings
     assert set(settings.IMAGE_CHECKS) == {v.key for v in validators.VALIDATORS}
 
 
