@@ -17,7 +17,7 @@ from wildintel_uploader.modules.settings.domain.models import (
 )
 from wildintel_uploader.modules.settings.domain.ports import (
     ActivityLog, ConfigInfo, Folders, GeneralView, Machine, NoLogFile, NoSettingsFile, Places, RecordStorage, SectionView, SettingsService, SettingsStore,
-    ShownSetting, SystemInfo, UnknownConfig, UnknownSetting,
+    ShownSetting, SystemInfo, UnknownSetting,
 )
 
 # The sections that are settings, as settings.toml names them, and their attribute in the domain: what the file still holds of the field work is not one.
@@ -162,17 +162,11 @@ class SettingsUseCases(SettingsService):
         return self.store.list()
 
     def activate_config(self, config_id: str) -> list[ConfigInfo]:
-        try:
-            self.store.set_active(config_id)
-        except KeyError:
-            raise UnknownConfig(config_id) from None
+        self.store.set_active(config_id)   # UnknownConfig if there is none by that id
         return self.store.list()
 
     def config_file(self, config_id: str) -> Path:
-        try:
-            path = self.store.path_of(config_id)
-        except KeyError:
-            raise UnknownConfig(config_id) from None
+        path = self.store.path_of(config_id)   # UnknownConfig if there is none by that id
         if not self.store.has_file(path):
             raise NoSettingsFile(config_id)
         return path

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from wildintel_uploader.modules.settings.domain.ports import ConfigInfo, SettingsStore
+from wildintel_uploader.modules.settings.domain.ports import BadConfigName, ConfigInfo, SettingsStore, UnknownConfig, UnreadableSettings
 from wildintel_uploader.modules.settings.domain import folders
 from wildintel_uploader.modules.postvalidation.domain import settings as postvalidation_settings
 from wildintel_uploader.modules.preprocessing.domain import settings as preprocessing_settings
@@ -119,7 +119,7 @@ def test_configs_are_created_named_safely_and_uniquely_and_one_is_active(tmp_pat
 
     assert store.create("Field season 2026") == "field-season-2026"
     assert store.create("field season 2026!") == "field-season-2026-2"
-    with pytest.raises(ValueError):
+    with pytest.raises(BadConfigName):
         store.create("¡¡ !!")
     assert [c.id for c in store.list()] == ["default", "field-season-2026", "field-season-2026-2"]
     assert store.active_id() == "default"                 # creating one does not make it the active one
@@ -129,9 +129,9 @@ def test_configs_are_created_named_safely_and_uniquely_and_one_is_active(tmp_pat
     assert store.list()[1] == ConfigInfo(id="field-season-2026", name="field-season-2026", path=str(tmp_path / "configs" / "field-season-2026.toml"), active=True)
     assert store.load().general.workers == 2
     assert store.path_of("default") == tmp_path / "settings.toml"
-    with pytest.raises(KeyError):
+    with pytest.raises(UnknownConfig):
         store.set_active("nope")
-    with pytest.raises(KeyError):
+    with pytest.raises(UnknownConfig):
         store.path_of("nope")
 
 
@@ -155,3 +155,14 @@ def test_the_folders_are_their_own_when_the_settings_say_one_else_inside_the_dat
     assert folders.collections_dir(own, Path("/srv/wild")) == Path("/mnt/big/collections")
     assert folders.packages_dir(own, Path("/srv/wild")) == Path("~/packages").expanduser()
     assert folders.reports_dir(own, Path("/srv/wild")) == Path("/srv/wild/reports")
+
+
+@pytest.mark.parametrize("text", ["this is = not [toml", "[GENERAL]\nworkers = 'many'\n"], ids=["not TOML", "not settings"])
+def test_a_settings_file_that_cannot_be_read_is_told_as_an_error_of_the_domain(tmp_path: Path, text: str):
+    """What the store lets out is the domain's UnreadableSettings — never an error of Dynaconf, the TOML parser or Pydantic — naming the file."""
+    file = tmp_path / "settings.toml"
+    file.write_text(text, encoding="utf-8")
+    store = TomlSettingsStore(file, tmp_path / "configs", tmp_path / "active-config")
+    with pytest.raises(UnreadableSettings) as caught:
+        store.load()
+    assert type(caught.value) is UnreadableSettings and caught.value.path == str(file)

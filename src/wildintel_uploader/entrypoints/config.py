@@ -84,21 +84,21 @@ def list_configs() -> list[ConfigInfo]:
 
 def create_config(name: str) -> str:
     """Raises:
-        ValueError: if `name` has no letters or digits to name a file after.
+        BadConfigName (a ValueError): if `name` has no letters or digits to name a file after.
     """
     return settings_store().create(name)
 
 
 def set_active_config(config_id: str) -> None:
     """Raises:
-        KeyError: if there's no config with that id.
+        UnknownConfig (a LookupError): if there's no config with that id.
     """
     settings_store().set_active(config_id)
 
 
 def config_file_for(config_id: str) -> Path:
     """Raises:
-        KeyError: if there's no config with that id.
+        UnknownConfig (a LookupError): if there's no config with that id.
     """
     return settings_store().path_of(config_id)
 

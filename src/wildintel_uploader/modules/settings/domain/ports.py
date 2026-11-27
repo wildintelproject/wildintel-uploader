@@ -83,6 +83,18 @@ class UnknownConfig(LookupError):
     """There is no config with that id."""
 
 
+class BadConfigName(ValueError):
+    """A name a config cannot be given: it has no letter or digit to name its file after."""
+
+
+class UnreadableSettings(ValueError):
+    """A settings file that cannot be read: it is not TOML, or what it says is not settings. `path` names it; the message says why."""
+
+    def __init__(self, path: str, message: str) -> None:
+        super().__init__(f"{path}: {message}")
+        self.path, self.message = path, message
+
+
 class NoSettingsFile(LookupError):
     """The config exists, but its file has not been written yet."""
 

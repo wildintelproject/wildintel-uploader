@@ -10,8 +10,9 @@ import threading
 from pathlib import Path
 
 from dynaconf import Dynaconf, loaders
+from pydantic import ValidationError
 
-from wildintel_uploader.modules.settings.domain.ports import ConfigInfo, SettingsStore
+from wildintel_uploader.modules.settings.domain.ports import BadConfigName, ConfigInfo, SettingsStore, UnknownConfig, UnreadableSettings
 from wildintel_uploader.modules.settings.domain import models
 from wildintel_uploader.modules.settings.infrastructure.mapping import to_domain, to_schema
 from wildintel_uploader.modules.settings.infrastructure.schema import Settings
@@ -34,15 +35,24 @@ def _version(config_file: Path) -> tuple:
 
 def read_settings_file(config_file: Path) -> Settings:
     """The settings of a file — written with the defaults first if there is none —, as the schema validates them: what was kept before a field existed
-    gets it. Read again only when the file or the environment changed."""
+    gets it. Read again only when the file or the environment changed.
+
+    Raises UnreadableSettings — of the domain, not of Dynaconf, the TOML parser or Pydantic — if the file is not TOML or not settings."""
     if not config_file.exists():
         write_settings_file(Settings(), config_file)
     version = _version(config_file)
     with _reading:
         kept = _read.get(config_file)
     if kept is None or kept[0] != version:
-        dynaconf_settings = Dynaconf(settings_files=[str(config_file)], envvar_prefix=ENV_PREFIX)
-        kept = (version, Settings.model_validate(dynaconf_settings.to_dict(), context={"migrate": True}))
+        try:
+            dynaconf_settings = Dynaconf(settings_files=[str(config_file)], envvar_prefix=ENV_PREFIX)
+            kept = (version, Settings.model_validate(dynaconf_settings.to_dict(), context={"migrate": True}))
+        except ValidationError as exc:
+            first = exc.errors()[0]
+            where = ".".join(str(p) for p in first.get("loc", ()))
+            raise UnreadableSettings(str(config_file), f"{where}: {first.get('msg', 'not valid')}" if where else str(first.get("msg"))) from exc
+        except (ValueError, OSError) as exc:   # not TOML (the parser's errors are ValueErrors), or not to be read
+            raise UnreadableSettings(str(config_file), str(exc)) from exc
         with _reading:
             _read[config_file] = kept
     return kept[1].model_copy(deep=True)
@@ -97,7 +107,7 @@ class TomlSettingsStore(SettingsStore):
         """Named after `name`, made file-name safe and unique among the others."""
         base = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
         if not base:
-            raise ValueError("A config needs a name with at least one letter or digit.")
+            raise BadConfigName("A config needs a name with at least one letter or digit.")
         existing = set(self._ids())
         config_id, suffix = base, 2
         while config_id in existing:
@@ -108,13 +118,13 @@ class TomlSettingsStore(SettingsStore):
 
     def set_active(self, config_id: str) -> None:
         if config_id not in self._ids():
-            raise KeyError(config_id)
+            raise UnknownConfig(config_id)
         self.pointer.parent.mkdir(parents=True, exist_ok=True)
         self.pointer.write_text(config_id, encoding="utf-8")
 
     def path_of(self, config_id: str) -> Path:
         if config_id not in self._ids():
-            raise KeyError(config_id)
+            raise UnknownConfig(config_id)
         return self._path(config_id)
 
     def load(self) -> models.Settings:
