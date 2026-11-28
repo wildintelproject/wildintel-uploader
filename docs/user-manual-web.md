@@ -474,7 +474,7 @@ A visit follows the same rules **by hand and from a file**: the one that breaks 
 |---|---|
 | *Not a location of the research project* | The location of the file is not one of the research project (see *Names that are not locations*, below). |
 | *Visit already there at that time* | The location already has a visit on that day and at that time. |
-| *Location visited twice in a revision* | A revision is **one visit to each location**, whatever the day. |
+| *Location visited twice in a revision* | A revision is **one visit to each location**, whatever the day: join the two visits in one row (see *Two visits to a location in one revision*, below). |
 | *Visit not after the last one of the location* / *Revision out of order* | A visit is after the last one to its location, and a revision is after the revisions before it and before the ones after it. |
 | *Revision started before the one before is finished* | A revision starts when the one before it has a visit in every location that is not archived. |
 | *Revision closed* | Every location has its visit in that revision: nothing new is added to it. |
@@ -486,6 +486,20 @@ A visit follows the same rules **by hand and from a file**: the one that breaks 
 | *Camera not in the research project*, *SD card not in the research project*, *Trapper not in the settings* | The camera, the SD card and who went have to exist — by hand and in a file — unless the import is asked to create the camera or the card. |
 
 What the form only **questions** — a Revision with no images, a camera or a card at two locations in a revision — is still kept, with a warning.
+
+**Two visits to a location in one revision.** It happens: a revision changes the cards of a camera that took dark images, and a few days later
+the camera is replaced. Both visits are real, but a revision is one visit to each location, so the second is refused — the message says the
+location, the revision and the days of both. Join them **in one row** of the file:
+
+- **The date, the time and who went** are those of the **last** visit.
+- **What is found** — the status of the camera, the batteries and the card, the photos, whether the date and time were right — is that of the
+  **first** visit: it ended the deployment the revision found.
+- **What is left** — the action, the camera, how it was put up, the SD card, the coordinates — is that of the **last** visit: it is how the
+  location stays until the next revision.
+- **The observations** of both go together, each with its day.
+
+What is lost is the deployment between the two visits (in the example, a few days of dark images), and the deployment the revision found ends on
+the day of the last visit.
 
 **What an unknown revision hides is not checked.** A revision before the first visit of a location is *unknown*: nothing is known of it — no day, no camera, no card. So the first visit to a location in a revision after `R0001` may be any, and what a visit left at a location (which camera is there, which card is in it) is **not trusted for a later visit when an unknown revision of that location lies between them**: nobody knows what was done in it. An unknown revision counts as a visit to finish its revision, and a real visit that comes later takes its place.
 
