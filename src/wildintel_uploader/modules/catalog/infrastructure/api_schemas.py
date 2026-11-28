@@ -6,12 +6,12 @@ The models of the research projects and the locations are those the pages of bef
 the API did not change. And the field work as the settings page shows it and sends it (`entrypoints/api/settings_page.py`)."""
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 from wildintel_uploader.modules.catalog.domain.models import Audit, Role, Trapper, is_utc
 from wildintel_uploader.modules.catalog.domain.ports import Fieldwork
@@ -269,3 +269,11 @@ def fieldwork_saved(page) -> tuple[list, list, list, list]:
             [(i.research_project, _page_equipment(i, "cameras")) for i in page.cameras],
             [(i.research_project, _page_equipment(i, "sd_cards")) for i in page.sd_cards],
             [(r.research_project, Role(trapper=r.trapper, role=r.role, audit=Audit(id=r.id))) for r in page.roles])
+
+
+def record_shown(record: Any) -> dict:
+    """A record of the catalog as the API answers with it — as the files keep it: what it says that this version does not know, its fields, and its
+    id and dates. Never the record of the domain itself."""
+    fields = {k: v for k, v in asdict(record).items() if k not in ("audit", "extra")}
+    return {**dict(record.extra), **fields, **{k: v for k, v in asdict(record.audit).items() if v is not None}}
+

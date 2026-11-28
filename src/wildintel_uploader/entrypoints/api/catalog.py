@@ -6,7 +6,6 @@ They only translate: a request into a call to the contract of the module (`domai
 error into HTTP. The people are given as the files keep them: their fields, their id and their dates."""
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Any
 
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
@@ -15,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pathlib import Path
 
 from wildintel_uploader.modules.catalog.infrastructure.api_schemas import (
+    record_shown,
     CameraIdentityRequest, DefaultResearchProjectRequest, DeleteLocationRequest, FieldItemsRequest, FieldItemStatusRequest, LocalLocationsRequest,
     LocationRecord, MoveCatalogRequest, NewTrappers, RebuildStatusHistoryRequest, ResearchProjectRecord, RoleBody, RolesRequest, SaveLocationRequest,
     StatusHistoryRequest, TrapperBody, UpdateLocationRequest, UpdateResearchProjectRequest,
@@ -40,13 +40,7 @@ settings_router = APIRouter(prefix="/api/settings", tags=["catalog"], route_clas
 Catalog = FromDishka[CatalogService]
 
 
-def _record(record: Any) -> dict:
-    """A record of the catalog as JSON, as the files keep it: what it says that this version does not know, its fields, and its id and dates."""
-    fields = {k: v for k, v in asdict(record).items() if k not in ("audit", "extra")}
-    return {**dict(record.extra), **fields, **{k: v for k, v in asdict(record.audit).items() if v is not None}}
-
-
-_trapper = _project = _record
+_record = _trapper = _project = record_shown
 
 
 def _refused(exc: CatalogError) -> HTTPException:

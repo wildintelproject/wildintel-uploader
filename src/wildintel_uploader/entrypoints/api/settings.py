@@ -7,7 +7,6 @@ page reads and saves all at once (GET and PUT /api/settings) is `entrypoints/api
 trappers to the research projects, and goes with them."""
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
@@ -16,8 +15,10 @@ from fastapi.responses import FileResponse
 
 from wildintel_uploader.shared.desktop import file_manager
 from wildintel_uploader.modules.settings.domain.models import DataSettings, GeneralSettings, SettingsError
-from wildintel_uploader.modules.settings.infrastructure.api_schemas import DataDirRequest, FoldersRequest, GeneralRequest, NewConfigRequest, ShowWelcomeRequest
-from wildintel_uploader.modules.settings.domain.ports import GeneralView, NoLogFile, NoSettingsFile, SettingsService, UnknownConfig, UnknownSetting
+from wildintel_uploader.modules.settings.infrastructure.api_schemas import (
+    ConfigShown, DataDirRequest, FoldersRequest, GeneralRequest, GeneralShown, LogDeleted, NewConfigRequest, SectionShown, ShowWelcomeRequest,
+)
+from wildintel_uploader.modules.settings.domain.ports import NoLogFile, NoSettingsFile, SettingsService, UnknownConfig, UnknownSetting
 
 # Each endpoint is given what it asks for as FromDishka[...] by the container of entrypoints.wiring, in a scope of its own for each request.
 router = APIRouter(prefix="/api/settings", tags=["settings"], route_class=DishkaSyncRoute)
@@ -36,26 +37,26 @@ def _config_file(service: SettingsService, config_id: str) -> Path:
 
 # ── the configs ──
 
-@router.get("/configs")
-def get_configs(service: Service) -> list[dict]:
+@router.get("/configs", response_model=list[ConfigShown])
+def get_configs(service: Service) -> list[ConfigShown]:
     """Every settings file the user can switch to, the one in use flagged."""
-    return [asdict(c) for c in service.list_configs()]
+    return [ConfigShown.of(c) for c in service.list_configs()]
 
 
-@router.post("/configs")
-def add_config(req: NewConfigRequest, service: Service) -> list[dict]:
+@router.post("/configs", response_model=list[ConfigShown])
+def add_config(req: NewConfigRequest, service: Service) -> list[ConfigShown]:
     """A new settings file with the default values (it doesn't become the active one), and the list of them."""
     try:
-        return [asdict(c) for c in service.create_config(req.name)]
+        return [ConfigShown.of(c) for c in service.create_config(req.name)]
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/configs/{config_id}/activate")
-def activate_config(config_id: str, service: Service) -> list[dict]:
+@router.post("/configs/{config_id}/activate", response_model=list[ConfigShown])
+def activate_config(config_id: str, service: Service) -> list[ConfigShown]:
     """Makes `config_id` the settings file the whole app reads and saves."""
     try:
-        return [asdict(c) for c in service.activate_config(config_id)]
+        return [ConfigShown.of(c) for c in service.activate_config(config_id)]
     except UnknownConfig:
         raise HTTPException(404, f"There's no config {config_id!r}.") from None
 
@@ -98,34 +99,21 @@ def set_data_dir(req: DataDirRequest, service: Service) -> dict:
 
 # ── the General section ──
 
-def _json(value: Any) -> Any:
-    """A view of the contract as JSON: its dataclasses as objects, its paths as text."""
-    if isinstance(value, dict):
-        return {k: _json(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json(v) for v in value]
-    return str(value) if isinstance(value, Path) else value
-
-
-def _general(view: GeneralView) -> dict:
-    return _json(asdict(view))
-
-
-@router.get("/general")
-def get_general(service: Service) -> dict:
+@router.get("/general", response_model=GeneralShown)
+def get_general(service: Service) -> GeneralShown:
     """The General section: {"general": its settings, "folders": the folders and the default of each, "system": the CPUs, the log file and a level
     the environment forces}."""
-    return _general(service.general())
+    return GeneralShown.of(service.general())
 
 
-@router.put("/general")
-def save_general(req: GeneralRequest, service: Service) -> dict:
+@router.put("/general", response_model=GeneralShown)
+def save_general(req: GeneralRequest, service: Service) -> GeneralShown:
     """Saves the General section, and the level of the log applies at once. A setting that cannot be is a 422 that names it."""
     folders = req.folders.model_dump() if req.folders else {k: getattr(service.general().folders, k) for k in FoldersRequest.model_fields}
     try:
         general = GeneralSettings(log_level=req.log_level, workers=req.workers, default_research_project=req.default_research_project,
                                   show_welcome=req.show_welcome)
-        return _general(service.save_general(general, DataSettings(**folders)))
+        return GeneralShown.of(service.save_general(general, DataSettings(**folders)))
     except SettingsError as exc:
         raise HTTPException(422, {"setting": exc.setting, "message": exc.message}) from exc
 
@@ -140,30 +128,30 @@ def download_log(service: Service) -> FileResponse:
     return FileResponse(path, media_type="text/plain", filename=path.name)
 
 
-@router.delete("/log")
-def delete_log(service: Service) -> dict:
+@router.delete("/log", response_model=LogDeleted)
+def delete_log(service: Service) -> LogDeleted:
     """Deletes the log file and its rotated copies — logging goes on, into a new one."""
-    return {"deleted": service.clear_log()}
+    return LogDeleted(deleted=service.clear_log())
 
 
 # ── each section ──
 
-@router.get("/sections/{section}")
-def get_section(section: str, service: Service) -> dict:
+@router.get("/sections/{section}", response_model=SectionShown)
+def get_section(section: str, service: Service) -> SectionShown:
     """One section of the settings — TRAPPER, AGOUTI, EPICOLLECT5, VALIDATION… —: {"section", "values" (the secrets left out), "secrets" (whether each
     is saved)}."""
     try:
-        return _json(asdict(service.section(section)))
+        return SectionShown.of(service.section(section))
     except UnknownSetting:
         raise HTTPException(404, f"There's no section {section!r}.") from None
 
 
-@router.put("/sections/{section}")
-def save_section(section: str, values: dict[str, Any], service: Service) -> dict:
+@router.put("/sections/{section}", response_model=SectionShown)
+def save_section(section: str, values: dict[str, Any], service: Service) -> SectionShown:
     """Changes the settings of one section that the body names — the rest stays. A secret left blank keeps the saved one. A setting that is not one
     is a 404; a value it does not take, a 422 that names it."""
     try:
-        return _json(asdict(service.save_section(section, values)))
+        return SectionShown.of(service.save_section(section, values))
     except UnknownSetting as exc:
         raise HTTPException(404, f"There's no setting {exc.args[0]!r}.") from None
     except SettingsError as exc:
