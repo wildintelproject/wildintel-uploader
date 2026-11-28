@@ -15,15 +15,19 @@ from wildintel_uploader.shared.deployment_record import DeploymentRecord
 Deployment = DeploymentRecord   # the record of a deployment of Camtrap DP: plain Python (shared.deployment_record)
 
 
-class UploadersService(ABC):
+class UploadersAccount(ABC):
+    """The account of TRAPPER: what the settings keep of it, and whether it works."""
 
-    # the account and what TRAPPER has
     @abstractmethod
     def account_defaults(self) -> dict: ...
 
     @abstractmethod
     def test_connection(self, account: Account) -> dict:
         """Checks the account, and keeps it in the settings once it works."""
+
+
+class UploadersTrapper(ABC):
+    """What TRAPPER has: its research projects, classification projects, locations and deployments."""
 
     @abstractmethod
     def research_projects(self, account: Account) -> list[dict]: ...
@@ -37,18 +41,24 @@ class UploadersService(ABC):
     @abstractmethod
     def deployments(self, account: Account, research_project_pk: int) -> list[dict]: ...
 
-    # importing a deployment into TRAPPER from the wizard
+    @abstractmethod
+    def project_classification_projects(self, account: Account, project: str) -> list[dict]: ...
+
+
+class UploadersImport(ABC):
+    """A deployment brought from the wizard into TRAPPER, its images in the timezone of its location."""
+
     @abstractmethod
     def import_deployment(self, account: Account, research_project_pk: int, classification_project_pk: int | None, source_dir: str, deployment: Deployment,
                           research_project_id: str | None, register: bool, timezone: str | None = None) -> Iterator[dict]:
         """The images in the timezone of the location kept — or in `timezone`, when it is given (the command line asks it)."""
 
-    # uploading the deployments kept
-    @abstractmethod
-    def collections(self, project: str) -> list[dict]: ...
+
+class UploadersUpload(ABC):
+    """Uploading the deployments kept: the collections to choose from, what TRAPPER says of the choice, the upload and its report."""
 
     @abstractmethod
-    def project_classification_projects(self, account: Account, project: str) -> list[dict]: ...
+    def collections(self, project: str) -> list[dict]: ...
 
     @abstractmethod
     def check_selection(self, account: Account, project: str, collection: str | None) -> list[dict]: ...
@@ -64,7 +74,10 @@ class UploadersService(ABC):
     @abstractmethod
     def upload_report(self, collection: str, project: str, items: list[dict], started_at: str, finished_at: str) -> str | None: ...
 
-    # where the deployments kept were uploaded
+
+class UploadersState(ABC):
+    """Where each deployment kept was uploaded: to TRAPPER, to each uploader in use."""
+
     @abstractmethod
     def trapper_state(self, project: str, deployment_id: str | None) -> tuple[str | None, bool]:
         """When the deployment was uploaded to TRAPPER, and whether it is there — uploaded from here, or synced from there."""
@@ -77,13 +90,21 @@ class UploadersService(ABC):
     def upload_states(self, project: str, imported: str | None, deployment_id: str) -> list[dict]:
         """The upload to each uploader in use: planned, done or failed."""
 
-    # bringing back what TRAPPER has
+
+class UploadersSync(ABC):
+    """Bringing back what TRAPPER has into the collections folder."""
+
     @abstractmethod
     def collection_names(self, account: Account, research_project_pk: int, classification_project_pk: int) -> list[dict]: ...
 
     @abstractmethod
     def sync(self, account: Account, project: dict, classification_project_pk: int, collections: list[str], deployments: list[str] | None,
              download_images: bool) -> Iterator[dict]: ...
+
+
+class UploadersService(UploadersAccount, UploadersTrapper, UploadersImport, UploadersUpload, UploadersState, UploadersSync, ABC):
+    """All that the module of the uploaders offers. Whoever needs only a part asks for that one: UploadersAccount, UploadersTrapper,
+    UploadersImport, UploadersUpload, UploadersState or UploadersSync."""
 
 
 # ── out ──

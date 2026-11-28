@@ -6,7 +6,13 @@ Sending the deployments kept to where they are published — TRAPPER for now —
 
 | Contract | What it is | Operations |
 |---|---|---|
-| `UploadersService` |  | `account_defaults`, `test_connection`, `research_projects`, `classification_projects`, `locations`, `deployments`, `import_deployment`, `collections`, `project_classification_projects`, `check_selection`, `check_access`, `upload`, `upload_report`, `trapper_state`, `uploads_of`, `upload_states`, `collection_names`, `sync` |
+| `UploadersAccount` | The account of TRAPPER: what the settings keep of it, and whether it works | `account_defaults`, `test_connection` |
+| `UploadersTrapper` | What TRAPPER has: its research projects, classification projects, locations and deployments | `research_projects`, `classification_projects`, `locations`, `deployments`, `project_classification_projects` |
+| `UploadersImport` | A deployment brought from the wizard into TRAPPER, its images in the timezone of its location | `import_deployment` |
+| `UploadersUpload` | Uploading the deployments kept: the collections to choose from, what TRAPPER says of the choice, the upload and its report | `collections`, `check_selection`, `check_access`, `upload`, `upload_report` |
+| `UploadersState` | Where each deployment kept was uploaded: to TRAPPER, to each uploader in use | `trapper_state`, `uploads_of`, `upload_states` |
+| `UploadersSync` | Bringing back what TRAPPER has into the collections folder | `collection_names`, `sync` |
+| `UploadersService` | All of them: what the module offers | — |
 
 ## How it is used
 
@@ -15,6 +21,9 @@ uploaders.test_connection(Account(url, username, password))   # once it works, t
 for event in uploaders.upload(account, "DONA", "R0001", "R0001-DONA_01", mode="new", classification_project_pk=None, delete_files=False):
     ...
 ```
+
+Each route and command asks for the part it uses — the page of the account `UploadersAccount`, the upload `UploadersUpload`, the sync
+`UploadersSync`…; the command that imports a deployment, which lists what TRAPPER has too, the whole contract.
 
 A deployment is checked before it is sent (`check_selection`, `check_access`), packed in parts of at most `TRAPPER.max_zip_mb`, and an upload
 that fails is planned again until it is done. The web app has `/api/trapper/…`, `/api/upload/…`, `/api/sync/…`; the command line,

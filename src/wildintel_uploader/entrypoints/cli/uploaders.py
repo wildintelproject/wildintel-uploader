@@ -16,7 +16,7 @@ from wildintel_uploader.entrypoints.cli.common import call, console, fail
 from wildintel_uploader.entrypoints.cli.injection import inject
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentsScanning
 from wildintel_uploader.modules.uploaders.domain.models import Account, UploaderError
-from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
+from wildintel_uploader.modules.uploaders.domain.ports import UploadersAccount, UploadersService, UploadersTrapper
 from wildintel_uploader.shared.camtrap import DeploymentFields
 
 trapper_app = typer.Typer(help="Find the TRAPPER ids the other commands take.", no_args_is_help=True)
@@ -43,7 +43,7 @@ def table(title: str, columns: list[str], rows: list[list]) -> None:
 
 
 @inject
-def test_connection(uploaders: FromDishka[UploadersService]) -> None:
+def test_connection(uploaders: FromDishka[UploadersAccount]) -> None:
     """Test the connection to TRAPPER (settings.toml's account)."""
     defaults = uploaders.account_defaults()
     result = _checked(lambda: uploaders.test_connection(Account()))
@@ -52,7 +52,7 @@ def test_connection(uploaders: FromDishka[UploadersService]) -> None:
 
 @trapper_app.command("research-projects")
 @inject
-def trapper_research_projects(uploaders: FromDishka[UploadersService]) -> None:
+def trapper_research_projects(uploaders: FromDishka[UploadersTrapper]) -> None:
     """The research projects you can access."""
     rows = _checked(lambda: uploaders.research_projects(Account()))
     table("Research projects", ["pk", "Name", "Acronym"], [[r["pk"], r["name"], r["acronym"]] for r in rows])
@@ -61,7 +61,7 @@ def trapper_research_projects(uploaders: FromDishka[UploadersService]) -> None:
 @trapper_app.command("classification-projects")
 @inject
 def trapper_classification_projects(rp: Annotated[int, typer.Option("--rp", "--research-project", help="Research project pk.")],
-                                    uploaders: FromDishka[UploadersService]) -> None:
+                                    uploaders: FromDishka[UploadersTrapper]) -> None:
     """A research project's classification projects."""
     rows = _checked(lambda: uploaders.classification_projects(Account(), rp))
     table("Classification projects", ["pk", "Name", "Active"], [[r["pk"], r["name"], r["is_active"]] for r in rows])
@@ -70,7 +70,7 @@ def trapper_classification_projects(rp: Annotated[int, typer.Option("--rp", "--r
 @trapper_app.command("locations")
 @inject
 def trapper_locations(rp: Annotated[int, typer.Option("--rp", "--research-project", help="Research project pk.")],
-                      uploaders: FromDishka[UploadersService]) -> None:
+                      uploaders: FromDishka[UploadersTrapper]) -> None:
     """A research project's locations."""
     rows = _checked(lambda: uploaders.locations(Account(), rp))
     table("Locations", ["pk", "Location id", "Name", "Timezone"], [[r["pk"], r["location_id"], r["name"], r["timezone"]] for r in rows])

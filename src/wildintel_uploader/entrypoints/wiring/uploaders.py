@@ -3,13 +3,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from dishka import Provider, Scope, provide
+from dishka import Provider, Scope, alias, provide
 
 from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.uploaders.application.sync import TrapperSync
 from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
 from wildintel_uploader.modules.uploaders.application.use_cases import UploadersUseCases
-from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
+from wildintel_uploader.modules.uploaders.domain.ports import UploadersAccount, UploadersImport, UploadersService, UploadersState, UploadersSync, UploadersTrapper, UploadersUpload
 from wildintel_uploader.modules.uploaders.infrastructure.failures import UploadFailures
 from wildintel_uploader.modules.uploaders.infrastructure.packages import DeploymentFolder, PackagesOnDisk
 from wildintel_uploader.modules.uploaders.infrastructure.synced_folder import CatalogOfTheSync, SyncedCollections
@@ -41,3 +41,11 @@ class UploadersProvider(Provider):
     @provide(scope=Scope.APP)
     def service(self) -> UploadersService:
         return build_uploaders()
+
+    # each part of the contract, for whoever needs only that one: the same service
+    account = alias(source=UploadersService, provides=UploadersAccount)
+    trapper = alias(source=UploadersService, provides=UploadersTrapper)
+    importing = alias(source=UploadersService, provides=UploadersImport)
+    uploading = alias(source=UploadersService, provides=UploadersUpload)
+    state = alias(source=UploadersService, provides=UploadersState)
+    syncing = alias(source=UploadersService, provides=UploadersSync)
