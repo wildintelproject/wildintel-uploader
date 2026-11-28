@@ -193,6 +193,13 @@ Each module is a folder of `src/wildintel_uploader/modules/` with three layers, 
 - **`infrastructure/`** — the **adapters**: each implements a port (JSON files, a SQL database, ExifTool, Pillow, pyepicollect, the TRAPPER SDK…),
   the models of its web API (`api_schemas.py`) and the format of its settings in `settings.toml`.
 
+**What a route answers.** Every JSON route declares it — `response_model=` a schema of its module's `api_schemas.py` (made from
+`shared.answers.Answer`), and `response_model_exclude_unset=True`, so a key the route leaves out stays out —; the routes of the app itself
+(health, version, the desktop) take theirs from `entrypoints/api/api_schemas.py`. The model goes in the decorator: Dishka wraps the function, so
+FastAPI does not see its return annotation. A route never answers with a record or a view of a domain as it is (no `asdict` in a router): it is
+turned into an answer in `api_schemas`. An answer passes on a key its schema does not say yet rather than dropping it; the tests of
+`tests/unit/app/test_api_contract.py` keep all this, and the OpenAPI (`/docs`) says what each route answers.
+
 | Module | Does |
 |---|---|
 | `settings` | `settings.toml` and its configs: reading, checking and saving the settings, by sections that each module registers. |

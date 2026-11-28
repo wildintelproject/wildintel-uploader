@@ -8,6 +8,9 @@ from dishka.integrations.fastapi import DishkaSyncRoute, FromDishka
 from fastapi import APIRouter, HTTPException, Response
 
 from wildintel_uploader.modules.reports.domain.ports import BadFormat, ReportMissing, ReportsService
+from wildintel_uploader.modules.reports.infrastructure.api_schemas import (  # what its routes answer
+    DeleteReportAnswer, GetReportAnswer, ListReportsItem,
+)
 
 router = APIRouter(prefix="/api/reports", tags=["reports"], route_class=DishkaSyncRoute)
 Reports = FromDishka[ReportsService]
@@ -23,13 +26,13 @@ def _http(call: Callable[[], T]) -> T:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.get("")
+@router.get("", response_model=list[ListReportsItem], response_model_exclude_unset=True)
 def list_reports(reports: Reports) -> list[dict]:
     """What each report says of itself, newest first."""
     return reports.list()
 
 
-@router.get("/{report_id}")
+@router.get("/{report_id}", response_model=GetReportAnswer, response_model_exclude_unset=True)
 def get_report(report_id: str, reports: Reports) -> dict:
     return _http(lambda: reports.read(report_id))
 
@@ -48,7 +51,7 @@ def report_image(report_id: str, path: str, reports: Reports, size: str = "thumb
     return Response(body, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
 
 
-@router.delete("/{report_id}")
+@router.delete("/{report_id}", response_model=DeleteReportAnswer, response_model_exclude_unset=True)
 def delete_report(report_id: str, reports: Reports) -> dict:
     _http(lambda: reports.delete(report_id))
     return {"status": "ok"}

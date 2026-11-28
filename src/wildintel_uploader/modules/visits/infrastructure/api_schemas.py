@@ -2,6 +2,10 @@
 and their checks as they were, so that the API did not change."""
 from __future__ import annotations
 
+from typing import Any
+
+from wildintel_uploader.shared.answers import Answer
+
 from datetime import date as date_type, time as time_type
 from typing import Literal, Optional
 
@@ -87,3 +91,212 @@ class VisitsCsvColumnsRequest(BaseModel):
     """The text of a CSV file whose columns are asked for, to map them to the fields of a visit."""
 
     csv: str
+
+
+# ── what the routes answer (#248) ──
+
+
+class VisitBookAnswer(Answer):
+    """What POST /api/visits/book answers."""
+    results: list[Any] | None = None
+
+
+class ClosedVisitsAnswer(Answer):
+    """What POST /api/visits/closed answers."""
+    results: list[Any] | None = None
+
+
+class CreateRevisionAnswer(Answer):
+    """What POST /api/visits/create-revision answers."""
+    session: str | None = None
+    planned: list[Any] | None = None
+    previous: dict[str, Any] | None = None
+
+
+class CsvColumnsAnswer(Answer):
+    """What POST /api/visits/csv-columns answers."""
+    columns: list[Any] | None = None
+    sample: list[Any] | None = None
+    mapping: dict[str, Any] | None = None
+    f_fields: list[Any] | None = Field(default=None, alias="fields")
+    kind: str | None = None
+    form_columns: dict[str, Any] | None = None
+    form_error: str | None = None
+
+
+class DeploymentsAnswer(Answer):
+    """What POST /api/visits/deployments answers."""
+    results: list[Any] | None = None
+
+
+class EpicollectDownloadAnswer(Answer):
+    """What POST /api/visits/epicollect-download answers."""
+    csv: str | None = None
+    count: int | None = None
+
+
+class ImportVisitsCsvAnswer(Answer):
+    """What POST /api/visits/import-csv answers."""
+    visits: list[Any] | None = None
+    problems: list[Any] | None = None
+    rows: list[Any] | None = None
+    skipped: int | None = None
+    new_sites: list[Any] | None = None
+    create: dict[str, Any] | None = None
+    warnings: list[Any] | None = None
+    loose_warnings: list[Any] | None = None
+    notes: list[Any] | None = None
+    unknown: list[Any] | None = None
+    closed: list[Any] | None = None
+    blocking: dict[str, Any] | None = None
+    saved: int | None = None
+    collection_folders: dict[str, Any] | None = None
+    report: str | None = None
+
+
+class LinkVisitAnswer(Answer):
+    """What POST /api/visits/link answers."""
+    session: str | None = None
+    when: str | None = None
+    actions: list[Any] | None = None
+    camera_status: Any = None
+    battery_status: Any = None
+    card_status: Any = None
+    num_photos: int | None = None
+    sd: str | None = None
+    date_time_ok: Any = None
+    calibration: Any = None
+    latitude: Any = None
+    longitude: Any = None
+    deployment_id: str | None = None
+    state: str | None = None
+    camera_id: str | None = None
+    camera_model: str | None = None
+    camera_serial: Any = None
+    camera_interval: Any = None
+    camera_height: float | None = None
+    camera_depth: Any = None
+    camera_tilt: Any = None
+    camera_heading: Any = None
+    detection_distance: Any = None
+    timestamp_issues: Any = None
+    bait_use: bool | None = None
+    feature_type: Any = None
+    habitat: str | None = None
+    deployment_groups: Any = None
+    comments: str | None = None
+    tags: list[Any] | None = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    location_id: str | None = None
+    setup_by: str | None = None
+    trappers: str | None = None
+    date: str | None = None
+    time: str | None = None
+
+
+class ListVisitsAnswer(Answer):
+    """What POST /api/visits/list answers."""
+    results: list[Any] | None = None
+
+
+class MarkNotVisitedAnswer(Answer):
+    """What POST /api/visits/mark-not-visited answers."""
+    session: str | None = None
+    marked: list[Any] | None = None
+
+
+class SaveVisitAnswer(Answer):
+    """What POST /api/visits/save answers."""
+    session: str | None = None
+    when: str | None = None
+    actions: list[Any] | None = None
+    trappers: str | None = None
+    camera_status: str | None = None
+    battery_status: str | None = None
+    card_status: str | None = None
+    num_photos: int | None = None
+    date_time_ok: Any = None
+    calibration: bool | None = None
+    latitude: Any = None
+    longitude: Any = None
+    deployment_id: Any = None
+    state: Any = None
+    setup_by: str | None = None
+    camera_ref: str | None = None
+    camera_model: str | None = None
+    camera_interval: Any = None
+    camera_height: float | None = None
+    camera_depth: Any = None
+    camera_tilt: int | None = None
+    camera_heading: Any = None
+    detection_distance: Any = None
+    timestamp_issues: Any = None
+    bait_use: bool | None = None
+    feature_type: str | None = None
+    habitat: Any = None
+    deployment_groups: Any = None
+    comments: str | None = None
+    tags: list[Any] | None = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    location_id: str | None = None
+    camera_id: str | None = None
+    camera_serial: str | None = None
+    sd: str | None = None
+    date: str | None = None
+    time: str | None = None
+    collection_folders: dict[str, Any] | None = None
+
+
+class UpdateVisitAnswer(Answer):
+    """What POST /api/visits/update answers."""
+    session: str | None = None
+    when: str | None = None
+    actions: list[Any] | None = None
+    camera_status: str | None = None
+    battery_status: Any = None
+    card_status: Any = None
+    num_photos: int | None = None
+    sd: str | None = None
+    date_time_ok: Any = None
+    calibration: Any = None
+    latitude: Any = None
+    longitude: Any = None
+    deployment_id: Any = None
+    state: str | None = None
+    camera_id: str | None = None
+    camera_model: Any = None
+    camera_serial: str | None = None
+    camera_interval: Any = None
+    camera_height: Any = None
+    camera_depth: Any = None
+    camera_tilt: Any = None
+    camera_heading: Any = None
+    detection_distance: Any = None
+    timestamp_issues: Any = None
+    bait_use: Any = None
+    feature_type: Any = None
+    habitat: Any = None
+    deployment_groups: Any = None
+    comments: str | None = None
+    tags: list[Any] | None = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    location_id: str | None = None
+    setup_by: str | None = None
+    trappers: str | None = None
+    date: str | None = None
+    time: str | None = None
+    collection_folders: dict[str, Any] | None = None
+    camera_ref: str | None = None
+
+
+class VisitsExported(Answer):
+    """The visits as the CSV of a file, its name, and how many."""
+    csv: str | None = None
+    filename: str | None = None
+    count: int | None = None

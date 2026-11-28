@@ -21,6 +21,9 @@ from wildintel_uploader.modules.catalog.domain.ports import CatalogService, Fiel
 from wildintel_uploader.modules.catalog.infrastructure.api_schemas import fieldwork_saved, fieldwork_shown
 from wildintel_uploader.modules.settings.infrastructure.api_schemas import settings_of
 from wildintel_uploader.shared.storage import StorageError
+from wildintel_uploader.modules.settings.infrastructure.api_schemas import (  # what its routes answer
+    GetSettingsAnswer, SaveSettingsAnswer,
+)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], route_class=DishkaSyncRoute)
 
@@ -66,13 +69,13 @@ def _follow_data_dir(old: config.Settings, new: config.Settings) -> None:
         setattr(new.DATA, key, getattr(followed, key))
 
 
-@router.get("")
+@router.get("", response_model=GetSettingsAnswer, response_model_exclude_unset=True)
 def get_settings(service: FromDishka[SettingsService], catalog: FromDishka[CatalogService]) -> dict:
     fieldwork = catalog.fieldwork()   # what versions before left in the settings goes to its research project first
     return _shown(config.load_settings(), service, fieldwork)
 
 
-@router.put("")
+@router.put("", response_model=SaveSettingsAnswer, response_model_exclude_unset=True)
 def save_settings(new: config.Settings, service: FromDishka[SettingsService]) -> dict:
     """Replaces every setting by the rules of the module of the settings (SettingsService.save_settings), and the field work of the page goes to the
     research projects by the rules of the catalog (CatalogService.save_fieldwork) — in the collections folder the settings are saved with."""
@@ -120,4 +123,3 @@ def _save_together(catalog: CatalogService, service: SettingsService, new: confi
             except Exception as failed:  # noqa: BLE001 — the first error is the one told
                 exc.add_note(f"What the catalog wrote could not all be put back: {failed}")
         raise
-

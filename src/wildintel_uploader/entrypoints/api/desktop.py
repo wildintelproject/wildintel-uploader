@@ -12,11 +12,14 @@ from wildintel_uploader.shared.desktop import folder_picker
 from wildintel_uploader.modules.deployments.infrastructure.api_schemas import BrowseFolderRequest, OpenFolderRequest
 from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
 from wildintel_uploader.modules.settings.domain.ports import SettingsReading
+from wildintel_uploader.entrypoints.api.api_schemas import (  # what its routes answer
+    BrowseFolderAnswer, ExiftoolAnswer, OpenFolderAnswer,
+)
 
 router = APIRouter(prefix="/api/deployment-import", tags=["desktop"], route_class=DishkaSyncRoute)
 
 
-@router.post("/browse-folder")
+@router.post("/browse-folder", response_model=BrowseFolderAnswer, response_model_exclude_unset=True)
 def browse_folder(req: BrowseFolderRequest = BrowseFolderRequest()) -> dict:
     """Opens the OS's native folder picker on the machine running the backend (always the user's own) and returns {"path": ...}, or
     {"path": None} if cancelled."""
@@ -27,7 +30,7 @@ def browse_folder(req: BrowseFolderRequest = BrowseFolderRequest()) -> dict:
     return {"path": path}
 
 
-@router.get("/exiftool")
+@router.get("/exiftool", response_model=ExiftoolAnswer, response_model_exclude_unset=True)
 def exiftool(files: FromDishka[FileInfoService]) -> dict:
     """Whether ExifTool is installed — the preprocessing's metadata needs it (what is known of the files says where it is)."""
     path = files.exiftool_path()
@@ -39,7 +42,7 @@ def _open_in_file_manager(path: Path) -> None:
     file_manager.open_folder(path)
 
 
-@router.post("/open-folder")
+@router.post("/open-folder", response_model=OpenFolderAnswer, response_model_exclude_unset=True)
 def open_folder(req: OpenFolderRequest, settings: FromDishka[SettingsReading]) -> dict:
     """Opens a folder kept by the app (inside its data folder, or its collections, reports or packages folder — nothing else) in the file explorer."""
     target = Path(req.path).expanduser().resolve()

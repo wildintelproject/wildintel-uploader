@@ -7,18 +7,21 @@ import httpx
 from fastapi import APIRouter
 
 from wildintel_uploader.shared.version import current_version
+from wildintel_uploader.entrypoints.api.api_schemas import (  # what its routes answer
+    CheckForUpdateAnswer, HealthAnswer, VersionAnswer,
+)
 
 router = APIRouter(tags=["health"])
 
 _GITHUB_RELEASES = "https://api.github.com/repos/wildintelproject/wildintel-uploader/releases"
 
 
-@router.get("/api/health")
+@router.get("/api/health", response_model=HealthAnswer, response_model_exclude_unset=True)
 def health() -> dict:
     return {"status": "ok"}
 
 
-@router.get("/api/version")
+@router.get("/api/version", response_model=VersionAnswer, response_model_exclude_unset=True)
 def version() -> dict:
     return {"current": current_version()}
 
@@ -53,7 +56,7 @@ def _latest_release(releases: list[dict]) -> dict | None:
     return max(candidates, key=lambda r: _parse(r["tag_name"]), default=None)
 
 
-@router.get("/api/version/check")
+@router.get("/api/version/check", response_model=CheckForUpdateAnswer, response_model_exclude_unset=True)
 async def check_for_update() -> dict:
     """Whether a newer release exists on GitHub. "error" is set when that
     couldn't be found out (offline, GitHub's rate limit...) — distinct from

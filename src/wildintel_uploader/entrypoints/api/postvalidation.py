@@ -13,6 +13,9 @@ from wildintel_uploader.entrypoints.api import streaming
 from wildintel_uploader.modules.postvalidation.domain.models import Deployment, DeploymentContext, PostvalidationError
 from wildintel_uploader.modules.postvalidation.domain.ports import PostvalidationService
 from wildintel_uploader.modules.postvalidation.infrastructure.api_schemas import ValidateDeploymentRequest
+from wildintel_uploader.modules.postvalidation.infrastructure.api_schemas import (  # what its routes answer
+    ValidateDeploymentAnswer,
+)
 
 router = APIRouter(prefix="/api/deployment-import", tags=["postvalidation"], route_class=DishkaSyncRoute)
 Postvalidation = FromDishka[PostvalidationService]
@@ -30,7 +33,7 @@ def _checks(req: ValidateDeploymentRequest) -> frozenset[str] | None:
     return frozenset(req.checks) if req.checks is not None else None
 
 
-@router.post("/validate-deployment")
+@router.post("/validate-deployment", response_model=ValidateDeploymentAnswer, response_model_exclude_unset=True)
 def validate_deployment(req: ValidateDeploymentRequest, postvalidation: Postvalidation) -> dict:
     """The checks of a deployment asked for, the statistical ones last, with the id of their report."""
     try:

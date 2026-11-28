@@ -12,6 +12,9 @@ from wildintel_uploader.entrypoints.api import streaming
 from wildintel_uploader.modules.prevalidation.domain.models import PrevalidationError
 from wildintel_uploader.modules.prevalidation.domain.ports import PrevalidationService
 from wildintel_uploader.modules.prevalidation.infrastructure.api_schemas import ValidateImagesRequest
+from wildintel_uploader.modules.prevalidation.infrastructure.api_schemas import (  # what its routes answer
+    ValidateImagesAnswer,
+)
 
 router = APIRouter(prefix="/api/deployment-import", tags=["prevalidation"], route_class=DishkaSyncRoute)
 Prevalidation = FromDishka[PrevalidationService]
@@ -21,7 +24,7 @@ def _checks(req: ValidateImagesRequest) -> frozenset[str] | None:
     return frozenset(req.checks) if req.checks is not None else None
 
 
-@router.post("/validate-images")
+@router.post("/validate-images", response_model=ValidateImagesAnswer, response_model_exclude_unset=True)
 def validate_images(req: ValidateImagesRequest, prevalidation: Prevalidation) -> dict:
     """The checks of the images of a folder asked for — corrupted files, the order of the shots, subfolders, one camera, the EXIF fields,
     duplicates — with the id of their report."""

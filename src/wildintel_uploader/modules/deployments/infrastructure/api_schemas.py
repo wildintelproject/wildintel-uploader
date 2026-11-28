@@ -2,6 +2,10 @@
 as they were."""
 from __future__ import annotations
 
+from typing import Any
+
+from wildintel_uploader.shared.answers import Answer
+
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -178,3 +182,174 @@ class SaveScanRequest(BaseModel):
 class SaveDetailsRequest(BaseModel):
     task_id: str
     deployment: DeploymentFields
+
+
+# ── what the routes answer (#248) ──
+
+
+class DiscardAnswer(Answer):
+    """What DELETE /api/sessions/{task_id} answers."""
+    status: str | None = None
+
+
+class LogEntryAnswer(Answer):
+    """What GET /api/deployment-import/log-entry answers."""
+    collection: str | None = None
+    timestamps: dict[str, Any] | None = None
+    fieldwork: dict[str, Any] | None = None
+
+
+class DeploymentPhotosListAnswer(Answer):
+    """What GET /api/deployment-import/photos answers."""
+    photos: list[Any] | None = None
+
+
+class ListSessionsItem(Answer):
+    """One of what GET /api/sessions answers."""
+    task_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    phase: str | None = None
+    task: str | None = None
+    source_dir: str | None = None
+    scan: dict[str, Any] | None = None
+    selection: dict[str, Any] | None = None
+    deployment: dict[str, Any] | None = None
+
+
+class CheckCollectionAnswer(Answer):
+    """What POST /api/deployment-import/check-collection answers."""
+    exists: bool | None = None
+    name: Any = None
+
+
+class CollectionPathAnswer(Answer):
+    """What POST /api/deployment-import/collection-path answers."""
+    path: str | None = None
+    collection: str | None = None
+    exists: bool | None = None
+    name: Any = None
+
+
+class DiscardCardCopyAnswer(Answer):
+    """What POST /api/deployment-import/discard-card-copy answers."""
+    removed: bool | None = None
+
+
+class EjectCardAnswer(Answer):
+    """What POST /api/deployment-import/eject-card answers."""
+    ejected: bool | None = None
+    message: str | None = None
+
+
+class ExistingDeploymentsAnswer(Answer):
+    """What POST /api/deployment-import/existing-deployments answers."""
+    results: dict[str, Any] | None = None
+
+
+class GuessDetailsAnswer(Answer):
+    """What POST /api/deployment-import/guess-details answers."""
+    start_date: str | None = None
+    end_date: str | None = None
+    camera_model: Any = None
+    camera_id: Any = None
+    warnings: list[Any] | None = None
+
+
+class ListLocalDeploymentsAnswer(Answer):
+    """What POST /api/deployment-import/list-local-deployments answers."""
+    results: list[Any] | None = None
+
+
+class NextRevisionAnswer(Answer):
+    """What POST /api/deployment-import/next-revision answers."""
+    last: int | None = None
+    next: int | None = None
+
+
+class PreviousDeploymentsAnswer(Answer):
+    """What POST /api/deployment-import/previous-deployments answers."""
+    results: dict[str, Any] | None = None
+
+
+class ScanFolderAnswer(Answer):
+    """What POST /api/deployment-import/scan-folder answers."""
+    file_count: int | None = None
+    image_count: int | None = None
+    warnings: list[Any] | None = None
+
+
+class ScanSessionAnswer(Answer):
+    """What POST /api/deployment-import/scan-session answers."""
+    deployments: list[Any] | None = None
+    loose_files: int | None = None
+    warnings: list[Any] | None = None
+    timestamp_log: Any = None
+
+
+class SealStatusAnswer(Answer):
+    """What POST /api/deployment-import/seal answers."""
+    status: str | None = None
+    changed: list[Any] | None = None
+    missing: list[Any] | None = None
+    added: list[Any] | None = None
+    deployment_changed: bool | None = None
+    seal_changed: bool | None = None
+
+
+class RepairCollectionsAnswer(Answer):
+    """What POST /api/repair/collections answers."""
+    results: list[Any] | None = None
+
+
+class InspectAnswer(Answer):
+    """What POST /api/repair/inspect answers."""
+    deployment_id: str | None = None
+    status: str | None = None
+    seal: dict[str, Any] | None = None
+    files: dict[str, Any] | None = None
+    images: int | None = None
+    log: str | None = None
+    problems: list[Any] | None = None
+
+
+class SaveDetailsAnswer(Answer):
+    """What POST /api/sessions/details answers."""
+    task_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    phase: str | None = None
+    task: str | None = None
+    source_dir: str | None = None
+    scan: dict[str, Any] | None = None
+    selection: dict[str, Any] | None = None
+    deployment: dict[str, Any] | None = None
+
+
+class SaveScanAnswer(Answer):
+    """What POST /api/sessions/scan answers."""
+    task_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    phase: str | None = None
+    task: str | None = None
+    source_dir: str | None = None
+    scan: dict[str, Any] | None = None
+    selection: dict[str, Any] | None = None
+
+
+class SaveSelectionAnswer(Answer):
+    """What POST /api/sessions/selection answers."""
+    task_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    phase: str | None = None
+    task: str | None = None
+    source_dir: str | None = None
+    scan: dict[str, Any] | None = None
+    selection: dict[str, Any] | None = None
+
+
+class RevisionAnswer(Answer):
+    """What POST /api/statistics/revision answers."""
+    results: list[Any] | None = None

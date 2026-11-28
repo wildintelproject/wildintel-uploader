@@ -1,5 +1,5 @@
 """#248: the contract of the web API — what a route answers is said by a schema of its module's api_schemas, never a view or a record of a domain
-as it is. The routes that do not say it yet are listed (routes_still_undeclared.txt), and the list only shrinks."""
+as it is; and the OpenAPI of the app, which says it, is made."""
 import ast
 import importlib
 import inspect
@@ -15,7 +15,6 @@ from pydantic import BaseModel
 import wildintel_uploader.entrypoints.api as api
 
 API = Path(api.__file__).parent
-STILL_UNDECLARED = Path(__file__).with_name("routes_still_undeclared.txt")
 
 
 def _routes() -> list[tuple[str, APIRoute]]:
@@ -51,10 +50,6 @@ def _undeclared() -> set[str]:
             for method in route.methods}
 
 
-def _listed() -> set[str]:
-    return {line.strip() for line in STILL_UNDECLARED.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")}
-
-
 @pytest.mark.parametrize("path", sorted(API.glob("*.py")), ids=lambda p: p.name)
 def test_no_route_turns_a_domain_object_into_its_answer_by_hand(path: Path):
     """A record or a view of a domain becomes an answer in its module's api_schemas (ConfigShown.of, record_shown…), not with asdict in a router."""
@@ -70,11 +65,13 @@ def test_no_route_answers_with_a_type_of_a_domain():
 
 
 def test_every_json_route_says_what_it_answers_with_a_schema():
-    new = sorted(_undeclared() - _listed())
-    assert not new, f"Routes that answer without a schema of their api_schemas: {new}"
+    undeclared = sorted(_undeclared())
+    assert not undeclared, f"Routes that answer without a schema of their api_schemas: {undeclared}"
 
 
-def test_the_list_of_the_routes_still_undeclared_only_shrinks():
-    """A route listed is one there is, and one that still does not say what it answers: once it does, it is taken off the list."""
-    stale = sorted(_listed() - _undeclared())
-    assert not stale, f"Take these off routes_still_undeclared.txt — they say what they answer now, or are gone: {stale}"
+def test_the_openapi_of_the_app_is_made_and_says_what_each_route_answers():
+    from wildintel_uploader.web.main import app
+
+    paths = app.openapi()["paths"]
+    answered = [op for item in paths.values() for op in item.values() if isinstance(op, dict) and "responses" in op]
+    assert len(answered) >= 130 and all("200" in op["responses"] or "201" in op["responses"] or "204" in op["responses"] for op in answered)

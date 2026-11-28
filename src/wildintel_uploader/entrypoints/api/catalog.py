@@ -28,6 +28,9 @@ from wildintel_uploader.modules.catalog.domain.models import (
 )
 from wildintel_uploader.shared.storage import StorageError, valid_project_id
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.catalog.infrastructure.api_schemas import (  # what its routes answer
+    AddFieldItemsAnswer, AddLocationAnswer, AddProjectAnswer, AddRolesAnswer, AddTrappersAnswer, CameraIdentityAnswer, DeleteLocationAnswer, DeleteLocationBeforeAnswer, DeleteProjectAnswer, DeleteResearchProjectAnswer, EquipmentItem, GetLocationsItem, GetProjectAnswer, GetProjectsItem, GetTrappersItem, HistoryLine, HistoryRebuilt, ListLocationsBeforeAnswer, ListResearchProjectsAnswer, MigrateCatalogAnswer, RebuildStatusHistoryAnswer, RoleItem, SaveLocationBeforeAnswer, SaveResearchProjectAnswer, SaveTrappersItem, SetDefaultResearchProjectAnswer, SetFieldItemStatusAnswer, StatusHistoryOfAnswer, UpdateLocationAnswer, UpdateLocationBeforeAnswer, UpdateProjectAnswer, UpdateResearchProjectAnswer,
+)
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"], route_class=DishkaSyncRoute)
 # the initial setup adds people too, at the address it always had
@@ -49,13 +52,13 @@ def _refused(exc: CatalogError) -> HTTPException:
 
 # ── the people ──
 
-@router.get("/trappers")
+@router.get("/trappers", response_model=list[GetTrappersItem], response_model_exclude_unset=True)
 def get_trappers(catalog: Catalog, include_deleted: bool = False) -> list[dict]:
     """The people. The removed ones only with include_deleted: the visits they made still say who they were."""
     return [_trapper(t) for t in catalog.trappers(include_deleted)]
 
 
-@router.put("/trappers")
+@router.put("/trappers", response_model=list[SaveTrappersItem], response_model_exclude_unset=True)
 def save_trappers(trappers: list[TrapperBody], catalog: Catalog) -> list[dict]:
     """Keeps these as all the people: one is the one kept when it says its id, or its username; an archived one stays as it was; one no longer
     listed is removed — kept, with when —, and one listed again comes back. A trapper or a list that cannot be is a 422 that names what."""
@@ -65,7 +68,7 @@ def save_trappers(trappers: list[TrapperBody], catalog: Catalog) -> list[dict]:
         raise _refused(exc) from exc
 
 
-@setup_router.post("/trappers")
+@setup_router.post("/trappers", response_model=AddTrappersAnswer, response_model_exclude_unset=True)
 def add_trappers(req: NewTrappers, catalog: Catalog) -> dict:
     """Adds the trappers that are not kept yet — one with the username of another, whatever its case, is left out. {"added": [usernames],
     "skipped": [usernames]}."""
@@ -78,13 +81,13 @@ def add_trappers(req: NewTrappers, catalog: Catalog) -> dict:
 
 # ── the research projects ──
 
-@router.get("/projects")
+@router.get("/projects", response_model=list[GetProjectsItem], response_model_exclude_unset=True)
 def get_projects(catalog: Catalog, include_deleted: bool = False) -> list[dict]:
     """The research projects — the removed ones only with include_deleted."""
     return [_project(p) for p in catalog.projects(include_deleted)]
 
 
-@router.post("/projects", status_code=201)
+@router.post("/projects", status_code=201, response_model=AddProjectAnswer, response_model_exclude_unset=True)
 def add_project(req: ResearchProjectRecord, catalog: Catalog) -> dict:
     """A new research project, and its folder. 409: its acronym is taken; 422: a field it cannot have."""
     try:
@@ -97,7 +100,7 @@ def add_project(req: ResearchProjectRecord, catalog: Catalog) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.get("/projects/{acronym}")
+@router.get("/projects/{acronym}", response_model=GetProjectAnswer, response_model_exclude_unset=True)
 def get_project(acronym: str, catalog: Catalog) -> dict:
     try:
         return _project(catalog.project(acronym))
@@ -105,7 +108,7 @@ def get_project(acronym: str, catalog: Catalog) -> dict:
         raise HTTPException(404, str(exc)) from exc
 
 
-@router.patch("/projects/{acronym}")
+@router.patch("/projects/{acronym}", response_model=UpdateProjectAnswer, response_model_exclude_unset=True)
 def update_project(acronym: str, changes: dict[str, Any], catalog: Catalog) -> dict:
     """Changes the fields the body names — never the acronym. 404: it is not kept; 422: it is archived, it has visits and would go back to planned,
     or a field it cannot have."""
@@ -119,7 +122,7 @@ def update_project(acronym: str, changes: dict[str, Any], catalog: Catalog) -> d
         raise HTTPException(422, {"field": None, "message": str(exc)}) from exc
 
 
-@router.delete("/projects/{acronym}")
+@router.delete("/projects/{acronym}", response_model=DeleteProjectAnswer, response_model_exclude_unset=True)
 def delete_project(acronym: str, catalog: Catalog) -> dict:
     """Removes a research project — logically. 404: it is not kept; 409: its folder holds collections, deployments or images; 422: it is archived."""
     try:
@@ -135,13 +138,13 @@ def delete_project(acronym: str, catalog: Catalog) -> dict:
 
 # ── the research projects, at the addresses of before: their answers and their errors, as they were ──
 
-@import_router.post("/research-projects/list")
+@import_router.post("/research-projects/list", response_model=ListResearchProjectsAnswer, response_model_exclude_unset=True)
 def list_research_projects(catalog: Catalog) -> dict:
     """The research projects kept — the wizard's first question, "where was it taken?", is answered from them. Empty until one is added."""
     return {"results": [_project(p) for p in catalog.projects()]}
 
 
-@import_router.post("/research-projects/save")
+@import_router.post("/research-projects/save", response_model=SaveResearchProjectAnswer, response_model_exclude_unset=True)
 def save_research_project(req: ResearchProjectRecord, catalog: Catalog) -> dict:
     """Adds a research project to the collections folder (by hand, or as filled in from TRAPPER) — 409 if its acronym is already there."""
     try:
@@ -152,7 +155,7 @@ def save_research_project(req: ResearchProjectRecord, catalog: Catalog) -> dict:
         raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
 
 
-@import_router.post("/research-projects/update")
+@import_router.post("/research-projects/update", response_model=UpdateResearchProjectAnswer, response_model_exclude_unset=True)
 def update_research_project(req: UpdateResearchProjectRequest, catalog: Catalog) -> dict:
     """Changes a kept research project — its name, description, keywords and status…; the fields left out stay as they are (its acronym names its
     folder and can't change). 404 if it isn't there."""
@@ -165,7 +168,7 @@ def update_research_project(req: UpdateResearchProjectRequest, catalog: Catalog)
         raise HTTPException(400, exc.message) from exc
 
 
-@import_router.post("/research-projects/delete")
+@import_router.post("/research-projects/delete", response_model=DeleteResearchProjectAnswer, response_model_exclude_unset=True)
 def delete_research_project(req: LocalLocationsRequest, catalog: Catalog) -> dict:
     """Removes a research project with its locations and visits — 409 when it holds anything more (collections, deployments, images), 404 if it
     isn't there."""
@@ -182,7 +185,7 @@ def delete_research_project(req: LocalLocationsRequest, catalog: Catalog) -> dic
 
 # ── where the catalog is kept ──
 
-@router.post("/migrate")
+@router.post("/migrate", response_model=MigrateCatalogAnswer, response_model_exclude_unset=True)
 def migrate_catalog(req: MoveCatalogRequest, settings: FromDishka[SettingsService]) -> dict:
     """Moves the catalog to `to`, and keeps it there from now on: {"trappers", "projects"} copied. 409: the place holds a catalog already (replace
     it); 422: it is there already, or what was copied does not read back as it was — the catalog then stays where it was."""
@@ -217,13 +220,13 @@ def _location_error(exc: Exception) -> HTTPException:
     return HTTPException(400, str(exc))
 
 
-@router.get("/projects/{project}/locations")
+@router.get("/projects/{project}/locations", response_model=list[GetLocationsItem], response_model_exclude_unset=True)
 def get_locations(project: str, catalog: Catalog, include_deleted: bool = False) -> list[dict]:
     """The locations of a research project — the removed ones only with include_deleted."""
     return [_location(loc) for loc in catalog.locations(project, include_deleted)]
 
 
-@router.post("/projects/{project}/locations", status_code=201)
+@router.post("/projects/{project}/locations", status_code=201, response_model=AddLocationAnswer, response_model_exclude_unset=True)
 def add_location(project: str, location: LocationRecord, catalog: Catalog, by_hand: bool = True) -> dict:
     """A new location of a research project — by hand it starts pending or planned. 409: its id is taken; 404: no such research project."""
     try:
@@ -232,7 +235,7 @@ def add_location(project: str, location: LocationRecord, catalog: Catalog, by_ha
         raise _location_error(exc) from exc
 
 
-@router.patch("/projects/{project}/locations/{location_id}")
+@router.patch("/projects/{project}/locations/{location_id}", response_model=UpdateLocationAnswer, response_model_exclude_unset=True)
 def update_location(project: str, location_id: str, changes: dict[str, Any], catalog: Catalog) -> dict:
     """Changes the fields the body names. 404: it is not kept; 409: its timezone or summer-time setting, which are fixed; 400: what the visits or
     the rules do not allow."""
@@ -244,7 +247,7 @@ def update_location(project: str, location_id: str, changes: dict[str, Any], cat
         raise HTTPException(422, str(exc)) from exc
 
 
-@router.delete("/projects/{project}/locations/{location_id}")
+@router.delete("/projects/{project}/locations/{location_id}", response_model=DeleteLocationAnswer, response_model_exclude_unset=True)
 def delete_location(project: str, location_id: str, catalog: Catalog) -> dict:
     """Removes a location — logically. 404: it is not kept; 409: it has visits, or comes from TRAPPER."""
     try:
@@ -256,7 +259,7 @@ def delete_location(project: str, location_id: str, catalog: Catalog) -> dict:
 
 # ── the locations, at the addresses of before ──
 
-@import_router.post("/locations/list")
+@import_router.post("/locations/list", response_model=ListLocationsBeforeAnswer, response_model_exclude_unset=True)
 def list_locations_before(req: LocalLocationsRequest, catalog: Catalog) -> dict:
     """The locations kept for a research project in the collections folder."""
     try:
@@ -266,7 +269,7 @@ def list_locations_before(req: LocalLocationsRequest, catalog: Catalog) -> dict:
     return {"results": [_location(loc) for loc in catalog.locations(req.research_project_id)]}
 
 
-@import_router.post("/locations/save")
+@import_router.post("/locations/save", response_model=SaveLocationBeforeAnswer, response_model_exclude_unset=True)
 def save_location_before(req: SaveLocationRequest, catalog: Catalog) -> dict:
     """Adds a location to a research project already kept in the collections folder (by hand, or as filled in from TRAPPER) — 409 if its id is
     used."""
@@ -278,7 +281,7 @@ def save_location_before(req: SaveLocationRequest, catalog: Catalog) -> dict:
         raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
 
 
-@import_router.post("/locations/update")
+@import_router.post("/locations/update", response_model=UpdateLocationBeforeAnswer, response_model_exclude_unset=True)
 def update_location_before(req: UpdateLocationRequest, catalog: Catalog) -> dict:
     """Changes a kept location — its name, where it is, its status. Its timezone and its summer-time setting are fixed when it is created: asking
     for a different one is a 409. The fields left out stay as they are; 404 if the location isn't there."""
@@ -294,7 +297,7 @@ def update_location_before(req: UpdateLocationRequest, catalog: Catalog) -> dict
         raise HTTPException(409 if "can't be changed" in exc.message else 400, exc.message) from exc
 
 
-@import_router.post("/locations/delete")
+@import_router.post("/locations/delete", response_model=DeleteLocationBeforeAnswer, response_model_exclude_unset=True)
 def delete_location_before(req: DeleteLocationRequest, catalog: Catalog) -> dict:
     """Deletes a kept location — 409 when visits were made to it (or it comes from TRAPPER), 404 if it isn't there."""
     try:
@@ -343,37 +346,37 @@ def _save_equipment(project: str, kind: str, items: list[dict[str, Any]], catalo
         raise HTTPException(422, str(exc)) from exc
 
 
-@router.get("/projects/{project}/cameras")
+@router.get("/projects/{project}/cameras", response_model=list[EquipmentItem], response_model_exclude_unset=True)
 def get_cameras(project: str, catalog: Catalog, include_deleted: bool = False) -> list[dict]:
     """The cameras of a research project — the removed ones only with include_deleted."""
     return _get_equipment(project, "cameras", catalog, include_deleted)
 
 
-@router.put("/projects/{project}/cameras")
+@router.put("/projects/{project}/cameras", response_model=list[EquipmentItem], response_model_exclude_unset=True)
 def save_cameras(project: str, items: list[dict[str, Any]], catalog: Catalog) -> list[dict]:
     """Keeps these as all the cameras of a research project — see _save_equipment."""
     return _save_equipment(project, "cameras", items, catalog)
 
 
-@router.get("/projects/{project}/sd-cards")
+@router.get("/projects/{project}/sd-cards", response_model=list[EquipmentItem], response_model_exclude_unset=True)
 def get_sd_cards(project: str, catalog: Catalog, include_deleted: bool = False) -> list[dict]:
     """The SD cards of a research project — the removed ones only with include_deleted."""
     return _get_equipment(project, "sd-cards", catalog, include_deleted)
 
 
-@router.put("/projects/{project}/sd-cards")
+@router.put("/projects/{project}/sd-cards", response_model=list[EquipmentItem], response_model_exclude_unset=True)
 def save_sd_cards(project: str, items: list[dict[str, Any]], catalog: Catalog) -> list[dict]:
     """Keeps these as all the SD cards of a research project — see _save_equipment."""
     return _save_equipment(project, "sd-cards", items, catalog)
 
 
-@router.get("/projects/{project}/roles")
+@router.get("/projects/{project}/roles", response_model=list[RoleItem], response_model_exclude_unset=True)
 def get_roles(project: str, catalog: Catalog, include_deleted: bool = False) -> list[dict]:
     """The roles of the people in a research project, each told with the name its trapper has now."""
     return [_role_json(r, project) for r in catalog.roles(project, include_deleted)]
 
 
-@router.put("/projects/{project}/roles")
+@router.put("/projects/{project}/roles", response_model=list[RoleItem], response_model_exclude_unset=True)
 def save_roles(project: str, roles: list[RoleBody], catalog: Catalog) -> list[dict]:
     """Keeps these as all the roles of a research project, each by the id of its trapper."""
     try:
@@ -384,7 +387,7 @@ def save_roles(project: str, roles: list[RoleBody], catalog: Catalog) -> list[di
         raise _refused(exc) from exc
 
 
-@router.get("/projects/{project}/history")
+@router.get("/projects/{project}/history", response_model=list[HistoryLine], response_model_exclude_unset=True)
 def get_history(project: str, catalog: Catalog, kind: str | None = None, name: str | None = None) -> list[dict]:
     """The history of the states of the locations, cameras and SD cards of a research project, the oldest first."""
     try:
@@ -393,7 +396,7 @@ def get_history(project: str, catalog: Catalog, kind: str | None = None, name: s
         raise HTTPException(404, str(exc)) from exc
 
 
-@router.post("/projects/{project}/history/rebuild")
+@router.post("/projects/{project}/history/rebuild", response_model=HistoryRebuilt, response_model_exclude_unset=True)
 def rebuild_history(project: str, catalog: Catalog) -> dict:
     """Adds to the history what the visits say and it lacks: {"added"}."""
     try:
@@ -404,7 +407,7 @@ def rebuild_history(project: str, catalog: Catalog) -> dict:
 
 # ── at the addresses of before ──
 
-@import_router.post("/camera-identity")
+@import_router.post("/camera-identity", response_model=CameraIdentityAnswer, response_model_exclude_unset=True)
 def camera_identity(req: CameraIdentityRequest, catalog: Catalog) -> dict:
     """Keeps in a camera's record the make and the model its images say — what Camera consistency compares them with from then on."""
     try:
@@ -413,7 +416,7 @@ def camera_identity(req: CameraIdentityRequest, catalog: Catalog) -> dict:
         raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
 
 
-@setup_router.post("/roles")
+@setup_router.post("/roles", response_model=AddRolesAnswer, response_model_exclude_unset=True)
 def add_roles(req: RolesRequest, catalog: Catalog) -> dict:
     """Gives trappers a role in a research project: the ones it has already are left as they are, and a trapper that is not kept is refused.
     {"added": [[trapper, role]]}."""
@@ -426,7 +429,7 @@ def add_roles(req: RolesRequest, catalog: Catalog) -> dict:
     return {"added": [list(a) for a in added]}
 
 
-@setup_router.post("/field-items")
+@setup_router.post("/field-items", response_model=AddFieldItemsAnswer, response_model_exclude_unset=True)
 def add_field_items(req: FieldItemsRequest, catalog: Catalog) -> dict:
     """Adds cameras or SD cards to a research project, active: one with the label of another is left out. {"added": [labels], "skipped": [labels]}."""
     own = ("camera_id", "camera_make", "camera_model") if req.kind == "cameras" else ("brand", "capacity")
@@ -439,7 +442,7 @@ def add_field_items(req: FieldItemsRequest, catalog: Catalog) -> dict:
     return {"added": added.added, "skipped": added.skipped}
 
 
-@settings_router.post("/field-item-status")
+@settings_router.post("/field-item-status", response_model=SetFieldItemStatusAnswer, response_model_exclude_unset=True)
 def set_field_item_status(req: FieldItemStatusRequest, catalog: Catalog) -> dict:
     """Marks a camera or an SD card of a research project as no longer available (stolen, lost…) — what a visit that finds a camera stolen says of
     it and of its card. Nothing happens, and `updated` is false, when the research project does not keep one called that — or when it is archived,
@@ -450,7 +453,7 @@ def set_field_item_status(req: FieldItemStatusRequest, catalog: Catalog) -> dict
         raise HTTPException(400, getattr(exc, "message", str(exc))) from exc
 
 
-@settings_router.post("/status-history")
+@settings_router.post("/status-history", response_model=StatusHistoryOfAnswer, response_model_exclude_unset=True)
 def status_history_of(req: StatusHistoryRequest, catalog: Catalog) -> dict:
     """The history of the status of the locations, the cameras and the SD cards of a research project — of one kind, and of one of them, when they
     are given — the oldest first."""
@@ -460,7 +463,7 @@ def status_history_of(req: StatusHistoryRequest, catalog: Catalog) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
-@settings_router.post("/status-history/rebuild")
+@settings_router.post("/status-history/rebuild", response_model=RebuildStatusHistoryAnswer, response_model_exclude_unset=True)
 def rebuild_status_history(req: RebuildStatusHistoryRequest, catalog: Catalog) -> dict:
     """Rebuilds the history of the status of a research project from its visits, adding the lines it lacks — nothing of it is overwritten nor
     deleted. Says how many it added."""
@@ -470,7 +473,7 @@ def rebuild_status_history(req: RebuildStatusHistoryRequest, catalog: Catalog) -
         raise HTTPException(400, str(exc)) from exc
 
 
-@settings_router.put("/default-research-project")
+@settings_router.put("/default-research-project", response_model=SetDefaultResearchProjectAnswer, response_model_exclude_unset=True)
 def set_default_research_project(req: DefaultResearchProjectRequest, catalog: Catalog, settings: FromDishka[SettingsService]) -> dict:
     """Changes only the research project that comes filled in everywhere — what the selector of the header does. It must be one of the catalog: the
     catalog says it is, and the settings keep it."""

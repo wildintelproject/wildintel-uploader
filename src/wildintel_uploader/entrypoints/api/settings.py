@@ -19,6 +19,9 @@ from wildintel_uploader.modules.settings.infrastructure.api_schemas import (
     ConfigShown, DataDirRequest, FoldersRequest, GeneralRequest, GeneralShown, LogDeleted, NewConfigRequest, SectionShown, ShowWelcomeRequest,
 )
 from wildintel_uploader.modules.settings.domain.ports import NoLogFile, NoSettingsFile, SettingsService, UnknownConfig, UnknownSetting
+from wildintel_uploader.modules.settings.infrastructure.api_schemas import (  # what its routes answer
+    OpenConfigFolderAnswer, SetDataDirAnswer, SetShowWelcomeAnswer,
+)
 
 # Each endpoint is given what it asks for as FromDishka[...] by the container of entrypoints.wiring, in a scope of its own for each request.
 router = APIRouter(prefix="/api/settings", tags=["settings"], route_class=DishkaSyncRoute)
@@ -68,7 +71,7 @@ def download_config(config_id: str, service: Service) -> FileResponse:
     return FileResponse(path, media_type="application/toml", filename=path.name)
 
 
-@router.post("/configs/{config_id}/open-folder")
+@router.post("/configs/{config_id}/open-folder", response_model=OpenConfigFolderAnswer, response_model_exclude_unset=True)
 def open_config_folder(config_id: str, service: Service) -> dict:
     """Opens the folder of that settings file in the OS's file manager."""
     path = _config_file(service, config_id)
@@ -81,13 +84,13 @@ def open_config_folder(config_id: str, service: Service) -> dict:
 
 # ── what the app changes on its own ──
 
-@router.put("/show-welcome")
+@router.put("/show-welcome", response_model=SetShowWelcomeAnswer, response_model_exclude_unset=True)
 def set_show_welcome(req: ShowWelcomeRequest, service: Service) -> dict:
     """Changes only whether the welcome page is shown when the app opens — what its tick does."""
     return {"show_welcome": service.set_show_welcome(req.show).general.show_welcome}
 
 
-@router.put("/data-dir")
+@router.put("/data-dir", response_model=SetDataDirAnswer, response_model_exclude_unset=True)
 def set_data_dir(req: DataDirRequest, service: Service) -> dict:
     """Changes only the data folder — what the initial setup asks for. Blank is the default one. What is kept in the old one is not moved, and the
     folders that were inside it go inside the new one."""

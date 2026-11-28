@@ -1,6 +1,10 @@
 """The web API of the postvalidation as JSON — what the requests send, for entrypoints/api/postvalidation.py."""
 from __future__ import annotations
 
+from typing import Any
+
+from wildintel_uploader.shared.answers import Answer
+
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -61,3 +65,32 @@ class ValidateDeploymentRequest(BaseModel):
     statistics: StatisticsParams = Field(default_factory=StatisticsParams)
     # The visit the deployment is of, for the checks of the card and of the photos (none: they have nothing to compare with).
     visit: Optional[VisitCheckInfo] = None
+
+
+# ── what the routes answer (#248) ──
+
+
+class ValidateDeploymentAnswer(Answer):
+    """What POST /api/deployment-import/validate-deployment answers."""
+    checked_count: int | None = None
+    deployment_id: dict[str, Any] | None = None
+    collection_prefix: dict[str, Any] | None = None
+    collection_name: dict[str, Any] | None = None
+    location: dict[str, Any] | None = None
+    tolerance_hours: float | None = None
+    out_of_range: list[Any] | None = None
+    images_span: dict[str, Any] | None = None
+    camera_mismatches: list[Any] | None = None
+    camera_models_found: list[Any] | None = None
+    camera_by: list[Any] | None = None
+    camera_expected: dict[str, Any] | None = None
+    camera_found: dict[str, Any] | None = None
+    camera_label: Any = None
+    camera_record: Any = None
+    sd_card: dict[str, Any] | None = None
+    photo_count: dict[str, Any] | None = None
+    image_count: dict[str, Any] | None = None
+    sequence_count: dict[str, Any] | None = None
+    sequence_length: dict[str, Any] | None = None
+    report_id: str | None = None
+    stopped_early: dict[str, Any] | None = None

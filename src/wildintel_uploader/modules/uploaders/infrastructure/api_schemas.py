@@ -1,6 +1,10 @@
 """The web API of the uploaders as JSON — what the requests send, for entrypoints/api/uploaders.py, with their fields and checks as they were."""
 from __future__ import annotations
 
+from typing import Any
+
+from wildintel_uploader.shared.answers import Answer
+
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -110,3 +114,53 @@ class UploadReportRequest(BaseModel):
     started_at: str
     finished_at: str
     items: list[dict]
+
+
+# ── what the routes answer (#248) ──
+
+
+class CollectionNamesAnswer(Answer):
+    """What POST /api/sync/collection-names answers."""
+    results: list[Any] | None = None
+
+
+class CheckAccessAnswer(Answer):
+    """What POST /api/upload/check-access answers."""
+    checks: list[Any] | None = None
+
+
+class CheckSelectionAnswer(Answer):
+    """What POST /api/upload/check-selection answers."""
+    checks: list[Any] | None = None
+
+
+class UploadClassificationProjectsAnswer(Answer):
+    """What POST /api/upload/classification-projects answers."""
+    results: list[Any] | None = None
+
+
+class CollectionsAnswer(Answer):
+    """What POST /api/upload/collections answers."""
+    results: list[Any] | None = None
+
+
+class SaveUploadReportAnswer(Answer):
+    """What POST /api/upload/report answers."""
+    report_id: str | None = None
+
+
+class TrapperDefaults(Answer):
+    """The account of TRAPPER kept in the settings — the password only said to be there."""
+    base_url: str | None = None
+    user_name: str | None = None
+    has_password: bool | None = None
+
+
+class TrapperConnection(Answer):
+    ok: bool | None = None
+    research_projects_count: int | None = None
+
+
+class TrapperResults(Answer):
+    """What TRAPPER lists — its research projects, classification projects, locations or deployments —, each as TRAPPER says it."""
+    results: list[dict[str, Any]] | None = None

@@ -9,12 +9,15 @@ from fastapi import APIRouter, HTTPException
 from wildintel_uploader.modules.sources.domain.models import SourceError
 from wildintel_uploader.modules.sources.domain.ports import SourcesService
 from wildintel_uploader.modules.sources.infrastructure.api_schemas import BatchEntriesRequest, EntriesRequest, TestConnectionRequest
+from wildintel_uploader.modules.sources.infrastructure.api_schemas import (  # what its routes answer
+    EntriesAnswer, EntriesBatchAnswer, FormAnswer, TestConnectionAnswer,
+)
 
 router = APIRouter(prefix="/api/epicollect", tags=["sources"], route_class=DishkaSyncRoute)
 Sources = FromDishka[SourcesService]
 
 
-@router.get("/form")
+@router.get("/form", response_model=FormAnswer, response_model_exclude_unset=True)
 def form(sources: Sources) -> dict:
     """The inputs of the project's forms, to map them onto the fields of a deployment."""
     try:
@@ -23,7 +26,7 @@ def form(sources: Sources) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/test-connection")
+@router.post("/test-connection", response_model=TestConnectionAnswer, response_model_exclude_unset=True)
 def test_connection(req: TestConnectionRequest, sources: Sources) -> dict:
     """Whether the project can be read with what is typed in the settings, saved or not. Nothing is saved."""
     try:
@@ -32,7 +35,7 @@ def test_connection(req: TestConnectionRequest, sources: Sources) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/entries")
+@router.post("/entries", response_model=EntriesAnswer, response_model_exclude_unset=True)
 def entries(req: EntriesRequest, sources: Sources) -> dict:
     """The entries of the project that are this location's (and this revision's), as the fields of a deployment."""
     try:
@@ -41,7 +44,7 @@ def entries(req: EntriesRequest, sources: Sources) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/entries/batch")
+@router.post("/entries/batch", response_model=EntriesBatchAnswer, response_model_exclude_unset=True)
 def entries_batch(req: BatchEntriesRequest, sources: Sources) -> dict:
     """The newest entry of each location (and this revision) — null for one that has none — reading the project once.
     {"results": {location id as sent: entry or null}}"""

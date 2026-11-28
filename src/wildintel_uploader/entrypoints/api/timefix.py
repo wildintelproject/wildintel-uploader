@@ -9,6 +9,9 @@ from fastapi import APIRouter, HTTPException
 
 from wildintel_uploader.modules.timefix.domain.ports import TimeFixError, TimeFixService, VisitOfTheImages
 from wildintel_uploader.modules.timefix.infrastructure.api_schemas import FolderRequest, RemoveRequest, ShiftRequest
+from wildintel_uploader.modules.timefix.infrastructure.api_schemas import (  # what its routes answer
+    TimelineAnswer,
+)
 
 router = APIRouter(prefix="/api/timefix", tags=["timefix"], route_class=DishkaSyncRoute)
 TimeFix = FromDishka[TimeFixService]
@@ -27,19 +30,19 @@ def _http(call: Callable[[], dict]) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/timeline")
+@router.post("/timeline", response_model=TimelineAnswer, response_model_exclude_unset=True)
 def timeline(req: FolderRequest, timefix: TimeFix) -> dict:
     """The folder's images in the camera's order, with their times, segments and the fixes made so far."""
     return _http(lambda: timefix.timeline(req.folder, _visit(req)))
 
 
-@router.post("/shift")
+@router.post("/shift", response_model=TimelineAnswer, response_model_exclude_unset=True)
 def shift(req: ShiftRequest, timefix: TimeFix) -> dict:
     """Moves the date and time of a run of images by an offset; returns the timeline after it."""
     return _http(lambda: timefix.shift(req.folder, _visit(req), req.first, req.last, req.offset_seconds, req.reason))
 
 
-@router.post("/remove")
+@router.post("/remove", response_model=TimelineAnswer, response_model_exclude_unset=True)
 def remove(req: RemoveRequest, timefix: TimeFix) -> dict:
     """Takes images whose time can't be made right out of the folder; returns the timeline after it."""
     return _http(lambda: timefix.remove(req.folder, _visit(req), req.names, req.reason))

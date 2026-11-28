@@ -2,6 +2,10 @@
 entry (#248): the routers of `entrypoints/api/settings.py` take them from here, and never answer with a view of the domain as it is. What a setting may be is the domain's to say (modules.settings.domain.models): the settings the page sends are turned into it here."""
 from __future__ import annotations
 
+from pydantic import Field
+
+from wildintel_uploader.shared.answers import Answer
+
 from typing import Any
 
 from pydantic import BaseModel
@@ -116,3 +120,50 @@ class SectionShown(BaseModel):
 class LogDeleted(BaseModel):
     deleted: int
 
+
+# ── what the routes answer (#248) ──
+
+
+class GetSettingsAnswer(Answer):
+    """What GET /api/settings answers."""
+    GENERAL: dict[str, Any] | None = None
+    TRAPPER: dict[str, Any] | None = None
+    EPICOLLECT5: dict[str, Any] | None = None
+    AGOUTI: dict[str, Any] | None = None
+    EPICOLLECTCSV: dict[str, Any] | None = None
+    DATA: dict[str, Any] | None = None
+    VALIDATION: dict[str, Any] | None = None
+    POSTVALIDATION: dict[str, Any] | None = None
+    PREPROCESSING: dict[str, Any] | None = None
+    FIELDWORK: dict[str, Any] | None = None
+    FIELDLOG: dict[str, Any] | None = None
+
+
+class SaveSettingsAnswer(Answer):
+    """What PUT /api/settings answers."""
+    GENERAL: dict[str, Any] | None = None
+    TRAPPER: dict[str, Any] | None = None
+    EPICOLLECT5: dict[str, Any] | None = None
+    AGOUTI: dict[str, Any] | None = None
+    EPICOLLECTCSV: dict[str, Any] | None = None
+    DATA: dict[str, Any] | None = None
+    VALIDATION: dict[str, Any] | None = None
+    POSTVALIDATION: dict[str, Any] | None = None
+    PREPROCESSING: dict[str, Any] | None = None
+    FIELDWORK: dict[str, Any] | None = None
+    FIELDLOG: dict[str, Any] | None = None
+
+
+class OpenConfigFolderAnswer(Answer):
+    """What POST /api/settings/configs/{config_id}/open-folder answers."""
+    ok: bool | None = None
+
+
+class SetDataDirAnswer(Answer):
+    """What PUT /api/settings/data-dir answers."""
+    dir: str | None = None
+
+
+class SetShowWelcomeAnswer(Answer):
+    """What PUT /api/settings/show-welcome answers."""
+    show_welcome: bool | None = None

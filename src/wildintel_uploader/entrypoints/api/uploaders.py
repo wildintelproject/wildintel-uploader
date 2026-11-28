@@ -17,6 +17,9 @@ from wildintel_uploader.modules.uploaders.infrastructure.api_schemas import (
     AccessCheckRequest, ClassificationProjectsRequest, DeploymentsRequest, ImportDeploymentRequest, LocationsRequest, SyncCollectionNamesRequest,
     SyncCollectionsRequest, TrapperCredentials, UploadClassificationProjectsRequest, UploadCollectionsRequest, UploadDeploymentRequest, UploadReportRequest,
 )
+from wildintel_uploader.modules.uploaders.infrastructure.api_schemas import (  # what its routes answer
+    CheckAccessAnswer, CheckSelectionAnswer, CollectionNamesAnswer, CollectionsAnswer, SaveUploadReportAnswer, TrapperConnection, TrapperDefaults, TrapperResults, UploadClassificationProjectsAnswer,
+)
 
 trapper_router = APIRouter(prefix="/api/trapper", tags=["uploaders"], route_class=DishkaSyncRoute)
 upload_router = APIRouter(prefix="/api/upload", tags=["uploaders"], route_class=DishkaSyncRoute)
@@ -39,34 +42,34 @@ def _http(call: Callable[[], T]) -> T:
 
 # ── the account and what TRAPPER has ──
 
-@trapper_router.get("/config")
+@trapper_router.get("/config", response_model=TrapperDefaults, response_model_exclude_unset=True)
 def get_config(uploaders: Uploaders) -> dict:
     """Saved TRAPPER connection defaults — never the password itself."""
     return uploaders.account_defaults()
 
 
-@trapper_router.post("/test-connection")
+@trapper_router.post("/test-connection", response_model=TrapperConnection, response_model_exclude_unset=True)
 def test_connection(req: TrapperCredentials, uploaders: Uploaders) -> dict:
     """Checks the credentials, and saves them to settings.toml once they work — so they needn't be retyped."""
     return _http(lambda: uploaders.test_connection(_account(req)))
 
 
-@trapper_router.post("/research-projects")
+@trapper_router.post("/research-projects", response_model=TrapperResults, response_model_exclude_unset=True)
 def research_projects(req: TrapperCredentials, uploaders: Uploaders) -> dict:
     return {"results": _http(lambda: uploaders.research_projects(_account(req)))}
 
 
-@trapper_router.post("/classification-projects")
+@trapper_router.post("/classification-projects", response_model=TrapperResults, response_model_exclude_unset=True)
 def classification_projects(req: ClassificationProjectsRequest, uploaders: Uploaders) -> dict:
     return {"results": _http(lambda: uploaders.classification_projects(_account(req), req.research_project_pk))}
 
 
-@trapper_router.post("/locations")
+@trapper_router.post("/locations", response_model=TrapperResults, response_model_exclude_unset=True)
 def locations(req: LocationsRequest, uploaders: Uploaders) -> dict:
     return {"results": _http(lambda: uploaders.locations(_account(req), req.research_project_pk))}
 
 
-@trapper_router.post("/deployments")
+@trapper_router.post("/deployments", response_model=TrapperResults, response_model_exclude_unset=True)
 def deployments(req: DeploymentsRequest, uploaders: Uploaders) -> dict:
     """Existing deployments of a research project — for the "use an existing deployment" wizard branch."""
     return {"results": _http(lambda: uploaders.deployments(_account(req), req.research_project_pk))}
@@ -85,25 +88,25 @@ def import_deployment(req: ImportDeploymentRequest, uploaders: Uploaders) -> Str
 
 # ── uploading the deployments kept ──
 
-@upload_router.post("/collections")
+@upload_router.post("/collections", response_model=CollectionsAnswer, response_model_exclude_unset=True)
 def collections(req: UploadCollectionsRequest, uploaders: Uploaders) -> dict:
     """The collections kept for a research project, and the deployments in each — what can be uploaded."""
     return {"results": _http(lambda: uploaders.collections(req.research_project_id))}
 
 
-@upload_router.post("/classification-projects")
+@upload_router.post("/classification-projects", response_model=UploadClassificationProjectsAnswer, response_model_exclude_unset=True)
 def upload_classification_projects(req: UploadClassificationProjectsRequest, uploaders: Uploaders) -> dict:
     """The classification projects TRAPPER has for a research project kept locally — the collection goes to one of them."""
     return {"results": _http(lambda: uploaders.project_classification_projects(_account(req), req.research_project_id))}
 
 
-@upload_router.post("/check-selection")
+@upload_router.post("/check-selection", response_model=CheckSelectionAnswer, response_model_exclude_unset=True)
 def check_selection(req: AccessCheckRequest, uploaders: Uploaders) -> dict:
     """Whether the account has access to the research project — and to the collection, when one is chosen — {"checks": [...]}."""
     return {"checks": _http(lambda: uploaders.check_selection(_account(req), req.research_project_id, req.collection))}
 
 
-@upload_router.post("/check-access")
+@upload_router.post("/check-access", response_model=CheckAccessAnswer, response_model_exclude_unset=True)
 def check_access(req: AccessCheckRequest, uploaders: Uploaders) -> dict:
     """Whether the account can reach what an upload needs, changing nothing: one {"check", "ok", "message"} per check."""
     return {"checks": _http(lambda: uploaders.check_access(_account(req), req.research_project_id, req.collection, req.deployment_ids,
@@ -118,7 +121,7 @@ def upload_deployment(req: UploadDeploymentRequest, uploaders: Uploaders) -> Str
     return streaming.from_events(events, f"Uploading {req.deployment_id} failed")
 
 
-@upload_router.post("/report")
+@upload_router.post("/report", response_model=SaveUploadReportAnswer, response_model_exclude_unset=True)
 def save_upload_report(req: UploadReportRequest, uploaders: Uploaders) -> dict:
     """Keeps the report of an upload that has ended — what went up, what failed and why."""
     return {"report_id": uploaders.upload_report(req.collection, req.research_project_id, req.items, req.started_at, req.finished_at)}
@@ -126,7 +129,7 @@ def save_upload_report(req: UploadReportRequest, uploaders: Uploaders) -> dict:
 
 # ── bringing back what TRAPPER has ──
 
-@sync_router.post("/collection-names")
+@sync_router.post("/collection-names", response_model=CollectionNamesAnswer, response_model_exclude_unset=True)
 def collection_names(req: SyncCollectionNamesRequest, uploaders: Uploaders) -> dict:
     """The collections starting with R of a classification project and their deployments, to choose what to sync."""
     return {"results": _http(lambda: uploaders.collection_names(_account(req), req.research_project_pk, req.classification_project_pk))}

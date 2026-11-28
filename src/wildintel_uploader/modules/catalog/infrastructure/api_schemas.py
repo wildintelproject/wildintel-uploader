@@ -6,6 +6,9 @@ The models of the research projects and the locations are those the pages of bef
 the API did not change. And the field work as the settings page shows it and sends it (`entrypoints/api/settings_page.py`)."""
 from __future__ import annotations
 
+
+from wildintel_uploader.shared.answers import Answer
+
 from typing import Any, Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -277,3 +280,380 @@ def record_shown(record: Any) -> dict:
     fields = {k: v for k, v in asdict(record).items() if k not in ("audit", "extra")}
     return {**dict(record.extra), **fields, **{k: v for k, v in asdict(record.audit).items() if v is not None}}
 
+
+# ── what the routes answer (#248) ──
+
+
+class DeleteProjectAnswer(Answer):
+    """What DELETE /api/catalog/projects/{acronym} answers."""
+    deleted: str | None = None
+
+
+class DeleteLocationAnswer(Answer):
+    """What DELETE /api/catalog/projects/{project}/locations/{location_id} answers."""
+    deleted: str | None = None
+
+
+class GetProjectsItem(Answer):
+    """One of what GET /api/catalog/projects answers."""
+    acronym: str | None = None
+    name: str | None = None
+    sampling_design: int | None = None
+    sensor_method: int | None = None
+    animal_types: int | None = None
+    bait_use: int | None = None
+    event_interval: int | None = None
+    status: str | None = None
+    keywords: str | None = None
+    abstract: str | None = None
+    methods: str | None = None
+    description: str | None = None
+    trapper_pk: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    deleted_at: str | None = None
+
+
+class GetProjectAnswer(Answer):
+    """What GET /api/catalog/projects/{acronym} answers."""
+    acronym: str | None = None
+    name: str | None = None
+    sampling_design: int | None = None
+    sensor_method: int | None = None
+    animal_types: int | None = None
+    bait_use: int | None = None
+    event_interval: int | None = None
+    status: str | None = None
+    keywords: str | None = None
+    abstract: str | None = None
+    methods: str | None = None
+    description: str | None = None
+    trapper_pk: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class GetLocationsItem(Answer):
+    """One of what GET /api/catalog/projects/{project}/locations answers."""
+    location_id: str | None = None
+    timezone: str | None = None
+    ignore_dst: bool | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    name: Any = None
+    coordinate_uncertainty: Any = None
+    in_service: str | None = None
+    trapper_pk: Any = None
+    status: str | None = None
+    status_date: Any = None
+    status_note: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class GetTrappersItem(Answer):
+    """One of what GET /api/catalog/trappers answers."""
+    username: str | None = None
+    name: str | None = None
+    affiliation: Any = None
+    email: Any = None
+    status: str | None = None
+    trapper_pk: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class UpdateProjectAnswer(Answer):
+    """What PATCH /api/catalog/projects/{acronym} answers."""
+    acronym: str | None = None
+    name: str | None = None
+    sampling_design: int | None = None
+    sensor_method: int | None = None
+    animal_types: int | None = None
+    bait_use: int | None = None
+    event_interval: int | None = None
+    status: str | None = None
+    keywords: str | None = None
+    abstract: str | None = None
+    methods: str | None = None
+    description: str | None = None
+    trapper_pk: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class UpdateLocationAnswer(Answer):
+    """What PATCH /api/catalog/projects/{project}/locations/{location_id} answers."""
+    location_id: str | None = None
+    timezone: str | None = None
+    ignore_dst: bool | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    name: str | None = None
+    coordinate_uncertainty: Any = None
+    in_service: str | None = None
+    trapper_pk: Any = None
+    status: str | None = None
+    status_date: Any = None
+    status_note: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class MigrateCatalogAnswer(Answer):
+    """What POST /api/catalog/migrate answers."""
+    trappers: int | None = None
+    projects: int | None = None
+
+
+class AddProjectAnswer(Answer):
+    """What POST /api/catalog/projects answers."""
+    acronym: str | None = None
+    name: str | None = None
+    sampling_design: int | None = None
+    sensor_method: int | None = None
+    animal_types: int | None = None
+    bait_use: int | None = None
+    event_interval: int | None = None
+    status: str | None = None
+    keywords: str | None = None
+    abstract: str | None = None
+    methods: str | None = None
+    description: str | None = None
+    trapper_pk: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class AddLocationAnswer(Answer):
+    """What POST /api/catalog/projects/{project}/locations answers."""
+    location_id: str | None = None
+    timezone: str | None = None
+    ignore_dst: bool | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    name: Any = None
+    coordinate_uncertainty: Any = None
+    in_service: str | None = None
+    trapper_pk: Any = None
+    status: str | None = None
+    status_date: Any = None
+    status_note: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class CameraIdentityAnswer(Answer):
+    """What POST /api/deployment-import/camera-identity answers."""
+    label: str | None = None
+    camera_id: Any = None
+    camera_make: str | None = None
+    camera_model: str | None = None
+    connectivity: Any = None
+    power_source: Any = None
+    battery_removable: Any = None
+    in_service: Any = None
+    status: str | None = None
+    archive_reason: Any = None
+    status_date: Any = None
+    status_note: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    research_project: str | None = None
+
+
+class DeleteLocationBeforeAnswer(Answer):
+    """What POST /api/deployment-import/locations/delete answers."""
+    deleted: str | None = None
+
+
+class ListLocationsBeforeAnswer(Answer):
+    """What POST /api/deployment-import/locations/list answers."""
+    results: list[Any] | None = None
+
+
+class SaveLocationBeforeAnswer(Answer):
+    """What POST /api/deployment-import/locations/save answers."""
+    location_id: str | None = None
+    timezone: str | None = None
+    ignore_dst: bool | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    name: str | None = None
+    coordinate_uncertainty: int | None = None
+    in_service: str | None = None
+    trapper_pk: int | None = None
+    status: str | None = None
+    status_date: str | None = None
+    status_note: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class UpdateLocationBeforeAnswer(Answer):
+    """What POST /api/deployment-import/locations/update answers."""
+    location_id: str | None = None
+    timezone: str | None = None
+    ignore_dst: bool | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    name: str | None = None
+    coordinate_uncertainty: Any = None
+    in_service: str | None = None
+    trapper_pk: Any = None
+    status: str | None = None
+    status_date: str | None = None
+    status_note: str | None = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class DeleteResearchProjectAnswer(Answer):
+    """What POST /api/deployment-import/research-projects/delete answers."""
+    deleted: str | None = None
+
+
+class ListResearchProjectsAnswer(Answer):
+    """What POST /api/deployment-import/research-projects/list answers."""
+    results: list[Any] | None = None
+
+
+class SaveResearchProjectAnswer(Answer):
+    """What POST /api/deployment-import/research-projects/save answers."""
+    acronym: str | None = None
+    name: str | None = None
+    sampling_design: int | None = None
+    sensor_method: int | None = None
+    animal_types: int | None = None
+    bait_use: int | None = None
+    event_interval: int | None = None
+    status: str | None = None
+    keywords: str | None = None
+    abstract: str | None = None
+    methods: str | None = None
+    description: str | None = None
+    trapper_pk: int | None = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class UpdateResearchProjectAnswer(Answer):
+    """What POST /api/deployment-import/research-projects/update answers."""
+    acronym: str | None = None
+    name: str | None = None
+    sampling_design: int | None = None
+    sensor_method: int | None = None
+    animal_types: int | None = None
+    bait_use: int | None = None
+    event_interval: int | None = None
+    status: str | None = None
+    keywords: str | None = None
+    abstract: str | None = None
+    methods: str | None = None
+    description: str | None = None
+    trapper_pk: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class SetFieldItemStatusAnswer(Answer):
+    """What POST /api/settings/field-item-status answers."""
+    updated: bool | None = None
+
+
+class StatusHistoryOfAnswer(Answer):
+    """What POST /api/settings/status-history answers."""
+    results: list[Any] | None = None
+
+
+class RebuildStatusHistoryAnswer(Answer):
+    """What POST /api/settings/status-history/rebuild answers."""
+    added: int | None = None
+
+
+class AddFieldItemsAnswer(Answer):
+    """What POST /api/setup/field-items answers."""
+    added: list[Any] | None = None
+    skipped: list[Any] | None = None
+
+
+class AddRolesAnswer(Answer):
+    """What POST /api/setup/roles answers."""
+    added: list[Any] | None = None
+
+
+class AddTrappersAnswer(Answer):
+    """What POST /api/setup/trappers answers."""
+    added: list[Any] | None = None
+    skipped: list[Any] | None = None
+
+
+class SaveTrappersItem(Answer):
+    """One of what PUT /api/catalog/trappers answers."""
+    username: str | None = None
+    name: str | None = None
+    affiliation: Any = None
+    email: Any = None
+    status: str | None = None
+    trapper_pk: Any = None
+    id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class SetDefaultResearchProjectAnswer(Answer):
+    """What PUT /api/settings/default-research-project answers."""
+    default_research_project: str | None = None
+
+
+class EquipmentItem(Answer):
+    """A camera or an SD card of a research project, as the files keep it — and the research project it is of."""
+    id: str | None = None
+    label: str | None = None
+    research_project: str | None = None
+    status: str | None = None
+    status_date: str | None = None
+    status_note: str | None = None
+    archive_reason: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    deleted_at: str | None = None
+
+
+class RoleItem(Answer):
+    """The role of a person in a research project."""
+    id: str | None = None
+    trapper: str | None = None
+    role: str | None = None
+    research_project: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    deleted_at: str | None = None
+
+
+class HistoryLine(Answer):
+    """A line of the history of the states: what changed — a location, a camera, an SD card —, from what to what, when and why."""
+    kind: str | None = None
+    name: str | None = None
+    before: str | None = None
+    after: str | None = None
+    at: str | None = None
+    day: str | None = None
+    reason: str | None = None
+
+
+class HistoryRebuilt(Answer):
+    added: int

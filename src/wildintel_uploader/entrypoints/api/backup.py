@@ -14,6 +14,9 @@ from wildintel_uploader.shared.desktop import folder_picker
 from wildintel_uploader.entrypoints.api import streaming
 from wildintel_uploader.modules.backup.domain.ports import BackupError, BackupGone, BackupService, Choice
 from wildintel_uploader.modules.backup.infrastructure.api_schemas import CreateBackupRequest, ProjectInfoRequest, ReadBackupRequest, RestoreRequest
+from wildintel_uploader.modules.backup.infrastructure.api_schemas import (  # what its routes answer
+    PickedFile, ProjectInfoAnswer, ReadAnswer,
+)
 
 router = APIRouter(prefix="/api/backup", tags=["backup"], route_class=DishkaSyncRoute)
 Backups = FromDishka[BackupService]
@@ -27,7 +30,7 @@ def _http(call: Callable[[], T]) -> T:
         raise HTTPException(404 if isinstance(exc, BackupGone) else 400, str(exc)) from exc
 
 
-@router.post("/pick-file")
+@router.post("/pick-file", response_model=PickedFile, response_model_exclude_unset=True)
 def pick_file() -> dict:
     """Opens the OS's native file dialog on the machine running the backend, for a backup (.zip): {"path": ...}, or {"path": None} if cancelled."""
     try:
@@ -36,7 +39,7 @@ def pick_file() -> dict:
         raise HTTPException(501, str(exc)) from exc
 
 
-@router.post("/project-info")
+@router.post("/project-info", response_model=ProjectInfoAnswer, response_model_exclude_unset=True)
 def project_info(req: ProjectInfoRequest, backups: Backups) -> dict:
     """What a research project has that can be put in a backup: its counts, and its deployments by collection, with their files and bytes."""
     return _http(lambda: backups.describe(req.research_project_id))
@@ -58,7 +61,7 @@ def download(name: str, backups: Backups) -> FileResponse:
     return FileResponse(path, media_type="application/zip", filename=name)
 
 
-@router.post("/read")
+@router.post("/read", response_model=ReadAnswer, response_model_exclude_unset=True)
 def read(req: ReadBackupRequest, backups: Backups) -> dict:
     """What a backup holds — its manifest — and what of it is already here, to choose what to restore."""
     return _http(lambda: backups.read(Path(req.path).expanduser()))
