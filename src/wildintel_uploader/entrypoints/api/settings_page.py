@@ -87,24 +87,37 @@ def save_settings(new: config.Settings, service: FromDishka[SettingsService]) ->
         raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
     _follow_data_dir(current, new)   # where the research projects are, for their field work
     catalog = wiring.build_catalog(_root(new), service)
-    fieldwork = new.FIELDWORK
-    # Two writes — the catalog, then the settings — and nothing to undo between them: the settings were checked above, before either; and the catalog
-    # takes the lists of the page as they are (save_fieldwork replaces them), so if writing the settings fails after it the settings still hold all
-    # of the field work, and saving the page again ends the same as one save that did not fail.
-    try:
-        catalog.save_fieldwork(*fieldwork_saved(fieldwork))
-    except (CatalogError, StorageError) as exc:
-        raise HTTPException(422, getattr(exc, "message", str(exc))) from exc
-    # what is of a research project that is not kept stays in the settings, to wait for it
-    known = {p.acronym for p in catalog.projects()}
-    fieldwork.trappers = []
-    fieldwork.cameras = [i for i in fieldwork.cameras if i.research_project not in known]
-    fieldwork.sd_cards = [i for i in fieldwork.sd_cards if i.research_project not in known]
-    fieldwork.roles = [r for r in fieldwork.roles if r.research_project not in known]
-    try:
-        service.save_settings(settings_of(new))
-    except domain.SettingsError as exc:
-        raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
+    _save_together(catalog, service, new)
     return _shown(config.load_settings(), service, catalog.fieldwork())
 
+
+def _save_together(catalog: CatalogService, service: SettingsService, new: config.Settings) -> None:
+    """The field work the page sends goes to the catalog — the people, and the cameras, SD cards and roles of each research project kept —, and the
+    rest of the page to the settings: two modules, two writes, whole or not at all. The settings were checked before; if the catalog refuses what
+    the page says (an archived camera changed…) or writing the settings fails, what the catalog wrote is put back as it was — the checkpoint of each
+    research project, with the people — and the error is told."""
+    put_back = [catalog.checkpoint(p.acronym) for p in catalog.projects()]
+    fieldwork = new.FIELDWORK
+    try:
+        try:
+            catalog.save_fieldwork(*fieldwork_saved(fieldwork))
+        except (CatalogError, StorageError) as exc:
+            raise HTTPException(422, getattr(exc, "message", str(exc))) from exc
+        # what is of a research project that is not kept stays in the settings, to wait for it
+        known = {p.acronym for p in catalog.projects()}
+        fieldwork.trappers = []
+        fieldwork.cameras = [i for i in fieldwork.cameras if i.research_project not in known]
+        fieldwork.sd_cards = [i for i in fieldwork.sd_cards if i.research_project not in known]
+        fieldwork.roles = [r for r in fieldwork.roles if r.research_project not in known]
+        try:
+            service.save_settings(settings_of(new))
+        except domain.SettingsError as exc:
+            raise HTTPException(422, f"{exc.message[:1].upper()}{exc.message[1:]}.") from exc
+    except BaseException as exc:
+        for undo in reversed(put_back):
+            try:
+                undo()
+            except Exception as failed:  # noqa: BLE001 — the first error is the one told
+                exc.add_note(f"What the catalog wrote could not all be put back: {failed}")
+        raise
 

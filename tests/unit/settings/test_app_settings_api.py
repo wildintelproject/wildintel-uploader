@@ -545,6 +545,40 @@ def test_a_archived_camera_or_sd_card_is_not_changed(tmp_path: Path):
     assert marked.json() == {"updated": False}
 
 
+def test_a_save_of_the_page_the_catalog_refuses_changes_nothing_of_it(tmp_path: Path):
+    """#248: the people are written before a camera is found archived for good — they are put back with it, as the page was refused whole."""
+    body = config.Settings().model_dump(mode="json")
+    body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana"}]
+    body["FIELDWORK"]["cameras"] = [{"label": "CAM-001", "camera_id": "BR1", "research_project": "DONA", "status": "archived"}]
+    assert _client().put("/api/settings", json=body).status_code == 200
+    before = _client().get("/api/settings").json()["FIELDWORK"]
+
+    body["FIELDWORK"]["trappers"] = [{"username": "ana", "name": "Ana"}, {"username": "luis", "name": "Luis"}]
+    body["FIELDWORK"]["cameras"][0]["camera_model"] = "Browning"          # refused: archived for good
+    refused = _client().put("/api/settings", json=body)
+
+    assert refused.status_code == 422 and _client().get("/api/settings").json()["FIELDWORK"] == before
+
+
+def test_a_save_of_the_page_whose_settings_cannot_be_written_puts_the_catalog_back(tmp_path: Path, monkeypatch):
+    from wildintel_uploader.modules.settings.application.use_cases import SettingsUseCases
+
+    body = config.Settings().model_dump(mode="json")
+    body["FIELDWORK"]["cameras"] = [{"label": "CAM-001", "research_project": "DONA"}]
+    assert _client().put("/api/settings", json=body).status_code == 200
+    before = _client().get("/api/settings").json()["FIELDWORK"]
+
+    def the_disk_is_full(self, settings):
+        raise OSError("The disk is full.")
+    monkeypatch.setattr(SettingsUseCases, "save_settings", the_disk_is_full)
+    body["FIELDWORK"]["cameras"].append({"label": "CAM-002", "research_project": "DONA"})
+    with pytest.raises(OSError):
+        _client().put("/api/settings", json=body)
+    monkeypatch.undo()
+
+    assert _client().get("/api/settings").json()["FIELDWORK"] == before   # CAM-002 is not in the catalog without the settings saved
+
+
 def test_each_source_of_visits_and_each_uploader_can_be_used_or_not(tmp_path: Path):
     shown = _client().get("/api/settings").json()
     # by default: the new WildINTEL CSV and Trapper are used; Epicollect and Agouti are not
