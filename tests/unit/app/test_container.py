@@ -86,3 +86,24 @@ def test_the_uploaders_and_the_backups_of_the_container_follow_the_collections_f
 
     assert uploaders.uploads_of("DONA", "R0001-DONA_01")[0]["uploaded_at"] == "2026-11-27T10:00:00Z"
     assert [c["name"] for c in backups.describe("DONA")["collections"]] == ["R0001"]   # the research project and its collection of the folder of now
+
+
+def _contracts() -> list:
+    """What every provider of the app says it gives — its factories and its aliases."""
+    from wildintel_uploader.entrypoints.wiring.container import providers
+    return [source.provides.type_hint for provider in providers() for source in (*provider.factories, *provider.aliases)]
+
+
+def test_the_container_gives_every_contract_with_none_of_its_ports_left_out(first: Path):
+    """#248: each contract the providers say they give is made — in a request, as a route or a command asks for it — and has every port it was
+    made with: a port left None is a wiring that forgot it, found here and not when its feature is first used."""
+    contracts = _contracts()
+    assert len(contracts) >= 20
+    container = wiring.make_app_container()
+    with container() as request:
+        for contract in contracts:
+            made = request.get(contract)
+            left_out = sorted(name for name, value in vars(made).items() if value is None) if hasattr(made, "__dict__") else []
+            assert not left_out, f"{getattr(contract, '__name__', contract)} is made with {left_out} left out"
+    container.close()
+

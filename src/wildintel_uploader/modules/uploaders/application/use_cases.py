@@ -24,9 +24,9 @@ T = TypeVar("T")
 class UploadersUseCases(UploadersService):
     """`deployments` gives the module of the deployments when it is needed: it is built with the uploaders among what it uses."""
 
-    def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports, uploads: DeploymentUploads | None = None, *,
-                 deployments: Callable[[], DeploymentsService] | None = None, sending: TrapperUploads | None = None,
-                 places: UploadPlaces | None = None, syncing: TrapperSync | None = None) -> None:
+    def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports, uploads: DeploymentUploads, *,
+                 deployments: Callable[[], DeploymentsService], sending: TrapperUploads, places: UploadPlaces, syncing: TrapperSync) -> None:
+        """Every port is needed — one left out is a mistake of the wiring, told when the module is put together, not when it is first used."""
         self._trapper, self._kept, self._reports, self._uploads = trapper, kept, reports, uploads
         self._deployments, self._sending, self._places, self._syncing = deployments, sending, places, syncing
 

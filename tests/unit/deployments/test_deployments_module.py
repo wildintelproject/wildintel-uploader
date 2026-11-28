@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.support.unused import unused
+
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
 
@@ -53,7 +55,9 @@ class Deployment:
 
 def _deployments(tmp_path, known=(), time=None):
     folders, preprocessing = Folders(tmp_path, {"timezone": "Atlantic/Canary", "ignore_dst": False} if time is None else time), Preprocessing()
-    service = DeploymentsUseCases(None, folders, None, None, visits=Visits(set(known)), preprocessing=preprocessing, imports=folders)
+    service = DeploymentsUseCases(unused("memory card"), folders, unused("revision statistics"), unused("photos"), visits=Visits(set(known)),
+                                  preprocessing=preprocessing, imports=folders, repairs=unused("repairing"), statistics=unused("statistics"),
+                                  sessions=unused("sessions"), layout=unused("collection layout"))
     return service, folders, preprocessing
 
 

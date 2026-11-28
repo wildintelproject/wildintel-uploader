@@ -4,6 +4,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+
+from tests.support.unused import unused
 from trapper_client import err
 
 from wildintel_uploader.modules.settings.domain import models as _settings_models
@@ -74,7 +76,8 @@ class Places:
 
 
 def _uploaders(events, kept):
-    return UploadersUseCases(Trapper(events), kept, None, sending=Sending(events), places=Places())
+    return UploadersUseCases(Trapper(events), kept, unused("reports"), unused("uploads"), sending=Sending(events), places=Places(),
+                             deployments=unused("deployments"), syncing=unused("syncing"))
 
 
 def _failing():
@@ -126,7 +129,8 @@ class NoTime:
 
 def test_a_deployment_is_organized_by_the_deployments_and_then_registered():
     trapper = Registering()
-    service = UploadersUseCases(trapper, NoTime(), None, deployments=Organizer)
+    service = UploadersUseCases(trapper, NoTime(), unused("reports"), unused("uploads"), deployments=Organizer, sending=unused("sending"),
+                                places=unused("places"), syncing=unused("syncing"))
     events = list(service.import_deployment(Account(), 2, None, "src", Deployment(), "DONA", True, timezone="Europe/Madrid"))
     assert [e["type"] for e in events] == ["copy", "registering", "done"] and trapper.registered == [("Europe/Madrid", False)]
     with pytest.raises(UploaderError, match="A timezone is required"):

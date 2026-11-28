@@ -20,9 +20,10 @@ from wildintel_uploader.modules.visits.domain.ports import VisitsService
 
 
 class DeploymentsUseCases(DeploymentsService):
-    def __init__(self, cards: CardCopying | None, folders: Folders, revisions: RevisionStatistics, photos: Photos, *, visits: VisitsService,
-                 preprocessing: PreprocessingService, repairs: Repairing | None = None, statistics: RevisionStatistics | None = None,
-                 sessions: ImportSessions | None = None, layout: CollectionLayout | None = None, imports: Importing | None = None) -> None:
+    def __init__(self, cards: CardCopying, folders: Folders, revisions: RevisionStatistics, photos: Photos, *, visits: VisitsService,
+                 preprocessing: PreprocessingService, repairs: Repairing, statistics: RevisionStatistics, sessions: ImportSessions,
+                 layout: CollectionLayout, imports: Importing) -> None:
+        """Every port is needed — one left out is a mistake of the wiring, told when the module is put together, not when it is first used."""
         self._cards, self._folders, self._revisions, self._photos = cards, folders, revisions, photos
         self._visits, self._preprocessing, self._repairs, self._statistics = visits, preprocessing, repairs, statistics
         self._sessions, self._layout, self._imports = sessions, layout, imports
