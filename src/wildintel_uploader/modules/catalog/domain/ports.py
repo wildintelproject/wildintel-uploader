@@ -167,6 +167,10 @@ class CatalogService(Protocol):
 class CatalogRepository(Protocol):
     """Where the records of the catalog are kept."""
 
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """What is kept of a research project now — its locations, cameras, SD cards and roles — and the people, and how to put it back exactly as
+        it was, what was not kept at all included (CatalogService.checkpoint)."""
+
     def read_trappers(self) -> list[Trapper]:
         """All the people kept, the removed ones too; one kept before the ids existed gets the same id whenever it is read."""
 

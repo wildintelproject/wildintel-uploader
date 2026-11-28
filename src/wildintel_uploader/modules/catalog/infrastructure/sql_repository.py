@@ -7,7 +7,7 @@ collections folder, where its collections go; what the folder holds besides is w
 now, are still kept there as JSON (its visits, its locations…)."""
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
@@ -188,6 +188,19 @@ class SqlCatalogRepository(CatalogRepository):
         self.engine = engine
         # made when they are not there, brought to the last version when they are of one before (sql_migrations)
         migrate(engine, lambda e: SQLModel.metadata.create_all(e, tables=_TABLES), [t.name for t in _TABLES])
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """What the tables hold of a research project and the people, read now, and written back as it was — no rows where there were none."""
+        trappers, roles, locations = self.read_trappers(), self.read_roles(project), self.read_locations(project)
+        equipment = {kind: self.read_equipment(project, kind) for kind in ("cameras", "sd_cards")}
+
+        def put_back() -> None:
+            self.write_trappers(trappers)
+            self.write_roles(project, roles)
+            self.write_locations(project, locations)
+            for kind, items in equipment.items():
+                self.write_equipment(project, kind, items)
+        return put_back
 
     # the people
 

@@ -47,9 +47,9 @@ def entities_unchecked(request, monkeypatch):
     monkeypatch.setattr(visit_file, "parse_visits", parse)
 
 
-def _client() -> TestClient:
+def _client(raise_server_exceptions: bool = True) -> TestClient:
     from wildintel_uploader.web.main import app
-    return TestClient(app)
+    return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 
 
 def _settings():
@@ -1130,6 +1130,31 @@ def test_the_entries_of_epicollect_are_downloaded_as_a_csv(monkeypatch):
     monkeypatch.setattr(EpicollectApi, "visits", lambda self, text, epicollect, settings: VisitRows(csv="location_id,date\nA,2026-01-01\n"))
     body = _client().post("/api/visits/epicollect-download").json()
     assert body == {"csv": "location_id,date\nA,2026-01-01\n", "count": 1}
+
+
+def test_a_visit_by_hand_whose_save_fails_half_way_is_not_kept_nor_what_it_changed(tmp_path: Path, monkeypatch):
+    """#248: a visit is written, then what it changes — the camera and the card it leaves, the location it starts, the states of the visits, the
+    folders —; when a later step fails, the visit and what it changed are put back as they were, and the save can be made again."""
+    from tests.support import built
+    from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
+
+    def the_disk_is_full(self, project, visits):
+        raise OSError("The disk is full.")
+    first = {**VISIT, "session": "R0012", "date": "2026-01-10", "actions": ["Installation"], "num_photos": None, "sd": "A13"}
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "12", "camera_id": "12", "camera_model": None, "research_project": "DONA"}])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "A13", "research_project": "DONA"}])
+        records_before = {p.name: p.read_text(encoding="utf-8") for p in (tmp_path / "DONA").glob("*.json")}
+        monkeypatch.setattr(VisitsUseCases, "_make_folders", the_disk_is_full)   # the last step: the visit and the catalog are written by now
+        failed = _client(raise_server_exceptions=False).post("/api/visits/save", json={"research_project_id": "DONA", "visit": first})
+        records_after = {p.name: p.read_text(encoding="utf-8") for p in (tmp_path / "DONA").glob("*.json")}
+        monkeypatch.undo()
+        again = _save(first)
+
+    assert failed.status_code >= 400
+    assert records_after == records_before   # the visit, its camera and card, the history: as they were
+    assert again.status_code == 200, again.text
 
 
 def test_a_visit_by_hand_is_after_the_last_one_to_its_site_and_after_the_revisions_before_its_own(tmp_path: Path):

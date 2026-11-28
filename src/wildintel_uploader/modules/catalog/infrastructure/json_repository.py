@@ -2,6 +2,7 @@
 research projects; each research project has its folder, named by its acronym, which holds its record and, besides, its collections."""
 from __future__ import annotations
 
+from collections.abc import Callable
 
 from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject, Role, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
@@ -9,12 +10,22 @@ from wildintel_uploader.modules.catalog.infrastructure.mapping import (
     equipment_from_record, equipment_to_record, location_from_record, location_to_record, project_from_record, project_to_record, role_from_record,
     role_to_record, trapper_from_record, trapper_to_record,
 )
+from wildintel_uploader.shared import storage
 from wildintel_uploader.shared.storage import ProjectStore, StorageError
 
 
 class StoreCatalogRepository(CatalogRepository):
     def __init__(self, store: ProjectStore) -> None:
         self.store = store
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        records = storage.checkpoint(lambda: self.store, project, ["locations", "cameras", "sd_cards", "roles"])
+        trappers = self.store.read_global("trappers")
+
+        def put_back() -> None:
+            records()
+            self.store.write_global("trappers", trappers)
+        return put_back
 
     def read_trappers(self) -> list[Trapper]:
         return [trapper_from_record(r) for r in self.store.read_global("trappers")]

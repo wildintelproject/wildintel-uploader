@@ -3,10 +3,12 @@ file or a source of visits and keeping them, and what the visits say of the depl
 (domain.rules); what it does to the locations, the cameras and the SD cards is done with it, with the visit as the reason in the history."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import csv
 import io
 import threading
-from typing import cast
+from typing import TypeVar, cast
 
 from wildintel_uploader.modules.sources.domain.models import SourceError
 from wildintel_uploader.modules.sources.domain.ports import SourcesService
@@ -55,6 +57,9 @@ def with_location_coordinates(text: str) -> str:
     for row in rows:
         writer.writerow({**row, "location_latitude": row.get("latitude", ""), "location_longitude": row.get("longitude", "")})
     return out.getvalue()
+
+
+T = TypeVar("T")
 
 
 class VisitsUseCases(VisitsService):
@@ -194,11 +199,13 @@ class VisitsUseCases(VisitsService):
                                                                else rules.refusals(visit, kept_visits, locations, cards, unknown))
         if reasons:
             raise VisitRefused(" ".join(reasons))
-        kept = self._visits.add(project, visit)
-        self._archive_locations(project, [kept])
-        self._apply_to_entities(project, [kept], kept_visits)
-        self._refresh_states(project)
-        return cast(SavedVisit, {**kept, "collection_folders": self._make_folders(project, [kept])})
+        def write() -> SavedVisit:
+            kept = self._visits.add(project, visit)
+            self._archive_locations(project, [kept])
+            self._apply_to_entities(project, [kept], kept_visits)
+            self._refresh_states(project)
+            return cast(SavedVisit, {**kept, "collection_folders": self._make_folders(project, [kept])})
+        return self._all_or_nothing(project, write)
 
     def update(self, project: str, location_id: str, session: str, visit: Visit) -> SavedVisit:
         self._catalog.require_project(project)
@@ -221,9 +228,11 @@ class VisitsUseCases(VisitsService):
                                                                               self._visits.unknown(project))
         if reasons:
             raise VisitRefused(" ".join(reasons))
-        kept = self._visits.update(project, location_id, session, visit)
-        self._refresh_states(project)
-        return cast(SavedVisit, {**kept, "collection_folders": self._make_folders(project, [kept])})
+        def write() -> SavedVisit:
+            kept = self._visits.update(project, location_id, session, visit)
+            self._refresh_states(project)
+            return cast(SavedVisit, {**kept, "collection_folders": self._make_folders(project, [kept])})
+        return self._all_or_nothing(project, write)
 
     # ── the revisions ──
 
@@ -323,9 +332,15 @@ class VisitsUseCases(VisitsService):
     def _keep(self, project: str, result: dict, kept: list[Visit], cameras: list[Camera], cards: list[SdCard]) -> tuple[int, dict, str | None]:
         """All or nothing, as the file is (#206): a save is many writes — the catalog's, then the visits' —, and if one fails what the others wrote is
         put back as it was, so the research project is never left half imported; the error is told as it came."""
+        return self._all_or_nothing(project, lambda: self._write(project, result, kept, cameras, cards))
+
+    def _all_or_nothing(self, project: str, write: Callable[[], T]) -> T:
+        """`write` — the many writes of saving a visit or a file of them: the catalog's, then the visits' — whole or not at all: if one fails, what
+        the others wrote is put back as it was (the checkpoints of the catalog and of the visits), and the error is told as it came. A folder of a
+        collection made before the failure stays: it is empty, and the next save finds it there."""
         put_back = [self._catalog.checkpoint(project), self._visits.checkpoint(project)]
         try:
-            return self._write(project, result, kept, cameras, cards)
+            return write()
         except Exception as exc:
             for undo in reversed(put_back):
                 try:

@@ -78,6 +78,25 @@ def test_the_locations_are_kept_for_each_research_project_in_their_order(reposit
     assert repository.read_locations("DONA") == [madrid] and repository.read_locations("NOPE") == []
 
 
+def test_a_checkpoint_puts_back_what_a_research_project_and_the_people_were(repository):
+    """#248: what a save of many writes undoes when one fails — on files and on a database alike."""
+    from wildintel_uploader.modules.catalog.domain.models import Location
+
+    repository.add_project(ResearchProject(acronym="DONA", name="Doñana"))
+    ana = Trapper(username="ana", name="Ana", audit=Audit(id="a", created_at="T1"))
+    one = Location(location_id="DONA_01", audit=Audit(id="l1", created_at="T1"))
+    repository.write_trappers([ana])
+    repository.write_locations("DONA", [one])
+    put_back = repository.checkpoint("DONA")
+
+    repository.write_trappers([ana, Trapper(username="luis", name="Luis", audit=Audit(id="l", created_at="T2"))])
+    repository.write_locations("DONA", [one, Location(location_id="DONA_02", audit=Audit(id="l2", created_at="T2"))])
+    repository.write_roles("DONA", [])
+    put_back()
+
+    assert repository.read_trappers() == [ana] and repository.read_locations("DONA") == [one] and repository.read_roles("DONA") == []
+
+
 def test_the_whole_catalog_works_the_same_on_a_database(tmp_path: Path):
     class NoLegacy:
         def take(self):
