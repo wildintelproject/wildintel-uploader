@@ -182,6 +182,24 @@ class BackupUseCases(BackupService):
 
     # ── restoring ──
 
+    def _checkpoint(self, project: str | None, *, trappers: bool) -> Callable[[], None]:
+        """What a restoration may change, as it is now, and how to put it back exactly (ProjectRecords.checkpoint): the records of the research
+        project — itself, its locations, cameras, SD cards, roles, history and visits — when it is restored into, and the people when the settings are. A research project that was not
+        here is left as the restoration made it: restoring it again finishes it. The settings are written last, so nothing written after them is
+        undone."""
+        records = self._records
+        people = records.trappers() if trappers else None
+        undo_project: Callable[[], None] = lambda: None   # noqa: E731
+        if project is not None and records.has_project(project):
+            undo_project = records.checkpoint(project)
+
+        def put_back() -> None:
+            undo_project()
+            if people is not None:
+                records.keep_trappers(people)
+        return put_back
+
+
     def restore(self, path: Path, choice: Choice, replace: bool) -> Iterator[dict]:
         return _first_then(self._restored(path, choice, replace), "The restoration", empty={"type": "done", "summary": {}})
 
@@ -209,44 +227,12 @@ class BackupUseCases(BackupService):
             def backed(name: str) -> list[dict]:
                 return [i for i in json.loads(archive.read(name)) if isinstance(i, dict)]
 
-            if wants_project and choice.project_files:
-                yield {"type": "step", "message": f"Restoring the data of {project}…"}
-                if f"project/{rules.PROJECT}" in names:
-                    if replace or records.project_record(project) is None:
-                        # as the backup has it — its id and dates too —, wherever the catalog is kept
-                        records.put_project_record(json.loads(archive.read(f"project/{rules.PROJECT}")))
-                        folders.make_project(project)
-                        summary["project_files"]["research_project"] = "written"
-                    else:
-                        summary["project_files"]["research_project"] = "kept"
-                for kind, file_name in rules.PROJECT_RECORDS.items():
-                    if f"project/{file_name}" not in names:
-                        continue
-                    items, key = backed(f"project/{file_name}"), rules.RECORD_KEYS[kind]
-                    if kind == "roles":   # told by the name of the trapper: it is kept by its id, whoever the trapper is here
-                        merged, added, replaced, skipped = rules.merge(records.roles(project), [r for r in items if not r.get("deleted_at")], key, replace=replace)
-                        records.keep_roles(project, merged)
-                    elif kind == "locations":
-                        merged, added, replaced, skipped = rules.merge(records.location_records(project), items, key, replace=replace)
-                        records.put_location_records(project, merged)
-                    else:   # the cameras and the SD cards
-                        merged, added, replaced, skipped = rules.merge(records.equipment_records(project, kind), items, key, replace=replace)
-                        records.put_equipment_records(project, kind, merged)
-                    summary["project_files"][kind] = {"added": added, "replaced": replaced, "kept": skipped}
-                if f"project/{rules.HISTORY}" in names:   # a line of the history is never changed: the ones the backup has that are not here are added
-                    merged, added, _, skipped = rules.merge(records.status_history(project), backed(f"project/{rules.HISTORY}"), rules.history_key, replace=False)
-                    records.keep_status_history(project, sorted(merged, key=lambda line: str(line.get("at", ""))))
-                    summary["project_files"]["status_history"] = {"added": added, "replaced": 0, "kept": skipped}
-            if wants_project and choice.visits:
-                yield {"type": "step", "message": f"Restoring the visits of {project}…"}
-                if f"project/{rules.VISITS}" not in names:
-                    raise BackupError("That backup holds no visits.")
-                merged, added, replaced, skipped = rules.merge(records.visits(project), backed(f"project/{rules.VISITS}"), rules.visit_key, replace=replace)
-                records.replace_visits(project, merged)
-                summary["visits"] = {"added": added, "replaced": replaced, "kept": skipped}
+            # all that can be known is checked before anything is written: what the backup lacks, and where each file would go
+            if wants_project and choice.visits and f"project/{rules.VISITS}" not in names:
+                raise BackupError("That backup holds no visits.")
+            files: list[tuple[str, str]] = []   # (name in the archive, path in the research project)
             if wants_project and choice.deployments:
                 wanted = {d["id"]: d for d in scope.get("deployments", []) if d["id"] in choice.deployments}
-                files: list[tuple[str, str]] = []   # (name in the archive, path in the research project)
                 for deployment_id, d in wanted.items():
                     if folders.holds(project, f"{d['collection']}/{deployment_id}") and not replace:
                         summary["deployments"]["skipped"].append(deployment_id)
@@ -265,20 +251,74 @@ class BackupUseCases(BackupService):
                         if replace or not folders.holds(project, relative):
                             files.append((name, relative))
                 folders.check_inside(project, [relative for _, relative in files])   # every file goes inside the research project, or none is written
-                yield {"type": "step", "message": f"Restoring {len(summary['deployments']['restored'])} deployment(s)…"}
-                for index, (name, relative) in enumerate(files, start=1):
-                    folders.write(project, relative, archive.read(name))
-                    summary["files"] += 1
-                    yield {"type": "file", "index": index, "total": len(files), "name": name}
-            if choice.settings:
-                yield {"type": "step", "message": "Restoring the settings…"}
-                from_backup = json.loads(archive.read(rules.SETTINGS))
-                merged_settings = rules.settings_restored(self._settings.as_data(), from_backup, self._settings.secrets())
-                fieldwork = from_backup.get("FIELDWORK")
-                if isinstance(fieldwork, dict) and fieldwork.get("trappers"):   # the people, kept beside the projects
-                    kept, added, replaced, skipped = rules.merge(records.trappers(), rules.people_of(from_backup), rules.trapper_key, replace=replace)
-                    records.keep_trappers(kept)
-                    summary["trappers"] = {"added": added, "replaced": replaced, "kept": skipped}
-                self._settings.save(merged_settings)
-                summary["settings"] = True
+
+            # then it is written — and if a write fails, or the restoration is stopped, what was written is undone (see _checkpoint)
+            put_back = self._checkpoint(project if wants_project else None, trappers=choice.settings)
+            new_files: list[str] = []
+            try:
+                if wants_project and choice.project_files:
+                    yield {"type": "step", "message": f"Restoring the data of {project}…"}
+                    if f"project/{rules.PROJECT}" in names:
+                        if replace or records.project_record(project) is None:
+                            # as the backup has it — its id and dates too —, wherever the catalog is kept
+                            records.put_project_record(json.loads(archive.read(f"project/{rules.PROJECT}")))
+                            folders.make_project(project)
+                            summary["project_files"]["research_project"] = "written"
+                        else:
+                            summary["project_files"]["research_project"] = "kept"
+                    for kind, file_name in rules.PROJECT_RECORDS.items():
+                        if f"project/{file_name}" not in names:
+                            continue
+                        items, key = backed(f"project/{file_name}"), rules.RECORD_KEYS[kind]
+                        if kind == "roles":   # told by the name of the trapper: it is kept by its id, whoever the trapper is here
+                            merged, added, replaced, skipped = rules.merge(records.roles(project), [r for r in items if not r.get("deleted_at")], key, replace=replace)
+                            records.keep_roles(project, merged)
+                        elif kind == "locations":
+                            merged, added, replaced, skipped = rules.merge(records.location_records(project), items, key, replace=replace)
+                            records.put_location_records(project, merged)
+                        else:   # the cameras and the SD cards
+                            merged, added, replaced, skipped = rules.merge(records.equipment_records(project, kind), items, key, replace=replace)
+                            records.put_equipment_records(project, kind, merged)
+                        summary["project_files"][kind] = {"added": added, "replaced": replaced, "kept": skipped}
+                    if f"project/{rules.HISTORY}" in names:   # a line of the history is never changed: the ones the backup has that are not here are added
+                        merged, added, _, skipped = rules.merge(records.status_history(project), backed(f"project/{rules.HISTORY}"), rules.history_key, replace=False)
+                        records.keep_status_history(project, sorted(merged, key=lambda line: str(line.get("at", ""))))
+                        summary["project_files"]["status_history"] = {"added": added, "replaced": 0, "kept": skipped}
+                if wants_project and choice.visits:
+                    yield {"type": "step", "message": f"Restoring the visits of {project}…"}
+                    merged, added, replaced, skipped = rules.merge(records.visits(project), backed(f"project/{rules.VISITS}"), rules.visit_key, replace=replace)
+                    records.replace_visits(project, merged)
+                    summary["visits"] = {"added": added, "replaced": replaced, "kept": skipped}
+                if files:
+                    yield {"type": "step", "message": f"Restoring {len(summary['deployments']['restored'])} deployment(s)…"}
+                    for index, (name, relative) in enumerate(files, start=1):
+                        if not folders.holds(project, relative):
+                            new_files.append(relative)
+                        folders.write(project, relative, archive.read(name))
+                        summary["files"] += 1
+                        yield {"type": "file", "index": index, "total": len(files), "name": name}
+                if choice.settings:
+                    yield {"type": "step", "message": "Restoring the settings…"}
+                    from_backup = json.loads(archive.read(rules.SETTINGS))
+                    merged_settings = rules.settings_restored(self._settings.as_data(), from_backup, self._settings.secrets())
+                    fieldwork = from_backup.get("FIELDWORK")
+                    if isinstance(fieldwork, dict) and fieldwork.get("trappers"):   # the people, kept beside the projects
+                        kept, added, replaced, skipped = rules.merge(records.trappers(), rules.people_of(from_backup), rules.trapper_key, replace=replace)
+                        records.keep_trappers(kept)
+                        summary["trappers"] = {"added": added, "replaced": replaced, "kept": skipped}
+                    self._settings.save(merged_settings)
+                    summary["settings"] = True
+            except BaseException as exc:
+                for relative in reversed(new_files):
+                    try:
+                        folders.remove(project, relative)
+                    except Exception as failed:  # noqa: BLE001 — the first error is the one told
+                        exc.add_note(f"A file restored could not be removed: {relative} ({failed})")
+                try:
+                    put_back()
+                except Exception as failed:  # noqa: BLE001
+                    exc.add_note(f"What was restored could not all be put back: {failed}")
+                if replace and summary["files"] > len(new_files):
+                    exc.add_note("Files that were there were replaced before it stopped: restore it again to have them all as the backup has them.")
+                raise
         yield {"type": "done", "summary": summary, "manifest": manifest}

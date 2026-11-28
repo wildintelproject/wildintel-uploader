@@ -13,6 +13,8 @@ What they refuse is a StorageError (shared.storage), with the words the callers 
 where the app is put together (entrypoints.wiring); the fewer that need them, the better."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from typing import Protocol
 
 
@@ -58,6 +60,10 @@ class CatalogRecordStore(Protocol):
 
     def put_project_record(self, record: dict) -> None:
         """Keeps the record as it is given — its id and dates too —, in place of the one kept, or as a new one (with its folder)."""
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """What is kept of a research project — its record, locations, cameras, SD cards and roles — and the people, and how to put it back exactly
+        as it was: a restoration that fails half way undoes what it wrote."""
 
     def location_records(self, project: str) -> list[dict]: ...
     def put_location_records(self, project: str, records: list[dict]) -> None: ...

@@ -65,3 +65,15 @@ class CollectionsFolder(ProjectFolders):
         with os.fdopen(fd, "wb") as out:
             out.write(data)
         os.replace(tmp, target)
+
+    def remove(self, project: str, relative: str) -> None:
+        folder = self._project(project)
+        target = folder / PurePosixPath(relative)
+        target.unlink(missing_ok=True)
+        for parent in target.parents:
+            if parent == folder or not parent.is_relative_to(folder):
+                break
+            try:
+                parent.rmdir()   # only when empty
+            except OSError:
+                break

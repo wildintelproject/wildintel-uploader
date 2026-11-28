@@ -29,6 +29,17 @@ class RecordsOfTheProject:
     def _kept(self) -> CatalogRecordStore:
         return self._store(self._root())
 
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """The catalog's records of the research project as its repository keeps them, and its history and visits as the store keeps them — each
+        put back exactly, what was not kept at all included."""
+        catalog = self._kept().checkpoint(project)
+        kept = storage.checkpoint(lambda: storage.open_store(self._root()), project, ["status_history", "visits"])
+
+        def put_back() -> None:
+            catalog()
+            kept()
+        return put_back
+
     def require_project(self, project: str) -> None:
         try:
             self._records().require_project(project)

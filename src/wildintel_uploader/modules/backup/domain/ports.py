@@ -3,7 +3,7 @@ the archives, and the settings of the app."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Iterator
+from collections.abc import Callable, Generator, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -55,6 +55,9 @@ class BackupService(ABC):
 class ProjectRecords(Protocol):
     """What a research project keeps as records — the catalog and the visits through their contracts, and the history of the states —, as the
     records are kept and with the ids of this computer."""
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """What is kept of a research project now — its records, history and visits — and the people, and how to put it back exactly as it was."""
 
     def require_project(self, project: str) -> None:
         """Raises BackupError when the research project is not kept."""
@@ -125,6 +128,10 @@ class ProjectFolders(ABC):
     @abstractmethod
     def write(self, project: str, relative: str, data: bytes) -> None:
         """Writes a file of the research project, whole or not at all."""
+
+    @abstractmethod
+    def remove(self, project: str, relative: str) -> None:
+        """Removes a file of the research project — one a restoration wrote, when it is undone —, and the folders it leaves empty."""
 
 
 class BackupArchive(AbstractContextManager, ABC):

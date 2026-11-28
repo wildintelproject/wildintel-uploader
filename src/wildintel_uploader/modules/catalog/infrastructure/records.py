@@ -159,6 +159,16 @@ class RecordStoreOf(CatalogRecordStore):
     def __init__(self, repository: Callable[[], CatalogRepository]) -> None:
         self._repository = repository
 
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        repository = self._repository()
+        record, records = repository.read_project(project), repository.checkpoint(project)
+
+        def put_back() -> None:
+            if record is not None:
+                repository.save_project(record)
+            records()
+        return put_back
+
     def project_record(self, project: str) -> dict | None:
         """The record of a research project as it is kept — removed or not —, or None."""
         found = self._repository().read_project(project)

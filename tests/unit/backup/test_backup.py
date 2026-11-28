@@ -1,5 +1,6 @@
 """Backups of the settings and of a research project, and their restoration (modules.backup)."""
 import json
+import shutil
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
@@ -366,3 +367,61 @@ def test_the_settings_of_a_backup_have_no_secrets_nor_folders_and_restoring_keep
     assert here["TRAPPER"]["password"] == "secret"                                          # what is here is not touched
     restored = archive.settings_restored(here, {"TRAPPER": {"base_url": "https://b", "password": None}, "DATA": {"dir": "/theirs"}}, [("TRAPPER", "password")])
     assert restored["TRAPPER"] == {"base_url": "https://b", "password": "secret"} and restored["DATA"] == {"dir": "/mine"}
+
+
+# ── a restoration is whole, or nothing of it is kept (#248) ──
+
+def _records_of(pdir: Path) -> dict:
+    """What the research project keeps, as the catalog reads it — the ids a record without one is read with included."""
+    records = built.records(pdir.parent)
+    project = pdir.name
+    return {"locations": records.locations(project, include_deleted=True), "cameras": records.equipment(project, "cameras", include_deleted=True),
+            "sd_cards": records.equipment(project, "sd_cards", include_deleted=True), "roles": records.roles(project, include_deleted=True),
+            "visits": json.loads((pdir / "visits.json").read_text(encoding="utf-8")) if (pdir / "visits.json").exists() else None}
+
+
+def _files_of(pdir: Path) -> set[str]:
+    return {str(p.relative_to(pdir)) for p in pdir.rglob("*") if p.is_file()}
+
+
+def test_what_a_backup_lacks_is_found_before_anything_is_written(tmp_path: Path):
+    source, dest = tmp_path / "source", tmp_path / "out"
+    source.mkdir(), dest.mkdir()
+    pdir = _project(source)
+    done = _make(source, dest, visits=False)                     # a backup with no visits
+    (pdir / "locations.json").write_text(json.dumps([{"location_id": "DONA_09", "status": "active"}]), encoding="utf-8")
+    before = _records_of(pdir)
+
+    with pytest.raises(BackupError, match="holds no visits"):
+        _restore(source, done["path"], visits=True, replace=True)
+    assert _records_of(pdir) == before                           # its locations were not restored first
+
+
+def test_a_restoration_that_fails_half_way_leaves_the_records_and_the_files_as_they_were(tmp_path: Path):
+    from wildintel_uploader.modules.backup.infrastructure.folders import CollectionsFolder
+
+    source, dest = tmp_path / "source", tmp_path / "out"
+    source.mkdir(), dest.mkdir()
+    pdir = _project(source)
+    done = _make(source, dest, images=True)
+    (pdir / "locations.json").write_text(json.dumps([{"location_id": "DONA_09", "status": "active"}]), encoding="utf-8")
+    (pdir / "visits.json").write_text("[]", encoding="utf-8")
+    deployment = pdir / "R0001" / "R0001-DONA_01"
+    shutil.rmtree(deployment)                                     # the deployment is not here: it is restored
+    records, files = _records_of(pdir), _files_of(pdir)
+    real_write, written = CollectionsFolder.write, []
+
+    def fails_at_the_third(self, project, relative, data):
+        if len(written) == 2:
+            raise OSError("The disk is full.")
+        written.append(relative)
+        real_write(self, project, relative, data)
+
+    with patch.object(CollectionsFolder, "write", fails_at_the_third), pytest.raises(BackupError, match="The disk is full"):
+        _restore(source, done["path"], replace=False)
+    assert _records_of(pdir) == records and _files_of(pdir) == files   # its locations, its visits and the files it had written: undone
+    assert not deployment.exists()                                # and the folders it made for them
+    assert len(written) == 2
+
+    _restore(source, done["path"], replace=False)                 # with room again, it is restored whole
+    assert (deployment / "IMG_0002.JPG").read_bytes() == b"jpeg-22"
