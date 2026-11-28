@@ -14,6 +14,22 @@ _TRAILING_DIGITS_RE = re.compile(r"(\d+)(?!.*\d)")  # a filename's last run of d
 
 
 def sequence_number(path: Path) -> int | None:
+    """The number a camera gave a shot: the last run of digits of its file name, without the extension.
+
+    Args:
+        path: The image.
+
+    Returns:
+        That number, or None when the name has no digit.
+
+    Examples:
+        >>> sequence_number(Path("DCIM/100RECNX/IMG_0042.JPG"))
+        42
+        >>> sequence_number(Path("RCNX0007_2.JPG"))
+        2
+        >>> sequence_number(Path("photo.jpg")) is None
+        True
+    """
     match = _TRAILING_DIGITS_RE.search(path.stem)
     return int(match.group(1)) if match else None
 
@@ -26,6 +42,28 @@ class ShootingOrder(ImageValidator):
                    "corrupted images are skipped, and each folder is checked on its own.")
 
     def run(self, folder: MediaFolder, options: ImageOptions) -> dict:
+        """The pairs of shots of a folder whose dates go back.
+
+        Within each folder (a subfolder on its own), the images that have a date and a number are put in order by their
+        number, and each is compared with the next: one dated before the one numbered before it is an issue; two with the
+        same number are not compared. The images with no date or no number are skipped, and so are the corrupted ones —
+        when the check of the corrupted images ran before.
+
+        Args:
+            folder: The folder whose images are checked.
+            options: Not read: the check has no option.
+
+        Returns:
+            ``{"sequence_issues": [...]}`` — one dict for each pair: ``{"path_a", "index_a", "date_a", "path_b",
+            "index_b", "date_b"}``, the lower-numbered image (a) and the next one (b), each with its path relative to the
+            folder, its number and its date (ISO 8601). Empty when every folder is in order.
+
+        Example:
+            The camera clock went back an hour between the shots 41 and 42::
+
+                {"sequence_issues": [{"path_a": "IMG_0041.JPG", "index_a": 41, "date_a": "2026-10-19T14:05:12",
+                                      "path_b": "IMG_0042.JPG", "index_b": 42, "date_b": "2026-10-19T13:05:40"}]}
+        """
         taken, errors = folder.dates(), folder.decode_errors_if_known()
         dated: dict[Path, datetime] = {}
         by_dir: dict[Path, list[Path]] = defaultdict(list)

@@ -12,6 +12,24 @@ class SdCardOfTheVisit(DeploymentValidator):
     of_the_visit = True
 
     def run(self, folder: MediaFolder, context: DeploymentContext) -> dict:
+        """Whether the SD card the images are said to come from is the one the visit left in the camera.
+
+        The cards are compared whatever their case. With no visit, no card said for the images, or a visit that says
+        none, there is nothing to compare: it is ok, and the message says why.
+
+        Args:
+            folder: Not read: the check is of the cards.
+            context: ``visit`` — ``sd_card``, the card the images are said to come from, and ``left_sd`` and
+                ``left_session``, the card left in the camera and the visit that left it.
+
+        Returns:
+            ``{"sd_card": {"ok": bool, "message": str}}`` — whether it is the card left, and what the page says.
+
+        Example::
+
+            {"sd_card": {"ok": False, "message": "You said the images come from the card SD07, but the visit R0012 left "
+                                                 "SD03 in the camera."}}
+        """
         visit = context.visit
         if not visit:
             return {"sd_card": ok("No visit was chosen, so the card cannot be checked.")}

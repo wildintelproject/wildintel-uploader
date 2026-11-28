@@ -15,6 +15,32 @@ class ExifFields(ImageValidator):
                    "and a few examples (all of them with detail).")
 
     def run(self, folder: MediaFolder, options: ImageOptions) -> dict:
+        """The EXIF fields checked, and the images that lack each.
+
+        The capture date is always checked, first; then the fields the settings ask for. The capture date is the one the
+        file cache reads (when it was taken, else when it was digitized, else when the camera last changed the file), and
+        Model and the serial numbers are those it read with the camera; any other field is read as a tag.
+
+        Args:
+            folder: The folder whose images are checked.
+            options: What the caller says of the checks; read here: ``exif_fields`` (the fields the settings ask for) and
+                ``detail`` (every image that lacks a field, not only a few examples).
+
+        Returns:
+            ``{"exif_missing": {field: {"label", "count", "examples", "files"}}}`` — one entry for each field checked,
+            also for those no image lacks: how the page names it ("capture date" for DateTimeOriginal, else the field),
+            how many images lack it and up to three of them, relative to the folder; ``files``, all of them, only with
+            ``detail``.
+
+        Example:
+            The settings ask for Model and SerialNumber; two images say no serial number::
+
+                {"exif_missing": {
+                    "DateTimeOriginal": {"label": "capture date", "count": 0, "examples": []},
+                    "Model": {"label": "Model", "count": 0, "examples": []},
+                    "SerialNumber": {"label": "SerialNumber", "count": 2, "examples": ["IMG_0001.JPG", "IMG_0002.JPG"]},
+                }}
+        """
         cameras, taken = folder.cameras(), folder.dates()
         images = sorted(folder.images)
         fields = ["DateTimeOriginal", *(f for f in options.exif_fields if f.lower() != "datetimeoriginal")]

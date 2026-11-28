@@ -12,6 +12,24 @@ class PhotoCount(DeploymentValidator):
     of_the_visit = True
 
     def run(self, folder: MediaFolder, context: DeploymentContext) -> dict:
+        """Whether the folder has as many images as the visit counted on the card when it collected it.
+
+        With no visit, or a visit that counted none, there is nothing to compare: it is ok, and the message says why.
+
+        Args:
+            folder: The folder of the deployment's images: they are counted.
+            context: ``visit`` — ``counted_photos``, what it counted, and ``collected_session``, the visit that
+                collected the card.
+
+        Returns:
+            ``{"photo_count": {"ok": bool, "message": str}}`` — a problem says how many images are missing or more.
+
+        Example:
+            The visit R0013 counted 1,215 images on the card, and the folder has 1,203::
+
+                {"photo_count": {"ok": False, "message": "The visit R0013 counted 1,215 images on the card, and the folder "
+                                                         "has 1,203 images — 12 images missing."}}
+        """
         visit, found = context.visit, len(folder.images)
         if not visit:
             return {"photo_count": ok("No visit was chosen, so the number of images cannot be checked.")}

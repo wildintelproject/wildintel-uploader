@@ -65,6 +65,32 @@ class CameraOfTheDeployment(DeploymentValidator):
                    "the first level that tells a camera the record has every field of; with no record, by the model of the deployment.")
 
     def run(self, folder: MediaFolder, context: DeploymentContext) -> dict:
+        """Whether the images are of the camera of the deployment (the module says how it is told, with examples).
+
+        Args:
+            folder: The folder of the deployment's images.
+            context: What the wizard knows of the deployment; read here: ``camera`` (the record of its camera in the
+                catalog — ``label``, ``camera_id``, ``camera_make``, ``camera_model`` —; None with no record),
+                ``camera_levels`` and ``deployment.camera_model``.
+
+        Returns:
+            ``{"camera_mismatches", "camera_models_found", "camera_by", "camera_expected", "camera_found",
+            "camera_label", "camera_record"}`` — what each one is, the module says.
+
+        Example:
+            The record of the camera 7B says serial BR5071, make Browning and model BTC-8A; one image was taken by
+            BR9999::
+
+                {
+                    "camera_mismatches": [{"path": "IMG_0007.JPG", "detected": "BR9999"}],
+                    "camera_models_found": ["Browning BTC-8A"],
+                    "camera_by": ["SerialNumber"],
+                    "camera_expected": {"SerialNumber": "BR5071"},
+                    "camera_found": {"make": "Browning", "model": "BTC-8A"},
+                    "camera_label": "7B",
+                    "camera_record": {"make": "Browning", "model": "BTC-8A"},
+                }
+        """
         images, camera, deployment = folder.images, context.camera, context.deployment
         read = folder.tags(images, ["Make", "Model"])
         record = {"make": (camera or {}).get("camera_make"), "model": (camera or {}).get("camera_model"), "serial": (camera or {}).get("camera_id")}
