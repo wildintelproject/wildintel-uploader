@@ -26,7 +26,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from wildintel_uploader.web.settings import settings
+from wildintel_uploader.web.server_settings import settings
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 

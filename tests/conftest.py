@@ -22,13 +22,19 @@ atexit.register(shutil.rmtree, _FAKE_HOME, True)
 
 import pytest  # noqa: E402
 
+from wildintel_uploader.entrypoints import wiring  # noqa: E402 — the app put together, as the app does
+
+wiring.configure_runtime()
+
 
 @pytest.fixture(autouse=True)
 def _forget_what_was_found_of_files():
     """What the steps of an import remember of a file (see services.file_memo), and what ExifTool read kept on disk (services.exif_store), is not carried from
     one test to the next."""
-    from wildintel_uploader.core.services import camera_info, exif_store, file_memo
-    camera_info.PREFETCH = False   # no reading ahead that outlives its test (the tests of it turn it on)
+    from wildintel_uploader.modules.fileinfo.infrastructure import store as exif_store
+    from wildintel_uploader.modules.fileinfo.infrastructure import memory as file_memo
+    from wildintel_uploader.modules.fileinfo.application import use_cases as fileinfo_use_cases
+    fileinfo_use_cases.PREFETCH = False   # no reading ahead that outlives its test (the tests of it turn it on)
     file_memo.forget_all()
     exif_store.clear()
     yield

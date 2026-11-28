@@ -29,6 +29,8 @@ dependencies = [
     "uvicorn[standard]>=0.49.0",
     "tzdata>=2024.1",
     "pyepicollect>=5.1.1",
+    "dishka>=1.10",
+    "sqlmodel>=0.0.22",
 ]
 
 [dependency-groups]
@@ -37,6 +39,7 @@ dev = [
     "mike>=2.0",
     "mkdocs-material>=9.7",
     "mkdocs-static-i18n>=1.2",
+    "mypy>=1.13",
     "playwright>=1.63.0",
     "pyinstaller>=6.21.0",
     "pytest>=8.0",
@@ -44,7 +47,7 @@ dev = [
 
 [project.scripts]
 # Not "cli": wildintel-trapper-sdk, in the same environment, already has its own.
-wildintel-uploader = "wildintel_uploader.cli.app:run"
+wildintel-uploader = "wildintel_uploader.entrypoints.cli.app:run"
 wucli = "wildintel_uploader.wucli:app"
 
 [tool.uv.sources]
@@ -53,6 +56,25 @@ wucli = "wildintel_uploader.wucli:app"
 # git tag once the changes this app needs are released:
 #   wildintel-trapper-sdk = { git = "https://github.com/wildintelproject/wildintelproject-trapper-sdk", tag = "vX.Y.Z" }
 wildintel-trapper-sdk = { path = "../wildintel-trapper-sdk", editable = true }
+
+[tool.mypy]
+# The modules that keep to their types — checked in CI (uv run mypy). One at a time: a module joins when mypy finds nothing in it.
+files = [
+    "src/wildintel_uploader/shared",
+    "src/wildintel_uploader/modules/backup",
+    "src/wildintel_uploader/modules/catalog",
+    "src/wildintel_uploader/modules/fileinfo",
+    "src/wildintel_uploader/modules/postvalidation",
+    "src/wildintel_uploader/modules/prevalidation",
+    "src/wildintel_uploader/modules/preprocessing",
+    "src/wildintel_uploader/modules/reports",
+    "src/wildintel_uploader/modules/sources",
+    "src/wildintel_uploader/modules/timefix",
+    "src/wildintel_uploader/modules/visits",
+]
+python_version = "3.13"
+ignore_missing_imports = true
+follow_imports = "silent"
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]

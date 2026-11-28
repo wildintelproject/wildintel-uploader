@@ -78,7 +78,7 @@ export interface CorruptedImage {
 }
 
 /** A higher-numbered shot with an earlier EXIF date than a lower-numbered
- * one in the same folder — see core.services.deployment_import_service
+ * one in the same folder — see modules/deployments
  * .validate_images. */
 export interface SequenceIssue {
   path_a: string
@@ -90,7 +90,7 @@ export interface SequenceIssue {
 }
 
 /** The "Validate folder contents" step's checks — see
- * core.services.deployment_import_service.IMAGE_CHECKS. Only the results of
+ * the registry of modules/prevalidation/domain/checks. Only the results of
  * whichever were asked for are present. */
 export type ImageCheck = 'corrupted' | 'sequence' | 'structure' | 'camera' | 'exif' | 'duplicates'
 
@@ -178,7 +178,7 @@ export interface CameraMismatch {
 }
 
 /** The postvalidation step's checks — see
- * core.services.deployment_import_service.DEPLOYMENT_CHECKS. */
+ * the registry of modules/postvalidation/domain/checks. */
 export type DeploymentCheck =
   | 'deployment_id' | 'collection_prefix' | 'collection_name' | 'location' | 'time_range' | 'camera'
   | 'image_count' | 'sequence_count' | 'sequence_length' | 'sd_card' | 'photo_count'
@@ -287,7 +287,7 @@ export type FeatureType =
  * names this mirrors (deploymentID -> deployment_id, etc.). The standard
  * requires deployment_id, latitude, longitude, start_date and end_date (the
  * dates as ISO 8601 with a timezone designator) — see deploymentValidation.ts
- * and core.schemas.requests.DeploymentFields, which enforce it. */
+ * and shared/camtrap.py DeploymentFields, which enforce it. */
 export interface DeploymentFields {
   deployment_id: string
   location_id?: string | null
@@ -351,7 +351,7 @@ export type ImportEvent =
   | { type: 'done'; dest_dir: string; processed?: number; skipped?: number; sealed?: boolean | null; report_id?: string | null; resize?: ResizeSummary }
 
 /** What is done to the images as they are imported, and the values it uses — see
- * core.services.preprocessing_service. */
+ * modules/preprocessing. */
 export interface PreprocessingOptions {
   rename: boolean
   resize: boolean
@@ -460,7 +460,7 @@ export interface CollectionPath extends CollectionCheck {
 }
 
 /** How the deployment is identified for this run — see
- * core.schemas.requests.DeploymentSelection. research_project/
+ * modules/deployments/infrastructure/api_schemas.py DeploymentSelection. research_project/
  * classification_project/location only apply to destination "trapper";
  * collection_dir/collection_name only to "local". An "existing" deployment's
  * own fields (including its location) come from wherever it was found (see

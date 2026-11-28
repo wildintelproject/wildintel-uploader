@@ -38,6 +38,9 @@ jobs:
       - name: Run tests
         run: uv run pytest -v
 
+      - name: Type check (the modules listed in [tool.mypy])
+        run: uv run mypy
+
   frontend:
     name: Frontend type check, lint, tests and build
     runs-on: ubuntu-latest

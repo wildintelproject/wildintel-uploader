@@ -1,0 +1,213 @@
+"""The adapters of the visits: the visits kept (KeptVisits), the catalog as records, the folders of the collections, the history of the states
+(the catalog's), where the deployments were uploaded (the uploaders), the reports, the settings of FIELDLOG. What
+they refuse is VisitsFailed, with their words."""
+from __future__ import annotations
+
+import builtins
+
+from typing import Any
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import AbstractContextManager, contextmanager
+from pathlib import Path
+
+from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownCamera, UnknownLocation, UnknownProject
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.visits.infrastructure import catalog_view as view
+from wildintel_uploader.modules.reports.domain.ports import ReportsService
+from wildintel_uploader.modules.visits.domain.models import VisitsFailed
+from wildintel_uploader.modules.visits.domain.visit_file import VisitsCsvError
+from wildintel_uploader.modules.visits.domain.ports import (
+    Clock, StateHistory, Uploads, Visit, VisitCatalog, VisitDeployments, VisitReports, VisitRepository, VisitSettings,
+)
+from wildintel_uploader.modules.deployments.domain.ports import CollectionLayout
+from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
+from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedVisit, Location, SdCard, Trapper, UnknownVisit
+
+
+
+@contextmanager
+def _failed() -> Iterator[None]:
+    """What the files and the catalog refuse, as VisitsFailed — with the words they say it with."""
+    from wildintel_uploader.shared.storage import StorageError
+    try:
+        yield
+    except (StorageError, VisitsCsvError, UnknownProject, UnknownLocation, UnknownCamera) as exc:
+        raise VisitsFailed(str(exc)) from exc
+    except CatalogError as exc:
+        raise VisitsFailed(exc.message) from exc
+
+
+class StoredVisits(VisitRepository):
+    """The visits kept (KeptVisits), what they refuse told as VisitsFailed."""
+
+    def __init__(self, kept: KeptVisits) -> None:
+        self._kept = kept
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        with _failed():
+            return self._kept.checkpoint(project)
+
+    def list(self, project: str, location_id: str | None = None) -> builtins.list[Visit]:
+        with _failed():
+            return self._kept.list(project, location_id)
+
+    def add(self, project: str, visit: Visit) -> Visit:
+        with _failed():
+            return self._kept.add(project, visit)
+
+    def add_many(self, project: str, visits: builtins.list[Visit]) -> int:
+        with _failed():
+            return self._kept.add_many(project, visits)
+
+    def update(self, project: str, location_id: str, session: str, visit: Visit) -> Visit:
+        with _failed():
+            return self._kept.update(project, location_id, session, visit)
+
+    def unknown(self, project: str) -> builtins.list[UnknownVisit]:
+        with _failed():
+            return self._kept.unknown(project)
+
+    def kept_count(self, project: str) -> int:
+        with _failed():
+            return self._kept.kept_count(project)
+
+    def replace_all(self, project: str, visits: builtins.list[Visit]) -> None:
+        with _failed():
+            self._kept.replace_all(project, visits)
+
+    def add_unknown(self, project: str, unknown: builtins.list[UnknownVisit]) -> int:
+        with _failed():
+            return self._kept.add_unknown(project, unknown)
+
+    def planned_revisions(self, project: str) -> builtins.list[str]:
+        with _failed():
+            return self._kept.planned_revisions(project)
+
+    def plan_revision(self, project: str, session: str) -> str:
+        with _failed():
+            return self._kept.plan_revision(project, session)
+
+    def closed(self, project: str) -> builtins.list[ClosedVisit]:
+        with _failed():
+            return self._kept.closed(project)
+
+    def link(self, project: str, location_id: str, date: str, time: str, deployment_id: str) -> Visit:
+        with _failed():
+            return self._kept.link(project, location_id, date, time, deployment_id)
+
+    def write_states(self, project: str, states: Mapping[tuple[str, str], str | None]) -> int:
+        with _failed():
+            return self._kept.write_states(project, states)
+
+
+class CatalogOfTheVisits(VisitCatalog):
+    """The catalog as the visits see it (infrastructure.catalog_view) — asked through its contract, given when it is needed."""
+
+    def __init__(self, catalog: Callable[[], CatalogService]) -> None:
+        self._catalog = catalog
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        with _failed():
+            return self._catalog().checkpoint(project)
+
+    def require_project(self, project: str, *, active: bool = False) -> None:
+        with _failed():
+            self._catalog().require_project(project, active=active)
+
+    def locations(self, project: str, include_deleted: bool = False) -> list[Location]:
+        with _failed():
+            return [view.seen(loc) for loc in self._catalog().locations(project, include_deleted)]
+
+    def equipment(self, project: str, kind: str) -> list[Camera | SdCard]:
+        with _failed():
+            return [{**view.seen(i), "research_project": project} for i in self._catalog().equipment(project, kind)]
+
+    def trappers(self) -> list[Trapper]:
+        with _failed():
+            return [view.seen(t) for t in self._catalog().trappers()]
+
+    def trapper_names(self) -> list[str]:
+        return [t["name"] for t in self.trappers()]
+
+    def add_trappers(self, trappers: list[Trapper]) -> None:
+        with _failed():
+            catalog = self._catalog()
+            catalog.save_trappers([*catalog.trappers(), *(view.trapper(t) for t in trappers)])
+
+    def add_location(self, project: str, location: Location) -> None:
+        with _failed():
+            self._catalog().add_location(project, view.new_location(location))
+
+    def change_location(self, project: str, location_id: str, changes: dict) -> None:
+        with _failed():
+            self._catalog().update_location(project, location_id, changes, by_visit=True)
+
+    def keep_equipment(self, project: str, kind: str, items: Sequence[Camera | SdCard]) -> None:
+        with _failed():
+            self._catalog().save_equipment(project, kind, [view.equipment(i, kind) for i in items])
+
+
+class StoredStateHistory(StateHistory):
+    def because(self, reason: str, day: str | None, why: dict | None = None) -> AbstractContextManager:
+        from wildintel_uploader.modules.catalog.domain.history import because
+        return because(reason, day, why)
+
+
+class CollectionFolders(VisitDeployments):
+    """The folders of the collections, as the deployments make them — their contract: the layout of the collections."""
+
+    def __init__(self, root: Path, layout: Callable[[], CollectionLayout]) -> None:
+        self.root, self._layout = root, layout
+
+    def make_collection(self, project: str, collection: str) -> None:
+        with _failed():
+            self._layout().write_collection_metadata(self.root / project / collection, collection)
+
+
+class UploadsOfTheUploaders(Uploads):
+    """Where the deployments were uploaded, as the uploaders say it — through their contract."""
+
+    def __init__(self, uploaders) -> None:
+        self._uploaders = uploaders
+
+    def trapper_state(self, project: str, deployment_id: str | None) -> tuple[str | None, bool]:
+        return self._uploaders.trapper_state(project, deployment_id)
+
+    def uploads_of(self, project: str, deployment_id: str) -> list[dict]:
+        return self._uploaders.uploads_of(project, deployment_id)
+
+    def upload_states(self, project: str, imported: str | None, deployment_id: str) -> list[dict]:
+        return self._uploaders.upload_states(project, imported, deployment_id)
+
+
+class SavedVisitReports(VisitReports):
+    """Through the contract of the reports."""
+
+    def __init__(self, reports: ReportsService) -> None:
+        self._reports = reports
+
+    def import_report(self, project: str, result: dict, saved: int) -> str | None:
+        """The report of an import, kept with the other reports — its id; None when it could not be written."""
+        try:
+            return self._reports.save_visits_import(project, result, saved)
+        except OSError:
+            return None
+
+
+class FieldlogInUse(VisitSettings):
+    """FIELDLOG as settings.toml keeps it."""
+
+    def __init__(self, fieldlog: Callable[[], Any]) -> None:
+        self._fieldlog = fieldlog   # the section, asked each time
+
+    def keep_seconds(self) -> bool:
+        return self._fieldlog().keep_seconds
+
+    def time_source(self) -> str:
+        return self._fieldlog().time_source
+
+
+class AuditClock(Clock):
+    def today(self) -> str:
+        from wildintel_uploader.shared import audit
+        return audit.now()[:10]

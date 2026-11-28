@@ -1,0 +1,123 @@
+"""What the backups take from other modules: the records of a research project — the catalog and the visits through their contracts, the history
+of the states as the project store keeps it —, and the settings of the app as settings.toml keeps them."""
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+from typing import cast
+
+from wildintel_uploader.modules.backup.domain.ports import AppSettings, BackupError, ProjectRecords
+from wildintel_uploader.modules.catalog.domain.models import UnknownProject
+from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.catalog.domain.records import CatalogRecordStore
+from wildintel_uploader.modules.settings.domain.ports import StoredSettings
+from wildintel_uploader.modules.visits.domain.ports import VisitsKept
+from wildintel_uploader.modules.visits.domain.shapes import Visit
+from wildintel_uploader.shared import storage
+
+
+class RecordsOfTheProject(ProjectRecords):
+    """The records of the research projects of a collections folder (`root`, asked each time)."""
+
+    def __init__(self, root: Callable[[], Path], catalog: Callable[[Path], CatalogService], store: Callable[[Path], CatalogRecordStore],
+                 visits: Callable[[Path], VisitsKept]) -> None:
+        """`catalog` gives the catalog of a collections folder, through its contract; `store` its records as they are kept, which a backup copies
+        and restores as they are."""
+        self._root, self._catalog, self._store, self._visits = root, catalog, store, visits
+
+    def _records(self) -> CatalogService:
+        return self._catalog(self._root())
+
+    def _kept(self) -> CatalogRecordStore:
+        return self._store(self._root())
+
+    def checkpoint(self, project: str) -> Callable[[], None]:
+        """The catalog's records of the research project as its repository keeps them, and its history and visits as the store keeps them — each
+        put back exactly, what was not kept at all included."""
+        catalog = self._kept().checkpoint(project)
+        kept = storage.checkpoint(lambda: storage.open_store(self._root()), project, ["status_history", "visits"])
+
+        def put_back() -> None:
+            catalog()
+            kept()
+        return put_back
+
+    def require_project(self, project: str) -> None:
+        try:
+            self._records().require_project(project)
+        except (UnknownProject, storage.StorageError) as exc:
+            raise BackupError(str(exc)) from exc
+
+    def has_project(self, project: str) -> bool:
+        try:
+            self._records().require_project(project)
+        except UnknownProject:
+            return False
+        return True
+
+    def project_record(self, project: str) -> dict | None:
+        return self._kept().project_record(project)
+
+    def put_project_record(self, record: dict) -> None:
+        self._kept().put_project_record(record)
+
+    def how_many(self, project: str, kind: str) -> int:
+        catalog = self._records()
+        return len(catalog.locations(project) if kind == "locations" else catalog.equipment(project, kind))
+
+    def location_records(self, project: str) -> list[dict]:
+        return self._kept().location_records(project)
+
+    def put_location_records(self, project: str, records: list[dict]) -> None:
+        self._kept().put_location_records(project, records)
+
+
+    def equipment_records(self, project: str, kind: str) -> list[dict]:
+        return self._kept().equipment_records(project, kind)
+
+    def put_equipment_records(self, project: str, kind: str, records: list[dict]) -> None:
+        self._kept().put_equipment_records(project, kind, records)
+
+    def roles(self, project: str, include_deleted: bool = False) -> list[dict]:
+        return self._kept().roles(project, include_deleted=include_deleted)
+
+    def keep_roles(self, project: str, roles: list[dict]) -> None:
+        self._kept().keep_roles(project, roles)
+
+    def trappers(self) -> list[dict]:
+        return self._kept().trappers()
+
+    def keep_trappers(self, trappers: list[dict]) -> None:
+        self._kept().keep_trappers(trappers)
+
+    def status_history(self, project: str) -> list[dict]:
+        return storage.open_store(self._root()).read_records(project, "status_history")
+
+    def keep_status_history(self, project: str, lines: list[dict]) -> None:
+        storage.open_store(self._root()).write_records(project, "status_history", lines)
+
+    def visits(self, project: str) -> list[dict]:
+        return cast(list[dict], self._visits(self._root()).visits(project))   # a backup keeps them as the records they are
+
+    def kept_visits(self, project: str) -> int:
+        return self._visits(self._root()).kept_count(project)
+
+    def replace_visits(self, project: str, visits: list[dict]) -> None:
+        self._visits(self._root()).replace_all(project, cast(list[Visit], visits))
+
+
+class SettingsOfTheApp(AppSettings):
+    def __init__(self, settings: StoredSettings) -> None:
+        self._settings = settings
+
+    def as_data(self) -> dict:
+        return self._settings.load_settings().model_dump(mode="json")
+
+    def secrets(self) -> list[tuple[str, str]]:
+        return list(self._settings.secret_fields())
+
+    def save(self, data: dict) -> None:
+        try:
+            self._settings.save_settings(self._settings.Settings.model_validate(data, context={"migrate": True}))
+        except Exception as exc:  # a setting the backup holds that this version does not accept
+            raise BackupError(f"The settings of the backup cannot be restored: {exc}") from exc
