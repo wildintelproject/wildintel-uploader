@@ -78,6 +78,10 @@ class DeploymentFolders(ABC):
         """Moves a prepared deployment to its place in the collection, in one rename. PreprocessingError when it can't."""
 
     @abstractmethod
+    def unpublish(self, dest: Path, work: Path) -> None:
+        """Moves a deployment just published back to its staging folder, in one rename — what could not be sealed is not left in the collection."""
+
+    @abstractmethod
     def write_deployment_metadata(self, dest: Path, deployment: DeploymentRecord) -> None: ...
 
     @abstractmethod

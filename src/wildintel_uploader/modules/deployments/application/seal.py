@@ -11,7 +11,7 @@ from wildintel_uploader.modules.catalog.domain.ports import CatalogEquipment
 from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
 from wildintel_uploader.modules.deployments.domain import seal as rules
 from wildintel_uploader.modules.deployments.domain.ports import CheckSettings, Deployment, SealedFolder
-from wildintel_uploader.modules.postvalidation.domain.models import Deployment as CheckedDeployment, DeploymentContext
+from wildintel_uploader.modules.postvalidation.domain.models import Deployment as CheckedDeployment, DeploymentContext, StatisticsParameters
 from wildintel_uploader.modules.postvalidation.domain.ports import PostvalidationService
 from wildintel_uploader.modules.prevalidation.domain.ports import PrevalidationService
 
@@ -51,9 +51,10 @@ class Sealing:
             collection=dest.parent.name, expected_location_id=deployment.location_id, tolerance_hours=post.tolerance_hours,
             camera=self._camera(collections_dir, research_project_id, deployment.camera_id), camera_levels=validation.camera_levels,
             research_project_id=research_project_id,
-            statistics={"sequence_gap_seconds": post.sequence_gap_seconds, "min_revisions": post.min_revisions, "method": post.similarity_method,
-                        "image_count_tolerance": post.image_count_tolerance, "sequence_count_tolerance": post.sequence_count_tolerance,
-                        "sequence_length_tolerance": post.sequence_length_tolerance},
+            statistics=StatisticsParameters(sequence_gap_seconds=post.sequence_gap_seconds, min_revisions=post.min_revisions,
+                                            method=post.similarity_method, image_count_tolerance=post.image_count_tolerance,
+                                            sequence_count_tolerance=post.sequence_count_tolerance,
+                                            sequence_length_tolerance=post.sequence_length_tolerance),
             previous=tuple(self._revisions_of(collections_dir).revisions_before(research_project_id, deployment.deployment_id)) if stat_checks else (),
         )
         consistency = postvalidation.validate(source, context, postvalidation.validators(deployment_checks | stat_checks))

@@ -27,6 +27,9 @@ by its serial number, by its make and model, by its model — is said by the set
 `POSTVALIDATION` in `settings.toml`: which checks are on, the leeway of the dates (`tolerance_hours`), what a sequence and a similar revision are
 for the statistical checks, and how each check starts (`defaults`).
 
+What a sequence and a similar revision are reach the checks as `StatisticsParameters` (`domain/models.py`), in the context — the gap of a
+sequence, the revisions before to judge by, the method and the tolerance of each check —, with the defaults of the settings.
+
 ## What it refuses
 
 `PostvalidationError` — a deployment that cannot be checked.

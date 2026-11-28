@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from wildintel_uploader.modules.fileinfo.domain.folder import MediaFolder, ParallelMap
@@ -49,6 +49,6 @@ class PostvalidationUseCases(PostvalidationService):
         if self._revisions is not None and context.research_project_id and any(v.statistical for v in validators):
             context = replace(context, previous=tuple(self._revisions.of(context.research_project_id, context.deployment.deployment_id)))
         result = self.validate(folder, context, validators, on_check=on_check)
-        parameters = {"checks": sorted(checks) if checks is not None else None, "tolerance_hours": context.tolerance_hours, **(context.statistics or {})}
+        parameters = {"checks": sorted(checks) if checks is not None else None, "tolerance_hours": context.tolerance_hours, **asdict(context.statistics)}
         report = self._reports.postvalidation(result, context.deployment.deployment_id, folder, parameters) if self._reports is not None else None
         return {**result, "report_id": report}

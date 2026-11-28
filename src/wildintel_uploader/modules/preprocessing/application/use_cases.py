@@ -38,8 +38,8 @@ class PreprocessingUseCases(PreprocessingService):
         self._folders.check_paths(source, dest)
         zone_of(options.timezone)
         job = Job(options=options, deployment=deployment, info=self._info, exiftool=self._exiftool())
-        image_steps = [s() for s in self._image_steps if s().wanted(options)]
-        folder_steps = [s() for s in self._folder_steps if s().wanted(options)]
+        image_steps = [image_step for kind in self._image_steps if (image_step := kind()).wanted(options)]
+        folder_steps = [folder_step for kind in self._folder_steps if (folder_step := kind()).wanted(options)]
         for step in folder_steps:
             step.check(job)
         self._folders.clear_left_pending(dest)
@@ -102,11 +102,7 @@ class PreprocessingUseCases(PreprocessingService):
         sealed = None
         if consolidate:
             yield {"type": "sealing"}
-            # from now on it is in the collection: its metadata and its seal are written there, where the seal's checks look for the rest of the project
-            self._folders.publish(work, dest)
-            self._folders.write_deployment_metadata(dest, deployment)
-            sealed = self._folders.seal(source, dest, deployment, originals={r["name"]: r["original"] for r in records},
-                                        source_hashes={r["original"]: r["source_hash"] for r in records}, preprocessing=asdict(options))
+            sealed = self._put_in_place(source, dest, work, deployment, records, asdict(options), staged=True)
         where = dest if consolidate else work
         logger.info("Deployment %s preprocessed in %s (%d image(s), %d skipped)", deployment.deployment_id, where, len(records), len(skipped))
         report_id = None
@@ -116,6 +112,25 @@ class PreprocessingUseCases(PreprocessingService):
             logger.warning("Could not write the report of the preprocessing of %s: %s", deployment.deployment_id, exc)
         yield {"type": "done", "dest_dir": str(where), "processed": len(records), "skipped": len(skipped), "sealed": sealed, "report_id": report_id,
                **({"resize": resize_summary(records)} if options.resize else {})}
+
+    def _put_in_place(self, source: Path, dest: Path, work: Path, deployment: DeploymentRecord, images: list[dict], options: dict, *,
+                      staged: bool) -> bool:
+        """The deployment prepared in `work` moved to its place in the collection (when it is staged), and its metadata and seal written there,
+        where the seal's checks look for the rest of the project. If they cannot be written, it goes back to its staging folder — never left in
+        the collection unsealed —, and consolidating it again finishes it."""
+        if staged:
+            self._folders.publish(work, dest)
+        try:
+            self._folders.write_deployment_metadata(dest, deployment)
+            return self._folders.seal(source, dest, deployment, originals={r["name"]: r["original"] for r in images},
+                                      source_hashes={r["original"]: r["source_hash"] for r in images}, preprocessing=options)
+        except Exception as exc:
+            if staged:
+                try:
+                    self._folders.unpublish(dest, work)
+                except Exception as failed:  # noqa: BLE001 — the first error is the one told
+                    exc.add_note(f"It could not be put back in its staging folder either: {failed}")
+            raise
 
     def consolidate(self, source_dir: Path, collection_dir: Path, deployment: DeploymentRecord) -> Iterator[dict]:
         source, collection = source_dir.expanduser(), collection_dir.expanduser()
@@ -141,10 +156,6 @@ class PreprocessingUseCases(PreprocessingService):
     def _consolidate(self, source: Path, dest: Path, work: Path, deployment: DeploymentRecord, staged: bool, log: dict, images: list,
                      options: dict) -> Iterator[dict]:
         yield {"type": "sealing"}
-        if staged:
-            self._folders.publish(work, dest)
-        self._folders.write_deployment_metadata(dest, deployment)
-        sealed = self._folders.seal(source, dest, deployment, originals={r["name"]: r["original"] for r in images},
-                                    source_hashes={r["original"]: r["source_hash"] for r in images}, preprocessing=options)
+        sealed = self._put_in_place(source, dest, work, deployment, images, options, staged=staged)
         logger.info("Deployment %s consolidated in %s", deployment.deployment_id, dest)
         yield {"type": "done", "dest_dir": str(dest), "processed": log.get("processed", len(images)), "skipped": log.get("skipped", 0), "sealed": sealed}

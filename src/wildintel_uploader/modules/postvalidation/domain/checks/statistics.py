@@ -10,20 +10,15 @@ from wildintel_uploader.modules.postvalidation.domain.models import DeploymentCo
 from wildintel_uploader.modules.postvalidation.domain.statistics import DeploymentTimes, judge
 from wildintel_uploader.modules.postvalidation.domain.validators import DeploymentValidator
 
-# What the statistical checks mean by a sequence and by similar, as the page sends them (StatisticsParams).
-_DEFAULTS = {"sequence_gap_seconds": 60.0, "min_revisions": 2, "method": "median", "image_count_tolerance": 50.0, "sequence_count_tolerance": 50.0,
-             "sequence_length_tolerance": 50.0}
-
-
 class _Statistic(DeploymentValidator):
     statistical = True
 
     def run(self, folder: MediaFolder, context: DeploymentContext) -> dict:
-        params = {**_DEFAULTS, **(context.statistics or {})}
+        params = context.statistics
         stamps = sorted(t.replace(tzinfo=timezone.utc).timestamp() for t in folder.dates().values() if t is not None)
         return judge(DeploymentTimes(len(folder.images), stamps), list(context.previous), context.deployment.deployment_id, frozenset({self.key}),
-                     sequence_gap_seconds=params["sequence_gap_seconds"], min_revisions=params["min_revisions"], method=params["method"],
-                     tolerances={key: params[f"{key}_tolerance"] for key in ("image_count", "sequence_count", "sequence_length")})
+                     sequence_gap_seconds=params.sequence_gap_seconds, min_revisions=params.min_revisions, method=params.method,
+                     tolerances={key: params.tolerance(key) for key in ("image_count", "sequence_count", "sequence_length")})
 
 class ImageCount(_Statistic):
     key = "image_count"

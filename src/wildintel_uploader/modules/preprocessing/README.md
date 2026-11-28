@@ -18,7 +18,8 @@ for event in preprocessing.preprocess(source, collection_dir, "R0001", deploymen
     ...           # {"type": "image", …}, {"type": "sealing"}, {"type": "done", …}
 ```
 
-`consolidate` moves to its place a deployment prepared before. Each step is a class:
+`consolidate` moves to its place a deployment prepared before. Moving it is one rename; if its metadata or its seal cannot be written
+after it, it goes back to its staging folder — a deployment is never left in the collection unsealed —, and consolidating it again finishes it. Each step is a class:
 
 - **image steps** — `CaptureDate`, `Rename`, `ResizeOrCopy`, `Hashes`, `CameraOfTheImage` — run for each image;
 - **folder steps** — `XmpMetadata`, `FinalHashes` — run once all of them are done.

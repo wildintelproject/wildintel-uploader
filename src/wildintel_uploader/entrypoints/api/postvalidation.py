@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from wildintel_uploader.entrypoints.api import streaming
-from wildintel_uploader.modules.postvalidation.domain.models import Deployment, DeploymentContext, PostvalidationError
+from wildintel_uploader.modules.postvalidation.domain.models import Deployment, DeploymentContext, PostvalidationError, StatisticsParameters
 from wildintel_uploader.modules.postvalidation.domain.ports import PostvalidationService
 from wildintel_uploader.modules.postvalidation.infrastructure.api_schemas import ValidateDeploymentRequest
 from wildintel_uploader.modules.postvalidation.infrastructure.api_schemas import (  # what its routes answer
@@ -26,7 +26,8 @@ def _context(req: ValidateDeploymentRequest) -> DeploymentContext:
     return DeploymentContext(
         deployment=Deployment(deployment_id=d.deployment_id, start_date=d.start_date, end_date=d.end_date, camera_model=d.camera_model, camera_id=d.camera_id),
         collection=req.collection_name, expected_location_id=req.expected_location_id, tolerance_hours=req.tolerance_hours,
-        visit=req.visit.model_dump() if req.visit else None, research_project_id=req.research_project_id, statistics=req.statistics.model_dump())
+        visit=req.visit.model_dump() if req.visit else None, research_project_id=req.research_project_id,
+        statistics=StatisticsParameters(**req.statistics.model_dump()))
 
 
 def _checks(req: ValidateDeploymentRequest) -> frozenset[str] | None:

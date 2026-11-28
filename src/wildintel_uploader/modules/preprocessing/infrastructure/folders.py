@@ -163,6 +163,10 @@ class CollectionFolders(DeploymentFolders):
     def publish(self, work: Path, dest: Path) -> None:
         publish(work, dest)
 
+    def unpublish(self, dest: Path, work: Path) -> None:
+        work.parent.mkdir(parents=True, exist_ok=True)   # the staging folder, gone once nothing else was in it
+        publish(dest, work)   # the same rename, the other way
+
     def write_deployment_metadata(self, dest: Path, deployment: DeploymentRecord) -> None:
         self._layout().write_deployment_metadata(dest, _as_dict(deployment))
 

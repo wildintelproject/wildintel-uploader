@@ -30,6 +30,23 @@ class Deployment:
     camera_id: str | None = None             # the label of its camera in the catalog
 
 
+
+@dataclass(frozen=True)
+class StatisticsParameters:
+    """What the statistical checks mean by a sequence and by similar: the images of a sequence are at most `sequence_gap_seconds` apart; a revision
+    is judged against at least `min_revisions` before it, by their `method` (median, mean, last, range), and is similar when it is within the
+    tolerance of each, in percent. The settings say them (POSTVALIDATION); these are their defaults."""
+    sequence_gap_seconds: float = 60.0
+    min_revisions: int = 2
+    method: str = "median"
+    image_count_tolerance: float = 50.0
+    sequence_count_tolerance: float = 50.0
+    sequence_length_tolerance: float = 50.0
+
+    def tolerance(self, check: str) -> float:
+        """The tolerance of a statistical check: "image_count", "sequence_count" or "sequence_length"."""
+        return float(getattr(self, f"{check}_tolerance"))
+
 @dataclass(frozen=True)
 class DeploymentContext:
     """What the wizard knows of a deployment, for the checks of it: the collection it goes in (none: the one its id names), the location chosen,
@@ -42,9 +59,9 @@ class DeploymentContext:
     camera: dict | None = None
     camera_levels: list[list[str]] = field(default_factory=lambda: [list(level) for level in DEFAULT_CAMERA_LEVELS])
     # the research project whose collections hold the previous revisions of the location, and what the statistical checks mean by a sequence and
-    # by similar: {"sequence_gap_seconds", "min_revisions", "method", "<check>_tolerance": percent}
+    # by similar
     research_project_id: str | None = None
-    statistics: dict | None = None
+    statistics: StatisticsParameters = field(default_factory=StatisticsParameters)
     # the previous revisions of the location — statistics.Revision —, for the statistical checks: none, there is no history to judge by
     previous: tuple = ()
 

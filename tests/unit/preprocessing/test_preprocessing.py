@@ -611,3 +611,37 @@ def test_an_empty_folder_in_the_way_does_not_stop_the_move(tmp_path: Path):
     folders_adapter.publish(work, dest)
 
     assert (dest / "a.txt").is_file()
+
+
+def test_a_deployment_that_cannot_be_sealed_goes_back_to_its_staging_folder_and_is_consolidated_later(tmp_path: Path, monkeypatch):
+    """#248: published into the collection, it is not left there unsealed — it goes back to .staging, and consolidating it finishes it."""
+    from wildintel_uploader.modules.preprocessing.infrastructure.folders import CollectionFolders
+
+    source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
+    real_seal = CollectionFolders.seal
+
+    def the_disk_is_full(self, *args, **kwargs):
+        raise OSError("The disk is full.")
+    monkeypatch.setattr(CollectionFolders, "seal", the_disk_is_full)
+    with pytest.raises(OSError, match="The disk is full"):
+        list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), None, DEPLOYMENT, NO_XMP))
+    dest, work = collection / "R0003-DONA_01", collection / ".staging" / "R0003-DONA_01"
+    assert not dest.exists() and (work / "preprocessing.json").is_file()
+
+    monkeypatch.setattr(CollectionFolders, "seal", real_seal)
+    events = list(built.preprocessing().consolidate(Path(str(source)), Path(str(collection)), DEPLOYMENT))
+    assert events[-1]["sealed"] is True and (dest / "seal.json").is_file() and not work.exists()
+
+
+def test_each_step_is_made_once_for_a_preprocessing(tmp_path: Path, monkeypatch):
+    from wildintel_uploader.modules.preprocessing.infrastructure.steps import IMAGE_STEPS
+
+    made: list[str] = []
+    first = IMAGE_STEPS[0]
+
+    def counted(self, *args, **kwargs):
+        made.append(type(self).__name__)
+    monkeypatch.setattr(first, "__init__", counted)
+    source, collection = _two_images(tmp_path), tmp_path / "collections" / "R0003"
+    list(built.preprocessing().preprocess(Path(str(source)), Path(str(collection)), None, DEPLOYMENT, NO_XMP, consolidate=False))
+    assert made == [first.__name__]
