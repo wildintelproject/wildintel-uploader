@@ -6,17 +6,24 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
+from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS
 from wildintel_uploader.modules.sources.domain.settings import Epicollect5Settings
 
 
 @dataclass(frozen=True)
 class VisitRows:
-    """What a source gives of the visits: the text of a CSV with a row per visit and the columns a visit has (VISIT_COLUMNS), and how it is read —
-    `time_source` when the source says when a visit happened (the form has no date: when its entry was created), and whether it comes from the
-    form of the field flow (a New site then makes its location, with the coordinates of the visit)."""
+    """What a source gives of the visits, and how it is read:
+
+    - `csv` — the text of a CSV with a row per visit, whose header is `columns`: the columns a visit has, named as a visit names them — so the
+      reader of the file maps each to itself, and needs to know nothing of the source;
+    - `time_source` — where the time of a visit comes from: what the source has to say (`"created_at"` for the CSV downloaded from the form,
+      which has no date nor time to read: only when its entry was created), or None when the source has both and the settings choose
+      (FIELDLOG.time_source — the entries of the API);
+    - `from_form` — whether it comes from the form of the field flow (a New site then makes its location, with the coordinates of the visit)."""
     csv: str
     time_source: str | None = None
     from_form: bool = True
+    columns: tuple[str, ...] = VISIT_COLUMNS
 
 
 class VisitSource(ABC):
@@ -50,7 +57,8 @@ class SourceSettings(ABC):
         """The settings of Epicollect5 in use."""
 
 
-class SourcesService(ABC):
+class SourcesVisits(ABC):
+    """Where the visits come from: the sources there are, the visits of one, and whether a CSV is the download of the form of a visit."""
 
     @abstractmethod
     def sources(self) -> list[VisitSource]:
@@ -61,12 +69,16 @@ class SourcesService(ABC):
         """The visits of the source of this key. SourceError: no such source, or it can't give them."""
 
     @abstractmethod
-    def project_form(self, settings: Epicollect5Settings | None = None) -> dict:
-        """The inputs of the Epicollect5 project saved in the settings: {"project": {name, slug}, "inputs": [...]}."""
+    def form_columns(self, text: str) -> dict[str, str]:
+        """The columns of a CSV that answer the questions of the form of a visit — empty if it is not the form."""
 
     @abstractmethod
-    def test_connection(self, slug: str | None, client_id: str | None, client_secret: str | None, settings: Epicollect5Settings | None = None) -> dict:
-        """Whether a project can be read with these values, saving nothing — a blank secret next to the saved client id is the saved one."""
+    def form_error(self, text: str) -> str | None:
+        """Why a CSV can't be read as the download of the form of a visit, or None."""
+
+
+class SourcesDeployments(ABC):
+    """The entries of the Epicollect5 project that say the details of a deployment."""
 
     @abstractmethod
     def deployment_entries(self, location_ids: list[str], revision: int | None, settings: Epicollect5Settings | None = None) -> dict[str, list[dict]]:
@@ -77,13 +89,24 @@ class SourcesService(ABC):
     def location_entries(self, location_id: str, revision: int | None, settings: Epicollect5Settings | None = None) -> list[dict]:
         """The entries of one location (and revision), newest first. SourceError when no location is chosen."""
 
-    @abstractmethod
-    def form_columns(self, text: str) -> dict[str, str]:
-        """The columns of a CSV that answer the questions of the form of a visit — empty if it is not the form."""
+
+class SourcesProject(ABC):
+    """The Epicollect5 project of the settings: its form, whether it can be read, and forgetting the tokens of its API."""
 
     @abstractmethod
-    def form_error(self, text: str) -> str | None:
-        """Why a CSV can't be read as the download of the form of a visit, or None."""
+    def project_form(self, settings: Epicollect5Settings | None = None) -> dict:
+        """The inputs of the Epicollect5 project saved in the settings: {"project": {name, slug}, "inputs": [...]}."""
+
+    @abstractmethod
+    def test_connection(self, slug: str | None, client_id: str | None, client_secret: str | None, settings: Epicollect5Settings | None = None) -> dict:
+        """Whether a project can be read with these values, saving nothing — a blank secret next to the saved client id is the saved one."""
 
     @abstractmethod
     def forget_tokens(self) -> None: ...
+
+
+class SourcesService(SourcesVisits, SourcesDeployments, SourcesProject, ABC):
+    """All that the module of the sources offers. Whoever needs only a part asks for that one: SourcesVisits (the module of the visits),
+    SourcesDeployments or SourcesProject."""
+
+

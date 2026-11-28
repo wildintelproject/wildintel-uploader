@@ -8,17 +8,22 @@ deployment.
 
 | Contract | What it is | Operations |
 |---|---|---|
-| `SourcesService` |  | `sources`, `visits`, `project_form`, `test_connection`, `deployment_entries`, `location_entries`, `form_columns`, `form_error`, `forget_tokens` |
+| `SourcesVisits` | Where the visits come from: the sources there are, the visits of one, and whether a CSV is the download of the form of a visit | `sources`, `visits`, `form_columns`, `form_error` |
+| `SourcesDeployments` | The entries of the Epicollect5 project that say the details of a deployment | `deployment_entries`, `location_entries` |
+| `SourcesProject` | The Epicollect5 project of the settings: its form, whether it can be read, and forgetting the tokens of its API | `project_form`, `test_connection`, `forget_tokens` |
+| `SourcesService` | All of them: what the module offers | — |
 
 ## How it is used
 
 ```python
-rows = sources.visits("epicollect-api")        # VisitRows: the CSV of the visits, and where the time of each comes from
+rows = sources.visits("epicollect-api")        # VisitRows: the CSV of the visits, its columns, and where the time of each comes from
+                                               #   (None: the settings choose — FIELDLOG.time_source)
 csv = sources.visits("epicollect-csv", text)   # the CSV downloaded from the project, as the same rows
 form = sources.project_form()                  # the questions of the form of the project of the settings
 ```
 
-Each source is a class of `infrastructure/sources/` (`epicollect_api.py`, `epicollect_csv.py`) with its `key` and `label`; the visits
+The module of the visits asks only for `SourcesVisits`; the routes of the Epicollect5 project and of the details of a deployment, for
+`SourcesProject` and `SourcesDeployments`. Each source is a class of `infrastructure/sources/` (`epicollect_api.py`, `epicollect_csv.py`) with its `key` and `label`; the visits
 (modules.visits) ask them by key. The web app has `/api/epicollect/…`.
 
 ## Its settings

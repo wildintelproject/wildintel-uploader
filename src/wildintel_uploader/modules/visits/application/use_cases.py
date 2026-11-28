@@ -11,8 +11,7 @@ import threading
 from typing import TypeVar, cast
 
 from wildintel_uploader.modules.sources.domain.models import SourceError
-from wildintel_uploader.modules.sources.domain.ports import SourcesService
-from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS
+from wildintel_uploader.modules.sources.domain.ports import SourcesVisits
 from wildintel_uploader.modules.visits.application.visit_file import VisitFiles
 from wildintel_uploader.modules.visits.domain import deployments as visit_deployments, rules, wall_clock
 from wildintel_uploader.modules.visits.domain.models import ImportOptions, VisitLocked, VisitMissing, VisitRefused, VisitsError, VisitsFailed
@@ -63,7 +62,7 @@ T = TypeVar("T")
 
 
 class VisitsUseCases(VisitsService):
-    def __init__(self, repository: VisitRepository, catalog: VisitCatalog, *, deployments: VisitDeployments, file: VisitFile, sources: SourcesService,
+    def __init__(self, repository: VisitRepository, catalog: VisitCatalog, *, deployments: VisitDeployments, file: VisitFile, sources: SourcesVisits,
                  uploads: Uploads, reports: VisitReports, history: StateHistory, settings: VisitSettings, clock: Clock) -> None:
         self._visits, self._catalog, self._deployments, self._file, self._sources = repository, catalog, deployments, VisitFiles(file), sources
         self._uploads, self._reports, self._history, self._settings, self._clock = uploads, reports, history, settings, clock
@@ -294,7 +293,8 @@ class VisitsUseCases(VisitsService):
             except SourceError as exc:
                 raise VisitsFailed(str(exc)) from exc
             # the entries of the API take the time the settings say; the form downloaded has no date or time: when its entry was created
-            text, fmt, mapping, time_source = rows.csv, "mapped", {c: c for c in VISIT_COLUMNS}, rows.time_source or time_source
+            # its columns are named as a visit names them; the time, as the source says — or the settings, when it leaves it to them
+            text, fmt, mapping, time_source = rows.csv, "mapped", {c: c for c in rows.columns}, rows.time_source or time_source
             # the form gives one place, the one of the visit: a location that is created from it has those coordinates
             text = with_location_coordinates(text)
             mapping = {**mapping, "location_latitude": "location_latitude", "location_longitude": "location_longitude"}

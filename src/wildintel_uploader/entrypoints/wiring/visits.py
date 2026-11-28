@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from dishka import Provider, Scope, provide
+from dishka import Provider, Scope, alias, provide
 
 from wildintel_uploader.modules.settings.domain.ports import SettingsService
 from wildintel_uploader.modules.sources.application.use_cases import SourcesUseCases
-from wildintel_uploader.modules.sources.domain.ports import SourcesService
+from wildintel_uploader.modules.sources.domain.ports import SourcesDeployments, SourcesProject, SourcesService, SourcesVisits
 from wildintel_uploader.modules.sources.infrastructure import sources as visit_sources
 from wildintel_uploader.modules.sources.infrastructure.epicollect5 import PyEpicollect5
 from wildintel_uploader.modules.sources.infrastructure.settings_in_use import SettingsOfTheSources
@@ -57,6 +57,11 @@ class SourcesProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def service(self, settings: SettingsService) -> SourcesService:
         return build_sources(settings)
+
+    # each part of the contract, for whoever needs only that one: the same service of the request
+    visits = alias(source=SourcesService, provides=SourcesVisits)
+    deployments = alias(source=SourcesService, provides=SourcesDeployments)
+    project = alias(source=SourcesService, provides=SourcesProject)
 
 
 class VisitsProvider(Provider):

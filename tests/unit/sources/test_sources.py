@@ -79,3 +79,15 @@ def test_its_settings_are_its_own():
 
 def _section(name: str):
     return next(x for x in _settings_models.SECTIONS if x.name == name)
+
+
+def test_a_source_says_its_columns_and_where_the_time_of_a_visit_comes_from():
+    """#248: the CSV downloaded from the form has no date nor time — only when its entry was created —, so it says so; the entries of the API have
+    both, and leave it to the settings (FIELDLOG.time_source). Either way the columns are named as a visit names them, and the source says them."""
+    from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS
+
+    text = ("ec5_uuid,created_at,title,1_setupBy,2_Revision,3_Date,4_locationID,5_Status_of_the_came,6_Battery_status,7_Card_Status,8_Time\n"
+            "u1,2026-09-14T11:40:00.000Z,t,Ana,R0042,14/09/2026,WICP_02_003,OK,No batteries,Full Card,11:40\n")
+    from_csv = _sources(FakeEpicollect()).visits("epicollect-csv", text)
+    assert from_csv.time_source == "created_at" and from_csv.columns == VISIT_COLUMNS
+    assert from_csv.csv.splitlines()[0].split(",") == list(from_csv.columns)

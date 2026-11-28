@@ -38,5 +38,5 @@ class EpicollectApi(VisitSource):
         writer.writeheader()
         for entry in entries:
             writer.writerow(visit_row(entry, refs))
-        # the time of a visit is the one the settings of the field log say: by default when the entry was created
+        # the entries have a date and a time typed and when they were created: the settings of the field log choose (FIELDLOG.time_source)
         return VisitRows(csv=out.getvalue(), time_source=None, from_form=True)
