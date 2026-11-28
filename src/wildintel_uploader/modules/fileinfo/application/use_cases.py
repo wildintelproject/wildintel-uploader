@@ -164,6 +164,10 @@ class FileInfoUseCases(FileInfoService):
     def mark_decoded(self, path: Path) -> None:
         self._remember(self._stamps.stamp(path), DECODED, "1")
 
+    def size(self, path: Path) -> int | None:
+        stamp = self._stamps.stamp(path)
+        return stamp[1] if stamp is not None else None
+
     def hash(self, path: Path, algorithm: str) -> str | None:
         stamp, digest = self._fact(path, algorithm)
         if digest is None:

@@ -3,12 +3,12 @@ pages list them in. Adding one is a file here and a line below; the settings, th
 from __future__ import annotations
 
 from wildintel_uploader.modules.prevalidation.domain.validators import ImageValidator
-from wildintel_uploader.modules.prevalidation.infrastructure.validators.cameras import Cameras
-from wildintel_uploader.modules.prevalidation.infrastructure.validators.corrupted import Corrupted
-from wildintel_uploader.modules.prevalidation.infrastructure.validators.duplicates import Duplicates
-from wildintel_uploader.modules.prevalidation.infrastructure.validators.exif_fields import ExifFields
-from wildintel_uploader.modules.prevalidation.infrastructure.validators.shooting_order import ShootingOrder
-from wildintel_uploader.modules.prevalidation.infrastructure.validators.structure import Structure
+from wildintel_uploader.modules.prevalidation.domain.checks.cameras import Cameras
+from wildintel_uploader.modules.prevalidation.domain.checks.corrupted import Corrupted
+from wildintel_uploader.modules.prevalidation.domain.checks.duplicates import Duplicates
+from wildintel_uploader.modules.prevalidation.domain.checks.exif_fields import ExifFields
+from wildintel_uploader.modules.prevalidation.domain.checks.shooting_order import ShootingOrder
+from wildintel_uploader.modules.prevalidation.domain.checks.structure import Structure
 
 # Which images decode is known before the order of the shots, which leaves out the corrupted ones; the camera and the dates read for one are there
 # for the next.

@@ -15,7 +15,7 @@ from wildintel_uploader.modules.postvalidation.domain.validators import Deployme
 
 
 class PostvalidationUseCases(PostvalidationService):
-    """Over the validators it is given (infrastructure/validators, put together in wiring), in their order."""
+    """Over the validators it is given (domain/checks, put together in wiring), in their order."""
 
     def __init__(self, info: FileInfoService, pmap: ParallelMap, validators: tuple[type[DeploymentValidator], ...], *, cameras: CameraRecords | None = None,
                  levels: CameraLevels | None = None, reports: PostvalidationReports | None = None, revisions: PreviousRevisions | None = None) -> None:

@@ -1,5 +1,5 @@
 """#248, #246: the postvalidation (modules.postvalidation) — the checks of a deployment against wildintel-tools' names, its images and its visit,
-each a validator in infrastructure/validators, run in the order of its registry."""
+each a validator in domain/checks, run in the order of its registry."""
 from pathlib import Path
 
 import pytest
@@ -9,8 +9,8 @@ from wildintel_uploader.entrypoints import wiring
 from wildintel_uploader.modules.fileinfo.domain.folder import MediaFolder
 from wildintel_uploader.modules.postvalidation.application.use_cases import PostvalidationUseCases
 from wildintel_uploader.modules.postvalidation.domain.models import Deployment, DeploymentContext, PostvalidationError
-from wildintel_uploader.modules.postvalidation.infrastructure import validators
-from wildintel_uploader.modules.postvalidation.infrastructure.validators.photo_count import PhotoCount
+from wildintel_uploader.modules.postvalidation.domain import checks as validators
+from wildintel_uploader.modules.postvalidation.domain.checks.photo_count import PhotoCount
 
 
 def _postvalidation(info) -> PostvalidationUseCases:

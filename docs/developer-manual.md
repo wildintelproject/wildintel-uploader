@@ -198,8 +198,8 @@ Each module is a folder of `src/wildintel_uploader/modules/` with three layers, 
 | `settings` | `settings.toml` and its configs: reading, checking and saving the settings, by sections that each module registers. |
 | `catalog` | The research projects, their locations, cameras, SD cards, the people and their roles, the history of their states — kept as JSON files or in SQLite. |
 | `fileinfo` | What is known of each image while the file is the same — what ExifTool reads, whether it decodes, its hashes —, in memory and in a cache on disk; and `MediaFolder`, the images of a folder. |
-| `prevalidation` | The checks of the images of a folder — each a validator in `infrastructure/validators/`. Settings: `VALIDATION`. |
-| `postvalidation` | The checks of a deployment, the statistical ones too — each a validator in `infrastructure/validators/`. Settings: `POSTVALIDATION`. |
+| `prevalidation` | The checks of the images of a folder — each a validator in `domain/checks/`. Settings: `VALIDATION`. |
+| `postvalidation` | The checks of a deployment, the statistical ones too — each a validator in `domain/checks/`. Settings: `POSTVALIDATION`. |
 | `preprocessing` | Dates, names, resizing, hashes and XMP, each a step in `infrastructure/steps/`; preparing in `.staging`, saving and sealing. Settings: `PREPROCESSING`. |
 | `sources` | Where the visits come from: the Epicollect5 API and the CSV downloaded from it, each a source in `infrastructure/sources/`. Settings: `EPICOLLECT5`, `EPICOLLECTCSV`. |
 | `visits` | The visits and their rules, files of visits, the deployments they say and the visit book. Settings: `FIELDLOG`. |
@@ -230,9 +230,12 @@ logs and formats as `********`, and what it holds is asked for with `reveal()` �
 (a request to Epicollect5, the login to TRAPPER). It is written as it is only to `settings.toml`; in the file's model (Pydantic) it is a text
 marked `json_schema_extra={"secret": True}, repr=False`, which a test checks of every secret.
 
-**Checks and steps as classes** (#246). A check of the images is a class of `prevalidation/infrastructure/validators/` with its `key`, `label`
+**Checks and steps as classes** (#246). A check of the images is a class of `prevalidation/domain/checks/` with its `key`, `label`
 and `description`, run over a `MediaFolder` that asks what is known of the files once, whatever check asks; the registry in the package's
-`__init__.py` gives their order. The same for the checks of a deployment and the steps of the preprocessing.
+`__init__.py` gives their order. The same for the checks of a deployment (`postvalidation/domain/checks/`) and the steps of the preprocessing.
+The checks are rules — plain Python over what `MediaFolder` and the context say, so they are of the domain; the steps of the preprocessing
+read and write the images (Pillow, ExifTool, the disk), so they are adapters (`preprocessing/infrastructure/steps/`), and the rules they apply
+(the name of an image…) are of its domain.
 
 **Tests of the architecture** (`tests/unit/app/test_architecture.py`): a domain is plain Python, a use case uses its domain only, the new code
 takes no models of the code before, a module uses another only through its domain, no module imports the entry points, every plug is plugged,
@@ -569,10 +572,10 @@ timeout → 502/504. The command line has its own `describe()` with the same wor
 
 A check is a class, and has a setting. To add, say, an image check `x`:
 
-1. **The validator.** A file `modules/prevalidation/infrastructure/validators/x.py` with a class `X(ImageValidator)` — `key = "x"`, its `label`
+1. **The validator.** A file `modules/prevalidation/domain/checks/x.py` with a class `X(ImageValidator)` — `key = "x"`, its `label`
    and `description` — whose `run(folder, options)` returns its findings under its own key, asking the `MediaFolder` for what it needs. Add it to
    `VALIDATORS` in that package's `__init__.py`, where it should run. (A check of a deployment is a `DeploymentValidator` of
-   `modules/postvalidation/infrastructure/validators/`; `of_the_visit` or `statistical` say which kind.)
+   `modules/postvalidation/domain/checks/`; `of_the_visit` or `statistical` say which kind.)
 2. **The setting.** Add `"x"` to `IMAGE_CHECKS` and `x: bool = True` to `ValidationSettings` in `modules/prevalidation/domain/settings.py`, and
    the field to its format in `modules/prevalidation/infrastructure/settings.py` — the switch in the settings page — and to the page's list.
 3. **The API.** Add `"x"` to the `ImageCheck` literal in `modules/prevalidation/infrastructure/api_schemas.py` (or `DeploymentCheck` in the

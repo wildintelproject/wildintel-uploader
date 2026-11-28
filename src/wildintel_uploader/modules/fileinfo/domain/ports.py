@@ -46,6 +46,10 @@ class FileInfoService(ABC):
         """The hash of the content of a file ("sha1", "sha256"), in hex; None when it cannot be read."""
 
     @abstractmethod
+    def size(self, path: Path) -> int | None:
+        """How many bytes a file is; None when it is not there."""
+
+    @abstractmethod
     def prefetch(self, paths: list[Path], tags: list[str] | None = None) -> threading.Thread | None:
         """Starts reading in the background what the steps of an import will ask of these images, so that it is there when they ask (#140): one
         that asks meanwhile waits for it rather than reading them again. Nothing without ExifTool, or with no images. Gives the thread."""

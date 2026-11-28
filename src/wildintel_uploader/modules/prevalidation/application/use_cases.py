@@ -13,7 +13,7 @@ from wildintel_uploader.modules.prevalidation.domain.validators import ImageVali
 
 
 class PrevalidationUseCases(PrevalidationService):
-    """Over the validators it is given (infrastructure/validators, put together in wiring), in their order."""
+    """Over the validators it is given (domain/checks, put together in wiring), in their order."""
 
     def __init__(self, info: FileInfoService, pmap: ParallelMap, validators: tuple[type[ImageValidator], ...], *, imported: ImportedImages | None = None,
                  settings: PrevalidationSettings | None = None, reports: PrevalidationReports | None = None) -> None:

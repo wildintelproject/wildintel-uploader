@@ -23,11 +23,10 @@ class Duplicates(ImageValidator):
     @staticmethod
     def _groups(folder: MediaFolder) -> list[dict]:
         by_size: dict[int, list[Path]] = defaultdict(list)
-        for path in sorted(folder.images):
-            try:
-                by_size[path.stat().st_size].append(path)
-            except OSError:
-                continue
+        sizes = folder.sizes(sorted(folder.images))
+        for path, size in sizes.items():
+            if size is not None:
+                by_size[size].append(path)
         candidates = {size: paths for size, paths in by_size.items() if len(paths) > 1}
         hashes = folder.hashes([p for paths in candidates.values() for p in paths], "sha256")
         groups: list[dict] = []

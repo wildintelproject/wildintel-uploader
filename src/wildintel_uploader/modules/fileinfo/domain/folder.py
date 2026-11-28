@@ -77,6 +77,10 @@ class MediaFolder:
         """Which images do not decode, only if a check already found it out: none otherwise."""
         return self._known.get("decoded", {})  # type: ignore[return-value]
 
+    def sizes(self, paths: list[Path]) -> dict[Path, int | None]:
+        """How many bytes each of these files is — None for one that is not there."""
+        return {path: self._info.size(path) for path in paths}
+
     def hashes(self, paths: list[Path], algorithm: str) -> dict[Path, str | None]:
         """The hash of the content of these files, in parallel; remembered while each file is the same."""
         return dict(zip(paths, self._pmap(lambda p: self._info.hash(p, algorithm), paths)))

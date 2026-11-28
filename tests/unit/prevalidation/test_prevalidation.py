@@ -1,4 +1,4 @@
-"""#248, #246: the prevalidation (modules.prevalidation) — the checks of the images of a folder, each a validator in infrastructure/validators, run
+"""#248, #246: the prevalidation (modules.prevalidation) — the checks of the images of a folder, each a validator in domain/checks, run
 in the order of its registry over one MediaFolder that asks what is known of the files once, whatever validator asks."""
 from datetime import datetime
 from pathlib import Path
@@ -10,8 +10,8 @@ from wildintel_uploader.entrypoints import wiring
 from wildintel_uploader.modules.fileinfo.domain.folder import MediaFolder
 from wildintel_uploader.modules.prevalidation.application.use_cases import PrevalidationUseCases
 from wildintel_uploader.modules.prevalidation.domain.models import ImageOptions, PrevalidationError
-from wildintel_uploader.modules.prevalidation.infrastructure import validators
-from wildintel_uploader.modules.prevalidation.infrastructure.validators.shooting_order import ShootingOrder
+from wildintel_uploader.modules.prevalidation.domain import checks as validators
+from wildintel_uploader.modules.prevalidation.domain.checks.shooting_order import ShootingOrder
 
 
 def _prevalidation(info) -> PrevalidationUseCases:
@@ -44,8 +44,8 @@ def test_the_validators_of_the_keys_asked_for_run_in_their_order_each_told(tmp_p
 
 
 def test_the_validators_given_run_in_the_order_given(tmp_path: Path):
-    from wildintel_uploader.modules.prevalidation.infrastructure.validators.corrupted import Corrupted
-    from wildintel_uploader.modules.prevalidation.infrastructure.validators.structure import Structure
+    from wildintel_uploader.modules.prevalidation.domain.checks.corrupted import Corrupted
+    from wildintel_uploader.modules.prevalidation.domain.checks.structure import Structure
     told = []
     _prevalidation(Info()).validate(folder_with(tmp_path, "a.jpg"), [Structure(), Corrupted()], on_check=lambda check, state: told.append(check))
     assert told == ["structure", "structure", "corrupted", "corrupted"]

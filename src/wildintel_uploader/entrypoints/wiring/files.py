@@ -17,7 +17,7 @@ from wildintel_uploader.modules.fileinfo.infrastructure.pillow import PillowDeco
 from wildintel_uploader.modules.fileinfo.infrastructure.store import SqliteStore
 from wildintel_uploader.modules.postvalidation.application.use_cases import PostvalidationUseCases
 from wildintel_uploader.modules.postvalidation.domain.ports import PostvalidationService
-from wildintel_uploader.modules.postvalidation.infrastructure import validators as deployment_validators
+from wildintel_uploader.modules.postvalidation.domain import checks as deployment_validators
 from wildintel_uploader.modules.postvalidation.infrastructure.adapters import CatalogCameras, LevelsInUse, RevisionsOfTheDeployments, SavedPostvalidationReports
 from wildintel_uploader.modules.preprocessing.application.use_cases import PreprocessingUseCases
 from wildintel_uploader.modules.preprocessing.domain.ports import PreprocessingService
@@ -25,7 +25,7 @@ from wildintel_uploader.modules.preprocessing.infrastructure import steps as pre
 from wildintel_uploader.modules.preprocessing.infrastructure.folders import CollectionFolders, SavedReports
 from wildintel_uploader.modules.prevalidation.application.use_cases import PrevalidationUseCases
 from wildintel_uploader.modules.prevalidation.domain.ports import PrevalidationService
-from wildintel_uploader.modules.prevalidation.infrastructure import validators as image_validators
+from wildintel_uploader.modules.prevalidation.domain import checks as image_validators
 from wildintel_uploader.modules.prevalidation.infrastructure.adapters import PreprocessedImages, SavedValidationReports, ValidationInUse
 from wildintel_uploader.modules.reports.application.use_cases import ReportsUseCases
 from wildintel_uploader.modules.reports.domain.ports import ReportsService

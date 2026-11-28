@@ -32,6 +32,9 @@ class Info:
     def hash(self, path, algorithm):
         return path.read_bytes().hex()
 
+    def size(self, path):
+        return path.stat().st_size if path.is_file() else None
+
 
 def pmap(function, items, progress=None):
     return [function(i) for i in items]

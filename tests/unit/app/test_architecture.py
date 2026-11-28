@@ -41,7 +41,7 @@ def _imports(path: Path) -> set[str]:
 
 
 def _files(layer: str) -> list[Path]:
-    """Every file of that layer of every module — those in its subfolders too (infrastructure/validators/…)."""
+    """Every file of that layer of every module — those in its subfolders too (infrastructure/steps/…)."""
     return sorted(SRC.glob(f"modules/*/{layer}/**/*.py"))
 
 
@@ -209,7 +209,7 @@ def test_the_parser_resolves_relative_imports_and_finds_the_files_in_subfolders(
     finally:
         probe.unlink()
     assert {"wildintel_uploader.modules.visits.domain", "wildintel_uploader.modules.visits.infrastructure"} <= found
-    assert any("infrastructure/validators" in str(p) for p in _files("infrastructure"))
+    assert any("infrastructure/steps" in str(p) for p in _files("infrastructure")) and any("domain/checks" in str(p) for p in _files("domain"))
 
 
 @pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=lambda p: str(p.relative_to(SRC)))
