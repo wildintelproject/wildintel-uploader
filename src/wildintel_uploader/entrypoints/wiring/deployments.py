@@ -1,7 +1,7 @@
 """The deployments: the memory cards, the collections folder, the import, the seal, the repair and the statistics."""
 from __future__ import annotations
 
-from dishka import Provider, Scope, provide
+from dishka import Provider, Scope, alias, provide
 
 from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.deployments.application.cards import CardCopying
@@ -12,7 +12,10 @@ from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.application.sessions import WizardSessions
 from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
 from wildintel_uploader.modules.deployments.application.use_cases import DeploymentsUseCases
-from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
+from wildintel_uploader.modules.deployments.domain.ports import (
+    DeploymentsCards, DeploymentsCollections, DeploymentsImporting, DeploymentsPhotos, DeploymentsRepairing, DeploymentsScanning, DeploymentsService,
+    DeploymentsSessions, DeploymentsStatistics,
+)
 from wildintel_uploader.modules.deployments.infrastructure.collection_layout import LayoutOfTheCollections
 from wildintel_uploader.modules.deployments.infrastructure.collections_folder import CollectionFolders as DeploymentFolders
 from wildintel_uploader.modules.deployments.infrastructure.import_folder import ImportFolderOnDisk
@@ -65,3 +68,13 @@ class DeploymentsProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def service(self, settings: SettingsService) -> DeploymentsService:
         return build_deployments(settings)
+
+    # each part of the contract, for whoever needs only that one: the same service of the request
+    cards = alias(source=DeploymentsService, provides=DeploymentsCards)
+    scanning = alias(source=DeploymentsService, provides=DeploymentsScanning)
+    collections = alias(source=DeploymentsService, provides=DeploymentsCollections)
+    importing = alias(source=DeploymentsService, provides=DeploymentsImporting)
+    repairing = alias(source=DeploymentsService, provides=DeploymentsRepairing)
+    statistics = alias(source=DeploymentsService, provides=DeploymentsStatistics)
+    sessions = alias(source=DeploymentsService, provides=DeploymentsSessions)
+    photos = alias(source=DeploymentsService, provides=DeploymentsPhotos)

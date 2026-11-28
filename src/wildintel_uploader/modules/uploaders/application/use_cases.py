@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator
 from typing import TypeVar
 
 from wildintel_uploader.modules.deployments.domain.models import DeploymentsError
-from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
+from wildintel_uploader.modules.deployments.domain.ports import DeploymentsImporting
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, NotThere, UploaderError
 from wildintel_uploader.modules.uploaders.application.sync import TrapperSync
 from wildintel_uploader.modules.uploaders.application.upload import TrapperUploads
@@ -25,7 +25,7 @@ class UploadersUseCases(UploadersService):
     """`deployments` gives the module of the deployments when it is needed: it is built with the uploaders among what it uses."""
 
     def __init__(self, trapper: Trapper, kept: KeptCollections, reports: UploadReports, uploads: DeploymentUploads, *,
-                 deployments: Callable[[], DeploymentsService], sending: TrapperUploads, places: UploadPlaces, syncing: TrapperSync) -> None:
+                 deployments: Callable[[], DeploymentsImporting], sending: TrapperUploads, places: UploadPlaces, syncing: TrapperSync) -> None:
         """Every port is needed — one left out is a mistake of the wiring, told when the module is put together, not when it is first used."""
         self._trapper, self._kept, self._reports, self._uploads = trapper, kept, reports, uploads
         self._deployments, self._sending, self._places, self._syncing = deployments, sending, places, syncing

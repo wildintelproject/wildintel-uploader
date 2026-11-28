@@ -84,3 +84,28 @@ def test_a_deployment_not_kept_has_no_seal(tmp_path: Path):
     service, _, _ = _deployments(tmp_path)
     with pytest.raises(DeploymentMissing):
         service.seal_status("DONA", "R0001-DONA_01")
+
+
+def test_the_contract_of_the_deployments_is_its_parts_each_operation_in_one_of_them():
+    """#248: whoever needs only a part of the deployments asks for that one — the memory card, a folder to scan, the collections, an import, the
+    repairs, the statistics, the sessions of the wizard or the photos —; the whole contract is the eight, and adds nothing of its own."""
+    from wildintel_uploader.modules.deployments.domain import ports
+
+    parts = (ports.DeploymentsCards, ports.DeploymentsScanning, ports.DeploymentsCollections, ports.DeploymentsImporting, ports.DeploymentsRepairing,
+             ports.DeploymentsStatistics, ports.DeploymentsSessions, ports.DeploymentsPhotos)
+    operations = [name for part in parts for name, value in vars(part).items() if not name.startswith("_") and callable(value)]
+    assert len(operations) == len(set(operations)) == 28
+    assert set(ports.DeploymentsService.__bases__) >= set(parts) and set(ports.DeploymentsService.__abstractmethods__) == set(operations)
+
+
+def test_the_container_gives_each_part_of_the_deployments_as_the_same_service():
+    from wildintel_uploader.entrypoints import wiring
+    from wildintel_uploader.modules.deployments.domain import ports
+
+    container = wiring.make_app_container()
+    with container() as request:
+        whole = request.get(ports.DeploymentsService)
+        assert all(request.get(part) is whole for part in (ports.DeploymentsCards, ports.DeploymentsScanning, ports.DeploymentsCollections,
+                                                          ports.DeploymentsImporting, ports.DeploymentsRepairing, ports.DeploymentsStatistics,
+                                                          ports.DeploymentsSessions, ports.DeploymentsPhotos))
+    container.close()

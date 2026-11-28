@@ -9,7 +9,7 @@ from rich.table import Table
 
 from wildintel_uploader.entrypoints.cli.common import call, console
 from wildintel_uploader.entrypoints.cli.injection import inject
-from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
+from wildintel_uploader.modules.deployments.domain.ports import DeploymentsStatistics
 
 statistics_app = typer.Typer(help="Compare the deployments with the previous revisions of their location.", no_args_is_help=True)
 
@@ -23,7 +23,7 @@ def _num(value, digits: int = 1) -> str:
 def statistics_collection(
     research_project: Annotated[str, typer.Argument(help="The research project's id (its folder in the collections folder).")],
     collection: Annotated[str, typer.Argument(help="The collection, e.g. R0028.")],
-    deployments: FromDishka[DeploymentsService],
+    deployments: FromDishka[DeploymentsStatistics],
 ) -> None:
     """Each deployment of a collection against the previous revisions of its location, with the thresholds of POSTVALIDATION."""
     rows = call(lambda: deployments.revision_statistics(research_project, collection))
@@ -51,7 +51,7 @@ def statistics_compare(
     research_project: Annotated[str, typer.Argument(help="The research project's id.")],
     first: Annotated[str, typer.Argument(help="The deployment to compare from, e.g. R0002-DONA_0006.")],
     second: Annotated[str, typer.Argument(help="The deployment to compare to, e.g. R0003-DONA_0006.")],
-    deployments: FromDishka[DeploymentsService],
+    deployments: FromDishka[DeploymentsStatistics],
 ) -> None:
     """Two deployments side by side — for the same location in two revisions."""
     result = call(lambda: deployments.compare(research_project, first, second))

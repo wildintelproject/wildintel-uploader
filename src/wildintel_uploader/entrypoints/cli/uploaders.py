@@ -14,7 +14,7 @@ from rich.table import Table
 
 from wildintel_uploader.entrypoints.cli.common import call, console, fail
 from wildintel_uploader.entrypoints.cli.injection import inject
-from wildintel_uploader.modules.deployments.domain.ports import DeploymentsService
+from wildintel_uploader.modules.deployments.domain.ports import DeploymentsScanning
 from wildintel_uploader.modules.uploaders.domain.models import Account, UploaderError
 from wildintel_uploader.modules.uploaders.domain.ports import UploadersService
 from wildintel_uploader.shared.camtrap import DeploymentFields
@@ -92,7 +92,7 @@ def _optional_prompt(label: str, default: str | None = None) -> Optional[str]:
 
 
 @inject
-def import_deployment(uploaders: FromDishka[UploadersService], deployments: FromDishka[DeploymentsService]) -> None:
+def import_deployment(uploaders: FromDishka[UploadersService], deployments: FromDishka[DeploymentsScanning]) -> None:
     """Import a deployment: organize a folder of camera-trap images locally, then register the deployment in TRAPPER. Does not upload the images
     to TRAPPER yet — that's a separate step this app doesn't have."""
     from wildintel_uploader.modules.deployments.domain import imports

@@ -54,13 +54,9 @@ class CollectionLayout(ABC):
         """Checks the source images and seals the deployment kept in dest; whether it was sealed."""
 
 
-class DeploymentsService(ABC):
+class DeploymentsCards(ABC):
+    """The memory card a deployment's images come from: copied to the computer, ejected, its copy discarded."""
 
-    @abstractmethod
-    def layout(self) -> CollectionLayout:
-        """How a collection holds its deployments."""
-
-    # the memory card
     @abstractmethod
     def copy_card(self, path: str) -> Iterator[dict]:
         """Copies a camera's memory card, read only, to a temporary folder: "start", "progress" after each file, "done" with its `path`."""
@@ -71,7 +67,10 @@ class DeploymentsService(ABC):
     @abstractmethod
     def discard_card_copy(self, path: str) -> bool: ...
 
-    # a folder of images
+
+class DeploymentsScanning(ABC):
+    """A folder of images, looked at before it is imported: what it holds, the details it suggests, the session it is of."""
+
     @abstractmethod
     def scan_folder(self, folder: Path) -> dict:
         """What a folder holds — and, behind the answer, its images' metadata start being read."""
@@ -82,7 +81,14 @@ class DeploymentsService(ABC):
     @abstractmethod
     def scan_session(self, folder: Path) -> dict: ...
 
-    # the collections
+
+class DeploymentsCollections(ABC):
+    """The collections of the collections folder and the deployments kept in them: where one goes, which are there, what each says."""
+
+    @abstractmethod
+    def layout(self) -> CollectionLayout:
+        """How a collection holds its deployments."""
+
     @abstractmethod
     def check_collection(self, folder: Path) -> dict: ...
 
@@ -116,7 +122,10 @@ class DeploymentsService(ABC):
         """The previous revisions of the location of a deployment, oldest first: {"revision", "deployment_id", "image_count", "times"} — the
         times when its images were taken, in seconds, sorted."""
 
-    # importing one
+
+class DeploymentsImporting(ABC):
+    """Bringing a deployment into a collection: from a folder of images, consolidated from its staging, or organized for an upload."""
+
     @abstractmethod
     def import_local(self, source_dir: str, collection_dir: str, collection_name: str | None, deployment: Deployment, preprocessing: dict | None,
                      consolidate: bool = True) -> Iterator[dict]:
@@ -132,7 +141,10 @@ class DeploymentsService(ABC):
         """The images of a folder copied, as they are, to the folder of the deployment in its collection — the default one of the research
         project —, with its metadata: where they go, and the events of the copy. DeploymentsFailed, before anything is copied, on bad paths."""
 
-    # checking and repairing those kept, and the statistics of a revision
+
+class DeploymentsRepairing(ABC):
+    """The deployments kept, checked against their seal and repaired."""
+
     @abstractmethod
     def repair_collections(self, project: str) -> list[dict]: ...
 
@@ -142,6 +154,10 @@ class DeploymentsService(ABC):
     @abstractmethod
     def repair(self, project: str, collection: str, deployment_id: str) -> Iterator[dict]: ...
 
+
+class DeploymentsStatistics(ABC):
+    """The statistics of the deployments of a revision, and two deployments side by side."""
+
     @abstractmethod
     def revision_statistics(self, project: str, collection: str) -> list[dict]: ...
 
@@ -149,17 +165,30 @@ class DeploymentsService(ABC):
     def compare(self, project: str, first: str, second: str) -> dict:
         """Two deployments side by side — the same location in two revisions: {"first", "second", "metrics"}."""
 
-    # the sessions of the wizard
+
+class DeploymentsSessions(ABC):
+    """The sessions of the wizard of an import."""
+
     @abstractmethod
     def sessions(self) -> "ImportSessions":
         """The unfinished runs of the wizard, kept step by step."""
 
-    # its photos
+
+class DeploymentsPhotos(ABC):
+    """The photos of a deployment kept, to be looked at."""
+
     @abstractmethod
     def photos(self, project: str, collection: str, deployment_id: str) -> list[dict]: ...
 
     @abstractmethod
     def photo(self, project: str, collection: str, deployment_id: str, name: str, large: bool = False) -> bytes: ...
+
+
+class DeploymentsService(DeploymentsCards, DeploymentsScanning, DeploymentsCollections, DeploymentsImporting, DeploymentsRepairing,
+                         DeploymentsStatistics, DeploymentsSessions, DeploymentsPhotos, ABC):
+    """All that the module of the deployments offers — the web app, the command line and the uploaders. Whoever needs only a part asks for that one:
+    DeploymentsCards, DeploymentsScanning, DeploymentsCollections, DeploymentsImporting, DeploymentsRepairing, DeploymentsStatistics,
+    DeploymentsSessions or DeploymentsPhotos."""
 
 
 # ── out ──
