@@ -118,7 +118,8 @@ def test_only_a_backup_takes_the_records_of_the_catalog_round_its_rules(path: Pa
 
 
 def test_the_catalog_does_not_hand_out_its_records():
-    """The catalog (CatalogService) is its rules: the catalog as records is a contract of its own (catalog.domain.records), given apart."""
+    """The catalog (CatalogService) is its rules: the records as a backup copies them are a contract of their own (catalog.domain.records), given
+    apart."""
     from wildintel_uploader.modules.catalog.domain.ports import CatalogService
     assert not hasattr(CatalogService, "records")
 
@@ -147,20 +148,11 @@ def test_no_file_takes_a_private_name_of_another(path: Path):
     assert not taken, f"{path.name} takes {sorted(taken)}"
 
 
-# The modules that still read and write the catalog as records (catalog.domain.records.CatalogRecords): each that stops leaves this list, and no
-# new one comes in — the others ask the catalog's contract, with its models.
-STILL_ON_THE_RECORDS = {"modules/backup/infrastructure/outside.py"}
-
-
-@pytest.mark.parametrize("path", sorted(p for p in SRC.glob("modules/*/**/*.py") if p.relative_to(SRC / "modules").parts[0] != "catalog"),
-                         ids=lambda p: str(p.relative_to(SRC)))
-def test_only_the_modules_of_before_read_the_catalog_as_records(path: Path):
-    uses_them = "CatalogRecords" in path.read_text(encoding="utf-8")
-    assert not uses_them or path.relative_to(SRC).as_posix() in STILL_ON_THE_RECORDS
-
-
-def test_the_list_of_those_on_the_records_only_shrinks():
-    assert all("CatalogRecords" in (SRC / p).read_text(encoding="utf-8") for p in STILL_ON_THE_RECORDS)
+def test_the_app_has_no_catalog_as_records():
+    """The catalog as dicts (CatalogRecords) is gone (#248): the modules ask the catalog's contract and see its models; the backup copies and
+    restores the records as they are kept (CatalogRecordStore). Only the tests set up what they need as records (tests/support/catalog_records)."""
+    users = sorted(str(p.relative_to(SRC)) for p in SRC.rglob("*.py") if "CatalogRecords" in p.read_text(encoding="utf-8"))
+    assert not users, users
 
 
 _IO = re.compile(r"\.(read_text|write_text|read_bytes|write_bytes|rglob|glob|iterdir|mkdir|unlink|rmdir|touch)\(|\.(is_file|is_dir|exists|stat|resolve)\(\)"

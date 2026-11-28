@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from wildintel_uploader.entrypoints.wiring.common import section, keep_trapper_account, app_log, error_words, catalog_collections_dir, configure_runtime  # noqa: E402,F401
 from wildintel_uploader.entrypoints.wiring.settings import build_settings, SettingsProvider  # noqa: E402,F401
-from wildintel_uploader.entrypoints.wiring.catalog import catalog_of, build_catalog, catalog_records, catalog_record_store, catalog_repository, CatalogProvider  # noqa: E402,F401
+from wildintel_uploader.entrypoints.wiring.catalog import catalog_of, build_catalog, catalog_record_store, catalog_repository, CatalogProvider  # noqa: E402,F401
 from wildintel_uploader.entrypoints.wiring.files import file_info, build_reports, build_prevalidation, build_postvalidation, build_preprocessing, FileInfoProvider, ValidationProvider, PreprocessingProvider, ReportsProvider  # noqa: E402,F401
 from wildintel_uploader.entrypoints.wiring.deployments import build_deployments, importing, sealing, repairing, revision_statistics, DeploymentsProvider  # noqa: E402,F401
 from wildintel_uploader.entrypoints.wiring.visits import build_sources, build_visits, build_timefix, SourcesProvider, VisitsProvider, TimeFixProvider  # noqa: E402,F401
@@ -43,7 +43,6 @@ __all__ = [
     "SettingsProvider",
     "catalog_of",
     "build_catalog",
-    "catalog_records",
     "catalog_record_store",
     "catalog_repository",
     "CatalogProvider",

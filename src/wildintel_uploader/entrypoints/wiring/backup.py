@@ -20,7 +20,7 @@ def build_backup(collections_dir: Path | None = None, version: Callable[[], str]
     """The backups, as zip files, of the collections folder — the settings' by default —: the catalog and the visits through their contracts."""
     def root() -> Path:
         return collections_dir or config.collections_dir()
-    return BackupUseCases(RecordsOfTheProject(root, w.catalog_records, w.catalog_record_store, lambda r: w.build_visits(r)), ProjectFoldersOnDisk(root), ZipBackups(),
+    return BackupUseCases(RecordsOfTheProject(root, w.catalog_of, w.catalog_record_store, lambda r: w.build_visits(r)), ProjectFoldersOnDisk(root), ZipBackups(),
                           SettingsOfTheApp(config), version)
 
 

@@ -66,9 +66,9 @@ class BackupUseCases(BackupService):
             collections.append({"name": collection, "deployments": deployments})
         return {
             "research_project_id": project,
-            "locations": len(self._records.locations(project)),
-            "cameras": len(self._records.equipment(project, "cameras")),
-            "sd_cards": len(self._records.equipment(project, "sd_cards")),
+            "locations": self._records.how_many(project, "locations"),
+            "cameras": self._records.how_many(project, "cameras"),
+            "sd_cards": self._records.how_many(project, "sd_cards"),
             "visits": self._records.kept_visits(project),
             "collections": collections,
         }

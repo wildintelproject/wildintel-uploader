@@ -130,5 +130,10 @@ def preprocessing():
 
 def records(root: Path):
     """The catalog of the collections folder as records, through its rules — what the other modules ask of it."""
-    from wildintel_uploader.entrypoints.wiring import catalog_records
-    return catalog_records(root)
+    from tests.support.catalog_records import RecordsOf
+    from wildintel_uploader.entrypoints.wiring import build_settings, catalog_repository
+    from wildintel_uploader.entrypoints.wiring.catalog import build_catalog
+    settings = build_settings()
+    kept = catalog_repository(root, settings)
+    catalog = build_catalog(root, settings, repository=kept)
+    return RecordsOf(lambda: catalog, lambda: kept)

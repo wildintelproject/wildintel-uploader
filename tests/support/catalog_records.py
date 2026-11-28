@@ -1,0 +1,152 @@
+"""The catalog of a collections folder as records — dicts, the shape the files keep them in — for the tests to set up and read what they need
+in few words (built.records). The app does not use it: its modules ask the catalog's contract (CatalogService) and see its models (#248)."""
+from __future__ import annotations
+
+from collections.abc import Callable
+from contextlib import contextmanager
+from dataclasses import replace
+
+from wildintel_uploader.modules.catalog.domain.models import Audit, CatalogError, Role, UnknownCamera, UnknownLocation, UnknownProject
+from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService
+from wildintel_uploader.modules.catalog.infrastructure.mapping import (
+    equipment_from_record, equipment_to_record, location_from_record, location_to_record, project_from_record, project_to_record, role_to_record,
+    trapper_from_record, trapper_to_record,
+)
+from wildintel_uploader.shared import audit, storage
+from wildintel_uploader.shared.storage import valid_project_id
+
+LocalFolderError = storage.StorageError
+
+
+class RecordsOf:
+    """The catalog of a collections folder as records, through its use cases (`catalog`) — and its repository only to tell whether a research
+    project is archived. The errors are told as the callers have always caught them (LocalFolderError, with the same words)."""
+
+    def __init__(self, catalog: Callable[[], CatalogService], repository: Callable[[], CatalogRepository]) -> None:
+        self._catalog, self._repository = catalog, repository
+
+    # the research projects
+
+    def research_projects(self, include_deleted: bool = False) -> list[dict]:
+        return [project_to_record(p) for p in self._catalog().projects(include_deleted)]
+
+    def has_project(self, project: str) -> bool:
+        try:
+            self._catalog().require_project(project)
+        except UnknownProject:
+            return False
+        return True
+
+    def add_project(self, record: dict) -> dict:
+        with _as_local_folder_error():
+            return project_to_record(self._catalog().add_project(project_from_record({k: v for k, v in record.items() if k not in audit.AUDIT_FIELDS and k != "id"})))
+
+    def update_project(self, project: str, changes: dict) -> dict:
+        with _as_local_folder_error():
+            return project_to_record(self._catalog().update_project(project, {k: v for k, v in changes.items() if k not in audit.AUDIT_FIELDS}))
+
+    def delete_project(self, project: str) -> dict:
+        with _as_local_folder_error():
+            self._catalog().delete_project(project)
+        return {"deleted": project}
+
+    def require_project(self, project: str, *, active: bool = False) -> None:
+        with _as_local_folder_error():
+            self._catalog().require_project(project, active=active)
+
+    def require_modifiable(self, project: str) -> None:
+        """Raises LocalFolderError when the research project is archived: an archived one can't be modified — nor its locations, cameras, SD cards,
+        roles or visits — and never goes back."""
+        found = self._repository().read_project(project)
+        if found is not None and str(project_to_record(found).get("status") or "active") == "archived":
+            raise LocalFolderError(f"The research project '{project}' is archived: it can't be modified.")
+
+    # the locations
+
+    def locations(self, project: str, include_deleted: bool = False) -> list[dict]:
+        valid_project_id(project)
+        return [location_to_record(loc) for loc in self._catalog().locations(project, include_deleted)]
+
+    def add_location(self, project: str, location: dict, by_hand: bool = False) -> dict:
+        with _as_local_folder_error():
+            record = {k: v for k, v in location.items() if k not in audit.AUDIT_FIELDS and k != "id"}
+            new = replace(location_from_record(record, project), audit=Audit())   # a new one: its id and dates are the catalog's to give
+            return location_to_record(self._catalog().add_location(project, new, by_hand=by_hand))
+
+    def change_location(self, project: str, location_id: str, changes: dict, by_visit: bool = False) -> dict:
+        with _as_local_folder_error():
+            return location_to_record(self._catalog().update_location(project, location_id, changes, by_visit=by_visit))
+
+    def delete_location(self, project: str, location_id: str) -> dict:
+        with _as_local_folder_error():
+            location = self._catalog().location(project, location_id)
+            self._catalog().delete_location(project, location_id)
+        return {"deleted": location.location_id}
+
+    def location_time(self, project: str, location_id: str | None) -> dict:
+        valid_project_id(project)
+        return self._catalog().location_time(project, location_id)
+
+    # the cameras and the SD cards
+
+    def equipment(self, project: str, kind: str, include_deleted: bool = False) -> list[dict]:
+        valid_project_id(project)
+        with _as_local_folder_error():
+            return [{**equipment_to_record(i, kind), "research_project": project} for i in self._catalog().equipment(project, kind, include_deleted)]
+
+    def all_equipment(self, kind: str) -> list[dict]:
+        return [{**equipment_to_record(i, kind), "research_project": p} for p, i in self._catalog().all_equipment(kind)]
+
+    def camera(self, project: str | None, key: str | None) -> dict | None:
+        """The camera of a research project a deployment or a visit names: the one with that label, else the one with that serial number."""
+        found = self._catalog().camera(project, key) if project and str(key or "").strip() else None
+        return {**equipment_to_record(found, "cameras"), "research_project": project} if found is not None else None
+
+    def set_camera_identity(self, project: str, label: str, make: str | None, model: str | None) -> dict:
+        with _as_local_folder_error():
+            camera = self._catalog().set_camera_identity(project, label, make, model)
+        return {**equipment_to_record(camera, "cameras"), "research_project": project}
+
+    def keep_equipment(self, project: str, kind: str, items: list[dict], by_hand: bool = False) -> None:
+        with _as_local_folder_error():
+            self._catalog().save_equipment(project, kind, [_equipment(i, kind, project) for i in items], by_hand=by_hand)
+
+    # the people and their roles
+
+    def trappers(self, include_deleted: bool = False) -> list[dict]:
+        return [trapper_to_record(t) for t in self._catalog().trappers(include_deleted)]
+
+    def trapper_records(self) -> list[dict]:
+        """The trappers, those that were deleted too: a visit or a role of one that was deleted still says who it was."""
+        return self.trappers(include_deleted=True)
+
+    def keep_trappers(self, trappers: list[dict]) -> None:
+        self._catalog().save_trappers([trapper_from_record({**t, "id": t.get("id") or None}) for t in trappers])
+
+    def roles(self, project: str, include_deleted: bool = False) -> list[dict]:
+        out = []
+        for role in self._catalog().roles(project, include_deleted):
+            record = {k: v for k, v in role_to_record(role).items() if k != "trapper_ref"}
+            out.append({**record, "trapper": role.trapper, "research_project": project})
+        return out
+
+    def keep_roles(self, project: str, roles: list[dict]) -> None:
+        with _as_local_folder_error():
+            self._catalog().save_roles(project, [Role(trapper=r.get("trapper"), role=r.get("role") or "contributor", audit=Audit(id=r.get("id"))) for r in roles])
+
+
+@contextmanager
+def _as_local_folder_error():
+    """The errors of the catalog as the callers of before catch them: a LocalFolderError, with the same words — some still read them."""
+    try:
+        yield
+    except (UnknownProject, UnknownLocation, UnknownCamera) as exc:
+        raise LocalFolderError(str(exc)) from exc
+    except CatalogError as exc:
+        raise LocalFolderError(exc.message) from exc
+
+
+def _equipment(record: dict, kind: str, research_project_id: str):
+    """A camera or an SD card as a caller of before gives it: with the id it says — none for a new one, which the catalog gives."""
+    item = equipment_from_record(record, kind, research_project_id)
+    return item if record.get("id") else replace(item, audit=Audit())

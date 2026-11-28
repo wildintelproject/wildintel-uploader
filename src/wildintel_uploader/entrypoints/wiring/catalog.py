@@ -9,12 +9,12 @@ from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseC
 from wildintel_uploader.modules.catalog.domain.ports import (
     CatalogCheckpoints, CatalogEquipment, CatalogFieldwork, CatalogHistory, CatalogLocations, CatalogPeople, CatalogProjects, CatalogRepository, CatalogRoles, CatalogService, Clock,
 )
-from wildintel_uploader.modules.catalog.domain.records import CatalogRecords, CatalogRecordStore
+from wildintel_uploader.modules.catalog.domain.records import CatalogRecordStore
 from wildintel_uploader.modules.catalog.infrastructure.clock import SystemClock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
 from wildintel_uploader.modules.catalog.infrastructure.legacy import FieldworkFromTheSettings, TrappersFromTheSettings
 from wildintel_uploader.modules.catalog.infrastructure.project_folders import ResearchProjectFolders
-from wildintel_uploader.modules.catalog.infrastructure.records import RecordsOf, RecordStoreOf
+from wildintel_uploader.modules.catalog.infrastructure.records import RecordStoreOf
 from wildintel_uploader.modules.catalog.infrastructure.sql_repository import SqlCatalogRepository, sqlite_engine
 from wildintel_uploader.modules.catalog.infrastructure.status_history import KeptStatusHistory
 from wildintel_uploader.modules.catalog.infrastructure.visits import StoredVisits, VisitsAsKept
@@ -39,20 +39,12 @@ def build_catalog(collections_dir: Path, settings: SettingsService, clock: Clock
                            legacy_fieldwork=FieldworkFromTheSettings(settings))
 
 
-def catalog_records(collections_dir: Path, settings: SettingsService | None = None) -> CatalogRecords:
-    """The catalog of a collections folder as records, through its rules — for the backups, which read and merge records. See
-    modules.catalog.domain.records."""
-    settings = settings or w.build_settings()
-    kept = catalog_repository(collections_dir, settings)
-    catalog = build_catalog(collections_dir, settings, repository=kept)
-    return RecordsOf(lambda: catalog, lambda: kept)
-
-
 def catalog_record_store(collections_dir: Path, settings: SettingsService | None = None) -> CatalogRecordStore:
     """The records of the catalog of a collections folder as they are kept, round its rules — for a backup only."""
     settings = settings or w.build_settings()
     kept = catalog_repository(collections_dir, settings)
-    return RecordStoreOf(lambda: kept)
+    catalog = build_catalog(collections_dir, settings, repository=kept)
+    return RecordStoreOf(lambda: kept, lambda: catalog)
 
 
 def catalog_repository(collections_dir: Path, settings: SettingsService, kind: str | None = None, database: Path | None = None) -> CatalogRepository:
