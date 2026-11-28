@@ -728,6 +728,21 @@ def site_start_errors(visit: Visit, kept: list[Visit]) -> list[str]:
     return []
 
 
+def repeated_visit(site: str, revision: str, dates: list[str]) -> str:
+    """Why a location cannot have a second visit in a revision, and how the two are joined — a revision is one visit to each location (#207). A
+    second visit that happened (the cameras replaced a few days after the revision) is joined with the first in one row: what is found is the
+    first's (it ended the deployment the revision found), what is left and when it was the last's (how the location stays until the next
+    revision), and the observations of both. What is lost is the deployment between them.
+
+        >>> repeated_visit("DONA_0026", "R0003", ["2020-12-20", "2020-12-15"])
+        'DONA_0026 has 2 visits in R0003 (2020-12-15 and 2020-12-20): a revision is one visit to each location. Join them in one row: the date and what is left from the last one, what is found from the first one, and the observations of both.'
+    """
+    days = sorted(d for d in dates if d)
+    return (f"{site} has {len(dates)} visits in {revision}" + (f" ({' and '.join(days)})" if days else "") + ": a revision is one visit to each "
+            "location. Join them in one row: the date and what is left from the last one, what is found from the first one, and the observations "
+            "of both.")
+
+
 def order_errors(visit: Visit, kept: list[Visit]) -> list[str]:
     """What stops a visit for when it was: a site has one visit in a revision, and a visit is after the last one to its site and after every visit of the revisions
     before its own — a revision starts when the one before it is finished (see revision_gate)."""
@@ -735,8 +750,9 @@ def order_errors(visit: Visit, kept: list[Visit]) -> list[str]:
     number = session_number(visit.get("session"))
     site = str(visit["location_id"]).strip()
     here = _site_visits(kept, site)
-    if number is not None and any(session_number(v.get("session")) == number for v in here):
-        errors.append(make_reason("visit_repeated", f"{site} already has a visit in R{number:04d}: a revision is one visit to each location."))
+    same = [v for v in here if number is not None and session_number(v.get("session")) == number]
+    if same:
+        errors.append(make_reason("visit_repeated", repeated_visit(site, f"R{number:04d}", [*(str(v.get("date") or "") for v in same), str(visit.get("date") or "")])))
     last = max(here, key=visit_stamp, default=None)
     if last is not None and visit_stamp(last) >= visit_stamp(visit):
         errors.append(make_reason("visit_not_after_the_last", f"The visit to {site} has to be after the last one, on {last['date']} at {last['time']} ({last.get('session')})."))
@@ -753,8 +769,10 @@ def _replay(visit: Visit, others: list[Visit], locations: list[Location], cards:
     stamp = visit_stamp(visit)
     number = session_number(visit.get("session"))
     found: list[tuple[tuple[str, str] | None, str]] = []
-    if number is not None and any(_same(v["location_id"], visit["location_id"]) and session_number(v.get("session")) == number for v in others):
-        found.append((None, make_reason("visit_repeated", f"{visit['location_id']} already has a visit in R{number:04d}: a revision is one visit to each location.")))
+    same = [v for v in others if number is not None and _same(v["location_id"], visit["location_id"]) and session_number(v.get("session")) == number]
+    if same:
+        found.append((None, make_reason("visit_repeated", repeated_visit(str(visit["location_id"]), f"R{number:04d}",
+                                                                        [*(str(v.get("date") or "") for v in same), str(visit.get("date") or "")]))))
     found += [(None, why) for why in refusals(visit, [v for v in others if visit_stamp(v) < stamp], locations, cards, unknown)]
     # a site starts once, with its first visit: the visits after this one say it, or this one is before the visit that says it
     site_later = [v for v in others if _same(v["location_id"], visit["location_id"]) and visit_stamp(v) > stamp]

@@ -389,7 +389,11 @@ def test_a_site_is_visited_once_in_a_revision_even_on_another_day_in_the_same_fi
     mapping = built.visit_files().columns(text)["mapping"]
     result = _parse(text, _LOCS, [], mapping)
     assert [(v["location_id"], v["session"]) for v in result["visits"]] == [("WICP_0001", "R0001"), ("WICP_0002", "R0001")]
-    assert [(p["row"], "row 2" in p["message"]) for p in result["problems"]] == [(3, True)]
+    assert [p["row"] for p in result["problems"]] == [3]
+    # #207: both rows, both days, and how the two visits are joined in one
+    assert result["problems"][0]["message"] == (
+        "Rows 2 and 3 of the file: WICP_0001 has 2 visits in R0001 (2026-10-19 and 2026-10-20): a revision is one visit to each location. Join them "
+        "in one row: the date and what is left from the last one, what is found from the first one, and the observations of both.")
     assert {r["row"]: r["result"] for r in result["rows"]}[3] == "problem"
 
 

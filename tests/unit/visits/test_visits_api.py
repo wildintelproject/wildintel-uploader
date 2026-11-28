@@ -1238,7 +1238,8 @@ def test_a_visit_by_hand_is_after_the_last_one_to_its_site_and_after_the_revisio
         before = _save({**VISIT, "session": "R0013", "date": "2026-01-05"})                   # not after the last visit to the site
         after = _save({**VISIT, "session": "R0013", "date": "2026-02-10"})
 
-    assert same_revision.status_code == 422 and "already has a visit in R0012" in same_revision.json()["detail"]
+    assert same_revision.status_code == 422 and "DONA_01 has 2 visits in R0012 (2026-01-10 and 2026-02-10)" in same_revision.json()["detail"]
+    assert "Join them in one row" in same_revision.json()["detail"]
     assert before.status_code == 422 and "has to be after the last one, on 2026-01-10" in before.json()["detail"]
     assert after.status_code == 200
 
