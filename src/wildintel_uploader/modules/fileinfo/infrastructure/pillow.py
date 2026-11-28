@@ -22,6 +22,15 @@ _PILLOW_DATE_TAGS = (("exif", 36867), ("exif", 36868), ("main", 306))   # DateTi
 
 
 def _read_with_pillow(path: Path) -> CameraInfo:
+    """The camera that took an image, as Pillow reads it.
+
+    Args:
+        path: The image.
+
+    Returns:
+        Its make and model (see model_name), and its BodySerialNumber — the only serial number Pillow knows of —;
+        an empty CameraInfo when the image cannot be read.
+    """
     try:
         with Image.open(path) as img:
             exif = img.getexif()
@@ -35,7 +44,20 @@ def _read_with_pillow(path: Path) -> CameraInfo:
 
 
 def _tags_with_pillow(path: Path, tags: list[str]) -> dict[str, str | None]:
-    """The value of each tag in a file, as Pillow reads it: the standard EXIF tags only, in the image, its Exif and its GPS sections."""
+    """The value of each tag in an image, as Pillow reads it.
+
+    The standard EXIF tags only, looked for in the image, its Exif section and its GPS section; a tag ExifTool names
+    otherwise is looked for by Pillow's name (ISO is ISOSpeedRatings, CreateDate is DateTimeDigitized…), and a GPS
+    tag with or without its ``GPS``.
+
+    Args:
+        path: The image.
+        tags: The tags wanted, by their ExifTool names.
+
+    Returns:
+        The value of each tag by the name asked, as text; None where it has not got it — every one, when the image
+        cannot be read.
+    """
     try:
         with Image.open(path) as img:
             exif = img.getexif()
@@ -53,6 +75,15 @@ def _tags_with_pillow(path: Path, tags: list[str]) -> dict[str, str | None]:
 
 
 def _date_with_pillow(path: Path) -> datetime | None:
+    """The capture date of an image, as Pillow reads it.
+
+    Args:
+        path: The image.
+
+    Returns:
+        The first there is of DateTimeOriginal, DateTimeDigitized and DateTime, as the camera's wall clock; None
+        when it says none, or it cannot be read.
+    """
     try:
         with Image.open(path) as img:
             exif = img.getexif()
@@ -68,17 +99,21 @@ def _date_with_pillow(path: Path) -> datetime | None:
 
 class PillowReader(FallbackReader):
     def tags(self, path: Path, tags: list[str]) -> dict[str, str | None]:
+        """See FallbackReader.tags: ``_tags_with_pillow``."""
         return _tags_with_pillow(path, tags)
 
     def date(self, path: Path) -> datetime | None:
+        """See FallbackReader.date: ``_date_with_pillow``."""
         return _date_with_pillow(path)
 
     def camera(self, path: Path) -> CameraInfo:
+        """See FallbackReader.camera: ``_read_with_pillow``."""
         return _read_with_pillow(path)
 
 
 class PillowDecoder(Decoder):
     def decode_error(self, path: Path) -> str | None:
+        """See Decoder.decode_error: the image opened and loaded in full by Pillow; what fails, as it says it."""
         try:
             with Image.open(path) as img:
                 img.load()

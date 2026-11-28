@@ -1,6 +1,6 @@
 """What is known of a file of an image, and how its metadata are understood — plain Python, with no reader nor store.
 
-A file is known by its stamp: its path, its size and its modification time in nanoseconds. One that was changed, or replaced by another, has another
+A file is known by its stamp: its path, its size, its modification time and its change time (ctime), in nanoseconds. One that was changed, or replaced by another, has another
 stamp: what is remembered of a stamp is never what an earlier file said."""
 from __future__ import annotations
 
@@ -46,16 +46,62 @@ class CameraInfo:
 
     @property
     def known(self) -> bool:
+        """Whether the image says anything of its camera.
+
+        Returns:
+            True when it says its model or its serial number.
+
+        Examples:
+            >>> CameraInfo(model="Browning BTC-8A").known
+            True
+            >>> CameraInfo().known
+            False
+        """
         return self.model is not None or self.camera_id is not None
 
 
 def clean(value: object) -> str | None:
+    """A value as text, without the spaces around it.
+
+    Args:
+        value: Anything a reader gave.
+
+    Returns:
+        The text; None when there is nothing but spaces, or nothing.
+
+    Examples:
+        >>> clean("  BR5071 ")
+        'BR5071'
+        >>> clean("   ") is None
+        True
+        >>> clean(None) is None
+        True
+    """
     text = str(value).strip() if value is not None else ""
     return text or None
 
 
 def model_name(make: object, model: object) -> str | None:
-    """"<make> <model>" — the model alone when it already starts with the make ("Canon" / "Canon EOS 5D")."""
+    """The name of a camera: ``"<make> <model>"``.
+
+    Args:
+        make: The Make of the image.
+        model: Its Model.
+
+    Returns:
+        The make and the model; the model alone when it already starts with the make; whichever there is when
+        only one is; None when neither.
+
+    Examples:
+        >>> model_name("Browning", "BTC-8A")
+        'Browning BTC-8A'
+        >>> model_name("Canon", "Canon EOS 5D")
+        'Canon EOS 5D'
+        >>> model_name(None, "BTC-8A")
+        'BTC-8A'
+        >>> model_name(None, None) is None
+        True
+    """
     make_text = str(make).strip() if make else ""
     model_text = str(model).strip() if model else ""
     if make_text and model_text.lower().startswith(make_text.lower()):
@@ -64,7 +110,25 @@ def model_name(make: object, model: object) -> str | None:
 
 
 def parse_date(raw: object) -> datetime | None:
-    """An EXIF date ("2024:09:04 10:00:00"), as the camera's wall clock; None when there is none, or it is not one."""
+    """An EXIF date, as the camera's wall clock.
+
+    Args:
+        raw: The date as EXIF writes it: ``"2024:09:04 10:00:00"``; what follows the seconds (a time zone, the
+            fractions) is dropped.
+
+    Returns:
+        The date, naive; None when there is none (empty, or the zeros of a clock never set), or it is not one.
+
+    Examples:
+        >>> parse_date("2024:09:04 10:00:00")
+        datetime.datetime(2024, 9, 4, 10, 0)
+        >>> parse_date("2024:09:04 10:00:00+02:00")
+        datetime.datetime(2024, 9, 4, 10, 0)
+        >>> parse_date("0000:00:00 00:00:00") is None
+        True
+        >>> parse_date("yesterday") is None
+        True
+    """
     text = str(raw or "").strip()
     if text in _NO_DATE:
         return None
@@ -75,17 +139,57 @@ def parse_date(raw: object) -> datetime | None:
 
 
 def date_of(tags: Tags) -> datetime | None:
-    """The capture date the tags of an image say: the first of DATE_TAGS that has one."""
+    """The capture date the tags of an image say.
+
+    Args:
+        tags: The tags of the image, by their names in lowercase.
+
+    Returns:
+        The first date there is of DATE_TAGS (DateTimeOriginal, CreateDate, ModifyDate); None when none has one.
+
+    Examples:
+        >>> date_of({"datetimeoriginal": None, "createdate": "2024:09:04 10:00:00"})
+        datetime.datetime(2024, 9, 4, 10, 0)
+        >>> date_of({}) is None
+        True
+    """
     return next((d for d in (parse_date(tags.get(t.lower())) for t in DATE_TAGS) if d is not None), None)
 
 
 def camera_of(tags: Tags) -> CameraInfo:
-    """The camera the tags of an image say: the model with its make, and the first serial number there is, in the order of SERIAL_TAGS."""
+    """The camera the tags of an image say.
+
+    Args:
+        tags: The tags of the image, by their names in lowercase.
+
+    Returns:
+        Its model with its make (see model_name), and the first serial number there is, in the order of
+        SERIAL_TAGS.
+
+    Example:
+        >>> camera_of({"make": "Browning", "model": "BTC-8A", "internalserialnumber": "BR5071"})
+        CameraInfo(model='Browning BTC-8A', camera_id='BR5071')
+    """
     serial = next((s for s in (clean(tags.get(t.lower())) for t in SERIAL_TAGS) if s), None)
     return CameraInfo(model=model_name(tags.get("make"), tags.get("model")), camera_id=serial)
 
 
 def common_value(values: list[str | None]) -> str | None:
-    """The one value every image has — None if any is missing or they differ."""
+    """The one value every image has.
+
+    Args:
+        values: The value of each image.
+
+    Returns:
+        That value; None when an image has none, when they differ, or when there are no images.
+
+    Examples:
+        >>> common_value(["BTC-8A", "BTC-8A"])
+        'BTC-8A'
+        >>> common_value(["BTC-8A", "HC600"]) is None
+        True
+        >>> common_value(["BTC-8A", None]) is None
+        True
+    """
     distinct = set(values)
     return distinct.pop() if len(distinct) == 1 and None not in distinct else None

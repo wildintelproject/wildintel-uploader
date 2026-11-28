@@ -22,6 +22,14 @@ class FileMemo(Generic[V]):
         self._lock = threading.Lock()
 
     def get(self, key) -> V | None:
+        """What is remembered under a key.
+
+        Args:
+            key: The key — a stamp, or a stamp and what is remembered of it; None has nothing.
+
+        Returns:
+            The value; None when there is none. Asking for it makes it the last to be forgotten.
+        """
         if key is None:
             return None
         with self._lock:
@@ -31,6 +39,14 @@ class FileMemo(Generic[V]):
             return self._items[key]
 
     def put(self, key, value: V) -> None:
+        """Remembers a value under a key, in place of what it had.
+
+        The one asked for or put longest ago is forgotten when there are more than the limit.
+
+        Args:
+            key: The key; None remembers nothing.
+            value: The value.
+        """
         if key is None:
             return
         with self._lock:
@@ -40,10 +56,12 @@ class FileMemo(Generic[V]):
                 self._items.popitem(last=False)
 
     def clear(self) -> None:
+        """Forgets everything."""
         with self._lock:
             self._items.clear()
 
     def __len__(self) -> int:
+        """How many values it remembers."""
         return len(self._items)
 
 
@@ -56,6 +74,7 @@ FACTS: FileMemo[str] = FileMemo(limit=150_000)
 
 
 def forget_all() -> None:
+    """Forgets everything the memories of the process remember: the EXIF, the cameras and the facts."""
     EXIF.clear()
     CAMERAS.clear()
     FACTS.clear()
@@ -65,23 +84,30 @@ class ProcessMemory(Memory):
     """The memories of this module, the same for every instance: what one finds out, the others know."""
 
     def get_tags(self, key: Stamp | None) -> Tags | None:
+        """See Memory.get_tags: EXIF."""
         return EXIF.get(key)
 
     def put_tags(self, key: Stamp | None, tags: Tags) -> None:
+        """See Memory.put_tags: EXIF."""
         EXIF.put(key, tags)
 
     def get_camera(self, key: Stamp | None) -> CameraInfo | None:
+        """See Memory.get_camera: CAMERAS."""
         return CAMERAS.get(key)
 
     def put_camera(self, key: Stamp | None, camera: CameraInfo) -> None:
+        """See Memory.put_camera: CAMERAS."""
         CAMERAS.put(key, camera)
 
     def get_fact(self, key: Stamp | None, kind: str) -> str | None:
+        """See Memory.get_fact: FACTS, by (stamp, kind)."""
         return FACTS.get((key, kind)) if key is not None else None
 
     def put_fact(self, key: Stamp | None, kind: str, value: str) -> None:
+        """See Memory.put_fact: FACTS, by (stamp, kind)."""
         if key is not None:
             FACTS.put((key, kind), value)
 
     def clear(self) -> None:
+        """See Memory.clear: ``forget_all``."""
         forget_all()

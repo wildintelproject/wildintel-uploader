@@ -32,12 +32,25 @@ _opened_at: Path | None = None
 
 
 def path() -> Path:
-    """Where the database is."""
+    """Where the database is.
+
+    Returns:
+        ``exif.sqlite3`` in the cache folder of the system: ``~/.cache/wildintel-uploader`` on Linux,
+        ``~/Library/Caches/wildintel-uploader`` on macOS, ``%LOCALAPPDATA%\\wildintel-uploader\\Cache`` on Windows.
+    """
     return Path(platformdirs.user_cache_dir(APP_NAME, appauthor=False)) / FILE_NAME
 
 
 def _open() -> sqlite3.Connection:
-    """The connection, opened the first time — again if the cache folder changed (the tests move it)."""
+    """The connection to the database, opened the first time — again when the cache folder changed (the tests
+    move it).
+
+    Opening it makes the folder and the tables when they are not there, and lets go the tables of a version whose
+    stamps had no ctime.
+
+    Returns:
+        The connection, shared by every thread: whoever uses it holds ``_lock``.
+    """
     global _connection, _opened_at
     where = path()
     if _connection is None or _opened_at != where:
@@ -62,6 +75,16 @@ def _open() -> sqlite3.Connection:
 
 
 def _rows(query: str, paths: list[str], *extra: object) -> list[tuple]:
+    """The rows of a query over many paths, asked a chunk at a time — below SQLite's limit of variables.
+
+    Args:
+        query: The query, with ``{marks}`` where the placeholders of the paths go.
+        paths: The paths.
+        *extra: The values of the placeholders before those of the paths.
+
+    Returns:
+        The rows of every chunk.
+    """
     db, rows = _open(), []
     for start in range(0, len(paths), _CHUNK):
         chunk = paths[start:start + _CHUNK]
@@ -70,7 +93,15 @@ def _rows(query: str, paths: list[str], *extra: object) -> list[tuple]:
 
 
 def get_many(stamps: list[Stamp]) -> dict[Stamp, Tags]:
-    """What was kept of the files of these stamps: only those that are kept, and only while the file is the same."""
+    """The tags kept of the files of these stamps.
+
+    Args:
+        stamps: The stamps of the files.
+
+    Returns:
+        The tags of each one kept with that very stamp — only while the file is the same —, by their names in
+        lowercase; the others are left out. Empty when the database cannot be read.
+    """
     if not stamps:
         return {}
     wanted = set(stamps)
@@ -84,7 +115,13 @@ def get_many(stamps: list[Stamp]) -> dict[Stamp, Tags]:
 
 
 def put_many(values: dict[Stamp, Tags]) -> None:
-    """Keeps what was read of these files, in place of what an earlier version of each one said; and forgets the oldest beyond LIMIT."""
+    """Keeps the tags read of these files, in place of what an earlier version of each one said.
+
+    The tags written longest ago are forgotten beyond LIMIT. What cannot be written is not kept, and nothing fails.
+
+    Args:
+        values: The tags of each file by its stamp, by their names in lowercase.
+    """
     if not values:
         return
     now = time.time()
@@ -104,6 +141,16 @@ def put_many(values: dict[Stamp, Tags]) -> None:
 
 
 def get_facts(stamps: list[Stamp], kind: str) -> dict[Stamp, str]:
+    """Something else kept of the files of these stamps.
+
+    Args:
+        stamps: The stamps of the files.
+        kind: What: ``"decoded"``, ``"sha1"``, ``"sha256"``…
+
+    Returns:
+        Its value for each one kept with that very stamp; the others are left out. Empty when the database cannot
+        be read.
+    """
     if not stamps:
         return {}
     wanted = set(stamps)
@@ -117,6 +164,15 @@ def get_facts(stamps: list[Stamp], kind: str) -> dict[Stamp, str]:
 
 
 def put_facts(values: dict[Stamp, str], kind: str) -> None:
+    """Keeps something else of these files, in place of what an earlier version of each one had.
+
+    Of each kind, the values written longest ago are forgotten beyond LIMIT. What cannot be written is not kept, and
+    nothing fails.
+
+    Args:
+        values: Its value for each file by its stamp.
+        kind: What: ``"decoded"``, ``"sha1"``, ``"sha256"``…
+    """
     if not values:
         return
     now = time.time()
@@ -135,7 +191,7 @@ def put_facts(values: dict[Stamp, str], kind: str) -> None:
 
 
 def clear() -> None:
-    """Forgets everything that was kept."""
+    """Forgets everything that was kept; nothing fails when it cannot."""
     try:
         with _lock:
             db = _open()
@@ -148,16 +204,21 @@ def clear() -> None:
 
 class SqliteStore(Store):
     def get_tags(self, stamps: list[Stamp]) -> dict[Stamp, Tags]:
+        """See Store.get_tags: ``get_many``."""
         return get_many(stamps)
 
     def put_tags(self, values: dict[Stamp, Tags]) -> None:
+        """See Store.put_tags: ``put_many``."""
         put_many(values)
 
     def get_facts(self, stamps: list[Stamp], kind: str) -> dict[Stamp, str]:
+        """See Store.get_facts: ``get_facts``."""
         return get_facts(stamps, kind)
 
     def put_facts(self, values: dict[Stamp, str], kind: str) -> None:
+        """See Store.put_facts: ``put_facts``."""
         put_facts(values, kind)
 
     def clear(self) -> None:
+        """See Store.clear: ``clear``."""
         clear()
