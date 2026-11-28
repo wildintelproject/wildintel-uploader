@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import replace
-from typing import Any
+from typing import Any, cast
 
 from wildintel_uploader.modules.catalog.domain import rules
 from wildintel_uploader.modules.catalog.domain.models import (
-    DEFAULT_TIMEZONE, EQUIPMENT_KINDS, CatalogError, EquipmentArchived, EquipmentStatusRefused, EquipmentWithoutProject, Location, LocationArchived, LocationExists, LocationFromTrapper, LocationHasVisits, LocationTimeFixed, NewLocationStatus,
+    DEFAULT_TIMEZONE, EQUIPMENT_KINDS, Camera, CatalogError, SdCard, EquipmentArchived, EquipmentStatusRefused, EquipmentWithoutProject, Location, LocationArchived, LocationExists, LocationFromTrapper, LocationHasVisits, LocationTimeFixed, NewLocationStatus,
     ProjectArchived, ProjectExists, ProjectHasVisits, ProjectNotActive, ProjectNotEmpty, ResearchProject, Role, SiteStatusRefused, Trapper,
     UnknownCamera, UnknownLocation, UnknownProject, UnknownTrapper, is_utc,
 )
@@ -254,15 +254,19 @@ class CatalogUseCases(CatalogService):
         if not project or not str(key or "").strip():
             return None
         try:
-            cameras = self.equipment(project, "cameras")
+            cameras = self._cameras(project)
         except Exception:  # noqa: BLE001 — no research project, nothing kept: no record to compare with
             return None
         wanted = str(key).strip().casefold()
         return (next((c for c in cameras if c.label.strip().casefold() == wanted), None)
                 or next((c for c in cameras if (c.camera_id or "").strip().casefold() == wanted), None))
 
+    def _cameras(self, project: str) -> list[Camera]:
+        """The cameras of a research project — those of equipment(…, "cameras"), which are cameras."""
+        return cast(list[Camera], self.equipment(project, "cameras"))
+
     def set_camera_identity(self, project: str, label: str, make: str | None, model: str | None):
-        cameras = self.equipment(project, "cameras")
+        cameras = self._cameras(project)
         record = next((c for c in cameras if c.label.strip() == label.strip()), None)
         if record is None:
             raise UnknownCamera(project, label)
@@ -386,8 +390,8 @@ class CatalogUseCases(CatalogService):
                     self.save_roles(acronym, [*[r for r in kept if not r.deleted], *added])
                 else:
                     kept_items = self.equipment(acronym, kind)
-                    have = {i.label for i in kept_items}   # as written: 7b and 7B are two
-                    self.save_equipment(acronym, kind, [*kept_items, *[i for i in mine if i.label not in have]])
+                    labels = {i.label for i in kept_items}   # as written: 7b and 7B are two
+                    self.save_equipment(acronym, kind, [*kept_items, *[i for i in mine if i.label not in labels]])
             left = [(project, item) for project, item in legacy if (project or "").lower() not in known]
             if len(left) != len(legacy):
                 self.legacy_fieldwork.keep(kind, left)
@@ -397,8 +401,8 @@ class CatalogUseCases(CatalogService):
         legacy = self.legacy_fieldwork
         return Fieldwork(
             trappers=self.trappers(),
-            cameras=[*self.all_equipment("cameras"), *(legacy.items("cameras") if legacy else [])],
-            sd_cards=[*self.all_equipment("sd_cards"), *(legacy.items("sd_cards") if legacy else [])],
+            cameras=[*cast(list[tuple[str | None, Camera]], self.all_equipment("cameras")), *(legacy.items("cameras") if legacy else [])],
+            sd_cards=[*cast(list[tuple[str | None, SdCard]], self.all_equipment("sd_cards")), *(legacy.items("sd_cards") if legacy else [])],
             roles=[*self.all_roles(), *(legacy.items("roles") if legacy else [])],
         )
 

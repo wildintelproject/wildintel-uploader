@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
-from typing import Callable, Iterator
+from typing import Any, Callable, Iterator
 
 from wildintel_uploader.modules.visits.domain import for_the_catalog as the_visits
 from wildintel_uploader.shared import audit
@@ -72,7 +72,7 @@ def in_order(lines: list[dict]) -> list[dict]:
     return sorted(lines, key=lambda l: last[(l.get("kind"), str(l.get("name", "")).lower())] if l.get("to_today") else str(l.get("day") or ""))
 
 
-def reconstructed_lines(locations: list[dict], equipment: dict[str, list[dict]], visits: list[dict], recorded: set[tuple], at: str) -> list[dict]:
+def reconstructed_lines(locations: list[dict], equipment: dict[str, list[dict]], visits: list[the_visits.Visit], recorded: set[tuple], at: str) -> list[dict]:
     """The lines the visits kept make, oldest first, of the locations, the cameras and the SD cards a research project keeps (those not removed);
     `recorded` are those that have lines written as they happened (no last line brings them to today).
 
@@ -90,34 +90,34 @@ def reconstructed_lines(locations: list[dict], equipment: dict[str, list[dict]],
                 if n:
                     items.setdefault((kind, n), one)
 
-    def found(kind: str, name: str) -> dict | None:
+    def found(kind: str, name: str) -> dict[str, Any] | None:
         return items.get((kind, name.lower() if kind == "locations" else name.strip()))
 
     status: dict[tuple[str, str], str] = {}          # (kind, name) -> the status the visits give it so far
     out: list[dict] = []
-    before: list[dict] = []
+    before: list[the_visits.Visit] = []
     for visit in sorted(audit.alive(visits), key=the_visits.stamp):
         changes = the_visits.entity_changes(visit, before)
         if "Archive" in (visit.get("actions") or []):
             changes.append({"kind": "locations", "name": str(visit["location_id"]), "status": "archived"})
         before.append(visit)
         for change in changes:
-            one = found(change["kind"], change["name"])
-            if one is None:
+            entity = found(change["kind"], change["name"])
+            if entity is None:
                 continue
-            key = (change["kind"], one["name"])
+            key = (str(change["kind"]), str(entity["name"]))
             was = status.get(key)
             # as the visits do it: what is archived is for good, and a site that is planned is not in the app yet
             if was == change["status"] or was == "archived" or (change["kind"] == "locations" and was not in (None, "pending", "ready", "active")):
                 continue
             status[key] = change["status"]
-            out.append({"kind": change["kind"], "name": one["name"], "before": was or UNKNOWN, "after": change["status"], "at": at, "day": visit.get("date") or at[:10],
+            out.append({"kind": change["kind"], "name": entity["name"], "before": was or UNKNOWN, "after": change["status"], "at": at, "day": visit.get("date") or at[:10],
                         "reason": f"The visit {visit.get('session')} to {visit['location_id']}.", "reconstructed": True})
     for (kind, name), worked_out in status.items():
-        one = found(kind, name)
-        now = one.get("status") if one else None
-        if not now or now == worked_out or (kind, name.lower()) in recorded:
+        entity = found(kind, name)
+        now = entity.get("status") if entity else None
+        if entity is None or not now or now == worked_out or (kind, name.lower()) in recorded:
             continue
-        out.append({"kind": kind, "name": name, "before": worked_out, "after": now, "at": at, "day": one.get("status_date") or at[:10],
+        out.append({"kind": kind, "name": name, "before": worked_out, "after": now, "at": at, "day": entity.get("status_date") or at[:10],
                     "reason": f"The status is {now}, the visits say {worked_out}.", "reconstructed": True, "to_today": True})
     return out

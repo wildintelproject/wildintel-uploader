@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from sqlalchemy import JSON, Engine, delete, func
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, col, create_engine, select
 
 from wildintel_uploader.modules.catalog.domain.models import Audit, Camera, Location, ResearchProject, Role, SdCard, Trapper
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository
@@ -118,7 +118,7 @@ class RoleRow(_Audited, table=True):
     role: str = "contributor"
 
 
-_TABLES = [t.__table__ for t in (TrapperRow, ProjectRow, LocationRow, CameraRow, SdCardRow, RoleRow)]  # type: ignore[attr-defined]
+_TABLES = [SQLModel.metadata.tables[t.__tablename__] for t in (TrapperRow, ProjectRow, LocationRow, CameraRow, SdCardRow, RoleRow)]
 _EQUIPMENT = {"cameras": (CameraRow, Camera, ("label", "camera_id", "camera_make", "camera_model", "connectivity", "power_source", "battery_removable",
                                                "in_service", "status", "archive_reason", "status_date", "status_note")),
               "sd_cards": (SdCardRow, SdCard, ("label", "brand", "capacity", "in_service", "status", "archive_reason", "status_date", "status_note"))}
@@ -206,7 +206,7 @@ class SqlCatalogRepository(CatalogRepository):
 
     def read_trappers(self) -> list[Trapper]:
         with Session(self.engine) as session:
-            return [_trapper(r) for r in session.exec(select(TrapperRow).order_by(TrapperRow.row))]
+            return [_trapper(r) for r in session.exec(select(TrapperRow).order_by(col(TrapperRow.row)))]
 
     def write_trappers(self, trappers: Iterable[Trapper]) -> None:
         """All of them at once, in one transaction: what was there is replaced."""
@@ -248,39 +248,41 @@ class SqlCatalogRepository(CatalogRepository):
 
     def read_locations(self, project: str) -> list[Location]:
         with Session(self.engine) as session:
-            return [_location(r) for r in session.exec(select(LocationRow).where(LocationRow.project == project).order_by(LocationRow.row))]
+            return [_location(r) for r in session.exec(select(LocationRow).where(col(LocationRow.project) == project).order_by(col(LocationRow.row)))]
 
     def write_locations(self, project: str, locations: list[Location]) -> None:
         """All the locations of the research project at once, in one transaction: what it had is replaced."""
         with Session(self.engine) as session:
-            session.exec(delete(LocationRow).where(LocationRow.project == project))  # type: ignore[call-overload]
+            session.exec(delete(LocationRow).where(col(LocationRow.project) == project))  # type: ignore[call-overload]
             session.add_all([_location_row(project, loc) for loc in locations])
             session.commit()
 
     # the equipment and the roles
 
     def read_equipment(self, project: str, kind: str) -> list:
+        row_class: Any
         row_class, domain_class, fields = _EQUIPMENT[kind]
         with Session(self.engine) as session:
-            rows = session.exec(select(row_class).where(row_class.project == project).order_by(row_class.row))
+            rows = session.exec(select(row_class).where(col(row_class.project) == project).order_by(col(row_class.row)))
             return [domain_class(**{k: getattr(r, k) for k in fields}, audit=_audit(r), extra=dict(r.extra or {})) for r in rows]
 
     def write_equipment(self, project: str, kind: str, items: list) -> None:
+        row_class: Any
         row_class, _, fields = _EQUIPMENT[kind]
         with Session(self.engine) as session:
-            session.exec(delete(row_class).where(row_class.project == project))  # type: ignore[call-overload]
+            session.exec(delete(row_class).where(col(row_class.project) == project))  # type: ignore[call-overload]
             session.add_all([row_class(project=project, **{k: getattr(i, k) for k in fields}, **{k: getattr(i.audit, k) for k in _AUDIT},
                                        extra=dict(i.extra)) for i in items])
             session.commit()
 
     def read_roles(self, project: str) -> list[Role]:
         with Session(self.engine) as session:
-            rows = session.exec(select(RoleRow).where(RoleRow.project == project).order_by(RoleRow.row))
+            rows = session.exec(select(RoleRow).where(col(RoleRow.project) == project).order_by(col(RoleRow.row)))
             return [Role(trapper=r.trapper, role=r.role, trapper_ref=r.trapper_ref, audit=_audit(r), extra=dict(r.extra or {})) for r in rows]
 
     def write_roles(self, project: str, roles: list[Role]) -> None:
         with Session(self.engine) as session:
-            session.exec(delete(RoleRow).where(RoleRow.project == project))  # type: ignore[call-overload]
+            session.exec(delete(RoleRow).where(col(RoleRow.project) == project))  # type: ignore[call-overload]
             session.add_all([RoleRow(project=project, trapper=None if r.trapper_ref else r.trapper, trapper_ref=r.trapper_ref, role=r.role,
                                      **{k: getattr(r.audit, k) for k in _AUDIT}, extra=dict(r.extra)) for r in roles])
             session.commit()

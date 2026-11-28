@@ -8,7 +8,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from wildintel_uploader.modules.catalog.domain import history
 from wildintel_uploader.modules.catalog.domain.models import Location
@@ -16,6 +16,7 @@ from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, S
 from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record, location_to_record
 from wildintel_uploader.modules.catalog.infrastructure.visits import VisitsAsKept
 from wildintel_uploader.shared import audit, storage
+from wildintel_uploader.modules.visits.domain import for_the_catalog as the_visits
 
 _rebuilding = threading.Lock()
 
@@ -75,7 +76,7 @@ class KeptStatusHistory(StatusHistory):
             locations = [r for r in (location_to_record(loc) for loc in repository.read_locations(project)) if not audit.is_deleted(r)]
             equipment = {kind: [r for r in (equipment_to_record(i, kind) for i in repository.read_equipment(project, kind)) if not audit.is_deleted(r)]
                          for kind in ("cameras", "sd_cards")}
-            made = history.reconstructed_lines(locations, equipment, self._visits().visits(project), recorded, audit.now())
+            made = history.reconstructed_lines(locations, equipment, cast(list[the_visits.Visit], self._visits().visits(project)), recorded, audit.now())
             new = [line for line in made if history.same(line) not in there]
             store.write_records(project, "status_history", history.in_order([*lines, *new]))
             return len(new)

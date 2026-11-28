@@ -11,7 +11,9 @@ from __future__ import annotations
 from wildintel_uploader.modules.visits.domain import references, refusals, rules
 from wildintel_uploader.modules.visits.domain.shapes import Camera, Location, SdCard, Trapper, UnknownVisit, Visit
 
-__all__ = ["stamp", "entity_changes", "told", "unknown_told", "site_status_refusal", "camera_status_refusal", "card_status_refusal"]
+# and the shapes they take and give — a visit, a visit not known, and a location, a camera, an SD card and a person as the visits see them
+__all__ = ["stamp", "entity_changes", "told", "unknown_told", "site_status_refusal", "camera_status_refusal", "card_status_refusal",
+           "Visit", "UnknownVisit", "Location", "Camera", "SdCard", "Trapper"]
 
 
 def stamp(visit: Visit) -> str:

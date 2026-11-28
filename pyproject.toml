@@ -62,6 +62,7 @@ wildintel-trapper-sdk = { path = "../wildintel-trapper-sdk", editable = true }
 files = [
     "src/wildintel_uploader/shared",
     "src/wildintel_uploader/modules/backup",
+    "src/wildintel_uploader/modules/catalog",
     "src/wildintel_uploader/modules/fileinfo",
     "src/wildintel_uploader/modules/postvalidation",
     "src/wildintel_uploader/modules/prevalidation",

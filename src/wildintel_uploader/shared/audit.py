@@ -13,9 +13,13 @@ What a client sends for them is not taken: the dates are those the app has kept.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timezone
+from typing import Any, TypeVar
 
 from wildintel_uploader.shared import ids   # the id is kept with the dates: a record has both, written by the app
+
+R = TypeVar("R", bound=Mapping[str, Any])   # a record: a dict, or a typed dict of a module (a visit…)
 
 AUDIT_FIELDS = ("created_at", "updated_at", "deleted_at")
 
@@ -54,12 +58,12 @@ def stamped(record: dict, before: dict | None, at: str | None = None, keep_given
     return out
 
 
-def is_deleted(record: dict) -> bool:
+def is_deleted(record: Mapping[str, Any]) -> bool:
     """Whether the record was removed (logically): it has a `deleted_at`."""
     return bool(record.get("deleted_at"))
 
 
-def alive(records: list[dict]) -> list[dict]:
+def alive(records: list[R]) -> list[R]:
     """The records that were not removed — what is listed."""
     return [r for r in records if not is_deleted(r)]
 

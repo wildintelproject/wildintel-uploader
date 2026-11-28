@@ -609,9 +609,9 @@ uv run wucli frontend test             # vitest (frontend/)
 uv run wucli frontend lint
 ```
 
-**Types.** The modules listed in `[tool.mypy]` keep to their types, and CI checks it: the shared kernel, and backup, fileinfo, postvalidation,
-prevalidation, preprocessing, reports, sources, timefix and visits — the visits with shapes of their own (a visit, a location, a camera… as
-`TypedDict`s of `domain.shapes`), the record of a deployment as `shared.deployment_record.DeploymentRecord`. Not yet: catalog, deployments,
+**Types.** The modules listed in `[tool.mypy]` keep to their types, and CI checks it: the shared kernel, and backup, catalog, fileinfo,
+postvalidation, prevalidation, preprocessing, reports, sources, timefix and visits — the visits with shapes of their own (a visit, a location, a camera… as
+`TypedDict`s of `domain.shapes`), the record of a deployment as `shared.deployment_record.DeploymentRecord`. Not yet: deployments,
 settings and uploaders. A module joins the list when mypy finds nothing in it.
 
 - **Backend** — `tests/unit/<module>/`, a folder for each module, `app/` for the whole app (the architecture, the routes) and `shared/` for
