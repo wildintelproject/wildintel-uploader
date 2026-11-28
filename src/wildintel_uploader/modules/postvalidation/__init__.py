@@ -1,3 +1,2 @@
-"""The postvalidation (#248, #246): the checks of a deployment — what the wizard knows of it — against wildintel-tools' names, its images (their
-dates, their camera) and the visit it is of (its card, how many photos), each a validator in domain/checks. The settings call it
-POSTVALIDATION; its statistical checks judge the history the deployments keep (modules.deployments, application.statistics)."""
+"""The module postvalidation (#248): the checks of a deployment. What it does, its contract and how it is used — with examples —, what it refuses and how
+it is made: README.md, beside this file."""

@@ -1,2 +1,2 @@
-"""Checking and fixing the dates and times of the images of a folder (#248): their times in the camera's order against the period the visits give,
-a run of them shifted by an offset, or those whose time can't be trusted taken out — every fix written down beside them."""
+"""The module timefix (#248): checking and fixing the dates and times of the images. What it does, its contract and how it is used — with examples —,
+what it refuses and how it is made: README.md, beside this file."""

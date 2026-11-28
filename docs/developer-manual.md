@@ -200,21 +200,24 @@ FastAPI does not see its return annotation. A route never answers with a record 
 turned into an answer in `api_schemas`. An answer passes on a key its schema does not say yet rather than dropping it; the tests of
 `tests/unit/app/test_api_contract.py` keep all this, and the OpenAPI (`/docs`) says what each route answers.
 
-| Module | Does |
-|---|---|
-| `settings` | `settings.toml` and its configs: reading, checking and saving the settings, by sections that each module registers. |
-| `catalog` | The research projects, their locations, cameras, SD cards, the people and their roles, the history of their states — kept as JSON files or in SQLite. |
-| `fileinfo` | What is known of each image while the file is the same — what ExifTool reads, whether it decodes, its hashes —, in memory and in a cache on disk; and `MediaFolder`, the images of a folder. |
-| `prevalidation` | The checks of the images of a folder — each a validator in `domain/checks/`. Settings: `VALIDATION`. |
-| `postvalidation` | The checks of a deployment, the statistical ones too — each a validator in `domain/checks/`. Settings: `POSTVALIDATION`. |
-| `preprocessing` | Dates, names, resizing, hashes and XMP, each a step in `infrastructure/steps/`; preparing in `.staging`, saving and sealing. Settings: `PREPROCESSING`. |
-| `sources` | Where the visits come from: the Epicollect5 API and the CSV downloaded from it, each a source in `infrastructure/sources/`. Settings: `EPICOLLECT5`, `EPICOLLECTCSV`. |
-| `visits` | The visits and their rules, files of visits, the deployments they say and the visit book. Settings: `FIELDLOG`. |
-| `deployments` | A memory card, a folder of images, the collections, importing a deployment, its seal, its photos, repairing it, the statistics of a revision, the sessions of the wizard. |
-| `timefix` | Checking and fixing the dates of the images of a folder. |
-| `uploaders` | TRAPPER: the account, uploading the deployments kept, importing one from the wizard, syncing. Settings: `TRAPPER`, `AGOUTI`. |
-| `backup` | Backups of the settings and of a research project, and restoring them. |
-| `reports` | The reports of what each module did. |
+Each module says in its own `README.md` what it does, its contract and how it is used, with examples; a test keeps every part of each
+contract named there.
+
+| Module | Does | More |
+|---|---|---|
+| `settings` | `settings.toml` and its configs: reading, checking and saving the settings, by sections that each module registers. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/settings/README.md) |
+| `catalog` | The research projects, their locations, cameras, SD cards, the people and their roles, the history of their states — kept as JSON files or in SQLite. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/catalog/README.md) |
+| `fileinfo` | What is known of each image while the file is the same — what ExifTool reads, whether it decodes, its hashes —, in memory and in a cache on disk; and `MediaFolder`, the images of a folder. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/fileinfo/README.md) |
+| `prevalidation` | The checks of the images of a folder — each a validator in `domain/checks/`. Settings: `VALIDATION`. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/prevalidation/README.md) |
+| `postvalidation` | The checks of a deployment, the statistical ones too — each a validator in `domain/checks/`. Settings: `POSTVALIDATION`. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/postvalidation/README.md) |
+| `preprocessing` | Dates, names, resizing, hashes and XMP, each a step in `infrastructure/steps/`; preparing in `.staging`, saving and sealing. Settings: `PREPROCESSING`. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/preprocessing/README.md) |
+| `sources` | Where the visits come from: the Epicollect5 API and the CSV downloaded from it, each a source in `infrastructure/sources/`. Settings: `EPICOLLECT5`, `EPICOLLECTCSV`. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/sources/README.md) |
+| `visits` | The visits and their rules, files of visits, the deployments they say and the visit book. Settings: `FIELDLOG`. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/visits/README.md) |
+| `deployments` | A memory card, a folder of images, the collections, importing a deployment, its seal, its photos, repairing it, the statistics of a revision, the sessions of the wizard. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/deployments/README.md) |
+| `timefix` | Checking and fixing the dates of the images of a folder. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/timefix/README.md) |
+| `uploaders` | TRAPPER: the account, uploading the deployments kept, importing one from the wizard, syncing. Settings: `TRAPPER`, `AGOUTI`. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/uploaders/README.md) |
+| `backup` | Backups of the settings and of a research project, and restoring them. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/backup/README.md) |
+| `reports` | The reports of what each module did. | [README](https://github.com/wildintelproject/wildintel-uploader/blob/development/src/wildintel_uploader/modules/reports/README.md) |
 
 **How they meet.** A module uses another **only through its domain** — its contract —, never its infrastructure. `entrypoints/wiring/` is
 the one place that puts them together — a factory for each context (settings, catalog, files, deployments, visits, uploaders, backup) —:
@@ -255,7 +258,7 @@ and nothing of the app imports what was `core`.
 
 ### The record of a visit
 
-A visit is kept as a **`VisitRecord`**, the Pydantic class in `modules/visits/infrastructure/records.py` that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks **each field on its own** (its type, its range, the values it may take: the status of the camera is one of `visit_rules.CAMERA_STATUSES`, the card and the batteries one of four codes) and two things on the **whole** visit: it does at least one action (only a visit that could not be made — status *Not revised* — has none), and it has a height or a depth, not both.
+A visit is kept as a **`VisitRecord`**, the Pydantic class in `modules/visits/infrastructure/records.py` that validates every visit — the one typed in the form and each row of a file alike: a visit that does not pass it is not kept. It checks **each field on its own** (its type, its range, the values it may take: the status of the camera is one of `visit_rules.CAMERA_STATUSES`, the card and the batteries one of four codes) and then asks the rules a visit keeps to by itself, which are of the domain (`modules/visits/domain/integrity.py`): it does at least one action (only a visit that could not be made — status *Not revised* — has none), a Stolen visit and the status of its camera agree, no SD card is left where the camera is taken away, the photos of a full card are not counted, and it has a height or a depth, not both.
 
 Six fields are not typed, the app fills them in: `id` (a UUID that never changes), `when` (the instant, ISO 8601 in UTC with a `Z`, worked out from the day and the time of the wall clock of the location), `state` (`deployed`, `collected`, `stolen`, `not_visited` or `no_camera`, worked out by `visit_deployments.visit_states` and refreshed whenever a visit is added), `deployment_id` (the deployment the visit closed, once its images are imported) and `created_at` / `updated_at` (written each time the visit is kept, as an ORM does: a visit saved again with nothing changed keeps both). What a visit points to — location, camera, SD card, trappers — is kept by id: see *Storage*.
 

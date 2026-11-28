@@ -1,1 +1,2 @@
-"""Backups (#248): the settings and the data of a research project — its records, its visits, the deployments chosen, with or without their images — kept in a file, read back and restored."""
+"""The module backup (#248): backups of the settings and of a research project. What it does, its contract and how it is used — with examples —, what it
+refuses and how it is made: README.md, beside this file."""
