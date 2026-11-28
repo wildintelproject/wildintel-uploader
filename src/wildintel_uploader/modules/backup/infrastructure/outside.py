@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
-from wildintel_uploader.modules.backup.domain.ports import AppSettings, BackupError
+from wildintel_uploader.modules.backup.domain.ports import AppSettings, BackupError, ProjectRecords
 from wildintel_uploader.modules.catalog.domain.models import UnknownProject
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
 from wildintel_uploader.modules.catalog.domain.records import CatalogRecordStore
@@ -16,7 +16,7 @@ from wildintel_uploader.modules.visits.domain.shapes import Visit
 from wildintel_uploader.shared import storage
 
 
-class RecordsOfTheProject:
+class RecordsOfTheProject(ProjectRecords):
     """The records of the research projects of a collections folder (`root`, asked each time)."""
 
     def __init__(self, root: Callable[[], Path], catalog: Callable[[Path], CatalogService], store: Callable[[Path], CatalogRecordStore],

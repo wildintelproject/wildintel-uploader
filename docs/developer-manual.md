@@ -235,6 +235,11 @@ what is plugged in (`entrypoints.config`), never the plug, which refuses it.
 and `infrastructure/schema.py` — and puts them together (`registry.put_together`), in the order the file has always had. There is no registry
 to fill and nothing is found by looking at the packages: a new module with settings is added to those two lists, and a test fails until it is.
 
+**ABC or Protocol.** A port that classes of the app implement is an `ABC`: the class names it (`class TomlSettingsStore(SettingsStore)`), and
+a method it lacks fails when it is made, not when it is first used. A `Protocol` is only for a narrow view of what was not written for that
+port, met by its shape: a module (`StoredSettings`, which `entrypoints.config` is), a Pydantic model (`DeploymentRecord`), a part of another
+contract (`ImageDates`, of `FileInfoService`). A test fails when a class implements a `Protocol` by name.
+
 **Shape and rules.** The schema of a section (Pydantic, `infrastructure/settings.py`) says the shape of the file — what kind each setting is, its
 description, what an older file is migrated from —, and never a rule: no bound (`ge`, `le`…) and no set of choices (`Literal`). The rules are the
 domain's (`domain/settings.py`, checked when a section is made), and they are checked on every read and every write of a settings file

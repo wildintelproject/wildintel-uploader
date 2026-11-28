@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+
 
 from wildintel_uploader.modules.catalog.domain.models import Location, ResearchProject
 from wildintel_uploader.modules.uploaders.domain.models import Account, Credentials, UploaderError
@@ -330,17 +330,21 @@ class UploadPlaces(ABC):
     def max_zip_bytes(self) -> int: ...
 
 
-class SyncedCatalog(Protocol):
+class SyncedCatalog(ABC):
     """The catalog of the collections folder as a sync reads and adds to it: research projects and their locations, as the catalog has them
     (catalog.domain.models)."""
 
+    @abstractmethod
     def has_project(self, project: str) -> bool: ...
 
+    @abstractmethod
     def add_project(self, project: ResearchProject) -> None: ...
 
+    @abstractmethod
     def location_ids(self, project: str) -> set[str]:
         """The ids of the locations of a research project, in lower case."""
 
+    @abstractmethod
     def add_location(self, project: str, location: Location) -> None: ...
 
 

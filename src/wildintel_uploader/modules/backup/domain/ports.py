@@ -7,7 +7,7 @@ from collections.abc import Callable, Generator, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+
 
 
 class BackupError(Exception):
@@ -52,34 +52,53 @@ class BackupService(ABC):
         """Restores what is chosen of a backup: steps, files, and {"type": "done", "summary"}. BackupError, before anything is touched."""
 
 
-class ProjectRecords(Protocol):
+class ProjectRecords(ABC):
     """What a research project keeps as records — the catalog and the visits through their contracts, and the history of the states —, as the
     records are kept and with the ids of this computer."""
 
+    @abstractmethod
     def checkpoint(self, project: str) -> Callable[[], None]:
         """What is kept of a research project now — its records, history and visits — and the people, and how to put it back exactly as it was."""
 
+    @abstractmethod
     def require_project(self, project: str) -> None:
         """Raises BackupError when the research project is not kept."""
         ...
 
+    @abstractmethod
     def has_project(self, project: str) -> bool: ...
+    @abstractmethod
     def project_record(self, project: str) -> dict | None: ...
+    @abstractmethod
     def put_project_record(self, record: dict) -> None: ...
+    @abstractmethod
     def how_many(self, project: str, kind: str) -> int:
         """How many locations, cameras or SD cards ("locations", "cameras", "sd_cards") a research project keeps — those not removed."""
+    @abstractmethod
     def location_records(self, project: str) -> list[dict]: ...
+    @abstractmethod
     def put_location_records(self, project: str, records: list[dict]) -> None: ...
+    @abstractmethod
     def equipment_records(self, project: str, kind: str) -> list[dict]: ...
+    @abstractmethod
     def put_equipment_records(self, project: str, kind: str, records: list[dict]) -> None: ...
+    @abstractmethod
     def roles(self, project: str, include_deleted: bool = False) -> list[dict]: ...
+    @abstractmethod
     def keep_roles(self, project: str, roles: list[dict]) -> None: ...
+    @abstractmethod
     def trappers(self) -> list[dict]: ...
+    @abstractmethod
     def keep_trappers(self, trappers: list[dict]) -> None: ...
+    @abstractmethod
     def status_history(self, project: str) -> list[dict]: ...
+    @abstractmethod
     def keep_status_history(self, project: str, lines: list[dict]) -> None: ...
+    @abstractmethod
     def visits(self, project: str) -> list[dict]: ...
+    @abstractmethod
     def kept_visits(self, project: str) -> int: ...
+    @abstractmethod
     def replace_visits(self, project: str, visits: list[dict]) -> None: ...
 
 

@@ -319,3 +319,19 @@ def test_the_format_of_a_section_of_the_settings_says_its_shape_not_its_rules():
                    if any(isinstance(m, (Ge, Gt, Le, Lt)) for m in field.metadata) or any(typing.get_origin(k) is typing.Literal for k in kinds(field.annotation)))
     assert not rules, f"Rules in the format of the file — they are the domain's: {rules}"
 
+
+def test_a_port_a_class_of_the_app_implements_is_an_abc_and_a_protocol_is_only_a_narrow_view():
+    """The ports a class of the app implements say so (ABC): it names the port, and a method it lacks fails when it is made, not when it is first
+    used. A Protocol is for a narrow view of what was not written for that port — a module (StoredSettings: entrypoints.config), a Pydantic model
+    (DeploymentRecord), a part of another contract (ImageDates, DeploymentSealer) —, met by its shape (#248)."""
+    protocols = {}
+    for path in [*SRC.glob("modules/*/domain/**/*.py"), *SRC.glob("shared/*.py")]:
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if isinstance(node, ast.ClassDef) and any(ast.unparse(b) == "Protocol" for b in node.bases):
+                protocols[node.name] = path
+    implemented = sorted({f"{base} ({protocols[base].relative_to(SRC)}) by {node.name}"
+                          for path in SRC.rglob("*.py") for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+                          if isinstance(node, ast.ClassDef) and not any(ast.unparse(b) == "Protocol" for b in node.bases)
+                          for base in (ast.unparse(b) for b in node.bases) if base in protocols})
+    assert not implemented, f"Protocols a class implements by name — make them ABCs: {implemented}"
+
