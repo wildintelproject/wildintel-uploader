@@ -260,3 +260,12 @@ def test_the_plain_kernel_of_shared_imports_only_the_standard_library(name: str)
     assert others <= set(sys.stdlib_module_names), f"{path.name} imports {sorted(others - set(sys.stdlib_module_names))}"
     assert {n for n in _imports(path) if n.startswith("wildintel_uploader")} <= SHARED_KERNEL
 
+
+@pytest.mark.parametrize("path", sorted(SRC.glob("modules/catalog/**/*.py")), ids=lambda p: str(p.relative_to(SRC / "modules")))
+def test_the_catalog_takes_of_the_visits_only_what_they_offer_it(path: Path):
+    """The visits need the catalog; the catalog needs a little of the visits — through one door, visits.domain.for_the_catalog, narrow and kept
+    stable, so the rest of the domain of the visits changes without the catalog knowing."""
+    door = "wildintel_uploader.modules.visits.domain.for_the_catalog"
+    taken = {i for i in _imports(path) if i.startswith("wildintel_uploader.modules.visits")} - {door, "wildintel_uploader.modules.visits.domain"}
+    assert not taken, f"{path.name} takes {sorted(taken)} of the visits: only {door}"
+

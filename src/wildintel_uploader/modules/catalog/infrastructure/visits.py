@@ -1,6 +1,6 @@
 """What the catalog needs of the visits: whether a research project has visits, how many a location has and what the visits say against a status
-asked for by hand — read from where the visits are kept, told with the catalog's own records (the visits' rules from their domain: references,
-refusals) —, so that the catalog never needs the module of the visits, which needs the catalog."""
+asked for by hand — read from where the visits are kept, told with the catalog's own records (what the visits offer the catalog:
+visits.domain.for_the_catalog) —, so that the catalog never needs the module of the visits, which needs the catalog."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -8,7 +8,7 @@ from collections.abc import Callable
 from wildintel_uploader.modules.catalog.domain.models import Location
 from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, VisitHistory
 from wildintel_uploader.modules.catalog.infrastructure.mapping import equipment_to_record, location_to_record, trapper_to_record
-from wildintel_uploader.modules.visits.domain import references, refusals
+from wildintel_uploader.modules.visits.domain import for_the_catalog as the_visits
 from wildintel_uploader.shared.storage import ProjectStore
 
 
@@ -22,19 +22,16 @@ class VisitsAsKept:
     def _locations(self, project: str) -> list[dict]:
         return [location_to_record(loc) for loc in self._repository().read_locations(project)]
 
-    def _refs(self, project: str) -> references.Refs:
+    def visits(self, project: str, location_id: str | None = None) -> list[dict]:
         repository = self._repository()
-        return references.Refs(self._locations(project),
+        told = the_visits.told(self._store.read_records(project, "visits"), self._locations(project),
                                [equipment_to_record(i, "cameras") for i in repository.read_equipment(project, "cameras")],
                                [equipment_to_record(i, "sd_cards") for i in repository.read_equipment(project, "sd_cards")],
-                               [trapper_to_record(t) for t in repository.read_trappers()])
-
-    def visits(self, project: str, location_id: str | None = None) -> list[dict]:
-        _, told = references.read_kept(self._store.read_records(project, "visits"), self._refs(project), project)
+                               [trapper_to_record(t) for t in repository.read_trappers()], project)
         return told if location_id is None else [v for v in told if str(v.get("location_id", "")).lower() == location_id.lower()]
 
     def unknown(self, project: str) -> list[dict]:
-        return references.unknown_told(self._store.read_records(project, "unknown_visits"), self._locations(project))
+        return the_visits.unknown_told(self._store.read_records(project, "unknown_visits"), self._locations(project))
 
 
 class StoredVisits(VisitHistory):
@@ -48,9 +45,9 @@ class StoredVisits(VisitHistory):
         return len(self._visits.visits(project, location_id))
 
     def site_status_refusal(self, project: str, locations: list[Location], location: Location, wanted: str) -> str | None:
-        return refusals.site_status_refusal(self._visits.visits(project), self._visits.unknown(project), [location_to_record(loc) for loc in locations],
+        return the_visits.site_status_refusal(self._visits.visits(project), self._visits.unknown(project), [location_to_record(loc) for loc in locations],
                                             location_to_record(location), wanted)
 
     def equipment_status_refusal(self, project: str, kind: str, item, wanted: str) -> str | None:
-        refusal = refusals.camera_status_refusal if kind == "cameras" else refusals.card_status_refusal
+        refusal = the_visits.camera_status_refusal if kind == "cameras" else the_visits.card_status_refusal
         return refusal(equipment_to_record(item, kind), wanted, self._visits.visits(project))

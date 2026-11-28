@@ -15,7 +15,7 @@ import contextlib
 import contextvars
 from typing import Callable, Iterator
 
-from wildintel_uploader.modules.visits.domain import rules as visit_rules
+from wildintel_uploader.modules.visits.domain import for_the_catalog as the_visits
 from wildintel_uploader.shared import audit
 
 KINDS = ("locations", "cameras", "sd_cards")
@@ -96,8 +96,8 @@ def reconstructed_lines(locations: list[dict], equipment: dict[str, list[dict]],
     status: dict[tuple[str, str], str] = {}          # (kind, name) -> the status the visits give it so far
     out: list[dict] = []
     before: list[dict] = []
-    for visit in sorted(audit.alive(visits), key=visit_rules.visit_stamp):
-        changes = visit_rules.entity_changes(visit, before)
+    for visit in sorted(audit.alive(visits), key=the_visits.stamp):
+        changes = the_visits.entity_changes(visit, before)
         if "Archive" in (visit.get("actions") or []):
             changes.append({"kind": "locations", "name": str(visit["location_id"]), "status": "archived"})
         before.append(visit)
