@@ -8,7 +8,13 @@ and kept.
 
 | Contract | What it is | Operations |
 |---|---|---|
-| `VisitsService` |  | `visits`, `unknown`, `kept_count`, `replace_all`, `save`, `update`, `create_revision`, `mark_not_visited`, `import_file`, `export_file`, `epicollect_download`, `file_columns`, `closed`, `link`, `deployments`, `book`, `has_deployment` |
+| `VisitsKept` | The visits kept of a research project, and the ones a revision lacks | `visits`, `unknown`, `kept_count`, `replace_all` |
+| `VisitsByHand` | A visit typed by hand, saved or edited — all or nothing | `save`, `update` |
+| `VisitsRevisions` | The revisions: starting one, and the locations it did not visit | `create_revision`, `mark_not_visited` |
+| `VisitsFiles` | Files of visits: read and kept (all or nothing), written, downloaded from Epicollect5, and the columns one has | `import_file`, `export_file`, `epicollect_download`, `file_columns` |
+| `VisitsAndDeployments` | The deployments the visits say: those closed, to be imported, and the visit each is of | `closed`, `link`, `deployments`, `has_deployment` |
+| `VisitsBook` | The book of the visits of a research project | `book` |
+| `VisitsService` | All of them: what the module offers | — |
 
 ## How it is used
 
@@ -25,7 +31,8 @@ The rules a visit keeps to by itself are `domain/integrity.py`; those it keeps w
 of what it points to and kept by their ids (`domain/references.py`); its shapes are `TypedDict`s (`domain/shapes.py`). The catalog and the
 fixing of times go in through doors of their own (`for_the_catalog.py`, `for_the_timefix.py`).
 
-The web app has `/api/visits/…`.
+Each route asks for the part it uses; the deployments ask only `VisitsAndDeployments` (whether a deployment is of a visit), the backups and the
+fixing of times only `VisitsKept`. The web app has `/api/visits/…`.
 
 ## Its settings
 

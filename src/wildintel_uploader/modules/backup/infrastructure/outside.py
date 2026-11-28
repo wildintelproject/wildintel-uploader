@@ -11,7 +11,7 @@ from wildintel_uploader.modules.catalog.domain.models import UnknownProject
 from wildintel_uploader.modules.catalog.domain.ports import CatalogService
 from wildintel_uploader.modules.catalog.domain.records import CatalogRecordStore
 from wildintel_uploader.modules.settings.domain.ports import StoredSettings
-from wildintel_uploader.modules.visits.domain.ports import VisitsService
+from wildintel_uploader.modules.visits.domain.ports import VisitsKept
 from wildintel_uploader.modules.visits.domain.shapes import Visit
 from wildintel_uploader.shared import storage
 
@@ -20,7 +20,7 @@ class RecordsOfTheProject:
     """The records of the research projects of a collections folder (`root`, asked each time)."""
 
     def __init__(self, root: Callable[[], Path], catalog: Callable[[Path], CatalogService], store: Callable[[Path], CatalogRecordStore],
-                 visits: Callable[[Path], VisitsService]) -> None:
+                 visits: Callable[[Path], VisitsKept]) -> None:
         """`catalog` gives the catalog of a collections folder, through its contract; `store` its records as they are kept, which a backup copies
         and restores as they are."""
         self._root, self._catalog, self._store, self._visits = root, catalog, store, visits

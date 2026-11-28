@@ -7,11 +7,11 @@ from collections.abc import Callable
 
 from wildintel_uploader.modules.timefix.domain.ports import TimeFixError, Tolerance, VisitsOfTheLocation
 from wildintel_uploader.modules.visits.domain.models import VisitsError
-from wildintel_uploader.modules.visits.domain.ports import VisitsService
+from wildintel_uploader.modules.visits.domain.ports import VisitsKept
 
 
 class VisitsThroughTheirContract(VisitsOfTheLocation):
-    def __init__(self, visits: Callable[[], VisitsService]) -> None:
+    def __init__(self, visits: Callable[[], VisitsKept]) -> None:
         self._visits = visits
 
     def visits(self, research_project_id: str, location_id: str) -> list[dict]:

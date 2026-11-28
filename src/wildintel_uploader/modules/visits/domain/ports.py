@@ -18,7 +18,8 @@ from wildintel_uploader.modules.visits.domain.shapes import Camera, ClosedDeploy
 
 # ── in: the contract ──
 
-class VisitsService(ABC):
+class VisitsKept(ABC):
+    """The visits kept of a research project, and the ones a revision lacks."""
 
     @abstractmethod
     def visits(self, project: str, location_id: str | None = None) -> list[Visit]:
@@ -36,6 +37,10 @@ class VisitsService(ABC):
     def replace_all(self, project: str, visits: list[Visit]) -> None:
         """Keeps these visits, as `visits` tells them, as all of the research project's — a backup restored: each keeps its id and its dates."""
 
+
+class VisitsByHand(ABC):
+    """A visit typed by hand, saved or edited — all or nothing."""
+
     @abstractmethod
     def save(self, project: str, visit: Visit) -> SavedVisit:
         """Registers a visit, if it follows the rules: what it does to the locations, the cameras and the SD cards is done, and the folders of the
@@ -45,6 +50,10 @@ class VisitsService(ABC):
     def update(self, project: str, location_id: str, session: str, visit: Visit) -> SavedVisit:
         """Edits a visit kept — its site and its revision are its key."""
 
+
+class VisitsRevisions(ABC):
+    """The revisions: starting one, and the locations it did not visit."""
+
     @abstractmethod
     def create_revision(self, project: str) -> dict:
         """Plans the next revision: {"session", "planned", "previous"}."""
@@ -52,6 +61,10 @@ class VisitsService(ABC):
     @abstractmethod
     def mark_not_visited(self, project: str, session: str) -> dict:
         """Finishes a revision: each location with no visit in it gets one that could not be made. {"session", "marked"}."""
+
+
+class VisitsFiles(ABC):
+    """Files of visits: read and kept (all or nothing), written, downloaded from Epicollect5, and the columns one has."""
 
     @abstractmethod
     def import_file(self, options: ImportOptions) -> dict:
@@ -69,6 +82,10 @@ class VisitsService(ABC):
     def file_columns(self, text: str) -> dict:
         """The columns of a CSV, whether it is the form, a few rows, the fields of a visit and the column that most likely gives each."""
 
+
+class VisitsAndDeployments(ABC):
+    """The deployments the visits say: those closed, to be imported, and the visit each is of."""
+
     @abstractmethod
     def closed(self, project: str) -> list[ClosedDeployment]:
         """The visits that closed a deployment not imported yet, with the visit that started it and its details."""
@@ -82,12 +99,21 @@ class VisitsService(ABC):
         """The deployments the visits say, closed and open, with where they were uploaded."""
 
     @abstractmethod
+    def has_deployment(self, project: str, deployment_id: str) -> bool:
+        """Whether a deployment is of a visit of the research project: linked to one already, or one the visits say."""
+
+
+class VisitsBook(ABC):
+    """The book of the visits of a research project."""
+
+    @abstractmethod
     def book(self, project: str, location_id: str | None = None) -> list[dict]:
         """The visit book: the visits, each with its deployment, and the locations not visited in a session."""
 
-    @abstractmethod
-    def has_deployment(self, project: str, deployment_id: str) -> bool:
-        """Whether a deployment is of a visit of the research project: linked to one already, or one the visits say."""
+
+class VisitsService(VisitsKept, VisitsByHand, VisitsRevisions, VisitsFiles, VisitsAndDeployments, VisitsBook, ABC):
+    """All that the module of the visits offers. Whoever needs only a part asks for that one: VisitsKept, VisitsByHand, VisitsRevisions,
+    VisitsFiles, VisitsAndDeployments or VisitsBook."""
 
 
 # ── out: what the use cases are given ──

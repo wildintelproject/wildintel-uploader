@@ -90,7 +90,7 @@ export interface SequenceIssue {
 }
 
 /** The "Validate folder contents" step's checks — see
- * the registry of modules/prevalidation/infrastructure/validators. Only the results of
+ * the registry of modules/prevalidation/domain/checks. Only the results of
  * whichever were asked for are present. */
 export type ImageCheck = 'corrupted' | 'sequence' | 'structure' | 'camera' | 'exif' | 'duplicates'
 
@@ -178,7 +178,7 @@ export interface CameraMismatch {
 }
 
 /** The postvalidation step's checks — see
- * the registry of modules/postvalidation/infrastructure/validators. */
+ * the registry of modules/postvalidation/domain/checks. */
 export type DeploymentCheck =
   | 'deployment_id' | 'collection_prefix' | 'collection_name' | 'location' | 'time_range' | 'camera'
   | 'image_count' | 'sequence_count' | 'sequence_length' | 'sd_card' | 'photo_count'

@@ -18,9 +18,11 @@ from wildintel_uploader.modules.timefix.infrastructure.corrections import Correc
 from wildintel_uploader.modules.timefix.infrastructure.images import ExifToolShifter, FolderOfImages
 from wildintel_uploader.modules.timefix.infrastructure.outside import ToleranceInUse, VisitsThroughTheirContract
 from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
-from wildintel_uploader.modules.visits.domain.ports import VisitsService
+from wildintel_uploader.modules.visits.domain.ports import (
+    VisitsAndDeployments, VisitsBook, VisitsByHand, VisitsFiles, VisitsKept, VisitsRevisions, VisitsService,
+)
 from wildintel_uploader.modules.visits.infrastructure.adapters import AuditClock, CatalogOfTheVisits, CollectionFolders as VisitCollectionFolders, FieldlogInUse, SavedVisitReports, StoredStateHistory, UploadsOfTheUploaders
-from wildintel_uploader.modules.visits.infrastructure.adapters import StoredVisits as VisitsKept
+from wildintel_uploader.modules.visits.infrastructure.adapters import StoredVisits
 from wildintel_uploader.modules.visits.infrastructure.csv_file import CsvVisitFile
 from wildintel_uploader.modules.visits.infrastructure.kept_visits import KeptVisits
 from wildintel_uploader.entrypoints import wiring as w   # the other factories, asked when called
@@ -37,7 +39,7 @@ def build_visits(collections_dir: Path | None = None, settings: SettingsService 
     root = collections_dir or w.catalog_collections_dir()
     settings = settings or w.build_settings()
     catalog = lambda: w.build_catalog(root, settings)   # noqa: E731 — the catalog of that folder, through its contract
-    return VisitsUseCases(VisitsKept(KeptVisits(root, catalog)), CatalogOfTheVisits(catalog),
+    return VisitsUseCases(StoredVisits(KeptVisits(root, catalog)), CatalogOfTheVisits(catalog),
                           deployments=VisitCollectionFolders(root, lambda: w.build_deployments().layout()), file=CsvVisitFile(),
                           sources=build_sources(settings), uploads=UploadsOfTheUploaders(w.build_uploaders(root)), reports=SavedVisitReports(w.build_reports()), history=StoredStateHistory(),
                           settings=FieldlogInUse(w.section("FIELDLOG")), clock=AuditClock())
@@ -70,6 +72,14 @@ class VisitsProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def service(self, settings: SettingsService) -> VisitsService:
         return build_visits(w.catalog_collections_dir(), settings)
+
+    # each part of the contract, for whoever needs only that one: the same service of the request
+    kept = alias(source=VisitsService, provides=VisitsKept)
+    by_hand = alias(source=VisitsService, provides=VisitsByHand)
+    revisions = alias(source=VisitsService, provides=VisitsRevisions)
+    files = alias(source=VisitsService, provides=VisitsFiles)
+    and_deployments = alias(source=VisitsService, provides=VisitsAndDeployments)
+    book = alias(source=VisitsService, provides=VisitsBook)
 
 
 class TimeFixProvider(Provider):

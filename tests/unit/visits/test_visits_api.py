@@ -1157,6 +1157,79 @@ def test_a_visit_by_hand_whose_save_fails_half_way_is_not_kept_nor_what_it_chang
     assert again.status_code == 200, again.text
 
 
+STEPS_AFTER_THE_FIRST_WRITE = ["_archive_locations", "_apply_to_entities", "_refresh_states", "_make_folders"]
+
+
+def _kept_records(root: Path) -> dict:
+    return {p.name: p.read_text(encoding="utf-8") for p in sorted((root / "DONA").glob("*.json"))}
+
+
+def _fails(self, *args, **kwargs):
+    raise OSError("The disk is full.")
+
+
+@pytest.mark.parametrize("step", STEPS_AFTER_THE_FIRST_WRITE)
+def test_a_visit_saved_by_hand_that_fails_at_any_step_leaves_everything_as_it_was(tmp_path: Path, monkeypatch, step: str):
+    """#248: all or nothing, whatever the step that fails — what the visit changes in the catalog, its states, its folders."""
+    from tests.support import built
+    from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
+
+    first = {**VISIT, "session": "R0012", "date": "2026-01-10", "actions": ["Installation"], "num_photos": None, "sd": "A13"}
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "12", "camera_id": "12", "camera_model": None, "research_project": "DONA"}])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "A13", "research_project": "DONA"}])
+        before = _kept_records(tmp_path)
+        monkeypatch.setattr(VisitsUseCases, step, _fails)
+        failed = _client(raise_server_exceptions=False).post("/api/visits/save", json={"research_project_id": "DONA", "visit": first})
+        after = _kept_records(tmp_path)
+
+    assert failed.status_code >= 400 and after == before
+
+
+@pytest.mark.parametrize("step", ["_refresh_states", "_make_folders"])
+def test_a_visit_edited_that_fails_at_any_step_is_left_as_it_was(tmp_path: Path, monkeypatch, step: str):
+    from tests.support import built
+    from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
+
+    first = {**VISIT, "session": "R0012", "date": "2026-01-10", "actions": ["Installation"], "num_photos": None, "sd": "A13"}
+    with _in(tmp_path):
+        _project(archived=(2, 3))
+        built.records(tmp_path).keep_equipment("DONA", "cameras", [{"label": "12", "camera_id": "12", "camera_model": None, "research_project": "DONA"}])
+        built.records(tmp_path).keep_equipment("DONA", "sd_cards", [{"label": "A13", "research_project": "DONA"}])
+        assert _save(first).status_code == 200
+        before = _kept_records(tmp_path)
+        monkeypatch.setattr(VisitsUseCases, step, _fails)
+        failed = _client(raise_server_exceptions=False).post("/api/visits/update", json={
+            "research_project_id": "DONA", "location_id": "DONA_01", "session": "R0012", "visit": {**first, "comments": "changed"}})
+        after = _kept_records(tmp_path)
+
+    assert failed.status_code >= 400 and after == before
+
+
+@pytest.mark.parametrize("step", STEPS_AFTER_THE_FIRST_WRITE)
+def test_a_file_of_visits_that_fails_at_any_step_leaves_everything_as_it_was(tmp_path: Path, monkeypatch, step: str):
+    """The location, the camera and the SD card the file creates, the visits, their states and folders: none of it is kept."""
+    from wildintel_uploader.modules.visits.application.use_cases import VisitsUseCases
+
+    csv = ("site,what,day,hour,lat,lon,llat,llon,tz,cam,model,sd,brand\n"
+           "DONA_09,Installation,2026-09-14,11:40,37.1002,-6.4001,37.1,-6.4,Europe/Madrid,CAM9,Browning,S9,SanDisk\n")
+    body = {"research_project_id": "DONA", "csv": csv, "format": "mapped", "create": {"locations": True, "cameras": True, "sd_cards": True},
+            "defaults": {"daylight_saving": "yes"}, "save": True,
+            "mapping": {"location_id": "site", "actions": "what", "date": "day", "time": "hour", "latitude": "lat", "longitude": "lon",
+                        "location_latitude": "llat", "location_longitude": "llon", "timezone": "tz", "camera_id": "cam", "camera_model": "model", "sd": "sd",
+                        "sd_brand": "brand"}}
+    with _in(tmp_path):
+        _client().post("/api/deployment-import/research-projects/save", json=PROJECT)
+        before = _kept_records(tmp_path)
+        monkeypatch.setattr(VisitsUseCases, step, _fails)
+        failed = _client(raise_server_exceptions=False).post("/api/visits/import-csv", json=body)
+        after = {k: v for k, v in _kept_records(tmp_path).items() if v.strip() != "[]" or k in before}
+        locations = _client().post("/api/deployment-import/locations/list", json={"research_project_id": "DONA"}).json()["results"]
+
+    assert failed.status_code >= 400 and after == before and locations == []
+
+
 def test_a_visit_by_hand_is_after_the_last_one_to_its_site_and_after_the_revisions_before_its_own(tmp_path: Path):
     with _in(tmp_path):
         _project(archived=(2, 3))

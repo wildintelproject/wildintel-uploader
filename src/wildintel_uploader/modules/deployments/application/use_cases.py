@@ -16,11 +16,11 @@ from wildintel_uploader.modules.deployments.domain.ports import (
 from wildintel_uploader.modules.preprocessing.domain.models import PreprocessingError, PreprocessOptions
 from wildintel_uploader.modules.preprocessing.domain.ports import PreprocessingService
 from wildintel_uploader.modules.visits.domain.models import VisitsError
-from wildintel_uploader.modules.visits.domain.ports import VisitsService
+from wildintel_uploader.modules.visits.domain.ports import VisitsAndDeployments
 
 
 class DeploymentsUseCases(DeploymentsService):
-    def __init__(self, cards: CardCopying, folders: Folders, revisions: RevisionStatistics, photos: Photos, *, visits: VisitsService,
+    def __init__(self, cards: CardCopying, folders: Folders, revisions: RevisionStatistics, photos: Photos, *, visits: VisitsAndDeployments,
                  preprocessing: PreprocessingService, repairs: Repairing, statistics: RevisionStatistics, sessions: ImportSessions,
                  layout: CollectionLayout, imports: Importing) -> None:
         """Every port is needed — one left out is a mistake of the wiring, told when the module is put together, not when it is first used."""
