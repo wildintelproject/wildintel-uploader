@@ -14,3 +14,8 @@ def test_what_a_visit_does_is_what_the_rules_of_the_visits_say():
     visit = {"location_id": "DONA_01", "session": "R0002", "date": "2026-08-05", "time": "09:00:00", "when": "2026-08-05T09:00:00Z",
              "actions": ["Desinstallation"], "camera_id": "C1"}
     assert for_the_catalog.entity_changes(visit, before) == rules.entity_changes(visit, before) != []
+
+
+def test_the_example_of_the_door_of_the_timefix_holds():
+    from wildintel_uploader.modules.visits.domain import for_the_timefix
+    assert doctest.testmod(for_the_timefix).failed == 0

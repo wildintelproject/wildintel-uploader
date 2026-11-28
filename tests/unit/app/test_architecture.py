@@ -277,3 +277,35 @@ def test_every_secret_of_the_file_is_left_out_of_what_it_prints():
     for section, name in schema.secret_fields():
         assert schema.Settings.model_fields[section].annotation.model_fields[name].repr is False, f"{section}.{name} is printed"
 
+
+# What a module offers the others besides its contract (ports), its errors and kinds (models, shapes, errors), its settings and a door made for one
+# of them (for_the_<that module>) — each said, with why: anything else of a module is its own, and may change without the others knowing.
+PUBLISHED = {
+    "settings": {"rules": "the rules every section of the settings follows", "registry": "how a module says the sections it owns"},
+    "fileinfo": {"folder": "MediaFolder, what the checks of the images are run over"},
+    "deployments": {"naming": "how deployments and collections are named and ordered", "seal": "the name of the seal a deployment keeps"},
+    "postvalidation": {"statistics": "the metrics of a deployment's times, which the statistics of a revision compare"},
+    "catalog": {"records": "the records as they are kept, for a backup only (see its own test)",
+                "history": "because: why a change of status is written down, said by who makes it"},
+}
+CONTRACT = {"ports", "models", "shapes", "errors", "settings"}
+
+
+def _what_of_another(path: Path) -> set[tuple[str, str]]:
+    """(module, part of its domain) of each module other than its own that a file takes something of."""
+    own = path.relative_to(SRC / "modules").parts[0]
+    found = set()
+    for name in _imports(path):
+        parts = name.split(".")
+        if len(parts) >= 5 and parts[:2] == ["wildintel_uploader", "modules"] and parts[2] != own and parts[3] == "domain":
+            found.add((parts[2], parts[4]))
+    return found
+
+
+@pytest.mark.parametrize("path", sorted(SRC.glob("modules/*/**/*.py")), ids=lambda p: str(p.relative_to(SRC / "modules")))
+def test_a_module_takes_of_another_only_what_that_one_offers(path: Path):
+    own = path.relative_to(SRC / "modules").parts[0]
+    wrong = sorted(f"{module}.domain.{part}" for module, part in _what_of_another(path)
+                   if part not in CONTRACT and part != f"for_the_{own}" and part not in PUBLISHED.get(module, {}))
+    assert not wrong, f"{path.name} takes {wrong}: what a module has of its own is not offered — ask it a door (for_the_{own}) or publish it"
+

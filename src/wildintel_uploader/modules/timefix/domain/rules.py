@@ -11,7 +11,7 @@ import datetime as dt
 from typing import cast
 
 from wildintel_uploader.modules.timefix.domain.ports import Period, TimeFixError
-from wildintel_uploader.modules.visits.domain.rules import closes_collection
+from wildintel_uploader.modules.visits.domain.for_the_timefix import closes_collection
 from wildintel_uploader.modules.visits.domain.shapes import Visit
 
 
