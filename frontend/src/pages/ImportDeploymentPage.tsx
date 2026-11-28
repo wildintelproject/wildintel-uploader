@@ -3203,7 +3203,7 @@ export default function ImportDeploymentPage({ resumeSession, closedVisit, resea
 
           {stepKey === 'dates' && (
           <WizardStep n={3} title="More details" status={originStatus(3)} canEdit onEdit={() => { setOriginOpen(3); setOriginReached(3) }}
-                      description="Everything here is optional. Fill in what you know now — you can add the rest later."
+                      description="Everything here is optional. Fill in what you know now — you can add the rest later. These are the fields the deployment is published with: the deployments.csv of its Camtrap DP package, what TRAPPER keeps of it. What is left empty is empty there."
                       summary={moreFilled > 0 ? `${moreFilled} ${moreFilled === 1 ? 'detail' : 'details'} filled in` : 'Nothing filled in yet'}>
             {pickable && (
               <PrefilledDetails

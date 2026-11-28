@@ -732,7 +732,7 @@ No `<COLLECTION>_FileTimestampLog.csv` is written. One that an older folder alre
 
 ![Stage 3 — More details](img/screenshots/step-details.png)
 
-After the dates, WildINTEL Uploader shows deployment details in the [Camtrap DP](https://camtrap-dp.tdwg.org) format — the same fields as TRAPPER's own deployment form. Most fields are optional and can be completed later in TRAPPER. WildINTEL Uploader pre-fills available details from the field visit where the SD card was left (and from the previous deployment, when available); you can review or edit them. Each section is a card that says how many of its fields are filled in; open it, with the chevron at its left, to fill it in.
+After the dates, WildINTEL Uploader shows deployment details in the [Camtrap DP](https://camtrap-dp.tdwg.org) format — the same fields as TRAPPER's own deployment form. They are what the deployment is **published** with: the `deployments.csv` of its Camtrap DP package, what TRAPPER keeps of it — so what is left empty here is empty there (#209). Most fields are optional and can be completed later in TRAPPER. WildINTEL Uploader pre-fills available details from the field visit where the SD card was left (and from the previous deployment, when available); you can review or edit them. Each section is a card that says how many of its fields are filled in; open it, with the chevron at its left, to fill it in.
 
 | Section | Fields |
 |---|---|

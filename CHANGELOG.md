@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Fixed
+- **What the details of a deployment are for** (#209): the step *More details* of *Import deployments* (and of a session of the wizard) says that
+  its fields are the ones the deployment is published with — the `deployments.csv` of its Camtrap DP package, what TRAPPER keeps —, so what is
+  left empty is empty there; the user manual says it too.
 - **Two visits to a location in one revision** (#207, its second point): the message says the location, the revision and the days of both visits,
   and how to join them in one row — the date and what is left from the last one, what is found from the first one, and the observations of both;
   the user manual says the rule and why. Both visits are real (a camera replaced a few days after the revision), but a revision stays one visit
