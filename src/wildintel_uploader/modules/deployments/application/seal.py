@@ -7,7 +7,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.catalog.domain.ports import CatalogEquipment
 from wildintel_uploader.modules.deployments.application.statistics import RevisionStatistics
 from wildintel_uploader.modules.deployments.domain import seal as rules
 from wildintel_uploader.modules.deployments.domain.ports import CheckSettings, Deployment, SealedFolder
@@ -20,7 +20,7 @@ class Sealing:
     """`catalog_of` and `revisions_of` give the catalog and the statistics of a collections folder: the one the deployment is kept in."""
 
     def __init__(self, folder: SealedFolder, settings: CheckSettings, *, prevalidation: Callable[[], PrevalidationService],
-                 postvalidation: Callable[[], PostvalidationService], catalog_of: Callable[[Path], CatalogService],
+                 postvalidation: Callable[[], PostvalidationService], catalog_of: Callable[[Path], CatalogEquipment],
                  revisions_of: Callable[[Path], RevisionStatistics], now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
         self._folder, self._settings, self._prevalidation, self._postvalidation = folder, settings, prevalidation, postvalidation
         self._catalog_of, self._revisions_of, self._now = catalog_of, revisions_of, now

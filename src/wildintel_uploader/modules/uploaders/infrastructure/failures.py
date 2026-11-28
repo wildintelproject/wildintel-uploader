@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from wildintel_uploader.modules.catalog.domain.models import CatalogError, UnknownProject
-from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.catalog.domain.ports import CatalogProjects
 from wildintel_uploader.modules.uploaders.domain import uploads as rules
 from wildintel_uploader.shared import storage
 
@@ -15,7 +15,7 @@ from wildintel_uploader.shared import storage
 class UploadFailures:
     """Those of the research projects of a collections folder (`root`, asked each time); the catalog of it says which research projects are kept."""
 
-    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogService]) -> None:
+    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogProjects]) -> None:
         self._root, self._catalog_of = root, catalog_of
 
     def of(self, research_project_id: str) -> list[dict]:

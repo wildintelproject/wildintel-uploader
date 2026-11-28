@@ -38,9 +38,8 @@ class AddedTrappers:
 
 # ── in: what the module offers ──
 
-class CatalogService(Protocol):
-    """The catalog. Besides the errors each method names, a record or a list that cannot be is the domain's CatalogError."""
-
+class CatalogPeople(Protocol):
+    """The people of the field work — kept for all the research projects."""
 
     def trappers(self, include_deleted: bool = False) -> list[Trapper]:
         """The people. A removed one is not listed unless asked for: the visits it made still say who it was."""
@@ -51,7 +50,10 @@ class CatalogService(Protocol):
     def add_trappers(self, trappers: list[Trapper]) -> AddedTrappers:
         """Adds the people that are not kept yet — active —; one with the username of another, whatever its case, is left out."""
 
-    # the research projects
+
+class CatalogProjects(Protocol):
+    """The research projects, and whether one is there to be worked on."""
+
     def projects(self, include_deleted: bool = False) -> list[ResearchProject]:
         """The research projects — a removed one only when asked for: everything it had is still kept."""
 
@@ -69,7 +71,14 @@ class CatalogService(Protocol):
         """Removes a research project — logically: it is no longer listed, and everything it has is kept. UnknownProject, ProjectArchived,
         ProjectNotEmpty (its folder holds collections, deployments or images)."""
 
-    # the locations of a research project
+    def require_project(self, acronym: str, *, active: bool = False, modifiable: bool = False) -> ResearchProject:
+        """The research project, if it is kept — and, asked for, being worked on (ProjectNotActive: what new visits need) or one that can be modified
+        (ProjectArchived). UnknownProject."""
+
+
+class CatalogLocations(Protocol):
+    """The locations of a research project, and the wall clock of each."""
+
     def locations(self, project: str, include_deleted: bool = False) -> list[Location]:
         """Its locations — a removed one only when asked for: the visits made there still need its timezone."""
 
@@ -93,7 +102,10 @@ class CatalogService(Protocol):
         """The timezone and the summer-time setting kept for a location — only the ones it has; empty when it is not kept: what every deployment
         there is read in."""
 
-    # the equipment of a research project: its cameras and its SD cards
+
+class CatalogEquipment(Protocol):
+    """The cameras and the SD cards of a research project."""
+
     def equipment(self, project: str, kind: str, include_deleted: bool = False) -> list[Equipment]:
         """Its cameras (`kind` "cameras") or its SD cards ("sd_cards") — a removed one only when asked for."""
 
@@ -120,7 +132,10 @@ class CatalogService(Protocol):
         broken ("archived": for another reason). False when the research project keeps none called that, or it is archived already: that is for
         good."""
 
-    # the roles of the people in a research project
+
+class CatalogRoles(Protocol):
+    """The roles of the people in a research project."""
+
     def roles(self, project: str, include_deleted: bool = False) -> list[Role]:
         """Its roles, each told with the name its trapper has now."""
 
@@ -135,18 +150,28 @@ class CatalogService(Protocol):
         """Keeps these as all its roles — each by the id of its trapper, found by name; one whose trapper is not among the people keeps the name it was
         given. UnknownProject, ProjectArchived."""
 
-    # the history of the states of the locations, the cameras and the SD cards
+
+class CatalogHistory(Protocol):
+    """The history of the states of the locations, the cameras and the SD cards."""
+
     def status_history(self, project: str, kind: str | None = None, name: str | None = None) -> list[dict[str, Any]]:
         """The lines of the history of a research project — of one kind and of one of them, when they are said —, the oldest first. UnknownProject."""
 
     def rebuild_status_history(self, project: str) -> int:
         """Adds the lines the visits say and the history lacks — nothing of it is changed nor removed —, and says how many. UnknownProject."""
 
+
+class CatalogCheckpoints(Protocol):
+    """What a save of many writes puts back when one of them fails."""
+
     def checkpoint(self, project: str) -> Callable[[], None]:
         """What the catalog keeps of a research project now — its locations, cameras, SD cards, roles and history, and the people —, and how to put
         it back: a save made of several writes (an import of visits) calls it when one of them fails, so nothing is left half written."""
 
-    # the field work of the settings page
+
+class CatalogFieldwork(Protocol):
+    """The field work of the settings page — the people, and the cameras, SD cards and roles of each research project."""
+
     def fieldwork(self) -> Fieldwork:
         """The people, and the cameras, SD cards and roles of every research project — and those versions before left in the settings, which are
         taken to their research project first when it is kept."""
@@ -157,9 +182,12 @@ class CatalogService(Protocol):
         its own — an archived camera or card can't be changed (EquipmentArchived), each belongs to a research project (EquipmentWithoutProject), and
         their status changes only as the visits allow. Gives what is of a research project that is not kept — to stay in the settings."""
 
-    def require_project(self, acronym: str, *, active: bool = False, modifiable: bool = False) -> ResearchProject:
-        """The research project, if it is kept — and, asked for, being worked on (ProjectNotActive: what new visits need) or one that can be modified
-        (ProjectArchived). UnknownProject."""
+
+class CatalogService(CatalogPeople, CatalogProjects, CatalogLocations, CatalogEquipment, CatalogRoles, CatalogHistory, CatalogCheckpoints,
+                     CatalogFieldwork, Protocol):
+    """The catalog — all it offers. Besides the errors each method names, a record or a list that cannot be is the domain's CatalogError. Whoever
+    needs only a part asks for that one: CatalogPeople, CatalogProjects, CatalogLocations, CatalogEquipment, CatalogRoles, CatalogHistory,
+    CatalogCheckpoints or CatalogFieldwork."""
 
 
 # ── out: what the module needs ──

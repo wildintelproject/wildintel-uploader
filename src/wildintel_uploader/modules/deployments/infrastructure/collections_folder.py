@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from wildintel_uploader.modules.catalog.domain.models import CatalogError
-from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.catalog.domain.ports import CatalogLocations
 from wildintel_uploader.modules.deployments.domain.models import DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.ports import DeploymentSealer, Folders
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
@@ -17,7 +17,7 @@ from wildintel_uploader.shared.storage import StorageError
 class CollectionFolders(Folders):
     """`root` says the collections folder, asked each time; `catalog_of` the catalog of a collections folder."""
 
-    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogService], sealing: Callable[[], DeploymentSealer]) -> None:
+    def __init__(self, root: Callable[[], Path], catalog_of: Callable[[Path], CatalogLocations], sealing: Callable[[], DeploymentSealer]) -> None:
         self._root, self._catalog_of, self._sealing = root, catalog_of, sealing
 
     def root(self) -> Path:

@@ -9,7 +9,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from wildintel_uploader.modules.catalog.domain.ports import CatalogService
+from wildintel_uploader.modules.catalog.domain.ports import CatalogLocations
 from wildintel_uploader.modules.deployments.application.seal import Sealing
 from wildintel_uploader.modules.deployments.domain import repair as rules
 from wildintel_uploader.modules.deployments.domain.models import DeploymentMissing, DeploymentsFailed
@@ -30,7 +30,7 @@ def _step(name: str, status: str, message: str) -> dict:
 class Repairing:
     """`catalog` is the catalog of the collections folder the folder is of; `defaults` the settings of the preprocessing, as a dict."""
 
-    def __init__(self, folder: RepairFolder, sealing: Callable[[], Sealing], reports: Callable[[], ReportsService], catalog: Callable[[], CatalogService],
+    def __init__(self, folder: RepairFolder, sealing: Callable[[], Sealing], reports: Callable[[], ReportsService], catalog: Callable[[], CatalogLocations],
                  defaults: Callable[[], dict], now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
         self._folder, self._sealing, self._reports, self._catalog, self._defaults, self._now = folder, sealing, reports, catalog, defaults, now
 

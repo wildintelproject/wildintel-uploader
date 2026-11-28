@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from dishka import Provider, Scope, provide
+from dishka import Provider, Scope, alias, provide
 
 from wildintel_uploader.modules.catalog.application.use_cases import CatalogUseCases
-from wildintel_uploader.modules.catalog.domain.ports import CatalogRepository, CatalogService, Clock
+from wildintel_uploader.modules.catalog.domain.ports import (
+    CatalogCheckpoints, CatalogEquipment, CatalogFieldwork, CatalogHistory, CatalogLocations, CatalogPeople, CatalogProjects, CatalogRepository, CatalogRoles, CatalogService, Clock,
+)
 from wildintel_uploader.modules.catalog.domain.records import CatalogRecords, CatalogRecordStore
 from wildintel_uploader.modules.catalog.infrastructure.clock import SystemClock
 from wildintel_uploader.modules.catalog.infrastructure.json_repository import StoreCatalogRepository
@@ -72,3 +74,13 @@ class CatalogProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def service(self, settings: SettingsService, clock: Clock) -> CatalogService:
         return build_catalog(w.catalog_collections_dir(), settings, clock)
+
+    # each part of the contract, for whoever needs only that one: the same catalog of the request
+    people = alias(source=CatalogService, provides=CatalogPeople)
+    projects = alias(source=CatalogService, provides=CatalogProjects)
+    locations = alias(source=CatalogService, provides=CatalogLocations)
+    equipment = alias(source=CatalogService, provides=CatalogEquipment)
+    roles = alias(source=CatalogService, provides=CatalogRoles)
+    history = alias(source=CatalogService, provides=CatalogHistory)
+    checkpoints = alias(source=CatalogService, provides=CatalogCheckpoints)
+    fieldwork = alias(source=CatalogService, provides=CatalogFieldwork)
