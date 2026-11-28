@@ -1583,7 +1583,7 @@ export default function ImportSessionPage({ onUpload, onOpenSettings, settingsOp
           </WizardStep>
 
           <WizardStep n={visitsMode ? 2 : 3} title="More details" status={originStatus(3)} canEdit onEdit={() => { setOriginOpen(3); setOriginReached(3) }}
-                      description="Everything here is optional. For each deployment, fill in what you know of its camera and its site now — you can add the rest later."
+                      description="Everything here is optional. For each deployment, fill in what you know of its camera and its site now — you can add the rest later. These are the fields each deployment is published with: the deployments.csv of its Camtrap DP package, what TRAPPER keeps of it."
                       summary={`${chosen.filter((d) => moreFilledOf(d.name) > 0).length} of ${plural(chosen.length, 'deployment', 'deployments')} with details`}>
           {(() => {
             const withDetails = chosen.filter((d) => moreFilledOf(d.name) > 0).length
