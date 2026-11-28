@@ -90,7 +90,7 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
     took_location_coordinates: list[int] = []  # the rows that have no coordinates of the visit: they take those of their location
     from_location = options.get("coordinates_from_location", True)   # a row with none takes its location's — unless the import is asked not to
     # A revision is one visit to each site: the session and the site of a visit already kept are taken, whatever its camera or its actions
-    in_file: dict[tuple[str, str], int] = {}
+    in_file: dict[tuple[str, str], tuple[int, str]] = {}   # the row of each visit of the file, and its day
     kept_by_site = visit_rules.History(kept)   # the visits kept, found by site: a row asks of its site's, not of all of them
     same_visit = {(str(v.get("session") or "").upper(), str(v.get("location_id", "")).lower()) for v in kept if v.get("session")}
 
@@ -203,10 +203,12 @@ def parse_visits(file: VisitFile, text: str, locations: list[Location], kept: li
             continue
         # the key of a visit is its site and its revision: a site is visited once in a revision, whatever the day
         if "session" in row and again in in_file:
-            problem(n, f"{record['location_id']} has already a visit in {record['session']} in row {in_file[again]} of the file: a revision is one visit to each location.", "visit_repeated")
+            first_row, first_date = in_file[again]
+            problem(n, f"Rows {first_row} and {n} of the file: " + visit_rules.repeated_visit(record["location_id"], record["session"],
+                                                                                      [first_date, str(record.get("date") or "")]), "visit_repeated")
             continue
         if "session" in row:
-            in_file[again] = n
+            in_file[again] = (n, str(record.get("date") or ""))
         already.add((record["location_id"].lower(), record["date"], record["time"]))
         parsed.append((n, record | {"_given": "session" in row}))
         if made["locations"]:

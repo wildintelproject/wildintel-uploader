@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Upcoming release
 
 ### Fixed
+- **Two visits to a location in one revision** (#207, its second point): the message says the location, the revision and the days of both visits,
+  and how to join them in one row — the date and what is left from the last one, what is found from the first one, and the observations of both;
+  the user manual says the rule and why. Both visits are real (a camera replaced a few days after the revision), but a revision stays one visit
+  to each location.
 - **Cameras to create** (#236): the summary of a file of visits showed each camera to create by its `camera_id`, which since #236 is its serial number: a camera with none was *null*, and one with it showed the number instead of its name. They are now shown by their label, as the file calls them.
 - **Location, not site** (#204, its fifth point): the screens that said *site* for a location now say *location*, as the glossary does: the field *Location* of a Custom CSV, *A visit needs the location, the actions and when*, *2 locations of the file are not ones of DONA yet* (was *2 sites are not a location of DONA*), the line *Locations* and the column *Location* of the visits added, the comparison of the statistics, the map (*Show all the locations*), the summary of the locations in the initial setup and the examples of a location's name. The section **Site** of the details of a deployment — feature type, habitat, bait use, timestamp issues — keeps its name, as Camtrap DP gives it, and so do the answers of the field form (*New site*, *Inactive site*, *Site removal*).
 - **Header of the file** (#204, its seventh point): in *Register the visits*, the columns of the file read for the visits are green and the others grey, and a legend now says so (*Read for the visits*, *Not read*), also on each column. The two columns of the coordinates of the WildINTEL form (`lat_…`, `long_…`) were grey although they are read: they are now among the columns used (`form_columns`).

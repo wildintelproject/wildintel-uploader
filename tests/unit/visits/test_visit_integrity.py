@@ -35,3 +35,13 @@ def test_a_visit_that_keeps_the_rules_has_no_problem(visit):
 def test_the_camera_of_a_stolen_visit_is_stolen():
     assert integrity.camera_status_of({"actions": ["Stolen"]}) == "Stolen"
     assert integrity.camera_status_of({"actions": ["Revision"], "camera_status": "Working"}) == "Working"
+
+
+def test_the_example_of_how_two_visits_of_a_revision_are_joined_holds():
+    import doctest
+
+    from wildintel_uploader.modules.visits.domain import rules
+    finder, runner = doctest.DocTestFinder(), doctest.DocTestRunner()
+    for test in finder.find(rules.repeated_visit, "repeated_visit", globs={"repeated_visit": rules.repeated_visit}):
+        runner.run(test)
+    assert runner.failures == 0 and runner.tries == 1
