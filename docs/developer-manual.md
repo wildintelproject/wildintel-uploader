@@ -225,6 +225,11 @@ what is plugged in (`entrypoints.config`), never the plug, which refuses it.
 and `infrastructure/schema.py` — and puts them together (`registry.put_together`), in the order the file has always had. There is no registry
 to fill and nothing is found by looking at the packages: a new module with settings is added to those two lists, and a test fails until it is.
 
+**Shape and rules.** The schema of a section (Pydantic, `infrastructure/settings.py`) says the shape of the file — what kind each setting is, its
+description, what an older file is migrated from —, and never a rule: no bound (`ge`, `le`…) and no set of choices (`Literal`). The rules are the
+domain's (`domain/settings.py`, checked when a section is made), and they are checked on every read and every write of a settings file
+(`toml_files`: what breaks one is not read — `UnreadableSettings` — nor written — `SettingsError`). A test keeps the rules out of the schema.
+
 **Secrets.** A password or a key of the settings is declared with `secret()` and kept as a `Secret` (`settings/domain/rules.py`): it prints,
 logs and formats as `********`, and what it holds is asked for with `reveal()` — or `revealed(x)`, none when there is none — only where it is used
 (a request to Epicollect5, the login to TRAPPER). It is written as it is only to `settings.toml`; in the file's model (Pydantic) it is a text

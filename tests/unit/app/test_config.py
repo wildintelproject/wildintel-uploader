@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from wildintel_uploader.entrypoints import config
+from wildintel_uploader.modules.settings.domain.models import DataSettings, GeneralSettings
+from wildintel_uploader.modules.settings.domain.rules import SettingsError
 
 
 def test_settings_roundtrip(tmp_path: Path):
@@ -44,10 +46,11 @@ def test_each_check_starts_at_a_level_that_can_be_set_as_it_started_before():
 
     post = config.PostvalidationSettings(defaults={"time_range": "warn"})
     assert post.defaults["time_range"] == "warn" and post.defaults["sd_card"] == "required"
-    with pytest.raises(ValueError):
-        config.ValidationSettings(defaults={"nothing": "warn"})
-    with pytest.raises(ValueError):
-        config.ValidationSettings(defaults={"structure": "sometimes"})
+    from wildintel_uploader.modules.prevalidation.domain.settings import ValidationSettings
+    with pytest.raises(SettingsError, match="not checks"):
+        ValidationSettings(defaults={"nothing": "warn"})
+    with pytest.raises(SettingsError, match="required, warn, skip"):
+        ValidationSettings(defaults={"structure": "sometimes"})
 
 
 def test_the_validation_checks_are_all_shown_by_default():
@@ -78,10 +81,11 @@ def test_the_statistical_checks_default_to_a_minute_gap_two_revisions_the_median
     {"similarity_method": "mode"}, {"image_count_tolerance": -1}, {"sequence_count_tolerance": 1001}, {"sequence_length_tolerance": -0.1},
 ])
 def test_the_statistical_parameters_have_limits(bad):
-    from pydantic import ValidationError
+    """The rules are the domain's (#248): the format of the file says the shape, the settings of the domain what may be."""
+    from wildintel_uploader.modules.postvalidation.domain.settings import PostvalidationSettings
 
-    with pytest.raises(ValidationError):
-        config.PostvalidationSettings(**bad)
+    with pytest.raises(SettingsError):
+        PostvalidationSettings(**bad)
 
 
 def test_the_postvalidation_tolerance_defaults_to_the_one_hour_of_wildintel_tools():
@@ -114,22 +118,19 @@ def test_a_settings_file_from_before_these_sections_still_loads_with_every_check
 
 
 def test_the_tolerance_cannot_be_negative():
-    import pytest
-    from pydantic import ValidationError
+    from wildintel_uploader.modules.postvalidation.domain.settings import PostvalidationSettings
 
-    with pytest.raises(ValidationError):
-        config.PostvalidationSettings(tolerance_hours=-1)
+    with pytest.raises(SettingsError):
+        PostvalidationSettings(tolerance_hours=-1)
 
 
 def test_the_data_folder_has_to_be_an_absolute_path_and_blank_means_the_default():
-    import pytest
-    from pydantic import ValidationError
 
     assert config.DataSettings(dir="  ").dir is None
     assert config.DataSettings(dir="/data/images").dir == "/data/images"
     assert config.DataSettings(dir="~/images").dir == "~/images"
-    with pytest.raises(ValidationError, match="absolute"):
-        config.DataSettings(dir="relative/images")
+    with pytest.raises(SettingsError, match="absolute"):
+        DataSettings(dir="relative/images")
 
 
 def test_a_data_folder_starting_with_a_tilde_means_the_users_home():
@@ -203,10 +204,10 @@ import pytest
 
 @pytest.mark.parametrize("bad", [{"resize_width": 99}, {"resize_width": 20001}])
 def test_the_resize_width_has_limits(bad):
-    from pydantic import ValidationError
+    from wildintel_uploader.modules.preprocessing.domain.settings import PreprocessingSettings
 
-    with pytest.raises(ValidationError):
-        config.PreprocessingSettings(**bad)
+    with pytest.raises(SettingsError):
+        PreprocessingSettings(**bad)
 
 
 # ── how many images are worked on at once ────────────────────────────────────
@@ -222,8 +223,24 @@ def test_the_workers_default_to_the_cpus_up_to_four(monkeypatch):
 
 @pytest.mark.parametrize("bad", [0, -1, 65])
 def test_the_workers_must_be_between_one_and_sixty_four(bad):
-    with pytest.raises(ValueError):
-        config.GeneralSettings(workers=bad)
+    with pytest.raises(SettingsError):
+        GeneralSettings(workers=bad)
+
+
+def test_a_settings_file_that_breaks_a_rule_of_the_domain_is_neither_read_nor_written(tmp_path: Path):
+    """#248: the schema of the file does not repeat the rules; they are checked by the domain on every read and every write of a settings file."""
+    from wildintel_uploader.modules.settings.domain.ports import UnreadableSettings
+    from wildintel_uploader.modules.settings.infrastructure.toml_files import read_settings_file, write_settings_file
+
+    file = tmp_path / "settings.toml"
+    file.write_text("[GENERAL]\nworkers = 0\n", encoding="utf-8")
+    with pytest.raises(UnreadableSettings, match="GENERAL.workers"):
+        read_settings_file(file)
+    bad = config.Settings()
+    bad.GENERAL.workers = 0
+    with pytest.raises(SettingsError, match="GENERAL.workers"):
+        write_settings_file(bad, tmp_path / "other.toml")
+    assert not (tmp_path / "other.toml").exists()
 
 
 def test_the_workers_are_saved_with_the_settings(tmp_path: Path):

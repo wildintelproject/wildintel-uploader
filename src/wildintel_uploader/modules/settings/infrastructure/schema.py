@@ -10,7 +10,6 @@ import os
 import re
 import unicodedata
 from datetime import date
-from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationInfo, create_model, field_validator, model_validator
@@ -18,7 +17,6 @@ from pydantic import BaseModel, Field, ValidationInfo, create_model, field_valid
 from wildintel_uploader.modules.settings.domain import models as _domain
 from wildintel_uploader.shared import ids
 
-LogLevel = Literal["ERROR", "WARNING", "INFO", "DEBUG"]
 
 MAX_WORKERS = 64
 
@@ -29,12 +27,12 @@ def default_workers() -> int:
 
 
 class GeneralSettings(BaseModel):
-    log_level: LogLevel = Field(
+    log_level: str = Field(
         default="INFO",
         description="How much the app logs, to the console and its log file. (GENERAL.log_level)",
     )
     workers: int = Field(
-        default_factory=default_workers, ge=1, le=MAX_WORKERS,
+        default_factory=default_workers,
         description="How many images are validated or preprocessed at once — up to the CPUs of the machine pays off. (GENERAL.workers)",
     )
     default_research_project: Optional[str] = Field(
@@ -77,7 +75,7 @@ class DataSettings(BaseModel):
         default=None,
         description="A folder of its own for the packages made to upload to TRAPPER, instead of the \"packages\" folder inside DATA.dir: <folder>/<research project id>/<collection>. (DATA.packages_dir)",
     )
-    catalog_storage: Literal["json", "sqlite"] = Field(
+    catalog_storage: str = Field(
         default="json",
         description="Where the catalog is kept — the research projects, the people, their equipment —: \"json\" (files in the collections folder) or \"sqlite\" (a database, see DATA.catalog_database). Change it with `catalog migrate`, which takes what is kept along. (DATA.catalog_storage)",
     )
@@ -88,12 +86,9 @@ class DataSettings(BaseModel):
 
     @field_validator("dir", "collections_dir", "reports_dir", "packages_dir", "catalog_database")
     @classmethod
-    def _absolute(cls, value: Optional[str]) -> Optional[str]:
-        if value is None or not value.strip():
-            return None
-        if not Path(value.strip()).expanduser().is_absolute():
-            raise ValueError("must be an absolute path (or start with ~)")
-        return value.strip()
+    def _blank_is_none(cls, value: Optional[str]) -> Optional[str]:
+        # that each is an absolute path is the domain's to say (models.DataSettings)
+        return (value or "").strip() or None
 
 
 def username_from(name: str, taken: set[str] | None = None) -> str:

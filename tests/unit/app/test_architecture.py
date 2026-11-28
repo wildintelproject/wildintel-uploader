@@ -309,3 +309,21 @@ def test_a_module_takes_of_another_only_what_that_one_offers(path: Path):
                    if part not in CONTRACT and part != f"for_the_{own}" and part not in PUBLISHED.get(module, {}))
     assert not wrong, f"{path.name} takes {wrong}: what a module has of its own is not offered — ask it a door (for_the_{own}) or publish it"
 
+
+def test_the_format_of_a_section_of_the_settings_says_its_shape_not_its_rules():
+    """A bound (ge, le…) or a set of choices (Literal) of a setting is a rule, and the rules are the domain's (#248): the schema of a section says
+    only what kind each setting is — the domain checks the rest on every read and every write of a settings file. The field work versions before
+    kept in the settings (FIELDWORK) is read as it was, and is not a section of settings."""
+    import typing
+
+    from annotated_types import Ge, Gt, Le, Lt
+
+    from wildintel_uploader.modules.settings.infrastructure import schema
+
+    def kinds(kind) -> list:
+        return [kind, *(k for arg in typing.get_args(kind) for k in kinds(arg))]
+    rules = sorted(f"{section}.{name}" for section, info in schema.Settings.model_fields.items() if section != "FIELDWORK"
+                   for name, field in info.annotation.model_fields.items()
+                   if any(isinstance(m, (Ge, Gt, Le, Lt)) for m in field.metadata) or any(typing.get_origin(k) is typing.Literal for k in kinds(field.annotation)))
+    assert not rules, f"Rules in the format of the file — they are the domain's: {rules}"
+

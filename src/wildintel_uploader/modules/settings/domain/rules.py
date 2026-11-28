@@ -120,7 +120,8 @@ def check_levels(setting: str, given: Mapping[str, str], checks: tuple[str, ...]
 
 
 def check_defaults(value: object, checks: tuple[str, ...], start: Mapping[str, str]) -> dict[str, str]:
-    """The same, as the format of the file reads it — a name that is not a check refused, the level left to the schema."""
+    """The same, as the format of the file reads it: the defaults of the checks not given — a name that is not a check refused; whether each level
+    is one is the domain's to say (check_levels)."""
     given = dict(value or {}) if isinstance(value, dict) else {}
     unknown = sorted(set(given) - set(checks))
     if unknown:

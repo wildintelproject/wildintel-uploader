@@ -11,6 +11,7 @@ from pathlib import Path
 from dynaconf import Dynaconf, loaders
 from pydantic import ValidationError
 
+from wildintel_uploader.modules.settings.domain.rules import SettingsError
 from wildintel_uploader.modules.settings.domain.ports import BadConfigName, ConfigInfo, SettingsStore, UnknownConfig, UnreadableSettings
 from wildintel_uploader.modules.settings.domain import models
 from wildintel_uploader.modules.settings.infrastructure.file_cache import CachedReading
@@ -33,7 +34,11 @@ def _read_file(config_file: Path) -> Settings:
     Raises UnreadableSettings — of the domain, not of Dynaconf, the TOML parser or Pydantic — if the file is not TOML or not settings."""
     try:
         dynaconf_settings = Dynaconf(settings_files=[str(config_file)], envvar_prefix=ENV_PREFIX)
-        return Settings.model_validate(dynaconf_settings.to_dict(), context={"migrate": True})
+        settings = Settings.model_validate(dynaconf_settings.to_dict(), context={"migrate": True})
+        to_domain(settings)   # the rules are the domain's: the schema says the shape of the file, the settings of the domain what may be
+        return settings
+    except SettingsError as exc:
+        raise UnreadableSettings(str(config_file), str(exc)) from exc
     except ValidationError as exc:
         first = exc.errors()[0]
         where = ".".join(str(p) for p in first.get("loc", ()))
@@ -55,7 +60,8 @@ def read_settings_file(config_file: Path) -> Settings:
 
 def write_settings_file(settings: Settings, config_file: Path) -> None:
     """Writes the settings to a file of their own and puts it in place at once: two saves at the same time (or a read in the middle of one) never
-    leave a half-written settings file, which the app could not read again."""
+    leave a half-written settings file, which the app could not read again. Nothing the domain refuses is written (SettingsError)."""
+    to_domain(settings)
     config_file.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=config_file.parent, prefix=f".{config_file.name}.", suffix=".tmp")
     os.close(fd)

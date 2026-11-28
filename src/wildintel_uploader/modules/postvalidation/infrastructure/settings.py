@@ -1,12 +1,11 @@
 """The section POSTVALIDATION of settings.toml as Pydantic reads and writes it — registered with the module of the settings."""
 from __future__ import annotations
 
-from typing import Literal, cast
 
 from pydantic import BaseModel, Field, field_validator
 
 from wildintel_uploader.modules.postvalidation.domain.settings import DEPLOYMENT_CHECK_DEFAULTS, DEPLOYMENT_CHECKS
-from wildintel_uploader.modules.settings.domain.rules import CheckLevel, check_defaults
+from wildintel_uploader.modules.settings.domain.rules import check_defaults
 
 
 class PostvalidationSettings(BaseModel):
@@ -25,8 +24,8 @@ class PostvalidationSettings(BaseModel):
     sequence_length: bool = Field(default=True, description="The length of the sequences is like the previous revisions'. (POSTVALIDATION.sequence_length)")
     sd_card: bool = Field(default=True, description="The SD card is the one the visit left in the camera. (POSTVALIDATION.sd_card)")
     photo_count: bool = Field(default=True, description="The folder has the number of images the visit counted on the card. (POSTVALIDATION.photo_count)")
-    defaults: dict[str, CheckLevel] = Field(
-        default_factory=lambda: cast(dict[str, CheckLevel], dict(DEPLOYMENT_CHECK_DEFAULTS)),
+    defaults: dict[str, str] = Field(
+        default_factory=lambda: dict(DEPLOYMENT_CHECK_DEFAULTS),
         description="How each check starts in an import, when it is on: required (it has to pass), warn or skip (offered unticked). (POSTVALIDATION.defaults)",
     )
 
@@ -35,22 +34,22 @@ class PostvalidationSettings(BaseModel):
     def _defaults(cls, value):
         return check_defaults(value, DEPLOYMENT_CHECKS, DEPLOYMENT_CHECK_DEFAULTS)
     sequence_gap_seconds: float = Field(
-        default=60.0, gt=0, le=86400,
+        default=60.0,
         description="What a sequence is: a new one starts when the gap to the previous image is at least this many seconds. (POSTVALIDATION.sequence_gap_seconds)",
     )
     min_revisions: int = Field(
-        default=2, ge=1, le=50,
+        default=2,
         description="How many previous revisions of the location the statistical checks need to have to judge — with fewer they are skipped. (POSTVALIDATION.min_revisions)",
     )
-    similarity_method: Literal["median", "mean", "last", "range"] = Field(
+    similarity_method: str = Field(
         default="median",
         description="What this revision is compared to: the median or mean of the previous ones, the last one, or the range they span. (POSTVALIDATION.similarity_method)",
     )
-    image_count_tolerance: float = Field(default=50.0, ge=0, le=1000, description="What is similar for the number of images, in percent. (POSTVALIDATION.image_count_tolerance)")
-    sequence_count_tolerance: float = Field(default=50.0, ge=0, le=1000, description="What is similar for the number of sequences, in percent. (POSTVALIDATION.sequence_count_tolerance)")
-    sequence_length_tolerance: float = Field(default=50.0, ge=0, le=1000, description="What is similar for the length of the sequences, in percent. (POSTVALIDATION.sequence_length_tolerance)")
+    image_count_tolerance: float = Field(default=50.0, description="What is similar for the number of images, in percent. (POSTVALIDATION.image_count_tolerance)")
+    sequence_count_tolerance: float = Field(default=50.0, description="What is similar for the number of sequences, in percent. (POSTVALIDATION.sequence_count_tolerance)")
+    sequence_length_tolerance: float = Field(default=50.0, description="What is similar for the length of the sequences, in percent. (POSTVALIDATION.sequence_length_tolerance)")
     tolerance_hours: float = Field(
-        default=1.0, ge=0, le=8760,
+        default=1.0,
         description="Hours of leeway around the deployment's start and end when checking the image dates — the default of the tolerance the wizard asks for. (POSTVALIDATION.tolerance_hours)",
     )
 

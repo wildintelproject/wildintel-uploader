@@ -15,7 +15,7 @@ class TrapperSettings(BaseModel):
         default=None, description="TRAPPER password. (TRAPPER.user_password)", json_schema_extra={"secret": True}, repr=False,
     )
     max_zip_mb: int = Field(
-        default=500, ge=1, le=5000,
+        default=500,
         description="The images of each deployment are uploaded in packages of at most this many megabytes. (TRAPPER.max_zip_mb)",
     )
 
