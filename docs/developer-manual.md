@@ -225,6 +225,11 @@ what is plugged in (`entrypoints.config`), never the plug, which refuses it.
 and `infrastructure/schema.py` — and puts them together (`registry.put_together`), in the order the file has always had. There is no registry
 to fill and nothing is found by looking at the packages: a new module with settings is added to those two lists, and a test fails until it is.
 
+**Secrets.** A password or a key of the settings is declared with `secret()` and kept as a `Secret` (`settings/domain/rules.py`): it prints,
+logs and formats as `********`, and what it holds is asked for with `reveal()` — or `revealed(x)`, none when there is none — only where it is used
+(a request to Epicollect5, the login to TRAPPER). It is written as it is only to `settings.toml`; in the file's model (Pydantic) it is a text
+marked `json_schema_extra={"secret": True}, repr=False`, which a test checks of every secret.
+
 **Checks and steps as classes** (#246). A check of the images is a class of `prevalidation/infrastructure/validators/` with its `key`, `label`
 and `description`, run over a `MediaFolder` that asks what is known of the files once, whatever check asks; the registry in the package's
 `__init__.py` gives their order. The same for the checks of a deployment and the steps of the preprocessing.

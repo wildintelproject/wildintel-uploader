@@ -269,3 +269,11 @@ def test_the_catalog_takes_of_the_visits_only_what_they_offer_it(path: Path):
     taken = {i for i in _imports(path) if i.startswith("wildintel_uploader.modules.visits")} - {door, "wildintel_uploader.modules.visits.domain"}
     assert not taken, f"{path.name} takes {sorted(taken)} of the visits: only {door}"
 
+
+def test_every_secret_of_the_file_is_left_out_of_what_it_prints():
+    """A secret of settings.toml (marked {"secret": True}) is never in the repr of its section: a log of the settings does not show it (#248)."""
+    from wildintel_uploader.modules.settings.infrastructure import schema
+
+    for section, name in schema.secret_fields():
+        assert schema.Settings.model_fields[section].annotation.model_fields[name].repr is False, f"{section}.{name} is printed"
+

@@ -8,13 +8,14 @@ import io
 from wildintel_uploader.modules.sources.domain.models import VISIT_COLUMNS, VISIT_QUESTIONS, SourceError, Unreachable, label_key, parse_project, visit_row
 from wildintel_uploader.modules.sources.domain.ports import Epicollect5, VisitRows, VisitSource
 from wildintel_uploader.modules.sources.domain.settings import Epicollect5Settings
+from wildintel_uploader.modules.settings.domain.rules import revealed
 
 
 def project_form(epicollect: Epicollect5, settings: Epicollect5Settings) -> dict:
     """The inputs of the project of the settings."""
     if not settings.project_slug:
         raise SourceError("There is no Epicollect5 project saved yet — set its slug in Settings › Epicollect5.")
-    return parse_project(epicollect.project(settings.project_slug, settings.client_id, settings.client_secret))
+    return parse_project(epicollect.project(settings.project_slug, settings.client_id, revealed(settings.client_secret)))
 
 
 class EpicollectApi(VisitSource):
@@ -29,7 +30,7 @@ class EpicollectApi(VisitSource):
         if missing:
             raise SourceError(f"The form of the project does not have the questions of a visit: {', '.join(missing)}.")
         try:
-            entries = epicollect.entries(settings.project_slug or "", settings.client_id, settings.client_secret)
+            entries = epicollect.entries(settings.project_slug or "", settings.client_id, revealed(settings.client_secret))
         except Unreachable as exc:
             raise SourceError(f"Could not read the entries from Epicollect5: {exc.detail}") from exc
         out = io.StringIO()

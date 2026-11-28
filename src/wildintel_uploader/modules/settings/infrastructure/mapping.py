@@ -9,6 +9,7 @@ from dataclasses import asdict, fields
 
 from wildintel_uploader.modules.settings.domain import models
 from wildintel_uploader.modules.settings.infrastructure import schema
+from wildintel_uploader.modules.settings.domain.rules import Secret
 
 # Each section of the domain and the class it is made with.
 _KINDS = {f.name: f.default_factory for f in fields(models.Settings)}  # type: ignore[misc]
@@ -37,6 +38,8 @@ def _plain(value):
         return [_plain(v) for v in value]
     if isinstance(value, dict):
         return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, Secret):   # the file keeps what it holds: it is written there, and only there
+        return value.reveal()
     return value
 
 

@@ -12,7 +12,7 @@ class TrapperSettings(BaseModel):
     base_url: Optional[str] = Field(default=None, description="TRAPPER server URL. (TRAPPER.base_url)")
     user_name: Optional[str] = Field(default=None, description="TRAPPER username (its email — the import form only accepts that). (TRAPPER.user_name)")
     user_password: Optional[str] = Field(
-        default=None, description="TRAPPER password. (TRAPPER.user_password)", json_schema_extra={"secret": True},
+        default=None, description="TRAPPER password. (TRAPPER.user_password)", json_schema_extra={"secret": True}, repr=False,
     )
     max_zip_mb: int = Field(
         default=500, ge=1, le=5000,
@@ -26,7 +26,7 @@ class AgoutiSettings(BaseModel):
     enabled: bool = Field(default=False, description="Whether Agouti is used as a place to upload deployments to. (AGOUTI.enabled)")
     base_url: Optional[str] = Field(default=None, description="The address of Agouti's API (https://api.agouti.eu). (AGOUTI.base_url)")
     api_key: Optional[str] = Field(
-        default=None, description="The API key Agouti's support gives, sent as X-API-KEY. (AGOUTI.api_key)", json_schema_extra={"secret": True},
+        default=None, description="The API key Agouti's support gives, sent as X-API-KEY. (AGOUTI.api_key)", json_schema_extra={"secret": True}, repr=False,
     )
     project_id: Optional[str] = Field(default=None, description="The id of the Agouti project the deployments are uploaded to. (AGOUTI.project_id)")
 

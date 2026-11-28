@@ -5,6 +5,7 @@ from __future__ import annotations
 from wildintel_uploader.modules.sources.domain.models import SourceError, entry_fields, parse_project, unmapped_notes
 from wildintel_uploader.modules.sources.domain.ports import Epicollect5, SourceSettings, SourcesService, VisitRows, VisitSource
 from wildintel_uploader.modules.sources.domain.settings import Epicollect5Settings
+from wildintel_uploader.modules.settings.domain.rules import revealed
 
 
 class SourcesUseCases(SourcesService):
@@ -30,7 +31,7 @@ class SourcesUseCases(SourcesService):
         cfg = self._epicollect5(settings)
         if not cfg.project_slug:
             raise SourceError("There is no Epicollect5 project saved yet — set its slug in Settings › Epicollect5.")
-        return parse_project(self._epicollect.project(cfg.project_slug, cfg.client_id, cfg.client_secret))
+        return parse_project(self._epicollect.project(cfg.project_slug, cfg.client_id, revealed(cfg.client_secret)))
 
     def test_connection(self, slug: str | None, client_id: str | None, client_secret: str | None, settings: Epicollect5Settings | None = None) -> dict:
         saved = self._epicollect5(settings)
@@ -38,7 +39,7 @@ class SourcesUseCases(SourcesService):
         if not slug:
             raise SourceError("Type the project's slug first.")
         if client_secret is None and client_id and client_id == saved.client_id:
-            client_secret = saved.client_secret   # the settings page leaves it blank to keep it
+            client_secret = revealed(saved.client_secret)   # the settings page leaves it blank to keep it
         if client_id and not client_secret:
             raise SourceError("A client id needs its secret too.")
         parsed = parse_project(self._epicollect.project(slug, client_id, client_secret))
@@ -61,8 +62,8 @@ class SourcesUseCases(SourcesService):
         if "location_id" not in mapping:
             raise SourceError("The location id is not mapped yet — relate it to an input of the form in Settings › Epicollect5 › Mapping.")
         found: dict[str, list[dict]] = {w: [] for w in (loc.strip().lower() for loc in location_ids) if w}
-        entries = self._epicollect.entries(cfg.project_slug, cfg.client_id, cfg.client_secret)
-        inputs = parse_project(self._epicollect.project(cfg.project_slug, cfg.client_id, cfg.client_secret))["inputs"] if cfg.unmapped_to_comments else []
+        entries = self._epicollect.entries(cfg.project_slug, cfg.client_id, revealed(cfg.client_secret))
+        inputs = parse_project(self._epicollect.project(cfg.project_slug, cfg.client_id, revealed(cfg.client_secret)))["inputs"] if cfg.unmapped_to_comments else []
         for entry in entries:
             fields = entry_fields(entry, mapping)
             location = (fields.get("location_id") or "").lower()

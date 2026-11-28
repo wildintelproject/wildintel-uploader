@@ -19,6 +19,7 @@ from wildintel_uploader.modules.settings.domain.ports import (
     ActivityLog, ConfigInfo, Folders, GeneralView, Machine, NoLogFile, NoSettingsFile, Places, RecordStorage, SectionView, SettingsService, SettingsStore,
     ShownSetting, SystemInfo, UnknownSetting,
 )
+from wildintel_uploader.modules.settings.domain.rules import Secret
 
 # The sections that are settings, as settings.toml names them, and their attribute in the domain: what the file still holds of the field work is not one.
 _SECTIONS = {section: name for name, section in Settings.SECTIONS.items() if name != "legacy_fieldwork"}
@@ -44,7 +45,7 @@ def _parsed(key: str, kind: Any, text: str | None) -> Any:
             return kind(text)
         except ValueError:
             raise SettingsError(key, f"must be {'a whole number' if kind is int else 'a number'}") from None
-    if kind is str:
+    if kind in (str, Secret):   # a secret is typed as a text: the setting keeps it as a Secret
         return text
     raise SettingsError(key, "is a list or a table: change it on the settings page, or in settings.toml")
 
@@ -70,7 +71,7 @@ def _given(key: str, kind: Any, value: Any) -> Any:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise SettingsError(key, "must be a number")
         return float(value)
-    if kind is str:
+    if kind in (str, Secret):
         if not isinstance(value, str):
             raise SettingsError(key, "must be a text")
         return value

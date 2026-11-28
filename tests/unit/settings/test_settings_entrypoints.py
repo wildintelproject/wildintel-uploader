@@ -218,7 +218,7 @@ def test_each_section_is_shown_with_its_secrets_out_of_sight_and_saved_by_the_sa
     saved = service.save_section("TRAPPER", {"base_url": "  ", "user_name": "ana@example.org", "user_password": "", "max_zip_mb": 300})
     kept = store.load().trapper
     assert (kept.base_url, kept.user_name, kept.max_zip_mb) == (None, "ana@example.org", 300)   # blank is none
-    assert kept.user_password == "s3cret" and saved.secrets == {"user_password": True}           # a secret left blank keeps the saved one
+    assert kept.user_password.reveal() == "s3cret" and saved.secrets == {"user_password": True}           # a secret left blank keeps the saved one
     service.save_section("VALIDATION", {"camera_levels": [["Make", "Model"]], "exif_fields": ["ISO", "iso"], "defaults": {"camera": "required"}})
     assert store.load().validation.camera_levels == (("Make", "Model"),) and store.load().validation.exif_fields == ("ISO",)
     assert service.save_section("EPICOLLECT5", {"mapping": {"location_id": "1_site"}}).values["mapping"] == {"location_id": "1_site"}
@@ -253,7 +253,7 @@ def test_saving_all_the_settings_keeps_the_secrets_follows_the_data_folder_and_p
 
     saved = service.save_settings(page)
 
-    assert saved.agouti.api_key == "k1" and store.load().agouti.api_key == "k1"
+    assert saved.agouti.api_key.reveal() == "k1" and store.load().agouti.api_key.reveal() == "k1"
     assert saved.data.reports_dir == str(tmp_path / "new" / "my-reports")       # it was inside the old data folder
     assert storage.used[-1] == "sqlite" and log.applied[-1] == "ERROR"
     with pytest.raises(SettingsError) as refused:

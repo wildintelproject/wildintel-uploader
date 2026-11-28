@@ -91,7 +91,7 @@ def test_the_file_goes_to_the_domain_and_back_as_it_was():
 
     settings = to_domain(kept)
 
-    assert settings.general.workers == 3 and settings.trapper.user_password == "s3cret" and settings.data.packages_dir == "/mnt/packages"
+    assert settings.general.workers == 3 and settings.trapper.user_password.reveal() == "s3cret" and settings.data.packages_dir == "/mnt/packages"
     assert settings.validation.camera_levels == (("Make", "Model"),) and settings.postvalidation.defaults["camera"] == "skip"
     assert settings.legacy_fieldwork.cameras[0]["camera_make"] == "RECONYX"   # what is still to be moved to the research projects, as it was
     assert to_schema(settings) == kept
@@ -166,3 +166,28 @@ def test_a_settings_file_that_cannot_be_read_is_told_as_an_error_of_the_domain(t
     with pytest.raises(UnreadableSettings) as caught:
         store.load()
     assert type(caught.value) is UnreadableSettings and caught.value.path == str(file)
+
+
+def test_a_secret_is_never_printed_and_is_written_to_the_file_as_it_is(tmp_path: Path):
+    """#248: the settings print, log and format a secret as ******** — the password is said only when asked for, and written only to the file."""
+    import logging
+
+    from wildintel_uploader.modules.settings.domain.rules import Secret
+
+    settings = replace(domain.Settings(), trapper=uploaders_settings.TrapperSettings(user_name="ana@example.org", user_password="s3cret"))
+    shown = [repr(settings), str(settings), repr(settings.trapper), f"{settings.trapper.user_password}", str(settings.trapper.user_password)]
+    record = logging.LogRecord("t", logging.INFO, __file__, 1, "%s", (settings.trapper,), None)
+
+    assert all("s3cret" not in text for text in [*shown, record.getMessage()])
+    assert settings.trapper.user_password == Secret("s3cret") and settings.trapper.user_password.reveal() == "s3cret"
+    assert to_schema(settings).TRAPPER.user_password == "s3cret"                       # the file keeps it
+    assert "s3cret" not in repr(to_schema(settings)) and "s3cret" not in repr(to_schema(settings).TRAPPER)   # and the file's model does not print it
+    assert uploaders_settings.TrapperSettings(user_password="").user_password is None                       # blank is none
+
+
+def test_the_example_of_a_secret_holds():
+    import doctest
+
+    from wildintel_uploader.modules.settings.domain import rules
+    assert doctest.testmod(rules).failed == 0
+
