@@ -15,7 +15,7 @@ from wildintel_uploader.modules.deployments.domain.naming import DEPLOYMENT_META
 from wildintel_uploader.modules.deployments.domain.ports import RevisionFolders, StatisticsSettings
 from wildintel_uploader.modules.deployments.domain.statistics import KeptDeployment
 from wildintel_uploader.modules.fileinfo.domain.models import IMAGE_EXTENSIONS
-from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
+from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoMetadata
 from wildintel_uploader.modules.postvalidation.domain.statistics import DeploymentTimes
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ def _deployments(collection: Path) -> list[KeptDeployment]:
 class RevisionFoldersOnDisk(RevisionFolders):
     """`root` says the collections folder, asked each time; `files` what is known of the images."""
 
-    def __init__(self, root: Callable[[], Path], files: Callable[[], FileInfoService]) -> None:
+    def __init__(self, root: Callable[[], Path], files: Callable[[], FileInfoMetadata]) -> None:
         self._root, self._files = root, files
 
     def _collections(self, project: str) -> list[Path]:

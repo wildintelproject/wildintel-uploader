@@ -13,8 +13,8 @@ from wildintel_uploader.modules.fileinfo.domain.models import CameraInfo, Stamp,
 
 # ── in: the contract ──
 
-class FileInfoService(ABC):
-    """What is known of the files of images, each thing found out once while the file is the same."""
+class FileInfoMetadata(ABC):
+    """What the metadata of the images say — read with ExifTool, or Pillow when there is none —, and reading them ahead."""
 
     @abstractmethod
     def tags(self, paths: list[Path], tags: list[str]) -> dict[Path, dict[str, str | None]]:
@@ -34,6 +34,19 @@ class FileInfoService(ABC):
         """All that ExifTool read of each image — what every reading asks for and `tags` —, by the names in lowercase; None without ExifTool."""
 
     @abstractmethod
+    def prefetch(self, paths: list[Path], tags: list[str] | None = None) -> threading.Thread | None:
+        """Starts reading in the background what the steps of an import will ask of these images, so that it is there when they ask (#140): one
+        that asks meanwhile waits for it rather than reading them again. Nothing without ExifTool, or with no images. Gives the thread."""
+
+    @abstractmethod
+    def exiftool_path(self) -> str | None:
+        """Where ExifTool is — None when there is none."""
+
+
+class FileInfoContent(ABC):
+    """What the content of a file is: whether an image decodes, its hash, its size."""
+
+    @abstractmethod
     def decode_error(self, path: Path) -> str | None:
         """None when the image opens and decodes in full; otherwise why not. Only one that decoded is remembered: one that failed is looked at again."""
 
@@ -49,21 +62,9 @@ class FileInfoService(ABC):
     def size(self, path: Path) -> int | None:
         """How many bytes a file is; None when it is not there."""
 
-    @abstractmethod
-    def prefetch(self, paths: list[Path], tags: list[str] | None = None) -> threading.Thread | None:
-        """Starts reading in the background what the steps of an import will ask of these images, so that it is there when they ask (#140): one
-        that asks meanwhile waits for it rather than reading them again. Nothing without ExifTool, or with no images. Gives the thread."""
 
-    @abstractmethod
-    def exiftool_path(self) -> str | None:
-        """Where ExifTool is — None when there is none."""
-
-    @abstractmethod
-    def forget(self) -> None:
-        """Forgets everything, in memory and on disk."""
-
-
-# ── out: what the use cases are given ──
+class FileInfoFiles(ABC):
+    """The files of a folder, as what is known of them is asked for."""
 
     @abstractmethod
     def is_folder(self, path: Path) -> bool: ...
@@ -72,6 +73,21 @@ class FileInfoService(ABC):
     def files_in(self, folder: Path) -> list[Path]:
         """Every file under a folder — what a folder of images is looked at by."""
 
+
+class FileInfoCache(ABC):
+    """What is remembered of the files."""
+
+    @abstractmethod
+    def forget(self) -> None:
+        """Forgets everything, in memory and on disk."""
+
+
+class FileInfoService(FileInfoMetadata, FileInfoContent, FileInfoFiles, FileInfoCache, ABC):
+    """All that is known of the files — what the checks, the preprocessing and the reports ask. Whoever needs only a part asks for that one:
+    FileInfoMetadata, FileInfoContent, FileInfoFiles or FileInfoCache."""
+
+
+# ── out: what the use cases are given ──
 
 class MetadataReader(ABC):
     """What reads the metadata of many images at once — ExifTool."""

@@ -13,7 +13,7 @@ from wildintel_uploader.modules.deployments.domain import imports as rules
 from wildintel_uploader.modules.deployments.domain.models import DeploymentImportError, DeploymentsFailed
 from wildintel_uploader.modules.deployments.domain.naming import natural_key
 from wildintel_uploader.modules.deployments.domain.ports import Deployment, ImportFolder
-from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
+from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoMetadata
 from wildintel_uploader.shared.errors import StorageError
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class Importing:
     """`exif_fields` says the EXIF fields the checks ask, as the settings have them."""
 
-    def __init__(self, folder: ImportFolder, files: Callable[[], FileInfoService], sealing: Callable[[], Sealing],
+    def __init__(self, folder: ImportFolder, files: Callable[[], FileInfoMetadata], sealing: Callable[[], Sealing],
                  exif_fields: Callable[[], list[str]] = list) -> None:
         self._folder, self._files, self._sealing, self._exif_fields = folder, files, sealing, exif_fields
 

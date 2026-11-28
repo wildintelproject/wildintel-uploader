@@ -15,7 +15,7 @@ from wildintel_uploader.modules.deployments.domain import repair as rules
 from wildintel_uploader.modules.deployments.domain.ports import Deployment, RepairFolder
 from wildintel_uploader.modules.deployments.infrastructure import collections as layout
 from wildintel_uploader.modules.deployments.infrastructure.sealed_folder import images_of
-from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
+from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoMetadata
 from wildintel_uploader.modules.preprocessing.domain.models import PREPROCESSING_LOG_FILE
 from wildintel_uploader.shared import parallel
 
@@ -33,7 +33,7 @@ def sha1(path: Path) -> str:
 class RepairFolderOnDisk(RepairFolder):
     """`root` says the collections folder, asked each time; `files` what is known of the images."""
 
-    def __init__(self, root: Callable[[], Path], files: Callable[[], FileInfoService]) -> None:
+    def __init__(self, root: Callable[[], Path], files: Callable[[], FileInfoMetadata]) -> None:
         self._root, self._files = root, files
 
     def _project(self, project: str) -> Path:

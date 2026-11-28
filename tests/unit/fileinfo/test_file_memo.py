@@ -191,9 +191,43 @@ def test_a_store_on_disk_that_cannot_be_read_is_as_if_it_were_empty(tmp_path: Pa
 def test_the_store_on_disk_keeps_at_most_its_limit_the_oldest_forgotten_first(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(exif_store, "LIMIT", 2)
     for n in range(3):
-        exif_store.put_many({(f"/img/{n}.jpg", 1, 1): {"model": str(n)}})
+        exif_store.put_many({(f"/img/{n}.jpg", 1, 1, 1): {"model": str(n)}})
 
-    assert exif_store.get_many([(f"/img/{n}.jpg", 1, 1) for n in range(3)]) == {("/img/1.jpg", 1, 1): {"model": "1"}, ("/img/2.jpg", 1, 1): {"model": "2"}}
+    assert exif_store.get_many([(f"/img/{n}.jpg", 1, 1, 1) for n in range(3)]) == {("/img/1.jpg", 1, 1, 1): {"model": "1"},
+                                                                                    ("/img/2.jpg", 1, 1, 1): {"model": "2"}}
+
+
+def test_a_file_replaced_by_another_of_the_same_size_and_modification_time_is_not_taken_for_it(tmp_path: Path):
+    """#248: cp -p or rsync -a keep the modification time; the ctime they cannot keep tells the file is another one, whatever was remembered."""
+    import os
+    import time as clock
+
+    from wildintel_uploader.modules.fileinfo.infrastructure.files import stamp
+
+    image = tmp_path / "IMG_0001.JPG"
+    image.write_bytes(b"first---")
+    before = stamp(image)
+    clock.sleep(0.01)
+    replacement = tmp_path / "other.JPG"
+    replacement.write_bytes(b"second--")                           # the same size
+    os.utime(replacement, ns=(before[2], before[2]))               # and the modification time kept, as a copy that keeps it does
+    os.replace(replacement, image)
+    after = stamp(image)
+    assert after[:3] == before[:3] and after != before
+
+
+def test_a_cache_kept_by_a_version_with_no_ctime_is_let_go_and_filled_again(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import sqlite3
+
+    old = tmp_path / "old-cache" / exif_store.FILE_NAME
+    old.parent.mkdir()
+    with sqlite3.connect(old) as db:
+        db.execute("CREATE TABLE exif (path TEXT NOT NULL, size INTEGER NOT NULL, mtime INTEGER NOT NULL, tags TEXT NOT NULL, written REAL NOT NULL, "
+                   "PRIMARY KEY (path, size, mtime))")
+        db.execute("INSERT INTO exif VALUES ('/img/a.jpg', 1, 1, '{}', 0)")
+    monkeypatch.setattr(exif_store, "path", lambda: old)
+    exif_store.put_many({("/img/a.jpg", 1, 1, 1): {"model": "new"}})
+    assert exif_store.get_many([("/img/a.jpg", 1, 1, 1)]) == {("/img/a.jpg", 1, 1, 1): {"model": "new"}}
 
 
 def test_the_exif_read_ahead_is_what_the_steps_find_even_when_they_ask_while_it_is_being_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

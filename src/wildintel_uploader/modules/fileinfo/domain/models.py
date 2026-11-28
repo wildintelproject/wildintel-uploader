@@ -7,8 +7,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-# What a file is, for this: where it is, how big and when it was last modified (in nanoseconds, to tell two writes in the same second).
-Stamp = tuple[str, int, int]
+# What a file is, for this: where it is, how big, when its content was last modified, and when the file last changed (ctime) — in
+# nanoseconds, to tell two writes in the same second. The ctime tells a file replaced by another of the same size whose modification time was kept
+# (cp -p, rsync -a): no copy can keep it, any write changes it (on Windows it is when the file was made, which a file put in place of another
+# changes too).
+Stamp = tuple[str, int, int, int]
 # The tags of an image, by their names in lowercase (as ExifTool names them), None where it has not got one.
 Tags = dict[str, str | None]
 

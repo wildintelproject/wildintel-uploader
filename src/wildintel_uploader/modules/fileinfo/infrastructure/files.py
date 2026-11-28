@@ -18,7 +18,7 @@ def stamp(path: Path | str) -> Stamp | None:
         status = os.stat(path)
     except OSError:
         return None
-    return (str(path), status.st_size, status.st_mtime_ns)
+    return (str(path), status.st_size, status.st_mtime_ns, status.st_ctime_ns)
 
 
 class OsStamps(FileStamps):

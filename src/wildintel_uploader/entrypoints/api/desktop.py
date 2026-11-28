@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from wildintel_uploader.shared.desktop import file_manager
 from wildintel_uploader.shared.desktop import folder_picker
 from wildintel_uploader.modules.deployments.infrastructure.api_schemas import BrowseFolderRequest, OpenFolderRequest
-from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
+from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoMetadata
 from wildintel_uploader.modules.settings.domain.ports import SettingsReading
 from wildintel_uploader.entrypoints.api.api_schemas import (  # what its routes answer
     BrowseFolderAnswer, ExiftoolAnswer, OpenFolderAnswer,
@@ -31,7 +31,7 @@ def browse_folder(req: BrowseFolderRequest = BrowseFolderRequest()) -> dict:
 
 
 @router.get("/exiftool", response_model=ExiftoolAnswer, response_model_exclude_unset=True)
-def exiftool(files: FromDishka[FileInfoService]) -> dict:
+def exiftool(files: FromDishka[FileInfoMetadata]) -> dict:
     """Whether ExifTool is installed — the preprocessing's metadata needs it (what is known of the files says where it is)."""
     path = files.exiftool_path()
     return {"available": path is not None, "path": path}

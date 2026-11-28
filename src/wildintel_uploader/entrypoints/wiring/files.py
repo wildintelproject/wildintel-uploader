@@ -4,11 +4,11 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from dishka import Provider, Scope, provide
+from dishka import Provider, Scope, alias, provide
 
 from wildintel_uploader.entrypoints import config
 from wildintel_uploader.modules.fileinfo.application.use_cases import FileInfoUseCases
-from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoService
+from wildintel_uploader.modules.fileinfo.domain.ports import FileInfoCache, FileInfoContent, FileInfoFiles, FileInfoMetadata, FileInfoService
 from wildintel_uploader.modules.fileinfo.infrastructure import exiftool as exiftool_adapter
 from wildintel_uploader.modules.fileinfo.infrastructure.exiftool import ExifToolReader
 from wildintel_uploader.modules.fileinfo.infrastructure.files import FileHasher, OsStamps
@@ -77,6 +77,12 @@ class FileInfoProvider(Provider):
     @provide(scope=Scope.APP)
     def service(self) -> FileInfoService:
         return file_info()
+
+    # each part of the contract, for whoever needs only that one: the same one of the app
+    metadata = alias(source=FileInfoService, provides=FileInfoMetadata)
+    content = alias(source=FileInfoService, provides=FileInfoContent)
+    files = alias(source=FileInfoService, provides=FileInfoFiles)
+    cache = alias(source=FileInfoService, provides=FileInfoCache)
 
 
 class ValidationProvider(Provider):
